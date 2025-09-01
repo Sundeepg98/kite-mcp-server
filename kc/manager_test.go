@@ -85,10 +85,6 @@ func TestNewManager(t *testing.T) {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
 	}
 
-	if manager == nil {
-		t.Fatal("Expected non-nil manager")
-	}
-
 	if manager.apiKey != apiKey {
 		t.Errorf("Expected API key %s, got %s", apiKey, manager.apiKey)
 	}

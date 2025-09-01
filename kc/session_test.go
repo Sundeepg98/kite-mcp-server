@@ -15,10 +15,6 @@ import (
 func TestNewSessionManager(t *testing.T) {
 	manager := NewSessionManager(testLogger())
 
-	if manager == nil {
-		t.Fatal("Expected non-nil manager")
-	}
-
 	if manager.sessionDuration != DefaultSessionDuration {
 		t.Errorf("Expected default duration of %v, got %v", DefaultSessionDuration, manager.sessionDuration)
 	}
@@ -101,10 +97,6 @@ func TestGetOrCreate(t *testing.T) {
 		t.Error("Expected isNew to be true for first call")
 	}
 
-	if session == nil {
-		t.Fatal("Expected non-nil session")
-	}
-
 	if session.ID != sessionID {
 		t.Errorf("Expected session ID %s, got %s", sessionID, session.ID)
 	}
@@ -123,7 +115,7 @@ func TestGetOrCreate(t *testing.T) {
 	if session2.ID != session.ID {
 		t.Error("Expected sessions to have the same ID")
 	}
-	
+
 	if session2.CreatedAt != session.CreatedAt {
 		t.Error("Expected sessions to have the same CreatedAt time")
 	}
@@ -385,7 +377,7 @@ func TestConcurrentSessionCreation(t *testing.T) {
 func TestConcurrentSessionTermination(t *testing.T) {
 	manager := NewSessionManager(testLogger())
 	const numGoroutines = 20
-	
+
 	// Create multiple sessions
 	sessionIDs := make([]string, numGoroutines)
 	for i := 0; i < numGoroutines; i++ {

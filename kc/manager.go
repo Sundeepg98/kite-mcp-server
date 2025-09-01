@@ -126,7 +126,7 @@ func (m *Manager) GetAuthenticatedClient(sessionID string) (*kiteconnect.Client,
 	}
 
 	if time.Now().After(session.Credentials.ExpiresAt) {
-		return nil, errors.New("Kite session has expired (24-hour limit). Please use the login tool to refresh")
+		return nil, errors.New("kite session has expired (24-hour limit). Please use the login tool to refresh")
 	}
 
 	client := kiteconnect.New(m.apiKey)

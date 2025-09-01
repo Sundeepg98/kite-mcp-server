@@ -12,10 +12,6 @@ func TestNewSessionSigner(t *testing.T) {
 		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	if signer == nil {
-		t.Fatal("Expected non-nil session signer")
-	}
-
 	if len(signer.secretKey) != 32 {
 		t.Errorf("Expected secret key length 32, got %d", len(signer.secretKey))
 	}
@@ -28,10 +24,6 @@ func TestNewSessionSigner(t *testing.T) {
 func TestNewSessionSignerWithKey(t *testing.T) {
 	testKey := []byte("test-key-32-bytes-long-for-hmac")
 	signer := NewSessionSignerWithKey(testKey)
-
-	if signer == nil {
-		t.Fatal("Expected non-nil session signer")
-	}
 
 	if len(signer.secretKey) != len(testKey) {
 		t.Errorf("Expected secret key length %d, got %d", len(testKey), len(signer.secretKey))

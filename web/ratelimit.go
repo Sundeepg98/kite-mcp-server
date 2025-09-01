@@ -20,7 +20,6 @@ type limiterEntry struct {
 type RateLimiter struct {
 	limiters       map[string]*limiterEntry
 	mu             sync.Mutex
-	cleanupTimer   *time.Timer
 	cleanupCancel  context.CancelFunc
 	cleanupRunning bool
 }
@@ -45,7 +44,7 @@ func (m *RateLimiter) getLimiter(ip string) *rate.Limiter {
 			lastAccess: time.Now(),
 		}
 		m.limiters[ip] = entry
-		
+
 		// Start cleanup goroutine if not already running
 		if !m.cleanupRunning {
 			m.startCleanup()
@@ -54,7 +53,7 @@ func (m *RateLimiter) getLimiter(ip string) *rate.Limiter {
 		// Update last access time
 		entry.lastAccess = time.Now()
 	}
-	
+
 	return entry.limiter
 }
 
@@ -78,11 +77,11 @@ func (m *RateLimiter) startCleanup() {
 	if m.cleanupRunning {
 		return
 	}
-	
+
 	m.cleanupRunning = true
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cleanupCancel = cancel
-	
+
 	go m.cleanupRoutine(ctx)
 }
 
@@ -99,10 +98,10 @@ func (m *RateLimiter) cleanupRoutine(ctx context.Context) {
 	// Clean up limiters that haven't been used for 1 hour
 	const maxIdleTime = time.Hour
 	const cleanupInterval = 30 * time.Minute
-	
+
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -117,20 +116,20 @@ func (m *RateLimiter) cleanupRoutine(ctx context.Context) {
 func (m *RateLimiter) cleanupInactive(maxIdleTime time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	now := time.Now()
 	toDelete := make([]string, 0)
-	
+
 	for ip, entry := range m.limiters {
 		if now.Sub(entry.lastAccess) > maxIdleTime {
 			toDelete = append(toDelete, ip)
 		}
 	}
-	
+
 	for _, ip := range toDelete {
 		delete(m.limiters, ip)
 	}
-	
+
 	// If no limiters left, stop the cleanup routine to save resources
 	if len(m.limiters) == 0 {
 		if m.cleanupCancel != nil {

@@ -132,7 +132,12 @@ func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		h.Logger.Info("Handling OAuth callback", "session_id", sessionID)
 		// This was a temporary session for OAuth. We will use the UserID from the
 		// new credentials to create or find the user's permanent session.
-		defer m.SessionManager().Terminate(sessionID)
+		defer func() {
+			_, err := m.SessionManager().Terminate(sessionID)
+			if err != nil {
+				h.Logger.Error("Failed to terminate session", "session_id", sessionID, "error", err)
+			}
+		}()
 
 		userSession, _, err := m.SessionManager().GetOrCreate(creds.UserID)
 		if err != nil {
@@ -227,7 +232,7 @@ func (h *OAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"client_id":                client.GetID(),
 		"client_secret":            secret,
 		"grant_types":              client.GetGrantTypes(),
@@ -235,7 +240,9 @@ func (h *OAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		"client_name":              registrationRequest.ClientName,
 		"client_id_issued_at":      time.Now().Unix(),
 		"client_secret_expires_at": 0,
-	})
+	}); err != nil {
+		h.Logger.Error("Failed to encode client registration response", "error", err)
+	}
 }
 
 // Discovery is the handler for the /.well-known/oauth-authorization-server endpoint.
@@ -263,7 +270,9 @@ func (h *OAuthHandler) Discovery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.Logger.Error("Failed to encode discovery response", "error", err)
+	}
 }
 
 // ProtectedResourceMetadata is the handler for the /.well-known/oauth-protected-resource endpoint.
@@ -281,7 +290,9 @@ func (h *OAuthHandler) ProtectedResourceMetadata(w http.ResponseWriter, r *http.
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.Logger.Error("Failed to encode protected resource metadata response", "error", err)
+	}
 }
 
 // Middleware is the OAuth 2.1 middleware for protecting MCP endpoints.

@@ -275,7 +275,7 @@ func (sm *SessionManager) copySession(original *Session) *Session {
 		ExpiresAt:  original.ExpiresAt,
 		OAuthData:  original.OAuthData, // Shallow copy - assuming immutable
 	}
-	
+
 	// Deep copy credentials if present
 	if original.Credentials != nil {
 		copy.Credentials = &KiteCredentials{
@@ -284,6 +284,6 @@ func (sm *SessionManager) copySession(original *Session) *Session {
 			ExpiresAt:   original.Credentials.ExpiresAt,
 		}
 	}
-	
+
 	return copy
 }
