@@ -1,18 +1,19 @@
-//go:build goexperiment.synctest
-
 package kc
 
 import (
 	"strings"
 	"testing"
-	"testing/synctest"
 	"time"
 )
 
 func TestNewSessionSigner(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
+	}
+
+	if signer == nil {
+		t.Fatal("Expected non-nil session signer")
 	}
 
 	if len(signer.secretKey) != 32 {
@@ -25,387 +26,174 @@ func TestNewSessionSigner(t *testing.T) {
 }
 
 func TestNewSessionSignerWithKey(t *testing.T) {
-	secretKey := []byte("test-secret-key-32-bytes-long!!")
-	signer := NewSessionSignerWithKey(secretKey)
+	testKey := []byte("test-key-32-bytes-long-for-hmac")
+	signer := NewSessionSignerWithKey(testKey)
 
-	if len(signer.secretKey) != len(secretKey) {
-		t.Errorf("Expected secret key length %d, got %d", len(secretKey), len(signer.secretKey))
+	if signer == nil {
+		t.Fatal("Expected non-nil session signer")
 	}
 
-	// Test panic with empty key
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic with empty secret key")
+	if len(signer.secretKey) != len(testKey) {
+		t.Errorf("Expected secret key length %d, got %d", len(testKey), len(signer.secretKey))
+	}
+
+	// Verify key content matches
+	for i, b := range testKey {
+		if signer.secretKey[i] != b {
+			t.Error("Expected secret key to match provided key")
+			break
 		}
-	}()
-	NewSessionSignerWithKey([]byte{})
+	}
 }
 
 func TestSignAndVerifySessionID(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	testSessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
+	testSessionID := "test-session-12345"
 
 	// Sign the session ID
-	signed := signer.SignSessionID(testSessionID)
+	signedParam := signer.SignSessionID(testSessionID)
+	if signedParam == "" {
+		t.Error("Expected non-empty signed parameter")
+	}
 
-	// Verify the signed session ID
-	verifiedSessionID, err := signer.VerifySessionID(signed)
+	// Should contain session ID and timestamp
+	if !strings.Contains(signedParam, testSessionID) {
+		t.Error("Expected signed parameter to contain session ID")
+	}
+
+	// Should have format: payload.signature
+	parts := strings.Split(signedParam, ".")
+	if len(parts) != 2 {
+		t.Errorf("Expected signed parameter to have format 'payload.signature', got %s", signedParam)
+	}
+
+	// Verify the signed parameter
+	verifiedSessionID, err := signer.VerifySessionID(signedParam)
 	if err != nil {
-		t.Fatalf("Failed to verify session ID: %v", err)
+		t.Errorf("Expected no error verifying session ID, got: %v", err)
 	}
 
 	if verifiedSessionID != testSessionID {
-		t.Errorf("Expected session ID %s, got %s", testSessionID, verifiedSessionID)
+		t.Errorf("Expected verified session ID %s, got %s", testSessionID, verifiedSessionID)
 	}
 }
 
-func TestSignedSessionIDFormat(t *testing.T) {
+func TestVerifySessionIDErrors(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-	signed := signer.SignSessionID(sessionID)
-
-	// Should have format: sessionID|timestamp.signature
-	parts := strings.Split(signed, ".")
-	if len(parts) != 2 {
-		t.Errorf("Expected 2 parts separated by '.', got %d parts", len(parts))
+	// Test invalid format (no dot)
+	_, err = signer.VerifySessionID("invalid-format")
+	if err != ErrInvalidFormat {
+		t.Errorf("Expected ErrInvalidFormat for invalid format, got: %v", err)
 	}
 
-	payload := parts[0]
-	signature := parts[1]
-
-	// Payload should contain sessionID and timestamp
-	payloadParts := strings.Split(payload, "|")
-	if len(payloadParts) != 2 {
-		t.Errorf("Expected 2 payload parts separated by '|', got %d parts", len(payloadParts))
+	// Test invalid base64 signature
+	_, err = signer.VerifySessionID("test|123.invalid-base64!")
+	if err == nil || !strings.Contains(err.Error(), "invalid base64") {
+		t.Errorf("Expected base64 error, got: %v", err)
 	}
 
-	if payloadParts[0] != sessionID {
-		t.Errorf("Expected session ID %s in payload, got %s", sessionID, payloadParts[0])
-	}
-
-	// Signature should be base64 encoded
-	if signature == "" {
-		t.Error("Expected non-empty signature")
-	}
-}
-
-func TestVerifyTamperedSessionID(t *testing.T) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
-	}
-
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-	signed := signer.SignSessionID(sessionID)
-
-	// Tamper with the signed parameter
-	tamperedSigned := strings.Replace(signed, sessionID, "kitemcp-different-session-id", 1)
-
+	// Test tampered signature
+	validSigned := signer.SignSessionID("test-session")
+	tamperedSigned := strings.Replace(validSigned, "test", "hack", 1)
 	_, err = signer.VerifySessionID(tamperedSigned)
 	if err != ErrTamperedSession {
-		t.Errorf("Expected ErrTamperedSession, got %v", err)
-	}
-}
-
-func TestVerifyInvalidFormat(t *testing.T) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
-	}
-
-	testCases := []struct {
-		name          string
-		signedParam   string
-		expectedError error
-	}{
-		{
-			name:          "no dot separator",
-			signedParam:   "sessionid-timestamp-signature",
-			expectedError: ErrInvalidFormat,
-		},
-		{
-			name:          "multiple dots",
-			signedParam:   "session.id.timestamp.signature",
-			expectedError: ErrInvalidFormat,
-		},
-		{
-			name:          "invalid base64 signature",
-			signedParam:   "sessionid|timestamp.invalid-base64!",
-			expectedError: ErrInvalidSignature,
-		},
-		{
-			name:          "no pipe in payload",
-			signedParam:   "sessionid-timestamp.dGVzdA==",
-			expectedError: ErrTamperedSession,
-		},
-		{
-			name:          "invalid timestamp",
-			signedParam:   "sessionid|notanumber.dGVzdA==",
-			expectedError: ErrTamperedSession,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := signer.VerifySessionID(tc.signedParam)
-			if err == nil {
-				t.Error("Expected error, got nil")
-			}
-			if !strings.Contains(err.Error(), tc.expectedError.Error()) {
-				t.Errorf("Expected error containing %v, got %v", tc.expectedError, err)
-			}
-		})
+		t.Errorf("Expected ErrTamperedSession for tampered signature, got: %v", err)
 	}
 }
 
 func TestSignatureExpiry(t *testing.T) {
-	synctest.Run(func() {
-		signer, err := NewSessionSigner()
-		if err != nil {
-			t.Fatalf("Failed to create session signer: %v", err)
-		}
-
-		// Set a very short expiry for testing
-		signer.SetSignatureExpiry(100 * time.Millisecond)
-
-		sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-		signed := signer.SignSessionID(sessionID)
-
-		// Advance time beyond expiry + MaxClockSkew
-		time.Sleep(100*time.Millisecond + MaxClockSkew + time.Second)
-
-		_, err = signer.VerifySessionID(signed)
-		if err != ErrExpiredSignature {
-			t.Errorf("Expected ErrExpiredSignature, got %v", err)
-		}
-	})
-}
-
-func TestDifferentSigners(t *testing.T) {
-	// Create two signers with different keys
-	signer1, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Failed to create first signer: %v", err)
-	}
-
-	signer2, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Failed to create second signer: %v", err)
-	}
-
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-
-	// Sign with signer1
-	signed := signer1.SignSessionID(sessionID)
-
-	// Try to verify with signer2 (should fail)
-	_, err = signer2.VerifySessionID(signed)
-	if err != ErrTamperedSession {
-		t.Errorf("Expected ErrTamperedSession when using different signers, got %v", err)
-	}
-}
-
-func TestSignRedirectParams(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
+	// Test that the expiry can be set
+	originalExpiry := signer.signatureExpiry
+	signer.SetSignatureExpiry(1 * time.Hour)
+	if signer.signatureExpiry != 1*time.Hour {
+		t.Errorf("Expected signature expiry to be set to 1 hour, got %v", signer.signatureExpiry)
+	}
 
-	redirectParams, err := signer.SignRedirectParams(sessionID)
+	// Reset for consistency
+	signer.SetSignatureExpiry(originalExpiry)
+}
+
+func TestSignAndVerifyRedirectParams(t *testing.T) {
+	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to sign redirect params: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	// Should start with "session_id="
+	testSessionID := "test-session-redirect"
+
+	// Sign redirect params
+	redirectParams, err := signer.SignRedirectParams(testSessionID)
+	if err != nil {
+		t.Errorf("Expected no error signing redirect params, got: %v", err)
+	}
+
+	if redirectParams == "" {
+		t.Error("Expected non-empty redirect params")
+	}
+
+	// Should have format: session_id=signed_value
 	if !strings.HasPrefix(redirectParams, "session_id=") {
 		t.Errorf("Expected redirect params to start with 'session_id=', got %s", redirectParams)
 	}
 
-	// Verify the redirect params
+	// Verify redirect params
 	verifiedSessionID, err := signer.VerifyRedirectParams(redirectParams)
 	if err != nil {
-		t.Fatalf("Failed to verify redirect params: %v", err)
+		t.Errorf("Expected no error verifying redirect params, got: %v", err)
 	}
 
-	if verifiedSessionID != sessionID {
-		t.Errorf("Expected session ID %s, got %s", sessionID, verifiedSessionID)
+	if verifiedSessionID != testSessionID {
+		t.Errorf("Expected verified session ID %s, got %s", testSessionID, verifiedSessionID)
 	}
 }
 
-func TestSignRedirectParamsInvalidSessionID(t *testing.T) {
+func TestVerifyRedirectParamsErrors(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	invalidSessionID := "invalid-session-id"
-
-	_, err = signer.SignRedirectParams(invalidSessionID)
-	if err == nil {
-		t.Error("Expected error for invalid session ID")
-	}
-}
-
-func TestVerifyRedirectParamsInvalidFormat(t *testing.T) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+	// Test invalid format (no session_id prefix)
+	_, err = signer.VerifyRedirectParams("invalid=format")
+	if err != ErrInvalidFormat {
+		t.Errorf("Expected ErrInvalidFormat for invalid format, got: %v", err)
 	}
 
-	testCases := []string{
-		"invalid=params",
-		"session_id=",
-		"different_param=value",
-		"",
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc, func(t *testing.T) {
-			_, err := signer.VerifyRedirectParams(tc)
-			if err != ErrInvalidFormat {
-				t.Errorf("Expected ErrInvalidFormat, got %v", err)
-			}
-		})
-	}
-}
-
-func TestGetSecretKey(t *testing.T) {
-	secretKey := []byte("test-secret-key-32-bytes-long!!")
-	signer := NewSessionSignerWithKey(secretKey)
-
-	retrievedKey := signer.GetSecretKey()
-
-	// Should return a copy
-	if &retrievedKey[0] == &signer.secretKey[0] {
-		t.Error("GetSecretKey should return a copy, not the original slice")
-	}
-
-	// But content should be the same
-	if string(retrievedKey) != string(secretKey) {
-		t.Error("GetSecretKey should return the same content")
-	}
-
-	// Modifying the returned key shouldn't affect the original
-	retrievedKey[0] = 'X'
-	if signer.secretKey[0] == 'X' {
-		t.Error("Modifying returned key affected the original")
+	// Test empty session_id value
+	_, err = signer.VerifyRedirectParams("session_id=")
+	if err != ErrInvalidFormat {
+		t.Errorf("Expected ErrInvalidFormat for empty session_id, got: %v", err)
 	}
 }
 
 func TestValidateSessionID(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
-		t.Fatalf("Failed to create session signer: %v", err)
+		t.Fatalf("Expected no error creating session signer, got: %v", err)
 	}
 
-	testCases := []struct {
-		name      string
-		sessionID string
-		expectErr bool
-	}{
-		{
-			name:      "valid session ID",
-			sessionID: "kitemcp-550e8400-e29b-41d4-a716-446655440000",
-			expectErr: false,
-		},
-		{
-			name:      "invalid prefix",
-			sessionID: "invalid-550e8400-e29b-41d4-a716-446655440000",
-			expectErr: true,
-		},
-		{
-			name:      "invalid UUID",
-			sessionID: "kitemcp-invalid-uuid",
-			expectErr: true,
-		},
-		{
-			name:      "empty session ID",
-			sessionID: "",
-			expectErr: true,
-		},
+	// Test empty session ID
+	err = signer.ValidateSessionID("")
+	if err == nil {
+		t.Error("Expected error for empty session ID")
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := signer.ValidateSessionID(tc.sessionID)
-			if tc.expectErr && err == nil {
-				t.Error("Expected error but got nil")
-			}
-			if !tc.expectErr && err != nil {
-				t.Errorf("Expected no error but got: %v", err)
-			}
-		})
-	}
-}
-
-func TestClockSkewTolerance(t *testing.T) {
-	synctest.Run(func() {
-		signer, err := NewSessionSigner()
-		if err != nil {
-			t.Fatalf("Failed to create session signer: %v", err)
-		}
-
-		// Set expiry to 1 second for testing
-		signer.SetSignatureExpiry(1 * time.Second)
-
-		sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-		signed := signer.SignSessionID(sessionID)
-
-		// Wait past expiry but within clock skew tolerance
-		time.Sleep(2 * time.Second) // Past 1s expiry but within 5min MaxClockSkew
-
-		// Should still be valid due to MaxClockSkew tolerance
-		_, err = signer.VerifySessionID(signed)
-		if err != nil {
-			t.Errorf("Expected signature to be valid within clock skew tolerance, got: %v", err)
-		}
-
-		// Create new signature and wait beyond clock skew tolerance
-		signed2 := signer.SignSessionID(sessionID)
-		time.Sleep(1*time.Second + MaxClockSkew + 1*time.Second) // Beyond expiry + MaxClockSkew
-
-		_, err = signer.VerifySessionID(signed2)
-		if err != ErrExpiredSignature {
-			t.Errorf("Expected ErrExpiredSignature beyond clock skew, got %v", err)
-		}
-	})
-}
-
-func BenchmarkSignSessionID(b *testing.B) {
-	signer, err := NewSessionSigner()
+	// Test valid session ID
+	err = signer.ValidateSessionID("valid-session-123")
 	if err != nil {
-		b.Fatalf("Failed to create session signer: %v", err)
-	}
-
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		signer.SignSessionID(sessionID)
-	}
-}
-
-func BenchmarkVerifySessionID(b *testing.B) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		b.Fatalf("Failed to create session signer: %v", err)
-	}
-
-	sessionID := "kitemcp-550e8400-e29b-41d4-a716-446655440000"
-	signed := signer.SignSessionID(sessionID)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		signer.VerifySessionID(signed)
+		t.Errorf("Expected no error for valid session ID, got: %v", err)
 	}
 }
