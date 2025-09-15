@@ -42,27 +42,77 @@ type HoldingsTool struct{}
 func (*HoldingsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_holdings",
 		mcp.WithDescription("Get holdings for the current user. Supports pagination for large datasets."),
+		mcp.WithString("type",
+			mcp.Description("Type of holdings data to retrieve. 'full' returns detailed holdings with pagination, 'summary' returns aggregated summary data, 'compact' returns compact holdings with pagination"),
+			mcp.DefaultString("full"),
+			mcp.Enum("full", "summary", "compact"),
+		),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of holdings to return. If not specified, returns all holdings. When specified, response includes pagination metadata."),
+			mcp.Description("Maximum number of holdings to return. If not specified, returns all holdings. When specified, response includes pagination metadata. Only applies to 'full' and 'compact' types"),
 		),
 	)
 }
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_holdings", func(client *kiteconnect.Client) ([]interface{}, error) {
-		holdings, err := client.GetHoldings()
-		if err != nil {
-			return nil, err
-		}
-		result := make([]interface{}, len(holdings))
-		for i, holding := range holdings {
-			result[i] = holding
-		}
-		return result, nil
-	})
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := request.GetArguments()
+		holdingsType := SafeAssertString(args["type"], "full")
+
+		return handler.WithKiteClient(ctx, "get_holdings", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+			switch holdingsType {
+			case "summary":
+				summary, err := client.GetHoldingsSummary()
+				if err != nil {
+					return nil, err
+				}
+				return handler.MarshalResponse(summary, "get_holdings")
+
+			case "compact":
+				compactHoldings, err := client.GetHoldingsCompact()
+				if err != nil {
+					return nil, err
+				}
+				result := make([]interface{}, len(compactHoldings))
+				for i, holding := range compactHoldings {
+					result[i] = holding
+				}
+				params := ParsePaginationParams(args)
+				originalLength := len(result)
+				paginatedData := ApplyPagination(result, params)
+				var responseData interface{}
+				if params.Limit > 0 {
+					responseData = CreatePaginatedResponse(result, paginatedData, params, originalLength)
+				} else {
+					responseData = paginatedData
+				}
+				return handler.MarshalResponse(responseData, "get_holdings")
+
+			default: // "full" or any other value
+				holdings, err := client.GetHoldings()
+				if err != nil {
+					return nil, err
+				}
+				result := make([]interface{}, len(holdings))
+				for i, holding := range holdings {
+					result[i] = holding
+				}
+				params := ParsePaginationParams(args)
+				originalLength := len(result)
+				paginatedData := ApplyPagination(result, params)
+				var responseData interface{}
+				if params.Limit > 0 {
+					responseData = CreatePaginatedResponse(result, paginatedData, params, originalLength)
+				} else {
+					responseData = paginatedData
+				}
+				return handler.MarshalResponse(responseData, "get_holdings")
+			}
+		})
+	}
 }
 
 type PositionsTool struct{}
