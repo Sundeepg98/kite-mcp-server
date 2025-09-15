@@ -41,6 +41,9 @@ func GetAllTools() []Tool {
 		&LTPTool{},
 		&OHLCTool{},
 
+		// Tools for alerts management
+		&AlertsTool{},
+
 		// Tools that post data to Kite Connect
 		&PlaceOrderTool{},
 		&ModifyOrderTool{},
