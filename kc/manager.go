@@ -130,6 +130,7 @@ func (m *Manager) GetAuthenticatedClient(sessionID string) (*kiteconnect.Client,
 	}
 
 	client := kiteconnect.New(m.apiKey)
+	client.SetAppName("kite-mcp")
 	client.SetAccessToken(session.Credentials.AccessToken)
 	return client, nil
 }
@@ -137,6 +138,7 @@ func (m *Manager) GetAuthenticatedClient(sessionID string) (*kiteconnect.Client,
 // CompleteLogin exchanges a request token for a new set of Kite credentials.
 func (m *Manager) CompleteLogin(requestToken string) (*KiteCredentials, error) {
 	kc := kiteconnect.New(m.apiKey)
+	kc.SetAppName("kite-mcp")
 	userSess, err := kc.GenerateSession(requestToken, m.apiSecret)
 	if err != nil {
 		m.Logger.Error("Failed to generate Kite session from request token", "error", err)
@@ -167,6 +169,7 @@ func (m *Manager) GenerateLoginURL(sessionID string) (string, error) {
 	}
 
 	kc := kiteconnect.New(m.apiKey)
+	kc.SetAppName("kite-mcp")
 	redirectParams := url.QueryEscape(signedParams)
 	loginURL := kc.GetLoginURL() + "&redirect_params=" + redirectParams
 
