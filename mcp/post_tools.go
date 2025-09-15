@@ -77,6 +77,9 @@ func (*PlaceOrderTool) Tool() mcp.Tool {
 			mcp.Description("An optional tag to apply to an order to identify it (alphanumeric, max 20 chars)"),
 			mcp.MaxLength(20),
 		),
+		mcp.WithNumber("market_protection",
+			mcp.Description("Market protection percentage for MARKET and SL-M orders. Values: 0 (no protection), 0-100 (custom %), -1 (auto protection)"),
+		),
 	)
 }
 
@@ -103,6 +106,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			IcebergLegs:       SafeAssertInt(args["iceberg_legs"], 0),
 			IcebergQty:        SafeAssertInt(args["iceberg_quantity"], 0),
 			Tag:               SafeAssertString(args["tag"], ""),
+			MarketProtection:  SafeAssertFloat64(args["market_protection"], 0.0),
 		}
 		return handler.WithKiteClient(ctx, "place_order", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 			resp, err := client.PlaceOrder(variety, orderParams)

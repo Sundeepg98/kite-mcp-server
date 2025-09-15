@@ -9,7 +9,7 @@ require (
 	github.com/ory/x v0.0.665
 	github.com/prometheus/client_golang v1.23.0
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/gokiteconnect/v4 v4.3.5
+	github.com/zerodha/gokiteconnect/v4 v4.3.6-0.20250915103037-488934d1cc3a
 	golang.org/x/crypto v0.38.0
 	golang.org/x/time v0.12.0
 )
