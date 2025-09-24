@@ -642,36 +642,6 @@ func TestManagerUpdateStats(t *testing.T) {
 	}
 }
 
-// TestManagerUpdateConfig tests configuration updates
-func TestManagerUpdateConfig(t *testing.T) {
-	manager := newTestManagerWithoutUpdate()
-	defer manager.Shutdown()
-
-	// Update configuration
-	newConfig := &UpdateConfig{
-		UpdateHour:      10,
-		UpdateMinute:    45,
-		RetryAttempts:   2,
-		RetryDelay:      1 * time.Second,
-		EnableScheduler: false,
-		MemoryLimit:     512 * 1024,
-	}
-
-	manager.UpdateConfig(newConfig)
-
-	// Verify configuration was updated
-	config := manager.GetConfig()
-	if config.UpdateHour != 10 {
-		t.Errorf("Expected update hour 10, got %d", config.UpdateHour)
-	}
-	if config.UpdateMinute != 45 {
-		t.Errorf("Expected update minute 45, got %d", config.UpdateMinute)
-	}
-	if config.RetryAttempts != 2 {
-		t.Errorf("Expected retry attempts 2, got %d", config.RetryAttempts)
-	}
-}
-
 // TestManagerFromFileWithConfig tests file-based manager with custom configuration
 // TestManagerFromFileWithConfig removed - file loading functionality removed
 
@@ -894,16 +864,6 @@ func BenchmarkManagerInsert(b *testing.B) {
 			Active:          true,
 		}
 		manager.Insert(inst)
-	}
-}
-
-// BenchmarkManagerGetByID benchmarks ID lookups
-func BenchmarkManagerGetByID(b *testing.B) {
-	manager := newTestManager()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = manager.GetByID("NSE:SBIN")
 	}
 }
 

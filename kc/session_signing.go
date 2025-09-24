@@ -46,23 +46,6 @@ func NewSessionSigner() (*SessionSigner, error) {
 	}, nil
 }
 
-// NewSessionSignerWithKey creates a new session signer with a provided secret key
-func NewSessionSignerWithKey(secretKey []byte) *SessionSigner {
-	if len(secretKey) == 0 {
-		panic("secret key cannot be empty")
-	}
-
-	return &SessionSigner{
-		secretKey:       secretKey,
-		signatureExpiry: DefaultSignatureExpiry,
-	}
-}
-
-// SetSignatureExpiry sets the expiry duration for signed session parameters
-func (s *SessionSigner) SetSignatureExpiry(duration time.Duration) {
-	s.signatureExpiry = duration
-}
-
 // SignSessionID creates a signed session parameter with timestamp and HMAC signature
 func (s *SessionSigner) SignSessionID(sessionID string) string {
 	timestamp := time.Now().Unix()
@@ -140,19 +123,10 @@ func (s *SessionSigner) VerifySessionID(signedParam string) (string, error) {
 	return sessionID, nil
 }
 
-// ValidateSessionID performs basic validation on a session ID format
-func (s *SessionSigner) ValidateSessionID(sessionID string) error {
-	if sessionID == "" {
-		return errors.New("session ID cannot be empty")
-	}
-
-	return nil
-}
-
 // SignRedirectParams creates a signed redirect parameter string for Kite authentication
 func (s *SessionSigner) SignRedirectParams(sessionID string) (string, error) {
-	if err := s.ValidateSessionID(sessionID); err != nil {
-		return "", fmt.Errorf("invalid session ID: %w", err)
+	if sessionID == "" {
+		return "", errors.New("invalid session ID: session ID cannot be empty")
 	}
 
 	signedSessionID := s.SignSessionID(sessionID)

@@ -48,7 +48,7 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 type InstrumentsSearchTool struct{}
 
 func (*InstrumentsSearchTool) Tool() mcp.Tool {
-	return mcp.NewTool("search_instruments", // TODO this can be multiplexed into various modes. Currently only the filter mode is implemented but other instruments queries in the instruments manager can be exposed here as well.
+	return mcp.NewTool("search_instruments", // TODO: Add support for additional search modes: GetByID, GetByTradingsymbol, GetByISIN, GetByInstToken, GetByExchToken. Currently only filter mode is implemented.
 		mcp.WithDescription("Search instruments. Supports pagination for large result sets."),
 		mcp.WithString("query",
 			mcp.Description("Search query"),

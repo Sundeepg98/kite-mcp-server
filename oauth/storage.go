@@ -205,11 +205,6 @@ func (s *InMemoryStore) DeletePKCERequestSession(_ context.Context, signature st
 	return nil
 }
 
-func (s *InMemoryStore) Authenticate(ctx context.Context, name string, secret string) (string, error) {
-	// This is a placeholder for username/password authentication, not used by our flows but required by some interfaces.
-	return "", fosite.ErrNotFound
-}
-
 func (s *InMemoryStore) RotateRefreshToken(ctx context.Context, requestID string, newSignature string) error {
 	// A more complex implementation would handle token rotation gracefully.
 	// For this example, we simply revoke the old token.

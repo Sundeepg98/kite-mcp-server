@@ -85,14 +85,6 @@ func (m *RateLimiter) startCleanup() {
 	go m.cleanupRoutine(ctx)
 }
 
-// StopCleanup stops the background cleanup goroutine
-func (m *RateLimiter) StopCleanup() {
-	if m.cleanupCancel != nil {
-		m.cleanupCancel()
-		m.cleanupRunning = false
-	}
-}
-
 // cleanupRoutine periodically removes inactive rate limiters
 func (m *RateLimiter) cleanupRoutine(ctx context.Context) {
 	// Clean up limiters that haven't been used for 1 hour

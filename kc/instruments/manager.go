@@ -138,19 +138,6 @@ func New(cfg Config) (*Manager, error) {
 	return manager, nil
 }
 
-// NewManager creates a new instruments manager that loads from the API
-// Deprecated: Use New(Config{Logger: logger}) instead
-func NewManager(logger *slog.Logger) *Manager {
-	return NewManagerWithConfig(DefaultUpdateConfig(), logger)
-}
-
-// NewManagerWithConfig creates a new instruments manager with the specified configuration
-// Does not load instruments automatically - call LoadInitialData() to load data
-// Deprecated: Use New(Config{UpdateConfig: config, Logger: logger}) instead
-func NewManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
-	return newManagerWithConfig(config, logger)
-}
-
 // newManagerWithConfig is the internal constructor used by both old and new APIs
 func newManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -178,15 +165,6 @@ func newManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
 	}
 
 	return m
-}
-
-// LoadInitialData loads instruments data and should be called after manager creation
-func (m *Manager) LoadInitialData() error {
-	if err := m.UpdateInstruments(); err != nil {
-		m.logger.Error("Error loading initial instruments data", "error", err)
-		return err
-	}
-	return nil
 }
 
 func isPreviousDayIST(t time.Time) bool {
@@ -442,6 +420,14 @@ func (m *Manager) parseInstrumentsJSON(reader io.Reader) (map[uint32]*Instrument
 	return mp, nil
 }
 
+// Insert inserts a new instrument.
+// This method is thread-safe and acquires its own write lock.
+func (m *Manager) Insert(inst *Instrument) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.insertUnsafe(inst)
+}
+
 // LoadMap from tokenToInstrument map to the manager.
 // This method is thread-safe and acquires its own write lock.
 func (m *Manager) LoadMap(tokenToInstrument map[uint32]*Instrument) {
@@ -461,14 +447,6 @@ func (m *Manager) LoadMap(tokenToInstrument map[uint32]*Instrument) {
 		}
 	}
 	m.logger.Debug("LoadMap: completed", "count", count)
-}
-
-// Insert inserts a new instrument.
-// This method is thread-safe and acquires its own write lock.
-func (m *Manager) Insert(inst *Instrument) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	m.insertUnsafe(inst)
 }
 
 // insertUnsafe inserts a new instrument without acquiring locks.

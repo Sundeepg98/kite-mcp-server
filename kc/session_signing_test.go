@@ -3,7 +3,6 @@ package kc
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNewSessionSigner(t *testing.T) {
@@ -18,23 +17,6 @@ func TestNewSessionSigner(t *testing.T) {
 
 	if signer.signatureExpiry != DefaultSignatureExpiry {
 		t.Errorf("Expected default expiry %v, got %v", DefaultSignatureExpiry, signer.signatureExpiry)
-	}
-}
-
-func TestNewSessionSignerWithKey(t *testing.T) {
-	testKey := []byte("test-key-32-bytes-long-for-hmac")
-	signer := NewSessionSignerWithKey(testKey)
-
-	if len(signer.secretKey) != len(testKey) {
-		t.Errorf("Expected secret key length %d, got %d", len(testKey), len(signer.secretKey))
-	}
-
-	// Verify key content matches
-	for i, b := range testKey {
-		if signer.secretKey[i] != b {
-			t.Error("Expected secret key to match provided key")
-			break
-		}
 	}
 }
 
@@ -101,23 +83,6 @@ func TestVerifySessionIDErrors(t *testing.T) {
 	}
 }
 
-func TestSignatureExpiry(t *testing.T) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Expected no error creating session signer, got: %v", err)
-	}
-
-	// Test that the expiry can be set
-	originalExpiry := signer.signatureExpiry
-	signer.SetSignatureExpiry(1 * time.Hour)
-	if signer.signatureExpiry != 1*time.Hour {
-		t.Errorf("Expected signature expiry to be set to 1 hour, got %v", signer.signatureExpiry)
-	}
-
-	// Reset for consistency
-	signer.SetSignatureExpiry(originalExpiry)
-}
-
 func TestSignAndVerifyRedirectParams(t *testing.T) {
 	signer, err := NewSessionSigner()
 	if err != nil {
@@ -168,24 +133,5 @@ func TestVerifyRedirectParamsErrors(t *testing.T) {
 	_, err = signer.VerifyRedirectParams("session_id=")
 	if err != ErrInvalidFormat {
 		t.Errorf("Expected ErrInvalidFormat for empty session_id, got: %v", err)
-	}
-}
-
-func TestValidateSessionID(t *testing.T) {
-	signer, err := NewSessionSigner()
-	if err != nil {
-		t.Fatalf("Expected no error creating session signer, got: %v", err)
-	}
-
-	// Test empty session ID
-	err = signer.ValidateSessionID("")
-	if err == nil {
-		t.Error("Expected error for empty session ID")
-	}
-
-	// Test valid session ID
-	err = signer.ValidateSessionID("valid-session-123")
-	if err != nil {
-		t.Errorf("Expected no error for valid session ID, got: %v", err)
 	}
 }

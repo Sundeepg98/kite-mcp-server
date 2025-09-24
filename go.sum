@@ -431,8 +431,6 @@ github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9dec
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zenazn/goji v0.9.0/go.mod h1:7S9M489iMyHBNxwZnk9/EHS098H4/F6TATF2mIxtB1Q=
-github.com/zerodha/gokiteconnect/v4 v4.3.5 h1:NIhcaNXeH/a6j3FBxPIwjh0Tx1ti4z2GODWdBoOHMFc=
-github.com/zerodha/gokiteconnect/v4 v4.3.5/go.mod h1:ym/xXldKyPzkpN7JZpg6Cbjs+nGfqvMC5X9BsHEil9s=
 github.com/zerodha/gokiteconnect/v4 v4.3.6-0.20250915103037-488934d1cc3a h1:lECjku4L2hpHFCDPeaOS1Am3LmGo2VMUY8jHJsLOxcM=
 github.com/zerodha/gokiteconnect/v4 v4.3.6-0.20250915103037-488934d1cc3a/go.mod h1:ym/xXldKyPzkpN7JZpg6Cbjs+nGfqvMC5X9BsHEil9s=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
