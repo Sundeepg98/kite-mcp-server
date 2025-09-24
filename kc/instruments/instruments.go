@@ -33,3 +33,31 @@ type Instrument struct {
 	// In FO, a large number of strikes are marked "inactive".
 	Active bool `json:"active"`
 }
+
+// Compact represents a condensed version of Instrument with essential fields only
+type Compact struct {
+	ID              string `json:"id"`
+	InstrumentToken uint32 `json:"instrument_token"`
+	Tradingsymbol   string `json:"tradingsymbol"`
+	Exchange        string `json:"exchange"`
+	Name            string `json:"name"`
+	InstrumentType  string `json:"instrument_type"`
+	Segment         string `json:"segment"`
+	LotSize         int    `json:"lot_size"`
+	Active          bool   `json:"active"`
+}
+
+// ToCompact converts an Instrument to its compact representation
+func (i Instrument) ToCompact() Compact {
+	return Compact{
+		ID:              i.ID,
+		InstrumentToken: i.InstrumentToken,
+		Tradingsymbol:   i.Tradingsymbol,
+		Exchange:        i.Exchange,
+		Name:            i.Name,
+		InstrumentType:  i.InstrumentType,
+		Segment:         i.Segment,
+		LotSize:         i.LotSize,
+		Active:          i.Active,
+	}
+}

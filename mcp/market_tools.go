@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -48,15 +49,42 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 type InstrumentsSearchTool struct{}
 
 func (*InstrumentsSearchTool) Tool() mcp.Tool {
-	return mcp.NewTool("search_instruments", // TODO: Add support for additional search modes: GetByID, GetByTradingsymbol, GetByISIN, GetByInstToken, GetByExchToken. Currently only filter mode is implemented.
-		mcp.WithDescription("Search instruments. Supports pagination for large result sets."),
+	return mcp.NewTool("search_instruments",
+		mcp.WithDescription("Search instruments or get specific instruments by various identifiers. Use 'compact' verbosity for faster responses with essential fields only. Switch to 'full' when you need complete instrument details. Supports pagination for large result sets."),
+		mcp.WithString("mode",
+			mcp.Description("Search mode: 'search' for filtering/searching, 'get_by_id' for exact ID lookup, 'get_by_tradingsymbol' for exchange+tradingsymbol lookup, 'get_by_isin' for ISIN lookup, 'get_by_inst_token' for instrument token lookup, 'get_by_exch_token' for exchange token lookup"),
+			mcp.DefaultString("search"),
+			mcp.Enum("search", "get_by_id", "get_by_tradingsymbol", "get_by_isin", "get_by_inst_token", "get_by_exch_token"),
+		),
+		mcp.WithString("verbosity",
+			mcp.Description("Response verbosity: 'compact' returns essential fields only (recommended for initial searches), 'full' returns complete instrument details"),
+			mcp.DefaultString("compact"),
+			mcp.Enum("compact", "full"),
+		),
 		mcp.WithString("query",
-			mcp.Description("Search query"),
-			mcp.Required(),
+			mcp.Description("Search query (required for 'search' mode)"),
 		),
 		mcp.WithString("filter_on",
-			mcp.Description("Filter on a specific field. (Optional). [id(default)=exch:tradingsymbol, name=nice name of the instrument, tradingsymbol=used to trade in a specific exchange, isin=universal identifier for an instrument across exchanges], underlying=[query=underlying instrument, result=futures and options. note=query format -> exch:tradingsymbol where NSE/BSE:PNB converted to -> NFO/BFO:PNB for query since futures and options available under them]"),
+			mcp.Description("Filter on a specific field for 'search' mode. (Optional). [id(default)=exch:tradingsymbol, name=nice name of the instrument, tradingsymbol=used to trade in a specific exchange, isin=universal identifier for an instrument across exchanges], underlying=[query=underlying instrument, result=futures and options. note=query format -> exch:tradingsymbol where NSE/BSE:PNB converted to -> NFO/BFO:PNB for query since futures and options available under them]"),
 			mcp.Enum("id", "name", "isin", "tradingsymbol", "underlying"),
+		),
+		mcp.WithString("id",
+			mcp.Description("Instrument ID in format 'EXCHANGE:TRADINGSYMBOL' (required for 'get_by_id' mode)"),
+		),
+		mcp.WithString("exchange",
+			mcp.Description("Exchange code (required for 'get_by_tradingsymbol' and 'get_by_exch_token' modes)"),
+		),
+		mcp.WithString("tradingsymbol",
+			mcp.Description("Trading symbol (required for 'get_by_tradingsymbol' mode)"),
+		),
+		mcp.WithString("isin",
+			mcp.Description("ISIN identifier (required for 'get_by_isin' mode)"),
+		),
+		mcp.WithNumber("inst_token",
+			mcp.Description("Instrument token (required for 'get_by_inst_token' mode)"),
+		),
+		mcp.WithNumber("exch_token",
+			mcp.Description("Exchange token (required for 'get_by_exch_token' mode)"),
 		),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
@@ -71,11 +99,22 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "query"); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		mode := SafeAssertString(args["mode"], "search")
+		verbosity := SafeAssertString(args["verbosity"], "compact")
+
+		// Track metrics for tool usage
+		if manager.Metrics() != nil {
+			manager.Metrics().IncrementDailyWithLabels("tool_calls", map[string]string{
+				"tool": "search_instruments",
+			})
+			// Track mode and verbosity usage
+			manager.Metrics().IncrementDailyWithLabels("instruments_search_mode", map[string]string{
+				"mode": mode,
+			})
+			manager.Metrics().IncrementDailyWithLabels("instruments_search_verbosity", map[string]string{
+				"verbosity": verbosity,
+			})
 		}
-		query := SafeAssertString(args["query"], "")
-		filterOn := SafeAssertString(args["filter_on"], "id")
 
 		if manager.Instruments == nil {
 			return mcp.NewToolResultError("Instrument manager is not initialized."), nil
@@ -86,54 +125,148 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		var out []instruments.Instrument
+		var err error
 
-		switch filterOn {
-		case "underlying":
-			if strings.Contains(query, ":") {
-				parts := strings.Split(query, ":")
-				if len(parts) != 2 {
-					return mcp.NewToolResultError("Invalid query format, specify exch:underlying, where exchange is BFO/NFO"), nil
+		switch mode {
+		case "get_by_id":
+			if err := ValidateRequired(args, "id"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			id := SafeAssertString(args["id"], "")
+			var instrument instruments.Instrument
+			instrument, err = manager.Instruments.GetByID(id)
+			if err == nil {
+				out = []instruments.Instrument{instrument}
+			}
+
+		case "get_by_tradingsymbol":
+			if err := ValidateRequired(args, "exchange", "tradingsymbol"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			exchange := SafeAssertString(args["exchange"], "")
+			tradingsymbol := SafeAssertString(args["tradingsymbol"], "")
+			var instrument instruments.Instrument
+			instrument, err = manager.Instruments.GetByTradingsymbol(exchange, tradingsymbol)
+			if err == nil {
+				out = []instruments.Instrument{instrument}
+			}
+
+		case "get_by_isin":
+			if err := ValidateRequired(args, "isin"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			isn := SafeAssertString(args["isin"], "")
+			out, err = manager.Instruments.GetByISIN(isn)
+
+		case "get_by_inst_token":
+			if err := ValidateRequired(args, "inst_token"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			token := SafeAssertInt(args["inst_token"], 0)
+			var instrument instruments.Instrument
+			instrument, err = manager.Instruments.GetByInstToken(uint32(token))
+			if err == nil {
+				out = []instruments.Instrument{instrument}
+			}
+
+		case "get_by_exch_token":
+			if err := ValidateRequired(args, "exchange", "exch_token"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			exchange := SafeAssertString(args["exchange"], "")
+			exchToken := SafeAssertInt(args["exch_token"], 0)
+			var instrument instruments.Instrument
+			instrument, err = manager.Instruments.GetByExchToken(exchange, uint32(exchToken))
+			if err == nil {
+				out = []instruments.Instrument{instrument}
+			}
+
+		default: // "search" mode
+			if err := ValidateRequired(args, "query"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			query := SafeAssertString(args["query"], "")
+			filterOn := SafeAssertString(args["filter_on"], "id")
+
+			switch filterOn {
+			case "underlying":
+				if strings.Contains(query, ":") {
+					parts := strings.Split(query, ":")
+					if len(parts) != 2 {
+						return mcp.NewToolResultError("Invalid query format, specify exch:underlying, where exchange is BFO/NFO"), nil
+					}
+					exch := parts[0]
+					underlying := parts[1]
+					instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
+					out = instruments
+				} else {
+					exch := "NFO"
+					underlying := query
+					instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
+					out = instruments
 				}
-				exch := parts[0]
-				underlying := parts[1]
-				instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
-				out = instruments
-			} else {
-				exch := "NFO"
-				underlying := query
-				instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
+			default:
+				instruments := manager.Instruments.Filter(func(instrument instruments.Instrument) bool {
+					switch filterOn {
+					case "name":
+						return strings.Contains(strings.ToLower(instrument.Name), strings.ToLower(query))
+					case "tradingsymbol":
+						return strings.Contains(strings.ToLower(instrument.Tradingsymbol), strings.ToLower(query))
+					case "isin":
+						return strings.Contains(strings.ToLower(instrument.ISIN), strings.ToLower(query))
+					case "id":
+						return strings.Contains(strings.ToLower(instrument.ID), strings.ToLower(query))
+					default:
+						return strings.Contains(strings.ToLower(instrument.ID), strings.ToLower(query))
+					}
+				})
 				out = instruments
 			}
-		default:
-			instruments := manager.Instruments.Filter(func(instrument instruments.Instrument) bool {
-				switch filterOn {
-				case "name":
-					return strings.Contains(strings.ToLower(instrument.Name), strings.ToLower(query))
-				case "tradingsymbol":
-					return strings.Contains(strings.ToLower(instrument.Tradingsymbol), strings.ToLower(query))
-				case "isin":
-					return strings.Contains(strings.ToLower(instrument.ISIN), strings.ToLower(query))
-				case "id":
-					return strings.Contains(strings.ToLower(instrument.ID), strings.ToLower(query))
-				default:
-					return strings.Contains(strings.ToLower(instrument.ID), strings.ToLower(query))
-				}
-			})
-			out = instruments
 		}
+
+		if err != nil {
+			return mcp.NewToolResultError("Instrument not found"), nil
+		}
+
 		params := ParsePaginationParams(args)
 		originalLength := len(out)
 		paginatedData := ApplyPagination(out, params)
+
+		// Convert to appropriate format based on verbosity
+		var finalData []interface{}
+		if verbosity == "compact" {
+			compacts := make([]instruments.Compact, len(paginatedData))
+			for i, instrument := range paginatedData {
+				compacts[i] = instrument.ToCompact()
+			}
+			finalData = make([]interface{}, len(compacts))
+			for i, compact := range compacts {
+				finalData[i] = compact
+			}
+		} else {
+			finalData = make([]interface{}, len(paginatedData))
+			for i, instrument := range paginatedData {
+				finalData[i] = instrument
+			}
+		}
+
 		var responseData interface{}
 		if params.Limit > 0 {
-			interfaceData := make([]interface{}, len(paginatedData))
-			for i, instrument := range paginatedData {
-				interfaceData[i] = instrument
-			}
-			responseData = CreatePaginatedResponse(out, interfaceData, params, originalLength)
+			responseData = CreatePaginatedResponse(out, finalData, params, originalLength)
 		} else {
-			responseData = paginatedData
+			responseData = finalData
 		}
+
+		// Track result metrics
+		if manager.Metrics() != nil {
+			resultCount := len(out)
+			manager.Metrics().IncrementDailyWithLabels("instruments_search_results", map[string]string{
+				"mode":      mode,
+				"verbosity": verbosity,
+				"count":     fmt.Sprintf("%d", resultCount),
+			})
+		}
+
 		return handler.MarshalResponse(responseData, "search_instruments")
 	}
 }

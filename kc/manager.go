@@ -83,6 +83,11 @@ type Manager struct {
 	Instruments    *instruments.Manager
 }
 
+// Metrics returns the metrics manager instance
+func (m *Manager) Metrics() *metrics.Manager {
+	return m.metrics
+}
+
 func (m *Manager) initializeTemplates() error {
 	templates, err := setupTemplates()
 	if err != nil {
