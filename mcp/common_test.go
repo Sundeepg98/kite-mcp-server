@@ -196,7 +196,7 @@ func TestToolExclusion(t *testing.T) {
 		// Verify excluded tools not in filtered list
 		filteredNames := make(map[string]bool)
 		for _, tool := range filtered {
-			filteredNames[tool.Tool().Name] = true
+			filteredNames[tool.Definition().Name] = true
 		}
 		assert.False(t, filteredNames["place_order"])
 		assert.False(t, filteredNames["modify_order"])
@@ -210,7 +210,7 @@ func TestToolExclusion(t *testing.T) {
 		toolNames := make(map[string]bool)
 		for _, tool := range allTools {
 			assert.NotNil(t, tool)
-			name := tool.Tool().Name
+			name := tool.Definition().Name
 			assert.NotEmpty(t, name)
 			assert.False(t, toolNames[name], "Duplicate tool: %s", name)
 			toolNames[name] = true

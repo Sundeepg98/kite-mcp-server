@@ -1,116 +1,137 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
 type AlertsTool struct{}
 
-func (*AlertsTool) Tool() mcp.Tool {
-	return mcp.NewTool("alerts",
-		mcp.WithDescription("Manage Kite price alerts - create, modify, delete, and retrieve alerts with optional history"),
-		mcp.WithString("mode",
-			mcp.Description("Operation mode: get=create=retrieve alerts, create=new alert, modify=update alert, delete=remove alerts"),
-			mcp.Required(),
-			mcp.Enum("get", "create", "modify", "delete"),
-		),
-		mcp.WithArray("uuids",
-			mcp.Description("Array of alert UUIDs (for get/modify/delete modes). Single UUID for specific alert, multiple for batch operations"),
-			mcp.Required(),
-			mcp.Items(map[string]any{
-				"type": "string",
-			}),
-		),
-		mcp.WithString("status",
-			mcp.Description("Filter alerts by status (only for get mode)"),
-			mcp.Enum("enabled", "disabled", "deleted"),
-		),
-		mcp.WithString("type",
-			mcp.Description("Filter alerts by type (only for get mode)"),
-			mcp.Enum("simple", "ato"),
-		),
-		mcp.WithBoolean("history",
-			mcp.Description("Include alert history (only for get mode, default: false)"),
-		),
-		mcp.WithString("name",
-			mcp.Description("Alert name (required for create/modify modes)"),
-		),
-		mcp.WithString("alert_type",
-			mcp.Description("Alert type: simple or ato (required for create/modify modes)"),
-			mcp.Enum("simple", "ato"),
-		),
-		mcp.WithString("lhs_exchange",
-			mcp.Description("Exchange for left-hand side instrument (required for create/modify modes)"),
-		),
-		mcp.WithString("lhs_tradingsymbol",
-			mcp.Description("Trading symbol for left-hand side instrument (required for create/modify modes)"),
-		),
-		mcp.WithString("lhs_attribute",
-			mcp.Description("Attribute for left-hand side (e.g., LastTradedPrice) (required for create/modify modes)"),
-		),
-		mcp.WithString("operator",
-			mcp.Description("Comparison operator: <=, >=, <, >, == (required for create/modify modes)"),
-			mcp.Enum("<=", ">=", "<", ">", "=="),
-		),
-		mcp.WithString("rhs_type",
-			mcp.Description("Right-hand side type: constant or instrument (required for create/modify modes)"),
-			mcp.Enum("constant", "instrument"),
-		),
-		mcp.WithNumber("rhs_constant",
-			mcp.Description("Constant value for right-hand side (required if rhs_type=constant)"),
-		),
-		mcp.WithString("rhs_exchange",
-			mcp.Description("Exchange for right-hand side instrument (required if rhs_type=instrument)"),
-		),
-		mcp.WithString("rhs_tradingsymbol",
-			mcp.Description("Trading symbol for right-hand side instrument (required if rhs_type=instrument)"),
-		),
-		mcp.WithString("rhs_attribute",
-			mcp.Description("Attribute for right-hand side (required if rhs_type=instrument)"),
-		),
-		mcp.WithString("basket",
-			mcp.Description("JSON string containing basket configuration for ATO alerts (optional, only for alert_type=ato)"),
-		),
+var alertsSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"mode": {
+			"type": "string",
+			"description": "Operation mode: get=retrieve alerts, create=new alert, modify=update alert, delete=remove alerts",
+			"enum": ["get", "create", "modify", "delete"]
+		},
+		"uuids": {
+			"type": "array",
+			"description": "Array of alert UUIDs (for get/modify/delete modes). Single UUID for specific alert, multiple for batch operations",
+			"items": {
+				"type": "string"
+			}
+		},
+		"status": {
+			"type": "string",
+			"description": "Filter alerts by status (only for get mode)",
+			"enum": ["enabled", "disabled", "deleted"]
+		},
+		"type": {
+			"type": "string",
+			"description": "Filter alerts by type (only for get mode)",
+			"enum": ["simple", "ato"]
+		},
+		"history": {
+			"type": "boolean",
+			"description": "Include alert history (only for get mode, default: false)"
+		},
+		"name": {
+			"type": "string",
+			"description": "Alert name (required for create/modify modes)"
+		},
+		"alert_type": {
+			"type": "string",
+			"description": "Alert type: simple or ato (required for create/modify modes)",
+			"enum": ["simple", "ato"]
+		},
+		"lhs_exchange": {
+			"type": "string",
+			"description": "Exchange for left-hand side instrument (required for create/modify modes)"
+		},
+		"lhs_tradingsymbol": {
+			"type": "string",
+			"description": "Trading symbol for left-hand side instrument (required for create/modify modes)"
+		},
+		"lhs_attribute": {
+			"type": "string",
+			"description": "Attribute for left-hand side (e.g., LastTradedPrice) (required for create/modify modes)"
+		},
+		"operator": {
+			"type": "string",
+			"description": "Comparison operator: <=, >=, <, >, == (required for create/modify modes)",
+			"enum": ["<=", ">=", "<", ">", "=="]
+		},
+		"rhs_type": {
+			"type": "string",
+			"description": "Right-hand side type: constant or instrument (required for create/modify modes)",
+			"enum": ["constant", "instrument"]
+		},
+		"rhs_constant": {
+			"type": "number",
+			"description": "Constant value for right-hand side (required if rhs_type=constant)"
+		},
+		"rhs_exchange": {
+			"type": "string",
+			"description": "Exchange for right-hand side instrument (required if rhs_type=instrument)"
+		},
+		"rhs_tradingsymbol": {
+			"type": "string",
+			"description": "Trading symbol for right-hand side instrument (required if rhs_type=instrument)"
+		},
+		"rhs_attribute": {
+			"type": "string",
+			"description": "Attribute for right-hand side (required if rhs_type=instrument)"
+		},
+		"basket": {
+			"type": "string",
+			"description": "JSON string containing basket configuration for ATO alerts (optional, only for alert_type=ato)"
+		}
+	},
+	"required": ["mode", "uuids"]
+}`)
+
+func (*AlertsTool) Definition() *mcp.Tool {
+	return NewTool("alerts",
+		"Manage Kite price alerts - create, modify, delete, and retrieve alerts with optional history",
+		alertsSchema,
 	)
 }
 
-func (*AlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*AlertsTool) Handler(manager *kc.Manager) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := request.GetArguments()
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := GetArguments(request)
 		mode := SafeAssertString(args["mode"], "")
 
 		switch mode {
 		case "get":
-			return handler.WithKiteClient(ctx, "alerts_get", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+			return handler.WithKiteClient(request, "alerts_get", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 				return handleGetAlerts(handler, args, client)
 			})
 		case "create":
-			return handler.WithKiteClient(ctx, "alerts_create", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+			return handler.WithKiteClient(request, "alerts_create", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 				return handleCreateAlert(handler, args, client)
 			})
 		case "modify":
-			return handler.WithKiteClient(ctx, "alerts_modify", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+			return handler.WithKiteClient(request, "alerts_modify", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 				return handleModifyAlert(handler, args, client)
 			})
 		case "delete":
-			return handler.WithKiteClient(ctx, "alerts_delete", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+			return handler.WithKiteClient(request, "alerts_delete", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 				return handleDeleteAlerts(handler, args, client)
 			})
 		default:
-			return mcp.NewToolResultError("Invalid mode. Must be one of: get, create, modify, delete"), nil
+			return NewToolResultError("Invalid mode. Must be one of: get, create, modify, delete"), nil
 		}
 	}
 }
 
-func handleGetAlerts(handler *ToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+func handleGetAlerts(handler *BaseToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 	uuids := SafeAssertStringArray(args["uuids"])
 	includeHistory := SafeAssertBool(args["history"], false)
 	status := SafeAssertString(args["status"], "")
@@ -130,7 +151,7 @@ func handleGetAlerts(handler *ToolHandler, args map[string]interface{}, client *
 		uuid := uuids[0]
 		alert, err := client.GetAlert(uuid)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get alert %s: %v", uuid, err)), nil
+			return NewToolResultError(fmt.Sprintf("Failed to get alert %s: %v", uuid, err)), nil
 		}
 
 		response := map[string]interface{}{
@@ -157,7 +178,7 @@ func handleGetAlerts(handler *ToolHandler, args map[string]interface{}, client *
 		// Get all alerts and filter by UUIDs
 		allAlerts, err := client.GetAlerts(nil)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get alerts: %v", err)), nil
+			return NewToolResultError(fmt.Sprintf("Failed to get alerts: %v", err)), nil
 		}
 
 		// Filter by provided UUIDs
@@ -175,7 +196,7 @@ func handleGetAlerts(handler *ToolHandler, args map[string]interface{}, client *
 		// Get all alerts with filters
 		alerts, err = client.GetAlerts(filters)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get alerts: %v", err)), nil
+			return NewToolResultError(fmt.Sprintf("Failed to get alerts: %v", err)), nil
 		}
 	}
 
@@ -200,19 +221,19 @@ func handleGetAlerts(handler *ToolHandler, args map[string]interface{}, client *
 	return handler.MarshalResponse(response, "alerts_get")
 }
 
-func handleCreateAlert(handler *ToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+func handleCreateAlert(handler *BaseToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 	if err := validateAlertParams(args, true); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	alertParams, err := buildAlertParams(args)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to build alert parameters: %v", err)), nil
+		return NewToolResultError(fmt.Sprintf("Failed to build alert parameters: %v", err)), nil
 	}
 
 	alert, err := client.CreateAlert(alertParams)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create alert: %v", err)), nil
+		return NewToolResultError(fmt.Sprintf("Failed to create alert: %v", err)), nil
 	}
 
 	return handler.MarshalResponse(map[string]interface{}{
@@ -220,24 +241,24 @@ func handleCreateAlert(handler *ToolHandler, args map[string]interface{}, client
 	}, "alerts_create")
 }
 
-func handleModifyAlert(handler *ToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+func handleModifyAlert(handler *BaseToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 	uuids := SafeAssertStringArray(args["uuids"])
 	if len(uuids) == 0 {
-		return mcp.NewToolResultError("UUID is required for modify mode"), nil
+		return NewToolResultError("UUID is required for modify mode"), nil
 	}
 
 	if err := validateAlertParams(args, false); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	alertParams, err := buildAlertParams(args)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to build alert parameters: %v", err)), nil
+		return NewToolResultError(fmt.Sprintf("Failed to build alert parameters: %v", err)), nil
 	}
 
 	alert, err := client.ModifyAlert(uuids[0], alertParams)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify alert %s: %v", uuids[0], err)), nil
+		return NewToolResultError(fmt.Sprintf("Failed to modify alert %s: %v", uuids[0], err)), nil
 	}
 
 	return handler.MarshalResponse(map[string]interface{}{
@@ -245,15 +266,15 @@ func handleModifyAlert(handler *ToolHandler, args map[string]interface{}, client
 	}, "alerts_modify")
 }
 
-func handleDeleteAlerts(handler *ToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+func handleDeleteAlerts(handler *BaseToolHandler, args map[string]interface{}, client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 	uuids := SafeAssertStringArray(args["uuids"])
 	if len(uuids) == 0 {
-		return mcp.NewToolResultError("At least one UUID is required for delete mode"), nil
+		return NewToolResultError("At least one UUID is required for delete mode"), nil
 	}
 
 	err := client.DeleteAlerts(uuids...)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete alerts: %v", err)), nil
+		return NewToolResultError(fmt.Sprintf("Failed to delete alerts: %v", err)), nil
 	}
 
 	return handler.MarshalResponse(map[string]interface{}{

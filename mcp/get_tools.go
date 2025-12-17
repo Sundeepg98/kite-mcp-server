@@ -1,23 +1,23 @@
 package mcp
 
 import (
-	"context"
+	"encoding/json"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
 type ProfileTool struct{}
 
-func (*ProfileTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_profile",
-		mcp.WithDescription("Retrieve the user's profile information, including user ID, name, email, and account details like products orders, and exchanges available to the user. Use this to get basic user details."),
+func (*ProfileTool) Definition() *mcp.Tool {
+	return NewTool("get_profile",
+		"Retrieve the user's profile information, including user ID, name, email, and account details like products orders, and exchanges available to the user. Use this to get basic user details.",
+		nil,
 	)
 }
 
-func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*ProfileTool) Handler(manager *kc.Manager) ToolHandler {
 	return SimpleToolHandler(manager, "get_profile", func(client *kiteconnect.Client) (interface{}, error) {
 		return client.GetUserProfile()
 	})
@@ -25,13 +25,11 @@ func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type MarginsTool struct{}
 
-func (*MarginsTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_margins",
-		mcp.WithDescription("Get margins"),
-	)
+func (*MarginsTool) Definition() *mcp.Tool {
+	return NewTool("get_margins", "Get margins", nil)
 }
 
-func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*MarginsTool) Handler(manager *kc.Manager) ToolHandler {
 	return SimpleToolHandler(manager, "get_margins", func(client *kiteconnect.Client) (interface{}, error) {
 		return client.GetUserMargins()
 	})
@@ -39,30 +37,40 @@ func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type HoldingsTool struct{}
 
-func (*HoldingsTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_holdings",
-		mcp.WithDescription("Get holdings for the current user. Supports pagination for large datasets."),
-		mcp.WithString("type",
-			mcp.Description("Type of holdings data to retrieve. 'full' returns detailed holdings with pagination, 'summary' returns aggregated summary data, 'compact' returns compact holdings with pagination"),
-			mcp.DefaultString("full"),
-			mcp.Enum("full", "summary", "compact"),
-		),
-		mcp.WithNumber("from",
-			mcp.Description("Starting index for pagination (0-based). Default: 0"),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of holdings to return. If not specified, returns all holdings. When specified, response includes pagination metadata. Only applies to 'full' and 'compact' types"),
-		),
+var holdingsSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"type": {
+			"type": "string",
+			"description": "Type of holdings data to retrieve. 'full' returns detailed holdings with pagination, 'summary' returns aggregated summary data, 'compact' returns compact holdings with pagination",
+			"default": "full",
+			"enum": ["full", "summary", "compact"]
+		},
+		"from": {
+			"type": "number",
+			"description": "Starting index for pagination (0-based). Default: 0"
+		},
+		"limit": {
+			"type": "number",
+			"description": "Maximum number of holdings to return. If not specified, returns all holdings. When specified, response includes pagination metadata. Only applies to 'full' and 'compact' types"
+		}
+	}
+}`)
+
+func (*HoldingsTool) Definition() *mcp.Tool {
+	return NewTool("get_holdings",
+		"Get holdings for the current user. Supports pagination for large datasets.",
+		holdingsSchema,
 	)
 }
 
-func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*HoldingsTool) Handler(manager *kc.Manager) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := request.GetArguments()
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := GetArguments(request)
 		holdingsType := SafeAssertString(args["type"], "full")
 
-		return handler.WithKiteClient(ctx, "get_holdings", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+		return handler.WithKiteClient(request, "get_holdings", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 			switch holdingsType {
 			case "summary":
 				summary, err := client.GetHoldingsSummary()
@@ -117,19 +125,28 @@ func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type PositionsTool struct{}
 
-func (*PositionsTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_positions",
-		mcp.WithDescription("Get current positions. Supports pagination for large datasets."),
-		mcp.WithNumber("from",
-			mcp.Description("Starting index for pagination (0-based). Default: 0"),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of positions to return. If not specified, returns all positions. When specified, response includes pagination metadata."),
-		),
+var paginationSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"from": {
+			"type": "number",
+			"description": "Starting index for pagination (0-based). Default: 0"
+		},
+		"limit": {
+			"type": "number",
+			"description": "Maximum number of items to return. If not specified, returns all items. When specified, response includes pagination metadata."
+		}
+	}
+}`)
+
+func (*PositionsTool) Definition() *mcp.Tool {
+	return NewTool("get_positions",
+		"Get current positions. Supports pagination for large datasets.",
+		paginationSchema,
 	)
 }
 
-func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*PositionsTool) Handler(manager *kc.Manager) ToolHandler {
 	return PaginatedToolHandler(manager, "get_positions", func(client *kiteconnect.Client) ([]interface{}, error) {
 		positions, err := client.GetPositions()
 		if err != nil {
@@ -151,19 +168,14 @@ func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type TradesTool struct{}
 
-func (*TradesTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_trades",
-		mcp.WithDescription("Get trading history. Supports pagination for large datasets."),
-		mcp.WithNumber("from",
-			mcp.Description("Starting index for pagination (0-based). Default: 0"),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of trades to return. If not specified, returns all trades. When specified, response includes pagination metadata."),
-		),
+func (*TradesTool) Definition() *mcp.Tool {
+	return NewTool("get_trades",
+		"Get trading history. Supports pagination for large datasets.",
+		paginationSchema,
 	)
 }
 
-func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*TradesTool) Handler(manager *kc.Manager) ToolHandler {
 	return PaginatedToolHandler(manager, "get_trades", func(client *kiteconnect.Client) ([]interface{}, error) {
 		trades, err := client.GetTrades()
 		if err != nil {
@@ -179,19 +191,14 @@ func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type OrdersTool struct{}
 
-func (*OrdersTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_orders",
-		mcp.WithDescription("Get all orders. Supports pagination for large datasets."),
-		mcp.WithNumber("from",
-			mcp.Description("Starting index for pagination (0-based). Default: 0"),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of orders to return. If not specified, returns all orders. When specified, response includes pagination metadata."),
-		),
+func (*OrdersTool) Definition() *mcp.Tool {
+	return NewTool("get_orders",
+		"Get all orders. Supports pagination for large datasets.",
+		paginationSchema,
 	)
 }
 
-func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*OrdersTool) Handler(manager *kc.Manager) ToolHandler {
 	return PaginatedToolHandler(manager, "get_orders", func(client *kiteconnect.Client) ([]interface{}, error) {
 		orders, err := client.GetOrders()
 		if err != nil {
@@ -207,19 +214,14 @@ func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type GTTOrdersTool struct{}
 
-func (*GTTOrdersTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_gtts",
-		mcp.WithDescription("Get all active GTT orders. Supports pagination for large datasets."),
-		mcp.WithNumber("from",
-			mcp.Description("Starting index for pagination (0-based). Default: 0"),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of GTT orders to return. If not specified, returns all GTT orders. When specified, response includes pagination metadata."),
-		),
+func (*GTTOrdersTool) Definition() *mcp.Tool {
+	return NewTool("get_gtts",
+		"Get all active GTT orders. Supports pagination for large datasets.",
+		paginationSchema,
 	)
 }
 
-func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*GTTOrdersTool) Handler(manager *kc.Manager) ToolHandler {
 	return PaginatedToolHandler(manager, "get_gtts", func(client *kiteconnect.Client) ([]interface{}, error) {
 		gttBook, err := client.GetGTTs()
 		if err != nil {
@@ -235,29 +237,37 @@ func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type OrderTradesTool struct{}
 
-func (*OrderTradesTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_order_trades",
-		mcp.WithDescription("Get trades for a specific order"),
-		mcp.WithString("order_id",
-			mcp.Description("ID of the order to fetch trades for"),
-			mcp.Required(),
-		),
+var orderIDSchema = json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"order_id": {
+			"type": "string",
+			"description": "ID of the order"
+		}
+	},
+	"required": ["order_id"]
+}`)
+
+func (*OrderTradesTool) Definition() *mcp.Tool {
+	return NewTool("get_order_trades",
+		"Get trades for a specific order",
+		orderIDSchema,
 	)
 }
 
-func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*OrderTradesTool) Handler(manager *kc.Manager) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := request.GetArguments()
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := GetArguments(request)
 		if err := ValidateRequired(args, "order_id"); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return NewToolResultError(err.Error()), nil
 		}
 		orderID := SafeAssertString(args["order_id"], "")
 
-		return handler.WithKiteClient(ctx, "get_order_trades", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+		return handler.WithKiteClient(request, "get_order_trades", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 			orderTrades, err := client.GetOrderTrades(orderID)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get order trades"), nil
+				return NewToolResultError("Failed to get order trades"), nil
 			}
 			return handler.MarshalResponse(orderTrades, "get_order_trades")
 		})
@@ -266,29 +276,26 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 type OrderHistoryTool struct{}
 
-func (*OrderHistoryTool) Tool() mcp.Tool {
-	return mcp.NewTool("get_order_history",
-		mcp.WithDescription("Get order history for a specific order"),
-		mcp.WithString("order_id",
-			mcp.Description("ID of the order to fetch history for"),
-			mcp.Required(),
-		),
+func (*OrderHistoryTool) Definition() *mcp.Tool {
+	return NewTool("get_order_history",
+		"Get order history for a specific order",
+		orderIDSchema,
 	)
 }
 
-func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+func (*OrderHistoryTool) Handler(manager *kc.Manager) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := request.GetArguments()
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := GetArguments(request)
 		if err := ValidateRequired(args, "order_id"); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return NewToolResultError(err.Error()), nil
 		}
 		orderID := SafeAssertString(args["order_id"], "")
 
-		return handler.WithKiteClient(ctx, "get_order_history", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+		return handler.WithKiteClient(request, "get_order_history", func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 			orderHistory, err := client.GetOrderHistory(orderID)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get order history"), nil
+				return NewToolResultError("Failed to get order history"), nil
 			}
 			return handler.MarshalResponse(orderHistory, "get_order_history")
 		})

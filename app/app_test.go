@@ -49,13 +49,38 @@ func TestLoadConfig_MissingAPISecret(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_ValidCredentials(t *testing.T) {
-	// Set both API key and secret
+func TestLoadConfig_MissingJWTSecret(t *testing.T) {
+	// Set API key and secret but not JWT secret
 	_ = os.Setenv("KITE_API_KEY", "test_key")
 	_ = os.Setenv("KITE_API_SECRET", "test_secret")
+	_ = os.Unsetenv("JWT_SECRET")
 	defer func() {
 		_ = os.Unsetenv("KITE_API_KEY")
 		_ = os.Unsetenv("KITE_API_SECRET")
+	}()
+
+	app := NewApp(testLogger())
+	err := app.LoadConfig()
+
+	if err == nil {
+		t.Error("Expected error when JWT secret is missing")
+	}
+
+	expectedMsg := "JWT_SECRET is required (32+ bytes)"
+	if err.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+func TestLoadConfig_ValidCredentials(t *testing.T) {
+	// Set both API key, secret, and JWT secret
+	_ = os.Setenv("KITE_API_KEY", "test_key")
+	_ = os.Setenv("KITE_API_SECRET", "test_secret")
+	_ = os.Setenv("JWT_SECRET", "test-jwt-secret-32-bytes-minimum")
+	defer func() {
+		_ = os.Unsetenv("KITE_API_KEY")
+		_ = os.Unsetenv("KITE_API_SECRET")
+		_ = os.Unsetenv("JWT_SECRET")
 	}()
 
 	app := NewApp(testLogger())
@@ -82,9 +107,11 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("APP_HOST")
 	_ = os.Setenv("KITE_API_KEY", "test_key")
 	_ = os.Setenv("KITE_API_SECRET", "test_secret")
+	_ = os.Setenv("JWT_SECRET", "test-jwt-secret-32-bytes-minimum")
 	defer func() {
 		_ = os.Unsetenv("KITE_API_KEY")
 		_ = os.Unsetenv("KITE_API_SECRET")
+		_ = os.Unsetenv("JWT_SECRET")
 	}()
 
 	app := NewApp(testLogger())
@@ -105,6 +132,12 @@ func TestLoadConfig_Defaults(t *testing.T) {
 
 	if app.Config.AppHost != DefaultHost {
 		t.Errorf("Expected default host '%s', got '%s'", DefaultHost, app.Config.AppHost)
+	}
+
+	// Verify OAuth issuer default
+	expectedIssuer := "http://" + DefaultHost + ":" + DefaultPort
+	if app.Config.OAuthIssuer != expectedIssuer {
+		t.Errorf("Expected OAuth issuer '%s', got '%s'", expectedIssuer, app.Config.OAuthIssuer)
 	}
 }
 

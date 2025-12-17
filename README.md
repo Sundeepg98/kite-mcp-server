@@ -282,6 +282,8 @@ The justfile automatically includes `GOEXPERIMENT=synctest` in all test commands
 | -------------------- | ----------- | ---------------------------------------------------------- |
 | `KITE_API_KEY`       | Required    | Your Kite Connect API key                                  |
 | `KITE_API_SECRET`    | Required    | Your Kite Connect API secret                               |
+| `JWT_SECRET`         | Required    | Secret for signing JWT tokens (min 32 bytes)               |
+| `OAUTH_ISSUER`       | _(auto)_    | OAuth issuer URL (defaults to http://host:port)            |
 | `APP_MODE`           | `http`      | Server mode: `stdio`, `http`, `sse`, or `hybrid`           |
 | `APP_PORT`           | `8080`      | Server port (HTTP/SSE/hybrid modes)                        |
 | `APP_HOST`           | `localhost` | Server host (HTTP/SSE/hybrid modes)                        |
@@ -300,6 +302,84 @@ EXCLUDED_TOOLS=place_order,modify_order,cancel_order
 ```
 
 The hosted version at `mcp.kite.trade` excludes potentially destructive trading operations for security. For accessing the other operations you can generate your own API keys and run the server locally.
+
+## OAuth 2.1 Authentication
+
+The server implements OAuth 2.1 with PKCE for secure authentication. MCP clients can use standard OAuth flows to authenticate users.
+
+### OAuth Endpoints
+
+| Endpoint | Description |
+| -------- | ----------- |
+| `/.well-known/oauth-authorization-server` | OAuth discovery metadata |
+| `/authorize` | Start OAuth authorization flow |
+| `/callback` | OAuth callback (handles Kite login redirect) |
+| `/token` | Exchange authorization code for JWT token |
+| `/mcp` | Protected MCP endpoint (requires Bearer token) |
+
+### OAuth Flow
+
+1. **Authorization Request** (with PKCE):
+   ```
+   GET /authorize?
+     response_type=code&
+     client_id=your-client&
+     redirect_uri=http://localhost:8080/callback&
+     code_challenge=<sha256(code_verifier)>&
+     code_challenge_method=S256&
+     state=random-state
+   ```
+
+2. **User Login**: User is redirected to Kite login page
+
+3. **Callback**: After login, user is redirected back with authorization code
+
+4. **Token Exchange**:
+   ```bash
+   curl -X POST http://localhost:8080/token \
+     -d "grant_type=authorization_code" \
+     -d "code=<authorization_code>" \
+     -d "redirect_uri=http://localhost:8080/callback" \
+     -d "client_id=your-client" \
+     -d "code_verifier=<original_verifier>"
+   ```
+
+5. **MCP Requests**: Use the JWT token in Authorization header:
+   ```bash
+   curl -X POST http://localhost:8080/mcp \
+     -H "Authorization: Bearer <access_token>" \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize",...}'
+   ```
+
+### Testing OAuth
+
+A test script is provided to verify the OAuth flow:
+
+```bash
+./scripts/test-oauth.sh
+```
+
+The script will:
+1. Generate PKCE code_challenge
+2. Display the authorize URL to open in browser
+3. Prompt for the authorization code
+4. Exchange for token and test MCP endpoints
+
+### Generate JWT Secret
+
+Generate a secure JWT secret for production:
+
+```bash
+openssl rand -hex 32
+```
+
+Add to your `.env` file:
+
+```env
+JWT_SECRET=<generated-secret>
+OAUTH_ISSUER=https://your-domain.com  # Optional, defaults to http://host:port
+```
 
 ## Contributing
 

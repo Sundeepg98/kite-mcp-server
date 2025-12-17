@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -12,8 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mark3labs/mcp-go/server"
-	"github.com/ory/fosite"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
@@ -25,17 +23,16 @@ import (
 
 // App represents the main application structure
 type App struct {
-	Config         *Config
-	Version        string
-	startTime      time.Time
-	kcManager      *kc.Manager
-	fositeProvider fosite.OAuth2Provider
-	fositeStore    *oauth.InMemoryStore
-	statusTemplate *template.Template
-	logger         *slog.Logger
-	metrics        *metrics.Manager
-	rateLimiter    *web.RateLimiter
-	oauthHandler   *web.OAuthHandler
+	Config           *Config
+	Version          string
+	startTime        time.Time
+	kcManager        *kc.Manager
+	oauthServer      *oauth.Server
+	jwtOauthHandlers *oauth.Handlers
+	statusTemplate   *template.Template
+	logger           *slog.Logger
+	metrics          *metrics.Manager
+	rateLimiter      *web.RateLimiter
 }
 
 // StatusPageData holds template data for the status page
@@ -54,6 +51,8 @@ type Config struct {
 	AppHost         string
 	ExcludedTools   string
 	AdminSecretPath string
+	JWTSecret       string
+	OAuthIssuer     string
 }
 
 // Server mode constants
@@ -78,6 +77,8 @@ func NewApp(logger *slog.Logger) *App {
 			AppHost:         os.Getenv("APP_HOST"),
 			ExcludedTools:   os.Getenv("EXCLUDED_TOOLS"),
 			AdminSecretPath: os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+			JWTSecret:       os.Getenv("JWT_SECRET"),
+			OAuthIssuer:     os.Getenv("OAUTH_ISSUER"),
 		},
 		Version:   "v0.0.0",
 		startTime: time.Now(),
@@ -102,6 +103,13 @@ func (app *App) LoadConfig() error {
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
 		return fmt.Errorf("KITE_API_KEY or KITE_API_SECRET is missing")
 	}
+	if app.Config.JWTSecret == "" {
+		return fmt.Errorf("JWT_SECRET is required (32+ bytes)")
+	}
+	// Default OAuth issuer to local URL if not set
+	if app.Config.OAuthIssuer == "" {
+		app.Config.OAuthIssuer = "http://" + app.Config.AppHost + ":" + app.Config.AppPort
+	}
 	return nil
 }
 
@@ -125,7 +133,7 @@ func (app *App) configureHTTPClient() {
 	http.DefaultClient.Timeout = 30 * time.Second
 }
 
-func (app *App) initializeServices() (*server.MCPServer, error) {
+func (app *App) initializeServices() (*mcpsdk.Server, error) {
 	app.logger.Info("Initializing services...")
 	// --- Instruments Manager ---
 	instManager, err := instruments.New(instruments.Config{Logger: app.logger})
@@ -141,19 +149,6 @@ func (app *App) initializeServices() (*server.MCPServer, error) {
 	})
 	app.rateLimiter = web.NewRateLimiter()
 
-	// --- Fosite OAuth2 Provider ---
-	// The HMAC strategy used by Fosite for signing tokens requires a secret key.
-	// The error "secret for signing HMAC-SHA512/256 is expected to be 32 byte long, got 0 byte"
-	// indicates this was not set. We'll use the Kite API Secret as a source of entropy
-	// and hash it with SHA-256 to produce a 32-byte key.
-	key := sha256.Sum256([]byte(app.Config.KiteAPISecret))
-	fositeConfig := &fosite.Config{
-		GlobalSecret:        key[:],
-		AccessTokenLifespan: time.Hour * 24,
-	}
-	app.fositeStore = oauth.NewInMemoryStore()
-	app.fositeProvider = oauth.NewFositeProvider(app.fositeStore, fositeConfig)
-
 	// --- Kite Connect Manager ---
 	kcManager, err := kc.New(kc.Config{
 		APIKey:      app.Config.KiteAPIKey,
@@ -167,12 +162,13 @@ func (app *App) initializeServices() (*server.MCPServer, error) {
 	}
 	app.kcManager = kcManager
 
-	// --- OAuth Handler ---
-	oauthHandlerConfig := web.AppConfig{
-		Host:       app.Config.AppHost + ":" + app.Config.AppPort,
-		KiteAPIKey: app.Config.KiteAPIKey,
-	}
-	app.oauthHandler = web.NewOAuthHandler(app.fositeProvider, app.fositeStore, app.kcManager, app.logger, oauthHandlerConfig)
+	// --- JWT OAuth Server ---
+	app.oauthServer = oauth.New(oauth.Config{
+		Issuer:    app.Config.OAuthIssuer,
+		JWTSecret: []byte(app.Config.JWTSecret),
+		TokenTTL:  24 * time.Hour,
+	})
+	app.jwtOauthHandlers = oauth.NewHandlers(app.oauthServer, app.kcManager, app.logger)
 
 	if err := app.initStatusPageTemplate(); err != nil {
 		app.logger.Warn("Failed to initialize status template", "error", err)
@@ -180,7 +176,10 @@ func (app *App) initializeServices() (*server.MCPServer, error) {
 
 	// --- MCP Server & Tools ---
 	app.logger.Info("Creating MCP server and registering tools...")
-	mcpServer := server.NewMCPServer("Kite MCP Server", app.Version)
+	mcpServer := mcpsdk.NewServer(
+		&mcpsdk.Implementation{Name: "Kite MCP Server", Version: app.Version},
+		nil,
+	)
 	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.logger)
 
 	app.logger.Info("All services initialized.")
@@ -218,12 +217,12 @@ func (app *App) setupMux() *http.ServeMux {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
 	mux.HandleFunc("/", app.serveStatusPage)
-	mux.HandleFunc("/callback", app.oauthHandler.Callback)
-	mux.Handle("/authorize", app.rateLimiter.Middleware(http.HandlerFunc(app.oauthHandler.Authorize)))
-	mux.Handle("/token", app.rateLimiter.Middleware(http.HandlerFunc(app.oauthHandler.Token)))
-	mux.Handle("/register", app.rateLimiter.Middleware(http.HandlerFunc(app.oauthHandler.Register)))
-	mux.HandleFunc("/.well-known/oauth-authorization-server", app.oauthHandler.Discovery)
-	mux.HandleFunc("/.well-known/oauth-protected-resource", app.oauthHandler.ProtectedResourceMetadata)
+	// OAuth endpoints (JWT-based)
+	mux.HandleFunc("/callback", app.jwtOauthHandlers.HandleCallback)
+	mux.Handle("/authorize", app.rateLimiter.Middleware(http.HandlerFunc(app.jwtOauthHandlers.HandleAuthorize)))
+	mux.Handle("/token", app.rateLimiter.Middleware(http.HandlerFunc(app.jwtOauthHandlers.HandleToken)))
+	mux.HandleFunc("/.well-known/oauth-authorization-server", app.jwtOauthHandlers.HandleDiscovery)
+	mux.HandleFunc("/.well-known/oauth-protected-resource", app.jwtOauthHandlers.HandleProtectedResourceMetadata)
 	return mux
 }
 
@@ -233,7 +232,7 @@ func (app *App) serveHTTPServer(srv *http.Server) {
 	}
 }
 
-func (app *App) startServer(srv *http.Server, mcpServer *server.MCPServer, url string) error {
+func (app *App) startServer(srv *http.Server, mcpServer *mcpsdk.Server, url string) error {
 	switch app.Config.AppMode {
 	default:
 		return fmt.Errorf("invalid APP_MODE: %s", app.Config.AppMode)
@@ -249,46 +248,64 @@ func (app *App) startServer(srv *http.Server, mcpServer *server.MCPServer, url s
 	return nil
 }
 
-func (app *App) startHTTPServerMode(srv *http.Server, mcpServer *server.MCPServer) {
+func (app *App) startHTTPServerMode(srv *http.Server, mcpServer *mcpsdk.Server) {
 	app.logger.Info("Starting HTTP MCP server", "url", "http://"+srv.Addr+"/mcp")
-	streamable := server.NewStreamableHTTPServer(mcpServer, server.WithSessionIdManager(app.kcManager.SessionManager()))
+	streamable := mcpsdk.NewStreamableHTTPHandler(
+		func(r *http.Request) *mcpsdk.Server { return mcpServer },
+		&mcpsdk.StreamableHTTPOptions{
+			Logger:         app.logger,
+			SessionTimeout: 30 * time.Minute,
+		},
+	)
 	mux := app.setupMux()
-	mux.Handle("/mcp", app.oauthHandler.Middleware(http.HandlerFunc(streamable.ServeHTTP)))
+	mux.Handle("/mcp", app.oauthServer.Middleware(http.HandlerFunc(streamable.ServeHTTP)))
 	srv.Handler = mux
 	app.serveHTTPServer(srv)
 }
 
-func (app *App) startSSEServerMode(srv *http.Server, mcpServer *server.MCPServer, url string) {
+func (app *App) startSSEServerMode(srv *http.Server, mcpServer *mcpsdk.Server, url string) {
 	app.logger.Info("Starting SSE MCP server", "url", "http://"+url+"/sse")
-	sse := server.NewSSEServer(mcpServer, server.WithBaseURL(url), server.WithKeepAlive(true))
+	sseHandler := mcpsdk.NewSSEHandler(
+		func(r *http.Request) *mcpsdk.Server { return mcpServer },
+		nil,
+	)
 	mux := app.setupMux()
-	mux.HandleFunc("/sse", sse.ServeHTTP)
-	mux.HandleFunc("/message", sse.ServeHTTP)
+	mux.HandleFunc("/sse", sseHandler.ServeHTTP)
+	mux.HandleFunc("/message", sseHandler.ServeHTTP)
 	srv.Handler = mux
 	app.serveHTTPServer(srv)
 }
 
-func (app *App) startHybridServerMode(srv *http.Server, mcpServer *server.MCPServer, url string) {
+func (app *App) startHybridServerMode(srv *http.Server, mcpServer *mcpsdk.Server, url string) {
 	app.logger.Info("Starting Hybrid MCP server", "url", "http://"+url)
-	sse := server.NewSSEServer(mcpServer, server.WithBaseURL(url), server.WithKeepAlive(true))
-	streamable := server.NewStreamableHTTPServer(mcpServer, server.WithSessionIdManager(app.kcManager.SessionManager()))
+	sseHandler := mcpsdk.NewSSEHandler(
+		func(r *http.Request) *mcpsdk.Server { return mcpServer },
+		nil,
+	)
+	streamable := mcpsdk.NewStreamableHTTPHandler(
+		func(r *http.Request) *mcpsdk.Server { return mcpServer },
+		&mcpsdk.StreamableHTTPOptions{
+			Logger:         app.logger,
+			SessionTimeout: 30 * time.Minute,
+		},
+	)
 	mux := app.setupMux()
 
-	mux.HandleFunc("/sse", sse.ServeHTTP)
-	mux.HandleFunc("/message", sse.ServeHTTP)
-	mux.Handle("/mcp", app.oauthHandler.Middleware(http.HandlerFunc(streamable.ServeHTTP)))
+	mux.HandleFunc("/sse", sseHandler.ServeHTTP)
+	mux.HandleFunc("/message", sseHandler.ServeHTTP)
+	mux.Handle("/mcp", app.oauthServer.Middleware(http.HandlerFunc(streamable.ServeHTTP)))
 
 	srv.Handler = mux
 	app.serveHTTPServer(srv)
 }
 
-func (app *App) startStdIOServer(srv *http.Server, mcpServer *server.MCPServer) {
+func (app *App) startStdIOServer(srv *http.Server, mcpServer *mcpsdk.Server) {
 	app.logger.Info("Starting STDIO MCP server...")
-	stdio := server.NewStdioServer(mcpServer)
 	mux := app.setupMux()
 	srv.Handler = mux
 	go app.serveHTTPServer(srv)
-	if err := stdio.Listen(context.Background(), os.Stdin, os.Stdout); err != nil {
+	// Run the server on stdio transport
+	if err := mcpServer.Run(context.Background(), &mcpsdk.StdioTransport{}); err != nil {
 		app.logger.Error("STDIO server error", "error", err)
 	}
 }

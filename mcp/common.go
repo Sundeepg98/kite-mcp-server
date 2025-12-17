@@ -1,31 +1,37 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
-// ToolHandler provides common functionality for all MCP tools
-type ToolHandler struct {
+// BaseToolHandler provides common functionality for all MCP tools
+type BaseToolHandler struct {
 	manager *kc.Manager
 }
 
 // NewToolHandler creates a new tool handler with the given manager
-func NewToolHandler(manager *kc.Manager) *ToolHandler {
-	return &ToolHandler{manager: manager}
+func NewToolHandler(manager *kc.Manager) *BaseToolHandler {
+	return &BaseToolHandler{manager: manager}
 }
 
 // WithKiteClient gets an authenticated Kite client and executes the provided function.
 // It handles authentication errors and provides clear instructions to the user.
-func (h *ToolHandler) WithKiteClient(ctx context.Context, toolName string, fn func(client *kiteconnect.Client) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
-	sess := server.ClientSessionFromContext(ctx)
-	sessionID := sess.SessionID()
+// The session ID is extracted from the X-Kite-Session-Id header set by OAuth middleware.
+func (h *BaseToolHandler) WithKiteClient(request *mcp.CallToolRequest, toolName string, fn func(client *kiteconnect.Client) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
+	// Get session ID from custom header set by OAuth middleware
+	var sessionID string
+	if request.Extra != nil && request.Extra.Header != nil {
+		sessionID = request.Extra.Header.Get("X-Kite-Session-Id")
+	}
+	if sessionID == "" {
+		// Fallback to MCP session ID (for stdio mode without OAuth)
+		sessionID = request.Session.ID()
+	}
 
 	h.manager.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID)
 
@@ -33,7 +39,7 @@ func (h *ToolHandler) WithKiteClient(ctx context.Context, toolName string, fn fu
 	if err != nil {
 		h.manager.Logger.Warn("Failed to get authenticated Kite client", "tool", toolName, "session_id", sessionID, "error", err)
 		// Return the specific error message from GetAuthenticatedClient, which guides the user.
-		return mcp.NewToolResultError(err.Error()), nil
+		return NewToolResultError(err.Error()), nil
 	}
 
 	h.manager.Logger.Debug("Session validated successfully", "tool", toolName, "session_id", sessionID)
@@ -41,24 +47,24 @@ func (h *ToolHandler) WithKiteClient(ctx context.Context, toolName string, fn fu
 }
 
 // MarshalResponse marshals data to JSON and returns an MCP text result
-func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.CallToolResult, error) {
+func (h *BaseToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.CallToolResult, error) {
 	v, err := json.Marshal(data)
 	if err != nil {
 		h.manager.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
-		return mcp.NewToolResultError("Failed to process response data"), nil
+		return NewToolResultError("Failed to process response data"), nil
 	}
 
 	h.manager.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
-	return mcp.NewToolResultText(string(v)), nil
+	return NewToolResultText(string(v)), nil
 }
 
 // HandleAPICall wraps common API call pattern with error handling and response marshalling
-func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(client *kiteconnect.Client) (interface{}, error)) (*mcp.CallToolResult, error) {
-	return h.WithKiteClient(ctx, toolName, func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+func (h *BaseToolHandler) HandleAPICall(request *mcp.CallToolRequest, toolName string, apiCall func(client *kiteconnect.Client) (interface{}, error)) (*mcp.CallToolResult, error) {
+	return h.WithKiteClient(request, toolName, func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 		data, err := apiCall(client)
 		if err != nil {
 			h.manager.Logger.Error("API call failed", "tool", toolName, "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
+			return NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
 		}
 		return h.MarshalResponse(data, toolName)
 	})
@@ -243,23 +249,37 @@ func CreatePaginatedResponse(originalData interface{}, paginatedData interface{}
 	return response
 }
 
-func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(client *kiteconnect.Client) (interface{}, error)) server.ToolHandlerFunc {
+// GetArguments extracts arguments from the request as a map
+func GetArguments(request *mcp.CallToolRequest) map[string]interface{} {
+	if request.Params == nil || request.Params.Arguments == nil {
+		return make(map[string]interface{})
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+		return make(map[string]interface{})
+	}
+	return args
+}
+
+// SimpleToolHandler creates a handler for simple API calls
+func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(client *kiteconnect.Client) (interface{}, error)) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handler.HandleAPICall(ctx, toolName, apiCall)
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handler.HandleAPICall(request, toolName, apiCall)
 	}
 }
 
-func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall func(client *kiteconnect.Client) ([]T, error)) server.ToolHandlerFunc {
+// PaginatedToolHandler creates a handler for paginated API calls
+func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall func(client *kiteconnect.Client) ([]T, error)) ToolHandler {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handler.WithKiteClient(ctx, toolName, func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
+	return func(request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handler.WithKiteClient(request, toolName, func(client *kiteconnect.Client) (*mcp.CallToolResult, error) {
 			data, err := apiCall(client)
 			if err != nil {
 				handler.manager.Logger.Error("API call failed", "tool", toolName, "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
+				return NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
 			}
-			args := request.GetArguments()
+			args := GetArguments(request)
 			params := ParsePaginationParams(args)
 			originalLength := len(data)
 			paginatedData := ApplyPagination(data, params)

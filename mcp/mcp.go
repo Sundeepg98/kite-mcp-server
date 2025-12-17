@@ -1,19 +1,26 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 
-	gomcp "github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
 // TODO: add destructive, openworld and readonly hints where applicable.
 
+// ToolHandler is the function signature for MCP tool handlers using the official SDK
+type ToolHandler func(*mcp.CallToolRequest) (*mcp.CallToolResult, error)
+
+// Tool interface defines methods for MCP tools
 type Tool interface {
-	Tool() gomcp.Tool
-	Handler(*kc.Manager) server.ToolHandlerFunc
+	// Definition returns the tool definition for the official SDK
+	Definition() *mcp.Tool
+	// Handler returns the tool handler function
+	Handler(*kc.Manager) ToolHandler
 }
 
 // GetAllTools returns all available tools for registration
@@ -78,7 +85,7 @@ func filterTools(allTools []Tool, excludedSet map[string]bool) ([]Tool, int, int
 	excludedCount := 0
 
 	for _, tool := range allTools {
-		toolName := tool.Tool().Name
+		toolName := tool.Definition().Name
 		if excludedSet[toolName] {
 			excludedCount++
 			continue
@@ -89,7 +96,8 @@ func filterTools(allTools []Tool, excludedSet map[string]bool) ([]Tool, int, int
 	return filteredTools, len(filteredTools), excludedCount
 }
 
-func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools string, logger *slog.Logger) {
+// RegisterTools registers all MCP tools with the official SDK server
+func RegisterTools(srv *mcp.Server, manager *kc.Manager, excludedTools string, logger *slog.Logger) {
 	// Parse excluded tools list
 	excludedSet := parseExcludedTools(excludedTools)
 
@@ -102,13 +110,53 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	allTools := GetAllTools()
 	filteredTools, registeredCount, excludedCount := filterTools(allTools, excludedSet)
 
-	// Register filtered tools
+	// Register filtered tools with official SDK
 	for _, tool := range filteredTools {
-		srv.AddTool(tool.Tool(), tool.Handler(manager))
+		def := tool.Definition()
+		handler := tool.Handler(manager)
+		srv.AddTool(def, wrapHandler(handler))
 	}
 
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,
 		"excluded", excludedCount,
 		"total_available", len(allTools))
+}
+
+// wrapHandler wraps our ToolHandler to match the official SDK's ToolHandler signature
+func wrapHandler(h ToolHandler) mcp.ToolHandler {
+	return func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return h(req)
+	}
+}
+
+// NewToolResultText creates a text result for tool responses
+func NewToolResultText(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}
+}
+
+// NewToolResultError creates an error result for tool responses
+func NewToolResultError(errMsg string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: errMsg},
+		},
+		IsError: true,
+	}
+}
+
+// NewTool creates a new tool definition with the given name and options
+func NewTool(name, description string, inputSchema json.RawMessage) *mcp.Tool {
+	if inputSchema == nil {
+		inputSchema = json.RawMessage(`{"type":"object"}`)
+	}
+	return &mcp.Tool{
+		Name:        name,
+		Description: description,
+		InputSchema: inputSchema,
+	}
 }

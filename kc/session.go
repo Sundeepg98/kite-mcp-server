@@ -171,6 +171,29 @@ func (sm *SessionManager) Get(sessionID string) (*Session, error) {
 	return sm.copySession(session), nil
 }
 
+// UpdateCredentials updates the credentials of an existing session.
+// This method modifies the session in-place, unlike Get which returns a copy.
+func (sm *SessionManager) UpdateCredentials(sessionID string, creds *KiteCredentials) error {
+	if sessionID == "" {
+		return errors.New("session ID cannot be empty")
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, exists := sm.sessions[sessionID]
+	if !exists {
+		return errors.New(errSessionNotFound)
+	}
+
+	if session.Terminated {
+		return errors.New(errCannotUpdateTerminated)
+	}
+
+	session.Credentials = creds
+	return nil
+}
+
 // CleanupExpiredSessions removes expired sessions from memory.
 func (sm *SessionManager) CleanupExpiredSessions() int {
 	sm.mu.Lock()
