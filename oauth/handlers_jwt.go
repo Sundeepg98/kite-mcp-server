@@ -1,8 +1,11 @@
 package oauth
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
 )
@@ -201,11 +204,89 @@ func (h *Handlers) HandleProtectedResourceMetadata(w http.ResponseWriter, r *htt
 	WriteJSON(w, http.StatusOK, h.server.ProtectedResourceMetadata())
 }
 
+// registerRateLimiter limits /register requests (10 per IP per hour)
+var registerRateLimiter = NewRateLimiter(10, time.Hour)
+
+// RegisterRequest represents RFC 7591 client registration request
+type RegisterRequest struct {
+	RedirectURIs []string `json:"redirect_uris"`
+	ClientName   string   `json:"client_name,omitempty"`
+}
+
+// HandleRegister handles POST /register (RFC 7591 Dynamic Client Registration)
+func (h *Handlers) HandleRegister(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientIP := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		clientIP = strings.Split(fwd, ",")[0]
+	}
+	if !registerRateLimiter.Allow(clientIP) {
+		WriteJSON(w, http.StatusTooManyRequests, map[string]string{
+			"error":             "rate_limit_exceeded",
+			"error_description": "Too many registration requests. Try again later.",
+		})
+		return
+	}
+
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_client_metadata",
+			"error_description": "Invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	if len(req.RedirectURIs) == 0 {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_client_metadata",
+			"error_description": "redirect_uris is required",
+		})
+		return
+	}
+
+	clientID := generateSecureToken(16)
+
+	h.server.mu.Lock()
+	h.server.clients[clientID] = &Client{
+		ID:           clientID,
+		RedirectURIs: req.RedirectURIs,
+		CreatedAt:    time.Now(),
+	}
+	h.server.mu.Unlock()
+
+	h.logger.Info("client registered via DCR", "client_id", clientID, "name", req.ClientName)
+
+	WriteJSON(w, http.StatusCreated, map[string]interface{}{
+		"client_id":                  clientID,
+		"client_id_issued_at":        time.Now().Unix(),
+		"redirect_uris":              req.RedirectURIs,
+		"client_name":                req.ClientName,
+		"grant_types":                []string{"authorization_code"},
+		"response_types":             []string{"code"},
+		"token_endpoint_auth_method": "none",
+	})
+}
+
 // RegisterRoutes registers all OAuth routes on a mux
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/.well-known/oauth-authorization-server", h.HandleDiscovery)
 	mux.HandleFunc("/.well-known/oauth-protected-resource", h.HandleProtectedResourceMetadata)
 	mux.HandleFunc("/authorize", h.HandleAuthorize)
 	mux.HandleFunc("/token", h.HandleToken)
+	mux.HandleFunc("/register", h.HandleRegister) // RFC 7591 Dynamic Client Registration
 	// Note: /callback is already registered by kcManager, but we handle OAuth flow in it
 }

@@ -94,6 +94,49 @@ func New(cfg Config) *Server {
 	}
 }
 
+// --- Rate Limiting ---
+
+// RateLimiter provides simple IP-based rate limiting
+type RateLimiter struct {
+	mu       sync.Mutex
+	requests map[string][]time.Time
+	limit    int
+	window   time.Duration
+}
+
+// NewRateLimiter creates a rate limiter
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+}
+
+// Allow checks if request is within rate limit
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	// Filter old requests
+	var recent []time.Time
+	for _, t := range rl.requests[ip] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+
+	if len(recent) >= rl.limit {
+		return false
+	}
+
+	rl.requests[ip] = append(recent, now)
+	return true
+}
+
 // --- Auto Registration ---
 
 // GetOrCreateClient auto-registers a client if not found
@@ -360,12 +403,13 @@ func (s *Server) writeUnauthorized(w http.ResponseWriter, message string) {
 // AuthorizationServerMetadata returns RFC 8414 metadata
 func (s *Server) AuthorizationServerMetadata() map[string]interface{} {
 	return map[string]interface{}{
-		"issuer":                             s.config.Issuer,
-		"authorization_endpoint":             s.config.Issuer + "/authorize",
-		"token_endpoint":                     s.config.Issuer + "/token",
-		"response_types_supported":           []string{"code"},
-		"grant_types_supported":              []string{"authorization_code"},
-		"code_challenge_methods_supported":   []string{"S256"},
+		"issuer":                                s.config.Issuer,
+		"authorization_endpoint":               s.config.Issuer + "/authorize",
+		"token_endpoint":                       s.config.Issuer + "/token",
+		"registration_endpoint":                s.config.Issuer + "/register",
+		"response_types_supported":             []string{"code"},
+		"grant_types_supported":                []string{"authorization_code"},
+		"code_challenge_methods_supported":     []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none"}, // Public clients
 	}
 }

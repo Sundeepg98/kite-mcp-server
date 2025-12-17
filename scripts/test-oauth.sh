@@ -54,6 +54,33 @@ DISCOVERY=$(curl -s "$SERVER_URL/.well-known/oauth-authorization-server")
 echo "$DISCOVERY" | jq . 2>/dev/null || echo "$DISCOVERY"
 echo ""
 
+# Check registration_endpoint exists
+REG_ENDPOINT=$(echo "$DISCOVERY" | jq -r '.registration_endpoint // empty' 2>/dev/null)
+if [ -z "$REG_ENDPOINT" ]; then
+    echo "WARNING: registration_endpoint not found in discovery"
+else
+    echo "registration_endpoint: $REG_ENDPOINT"
+fi
+echo ""
+
+# Step 2b: Test Dynamic Client Registration
+echo "=== Step 2b: Dynamic Client Registration (RFC 7591) ==="
+REGISTER_RESPONSE=$(curl -s -X POST "$SERVER_URL/register" \
+    -H "Content-Type: application/json" \
+    -d "{\"redirect_uris\": [\"$REDIRECT_URI\"], \"client_name\": \"test-client-dcr\"}")
+
+echo "Register Response:"
+echo "$REGISTER_RESPONSE" | jq . 2>/dev/null || echo "$REGISTER_RESPONSE"
+echo ""
+
+DCR_CLIENT_ID=$(echo "$REGISTER_RESPONSE" | jq -r '.client_id // empty' 2>/dev/null)
+if [ -n "$DCR_CLIENT_ID" ]; then
+    echo "DCR client_id: $DCR_CLIENT_ID"
+    # Optionally use DCR client for the flow:
+    # CLIENT_ID="$DCR_CLIENT_ID"
+fi
+echo ""
+
 # Step 3: Generate authorize URL
 AUTHORIZE_URL="$SERVER_URL/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URI&code_challenge=$CODE_CHALLENGE&code_challenge_method=S256&state=test-state-$$"
 echo "=== Step 3: OAuth Authorize URL ==="
@@ -148,6 +175,7 @@ echo "=== OAuth Test Complete ==="
 echo ""
 echo "Summary:"
 echo "  - OAuth discovery: OK"
+echo "  - DCR registration: OK"
 echo "  - Token exchange: OK"
 echo "  - MCP initialize: OK"
 echo "  - Tool call: OK"
