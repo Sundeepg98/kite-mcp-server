@@ -23,6 +23,16 @@ type Tool interface {
 	Handler(*kc.Manager) ToolHandler
 }
 
+// GetToolNames returns the names of all available tools
+func GetToolNames() []string {
+	tools := GetAllTools()
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Definition().Name
+	}
+	return names
+}
+
 // GetAllTools returns all available tools for registration
 func GetAllTools() []Tool {
 	return []Tool{

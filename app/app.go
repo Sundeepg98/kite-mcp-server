@@ -30,6 +30,7 @@ type App struct {
 	oauthServer      *oauth.Server
 	jwtOauthHandlers *oauth.Handlers
 	statusTemplate   *template.Template
+	docsManager      *DocsManager
 	logger           *slog.Logger
 	metrics          *metrics.Manager
 	rateLimiter      *web.RateLimiter
@@ -174,6 +175,15 @@ func (app *App) initializeServices() (*mcpsdk.Server, error) {
 		app.logger.Warn("Failed to initialize status template", "error", err)
 	}
 
+	// --- Docs Manager ---
+	docsManager, err := NewDocsManager(app.Version, mcp.GetToolNames())
+	if err != nil {
+		app.logger.Warn("Failed to initialize docs manager", "error", err)
+	} else {
+		app.docsManager = docsManager
+		app.logger.Info("Docs manager initialized")
+	}
+
 	// --- MCP Server & Tools ---
 	app.logger.Info("Creating MCP server and registering tools...")
 	mcpServer := mcpsdk.NewServer(
@@ -216,7 +226,17 @@ func (app *App) setupMux() *http.ServeMux {
 	if app.Config.AdminSecretPath != "" {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
-	mux.HandleFunc("/", app.serveStatusPage)
+
+	// Docs routes (landing page, docs, static assets)
+	if app.docsManager != nil {
+		mux.HandleFunc("/", app.docsManager.ServeLanding)
+		mux.HandleFunc("/docs/", app.docsManager.ServeDocs)
+		mux.Handle("/static/", app.docsManager.ServeStatic())
+	} else {
+		// Fallback to status page if docs manager failed to initialize
+		mux.HandleFunc("/", app.serveStatusPage)
+	}
+
 	// OAuth endpoints (JWT-based)
 	mux.HandleFunc("/callback", app.jwtOauthHandlers.HandleCallback)
 	mux.Handle("/authorize", app.rateLimiter.Middleware(http.HandlerFunc(app.jwtOauthHandlers.HandleAuthorize)))

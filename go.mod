@@ -8,8 +8,10 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.1.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/stretchr/testify v1.10.0
+	github.com/yuin/goldmark v1.7.8
 	github.com/zerodha/gokiteconnect/v4 v4.3.6-0.20250915103037-488934d1cc3a
 	golang.org/x/time v0.12.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -29,5 +31,4 @@ require (
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
