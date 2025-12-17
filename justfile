@@ -39,7 +39,11 @@ run *ARGS: build
 
 # Run with environment variables from .env file
 run-env *ARGS: _check-env-file build
-    @set -o allexport && source .env && set +o allexport && ./{{BINARY_NAME}} {{ARGS}}
+    #!/usr/bin/env bash
+    set -a
+    source .env
+    set +a
+    ./{{BINARY_NAME}} {{ARGS}}
 
 # Run in development mode (stdio)
 run-dev: build
