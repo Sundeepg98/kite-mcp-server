@@ -201,16 +201,13 @@
 <body class="landing-page">
     <header class="landing-header">
         <a href="/" class="docs-logo">
-            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="32" height="32" rx="6" fill="#387ed1"/>
-                <path d="M8 12h6v2H8v-2zm0 4h10v2H8v-2zm0 4h8v2H8v-2zm14-8l4 4-4 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img src="/static/img/zerodha-logo.svg" alt="Zerodha" height="24">
             <span>Kite MCP</span>
         </a>
 
         <nav class="landing-nav">
             <a href="/docs/">Docs</a>
-            <a href="/docs/tools/">Tools</a>
+            <a href="/docs/examples">Examples</a>
             <a href="https://github.com/zerodha/kite-mcp-server" target="_blank" rel="noopener">GitHub</a>
             <button
                 class="theme-toggle"
@@ -235,7 +232,7 @@
 
             <div class="landing-cta">
                 <a href="/docs/getting-started" class="btn btn-primary">Get Started</a>
-                <a href="/docs/tools/" class="btn btn-secondary">View Tools</a>
+                <a href="/docs/examples" class="btn btn-secondary">See Examples</a>
             </div>
 
             <div class="code-example">
@@ -268,16 +265,22 @@
 
     <section class="tools-section">
         <div class="landing-container">
-            <h2>Available Tools</h2>
+            <h2>What Can You Do?</h2>
+            <p style="text-align: center; max-width: 600px; margin: 0 auto var(--space-xl);">Ask your AI assistant questions in plain language.</p>
 
-            <div class="tools-grid">
-                {{range .Tools}}
-                <a href="/docs/tools/{{.Slug}}" class="tool-chip">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                    {{.Name}}
-                </a>
-                {{end}}
+            <div class="example-prompts" style="max-width: 700px; margin: 0 auto;">
+                <blockquote style="background: var(--card); padding: var(--space-md) var(--space-lg); border-left: 3px solid var(--kite-blue); margin: var(--space-md) 0; border-radius: var(--radius-sm);">
+                    "Please group my open positions based on the underlying and calculate net delta of my option strategies."
+                </blockquote>
+                <blockquote style="background: var(--card); padding: var(--space-md) var(--space-lg); border-left: 3px solid var(--kite-blue); margin: var(--space-md) 0; border-radius: var(--radius-sm);">
+                    "What's the current price of Infosys? Show me the day's high and low."
+                </blockquote>
+                <blockquote style="background: var(--card); padding: var(--space-md) var(--space-lg); border-left: 3px solid var(--kite-blue); margin: var(--space-md) 0; border-radius: var(--radius-sm);">
+                    "Analyse my portfolio: top positions, best performers, sector distribution."
+                </blockquote>
             </div>
+
+            <p style="text-align: center; margin-top: var(--space-xl);"><a href="/docs/examples" class="btn btn-secondary">See More Examples</a></p>
         </div>
     </section>
 

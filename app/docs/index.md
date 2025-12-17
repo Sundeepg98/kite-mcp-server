@@ -1,57 +1,46 @@
 ---
 title: Introduction
-description: Kite MCP Server connects AI assistants to your Zerodha trading account via the Model Context Protocol.
+description: Connect your Zerodha account to AI assistants and get instant portfolio insights.
 ---
 
-# Introduction
+# Kite MCP
 
-Kite MCP Server is a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that connects AI assistants like Claude, Cursor, and others to your Zerodha trading account via the Kite Connect API.
+Connect your Zerodha account to AI assistants and get instant portfolio insights.
 
 ## What is MCP?
 
-The Model Context Protocol is an open standard that allows AI assistants to securely connect to external data sources and tools. Instead of copying and pasting data, MCP lets AI assistants directly access your portfolio, market data, and trading functions.
+Model Context Protocol (MCP) is a communication standard that enables AI assistants to interact with real-world data and services. Rather than relying only on pre-trained knowledge, AI tools can now access live information from your Zerodha account.
+
+## Features
+
+* **Real-time data access:** Access current market prices, not just historical data
+* **Personalised insights:** Analyse your specific portfolio, not generic information
+* **Interactive capabilities:** Retrieve precise information you need
+* **Natural conversation:** Ask about complex market data in plain language
+
+## Quick Start
+
+Choose your preferred AI assistant:
+
+- [Claude Desktop](/docs/clients/claude-desktop)
+- [VS Code](/docs/clients/vscode)
+- [Cursor](/docs/clients/cursor)
 
 ## What Can You Do?
 
-With Kite MCP, you can ask your AI assistant to:
+- "Please group my open positions based on the underlying and calculate net delta of my option strategies"
+- "Please provide a summary of today's market conditions including major index movements, sector performance, any notable news affecting my holdings, and stocks with unusual volume or price action."
+- "What's the current price of Infosys stock? Show me the day's high and low, and compare its performance to the Nifty 50 today."
 
-- **View your portfolio**: "Show me my current holdings and their P&L"
-- **Analyze positions**: "Which of my stocks are down more than 5% today?"
-- **Get market data**: "What's the current price of RELIANCE?"
-- **Place orders**: "Buy 10 shares of INFY at market price"
-- **Manage GTT orders**: "Set a stop loss at 1500 for my TCS position"
-- **Track alerts**: "Show me my active price alerts"
 
-## Security
+## Security and privacy
 
-- **OAuth 2.1 with PKCE**: Industry-standard secure authentication
-- **No stored credentials**: Your Kite credentials are never stored on our servers
-- **Session-based access**: Each session requires fresh authorization
-- **Read-only by default**: Order placement requires explicit confirmation
+Zerodha takes security seriously with the Kite MCP implementation:
 
-## Getting Started
+* **Limited access**: Claude can only access data you explicitly authorise
+* **No credential storage**: Your Zerodha credentials never pass through Claude. Instead, authentication happens externally through Kite's secure two-factor authentication flow.
 
-1. [Quick Start Guide](/docs/getting-started) - Set up in 2 minutes
-2. [OAuth Flow](/docs/oauth-flow) - Understand how authentication works
-3. [Tools Reference](/docs/tools/) - See all available MCP tools
 
-## Hosted vs Self-Hosted
+## Support
 
-### Hosted (Recommended)
-
-Use our hosted server at `mcp.kite.trade` - no setup required:
-
-```json
-{
-  "mcpServers": {
-    "kite": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://mcp.kite.trade/mcp"]
-    }
-  }
-}
-```
-
-### Self-Hosted
-
-Run your own instance for development or custom deployments. See the [GitHub repository](https://github.com/zerodha/kite-mcp-server) for instructions.
+For issues or questions, contact [Zerodha support](https://support.zerodha.com/) or file an issue on [GitHub](https://github.com/zerodha/kite-mcp-server/issues).

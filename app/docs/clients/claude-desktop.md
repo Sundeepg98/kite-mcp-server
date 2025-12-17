@@ -1,24 +1,24 @@
 ---
-title: Claude Desktop Setup
-description: Connect Kite MCP to Claude Desktop on macOS, Windows, or Linux
+title: Claude Desktop
+description: Setting up Kite MCP with Claude Desktop
 ---
 
-# Claude Desktop Setup
+# Setting up Kite MCP using Claude
 
-Connect your Zerodha account to Claude Desktop for natural conversations about your portfolio.
+## Install Node.js
 
-## Prerequisites
+* Download and install Node.js from [nodejs.org](https://nodejs.org/en)
+* Verify installation by opening Command Prompt and typing `node --version`
 
-- [Node.js](https://nodejs.org/) installed
-- [Claude Desktop](https://claude.ai/download) application
 
-## Configuration Steps
+## Configure Claude Desktop
 
-1. Open Claude Desktop application
-2. Go to **Settings** (gear icon)
-3. Click **Developer** in the left sidebar
-4. Click **Edit Config**
-5. Add the following configuration:
+* Open [Claude Desktop](https://claude.ai/download) application
+* Go to Settings (gear icon)
+* Click on Developer in the left sidebar
+* Click Edit Config
+* Add the following configuration:
+
 
 ```json
 {
@@ -31,23 +31,26 @@ Connect your Zerodha account to Claude Desktop for natural conversations about y
 }
 ```
 
-6. Save and restart Claude Desktop
+* Save and restart Claude Desktop
+
+For a visual walkthrough of the setup process, check out this [step-by-step video](https://www.youtube.com/watch?v=tD1z8lR0CDE) guide on configuring MCP for Claude Desktop.
+
+
 
 ## Verify Connection
 
-1. In Claude Desktop, look for the **Search and tools** icon in the chat interface
-2. Click it to verify Kite MCP tools are available
-3. Follow the authorization prompts to connect to your Zerodha account
+* In Claude Desktop, look for the `Search and tools` icon in the chat interface
+* Click it to verify Kite MCP tools are available
+* Follow the authorisation prompts to connect to your Zerodha account
 
-## Video Guide
-
-For a visual walkthrough, check out this [step-by-step video guide](https://www.youtube.com/watch?v=tD1z8lR0CDE) on configuring MCP for Claude Desktop.
 
 ## Linux Installation
 
-Claude Desktop doesn't have an official Linux build, but there are community options:
+There are two unofficial builds for Claude Desktop on Linux:
 
-### Option 1: Debian/Ubuntu Build
+### Using aaddrick's Debian/Ubuntu build
+
+[GitHub Repository](https://github.com/aaddrick/claude-desktop-debian)
 
 ```bash
 git clone https://github.com/aaddrick/claude-desktop-debian.git
@@ -57,13 +60,15 @@ chmod +x build.sh
 sudo dpkg -i ./claude-desktop_*.deb
 ```
 
-### Option 2: Nix Flake
+### Using k3d3's Nix Flake method
+
+[GitHub Repository](https://github.com/k3d3/claude-desktop-linux-flake)
 
 ```bash
 NIXPKGS_ALLOW_UNFREE=1 nix run github:k3d3/claude-desktop-linux-flake --impure
 ```
 
-After installation, configure MCP:
+After installing with either method, configure MCP:
 
 ```bash
 mkdir -p ~/.config/Claude
@@ -72,9 +77,7 @@ nano ~/.config/Claude/claude_desktop_config.json
 
 Add the same JSON configuration as above.
 
-### Option 3: Claude Code CLI
-
-Claude Code has official Linux support:
+### Claude Code (official Linux support)
 
 ```bash
 npm install -g @anthropic-ai/claude-code
