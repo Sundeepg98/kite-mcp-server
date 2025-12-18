@@ -109,12 +109,12 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Info("login tool callback", "user_id", creds.UserID)
-		h.kcManager.RenderSuccessTemplate(w)
+		_ = h.kcManager.RenderSuccessTemplate(w)
 		return
 	}
 
 	// OAuth flow - clean up temp session, create permanent user session
-	defer h.kcManager.SessionManager().Terminate(sessionID)
+	defer func() { _, _ = h.kcManager.SessionManager().Terminate(sessionID) }()
 
 	// Create or get persistent session for the user
 	userSession, _, err := h.kcManager.SessionManager().GetOrCreate(creds.UserID)

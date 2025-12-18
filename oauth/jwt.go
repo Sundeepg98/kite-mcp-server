@@ -44,9 +44,9 @@ type Server struct {
 
 	// In-memory stores (replace with Redis/DB for production)
 	mu            sync.RWMutex
-	clients       map[string]*Client       // client_id -> client
-	authCodes     map[string]*AuthCode     // code -> auth code data
-	pkceVerifiers map[string]string        // code -> code_verifier hash
+	clients       map[string]*Client   // client_id -> client
+	authCodes     map[string]*AuthCode // code -> auth code data
+	pkceVerifiers map[string]string    // code -> code_verifier hash
 }
 
 // Client represents an OAuth client (auto-registered)
@@ -61,10 +61,10 @@ type AuthCode struct {
 	Code        string
 	ClientID    string
 	RedirectURI string
-	KiteUserID  string    // From KiteConnect after login
-	KiteSession string    // Reference to kc.Session
+	KiteUserID  string // From KiteConnect after login
+	KiteSession string // Reference to kc.Session
 	ExpiresAt   time.Time
-	PKCEHash    string    // S256 hash of code_verifier
+	PKCEHash    string // S256 hash of code_verifier
 }
 
 // TokenClaims are the JWT claims for access tokens
@@ -404,12 +404,12 @@ func (s *Server) writeUnauthorized(w http.ResponseWriter, message string) {
 func (s *Server) AuthorizationServerMetadata() map[string]interface{} {
 	return map[string]interface{}{
 		"issuer":                                s.config.Issuer,
-		"authorization_endpoint":               s.config.Issuer + "/authorize",
-		"token_endpoint":                       s.config.Issuer + "/token",
-		"registration_endpoint":                s.config.Issuer + "/register",
-		"response_types_supported":             []string{"code"},
-		"grant_types_supported":                []string{"authorization_code"},
-		"code_challenge_methods_supported":     []string{"S256"},
+		"authorization_endpoint":                s.config.Issuer + "/authorize",
+		"token_endpoint":                        s.config.Issuer + "/token",
+		"registration_endpoint":                 s.config.Issuer + "/register",
+		"response_types_supported":              []string{"code"},
+		"grant_types_supported":                 []string{"authorization_code"},
+		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none"}, // Public clients
 	}
 }
@@ -428,7 +428,9 @@ func (s *Server) ProtectedResourceMetadata() map[string]interface{} {
 
 func generateSecureToken(length int) string {
 	bytes := make([]byte, length)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		panic("crypto/rand.Read failed: " + err.Error())
+	}
 	return hex.EncodeToString(bytes)
 }
 
@@ -455,5 +457,5 @@ func BuildRedirectWithCode(redirectURI, code, state string) string {
 func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
