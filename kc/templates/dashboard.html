@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kite Portfolio Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e4e8; }
+  .header { background: #161b22; padding: 16px 24px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .status { font-size: 12px; color: #8b949e; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.connected { background: #3fb950; }
+  .status-dot.disconnected { background: #f85149; }
+  .status-dot.loading { background: #d29922; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; padding: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .card .value { font-size: 24px; font-weight: 600; }
+  .positive { color: #3fb950; }
+  .negative { color: #f85149; }
+  .tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid #30363d; }
+  .tab { padding: 12px 20px; cursor: pointer; border-bottom: 2px solid transparent; color: #8b949e; font-size: 14px; }
+  .tab.active { color: #e1e4e8; border-bottom-color: #58a6ff; }
+  .tab:hover { color: #e1e4e8; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 16px; font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363d; }
+  td { padding: 10px 16px; font-size: 14px; border-bottom: 1px solid #21262d; }
+  .table-wrapper { padding: 0 24px 24px; overflow-x: auto; }
+  .flash { transition: background-color 0.5s ease; }
+  .flash-green { background-color: rgba(63, 185, 80, 0.15) !important; }
+  .flash-red { background-color: rgba(248, 81, 73, 0.15) !important; }
+  .empty { text-align: center; padding: 40px; color: #8b949e; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .loading-text { animation: pulse 1.5s infinite; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Kite Portfolio</h1>
+  <div class="status">
+    <span class="status-dot loading" id="statusDot"></span>
+    <span id="statusText" class="loading-text">Connecting...</span>
+  </div>
+</div>
+
+<div class="summary" id="summary">
+  <div class="card"><div class="label">Total Investment</div><div class="value" id="totalInvestment">--</div></div>
+  <div class="card"><div class="label">Current Value</div><div class="value" id="currentValue">--</div></div>
+  <div class="card"><div class="label">Overall P&L</div><div class="value" id="overallPnl">--</div></div>
+  <div class="card"><div class="label">Day P&L</div><div class="value" id="dayPnl">--</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="holdings" onclick="switchTab('holdings')">Holdings</div>
+  <div class="tab" data-tab="positions" onclick="switchTab('positions')">Positions</div>
+</div>
+
+<div class="table-wrapper" id="holdingsTab">
+  <table>
+    <thead>
+      <tr><th>Instrument</th><th>Qty</th><th>Avg Price</th><th>LTP</th><th>P&L</th><th>Day Change</th></tr>
+    </thead>
+    <tbody id="holdingsBody"><tr><td colspan="6" class="empty loading-text">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="table-wrapper" id="positionsTab" style="display:none">
+  <table>
+    <thead>
+      <tr><th>Instrument</th><th>Qty</th><th>Avg Price</th><th>LTP</th><th>P&L</th><th>Product</th></tr>
+    </thead>
+    <tbody id="positionsBody"><tr><td colspan="6" class="empty loading-text">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+// Safe text formatting — all values from API are numeric, rendered via textContent
+const fmt = (n) => n != null ? '\u20B9' + Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '--';
+const pnlClass = (n) => n >= 0 ? 'positive' : 'negative';
+
+// Map instrument_token -> {ltpCell, row} for live updates
+const tokenCellMap = {};
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelector('.tab[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('holdingsTab').style.display = tab === 'holdings' ? '' : 'none';
+  document.getElementById('positionsTab').style.display = tab === 'positions' ? '' : 'none';
+}
+
+// Build table rows safely using DOM APIs (no innerHTML with user data)
+function createCell(text, className) {
+  var td = document.createElement('td');
+  td.textContent = text;
+  if (className) td.className = className;
+  return td;
+}
+
+function renderHoldings(data) {
+  var tbody = document.getElementById('holdingsBody');
+  tbody.textContent = '';  // Clear safely
+
+  if (!data || data.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'empty';
+    td.textContent = 'No holdings';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  data.forEach(function(h) {
+    var tr = document.createElement('tr');
+    tr.className = 'flash';
+    tr.setAttribute('data-token', h.instrument_token);
+
+    tr.appendChild(createCell(h.exchange + ':' + h.tradingsymbol));
+    tr.appendChild(createCell(String(h.quantity)));
+    tr.appendChild(createCell(fmt(h.average_price)));
+
+    var ltpCell = createCell(fmt(h.last_price));
+    ltpCell.className = 'ltp';
+    tr.appendChild(ltpCell);
+
+    tr.appendChild(createCell(fmt(h.pnl), pnlClass(h.pnl)));
+    tr.appendChild(createCell(h.day_change_pct != null ? h.day_change_pct.toFixed(2) + '%' : '--', pnlClass(h.day_change)));
+
+    tbody.appendChild(tr);
+    tokenCellMap[h.instrument_token] = { ltpCell: ltpCell, row: tr };
+  });
+}
+
+function renderPositions(data) {
+  var tbody = document.getElementById('positionsBody');
+  tbody.textContent = '';
+
+  if (!data || data.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'empty';
+    td.textContent = 'No open positions';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  data.forEach(function(p) {
+    var tr = document.createElement('tr');
+    tr.className = 'flash';
+    tr.setAttribute('data-token', p.instrument_token);
+
+    tr.appendChild(createCell(p.exchange + ':' + p.tradingsymbol));
+    tr.appendChild(createCell(String(p.quantity)));
+    tr.appendChild(createCell(fmt(p.average_price)));
+
+    var ltpCell = createCell(fmt(p.last_price));
+    ltpCell.className = 'ltp';
+    tr.appendChild(ltpCell);
+
+    tr.appendChild(createCell(fmt(p.pnl), pnlClass(p.pnl)));
+    tr.appendChild(createCell(p.product));
+
+    tbody.appendChild(tr);
+    tokenCellMap[p.instrument_token] = { ltpCell: ltpCell, row: tr };
+  });
+}
+
+function updateSummary(s) {
+  document.getElementById('totalInvestment').textContent = fmt(s.total_investment);
+  document.getElementById('currentValue').textContent = fmt(s.current_value);
+
+  var pnlEl = document.getElementById('overallPnl');
+  pnlEl.textContent = fmt(s.overall_pnl) + (s.overall_pnl_pct ? ' (' + s.overall_pnl_pct.toFixed(2) + '%)' : '');
+  pnlEl.className = 'value ' + pnlClass(s.overall_pnl);
+
+  var dayEl = document.getElementById('dayPnl');
+  dayEl.textContent = fmt(s.day_pnl);
+  dayEl.className = 'value ' + pnlClass(s.day_pnl);
+}
+
+// Fetch initial data
+fetch('/api/dashboard/data')
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    renderHoldings(data.holdings || []);
+    renderPositions(data.positions || []);
+    updateSummary(data.summary);
+    connectSSE();
+  })
+  .catch(function(err) {
+    console.error('Failed to fetch data:', err);
+    var tbody = document.getElementById('holdingsBody');
+    tbody.textContent = '';
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'empty';
+    td.textContent = 'Failed to load data. Are you logged in?';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+
+// SSE live updates
+function connectSSE() {
+  var dot = document.getElementById('statusDot');
+  var text = document.getElementById('statusText');
+
+  var es = new EventSource('/api/dashboard/stream');
+
+  es.onopen = function() {
+    dot.className = 'status-dot connected';
+    text.textContent = 'Live';
+    text.className = '';
+  };
+
+  es.onmessage = function(e) {
+    try {
+      var tick = JSON.parse(e.data);
+      updateTickRow(tick);
+    } catch(err) { /* ignore parse errors */ }
+  };
+
+  es.onerror = function() {
+    dot.className = 'status-dot disconnected';
+    text.textContent = 'Reconnecting...';
+    text.className = 'loading-text';
+  };
+}
+
+function updateTickRow(tick) {
+  var entry = tokenCellMap[tick.instrument_token];
+  if (!entry || !entry.ltpCell) return;
+
+  var oldText = entry.ltpCell.textContent.replace(/[\u20B9,]/g, '');
+  var oldPrice = parseFloat(oldText) || 0;
+  entry.ltpCell.textContent = fmt(tick.last_price);
+
+  // Flash animation
+  var flashClass = tick.last_price >= oldPrice ? 'flash-green' : 'flash-red';
+  entry.row.classList.add(flashClass);
+  setTimeout(function() { entry.row.classList.remove(flashClass); }, 500);
+}
+</script>
+</body>
+</html>

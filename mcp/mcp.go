@@ -42,6 +42,19 @@ func GetAllTools() []Tool {
 		&LTPTool{},
 		&OHLCTool{},
 
+		// Tools for real-time market data (WebSocket ticker)
+		&StartTickerTool{},
+		&StopTickerTool{},
+		&TickerStatusTool{},
+		&SubscribeInstrumentsTool{},
+		&UnsubscribeInstrumentsTool{},
+
+		// Tools for price alerts
+		&SetupTelegramTool{},
+		&SetAlertTool{},
+		&ListAlertsTool{},
+		&DeleteAlertTool{},
+
 		// Tools that post data to Kite Connect
 		&PlaceOrderTool{},
 		&ModifyOrderTool{},

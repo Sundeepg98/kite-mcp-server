@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -351,6 +352,37 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		"token_type":   "Bearer",
 		"expires_in":   int(h.config.TokenExpiry.Seconds()),
 	})
+}
+
+// GetGoogleAuthURL generates a Google OAuth URL for browser-based dashboard login.
+// The state parameter is passed through and returned in the callback.
+func (h *Handler) GetGoogleAuthURL(state string) string {
+	// Use a separate config with dashboard callback URL
+	dashboardOAuth := *h.googleOAuth
+	dashboardOAuth.RedirectURL = h.config.ExternalURL + "/dashboard/callback"
+	return dashboardOAuth.AuthCodeURL(state, oauth2.AccessTypeOffline)
+}
+
+// ExchangeCodeForEmail exchanges a Google OAuth code (from dashboard callback) for the user's email.
+func (h *Handler) ExchangeCodeForEmail(ctx context.Context, code string) (string, error) {
+	dashboardOAuth := *h.googleOAuth
+	dashboardOAuth.RedirectURL = h.config.ExternalURL + "/dashboard/callback"
+
+	token, err := dashboardOAuth.Exchange(ctx, code)
+	if err != nil {
+		return "", fmt.Errorf("google token exchange: %w", err)
+	}
+
+	email, err := h.getGoogleEmail(token)
+	if err != nil {
+		return "", fmt.Errorf("get google email: %w", err)
+	}
+
+	if !h.config.IsEmailAllowed(email) {
+		return "", fmt.Errorf("email not allowed: %s", email)
+	}
+
+	return email, nil
 }
 
 // writeJSON writes a JSON response with the given status code.

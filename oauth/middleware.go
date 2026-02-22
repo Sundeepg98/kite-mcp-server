@@ -43,3 +43,62 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// cookieName is the JWT cookie used for browser-based dashboard auth.
+const cookieName = "kite_jwt"
+
+// RequireAuthBrowser returns middleware for browser-based auth.
+// Tries Bearer token first, then falls back to a JWT cookie.
+// If neither is valid, redirects to the Google OAuth login flow.
+func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try Bearer token first
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			tokenStr := strings.TrimPrefix(auth, "Bearer ")
+			if claims, err := h.jwt.ValidateToken(tokenStr); err == nil {
+				ctx := context.WithValue(r.Context(), emailContextKey{}, claims.Subject)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
+		// Try cookie
+		cookie, err := r.Cookie(cookieName)
+		if err == nil && cookie.Value != "" {
+			claims, err := h.jwt.ValidateToken(cookie.Value)
+			if err == nil {
+				ctx := context.WithValue(r.Context(), emailContextKey{}, claims.Subject)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			h.logger.Debug("Invalid dashboard cookie", "error", err)
+		}
+
+		// Redirect to Google OAuth login with redirect back to original URL
+		redirectURL := h.config.ExternalURL + "/dashboard/login?redirect=" + r.URL.Path
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+	})
+}
+
+// SetAuthCookie sets a JWT cookie for browser-based dashboard auth.
+func (h *Handler) SetAuthCookie(w http.ResponseWriter, email string) error {
+	token, err := h.jwt.GenerateToken(email, "dashboard")
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400, // 24 hours
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	return nil
+}
+
+// JWTManager returns the JWT manager for external use.
+func (h *Handler) JWTManager() *JWTManager {
+	return h.jwt
+}

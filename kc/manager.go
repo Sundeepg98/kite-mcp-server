@@ -11,9 +11,12 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/kc/ticker"
 )
 
 // Config holds configuration for creating a new kc Manager
@@ -26,6 +29,7 @@ type Config struct {
 	InstrumentsManager *instruments.Manager      // optional - if provided, skips creating new instruments manager
 	SessionSigner      *SessionSigner            // optional - if nil, creates new session signer
 	Metrics            *metrics.Manager          // optional - for tracking user metrics
+	TelegramBotToken   string                    // optional - for Telegram price alert notifications
 }
 
 // New creates a new kc Manager with the given configuration
@@ -64,6 +68,32 @@ func New(cfg Config) (*Manager, error) {
 		credentialStore: NewKiteCredentialStore(),
 	}
 
+	// Initialize alert system: store → notifier → evaluator → ticker
+	m.alertStore = alerts.NewStore(func(alert *alerts.Alert, currentPrice float64) {
+		if m.telegramNotifier != nil {
+			m.telegramNotifier.Notify(alert, currentPrice)
+		}
+	})
+
+	if cfg.TelegramBotToken != "" {
+		notifier, tgErr := alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
+		if tgErr != nil {
+			cfg.Logger.Warn("Telegram notifier failed to initialize", "error", tgErr)
+		} else {
+			m.telegramNotifier = notifier
+		}
+	}
+
+	m.alertEvaluator = alerts.NewEvaluator(m.alertStore, cfg.Logger)
+
+	// Initialize ticker with alert evaluator as the OnTick callback
+	m.tickerService = ticker.New(ticker.Config{
+		Logger: cfg.Logger,
+		OnTick: func(email string, tick models.Tick) {
+			m.alertEvaluator.Evaluate(email, tick)
+		},
+	})
+
 	if err := m.initializeTemplates(); err != nil {
 		return nil, fmt.Errorf("failed to initialize Kite manager: %w", err)
 	}
@@ -74,6 +104,18 @@ func New(cfg Config) (*Manager, error) {
 
 	m.Instruments = instrumentsManager
 	m.initializeSessionManager()
+
+	// Wire token rotation observer: when a user's token changes, update their ticker
+	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
+		if m.tickerService.IsRunning(email) {
+			apiKey := m.getAPIKeyForEmail(email)
+			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
+				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
+			} else {
+				m.Logger.Info("Ticker token rotated automatically", "email", email)
+			}
+		}
+	})
 
 	return m, nil
 }
@@ -125,8 +167,12 @@ type Manager struct {
 	Instruments    *instruments.Manager
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
-	tokenStore      *KiteTokenStore      // per-email Kite token cache
-	credentialStore *KiteCredentialStore // per-email Kite API credentials (per-user apps)
+	tokenStore         *KiteTokenStore           // per-email Kite token cache
+	credentialStore    *KiteCredentialStore      // per-email Kite API credentials (per-user apps)
+	tickerService      *ticker.Service           // per-user WebSocket ticker connections
+	alertStore         *alerts.Store             // per-user price alerts
+	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
+	telegramNotifier   *alerts.TelegramNotifier  // Telegram alert sender
 }
 
 // NewManager creates a new manager with default configuration
@@ -260,6 +306,31 @@ func (m *Manager) HasUserCredentials(email string) bool {
 // HasGlobalCredentials returns true if global API key/secret are configured (from env vars).
 func (m *Manager) HasGlobalCredentials() bool {
 	return m.apiKey != "" && m.apiSecret != ""
+}
+
+// TickerService returns the per-user WebSocket ticker service.
+func (m *Manager) TickerService() *ticker.Service {
+	return m.tickerService
+}
+
+// AlertStore returns the per-user alert store.
+func (m *Manager) AlertStore() *alerts.Store {
+	return m.alertStore
+}
+
+// GetAPIKeyForEmail returns the API key for a given email (exported for MCP tools).
+func (m *Manager) GetAPIKeyForEmail(email string) string {
+	return m.getAPIKeyForEmail(email)
+}
+
+// GetAccessTokenForEmail returns the cached access token for a given email.
+func (m *Manager) GetAccessTokenForEmail(email string) string {
+	if email != "" {
+		if entry, ok := m.tokenStore.Get(email); ok {
+			return entry.AccessToken
+		}
+	}
+	return m.accessToken // fallback to global pre-auth token
 }
 
 // getAPIKeyForEmail returns the API key for a given email.
@@ -589,6 +660,9 @@ func (m *Manager) Shutdown() {
 	if m.metrics != nil {
 		m.metrics.Shutdown()
 	}
+
+	// Shutdown ticker service (stops all WebSocket connections)
+	m.tickerService.Shutdown()
 
 	// Shutdown instruments manager (stops scheduler)
 	m.Instruments.Shutdown()

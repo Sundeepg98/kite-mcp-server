@@ -6,5 +6,5 @@ import (
 	"embed"
 )
 
-//go:embed login_success.html status.html base.html
+//go:embed login_success.html status.html base.html dashboard.html
 var FS embed.FS

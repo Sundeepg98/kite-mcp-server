@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/dashboard"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -59,6 +60,9 @@ type Config struct {
 	OAuthJWTSecret     string
 	OAuthAllowedEmails string
 	ExternalURL        string
+
+	// Telegram (opt-in: set TELEGRAM_BOT_TOKEN to enable price alert notifications)
+	TelegramBotToken string
 }
 
 // Server mode constants
@@ -93,6 +97,8 @@ func NewApp(logger *slog.Logger) *App {
 			OAuthJWTSecret:     os.Getenv("OAUTH_JWT_SECRET"),
 			OAuthAllowedEmails: os.Getenv("OAUTH_ALLOWED_EMAILS"),
 			ExternalURL:        os.Getenv("EXTERNAL_URL"),
+
+			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		},
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
@@ -191,11 +197,12 @@ func (app *App) configureHTTPClient() {
 func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	app.logger.Info("Creating Kite Connect manager...")
 	kcManager, err := kc.New(kc.Config{
-		APIKey:      app.Config.KiteAPIKey,
-		APISecret:   app.Config.KiteAPISecret,
-		AccessToken: app.Config.KiteAccessToken,
-		Logger:      app.logger,
-		Metrics:     app.metrics,
+		APIKey:           app.Config.KiteAPIKey,
+		APISecret:        app.Config.KiteAPISecret,
+		AccessToken:      app.Config.KiteAccessToken,
+		Logger:           app.logger,
+		Metrics:          app.metrics,
+		TelegramBotToken: app.Config.TelegramBotToken,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -298,6 +305,10 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/oauth/google/callback", app.oauthHandler.GoogleCallback)
 		mux.HandleFunc("/oauth/token", app.oauthHandler.Token)
 	}
+	// Register dashboard routes (requires OAuth)
+	dash := dashboard.New(kcManager, app.oauthHandler, app.logger)
+	dash.RegisterRoutes(mux)
+
 	app.serveStatusPage(mux)
 	return mux
 }

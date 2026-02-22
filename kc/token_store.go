@@ -14,11 +14,15 @@ type KiteTokenEntry struct {
 	StoredAt    time.Time
 }
 
+// TokenChangeCallback is invoked when a token is stored or updated.
+type TokenChangeCallback func(email string, entry *KiteTokenEntry)
+
 // KiteTokenStore is a thread-safe in-memory map of email -> Kite access token.
 // Used to cache tokens so users only need to login once per day.
 type KiteTokenStore struct {
-	mu     sync.RWMutex
-	tokens map[string]*KiteTokenEntry
+	mu        sync.RWMutex
+	tokens    map[string]*KiteTokenEntry
+	onChange  []TokenChangeCallback
 }
 
 // NewKiteTokenStore creates a new token store.
@@ -36,12 +40,27 @@ func (s *KiteTokenStore) Get(email string) (*KiteTokenEntry, bool) {
 	return entry, ok
 }
 
-// Set stores a token for the given email.
-func (s *KiteTokenStore) Set(email string, entry *KiteTokenEntry) {
+// OnChange registers a callback that fires when a token is stored or updated.
+func (s *KiteTokenStore) OnChange(cb TokenChangeCallback) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.onChange = append(s.onChange, cb)
+}
+
+// Set stores a token for the given email and notifies observers.
+func (s *KiteTokenStore) Set(email string, entry *KiteTokenEntry) {
+	s.mu.Lock()
 	entry.StoredAt = time.Now()
-	s.tokens[strings.ToLower(email)] = entry
+	key := strings.ToLower(email)
+	s.tokens[key] = entry
+	callbacks := make([]TokenChangeCallback, len(s.onChange))
+	copy(callbacks, s.onChange)
+	s.mu.Unlock()
+
+	// Notify observers outside the lock to avoid deadlocks
+	for _, cb := range callbacks {
+		cb(key, entry)
+	}
 }
 
 // Delete removes a token for the given email.
