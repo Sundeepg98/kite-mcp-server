@@ -191,7 +191,10 @@ func (m *Manager) LoadInitialData() error {
 
 func isPreviousDayIST(t time.Time) bool {
 	// Define IST location (UTC+5:30)
-	ist, _ := time.LoadLocation("Asia/Kolkata")
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		ist = time.FixedZone("IST", 5*60*60+30*60)
+	}
 
 	// Convert current time to IST
 	nowIST := time.Now().In(ist)
@@ -608,7 +611,11 @@ func (m *Manager) startScheduler() {
 // shouldUpdate checks if it's time for a scheduled update
 func (m *Manager) shouldUpdate() bool {
 	now := time.Now()
-	ist, _ := time.LoadLocation("Asia/Kolkata")
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		// Fallback: IST is UTC+5:30
+		ist = time.FixedZone("IST", 5*60*60+30*60)
+	}
 	nowIST := now.In(ist)
 
 	// Safely read config values
@@ -642,7 +649,10 @@ func (m *Manager) shouldUpdate() bool {
 
 // getNextScheduledUpdate calculates the next scheduled update time
 func (m *Manager) getNextScheduledUpdate() time.Time {
-	ist, _ := time.LoadLocation("Asia/Kolkata")
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		ist = time.FixedZone("IST", 5*60*60+30*60)
+	}
 	now := time.Now().In(ist)
 
 	// Get config with lock protection (this method is called while holding RLock already)

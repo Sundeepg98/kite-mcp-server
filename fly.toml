@@ -1,0 +1,12 @@
+app = "kite-mcp-server"
+primary_region = "bom"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+[env]
+  APP_MODE = "http"
+  APP_PORT = "8080"
+  APP_HOST = "0.0.0.0"
+  LOG_LEVEL = "info"

@@ -20,6 +20,7 @@ type Tool interface {
 func GetAllTools() []Tool {
 	return []Tool{
 		// Tools for setting up the client
+		&SetupKiteTool{},
 		&LoginTool{},
 
 		// Tools that get data from Kite Connect

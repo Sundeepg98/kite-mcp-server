@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 type LoginTool struct{}
@@ -26,16 +27,79 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Get MCP client session from context
 		mcpClientSession := server.ClientSessionFromContext(ctx)
 
-		// Extract MCP session ID
+		// Extract MCP session ID and OAuth email
 		mcpSessionID := mcpClientSession.SessionID()
-		manager.Logger.Info("Login tool called", "session_id", mcpSessionID)
+		email := oauth.EmailFromContext(ctx)
+		manager.Logger.Info("Login tool called", "session_id", mcpSessionID, "email", email)
 
-		// Get or create a Kite session for this MCP session
-		kiteSession, isNew, err := manager.GetOrCreateSession(mcpSessionID)
+		// Check if any credentials are available (per-user or global)
+		if !manager.HasGlobalCredentials() && !manager.HasUserCredentials(email) {
+			manager.Logger.Info("No credentials available for login", "email", email)
+			handler.trackToolError(ctx, "login", "no_credentials")
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Type: "text",
+						Text: "No Kite API credentials configured.\n\n" +
+							"**To set up:**\n" +
+							"1. Go to https://developers.kite.trade/apps and create a free app\n" +
+							"2. Set the **Redirect URL** to `https://kite-mcp-server.fly.dev/callback`\n" +
+							"3. Copy your **API Key** and **API Secret**\n" +
+							"4. Call the `setup_kite` tool with your api_key and api_secret\n" +
+							"5. Then call `login` again\n\n" +
+							"Note: Each Kite developer app is tied to a single Zerodha Client ID.",
+					},
+				},
+			}, nil
+		}
+
+		// Get or create a Kite session for this MCP session (email-aware)
+		kiteSession, isNew, err := manager.GetOrCreateSessionWithEmail(mcpSessionID, email)
 		if err != nil {
 			manager.Logger.Error("Failed to get or create Kite session", "session_id", mcpSessionID, "error", err)
 			handler.trackToolError(ctx, "login", "session_error")
 			return mcp.NewToolResultError("Failed to get or create Kite session"), nil
+		}
+
+		// Ensure email is set on session for callback lookup
+		if email != "" {
+			kiteSession.Email = email
+		}
+
+		// Check cached token (per-email, Fly.io multi-user flow)
+		if isNew && email != "" && manager.HasCachedToken(email) {
+			profile, err := kiteSession.Kite.Client.GetUserProfile()
+			if err == nil {
+				manager.Logger.Info("Cached token valid", "session_id", mcpSessionID, "email", email, "user", profile.UserName)
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: fmt.Sprintf("You are already logged in as %s (auto-authenticated)", profile.UserName),
+						},
+					},
+				}, nil
+			}
+			// Cached token expired, remove it
+			manager.Logger.Warn("Cached token expired, clearing", "email", email, "error", err)
+			manager.TokenStore().Delete(email)
+		}
+
+		if isNew && manager.HasPreAuth() {
+			// Pre-auth session — verify the token works
+			profile, err := kiteSession.Kite.Client.GetUserProfile()
+			if err == nil {
+				manager.Logger.Info("Pre-auth token valid", "session_id", mcpSessionID, "user", profile.UserName)
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: fmt.Sprintf("You are already logged in as %s (pre-authenticated)", profile.UserName),
+						},
+					},
+				}, nil
+			}
+			manager.Logger.Warn("Pre-auth token invalid, falling through to login", "session_id", mcpSessionID, "error", err)
 		}
 
 		if !isNew {
@@ -50,8 +114,13 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					return mcp.NewToolResultError("Failed to clear session data"), nil
 				}
 
+				// Clear cached token too if it exists
+				if email != "" {
+					manager.TokenStore().Delete(email)
+				}
+
 				// Create a new session
-				_, _, err = manager.GetOrCreateSession(mcpSessionID)
+				_, _, err = manager.GetOrCreateSessionWithEmail(mcpSessionID, email)
 				if err != nil {
 					manager.Logger.Error("Failed to create new Kite session", "session_id", mcpSessionID, "error", err)
 					return mcp.NewToolResultError("Failed to create new Kite session"), nil

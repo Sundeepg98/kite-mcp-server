@@ -444,25 +444,18 @@ func TestNewConfigConstructor(t *testing.T) {
 
 	// Test validation
 	t.Run("validation", func(t *testing.T) {
-		// Missing API key
-		_, err := New(Config{
-			APISecret: "test_secret",
-			Logger:    testLogger(),
-		})
-		if err == nil || err.Error() != "APIKey is required" {
-			t.Errorf("Expected 'APIKey is required' error, got: %v", err)
-		}
-
-		// Missing API secret
-		_, err = New(Config{
-			APIKey: "test_key",
+		// Missing API key/secret is now allowed (warns, doesn't error) — per-user creds via setup_kite
+		m, err := New(Config{
 			Logger: testLogger(),
 		})
-		if err == nil || err.Error() != "APISecret is required" {
-			t.Errorf("Expected 'APISecret is required' error, got: %v", err)
+		if err != nil {
+			t.Errorf("Expected no error with empty API key/secret (per-user creds), got: %v", err)
+		}
+		if m != nil {
+			m.Shutdown()
 		}
 
-		// Missing logger
+		// Missing logger is still an error
 		_, err = New(Config{
 			APIKey:    "test_key",
 			APISecret: "test_secret",

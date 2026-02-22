@@ -11,12 +11,15 @@ import (
 	"syscall"
 	"time"
 
+	"strings"
+
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // App represents the main application structure
@@ -25,6 +28,7 @@ type App struct {
 	Version        string
 	startTime      time.Time
 	kcManager      *kc.Manager
+	oauthHandler   *oauth.Handler
 	statusTemplate *template.Template
 	logger         *slog.Logger
 	metrics        *metrics.Manager
@@ -39,14 +43,22 @@ type StatusPageData struct {
 
 // Config holds the application configuration
 type Config struct {
-	KiteAPIKey    string
-	KiteAPISecret string
-	AppMode       string
+	KiteAPIKey      string
+	KiteAPISecret   string
+	KiteAccessToken string
+	AppMode         string
 	AppPort       string
 	AppHost       string
 
 	ExcludedTools   string
 	AdminSecretPath string
+
+	// OAuth 2.1 (opt-in: set GOOGLE_CLIENT_ID to enable)
+	GoogleClientID     string
+	GoogleClientSecret string
+	OAuthJWTSecret     string
+	OAuthAllowedEmails string
+	ExternalURL        string
 }
 
 // Server mode constants
@@ -66,14 +78,21 @@ const (
 func NewApp(logger *slog.Logger) *App {
 	return &App{
 		Config: &Config{
-			KiteAPIKey:    os.Getenv("KITE_API_KEY"),
-			KiteAPISecret: os.Getenv("KITE_API_SECRET"),
-			AppMode:       os.Getenv("APP_MODE"),
+			KiteAPIKey:      os.Getenv("KITE_API_KEY"),
+			KiteAPISecret:   os.Getenv("KITE_API_SECRET"),
+			KiteAccessToken: os.Getenv("KITE_ACCESS_TOKEN"),
+			AppMode:         os.Getenv("APP_MODE"),
 			AppPort:       os.Getenv("APP_PORT"),
 			AppHost:       os.Getenv("APP_HOST"),
 
 			ExcludedTools:   os.Getenv("EXCLUDED_TOOLS"),
 			AdminSecretPath: os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+
+			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			OAuthJWTSecret:     os.Getenv("OAUTH_JWT_SECRET"),
+			OAuthAllowedEmails: os.Getenv("OAUTH_ALLOWED_EMAILS"),
+			ExternalURL:        os.Getenv("EXTERNAL_URL"),
 		},
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
@@ -105,9 +124,12 @@ func (app *App) LoadConfig() error {
 		app.Config.AppHost = DefaultHost
 	}
 
-	// Check if API KEY or SECRET is missing
+	// Global Kite credentials are optional when OAuth is enabled (users bring their own via setup_kite tool)
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
-		return fmt.Errorf("KITE_API_KEY or KITE_API_SECRET is missing")
+		if app.Config.GoogleClientID == "" {
+			return fmt.Errorf("KITE_API_KEY or KITE_API_SECRET is missing (set env vars, or enable OAuth for per-user credentials)")
+		}
+		app.logger.Warn("Global Kite credentials not set — users must provide their own via setup_kite tool")
 	}
 
 	return nil
@@ -121,6 +143,31 @@ func (app *App) RunServer() error {
 	kcManager, mcpServer, err := app.initializeServices()
 	if err != nil {
 		return err
+	}
+
+	// Initialize OAuth handler if configured
+	if app.Config.GoogleClientID != "" {
+		var allowedEmails []string
+		if app.Config.OAuthAllowedEmails != "" {
+			for _, e := range strings.Split(app.Config.OAuthAllowedEmails, ",") {
+				if trimmed := strings.TrimSpace(e); trimmed != "" {
+					allowedEmails = append(allowedEmails, trimmed)
+				}
+			}
+		}
+		oauthCfg := &oauth.Config{
+			GoogleClientID:     app.Config.GoogleClientID,
+			GoogleClientSecret: app.Config.GoogleClientSecret,
+			JWTSecret:          app.Config.OAuthJWTSecret,
+			AllowedEmails:      allowedEmails,
+			ExternalURL:        app.Config.ExternalURL,
+			Logger:             app.logger,
+		}
+		if err := oauthCfg.Validate(); err != nil {
+			return fmt.Errorf("invalid OAuth config: %w", err)
+		}
+		app.oauthHandler = oauth.NewHandler(oauthCfg)
+		app.logger.Info("OAuth 2.1 enabled", "external_url", app.Config.ExternalURL)
 	}
 
 	srv := app.createHTTPServer(url)
@@ -144,10 +191,11 @@ func (app *App) configureHTTPClient() {
 func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	app.logger.Info("Creating Kite Connect manager...")
 	kcManager, err := kc.New(kc.Config{
-		APIKey:    app.Config.KiteAPIKey,
-		APISecret: app.Config.KiteAPISecret,
-		Logger:    app.logger,
-		Metrics:   app.metrics,
+		APIKey:      app.Config.KiteAPIKey,
+		APISecret:   app.Config.KiteAPISecret,
+		AccessToken: app.Config.KiteAccessToken,
+		Logger:      app.logger,
+		Metrics:     app.metrics,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -241,6 +289,15 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	if app.Config.AdminSecretPath != "" {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
+	// Register OAuth 2.1 endpoints if enabled
+	if app.oauthHandler != nil {
+		mux.HandleFunc("/.well-known/oauth-protected-resource", app.oauthHandler.ResourceMetadata)
+		mux.HandleFunc("/.well-known/oauth-authorization-server", app.oauthHandler.AuthServerMetadata)
+		mux.HandleFunc("/oauth/register", app.oauthHandler.Register)
+		mux.HandleFunc("/oauth/authorize", app.oauthHandler.Authorize)
+		mux.HandleFunc("/oauth/google/callback", app.oauthHandler.GoogleCallback)
+		mux.HandleFunc("/oauth/token", app.oauthHandler.Token)
+	}
 	app.serveStatusPage(mux)
 	return mux
 }
@@ -302,7 +359,12 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 
 	// Register endpoints
 	app.registerSSEEndpoints(mux, sse)
-	mux.HandleFunc("/mcp", withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP))
+	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
+	if app.oauthHandler != nil {
+		mux.Handle("/mcp", app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler)))
+	} else {
+		mux.HandleFunc("/mcp", mcpHandler)
+	}
 
 	app.logger.Info("Hybrid mode enabled with both SSE and MCP endpoints on the same server")
 	app.logger.Info("SSE endpoints available", "url", fmt.Sprintf("http://%s/sse and http://%s/message", url, url))
@@ -347,7 +409,15 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 
 	// Setup mux with common handlers
 	mux := app.setupMux(kcManager)
-	mux.HandleFunc("/mcp", withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP))
+
+	// Register /mcp with optional OAuth middleware
+	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
+	if app.oauthHandler != nil {
+		mux.Handle("/mcp", app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler)))
+		app.logger.Info("OAuth middleware enabled for /mcp endpoint")
+	} else {
+		mux.HandleFunc("/mcp", mcpHandler)
+	}
 
 	app.logger.Info("MCP session manager configured with automatic cleanup for both MCP and Kite sessions")
 	app.logger.Info("MCP Session manager configured", "session_expiry", kc.DefaultSessionDuration)

@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // Context key for session type
@@ -66,15 +67,16 @@ func (h *ToolHandler) trackToolError(ctx context.Context, toolName, errorType st
 	}
 }
 
-// WithSession validates session and executes the provided function with a valid Kite session
-// This eliminates the TOCTOU race condition by consolidating session validation and usage
+// WithSession validates session and executes the provided function with a valid Kite session.
+// Extracts email from OAuth context (if available) to enable per-user token caching.
 func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
 	sess := server.ClientSessionFromContext(ctx)
 	sessionID := sess.SessionID()
+	email := oauth.EmailFromContext(ctx)
 
-	h.manager.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID)
+	h.manager.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
 
-	kiteSession, isNew, err := h.manager.GetOrCreateSession(sessionID)
+	kiteSession, isNew, err := h.manager.GetOrCreateSessionWithEmail(sessionID, email)
 	if err != nil {
 		h.manager.Logger.Error("Failed to establish session", "tool", toolName, "session_id", sessionID, "error", err)
 		h.trackToolError(ctx, toolName, "session_error")
@@ -82,9 +84,24 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	}
 
 	if isNew {
-		h.manager.Logger.Info("New session created, login required", "tool", toolName, "session_id", sessionID)
-		h.trackToolError(ctx, toolName, "auth_required")
-		return mcp.NewToolResultError("Please log in first using the login tool"), nil
+		// Check if a cached token was applied (per-email cache hit)
+		if email != "" && h.manager.HasCachedToken(email) {
+			// Verify the cached token is still valid
+			_, err := kiteSession.Kite.Client.GetUserProfile()
+			if err != nil {
+				h.manager.Logger.Warn("Cached Kite token expired", "email", email, "error", err)
+				h.manager.TokenStore().Delete(email)
+				h.trackToolError(ctx, toolName, "auth_required")
+				return mcp.NewToolResultError("Your Kite session has expired. Please use the login tool to re-authenticate."), nil
+			}
+			h.manager.Logger.Info("Auto-authenticated via cached token", "tool", toolName, "email", email)
+		} else if !h.manager.HasPreAuth() {
+			h.manager.Logger.Info("New session created, login required", "tool", toolName, "session_id", sessionID)
+			h.trackToolError(ctx, toolName, "auth_required")
+			return mcp.NewToolResultError("Please log in first using the login tool"), nil
+		} else {
+			h.manager.Logger.Info("New session with pre-auth token", "tool", toolName, "session_id", sessionID)
+		}
 	}
 
 	h.manager.Logger.Debug("Session validated successfully", "tool", toolName, "session_id", sessionID)
