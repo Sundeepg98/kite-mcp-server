@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os/exec"
+	"runtime"
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
@@ -31,6 +33,9 @@ type Config struct {
 	Metrics            *metrics.Manager          // optional - for tracking user metrics
 	TelegramBotToken   string                    // optional - for Telegram price alert notifications
 	AlertDBPath        string                    // optional - SQLite path for alert persistence
+	AppMode            string                    // optional - "stdio", "http", "sse"
+	ExternalURL        string                    // optional - e.g. "https://kite-mcp-server.fly.dev"
+	AdminSecretPath    string                    // optional - admin endpoint secret for ops dashboard URL
 }
 
 // New creates a new kc Manager with the given configuration
@@ -60,11 +65,14 @@ func New(cfg Config) (*Manager, error) {
 	}
 
 	m := &Manager{
-		apiKey:      cfg.APIKey,
-		apiSecret:   cfg.APISecret,
-		accessToken: cfg.AccessToken,
-		Logger:      cfg.Logger,
-		metrics:     cfg.Metrics,
+		apiKey:          cfg.APIKey,
+		apiSecret:       cfg.APISecret,
+		accessToken:     cfg.AccessToken,
+		Logger:          cfg.Logger,
+		metrics:         cfg.Metrics,
+		appMode:         cfg.AppMode,
+		externalURL:     cfg.ExternalURL,
+		adminSecretPath: cfg.AdminSecretPath,
 		tokenStore:      NewKiteTokenStore(),
 		credentialStore: NewKiteCredentialStore(),
 	}
@@ -89,6 +97,14 @@ func New(cfg Config) (*Manager, error) {
 				cfg.Logger.Error("Failed to load alerts from DB", "error", err)
 			} else {
 				cfg.Logger.Info("Alerts loaded from database", "path", cfg.AlertDBPath)
+			}
+			// Token persistence: share the same DB
+			m.tokenStore.SetDB(alertDB)
+			m.tokenStore.SetLogger(cfg.Logger)
+			if err := m.tokenStore.LoadFromDB(); err != nil {
+				cfg.Logger.Error("Failed to load tokens from DB", "error", err)
+			} else {
+				cfg.Logger.Info("Tokens loaded from database", "count", m.tokenStore.Count())
 			}
 		}
 	}
@@ -192,6 +208,9 @@ type Manager struct {
 	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
 	telegramNotifier   *alerts.TelegramNotifier  // Telegram alert sender
 	alertDB            *alerts.DB                // optional: SQLite persistence for alerts
+	appMode            string
+	externalURL        string
+	adminSecretPath    string
 }
 
 // NewManager creates a new manager with default configuration
@@ -202,6 +221,39 @@ func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error)
 		APISecret: apiSecret,
 		Logger:    logger,
 	})
+}
+
+// IsLocalMode returns true when running in STDIO mode (local process, not remote HTTP).
+func (m *Manager) IsLocalMode() bool {
+	return m.appMode == "" || m.appMode == "stdio"
+}
+
+// ExternalURL returns the configured external URL (e.g. "https://kite-mcp-server.fly.dev").
+func (m *Manager) ExternalURL() string {
+	return m.externalURL
+}
+
+// AdminSecretPath returns the configured admin secret path.
+func (m *Manager) AdminSecretPath() string {
+	return m.adminSecretPath
+}
+
+// OpenBrowser opens the given URL in the user's default browser.
+// Only works in local/STDIO mode where the server runs on the user's machine.
+func (m *Manager) OpenBrowser(url string) error {
+	if !m.IsLocalMode() {
+		return nil
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 // initializeTemplates sets up HTML templates

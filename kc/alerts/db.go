@@ -45,6 +45,14 @@ CREATE INDEX IF NOT EXISTS idx_alerts_email ON alerts(email);
 CREATE TABLE IF NOT EXISTS telegram_chat_ids (
     email   TEXT PRIMARY KEY,
     chat_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kite_tokens (
+    email        TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
+    user_name    TEXT NOT NULL,
+    stored_at    TEXT NOT NULL
 );`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
@@ -169,6 +177,55 @@ func (d *DB) SaveTelegramChatID(email string, chatID int64) error {
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO telegram_chat_ids (email, chat_id) VALUES (?, ?)`, email, chatID)
 	if err != nil {
 		return fmt.Errorf("save telegram chat id: %w", err)
+	}
+	return nil
+}
+
+// TokenEntry represents a Kite access token stored in the database.
+type TokenEntry struct {
+	Email       string
+	AccessToken string
+	UserID      string
+	UserName    string
+	StoredAt    time.Time
+}
+
+// LoadTokens reads all cached Kite tokens from the database.
+func (d *DB) LoadTokens() ([]*TokenEntry, error) {
+	rows, err := d.db.Query(`SELECT email, access_token, user_id, user_name, stored_at FROM kite_tokens`)
+	if err != nil {
+		return nil, fmt.Errorf("query tokens: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*TokenEntry
+	for rows.Next() {
+		var t TokenEntry
+		var storedAtS string
+		if err := rows.Scan(&t.Email, &t.AccessToken, &t.UserID, &t.UserName, &storedAtS); err != nil {
+			return nil, fmt.Errorf("scan token: %w", err)
+		}
+		t.StoredAt, _ = time.Parse(time.RFC3339, storedAtS)
+		out = append(out, &t)
+	}
+	return out, rows.Err()
+}
+
+// SaveToken stores or updates a Kite token for the given email.
+func (d *DB) SaveToken(email, accessToken, userID, userName string, storedAt time.Time) error {
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
+		email, accessToken, userID, userName, storedAt.Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("save token: %w", err)
+	}
+	return nil
+}
+
+// DeleteToken removes a cached token for the given email.
+func (d *DB) DeleteToken(email string) error {
+	_, err := d.db.Exec(`DELETE FROM kite_tokens WHERE email = ?`, email)
+	if err != nil {
+		return fmt.Errorf("delete token: %w", err)
 	}
 	return nil
 }

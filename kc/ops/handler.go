@@ -34,15 +34,15 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 	}
 }
 
-// RegisterRoutes mounts all ops routes under /admin/{secret}/ops using exact-match patterns.
-func (h *Handler) RegisterRoutes(mux *http.ServeMux, secret string) {
-	prefix := "/admin/" + secret + "/ops"
-	mux.HandleFunc(prefix, h.servePage)
-	mux.HandleFunc(prefix+"/api/overview", h.overview)
-	mux.HandleFunc(prefix+"/api/sessions", h.sessions)
-	mux.HandleFunc(prefix+"/api/tickers", h.tickers)
-	mux.HandleFunc(prefix+"/api/alerts", h.alerts)
-	mux.HandleFunc(prefix+"/api/logs", h.logStream)
+// RegisterRoutes mounts all ops routes under /admin/ops, protected by the provided auth middleware.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler) {
+	wrap := func(f http.HandlerFunc) http.Handler { return auth(f) }
+	mux.Handle("/admin/ops", wrap(h.servePage))
+	mux.Handle("/admin/ops/api/overview", wrap(h.overview))
+	mux.Handle("/admin/ops/api/sessions", wrap(h.sessions))
+	mux.Handle("/admin/ops/api/tickers", wrap(h.tickers))
+	mux.Handle("/admin/ops/api/alerts", wrap(h.alerts))
+	mux.Handle("/admin/ops/api/logs", wrap(h.logStream))
 }
 
 // servePage serves the embedded ops.html dashboard page.

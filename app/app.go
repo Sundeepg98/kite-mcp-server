@@ -215,6 +215,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		Metrics:          app.metrics,
 		TelegramBotToken: app.Config.TelegramBotToken,
 		AlertDBPath:      app.Config.AlertDBPath,
+		AppMode:          app.Config.AppMode,
+		ExternalURL:      app.Config.ExternalURL,
+		AdminSecretPath:  app.Config.AdminSecretPath,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -307,8 +310,14 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux.HandleFunc("/callback", kcManager.HandleKiteCallback())
 	if app.Config.AdminSecretPath != "" {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
-		opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime)
-		opsHandler.RegisterRoutes(mux, app.Config.AdminSecretPath)
+	}
+	// Ops dashboard: protected by Google OAuth if available, otherwise by secret path
+	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime)
+	if app.oauthHandler != nil {
+		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
+	} else if app.Config.AdminSecretPath != "" {
+		// Fallback for local dev: use identity middleware (no auth)
+		opsHandler.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
 	}
 	// Register OAuth 2.1 endpoints if enabled
 	if app.oauthHandler != nil {

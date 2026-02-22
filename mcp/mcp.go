@@ -22,6 +22,7 @@ func GetAllTools() []Tool {
 		// Tools for setting up the client
 		&SetupKiteTool{},
 		&LoginTool{},
+		&OpenDashboardTool{},
 
 		// Tools that get data from Kite Connect
 		&ProfileTool{},

@@ -1,9 +1,12 @@
 package kc
 
 import (
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 )
 
 // KiteTokenEntry stores a Kite access token and metadata for a user.
@@ -19,10 +22,13 @@ type TokenChangeCallback func(email string, entry *KiteTokenEntry)
 
 // KiteTokenStore is a thread-safe in-memory map of email -> Kite access token.
 // Used to cache tokens so users only need to login once per day.
+// Optionally backed by SQLite for persistence via SetDB.
 type KiteTokenStore struct {
 	mu        sync.RWMutex
 	tokens    map[string]*KiteTokenEntry
 	onChange  []TokenChangeCallback
+	db        *alerts.DB
+	logger    *slog.Logger
 }
 
 // NewKiteTokenStore creates a new token store.
@@ -30,6 +36,38 @@ func NewKiteTokenStore() *KiteTokenStore {
 	return &KiteTokenStore{
 		tokens: make(map[string]*KiteTokenEntry),
 	}
+}
+
+// SetDB enables write-through persistence to the given SQLite database.
+func (s *KiteTokenStore) SetDB(db *alerts.DB) {
+	s.db = db
+}
+
+// SetLogger sets the logger for DB error reporting.
+func (s *KiteTokenStore) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
+// LoadFromDB populates the in-memory store from the database.
+func (s *KiteTokenStore) LoadFromDB() error {
+	if s.db == nil {
+		return nil
+	}
+	entries, err := s.db.LoadTokens()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range entries {
+		s.tokens[strings.ToLower(t.Email)] = &KiteTokenEntry{
+			AccessToken: t.AccessToken,
+			UserID:      t.UserID,
+			UserName:    t.UserName,
+			StoredAt:    t.StoredAt,
+		}
+	}
+	return nil
 }
 
 // Get retrieves a stored token for the given email.
@@ -57,6 +95,12 @@ func (s *KiteTokenStore) Set(email string, entry *KiteTokenEntry) {
 	copy(callbacks, s.onChange)
 	s.mu.Unlock()
 
+	if s.db != nil {
+		if err := s.db.SaveToken(key, entry.AccessToken, entry.UserID, entry.UserName, entry.StoredAt); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist token", "email", key, "error", err)
+		}
+	}
+
 	// Notify observers outside the lock to avoid deadlocks
 	for _, cb := range callbacks {
 		cb(key, entry)
@@ -67,7 +111,13 @@ func (s *KiteTokenStore) Set(email string, entry *KiteTokenEntry) {
 func (s *KiteTokenStore) Delete(email string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.tokens, strings.ToLower(email))
+	key := strings.ToLower(email)
+	delete(s.tokens, key)
+	if s.db != nil {
+		if err := s.db.DeleteToken(key); err != nil && s.logger != nil {
+			s.logger.Error("Failed to delete persisted token", "email", key, "error", err)
+		}
+	}
 }
 
 // KiteTokenSummary is a redacted view of a token entry (no AccessToken exposed).

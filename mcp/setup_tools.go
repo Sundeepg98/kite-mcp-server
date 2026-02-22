@@ -10,6 +10,20 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
+// dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
+func dashboardLink(manager *kc.Manager) string {
+	var base string
+	if manager.IsLocalMode() {
+		base = "http://127.0.0.1:8080"
+	} else {
+		base = manager.ExternalURL()
+	}
+	if base == "" {
+		return ""
+	}
+	return fmt.Sprintf("\n\nOps dashboard: [Open Dashboard](%s/admin/ops)", base)
+}
+
 type LoginTool struct{}
 
 func (*LoginTool) Tool() mcp.Tool {
@@ -75,7 +89,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s (auto-authenticated)", profile.UserName),
+							Text: fmt.Sprintf("You are already logged in as %s (auto-authenticated)%s", profile.UserName, dashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -94,7 +108,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s (pre-authenticated)", profile.UserName),
+							Text: fmt.Sprintf("You are already logged in as %s (pre-authenticated)%s", profile.UserName, dashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -131,7 +145,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s", profile.UserName),
+							Text: fmt.Sprintf("You are already logged in as %s%s", profile.UserName, dashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -146,12 +160,64 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		manager.Logger.Info("Successfully generated Kite login URL", "session_id", mcpSessionID)
+
+		// Auto-open browser in local/STDIO mode
+		if err := manager.OpenBrowser(url); err != nil {
+			manager.Logger.Warn("Failed to auto-open browser", "error", err)
+		}
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
 					Text: fmt.Sprintf("IMPORTANT: Please display this warning to the user before proceeding:\n\n⚠️ **WARNING: AI systems are unpredictable and non-deterministic. By continuing, you agree to interact with your Zerodha account via AI at your own risk.**\n\nAfter showing the warning above, provide the user with this login link: [Login to Kite](%s)\n\nIf your client supports clickable links, you can render and present it and ask them to click the link above. Otherwise, display the URL and ask them to copy and paste it into their browser: %s\n\nAfter completing the login in your browser, let me know and I'll continue with your request.", url, url),
 				},
+			},
+		}, nil
+	}
+}
+
+type OpenDashboardTool struct{}
+
+func (*OpenDashboardTool) Tool() mcp.Tool {
+	return mcp.NewTool("open_dashboard",
+		mcp.WithDescription("Open the ops dashboard in the user's browser. Shows server health: active sessions, ticker connections, price alerts, and real-time logs. In local mode, automatically opens the browser. In remote mode, returns a clickable link."),
+	)
+}
+
+func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler := NewToolHandler(manager)
+		handler.trackToolCall(ctx, "open_dashboard")
+
+		// Build dashboard URL
+		var baseURL string
+		if manager.IsLocalMode() {
+			baseURL = "http://127.0.0.1:8080"
+		} else {
+			baseURL = manager.ExternalURL()
+			if baseURL == "" {
+				return mcp.NewToolResultError("External URL not configured"), nil
+			}
+		}
+		dashURL := baseURL + "/admin/ops"
+
+		// Auto-open browser in local mode
+		if err := manager.OpenBrowser(dashURL); err != nil {
+			manager.Logger.Warn("Failed to auto-open dashboard", "error", err)
+		}
+
+		if manager.IsLocalMode() {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{Type: "text", Text: fmt.Sprintf("Ops dashboard opened in your browser: %s", dashURL)},
+				},
+			}, nil
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{Type: "text", Text: fmt.Sprintf("Open the ops dashboard: [Ops Dashboard](%s)", dashURL)},
 			},
 		}, nil
 	}
