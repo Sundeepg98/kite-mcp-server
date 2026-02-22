@@ -375,6 +375,33 @@ func (s *Service) RemoveListener(email, listenerID string) {
 	s.logger.Debug("Tick listener removed", "email", email, "listener_id", listenerID)
 }
 
+// UserTickerInfo is a summary of a user's ticker connection for admin display.
+type UserTickerInfo struct {
+	Email         string    `json:"email"`
+	Connected     bool      `json:"connected"`
+	StartedAt     time.Time `json:"started_at"`
+	Subscriptions int       `json:"subscriptions"`
+}
+
+// ListAll returns a summary of all active ticker connections.
+func (s *Service) ListAll() []UserTickerInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]UserTickerInfo, 0, len(s.tickers))
+	for _, ut := range s.tickers {
+		ut.mu.RLock()
+		info := UserTickerInfo{
+			Email:         ut.Email,
+			Connected:     ut.Connected,
+			StartedAt:     ut.StartedAt,
+			Subscriptions: len(ut.Subscribed),
+		}
+		ut.mu.RUnlock()
+		out = append(out, info)
+	}
+	return out
+}
+
 // Shutdown stops all running tickers.
 func (s *Service) Shutdown() {
 	s.mu.Lock()

@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -35,11 +36,14 @@ type Alert struct {
 type NotifyCallback func(alert *Alert, currentPrice float64)
 
 // Store is a thread-safe in-memory store for price alerts and Telegram chat IDs.
+// Optionally backed by SQLite for persistence via SetDB.
 type Store struct {
 	mu       sync.RWMutex
 	alerts   map[string][]*Alert  // email -> alerts
 	telegram map[string]int64     // email -> chat ID
 	onNotify NotifyCallback
+	db       *DB                  // optional: write-through persistence
+	logger   *slog.Logger
 }
 
 // NewStore creates a new alert store.
@@ -48,7 +52,42 @@ func NewStore(onNotify NotifyCallback) *Store {
 		alerts:   make(map[string][]*Alert),
 		telegram: make(map[string]int64),
 		onNotify: onNotify,
+		logger:   slog.Default(),
 	}
+}
+
+// SetLogger sets the logger for DB error reporting.
+func (s *Store) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
+// SetDB enables write-through persistence to the given SQLite database.
+func (s *Store) SetDB(db *DB) {
+	s.db = db
+}
+
+// LoadFromDB populates the in-memory store from the database.
+func (s *Store) LoadFromDB() error {
+	if s.db == nil {
+		return nil
+	}
+	alerts, err := s.db.LoadAlerts()
+	if err != nil {
+		return fmt.Errorf("load alerts: %w", err)
+	}
+	chatIDs, err := s.db.LoadTelegramChatIDs()
+	if err != nil {
+		return fmt.Errorf("load telegram chat ids: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for email, list := range alerts {
+		s.alerts[email] = list
+	}
+	for email, chatID := range chatIDs {
+		s.telegram[email] = chatID
+	}
+	return nil
 }
 
 // Add creates a new alert and returns its ID.
@@ -68,6 +107,11 @@ func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint3
 	}
 
 	s.alerts[email] = append(s.alerts[email], alert)
+	if s.db != nil {
+		if err := s.db.SaveAlert(alert); err != nil {
+			s.logger.Error("Failed to persist alert", "id", alert.ID, "error", err)
+		}
+	}
 	return alert.ID
 }
 
@@ -84,6 +128,11 @@ func (s *Store) Delete(email, alertID string) error {
 	for i, a := range alerts {
 		if a.ID == alertID {
 			s.alerts[email] = append(alerts[:i], alerts[i+1:]...)
+			if s.db != nil {
+				if err := s.db.DeleteAlert(email, alertID); err != nil {
+					s.logger.Error("Failed to delete alert from DB", "id", alertID, "error", err)
+				}
+			}
 			return nil
 		}
 	}
@@ -129,6 +178,11 @@ func (s *Store) MarkTriggered(alertID string, currentPrice float64) {
 				a.Triggered = true
 				a.TriggeredAt = time.Now()
 				a.TriggeredPrice = currentPrice
+				if s.db != nil {
+					if err := s.db.UpdateTriggered(alertID, currentPrice, a.TriggeredAt); err != nil {
+						s.logger.Error("Failed to persist triggered alert", "id", alertID, "error", err)
+					}
+				}
 				return
 			}
 		}
@@ -140,6 +194,11 @@ func (s *Store) SetTelegramChatID(email string, chatID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.telegram[email] = chatID
+	if s.db != nil {
+		if err := s.db.SaveTelegramChatID(email, chatID); err != nil {
+			s.logger.Error("Failed to persist telegram chat ID", "email", email, "error", err)
+		}
+	}
 }
 
 // GetTelegramChatID returns the Telegram chat ID for a user.
@@ -148,6 +207,30 @@ func (s *Store) GetTelegramChatID(email string) (int64, bool) {
 	defer s.mu.RUnlock()
 	chatID, ok := s.telegram[email]
 	return chatID, ok
+}
+
+// ListAll returns a copy of all alerts grouped by email.
+func (s *Store) ListAll() map[string][]*Alert {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string][]*Alert, len(s.alerts))
+	for email, alerts := range s.alerts {
+		cp := make([]*Alert, len(alerts))
+		copy(cp, alerts)
+		out[email] = cp
+	}
+	return out
+}
+
+// ListAllTelegram returns a copy of all Telegram chat ID mappings.
+func (s *Store) ListAllTelegram() map[string]int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]int64, len(s.telegram))
+	for email, chatID := range s.telegram {
+		out[email] = chatID
+	}
+	return out
 }
 
 // ActiveCount returns the number of active (non-triggered) alerts for a user.

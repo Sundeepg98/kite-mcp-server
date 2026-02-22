@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ops · Kite MCP</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.topbar-uptime { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.tabs { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.tab { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
+.tab:hover { color: var(--text-1); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.panel { display: none; padding: 20px 24px; animation: fadeIn 0.2s ease; }
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--text-0); }
+.stat-value.green { color: var(--green); }
+.stat-value.amber { color: var(--amber); }
+
+.section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+td { padding: 7px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); }
+
+.log-controls { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+.log-filter { padding: 4px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--mono); cursor: pointer; transition: all 0.12s; }
+.log-filter:hover { border-color: var(--border-hi); }
+.log-filter.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.log-count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.log-stream { background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; height: calc(100vh - 240px); overflow-y: auto; padding: 2px 0; font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+.log-line { padding: 1px 12px; border-bottom: 1px solid rgba(37,45,58,0.5); display: flex; gap: 10px; animation: logSlide 0.15s ease; }
+.log-line:hover { background: var(--bg-2); }
+@keyframes logSlide { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.log-time { color: var(--text-2); flex-shrink: 0; }
+.log-level { flex-shrink: 0; width: 44px; font-weight: 600; }
+.log-level-INFO { color: var(--accent); }
+.log-level-WARN { color: var(--amber); }
+.log-level-ERROR { color: var(--red); }
+.log-level-DEBUG { color: var(--text-2); }
+.log-msg { color: var(--text-1); }
+.log-attrs { color: var(--text-2); }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Ops Dashboard</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-uptime" id="uptimeDisplay">--</span>
+    <div class="pulse-dot" id="pulseDot"></div>
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab active" data-tab="overview">Overview</button>
+  <button class="tab" data-tab="sessions">Sessions</button>
+  <button class="tab" data-tab="tickers">Tickers</button>
+  <button class="tab" data-tab="alerts">Alerts</button>
+  <button class="tab" data-tab="logs">Logs</button>
+</div>
+
+<div id="panel-overview" class="panel active">
+  <div class="stats-grid" id="statsGrid"></div>
+  <div class="section-header">Tool Usage</div>
+  <div class="tbl-wrap"><table id="toolTable"><thead><tr><th>Counter</th><th>Value</th></tr></thead><tbody id="toolBody"></tbody></table></div>
+</div>
+
+<div id="panel-sessions" class="panel">
+  <div class="tbl-wrap"><table id="sessionsTable"><thead><tr><th>Session ID</th><th>Email</th><th>Created</th><th>Expires</th></tr></thead><tbody id="sessionsBody"></tbody></table></div>
+  <div class="empty-state" id="sessionsEmpty" style="display:none">No active sessions</div>
+</div>
+
+<div id="panel-tickers" class="panel">
+  <div class="tbl-wrap"><table id="tickersTable"><thead><tr><th>Email</th><th>Status</th><th>Started</th><th>Subscriptions</th></tr></thead><tbody id="tickersBody"></tbody></table></div>
+  <div class="empty-state" id="tickersEmpty" style="display:none">No active tickers</div>
+</div>
+
+<div id="panel-alerts" class="panel">
+  <div class="section-header">Price Alerts</div>
+  <div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Email</th><th>Symbol</th><th>Target</th><th>Dir</th><th>Status</th><th>Created</th></tr></thead><tbody id="alertsBody"></tbody></table></div>
+  <div class="empty-state" id="alertsEmpty" style="display:none">No alerts configured</div>
+  <div class="section-header" style="margin-top:28px">Telegram Mappings</div>
+  <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Chat ID</th></tr></thead><tbody id="telegramBody"></tbody></table></div>
+</div>
+
+<div id="panel-logs" class="panel">
+  <div class="log-controls">
+    <button class="log-filter active" data-level="all">All</button>
+    <button class="log-filter" data-level="INFO">Info</button>
+    <button class="log-filter" data-level="WARN">Warn</button>
+    <button class="log-filter" data-level="ERROR">Error</button>
+    <button class="log-filter" data-level="DEBUG">Debug</button>
+    <span class="log-count" id="logCount">0 entries</span>
+  </div>
+  <div class="log-stream" id="logStream"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var basePath = location.pathname;
+  var logFilter = 'all';
+  var logEntries = [];
+  var MAX_LOG = 500;
+  var evtSource = null;
+
+  // Safe DOM helpers — never use innerHTML with data
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function td(text) { return el('td', null, text); }
+  function tr(cells) {
+    var r = document.createElement('tr');
+    cells.forEach(function(c) { r.appendChild(c); });
+    return r;
+  }
+  function badge(text, type) {
+    var s = el('span', 'badge badge-' + type, text);
+    return s;
+  }
+  function tdBadge(text, type) {
+    var c = document.createElement('td');
+    c.appendChild(badge(text, type));
+    return c;
+  }
+  function fmtTime(iso) {
+    if (!iso) return '--';
+    var d = new Date(iso);
+    return d.toLocaleTimeString('en-GB', {hour12: false}) + ' ' + d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+  }
+  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'logs') startLogStream();
+    });
+  });
+
+  // Fetch
+  function fetchJSON(endpoint) {
+    return fetch(basePath + '/api/' + endpoint).then(function(r) { return r.json(); });
+  }
+
+  // Overview
+  function refreshOverview() {
+    fetchJSON('overview').then(function(d) {
+      document.getElementById('uptimeDisplay').textContent = 'up ' + d.uptime;
+      var cards = [
+        {label:'Version', value:d.version},
+        {label:'Sessions', value:d.active_sessions, cls: d.active_sessions > 0 ? 'green' : ''},
+        {label:'Tickers', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
+        {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
+        {label:'Cached Tokens', value:d.cached_tokens},
+        {label:'Credentials', value:d.user_credentials},
+        {label:'Daily Users', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
+      ];
+      var grid = document.getElementById('statsGrid');
+      clearChildren(grid);
+      cards.forEach(function(c) {
+        var card = el('div', 'stat-card');
+        card.appendChild(el('div', 'stat-label', c.label));
+        card.appendChild(el('div', 'stat-value' + (c.cls ? ' ' + c.cls : ''), c.value));
+        grid.appendChild(card);
+      });
+      // Tool usage
+      var tbody = document.getElementById('toolBody');
+      clearChildren(tbody);
+      var usage = d.tool_usage || {};
+      var sorted = Object.entries(usage).sort(function(a, b) { return b[1] - a[1]; });
+      if (sorted.length === 0) {
+        var r = document.createElement('tr');
+        var c = el('td', null, 'No tool usage recorded');
+        c.colSpan = 2; c.style.textAlign = 'center'; c.style.color = 'var(--text-2)';
+        r.appendChild(c); tbody.appendChild(r);
+      } else {
+        sorted.forEach(function(pair) {
+          tbody.appendChild(tr([td(pair[0]), td(pair[1].toLocaleString())]));
+        });
+      }
+    }).catch(function(e) { console.error('overview:', e); });
+  }
+
+  // Sessions
+  function refreshSessions() {
+    fetchJSON('sessions').then(function(data) {
+      var tbody = document.getElementById('sessionsBody');
+      var empty = document.getElementById('sessionsEmpty');
+      clearChildren(tbody);
+      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      data.forEach(function(s) {
+        tbody.appendChild(tr([
+          td(s.id ? s.id.substring(0, 12) + '\u2026' : '--'),
+          td(s.email || '\u2014'),
+          td(fmtTime(s.created_at)),
+          td(fmtTime(s.expires_at))
+        ]));
+      });
+    }).catch(function(e) { console.error('sessions:', e); });
+  }
+
+  // Tickers
+  function refreshTickers() {
+    fetchJSON('tickers').then(function(data) {
+      var tbody = document.getElementById('tickersBody');
+      var empty = document.getElementById('tickersEmpty');
+      clearChildren(tbody);
+      var tickers = (data && data.tickers) || [];
+      if (tickers.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      tickers.forEach(function(t) {
+        tbody.appendChild(tr([
+          td(t.email),
+          tdBadge(t.connected ? 'connected' : 'disconnected', t.connected ? 'green' : 'red'),
+          td(fmtTime(t.started_at)),
+          td(String(t.subscriptions))
+        ]));
+      });
+    }).catch(function(e) { console.error('tickers:', e); });
+  }
+
+  // Alerts
+  function refreshAlerts() {
+    fetchJSON('alerts').then(function(data) {
+      var tbody = document.getElementById('alertsBody');
+      var empty = document.getElementById('alertsEmpty');
+      clearChildren(tbody);
+      var all = [];
+      var alerts = data.alerts || {};
+      Object.keys(alerts).forEach(function(email) {
+        (alerts[email] || []).forEach(function(a) { a._email = email; all.push(a); });
+      });
+      if (all.length === 0) { empty.style.display = 'block'; } else {
+        empty.style.display = 'none';
+        all.forEach(function(a) {
+          tbody.appendChild(tr([
+            td(a.id), td(a.email),
+            td(a.tradingsymbol + ':' + a.exchange),
+            td(a.target_price.toFixed(2)),
+            td(a.direction),
+            tdBadge(a.triggered ? 'triggered' : 'active', a.triggered ? 'amber' : 'green'),
+            td(fmtTime(a.created_at))
+          ]));
+        });
+      }
+      // Telegram
+      var tBody = document.getElementById('telegramBody');
+      clearChildren(tBody);
+      var tg = data.telegram || {};
+      var tgKeys = Object.keys(tg);
+      if (tgKeys.length === 0) {
+        var r = document.createElement('tr');
+        var c = el('td', null, 'No Telegram mappings');
+        c.colSpan = 2; c.style.textAlign = 'center'; c.style.color = 'var(--text-2)';
+        r.appendChild(c); tBody.appendChild(r);
+      } else {
+        tgKeys.forEach(function(email) { tBody.appendChild(tr([td(email), td(String(tg[email]))])); });
+      }
+    }).catch(function(e) { console.error('alerts:', e); });
+  }
+
+  // Log Stream (SSE)
+  function startLogStream() {
+    if (evtSource) return;
+    evtSource = new EventSource(basePath + '/api/logs');
+    evtSource.onmessage = function(ev) {
+      try {
+        var entry = JSON.parse(ev.data);
+        logEntries.push(entry);
+        if (logEntries.length > MAX_LOG) logEntries.shift();
+        appendLogLine(entry);
+        updateLogCount();
+      } catch(e) {}
+    };
+    evtSource.onerror = function() { evtSource.close(); evtSource = null; setTimeout(startLogStream, 3000); };
+  }
+
+  function appendLogLine(entry) {
+    if (logFilter !== 'all' && entry.level !== logFilter) return;
+    var stream = document.getElementById('logStream');
+    var line = el('div', 'log-line');
+    var t = new Date(entry.time);
+    var ts = t.toLocaleTimeString('en-GB', {hour12: false});
+
+    line.appendChild(el('span', 'log-time', ts));
+    line.appendChild(el('span', 'log-level log-level-' + entry.level, entry.level));
+    line.appendChild(el('span', 'log-msg', entry.msg));
+    if (entry.attrs) line.appendChild(el('span', 'log-attrs', entry.attrs));
+
+    stream.appendChild(line);
+    if (stream.scrollHeight - stream.scrollTop - stream.clientHeight < 100) {
+      stream.scrollTop = stream.scrollHeight;
+    }
+    while (stream.children.length > MAX_LOG) stream.removeChild(stream.firstChild);
+  }
+
+  function renderFilteredLogs() {
+    var stream = document.getElementById('logStream');
+    clearChildren(stream);
+    var filtered = logFilter === 'all' ? logEntries : logEntries.filter(function(e) { return e.level === logFilter; });
+    filtered.forEach(appendLogLine);
+    updateLogCount();
+  }
+
+  function updateLogCount() {
+    var filtered = logFilter === 'all' ? logEntries : logEntries.filter(function(e) { return e.level === logFilter; });
+    document.getElementById('logCount').textContent = filtered.length + ' entries';
+  }
+
+  document.querySelectorAll('.log-filter').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.log-filter').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      logFilter = btn.dataset.level;
+      renderFilteredLogs();
+    });
+  });
+
+  // Auto-refresh
+  function refreshAll() { refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); }
+  refreshAll();
+  setInterval(refreshAll, 10000);
+})();
+</script>
+</body>
+</html>

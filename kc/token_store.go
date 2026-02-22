@@ -70,6 +70,25 @@ func (s *KiteTokenStore) Delete(email string) {
 	delete(s.tokens, strings.ToLower(email))
 }
 
+// KiteTokenSummary is a redacted view of a token entry (no AccessToken exposed).
+type KiteTokenSummary struct {
+	Email    string    `json:"email"`
+	UserID   string    `json:"user_id"`
+	UserName string    `json:"user_name"`
+	StoredAt time.Time `json:"stored_at"`
+}
+
+// ListAll returns a redacted summary of all cached tokens.
+func (s *KiteTokenStore) ListAll() []KiteTokenSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]KiteTokenSummary, 0, len(s.tokens))
+	for email, v := range s.tokens {
+		out = append(out, KiteTokenSummary{Email: email, UserID: v.UserID, UserName: v.UserName, StoredAt: v.StoredAt})
+	}
+	return out
+}
+
 // Count returns the number of stored tokens.
 func (s *KiteTokenStore) Count() int {
 	s.mu.RLock()

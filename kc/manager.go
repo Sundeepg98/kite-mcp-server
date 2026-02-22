@@ -30,6 +30,7 @@ type Config struct {
 	SessionSigner      *SessionSigner            // optional - if nil, creates new session signer
 	Metrics            *metrics.Manager          // optional - for tracking user metrics
 	TelegramBotToken   string                    // optional - for Telegram price alert notifications
+	AlertDBPath        string                    // optional - SQLite path for alert persistence
 }
 
 // New creates a new kc Manager with the given configuration
@@ -74,6 +75,23 @@ func New(cfg Config) (*Manager, error) {
 			m.telegramNotifier.Notify(alert, currentPrice)
 		}
 	})
+	m.alertStore.SetLogger(cfg.Logger)
+
+	// Optional: SQLite persistence for alerts
+	if cfg.AlertDBPath != "" {
+		alertDB, dbErr := alerts.OpenDB(cfg.AlertDBPath)
+		if dbErr != nil {
+			cfg.Logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
+		} else {
+			m.alertDB = alertDB
+			m.alertStore.SetDB(alertDB)
+			if err := m.alertStore.LoadFromDB(); err != nil {
+				cfg.Logger.Error("Failed to load alerts from DB", "error", err)
+			} else {
+				cfg.Logger.Info("Alerts loaded from database", "path", cfg.AlertDBPath)
+			}
+		}
+	}
 
 	if cfg.TelegramBotToken != "" {
 		notifier, tgErr := alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
@@ -173,6 +191,7 @@ type Manager struct {
 	alertStore         *alerts.Store             // per-user price alerts
 	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
 	telegramNotifier   *alerts.TelegramNotifier  // Telegram alert sender
+	alertDB            *alerts.DB                // optional: SQLite persistence for alerts
 }
 
 // NewManager creates a new manager with default configuration
@@ -663,6 +682,13 @@ func (m *Manager) Shutdown() {
 
 	// Shutdown ticker service (stops all WebSocket connections)
 	m.tickerService.Shutdown()
+
+	// Close alert DB after ticker (ticker's OnTick writes through to DB)
+	if m.alertDB != nil {
+		if err := m.alertDB.Close(); err != nil {
+			m.Logger.Error("Failed to close alert DB", "error", err)
+		}
+	}
 
 	// Shutdown instruments manager (stops scheduler)
 	m.Instruments.Shutdown()

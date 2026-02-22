@@ -18,6 +18,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/dashboard"
+	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -33,6 +34,7 @@ type App struct {
 	statusTemplate *template.Template
 	logger         *slog.Logger
 	metrics        *metrics.Manager
+	logBuffer      *ops.LogBuffer
 }
 
 // StatusPageData holds template data for the status page
@@ -63,6 +65,9 @@ type Config struct {
 
 	// Telegram (opt-in: set TELEGRAM_BOT_TOKEN to enable price alert notifications)
 	TelegramBotToken string
+
+	// Alert persistence (opt-in: set ALERT_DB_PATH to enable SQLite persistence)
+	AlertDBPath string
 }
 
 // Server mode constants
@@ -99,6 +104,7 @@ func NewApp(logger *slog.Logger) *App {
 			ExternalURL:        os.Getenv("EXTERNAL_URL"),
 
 			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+			AlertDBPath:      os.Getenv("ALERT_DB_PATH"),
 		},
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
@@ -114,6 +120,11 @@ func NewApp(logger *slog.Logger) *App {
 // SetVersion sets the server version
 func (app *App) SetVersion(version string) {
 	app.Version = version
+}
+
+// SetLogBuffer sets the log buffer for the ops dashboard SSE stream.
+func (app *App) SetLogBuffer(buf *ops.LogBuffer) {
+	app.logBuffer = buf
 }
 
 // LoadConfig loads and validates the application configuration
@@ -203,6 +214,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		Logger:           app.logger,
 		Metrics:          app.metrics,
 		TelegramBotToken: app.Config.TelegramBotToken,
+		AlertDBPath:      app.Config.AlertDBPath,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -295,6 +307,8 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux.HandleFunc("/callback", kcManager.HandleKiteCallback())
 	if app.Config.AdminSecretPath != "" {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
+		opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime)
+		opsHandler.RegisterRoutes(mux, app.Config.AdminSecretPath)
 	}
 	// Register OAuth 2.1 endpoints if enabled
 	if app.oauthHandler != nil {

@@ -4,9 +4,15 @@ primary_region = "bom"
 [http_service]
   internal_port = 8080
   force_https = true
+  auto_stop_machines = false
+
+[mounts]
+  source = "kite_data"
+  destination = "/data"
 
 [env]
   APP_MODE = "http"
   APP_PORT = "8080"
   APP_HOST = "0.0.0.0"
   LOG_LEVEL = "info"
+  ALERT_DB_PATH = "/data/alerts.db"

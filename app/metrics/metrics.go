@@ -146,6 +146,18 @@ func (m *Manager) GetTodayUserCount() int64 {
 	return m.GetDailyUserCount(today)
 }
 
+// GetAllCounters returns a snapshot of all counter values.
+func (m *Manager) GetAllCounters() map[string]int64 {
+	result := make(map[string]int64)
+	m.counters.Range(func(key, val interface{}) bool {
+		if name, ok := key.(string); ok {
+			result[name] = atomic.LoadInt64(val.(*int64))
+		}
+		return true
+	})
+	return result
+}
+
 // CleanupOldData removes user data older than the configured retention period
 func (m *Manager) CleanupOldData() error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -m.cleanupRetentionDays)

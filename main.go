@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/zerodha/kite-mcp-server/app"
+	"github.com/zerodha/kite-mcp-server/kc/ops"
 )
 
 var (
@@ -18,7 +19,7 @@ var (
 	buildString = "dev build"
 )
 
-func initLogger() *slog.Logger {
+func initLogger() (*slog.Logger, *ops.LogBuffer) {
 	// Default to INFO level, can be overridden by LOG_LEVEL env var
 	// Valid levels: debug, info, warn, error
 	var level slog.Level
@@ -39,8 +40,10 @@ func initLogger() *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level: level,
 	}
-	handler := slog.NewTextHandler(os.Stderr, opts)
-	return slog.New(handler)
+	logBuffer := ops.NewLogBuffer(500)
+	inner := slog.NewTextHandler(os.Stderr, opts)
+	tee := ops.NewTeeHandler(inner, logBuffer)
+	return slog.New(tee), logBuffer
 }
 
 func main() {
@@ -51,11 +54,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Initialize logger
-	logger := initLogger()
+	// Initialize logger with tee handler for ops dashboard log streaming
+	logger, logBuffer := initLogger()
 
 	// Create a new application instance
 	application := app.NewApp(logger)
+	application.SetLogBuffer(logBuffer)
 
 	// Load configuration from environment
 	if err := application.LoadConfig(); err != nil {

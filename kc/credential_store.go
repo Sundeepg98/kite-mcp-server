@@ -50,6 +50,24 @@ func (s *KiteCredentialStore) Delete(email string) {
 	delete(s.credentials, strings.ToLower(email))
 }
 
+// KiteCredentialSummary is a redacted view of a credential entry (no APISecret exposed).
+type KiteCredentialSummary struct {
+	Email    string    `json:"email"`
+	APIKey   string    `json:"api_key"`
+	StoredAt time.Time `json:"stored_at"`
+}
+
+// ListAll returns a redacted summary of all stored credentials.
+func (s *KiteCredentialStore) ListAll() []KiteCredentialSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]KiteCredentialSummary, 0, len(s.credentials))
+	for email, v := range s.credentials {
+		out = append(out, KiteCredentialSummary{Email: email, APIKey: v.APIKey, StoredAt: v.StoredAt})
+	}
+	return out
+}
+
 // Count returns the number of stored credential entries.
 func (s *KiteCredentialStore) Count() int {
 	s.mu.RLock()
