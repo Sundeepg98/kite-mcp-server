@@ -28,7 +28,13 @@ type LoginTool struct{}
 
 func (*LoginTool) Tool() mcp.Tool {
 	return mcp.NewTool("login",
-		mcp.WithDescription("Login to Kite API. This tool helps you log in to the Kite API. If you are starting off a new conversation call this tool before hand. Call this if you get a session error. Returns a link that the user should click to authorize access, present as markdown if your client supports so that they can click it easily when rendered."),
+		mcp.WithDescription("Login to Kite API. This tool helps you log in to the Kite API. If you are starting off a new conversation call this tool before hand. Call this if you get a session error. Returns a link that the user should click to authorize access, present as markdown if your client supports so that they can click it easily when rendered. Optionally provide your own Kite developer app credentials (api_key + api_secret) for per-user isolation — get them from https://developers.kite.trade/apps"),
+		mcp.WithString("api_key",
+			mcp.Description("Optional: Your Kite developer app API key from https://developers.kite.trade/apps"),
+		),
+		mcp.WithString("api_secret",
+			mcp.Description("Optional: Your Kite developer app API secret"),
+		),
 	)
 }
 
@@ -46,11 +52,35 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		email := oauth.EmailFromContext(ctx)
 		manager.Logger.Info("Login tool called", "session_id", mcpSessionID, "email", email)
 
-		// Check if credentials are configured
-		if !manager.HasGlobalCredentials() {
+		// If user provided their own credentials, store them for per-user isolation
+		args := request.GetArguments()
+		apiKey := SafeAssertString(args["api_key"], "")
+		apiSecret := SafeAssertString(args["api_secret"], "")
+
+		if apiKey != "" && apiSecret != "" {
+			if email == "" {
+				return mcp.NewToolResultError("OAuth authentication required to register per-user credentials. Please connect via an OAuth-enabled client first."), nil
+			}
+			manager.CredentialStore().Set(email, &kc.KiteCredentialEntry{
+				APIKey:    apiKey,
+				APISecret: apiSecret,
+			})
+			// Clear old cached token — it was generated with different credentials
+			manager.TokenStore().Delete(email)
+			// Clear session data so next GetOrCreateSession uses the new API key
+			if err := manager.ClearSessionData(mcpSessionID); err != nil {
+				manager.Logger.Warn("Failed to clear session data after credential registration", "error", err)
+			}
+			manager.Logger.Info("Stored per-user Kite credentials via login tool", "email", email)
+		} else if apiKey != "" || apiSecret != "" {
+			return mcp.NewToolResultError("Both api_key and api_secret are required. Provide both or neither."), nil
+		}
+
+		// Check if credentials are configured (global or per-user)
+		if !manager.HasGlobalCredentials() && !manager.HasUserCredentials(email) {
 			manager.Logger.Info("No credentials configured for login")
 			handler.trackToolError(ctx, "login", "no_credentials")
-			return mcp.NewToolResultError("No Kite API credentials configured. Set KITE_API_KEY and KITE_API_SECRET environment variables."), nil
+			return mcp.NewToolResultError("No Kite API credentials configured. Either set KITE_API_KEY and KITE_API_SECRET environment variables, or provide api_key and api_secret parameters to register your own credentials."), nil
 		}
 
 		// Get or create a Kite session for this MCP session (email-aware)

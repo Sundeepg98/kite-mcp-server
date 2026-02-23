@@ -392,6 +392,15 @@ func (m *Manager) CredentialStore() *KiteCredentialStore {
 	return m.credentialStore
 }
 
+// HasUserCredentials returns true if per-user Kite credentials exist for the given email.
+func (m *Manager) HasUserCredentials(email string) bool {
+	if email == "" {
+		return false
+	}
+	_, ok := m.credentialStore.Get(email)
+	return ok
+}
+
 // GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
 func (m *Manager) GetAPIKeyForEmail(email string) string {
 	if email != "" {
