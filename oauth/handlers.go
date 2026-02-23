@@ -24,6 +24,7 @@ type Signer interface {
 type KiteExchanger interface {
 	ExchangeRequestToken(requestToken string) (email string, err error)
 	ExchangeWithCredentials(requestToken, apiKey, apiSecret string) (email string, err error)
+	GetCredentials(email string) (apiKey, apiSecret string, ok bool)
 }
 
 // Handler implements all OAuth 2.1 HTTP endpoints.
@@ -317,21 +318,38 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	// Read and verify signed redirect target
+	// Read and verify signed target (contains "email|redirect")
 	signedTarget := r.URL.Query().Get("target")
 	redirect := "/admin/ops" // default
+	var dashEmail string
 	if signedTarget != "" {
 		decoded, err := h.signer.Verify(signedTarget)
 		if err != nil {
 			h.logger.Warn("Invalid dashboard callback signature", "error", err)
-			// Fall through to default redirect rather than erroring
+		} else if parts := strings.SplitN(decoded, "|", 2); len(parts) == 2 {
+			dashEmail = parts[0]
+			redirect = parts[1]
 		} else {
 			redirect = decoded
 		}
 	}
 
-	// Exchange Kite request_token for user identity
-	email, err := h.exchanger.ExchangeRequestToken(requestToken)
+	// Exchange Kite request_token for user identity using per-user or global credentials
+	var email string
+	var err error
+	if dashEmail != "" {
+		// Per-user: look up stored API key/secret for this email
+		apiKey, apiSecret, ok := h.exchanger.GetCredentials(dashEmail)
+		if !ok {
+			h.logger.Error("No stored credentials for dashboard user", "email", dashEmail)
+			http.Error(w, "Authentication failed: no credentials found", http.StatusUnauthorized)
+			return
+		}
+		email, err = h.exchanger.ExchangeWithCredentials(requestToken, apiKey, apiSecret)
+	} else {
+		// Global fallback
+		email, err = h.exchanger.ExchangeRequestToken(requestToken)
+	}
 	if err != nil {
 		h.logger.Error("Kite dashboard token exchange failed", "error", err)
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
@@ -352,13 +370,14 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 // --- Dashboard Login URL ---
 
 // GenerateDashboardLoginURL generates a Kite login URL for dashboard browser auth.
-// The redirect path is signed and passed through as redirect_params.
-// If apiKey is provided, it's used instead of the global KiteAPIKey.
-func (h *Handler) GenerateDashboardLoginURL(apiKey, redirect string) string {
+// The email and redirect path are signed together and passed through as redirect_params,
+// so the callback can look up per-user credentials for the token exchange.
+func (h *Handler) GenerateDashboardLoginURL(apiKey, email, redirect string) string {
 	if apiKey == "" {
 		apiKey = h.config.KiteAPIKey
 	}
-	signedTarget := h.signer.Sign(redirect)
+	// Encode email|redirect into the signed target so callback can recover both
+	signedTarget := h.signer.Sign(email + "|" + redirect)
 	redirectParams := "flow=dash&target=" + url.QueryEscape(signedTarget)
 	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
 		apiKey, url.QueryEscape(redirectParams))

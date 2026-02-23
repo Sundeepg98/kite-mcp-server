@@ -609,3 +609,16 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 
 	return email, nil
 }
+
+func (a *kiteExchangerAdapter) GetCredentials(email string) (string, string, bool) {
+	email = strings.ToLower(email)
+	entry, ok := a.credentialStore.Get(email)
+	if !ok {
+		// Fall back to global credentials if available
+		if a.apiKey != "" && a.apiSecret != "" {
+			return a.apiKey, a.apiSecret, true
+		}
+		return "", "", false
+	}
+	return entry.APIKey, entry.APISecret, true
+}

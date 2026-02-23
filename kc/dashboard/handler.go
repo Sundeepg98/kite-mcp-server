@@ -73,7 +73,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	kiteURL := h.oauthHandler.GenerateDashboardLoginURL(apiKey, redirect)
+	kiteURL := h.oauthHandler.GenerateDashboardLoginURL(apiKey, email, redirect)
 	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 
