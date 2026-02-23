@@ -5,10 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/zerodha/kite-mcp-server/kc/templates"
 )
 
 // Signer signs and verifies arbitrary strings (implemented by kc.SessionSigner via adapter).
@@ -271,7 +274,7 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 		h.logger.Info("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
 	}
 
-	// Redirect back to MCP client
+	// Build redirect URL back to MCP client
 	sep := "?"
 	if strings.Contains(st.RedirectURI, "?") {
 		sep = "&"
@@ -280,7 +283,28 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 	if st.State != "" {
 		redirectURL += "&state=" + st.State
 	}
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+
+	// Serve the same success page as the non-OAuth callback, with auto-redirect
+	tmpl, err := template.ParseFS(templates.FS, "base.html", "login_success.html")
+	if err != nil {
+		h.logger.Error("Failed to parse success template, falling back to redirect", "error", err)
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct {
+		Title       string
+		RedirectURL string
+	}{
+		Title:       "Login Successful",
+		RedirectURL: redirectURL,
+	}
+	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+		h.logger.Error("Failed to render success template", "error", err)
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
+	}
 }
 
 // --- Kite Dashboard Callback ---

@@ -22,6 +22,9 @@
         to continue your session. You can close this tab.
     </p>
 </div>
+{{if .RedirectURL}}
+<script>setTimeout(function(){window.location.href={{.RedirectURL}}},1500)</script>
+{{end}}
 {{end}}
 
 {{template "base" .}}
