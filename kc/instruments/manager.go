@@ -380,6 +380,10 @@ func (m *Manager) loadFromURL() (map[uint32]*Instrument, error) {
 		"content-length", resp.Header.Get("Content-Length"),
 		"content-encoding", resp.Header.Get("Content-Encoding"))
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d fetching instruments from %s", resp.StatusCode, instrumentsURL)
+	}
+
 	var reader io.Reader = resp.Body
 	if resp.Header.Get("Content-Encoding") == "gzip" {
 		m.logger.Debug("Response is gzip compressed, creating gzip reader")

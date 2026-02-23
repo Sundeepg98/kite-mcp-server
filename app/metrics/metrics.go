@@ -268,6 +268,14 @@ func (m *Manager) parseDailyMetric(key string) (baseName, sessionType, date stri
 	return baseName, "", date
 }
 
+// sanitizeLabel strips characters that could break Prometheus label values.
+func sanitizeLabel(s string) string {
+	s = strings.ReplaceAll(s, "\"", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
+}
+
 // formatMetric formats a single metric in Prometheus format
 func (m *Manager) formatMetric(buf *bytes.Buffer, name string, labels map[string]string, value float64) {
 	if labels == nil {
@@ -277,7 +285,7 @@ func (m *Manager) formatMetric(buf *bytes.Buffer, name string, labels map[string
 
 	var labelPairs []string
 	for k, v := range labels {
-		labelPairs = append(labelPairs, fmt.Sprintf(`%s="%s"`, k, v))
+		labelPairs = append(labelPairs, fmt.Sprintf(`%s="%s"`, k, sanitizeLabel(v)))
 	}
 	sort.Strings(labelPairs)
 

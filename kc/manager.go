@@ -316,7 +316,7 @@ func (m *Manager) initializeSessionManager() {
 // kiteSessionCleanupHook handles cleanup of Kite sessions
 func (m *Manager) kiteSessionCleanupHook(session *MCPSession) {
 	if kiteData, ok := session.Data.(*KiteSessionData); ok && kiteData != nil && kiteData.Kite != nil {
-		m.Logger.Info("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
+		m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
 		_, _ = kiteData.Kite.Client.InvalidateAccessToken()
 	}
 }
@@ -332,7 +332,7 @@ func (m *Manager) validateSessionID(sessionID string) error {
 // createKiteSessionData creates new KiteSessionData for a session.
 // If email is provided and a cached token exists, it is applied automatically.
 func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionData {
-	m.Logger.Info("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
+	m.Logger.Debug("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
 
 	apiKey := m.GetAPIKeyForEmail(email)
 
@@ -455,17 +455,17 @@ func (m *Manager) extractKiteSessionData(data any, sessionID string) (*KiteSessi
 
 // logSessionCreated logs when a new session is created
 func (m *Manager) logSessionCreated(sessionID string) {
-	m.Logger.Info("Successfully created new Kite data for MCP session ID", "session_id", sessionID)
+	m.Logger.Debug("Successfully created new Kite data for MCP session ID", "session_id", sessionID)
 }
 
 // logSessionRetrieved logs when an existing session is retrieved
 func (m *Manager) logSessionRetrieved(sessionID string) {
-	m.Logger.Info("Successfully retrieved existing Kite data for MCP session ID", "session_id", sessionID)
+	m.Logger.Debug("Successfully retrieved existing Kite data for MCP session ID", "session_id", sessionID)
 }
 
 // logSessionRetrievedData logs when session data is successfully retrieved
 func (m *Manager) logSessionRetrievedData(sessionID string) {
-	m.Logger.Info("Successfully retrieved Kite data for MCP session ID", "session_id", sessionID)
+	m.Logger.Debug("Successfully retrieved Kite data for MCP session ID", "session_id", sessionID)
 }
 
 // GetOrCreateSession retrieves an existing Kite session or creates a new one atomically.
@@ -644,7 +644,7 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 		return err
 	}
 
-	m.Logger.Info("Completing Kite auth for MCP session", "session_id", mcpSessionID, "request_token", kiteRequestToken)
+	m.Logger.Debug("Completing Kite auth for MCP session", "session_id", mcpSessionID, "request_token", kiteRequestToken)
 
 	kiteData, err := m.GetSession(mcpSessionID)
 	if err != nil {
@@ -826,7 +826,7 @@ func (m *Manager) handleCallbackError(w http.ResponseWriter, message string, sta
 // HandleKiteCallback returns an HTTP handler for Kite authentication callbacks
 func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m.Logger.Info("Received Kite callback request", "url", r.URL.String())
+		m.Logger.Debug("Received Kite callback request", "url", r.URL.String())
 		requestToken, mcpSessionID, err := m.extractCallbackParams(r)
 		if err != nil {
 			m.handleCallbackError(w, missingParamsMessage, http.StatusBadRequest, "Invalid callback parameters", "error", err)

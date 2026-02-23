@@ -3,9 +3,18 @@ package alerts
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
+
+// escapeTelegramMarkdown escapes special Markdown characters for Telegram messages.
+func escapeTelegramMarkdown(s string) string {
+	for _, ch := range []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"} {
+		s = strings.ReplaceAll(s, ch, "\\"+ch)
+	}
+	return s
+}
 
 // TelegramNotifier sends alert notifications via Telegram.
 type TelegramNotifier struct {
@@ -58,8 +67,8 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	text := fmt.Sprintf(
 		"%s *%s:%s* crossed %s %.2f\nCurrent: %.2f\nTarget: %.2f (%s)",
 		emoji,
-		alert.Exchange,
-		alert.Tradingsymbol,
+		escapeTelegramMarkdown(alert.Exchange),
+		escapeTelegramMarkdown(alert.Tradingsymbol),
 		string(alert.Direction),
 		alert.TargetPrice,
 		currentPrice,

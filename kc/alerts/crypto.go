@@ -68,7 +68,7 @@ func decrypt(key []byte, hexCiphertext string) string {
 	}
 	plaintext, err := gcm.Open(nil, data[:nonceSize], data[nonceSize:], nil)
 	if err != nil {
-		return hexCiphertext // Decryption failed — likely plaintext data
+		return "" // Decryption failed on valid hex data — don't leak ciphertext
 	}
 	return string(plaintext)
 }

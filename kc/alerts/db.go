@@ -32,6 +32,9 @@ func OpenDB(path string) (*DB, error) {
 	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
 		return nil, fmt.Errorf("set wal mode: %w", err)
 	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000;"); err != nil {
+		return nil, fmt.Errorf("set busy_timeout: %w", err)
+	}
 
 	ddl := `
 CREATE TABLE IF NOT EXISTS alerts (

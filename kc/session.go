@@ -158,23 +158,32 @@ func (sm *SessionRegistry) Validate(sessionID string) (isTerminated bool, err er
 
 // Terminate marks a MCP session ID as terminated and cleans up associated Kite session
 func (sm *SessionRegistry) Terminate(sessionID string) (isNotAllowed bool, err error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	var session *MCPSession
+	var hooks []CleanupHook
 
+	sm.mu.Lock()
 	// Check if sessionID has the correct prefix and valid UUID format
 	if err := checkSessionID(sessionID); err != nil {
+		sm.mu.Unlock()
 		return false, err
 	}
 
-	session, exists := sm.sessions[sessionID]
+	s, exists := sm.sessions[sessionID]
 	if !exists {
+		sm.mu.Unlock()
 		return false, errors.New(errSessionNotFound)
 	}
 
-	session.Terminated = true
+	s.Terminated = true
+	session = s
 
-	// Call cleanup hooks for associated Kite sessions
-	for _, hook := range sm.cleanupHooks {
+	// Copy hooks to call outside lock
+	hooks = make([]CleanupHook, len(sm.cleanupHooks))
+	copy(hooks, sm.cleanupHooks)
+	sm.mu.Unlock()
+
+	// Call cleanup hooks outside the lock to avoid deadlocks
+	for _, hook := range hooks {
 		hook(session)
 	}
 
@@ -220,27 +229,38 @@ func (sm *SessionRegistry) ListActiveSessions() []*MCPSession {
 
 // CleanupExpiredSessions removes expired MCP sessions from memory and their associated Kite data
 func (sm *SessionRegistry) CleanupExpiredSessions() int {
+	// Collect expired sessions and hooks under lock
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	now := time.Now()
-	cleaned := 0
+	var toClean []*MCPSession
+	var toDelete []string
 
 	for sessionID, session := range sm.sessions {
 		if now.After(session.ExpiresAt) {
-			// Mark as terminated and call cleanup hooks
 			if !session.Terminated {
 				session.Terminated = true
-				for _, hook := range sm.cleanupHooks {
-					hook(session)
-				}
+				toClean = append(toClean, session)
 			}
-			delete(sm.sessions, sessionID)
-			cleaned++
+			toDelete = append(toDelete, sessionID)
 		}
 	}
 
-	return cleaned
+	for _, sessionID := range toDelete {
+		delete(sm.sessions, sessionID)
+	}
+
+	hooks := make([]CleanupHook, len(sm.cleanupHooks))
+	copy(hooks, sm.cleanupHooks)
+	sm.mu.Unlock()
+
+	// Call cleanup hooks outside the lock to avoid deadlocks
+	for _, session := range toClean {
+		for _, hook := range hooks {
+			hook(session)
+		}
+	}
+
+	return len(toDelete)
 }
 
 // GetSessionDuration returns the configured MCP session duration
