@@ -12,7 +12,8 @@ type AuthCodeEntry struct {
 	ClientID      string
 	CodeChallenge string // S256-hashed code_challenge from the client
 	RedirectURI   string
-	Email         string
+	Email         string // set at callback for normal flow (global credentials)
+	RequestToken  string // set at callback for deferred exchange (per-user Kite credentials)
 	ExpiresAt     time.Time
 }
 
@@ -76,6 +77,7 @@ type ClientEntry struct {
 	RedirectURIs []string
 	ClientName   string
 	CreatedAt    time.Time
+	IsKiteAPIKey bool // true if client_id is a user's Kite API key (per-user credentials)
 }
 
 // ClientStore is a thread-safe in-memory store for dynamically registered OAuth clients.
@@ -132,6 +134,50 @@ func (s *ClientStore) ValidateRedirectURI(clientID, uri string) bool {
 		}
 	}
 	return false
+}
+
+// RegisterKiteClient auto-registers a client where client_id is a Kite API key.
+// No client_secret is stored — validation happens via Kite's GenerateSession at token exchange.
+func (s *ClientStore) RegisterKiteClient(clientID string, redirectURIs []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.clients[clientID]; exists {
+		return
+	}
+	name := "kite-user"
+	if len(clientID) >= 8 {
+		name = "kite-user-" + clientID[:8]
+	}
+	s.clients[clientID] = &ClientEntry{
+		RedirectURIs: redirectURIs,
+		ClientName:   name,
+		CreatedAt:    time.Now(),
+		IsKiteAPIKey: true,
+	}
+}
+
+// IsKiteClient returns true if the client_id was registered as a Kite API key client.
+func (s *ClientStore) IsKiteClient(clientID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.clients[clientID]
+	return ok && c.IsKiteAPIKey
+}
+
+// AddRedirectURI adds a redirect URI to an existing client if not already present.
+func (s *ClientStore) AddRedirectURI(clientID, uri string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.clients[clientID]
+	if !ok {
+		return
+	}
+	for _, u := range c.RedirectURIs {
+		if u == uri {
+			return
+		}
+	}
+	c.RedirectURIs = append(c.RedirectURIs, uri)
 }
 
 func randomHex(n int) (string, error) {

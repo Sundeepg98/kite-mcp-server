@@ -20,6 +20,7 @@ type Signer interface {
 // KiteExchanger exchanges a Kite request_token for user identity and caches the access token.
 type KiteExchanger interface {
 	ExchangeRequestToken(requestToken string) (email string, err error)
+	ExchangeWithCredentials(requestToken, apiKey, apiSecret string) (email string, err error)
 }
 
 // Handler implements all OAuth 2.1 HTTP endpoints.
@@ -150,9 +151,17 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate client
+	// Validate client — if unknown, auto-register as a Kite API key client
+	if _, ok := h.clients.Get(clientID); !ok {
+		h.clients.RegisterKiteClient(clientID, []string{redirectURI})
+		h.logger.Info("Auto-registered Kite API key client", "client_id", clientID)
+	} else if h.clients.IsKiteClient(clientID) {
+		// Ensure this redirect_uri is registered for existing Kite clients
+		h.clients.AddRedirectURI(clientID, redirectURI)
+	}
+
 	if !h.clients.ValidateRedirectURI(clientID, redirectURI) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "unknown client_id or redirect_uri mismatch"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri mismatch for client"})
 		return
 	}
 
@@ -170,9 +179,16 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	// Build redirect_params: flow=oauth&data=<signed>
 	redirectParams := "flow=oauth&data=" + url.QueryEscape(signedState)
 
+	// Use per-user API key for Kite login if this is a Kite API key client
+	kiteAPIKey := h.config.KiteAPIKey
+	if h.clients.IsKiteClient(clientID) {
+		kiteAPIKey = clientID
+	}
+
 	// Redirect to Kite login
-	kiteURL := h.generateKiteLoginURL(redirectParams)
-	h.logger.Info("Redirecting to Kite login", "client_id", clientID)
+	kiteURL := fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
+		kiteAPIKey, url.QueryEscape(redirectParams))
+	h.logger.Info("Redirecting to Kite login", "client_id", clientID, "is_kite_key", h.clients.IsKiteClient(clientID))
 	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 
@@ -212,28 +228,43 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Exchange Kite request_token for user identity
-	email, err := h.exchanger.ExchangeRequestToken(requestToken)
-	if err != nil {
-		h.logger.Error("Kite token exchange failed", "error", err)
-		http.Error(w, "failed to authenticate with Kite", http.StatusInternalServerError)
-		return
+	var mcpCode string
+	if h.clients.IsKiteClient(st.ClientID) {
+		// Per-user Kite API key: defer exchange to /oauth/token (we need client_secret)
+		var err error
+		mcpCode, err = h.authCodes.Generate(&AuthCodeEntry{
+			ClientID:      st.ClientID,
+			CodeChallenge: st.CodeChallenge,
+			RedirectURI:   st.RedirectURI,
+			RequestToken:  requestToken,
+		})
+		if err != nil {
+			h.logger.Error("Failed to generate auth code (deferred)", "error", err)
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		h.logger.Info("Kite OAuth callback (deferred exchange)", "client_id", st.ClientID)
+	} else {
+		// Normal flow: exchange immediately with global credentials
+		email, err := h.exchanger.ExchangeRequestToken(requestToken)
+		if err != nil {
+			h.logger.Error("Kite token exchange failed", "error", err)
+			http.Error(w, "failed to authenticate with Kite", http.StatusInternalServerError)
+			return
+		}
+		mcpCode, err = h.authCodes.Generate(&AuthCodeEntry{
+			ClientID:      st.ClientID,
+			CodeChallenge: st.CodeChallenge,
+			RedirectURI:   st.RedirectURI,
+			Email:         email,
+		})
+		if err != nil {
+			h.logger.Error("Failed to generate auth code", "error", err)
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		h.logger.Info("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
 	}
-
-	// Generate MCP authorization code
-	mcpCode, err := h.authCodes.Generate(&AuthCodeEntry{
-		ClientID:      st.ClientID,
-		CodeChallenge: st.CodeChallenge,
-		RedirectURI:   st.RedirectURI,
-		Email:         email,
-	})
-	if err != nil {
-		h.logger.Error("Failed to generate auth code", "error", err)
-		http.Error(w, "server error", http.StatusInternalServerError)
-		return
-	}
-
-	h.logger.Info("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
 
 	// Redirect back to MCP client
 	sep := "?"
@@ -334,7 +365,8 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
 		return
 	}
-	if client.ClientSecret != clientSecret {
+	// For Kite API key clients, skip secret comparison — validated by Kite's GenerateSession instead
+	if !client.IsKiteAPIKey && client.ClientSecret != clientSecret {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
 		return
 	}
@@ -361,15 +393,39 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve email — either already known (normal flow) or needs deferred exchange
+	email := entry.Email
+	if email == "" && entry.RequestToken != "" {
+		// Deferred exchange: client_id = Kite API key, client_secret = Kite API secret
+		if clientSecret == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_secret (Kite API secret) required for per-user authentication"})
+			return
+		}
+		var err error
+		email, err = h.exchanger.ExchangeWithCredentials(entry.RequestToken, clientID, clientSecret)
+		if err != nil {
+			h.logger.Error("Deferred Kite token exchange failed", "client_id", clientID, "error", err)
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "Kite authentication failed — check your API key and secret"})
+			return
+		}
+		h.logger.Info("Deferred Kite exchange successful", "email", email, "client_id", clientID)
+	}
+
+	if email == "" {
+		h.logger.Error("No email resolved for token", "client_id", clientID)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error", "error_description": "failed to determine user identity"})
+		return
+	}
+
 	// Generate JWT
-	accessToken, err := h.jwt.GenerateToken(entry.Email, clientID)
+	accessToken, err := h.jwt.GenerateToken(email, clientID)
 	if err != nil {
 		h.logger.Error("Failed to generate JWT", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}
 
-	h.logger.Info("Issued JWT access token", "email", entry.Email, "client_id", clientID)
+	h.logger.Info("Issued JWT access token", "email", email, "client_id", clientID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"access_token": accessToken,

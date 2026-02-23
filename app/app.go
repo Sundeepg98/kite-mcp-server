@@ -166,10 +166,11 @@ func (app *App) RunServer() error {
 		}
 		signer := &signerAdapter{signer: kcManager.SessionSigner()}
 		exchanger := &kiteExchangerAdapter{
-			apiKey:     app.Config.KiteAPIKey,
-			apiSecret:  app.Config.KiteAPISecret,
-			tokenStore: kcManager.TokenStore(),
-			logger:     app.logger,
+			apiKey:          app.Config.KiteAPIKey,
+			apiSecret:       app.Config.KiteAPISecret,
+			tokenStore:      kcManager.TokenStore(),
+			credentialStore: kcManager.CredentialStore(),
+			logger:          app.logger,
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
@@ -544,10 +545,11 @@ func (s *signerAdapter) Verify(signed string) (string, error) {
 
 // kiteExchangerAdapter exchanges a Kite request_token for user identity.
 type kiteExchangerAdapter struct {
-	apiKey    string
-	apiSecret string
-	tokenStore *kc.KiteTokenStore
-	logger     *slog.Logger
+	apiKey          string
+	apiSecret       string
+	tokenStore      *kc.KiteTokenStore
+	credentialStore *kc.KiteCredentialStore
+	logger          *slog.Logger
 }
 
 func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string, error) {
@@ -570,6 +572,36 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 		AccessToken: userSess.AccessToken,
 		UserID:      userSess.UserID,
 		UserName:    userSess.UserName,
+	})
+
+	return email, nil
+}
+
+func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, apiSecret string) (string, error) {
+	client := kiteconnect.New(apiKey)
+	userSess, err := client.GenerateSession(requestToken, apiSecret)
+	if err != nil {
+		return "", fmt.Errorf("kite generate session with per-user credentials: %w", err)
+	}
+
+	email := userSess.Email
+	if email == "" {
+		email = userSess.UserID
+	}
+
+	a.logger.Info("Kite token exchange (per-user credentials) successful", "email", email, "user_id", userSess.UserID)
+
+	// Cache the access token keyed by email
+	a.tokenStore.Set(strings.ToLower(email), &kc.KiteTokenEntry{
+		AccessToken: userSess.AccessToken,
+		UserID:      userSess.UserID,
+		UserName:    userSess.UserName,
+	})
+
+	// Store per-user credentials so all future operations use them
+	a.credentialStore.Set(strings.ToLower(email), &kc.KiteCredentialEntry{
+		APIKey:    apiKey,
+		APISecret: apiSecret,
 	})
 
 	return email, nil
