@@ -204,7 +204,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			resp, err := session.Kite.Client.ModifyOrder(variety, orderID, orderParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)
-				return mcp.NewToolResultError("Failed to modify order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "modify_order")
@@ -248,7 +248,7 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			resp, err := session.Kite.Client.CancelOrder(variety, orderID, nil)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
-				return mcp.NewToolResultError("Failed to cancel order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "cancel_order")
@@ -375,7 +375,7 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			resp, err := session.Kite.Client.PlaceGTT(gttParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place GTT order", "error", err)
-				return mcp.NewToolResultError("Failed to place GTT order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to place GTT order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "place_gtt_order")
@@ -413,7 +413,7 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			resp, err := session.Kite.Client.DeleteGTT(triggerID)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to delete GTT order", "error", err)
-				return mcp.NewToolResultError("Failed to delete GTT order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete GTT order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "delete_gtt_order")
@@ -448,6 +448,11 @@ func (*ModifyGTTOrderTool) Tool() mcp.Tool {
 			mcp.Description("Transaction type"),
 			mcp.Required(),
 			mcp.Enum("BUY", "SELL"),
+		),
+		mcp.WithString("product",
+			mcp.Description("Product type"),
+			mcp.Required(),
+			mcp.Enum("CNC", "NRML", "MIS", "MTF"),
 		),
 		mcp.WithString("trigger_type",
 			mcp.Description("GTT trigger type"),
@@ -493,7 +498,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		args := request.GetArguments()
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "trigger_type"); err != nil {
+		if err := ValidateRequired(args, "trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -506,6 +511,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Tradingsymbol:   SafeAssertString(args["tradingsymbol"], ""),
 			LastPrice:       SafeAssertFloat64(args["last_price"], 0.0),
 			TransactionType: SafeAssertString(args["transaction_type"], ""),
+			Product:         SafeAssertString(args["product"], ""),
 		}
 
 		// Set up trigger based on trigger_type
@@ -541,7 +547,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			resp, err := session.Kite.Client.ModifyGTT(triggerID, gttParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify GTT order", "error", err)
-				return mcp.NewToolResultError("Failed to modify GTT order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify GTT order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "modify_gtt_order")

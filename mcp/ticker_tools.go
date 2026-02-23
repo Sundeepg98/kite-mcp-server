@@ -66,17 +66,22 @@ func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "stop_ticker")
 
-		email := oauth.EmailFromContext(ctx)
-		if email == "" {
-			return mcp.NewToolResultError("Email required"), nil
-		}
+		return handler.WithSession(ctx, "stop_ticker", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			email := oauth.EmailFromContext(ctx)
+			if email == "" {
+				email = session.Email
+			}
+			if email == "" {
+				return mcp.NewToolResultError("Email required"), nil
+			}
 
-		if err := manager.TickerService().Stop(email); err != nil {
-			handler.trackToolError(ctx, "stop_ticker", "stop_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to stop ticker: %s", err)), nil
-		}
+			if err := manager.TickerService().Stop(email); err != nil {
+				handler.trackToolError(ctx, "stop_ticker", "stop_error")
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to stop ticker: %s", err)), nil
+			}
 
-		return mcp.NewToolResultText("Ticker stopped."), nil
+			return mcp.NewToolResultText("Ticker stopped."), nil
+		})
 	}
 }
 
@@ -94,18 +99,23 @@ func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "ticker_status")
 
-		email := oauth.EmailFromContext(ctx)
-		if email == "" {
-			return mcp.NewToolResultError("Email required"), nil
-		}
+		return handler.WithSession(ctx, "ticker_status", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			email := oauth.EmailFromContext(ctx)
+			if email == "" {
+				email = session.Email
+			}
+			if email == "" {
+				return mcp.NewToolResultError("Email required"), nil
+			}
 
-		status, err := manager.TickerService().GetStatus(email)
-		if err != nil {
-			handler.trackToolError(ctx, "ticker_status", "status_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get ticker status: %s", err)), nil
-		}
+			status, err := manager.TickerService().GetStatus(email)
+			if err != nil {
+				handler.trackToolError(ctx, "ticker_status", "status_error")
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to get ticker status: %s", err)), nil
+			}
 
-		return handler.MarshalResponse(status, "ticker_status")
+			return handler.MarshalResponse(status, "ticker_status")
+		})
 	}
 }
 

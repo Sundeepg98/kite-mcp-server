@@ -71,11 +71,16 @@ func (s *KiteTokenStore) LoadFromDB() error {
 }
 
 // Get retrieves a stored token for the given email.
+// Returns a copy to prevent callers from mutating shared state.
 func (s *KiteTokenStore) Get(email string) (*KiteTokenEntry, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	entry, ok := s.tokens[strings.ToLower(email)]
-	return entry, ok
+	if !ok {
+		return nil, false
+	}
+	cp := *entry
+	return &cp, true
 }
 
 // OnChange registers a callback that fires when a token is stored or updated.

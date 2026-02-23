@@ -113,11 +113,18 @@ func (s *ClientStore) Register(redirectURIs []string, clientName string) (client
 }
 
 // Get retrieves a client by ID.
+// Returns a copy to prevent callers from mutating shared state.
 func (s *ClientStore) Get(clientID string) (*ClientEntry, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	c, ok := s.clients[clientID]
-	return c, ok
+	if !ok {
+		return nil, false
+	}
+	cp := *c
+	cp.RedirectURIs = make([]string, len(c.RedirectURIs))
+	copy(cp.RedirectURIs, c.RedirectURIs)
+	return &cp, true
 }
 
 // ValidateRedirectURI checks if the URI is registered for the client.

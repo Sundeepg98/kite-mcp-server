@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -220,7 +221,7 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			orderTrades, err := session.Kite.Client.GetOrderTrades(orderID)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get order trades"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order trades: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(orderTrades, "get_order_trades")
@@ -256,7 +257,7 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			orderHistory, err := session.Kite.Client.GetOrderHistory(orderID)
 			if err != nil {
-				return mcp.NewToolResultError("Failed to get order history"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order history: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(orderHistory, "get_order_history")

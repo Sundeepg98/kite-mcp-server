@@ -29,6 +29,10 @@ func (e *Evaluator) Evaluate(email string, tick models.Tick) {
 
 	for _, alert := range alerts {
 		if shouldTrigger(alert, tick.LastPrice) {
+			if !e.store.MarkTriggered(alert.ID, tick.LastPrice) {
+				continue
+			}
+
 			e.logger.Info("Alert triggered",
 				"alert_id", alert.ID,
 				"email", alert.Email,
@@ -37,8 +41,6 @@ func (e *Evaluator) Evaluate(email string, tick models.Tick) {
 				"current", tick.LastPrice,
 				"direction", alert.Direction,
 			)
-
-			e.store.MarkTriggered(alert.ID, tick.LastPrice)
 
 			if e.store.onNotify != nil {
 				e.store.onNotify(alert, tick.LastPrice)

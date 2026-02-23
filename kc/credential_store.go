@@ -64,11 +64,16 @@ func (s *KiteCredentialStore) LoadFromDB() error {
 }
 
 // Get retrieves stored credentials for the given email.
+// Returns a copy to prevent callers from mutating shared state.
 func (s *KiteCredentialStore) Get(email string) (*KiteCredentialEntry, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	entry, ok := s.creds[strings.ToLower(email)]
-	return entry, ok
+	if !ok {
+		return nil, false
+	}
+	cp := *entry
+	return &cp, true
 }
 
 // Set stores credentials for the given email.

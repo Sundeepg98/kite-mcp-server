@@ -152,6 +152,7 @@ func (s *Store) List(email string) []*Alert {
 }
 
 // GetByToken returns all active (non-triggered) alerts matching the instrument token.
+// Returns copies to prevent callers from mutating shared state.
 func (s *Store) GetByToken(instrumentToken uint32) []*Alert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -160,7 +161,8 @@ func (s *Store) GetByToken(instrumentToken uint32) []*Alert {
 	for _, alerts := range s.alerts {
 		for _, a := range alerts {
 			if a.InstrumentToken == instrumentToken && !a.Triggered {
-				matches = append(matches, a)
+				cp := *a
+				matches = append(matches, &cp)
 			}
 		}
 	}
@@ -168,13 +170,17 @@ func (s *Store) GetByToken(instrumentToken uint32) []*Alert {
 }
 
 // MarkTriggered marks an alert as triggered with the current price.
-func (s *Store) MarkTriggered(alertID string, currentPrice float64) {
+// Returns true if the alert was newly triggered, false if already triggered or not found.
+func (s *Store) MarkTriggered(alertID string, currentPrice float64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for _, alerts := range s.alerts {
 		for _, a := range alerts {
 			if a.ID == alertID {
+				if a.Triggered {
+					return false
+				}
 				a.Triggered = true
 				a.TriggeredAt = time.Now()
 				a.TriggeredPrice = currentPrice
@@ -183,10 +189,11 @@ func (s *Store) MarkTriggered(alertID string, currentPrice float64) {
 						s.logger.Error("Failed to persist triggered alert", "id", alertID, "error", err)
 					}
 				}
-				return
+				return true
 			}
 		}
 	}
+	return false
 }
 
 // SetTelegramChatID sets the Telegram chat ID for a user.
