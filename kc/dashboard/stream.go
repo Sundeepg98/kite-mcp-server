@@ -41,6 +41,7 @@ func (h *Handler) serveStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	flusher.Flush() // Send headers immediately so browser's EventSource fires onopen
 
 	h.logger.Info("Dashboard SSE stream started", "email", email)
 

@@ -85,6 +85,11 @@ func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	jsonError := func(status int, msg string) {
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		json.NewEncoder(w).Encode(h.manager.CredentialStore().ListAll())
@@ -96,11 +101,11 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 			APISecret string `json:"api_secret"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+			jsonError(http.StatusBadRequest, "invalid JSON")
 			return
 		}
 		if req.Email == "" || req.APIKey == "" || req.APISecret == "" {
-			http.Error(w, `{"error":"email, api_key, and api_secret are required"}`, http.StatusBadRequest)
+			jsonError(http.StatusBadRequest, "email, api_key, and api_secret are required")
 			return
 		}
 		h.manager.CredentialStore().Set(req.Email, &kc.KiteCredentialEntry{
@@ -115,7 +120,7 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		email := r.URL.Query().Get("email")
 		if email == "" {
-			http.Error(w, `{"error":"email query parameter required"}`, http.StatusBadRequest)
+			jsonError(http.StatusBadRequest, "email query parameter required")
 			return
 		}
 		h.manager.CredentialStore().Delete(email)
@@ -124,7 +129,7 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 
 	default:
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		jsonError(http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 

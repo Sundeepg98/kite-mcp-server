@@ -187,6 +187,13 @@ function updateSummary(s) {
 fetch('/api/dashboard/data')
   .then(function(r) { return r.json(); })
   .then(function(data) {
+    // Show API errors as banner if present
+    if (data.errors && data.errors.length > 0) {
+      var banner = document.createElement('div');
+      banner.style.cssText = 'background:#f8514926;border:1px solid #f85149;color:#f85149;padding:12px 24px;margin:0 24px;border-radius:6px;font-size:14px;';
+      banner.textContent = data.errors.join('; ');
+      document.querySelector('.summary').insertAdjacentElement('afterend', banner);
+    }
     renderHoldings(data.holdings || []);
     renderPositions(data.positions || []);
     updateSummary(data.summary);

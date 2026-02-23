@@ -87,11 +87,15 @@ func (lb *LogBuffer) AddListener(id string) chan LogEntry {
 	return ch
 }
 
-// RemoveListener unregisters a listener by id.
+// RemoveListener unregisters a listener by id and closes its channel.
 func (lb *LogBuffer) RemoveListener(id string) {
 	lb.listenerMu.Lock()
+	ch, exists := lb.listeners[id]
 	delete(lb.listeners, id)
 	lb.listenerMu.Unlock()
+	if exists {
+		close(ch)
+	}
 }
 
 // TeeHandler wraps an slog.Handler and copies every record to a LogBuffer.
