@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -30,9 +31,18 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 		}
 
 		tokenStr := strings.TrimPrefix(auth, "Bearer ")
+		// Do not restrict audience for MCP Bearer tokens — client IDs vary per registration
 		claims, err := h.jwt.ValidateToken(tokenStr)
 		if err != nil {
 			h.logger.Debug("Invalid JWT", "error", err)
+			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token", resource_metadata="`+resourceMetadataURL+`"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		// Reject dashboard-only tokens on MCP endpoints
+		if len(claims.Audience) == 1 && claims.Audience[0] == "dashboard" {
+			h.logger.Debug("Dashboard token used on MCP endpoint")
 			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token", resource_metadata="`+resourceMetadataURL+`"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -52,20 +62,20 @@ const cookieName = "kite_jwt"
 // If neither is valid, redirects to the Kite login flow.
 func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try Bearer token first
+		// Try Bearer token first (must have dashboard audience)
 		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 			tokenStr := strings.TrimPrefix(auth, "Bearer ")
-			if claims, err := h.jwt.ValidateToken(tokenStr); err == nil {
+			if claims, err := h.jwt.ValidateToken(tokenStr, "dashboard"); err == nil {
 				ctx := context.WithValue(r.Context(), emailContextKey{}, claims.Subject)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 		}
 
-		// Try cookie
+		// Try cookie (must have dashboard audience)
 		cookie, err := r.Cookie(cookieName)
 		if err == nil && cookie.Value != "" {
-			claims, err := h.jwt.ValidateToken(cookie.Value)
+			claims, err := h.jwt.ValidateToken(cookie.Value, "dashboard")
 			if err == nil {
 				ctx := context.WithValue(r.Context(), emailContextKey{}, claims.Subject)
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -75,7 +85,11 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 		}
 
 		// Redirect to browser login with redirect back to original URL
-		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + r.URL.Path
+		redirect := r.URL.Path
+		if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+			redirect = "/admin/ops"
+		}
+		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + url.QueryEscape(redirect)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
 }

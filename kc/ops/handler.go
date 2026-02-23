@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // Handler serves the ops dashboard pages and API endpoints.
@@ -81,7 +82,8 @@ func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(h.buildAlerts())
 }
 
-// credentials handles GET (list), POST (create), DELETE (remove) for per-user Kite credentials.
+// credentials handles GET (list own), POST (create own), DELETE (remove own) for per-user Kite credentials.
+// Operations are scoped to the authenticated user's email to prevent IDOR.
 func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -90,13 +92,25 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": msg})
 	}
 
+	// Get the authenticated user's email from context
+	authEmail := oauth.EmailFromContext(r.Context())
+	if authEmail == "" {
+		jsonError(http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		json.NewEncoder(w).Encode(h.manager.CredentialStore().ListAll())
+		// Only return the authenticated user's own credentials
+		entry, ok := h.manager.CredentialStore().Get(authEmail)
+		if ok {
+			json.NewEncoder(w).Encode([]map[string]string{{"email": authEmail, "api_key": entry.APIKey}})
+		} else {
+			json.NewEncoder(w).Encode([]map[string]string{})
+		}
 
 	case http.MethodPost:
 		var req struct {
-			Email     string `json:"email"`
 			APIKey    string `json:"api_key"`
 			APISecret string `json:"api_secret"`
 		}
@@ -104,28 +118,23 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 			jsonError(http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		if req.Email == "" || req.APIKey == "" || req.APISecret == "" {
-			jsonError(http.StatusBadRequest, "email, api_key, and api_secret are required")
+		if req.APIKey == "" || req.APISecret == "" {
+			jsonError(http.StatusBadRequest, "api_key and api_secret are required")
 			return
 		}
-		h.manager.CredentialStore().Set(req.Email, &kc.KiteCredentialEntry{
+		h.manager.CredentialStore().Set(authEmail, &kc.KiteCredentialEntry{
 			APIKey:    req.APIKey,
 			APISecret: req.APISecret,
 		})
 		// Clear cached token — old token was generated with different credentials
-		h.manager.TokenStore().Delete(req.Email)
-		h.logger.Info("Stored Kite credentials", "email", req.Email)
+		h.manager.TokenStore().Delete(authEmail)
+		h.logger.Info("Stored Kite credentials", "email", authEmail)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
-		email := r.URL.Query().Get("email")
-		if email == "" {
-			jsonError(http.StatusBadRequest, "email query parameter required")
-			return
-		}
-		h.manager.CredentialStore().Delete(email)
-		h.manager.TokenStore().Delete(email)
-		h.logger.Info("Deleted Kite credentials", "email", email)
+		h.manager.CredentialStore().Delete(authEmail)
+		h.manager.TokenStore().Delete(authEmail)
+		h.logger.Info("Deleted Kite credentials", "email", authEmail)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 
 	default:

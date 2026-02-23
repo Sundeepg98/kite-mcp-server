@@ -21,13 +21,22 @@ type AuthCodeEntry struct {
 type AuthCodeStore struct {
 	mu      sync.RWMutex
 	entries map[string]*AuthCodeEntry
+	done    chan struct{}
 }
 
 // NewAuthCodeStore creates a store and starts a background cleanup goroutine.
 func NewAuthCodeStore() *AuthCodeStore {
-	s := &AuthCodeStore{entries: make(map[string]*AuthCodeEntry)}
+	s := &AuthCodeStore{
+		entries: make(map[string]*AuthCodeEntry),
+		done:    make(chan struct{}),
+	}
 	go s.cleanup()
 	return s
+}
+
+// Close stops the background cleanup goroutine.
+func (s *AuthCodeStore) Close() {
+	close(s.done)
 }
 
 // Generate creates a new random authorization code and stores the entry.
@@ -59,15 +68,20 @@ func (s *AuthCodeStore) Consume(code string) (*AuthCodeEntry, bool) {
 func (s *AuthCodeStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		now := time.Now()
-		for k, v := range s.entries {
-			if now.After(v.ExpiresAt) {
-				delete(s.entries, k)
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			now := time.Now()
+			for k, v := range s.entries {
+				if now.After(v.ExpiresAt) {
+					delete(s.entries, k)
+				}
 			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 	}
 }
 
@@ -80,6 +94,10 @@ type ClientEntry struct {
 	IsKiteAPIKey bool // true if client_id is a user's Kite API key (per-user credentials)
 }
 
+// maxClients is the maximum number of dynamically registered OAuth clients.
+// Once reached, the oldest client is evicted to make room.
+const maxClients = 1000
+
 // ClientStore is a thread-safe in-memory store for dynamically registered OAuth clients.
 type ClientStore struct {
 	mu      sync.RWMutex
@@ -89,6 +107,21 @@ type ClientStore struct {
 // NewClientStore creates a new client store.
 func NewClientStore() *ClientStore {
 	return &ClientStore{clients: make(map[string]*ClientEntry)}
+}
+
+// evictOldest removes the oldest client by CreatedAt. Must be called with mu held.
+func (s *ClientStore) evictOldest() {
+	var oldestID string
+	var oldestTime time.Time
+	for id, c := range s.clients {
+		if oldestID == "" || c.CreatedAt.Before(oldestTime) {
+			oldestID = id
+			oldestTime = c.CreatedAt
+		}
+	}
+	if oldestID != "" {
+		delete(s.clients, oldestID)
+	}
 }
 
 // Register creates a new client with a random ID and secret.
@@ -102,6 +135,9 @@ func (s *ClientStore) Register(redirectURIs []string, clientName string) (client
 		return "", "", err
 	}
 	s.mu.Lock()
+	if len(s.clients) >= maxClients {
+		s.evictOldest()
+	}
 	s.clients[clientID] = &ClientEntry{
 		ClientSecret: clientSecret,
 		RedirectURIs: redirectURIs,
@@ -150,6 +186,9 @@ func (s *ClientStore) RegisterKiteClient(clientID string, redirectURIs []string)
 	defer s.mu.Unlock()
 	if _, exists := s.clients[clientID]; exists {
 		return
+	}
+	if len(s.clients) >= maxClients {
+		s.evictOldest()
 	}
 	name := "kite-user"
 	if len(clientID) >= 8 {

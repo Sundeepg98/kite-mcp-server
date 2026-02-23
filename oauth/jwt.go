@@ -43,19 +43,45 @@ func (j *JWTManager) GenerateToken(email, clientID string) (string, error) {
 }
 
 // ValidateToken parses and validates the JWT, returning claims if valid.
-func (j *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
+// If audiences are provided, validates that the token's audience matches at least one.
+func (j *JWTManager) ValidateToken(tokenString string, audiences ...string) (*Claims, error) {
+	opts := []jwt.ParserOption{
+		jwt.WithValidMethods([]string{"HS256"}),
+	}
+	if len(audiences) > 0 {
+		// Validate that the token was issued for one of the expected audiences
+		opts = append(opts, jwt.WithAudience(audiences[0]))
+	}
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return j.secret, nil
-	})
+	}, opts...)
 	if err != nil {
 		return nil, err
 	}
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
+	}
+	// Check additional audiences if more than one was provided
+	if len(audiences) > 1 {
+		matched := false
+		for _, aud := range audiences {
+			for _, tokenAud := range claims.Audience {
+				if tokenAud == aud {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				break
+			}
+		}
+		if !matched {
+			return nil, fmt.Errorf("token audience mismatch")
+		}
 	}
 	return claims, nil
 }

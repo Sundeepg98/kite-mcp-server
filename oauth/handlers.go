@@ -36,11 +36,15 @@ type Handler struct {
 	signer    Signer
 	exchanger KiteExchanger
 	logger    *slog.Logger
+
+	// Cached templates (parsed once at startup)
+	loginSuccessTmpl  *template.Template
+	browserLoginTmpl  *template.Template
 }
 
 // NewHandler creates a new OAuth handler. Config must be validated first.
 func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
-	return &Handler{
+	h := &Handler{
 		config:    cfg,
 		jwt:       NewJWTManager(cfg.JWTSecret, cfg.TokenExpiry),
 		authCodes: NewAuthCodeStore(),
@@ -49,6 +53,19 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 		exchanger: exchanger,
 		logger:    cfg.Logger,
 	}
+
+	// Pre-parse templates from embedded FS
+	var err error
+	h.loginSuccessTmpl, err = template.ParseFS(templates.FS, "base.html", "login_success.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse login_success template", "error", err)
+	}
+	h.browserLoginTmpl, err = template.ParseFS(templates.FS, "base.html", "browser_login.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse browser_login template", "error", err)
+	}
+
+	return h
 }
 
 // oauthState is packed into Kite's redirect_params to round-trip MCP client data.
@@ -63,6 +80,10 @@ type oauthState struct {
 
 // ResourceMetadata serves RFC 9728 OAuth Protected Resource Metadata.
 func (h *Handler) ResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"resource":              h.config.ExternalURL + "/mcp",
 		"authorization_servers": []string{h.config.ExternalURL},
@@ -71,6 +92,10 @@ func (h *Handler) ResourceMetadata(w http.ResponseWriter, r *http.Request) {
 
 // AuthServerMetadata serves RFC 8414 OAuth Authorization Server Metadata.
 func (h *Handler) AuthServerMetadata(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"issuer":                                h.config.ExternalURL,
 		"authorization_endpoint":                h.config.ExternalURL + "/oauth/authorize",
@@ -129,6 +154,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Authorize handles GET /oauth/authorize — validates params and redirects to Kite login.
 func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	q := r.URL.Query()
 	clientID := q.Get("client_id")
 	redirectURI := q.Get("redirect_uri")
@@ -287,15 +316,13 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 	if strings.Contains(st.RedirectURI, "?") {
 		sep = "&"
 	}
-	redirectURL := st.RedirectURI + sep + "code=" + mcpCode
+	redirectURL := st.RedirectURI + sep + "code=" + url.QueryEscape(mcpCode)
 	if st.State != "" {
-		redirectURL += "&state=" + st.State
+		redirectURL += "&state=" + url.QueryEscape(st.State)
 	}
 
 	// Serve the same success page as the non-OAuth callback, with auto-redirect
-	tmpl, err := template.ParseFS(templates.FS, "base.html", "login_success.html")
-	if err != nil {
-		h.logger.Error("Failed to parse success template, falling back to redirect", "error", err)
+	if h.loginSuccessTmpl == nil {
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
 	}
@@ -308,7 +335,7 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 		Title:       "Login Successful",
 		RedirectURL: redirectURL,
 	}
-	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+	if err := h.loginSuccessTmpl.ExecuteTemplate(w, "base", data); err != nil {
 		h.logger.Error("Failed to render success template", "error", err)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
@@ -343,6 +370,11 @@ func (h *Handler) HandleBrowserAuthCallback(w http.ResponseWriter, r *http.Reque
 			// Legacy: plain redirect without email
 			redirect = decoded
 		}
+	}
+
+	// Prevent open redirect: only allow relative paths
+	if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+		redirect = "/admin/ops"
 	}
 
 	// Exchange Kite request_token for user identity using per-user or global credentials
@@ -429,9 +461,7 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 
 // serveBrowserLoginForm renders the browser login form template.
 func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, errorMsg string) {
-	tmpl, err := template.ParseFS(templates.FS, "base.html", "browser_login.html")
-	if err != nil {
-		h.logger.Error("Failed to parse browser login template", "error", err)
+	if h.browserLoginTmpl == nil {
 		http.Error(w, "Failed to load login page", http.StatusInternalServerError)
 		return
 	}
@@ -446,7 +476,7 @@ func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, 
 		Redirect: redirect,
 		Error:    errorMsg,
 	}
-	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+	if err := h.browserLoginTmpl.ExecuteTemplate(w, "base", data); err != nil {
 		h.logger.Error("Failed to render browser login template", "error", err)
 	}
 }
