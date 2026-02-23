@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"html/template"
 	"log/slog"
 	"net/http"
 
@@ -34,7 +35,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 
-	// Dashboard login initiation (redirects to Kite login)
+	// Dashboard login initiation (shows email form or redirects to Kite)
 	mux.HandleFunc("/dashboard/login", h.handleLogin)
 
 	// Protected routes
@@ -47,15 +48,57 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	h.logger.Info("Dashboard routes registered at /dashboard")
 }
 
-// handleLogin redirects to Kite login for browser-based auth.
+// handleLogin shows a login form or redirects to Kite login.
+// If email query param is provided, looks up stored credentials and redirects to Kite.
+// Otherwise, serves a login form where the user enters their email.
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
 		redirect = "/dashboard"
 	}
+	email := r.URL.Query().Get("email")
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		email = r.FormValue("email")
+	}
 
-	kiteURL := h.oauthHandler.GenerateDashboardLoginURL(redirect)
+	if email == "" {
+		h.serveLoginForm(w, redirect, "")
+		return
+	}
+
+	apiKey := h.manager.GetAPIKeyForEmail(email)
+	if apiKey == "" {
+		h.serveLoginForm(w, redirect, "No credentials found for this email. Please authenticate via your MCP client first.")
+		return
+	}
+
+	kiteURL := h.oauthHandler.GenerateDashboardLoginURL(apiKey, redirect)
 	http.Redirect(w, r, kiteURL, http.StatusFound)
+}
+
+// serveLoginForm renders the dashboard login form template.
+func (h *Handler) serveLoginForm(w http.ResponseWriter, redirect string, errorMsg string) {
+	tmpl, err := template.ParseFS(templates.FS, "base.html", "dashboard_login.html")
+	if err != nil {
+		h.logger.Error("Failed to parse dashboard login template", "error", err)
+		http.Error(w, "Failed to load login page", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct {
+		Title    string
+		Redirect string
+		Error    string
+	}{
+		Title:    "Dashboard Login",
+		Redirect: redirect,
+		Error:    errorMsg,
+	}
+	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+		h.logger.Error("Failed to render dashboard login template", "error", err)
+	}
 }
 
 // serveDashboard serves the dashboard HTML page.

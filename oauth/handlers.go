@@ -353,10 +353,15 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 
 // GenerateDashboardLoginURL generates a Kite login URL for dashboard browser auth.
 // The redirect path is signed and passed through as redirect_params.
-func (h *Handler) GenerateDashboardLoginURL(redirect string) string {
+// If apiKey is provided, it's used instead of the global KiteAPIKey.
+func (h *Handler) GenerateDashboardLoginURL(apiKey, redirect string) string {
+	if apiKey == "" {
+		apiKey = h.config.KiteAPIKey
+	}
 	signedTarget := h.signer.Sign(redirect)
 	redirectParams := "flow=dash&target=" + url.QueryEscape(signedTarget)
-	return h.generateKiteLoginURL(redirectParams)
+	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
+		apiKey, url.QueryEscape(redirectParams))
 }
 
 // --- Token Endpoint ---

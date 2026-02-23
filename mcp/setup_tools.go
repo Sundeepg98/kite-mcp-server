@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -217,6 +218,13 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 		dashURL := baseURL + "/admin/ops"
+
+		// Include email in dashboard login URL for seamless browser auth
+		email := oauth.EmailFromContext(ctx)
+		if email != "" {
+			loginURL := baseURL + "/dashboard/login?email=" + url.QueryEscape(email) + "&redirect=/admin/ops"
+			dashURL = loginURL
+		}
 
 		// Auto-open browser in local mode
 		if err := manager.OpenBrowser(dashURL); err != nil {
