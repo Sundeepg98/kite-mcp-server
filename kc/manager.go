@@ -44,9 +44,8 @@ func New(cfg Config) (*Manager, error) {
 	if cfg.Logger == nil {
 		return nil, errors.New("logger is required")
 	}
-	// Global API key/secret are optional — users can provide their own via setup_kite tool
 	if cfg.APIKey == "" || cfg.APISecret == "" {
-		cfg.Logger.Warn("No global Kite API credentials configured — users must provide their own via setup_kite tool")
+		cfg.Logger.Warn("No Kite API credentials configured")
 	}
 
 	// Create or use provided instruments manager
@@ -73,8 +72,7 @@ func New(cfg Config) (*Manager, error) {
 		appMode:         cfg.AppMode,
 		externalURL:     cfg.ExternalURL,
 		adminSecretPath: cfg.AdminSecretPath,
-		tokenStore:      NewKiteTokenStore(),
-		credentialStore: NewKiteCredentialStore(),
+		tokenStore: NewKiteTokenStore(),
 	}
 
 	// Initialize alert system: store → notifier → evaluator → ticker
@@ -142,8 +140,7 @@ func New(cfg Config) (*Manager, error) {
 	// Wire token rotation observer: when a user's token changes, update their ticker
 	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
 		if m.tickerService.IsRunning(email) {
-			apiKey := m.getAPIKeyForEmail(email)
-			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
+			if err := m.tickerService.UpdateToken(email, m.apiKey, entry.AccessToken); err != nil {
 				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
 			} else {
 				m.Logger.Info("Ticker token rotated automatically", "email", email)
@@ -202,7 +199,6 @@ type Manager struct {
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
 	tokenStore         *KiteTokenStore           // per-email Kite token cache
-	credentialStore    *KiteCredentialStore      // per-email Kite API credentials (per-user apps)
 	tickerService      *ticker.Service           // per-user WebSocket ticker connections
 	alertStore         *alerts.Store             // per-user price alerts
 	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
@@ -316,11 +312,8 @@ func (m *Manager) validateSessionID(sessionID string) error {
 func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionData {
 	m.Logger.Info("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
 
-	// Resolve API key: per-user credentials > global credentials
-	apiKey := m.getAPIKeyForEmail(email)
-
 	kd := &KiteSessionData{
-		Kite:  NewKiteConnect(apiKey),
+		Kite:  NewKiteConnect(m.apiKey),
 		Email: email,
 	}
 
@@ -360,19 +353,6 @@ func (m *Manager) TokenStore() *KiteTokenStore {
 	return m.tokenStore
 }
 
-// CredentialStore returns the per-email credential store.
-func (m *Manager) CredentialStore() *KiteCredentialStore {
-	return m.credentialStore
-}
-
-// HasUserCredentials returns true if per-user Kite credentials exist for the given email.
-func (m *Manager) HasUserCredentials(email string) bool {
-	if email == "" {
-		return false
-	}
-	_, ok := m.credentialStore.Get(email)
-	return ok
-}
 
 // HasGlobalCredentials returns true if global API key/secret are configured (from env vars).
 func (m *Manager) HasGlobalCredentials() bool {
@@ -389,9 +369,14 @@ func (m *Manager) AlertStore() *alerts.Store {
 	return m.alertStore
 }
 
-// GetAPIKeyForEmail returns the API key for a given email (exported for MCP tools).
+// APIKey returns the global Kite API key.
+func (m *Manager) APIKey() string {
+	return m.apiKey
+}
+
+// GetAPIKeyForEmail returns the API key (always global).
 func (m *Manager) GetAPIKeyForEmail(email string) string {
-	return m.getAPIKeyForEmail(email)
+	return m.apiKey
 }
 
 // GetAccessTokenForEmail returns the cached access token for a given email.
@@ -404,27 +389,6 @@ func (m *Manager) GetAccessTokenForEmail(email string) string {
 	return m.accessToken // fallback to global pre-auth token
 }
 
-// getAPIKeyForEmail returns the API key for a given email.
-// Priority: per-user credentials > global credentials.
-func (m *Manager) getAPIKeyForEmail(email string) string {
-	if email != "" {
-		if cred, ok := m.credentialStore.Get(email); ok {
-			return cred.APIKey
-		}
-	}
-	return m.apiKey
-}
-
-// getAPISecretForEmail returns the API secret for a given email.
-// Priority: per-user credentials > global credentials.
-func (m *Manager) getAPISecretForEmail(email string) string {
-	if email != "" {
-		if cred, ok := m.credentialStore.Get(email); ok {
-			return cred.APISecret
-		}
-	}
-	return m.apiSecret
-}
 
 // extractKiteSessionData safely extracts KiteSessionData from interface{}
 func (m *Manager) extractKiteSessionData(data any, sessionID string) (*KiteSessionData, error) {
@@ -635,15 +599,13 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 		return ErrSessionNotFound
 	}
 
-	// Resolve API secret: per-user credentials > global credentials
-	apiSecret := m.getAPISecretForEmail(kiteData.Email)
-	if apiSecret == "" {
-		m.Logger.Error("No API secret available for session", "session_id", mcpSessionID, "email", kiteData.Email)
-		return fmt.Errorf("no Kite API secret available — use setup_kite tool to configure your credentials")
+	if m.apiSecret == "" {
+		m.Logger.Error("No API secret configured", "session_id", mcpSessionID)
+		return fmt.Errorf("no Kite API secret configured")
 	}
 
 	m.Logger.Debug("Generating Kite session with request token")
-	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, apiSecret)
+	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, m.apiSecret)
 	if err != nil {
 		m.Logger.Error("Failed to generate Kite session", "error", err)
 		return fmt.Errorf("failed to generate Kite session: %w", err)

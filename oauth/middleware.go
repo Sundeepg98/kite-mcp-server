@@ -49,7 +49,7 @@ const cookieName = "kite_jwt"
 
 // RequireAuthBrowser returns middleware for browser-based auth.
 // Tries Bearer token first, then falls back to a JWT cookie.
-// If neither is valid, redirects to the Google OAuth login flow.
+// If neither is valid, redirects to the Kite login flow.
 func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try Bearer token first
@@ -74,7 +74,7 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 			h.logger.Debug("Invalid dashboard cookie", "error", err)
 		}
 
-		// Redirect to Google OAuth login with redirect back to original URL
+		// Redirect to Kite login with redirect back to original URL
 		redirectURL := h.config.ExternalURL + "/dashboard/login?redirect=" + r.URL.Path
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})

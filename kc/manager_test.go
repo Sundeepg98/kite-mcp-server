@@ -444,7 +444,7 @@ func TestNewConfigConstructor(t *testing.T) {
 
 	// Test validation
 	t.Run("validation", func(t *testing.T) {
-		// Missing API key/secret is now allowed (warns, doesn't error) — per-user creds via setup_kite
+		// Missing API key/secret is allowed (warns, doesn't error)
 		m, err := New(Config{
 			Logger: testLogger(),
 		})

@@ -16,7 +16,6 @@ type OverviewData struct {
 	TotalAlerts     int              `json:"total_alerts"`
 	ActiveAlerts    int              `json:"active_alerts"`
 	CachedTokens    int              `json:"cached_tokens"`
-	UserCredentials int              `json:"user_credentials"`
 	ToolUsage       map[string]int64 `json:"tool_usage"`
 	DailyUsers      int64            `json:"daily_users"`
 }
@@ -62,7 +61,6 @@ func (h *Handler) buildOverview() OverviewData {
 		TotalAlerts:     total,
 		ActiveAlerts:    active,
 		CachedTokens:    len(h.manager.TokenStore().ListAll()),
-		UserCredentials: len(h.manager.CredentialStore().ListAll()),
 		ToolUsage:       toolUsage,
 		DailyUsers:      dailyUsers,
 	}

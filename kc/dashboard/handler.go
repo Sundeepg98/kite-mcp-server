@@ -34,11 +34,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 
-	// Dashboard login initiation (redirects to Google OAuth)
+	// Dashboard login initiation (redirects to Kite login)
 	mux.HandleFunc("/dashboard/login", h.handleLogin)
-
-	// Dashboard login callback (sets cookie, redirects to dashboard)
-	mux.HandleFunc("/dashboard/callback", h.handleCallback)
 
 	// Protected routes
 	auth := h.oauthHandler.RequireAuthBrowser
@@ -50,51 +47,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	h.logger.Info("Dashboard routes registered at /dashboard")
 }
 
-// handleLogin redirects to Google OAuth for browser-based auth.
+// handleLogin redirects to Kite login for browser-based auth.
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
 		redirect = "/dashboard"
 	}
 
-	// Use the same Google OAuth flow — store redirect target in state
-	oauthURL := h.oauthHandler.GetGoogleAuthURL("dashboard:" + redirect)
-	http.Redirect(w, r, oauthURL, http.StatusFound)
-}
-
-// handleCallback handles the Google OAuth callback for dashboard login.
-func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-
-	if code == "" {
-		http.Error(w, "Missing authorization code", http.StatusBadRequest)
-		return
-	}
-
-	// Exchange code for Google user info
-	email, err := h.oauthHandler.ExchangeCodeForEmail(r.Context(), code)
-	if err != nil {
-		h.logger.Error("Dashboard OAuth callback failed", "error", err)
-		http.Error(w, "Authentication failed", http.StatusUnauthorized)
-		return
-	}
-
-	// Set JWT cookie for browser auth
-	if err := h.oauthHandler.SetAuthCookie(w, email); err != nil {
-		h.logger.Error("Failed to set auth cookie", "error", err)
-		http.Error(w, "Failed to set auth cookie", http.StatusInternalServerError)
-		return
-	}
-
-	// Extract redirect target from state
-	redirect := "/dashboard"
-	if len(state) > len("dashboard:") {
-		redirect = state[len("dashboard:"):]
-	}
-
-	h.logger.Info("Dashboard login successful", "email", email)
-	http.Redirect(w, r, redirect, http.StatusFound)
+	kiteURL := h.oauthHandler.GenerateDashboardLoginURL(redirect)
+	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 
 // serveDashboard serves the dashboard HTML page.
@@ -116,7 +77,7 @@ func (h *Handler) ensureTickerForUser(email string) {
 		return
 	}
 
-	apiKey := h.manager.GetAPIKeyForEmail(email)
+	apiKey := h.manager.APIKey()
 	accessToken := h.manager.GetAccessTokenForEmail(email)
 	if accessToken == "" {
 		return

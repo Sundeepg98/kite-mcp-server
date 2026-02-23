@@ -1,49 +1,52 @@
 package oauth
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
-
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
+
+// Signer signs and verifies arbitrary strings (implemented by kc.SessionSigner via adapter).
+type Signer interface {
+	Sign(data string) string
+	Verify(signed string) (string, error)
+}
+
+// KiteExchanger exchanges a Kite request_token for user identity and caches the access token.
+type KiteExchanger interface {
+	ExchangeRequestToken(requestToken string) (email string, err error)
+}
 
 // Handler implements all OAuth 2.1 HTTP endpoints.
 type Handler struct {
-	config      *Config
-	jwt         *JWTManager
-	authCodes   *AuthCodeStore
-	clients     *ClientStore
-	googleOAuth *oauth2.Config
-	logger      *slog.Logger
+	config    *Config
+	jwt       *JWTManager
+	authCodes *AuthCodeStore
+	clients   *ClientStore
+	signer    Signer
+	exchanger KiteExchanger
+	logger    *slog.Logger
 }
 
 // NewHandler creates a new OAuth handler. Config must be validated first.
-func NewHandler(cfg *Config) *Handler {
+func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	return &Handler{
 		config:    cfg,
 		jwt:       NewJWTManager(cfg.JWTSecret, cfg.TokenExpiry),
 		authCodes: NewAuthCodeStore(),
 		clients:   NewClientStore(),
-		googleOAuth: &oauth2.Config{
-			ClientID:     cfg.GoogleClientID,
-			ClientSecret: cfg.GoogleClientSecret,
-			RedirectURL:  cfg.ExternalURL + "/oauth/google/callback",
-			Scopes:       []string{"openid", "email"},
-			Endpoint:     google.Endpoint,
-		},
-		logger: cfg.Logger,
+		signer:    signer,
+		exchanger: exchanger,
+		logger:    cfg.Logger,
 	}
 }
 
-// oauthState is packed into Google's state parameter to round-trip MCP client data.
+// oauthState is packed into Kite's redirect_params to round-trip MCP client data.
 type oauthState struct {
 	ClientID      string `json:"c"`
 	RedirectURI   string `json:"r"`
@@ -64,13 +67,13 @@ func (h *Handler) ResourceMetadata(w http.ResponseWriter, r *http.Request) {
 // AuthServerMetadata serves RFC 8414 OAuth Authorization Server Metadata.
 func (h *Handler) AuthServerMetadata(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"issuer":                             h.config.ExternalURL,
-		"authorization_endpoint":             h.config.ExternalURL + "/oauth/authorize",
-		"token_endpoint":                     h.config.ExternalURL + "/oauth/token",
-		"registration_endpoint":              h.config.ExternalURL + "/oauth/register",
-		"response_types_supported":           []string{"code"},
-		"grant_types_supported":              []string{"authorization_code"},
-		"code_challenge_methods_supported":   []string{"S256"},
+		"issuer":                                h.config.ExternalURL,
+		"authorization_endpoint":                h.config.ExternalURL + "/oauth/authorize",
+		"token_endpoint":                        h.config.ExternalURL + "/oauth/token",
+		"registration_endpoint":                 h.config.ExternalURL + "/oauth/register",
+		"response_types_supported":              []string{"code"},
+		"grant_types_supported":                 []string{"authorization_code"},
+		"code_challenge_methods_supported":       []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_post"},
 	})
 }
@@ -107,19 +110,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registered OAuth client", "client_id", clientID, "client_name", req.ClientName)
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"client_id":                clientID,
-		"client_secret":            clientSecret,
-		"redirect_uris":            req.RedirectURIs,
-		"client_name":              req.ClientName,
-		"grant_types":              []string{"authorization_code"},
-		"response_types":           []string{"code"},
+		"client_id":                  clientID,
+		"client_secret":              clientSecret,
+		"redirect_uris":              req.RedirectURIs,
+		"client_name":                req.ClientName,
+		"grant_types":                []string{"authorization_code"},
+		"response_types":             []string{"code"},
 		"token_endpoint_auth_method": "client_secret_post",
 	})
 }
 
 // --- Authorization Endpoint ---
 
-// Authorize handles GET /oauth/authorize — validates params and redirects to Google.
+// Authorize handles GET /oauth/authorize — validates params and redirects to Kite login.
 func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	clientID := q.Get("client_id")
@@ -153,7 +156,7 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pack MCP client state into Google's state param
+	// Pack MCP client state into signed redirect_params
 	stateData := oauthState{
 		ClientID:      clientID,
 		RedirectURI:   redirectURI,
@@ -162,63 +165,58 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	stateJSON, _ := json.Marshal(stateData)
 	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
+	signedState := h.signer.Sign(encodedState)
 
-	// Redirect to Google
-	googleURL := h.googleOAuth.AuthCodeURL(encodedState, oauth2.AccessTypeOffline)
-	h.logger.Info("Redirecting to Google OAuth", "client_id", clientID)
-	http.Redirect(w, r, googleURL, http.StatusFound)
+	// Build redirect_params: flow=oauth&data=<signed>
+	redirectParams := "flow=oauth&data=" + url.QueryEscape(signedState)
+
+	// Redirect to Kite login
+	kiteURL := h.generateKiteLoginURL(redirectParams)
+	h.logger.Info("Redirecting to Kite login", "client_id", clientID)
+	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 
-// --- Google Callback ---
+// --- Kite OAuth Callback ---
 
-// GoogleCallback handles GET /oauth/google/callback — exchanges Google code, issues MCP auth code.
-func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
-	// Check for Google errors
-	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		h.logger.Warn("Google OAuth error", "error", errParam)
-		http.Error(w, "Google OAuth error: "+errParam, http.StatusBadRequest)
+// HandleKiteOAuthCallback handles the Kite callback for MCP OAuth flow.
+// Called when flow=oauth in the callback query params.
+func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request, requestToken string) {
+	if requestToken == "" {
+		http.Error(w, "missing request_token", http.StatusBadRequest)
 		return
 	}
 
-	googleCode := r.URL.Query().Get("code")
-	encodedState := r.URL.Query().Get("state")
-	if googleCode == "" || encodedState == "" {
-		http.Error(w, "missing code or state", http.StatusBadRequest)
+	// Read and verify signed state data
+	signedData := r.URL.Query().Get("data")
+	if signedData == "" {
+		http.Error(w, "missing data parameter", http.StatusBadRequest)
 		return
 	}
 
-	// Decode our packed state
+	encodedState, err := h.signer.Verify(signedData)
+	if err != nil {
+		h.logger.Warn("Invalid OAuth callback signature", "error", err)
+		http.Error(w, "invalid or expired callback data", http.StatusBadRequest)
+		return
+	}
+
+	// Decode state
 	stateJSON, err := base64.URLEncoding.DecodeString(encodedState)
 	if err != nil {
-		http.Error(w, "invalid state", http.StatusBadRequest)
+		http.Error(w, "invalid state encoding", http.StatusBadRequest)
 		return
 	}
 	var st oauthState
 	if err := json.Unmarshal(stateJSON, &st); err != nil {
-		http.Error(w, "invalid state", http.StatusBadRequest)
+		http.Error(w, "invalid state data", http.StatusBadRequest)
 		return
 	}
 
-	// Exchange Google code for token
-	token, err := h.googleOAuth.Exchange(r.Context(), googleCode)
+	// Exchange Kite request_token for user identity
+	email, err := h.exchanger.ExchangeRequestToken(requestToken)
 	if err != nil {
-		h.logger.Error("Google token exchange failed", "error", err)
-		http.Error(w, "failed to exchange Google token", http.StatusInternalServerError)
-		return
-	}
-
-	// Get user email from Google userinfo
-	email, err := h.getGoogleEmail(token)
-	if err != nil {
-		h.logger.Error("Failed to get Google email", "error", err)
-		http.Error(w, "failed to get user info", http.StatusInternalServerError)
-		return
-	}
-
-	// Check allowlist
-	if !h.config.IsEmailAllowed(email) {
-		h.logger.Warn("Email not allowed", "email", email)
-		http.Error(w, "access denied: email not allowed", http.StatusForbidden)
+		h.logger.Error("Kite token exchange failed", "error", err)
+		http.Error(w, "failed to authenticate with Kite", http.StatusInternalServerError)
 		return
 	}
 
@@ -235,7 +233,7 @@ func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("Google OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
+	h.logger.Info("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
 
 	// Redirect back to MCP client
 	sep := "?"
@@ -249,30 +247,56 @@ func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
-// getGoogleEmail fetches the user's email from Google userinfo API.
-func (h *Handler) getGoogleEmail(token *oauth2.Token) (string, error) {
-	client := h.googleOAuth.Client(nil, token)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+// --- Kite Dashboard Callback ---
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
+// HandleKiteDashCallback handles the Kite callback for dashboard login flow.
+// Called when flow=dash in the callback query params.
+func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request, requestToken string) {
+	if requestToken == "" {
+		http.Error(w, "missing request_token", http.StatusBadRequest)
+		return
 	}
 
-	var info struct {
-		Email string `json:"email"`
+	// Read and verify signed redirect target
+	signedTarget := r.URL.Query().Get("target")
+	redirect := "/admin/ops" // default
+	if signedTarget != "" {
+		decoded, err := h.signer.Verify(signedTarget)
+		if err != nil {
+			h.logger.Warn("Invalid dashboard callback signature", "error", err)
+			// Fall through to default redirect rather than erroring
+		} else {
+			redirect = decoded
+		}
 	}
-	if err := json.Unmarshal(body, &info); err != nil {
-		return "", err
+
+	// Exchange Kite request_token for user identity
+	email, err := h.exchanger.ExchangeRequestToken(requestToken)
+	if err != nil {
+		h.logger.Error("Kite dashboard token exchange failed", "error", err)
+		http.Error(w, "Authentication failed", http.StatusUnauthorized)
+		return
 	}
-	if info.Email == "" {
-		return "", fmt.Errorf("no email in Google response")
+
+	// Set JWT cookie for browser auth
+	if err := h.SetAuthCookie(w, email); err != nil {
+		h.logger.Error("Failed to set auth cookie", "error", err)
+		http.Error(w, "Failed to set auth cookie", http.StatusInternalServerError)
+		return
 	}
-	return info.Email, nil
+
+	h.logger.Info("Dashboard login successful", "email", email)
+	http.Redirect(w, r, redirect, http.StatusFound)
+}
+
+// --- Dashboard Login URL ---
+
+// GenerateDashboardLoginURL generates a Kite login URL for dashboard browser auth.
+// The redirect path is signed and passed through as redirect_params.
+func (h *Handler) GenerateDashboardLoginURL(redirect string) string {
+	signedTarget := h.signer.Sign(redirect)
+	redirectParams := "flow=dash&target=" + url.QueryEscape(signedTarget)
+	return h.generateKiteLoginURL(redirectParams)
 }
 
 // --- Token Endpoint ---
@@ -354,35 +378,12 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetGoogleAuthURL generates a Google OAuth URL for browser-based dashboard login.
-// The state parameter is passed through and returned in the callback.
-func (h *Handler) GetGoogleAuthURL(state string) string {
-	// Use a separate config with dashboard callback URL
-	dashboardOAuth := *h.googleOAuth
-	dashboardOAuth.RedirectURL = h.config.ExternalURL + "/dashboard/callback"
-	return dashboardOAuth.AuthCodeURL(state, oauth2.AccessTypeOffline)
-}
+// --- Internal helpers ---
 
-// ExchangeCodeForEmail exchanges a Google OAuth code (from dashboard callback) for the user's email.
-func (h *Handler) ExchangeCodeForEmail(ctx context.Context, code string) (string, error) {
-	dashboardOAuth := *h.googleOAuth
-	dashboardOAuth.RedirectURL = h.config.ExternalURL + "/dashboard/callback"
-
-	token, err := dashboardOAuth.Exchange(ctx, code)
-	if err != nil {
-		return "", fmt.Errorf("google token exchange: %w", err)
-	}
-
-	email, err := h.getGoogleEmail(token)
-	if err != nil {
-		return "", fmt.Errorf("get google email: %w", err)
-	}
-
-	if !h.config.IsEmailAllowed(email) {
-		return "", fmt.Errorf("email not allowed: %s", email)
-	}
-
-	return email, nil
+// generateKiteLoginURL builds a Kite Connect login URL with the given redirect_params.
+func (h *Handler) generateKiteLoginURL(redirectParams string) string {
+	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
+		h.config.KiteAPIKey, url.QueryEscape(redirectParams))
 }
 
 // writeJSON writes a JSON response with the given status code.

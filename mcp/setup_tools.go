@@ -46,25 +46,11 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		email := oauth.EmailFromContext(ctx)
 		manager.Logger.Info("Login tool called", "session_id", mcpSessionID, "email", email)
 
-		// Check if any credentials are available (per-user or global)
-		if !manager.HasGlobalCredentials() && !manager.HasUserCredentials(email) {
-			manager.Logger.Info("No credentials available for login", "email", email)
+		// Check if credentials are configured
+		if !manager.HasGlobalCredentials() {
+			manager.Logger.Info("No credentials configured for login")
 			handler.trackToolError(ctx, "login", "no_credentials")
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: "No Kite API credentials configured.\n\n" +
-							"**To set up:**\n" +
-							"1. Go to https://developers.kite.trade/apps and create a free app\n" +
-							"2. Set the **Redirect URL** to `https://kite-mcp-server.fly.dev/callback`\n" +
-							"3. Copy your **API Key** and **API Secret**\n" +
-							"4. Call the `setup_kite` tool with your api_key and api_secret\n" +
-							"5. Then call `login` again\n\n" +
-							"Note: Each Kite developer app is tied to a single Zerodha Client ID.",
-					},
-				},
-			}, nil
+			return mcp.NewToolResultError("No Kite API credentials configured. Set KITE_API_KEY and KITE_API_SECRET environment variables."), nil
 		}
 
 		// Get or create a Kite session for this MCP session (email-aware)

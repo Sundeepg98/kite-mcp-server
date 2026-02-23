@@ -207,7 +207,6 @@ tr:hover td { background: var(--bg-2); }
         {label:'Tickers', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
         {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
         {label:'Cached Tokens', value:d.cached_tokens},
-        {label:'Credentials', value:d.user_credentials},
         {label:'Daily Users', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
       ];
       var grid = document.getElementById('statsGrid');

@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"strings"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mark3labs/mcp-go/util"
@@ -56,12 +57,9 @@ type Config struct {
 	ExcludedTools   string
 	AdminSecretPath string
 
-	// OAuth 2.1 (opt-in: set GOOGLE_CLIENT_ID to enable)
-	GoogleClientID     string
-	GoogleClientSecret string
-	OAuthJWTSecret     string
-	OAuthAllowedEmails string
-	ExternalURL        string
+	// OAuth 2.1 (opt-in: set OAUTH_JWT_SECRET to enable)
+	OAuthJWTSecret string
+	ExternalURL    string
 
 	// Telegram (opt-in: set TELEGRAM_BOT_TOKEN to enable price alert notifications)
 	TelegramBotToken string
@@ -97,11 +95,8 @@ func NewApp(logger *slog.Logger) *App {
 			ExcludedTools:   os.Getenv("EXCLUDED_TOOLS"),
 			AdminSecretPath: os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
 
-			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-			OAuthJWTSecret:     os.Getenv("OAUTH_JWT_SECRET"),
-			OAuthAllowedEmails: os.Getenv("OAUTH_ALLOWED_EMAILS"),
-			ExternalURL:        os.Getenv("EXTERNAL_URL"),
+			OAuthJWTSecret: os.Getenv("OAUTH_JWT_SECRET"),
+			ExternalURL:    os.Getenv("EXTERNAL_URL"),
 
 			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 			AlertDBPath:      os.Getenv("ALERT_DB_PATH"),
@@ -141,12 +136,8 @@ func (app *App) LoadConfig() error {
 		app.Config.AppHost = DefaultHost
 	}
 
-	// Global Kite credentials are optional when OAuth is enabled (users bring their own via setup_kite tool)
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
-		if app.Config.GoogleClientID == "" {
-			return fmt.Errorf("KITE_API_KEY or KITE_API_SECRET is missing (set env vars, or enable OAuth for per-user credentials)")
-		}
-		app.logger.Warn("Global Kite credentials not set — users must provide their own via setup_kite tool")
+		return fmt.Errorf("KITE_API_KEY and KITE_API_SECRET are required")
 	}
 
 	return nil
@@ -162,29 +153,26 @@ func (app *App) RunServer() error {
 		return err
 	}
 
-	// Initialize OAuth handler if configured
-	if app.Config.GoogleClientID != "" {
-		var allowedEmails []string
-		if app.Config.OAuthAllowedEmails != "" {
-			for _, e := range strings.Split(app.Config.OAuthAllowedEmails, ",") {
-				if trimmed := strings.TrimSpace(e); trimmed != "" {
-					allowedEmails = append(allowedEmails, trimmed)
-				}
-			}
-		}
+	// Initialize OAuth handler if configured (uses Kite as identity provider)
+	if app.Config.OAuthJWTSecret != "" {
 		oauthCfg := &oauth.Config{
-			GoogleClientID:     app.Config.GoogleClientID,
-			GoogleClientSecret: app.Config.GoogleClientSecret,
-			JWTSecret:          app.Config.OAuthJWTSecret,
-			AllowedEmails:      allowedEmails,
-			ExternalURL:        app.Config.ExternalURL,
-			Logger:             app.logger,
+			KiteAPIKey:  app.Config.KiteAPIKey,
+			JWTSecret:   app.Config.OAuthJWTSecret,
+			ExternalURL: app.Config.ExternalURL,
+			Logger:      app.logger,
 		}
 		if err := oauthCfg.Validate(); err != nil {
 			return fmt.Errorf("invalid OAuth config: %w", err)
 		}
-		app.oauthHandler = oauth.NewHandler(oauthCfg)
-		app.logger.Info("OAuth 2.1 enabled", "external_url", app.Config.ExternalURL)
+		signer := &signerAdapter{signer: kcManager.SessionSigner()}
+		exchanger := &kiteExchangerAdapter{
+			apiKey:     app.Config.KiteAPIKey,
+			apiSecret:  app.Config.KiteAPISecret,
+			tokenStore: kcManager.TokenStore(),
+			logger:     app.logger,
+		}
+		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
 	}
 
 	srv := app.createHTTPServer(url)
@@ -307,11 +295,36 @@ func (app *App) startServer(srv *http.Server, kcManager *kc.Manager, mcpServer *
 // setupMux creates and configures a new HTTP mux with common handlers
 func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", kcManager.HandleKiteCallback())
+
+	// Unified /callback handler: dispatches by flow param
+	// - flow=oauth → MCP OAuth callback (Kite → JWT → MCP auth code)
+	// - flow=dash  → Dashboard callback (Kite → JWT cookie)
+	// - default    → Login tool re-auth (existing session_id flow)
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		requestToken := r.URL.Query().Get("request_token")
+		flow := r.URL.Query().Get("flow")
+		switch flow {
+		case "oauth":
+			if app.oauthHandler != nil {
+				app.oauthHandler.HandleKiteOAuthCallback(w, r, requestToken)
+			} else {
+				http.Error(w, "OAuth not configured", http.StatusInternalServerError)
+			}
+		case "dash":
+			if app.oauthHandler != nil {
+				app.oauthHandler.HandleKiteDashCallback(w, r, requestToken)
+			} else {
+				http.Error(w, "OAuth not configured", http.StatusInternalServerError)
+			}
+		default:
+			kcManager.HandleKiteCallback()(w, r)
+		}
+	})
+
 	if app.Config.AdminSecretPath != "" {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
-	// Ops dashboard: protected by Google OAuth if available, otherwise by secret path
+	// Ops dashboard: protected by OAuth if available, otherwise by secret path
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime)
 	if app.oauthHandler != nil {
 		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
@@ -325,7 +338,6 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/.well-known/oauth-authorization-server", app.oauthHandler.AuthServerMetadata)
 		mux.HandleFunc("/oauth/register", app.oauthHandler.Register)
 		mux.HandleFunc("/oauth/authorize", app.oauthHandler.Authorize)
-		mux.HandleFunc("/oauth/google/callback", app.oauthHandler.GoogleCallback)
 		mux.HandleFunc("/oauth/token", app.oauthHandler.Token)
 	}
 	// Register dashboard routes (requires OAuth)
@@ -513,4 +525,52 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 	})
 
 	app.logger.Info("Template-based status page configured to be served at root URL")
+}
+
+// --- OAuth adapter types ---
+
+// signerAdapter wraps kc.SessionSigner to implement oauth.Signer.
+type signerAdapter struct {
+	signer *kc.SessionSigner
+}
+
+func (s *signerAdapter) Sign(data string) string {
+	return s.signer.SignSessionID(data)
+}
+
+func (s *signerAdapter) Verify(signed string) (string, error) {
+	return s.signer.VerifySessionID(signed)
+}
+
+// kiteExchangerAdapter exchanges a Kite request_token for user identity.
+type kiteExchangerAdapter struct {
+	apiKey    string
+	apiSecret string
+	tokenStore *kc.KiteTokenStore
+	logger     *slog.Logger
+}
+
+func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string, error) {
+	client := kiteconnect.New(a.apiKey)
+	userSess, err := client.GenerateSession(requestToken, a.apiSecret)
+	if err != nil {
+		return "", fmt.Errorf("kite generate session: %w", err)
+	}
+
+	// UserSession embeds UserProfile — Email available directly
+	email := userSess.Email
+	if email == "" {
+		email = userSess.UserID
+	}
+
+	a.logger.Info("Kite token exchange successful", "email", email, "user_id", userSess.UserID)
+
+	// Cache the access token keyed by email
+	a.tokenStore.Set(strings.ToLower(email), &kc.KiteTokenEntry{
+		AccessToken: userSess.AccessToken,
+		UserID:      userSess.UserID,
+		UserName:    userSess.UserName,
+	})
+
+	return email, nil
 }
