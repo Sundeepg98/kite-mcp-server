@@ -53,6 +53,13 @@ CREATE TABLE IF NOT EXISTS kite_tokens (
     user_id      TEXT NOT NULL,
     user_name    TEXT NOT NULL,
     stored_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kite_credentials (
+    email      TEXT PRIMARY KEY,
+    api_key    TEXT NOT NULL,
+    api_secret TEXT NOT NULL,
+    stored_at  TEXT NOT NULL
 );`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
@@ -226,6 +233,54 @@ func (d *DB) DeleteToken(email string) error {
 	_, err := d.db.Exec(`DELETE FROM kite_tokens WHERE email = ?`, email)
 	if err != nil {
 		return fmt.Errorf("delete token: %w", err)
+	}
+	return nil
+}
+
+// CredentialEntry represents a user's Kite developer app credentials stored in the database.
+type CredentialEntry struct {
+	Email     string
+	APIKey    string
+	APISecret string
+	StoredAt  time.Time
+}
+
+// LoadCredentials reads all stored Kite credentials from the database.
+func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
+	rows, err := d.db.Query(`SELECT email, api_key, api_secret, stored_at FROM kite_credentials`)
+	if err != nil {
+		return nil, fmt.Errorf("query credentials: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*CredentialEntry
+	for rows.Next() {
+		var c CredentialEntry
+		var storedAtS string
+		if err := rows.Scan(&c.Email, &c.APIKey, &c.APISecret, &storedAtS); err != nil {
+			return nil, fmt.Errorf("scan credential: %w", err)
+		}
+		c.StoredAt, _ = time.Parse(time.RFC3339, storedAtS)
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+// SaveCredential stores or updates Kite credentials for the given email.
+func (d *DB) SaveCredential(email, apiKey, apiSecret string, storedAt time.Time) error {
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
+		email, apiKey, apiSecret, storedAt.Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("save credential: %w", err)
+	}
+	return nil
+}
+
+// DeleteCredential removes Kite credentials for the given email.
+func (d *DB) DeleteCredential(email string) error {
+	_, err := d.db.Exec(`DELETE FROM kite_credentials WHERE email = ?`, email)
+	if err != nil {
+		return fmt.Errorf("delete credential: %w", err)
 	}
 	return nil
 }

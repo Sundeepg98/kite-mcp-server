@@ -15,9 +15,10 @@ type OverviewData struct {
 	ActiveTickers   int              `json:"active_tickers"`
 	TotalAlerts     int              `json:"total_alerts"`
 	ActiveAlerts    int              `json:"active_alerts"`
-	CachedTokens    int              `json:"cached_tokens"`
-	ToolUsage       map[string]int64 `json:"tool_usage"`
-	DailyUsers      int64            `json:"daily_users"`
+	CachedTokens       int              `json:"cached_tokens"`
+	PerUserCredentials int              `json:"per_user_credentials"`
+	ToolUsage          map[string]int64 `json:"tool_usage"`
+	DailyUsers         int64            `json:"daily_users"`
 }
 
 type SessionInfo struct {
@@ -60,9 +61,10 @@ func (h *Handler) buildOverview() OverviewData {
 		ActiveTickers:   len(h.manager.TickerService().ListAll()),
 		TotalAlerts:     total,
 		ActiveAlerts:    active,
-		CachedTokens:    len(h.manager.TokenStore().ListAll()),
-		ToolUsage:       toolUsage,
-		DailyUsers:      dailyUsers,
+		CachedTokens:       len(h.manager.TokenStore().ListAll()),
+		PerUserCredentials: h.manager.CredentialStore().Count(),
+		ToolUsage:          toolUsage,
+		DailyUsers:         dailyUsers,
 	}
 }
 

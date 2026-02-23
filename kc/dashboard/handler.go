@@ -77,7 +77,7 @@ func (h *Handler) ensureTickerForUser(email string) {
 		return
 	}
 
-	apiKey := h.manager.APIKey()
+	apiKey := h.manager.GetAPIKeyForEmail(email)
 	accessToken := h.manager.GetAccessTokenForEmail(email)
 	if accessToken == "" {
 		return

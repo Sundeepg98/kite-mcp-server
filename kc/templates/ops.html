@@ -104,6 +104,7 @@ tr:hover td { background: var(--bg-2); }
   <button class="tab" data-tab="sessions">Sessions</button>
   <button class="tab" data-tab="tickers">Tickers</button>
   <button class="tab" data-tab="alerts">Alerts</button>
+  <button class="tab" data-tab="credentials">Credentials</button>
   <button class="tab" data-tab="logs">Logs</button>
 </div>
 
@@ -129,6 +130,31 @@ tr:hover td { background: var(--bg-2); }
   <div class="empty-state" id="alertsEmpty" style="display:none">No alerts configured</div>
   <div class="section-header" style="margin-top:28px">Telegram Mappings</div>
   <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Chat ID</th></tr></thead><tbody id="telegramBody"></tbody></table></div>
+</div>
+
+<div id="panel-credentials" class="panel">
+  <div class="section-header">Per-User Kite Credentials</div>
+  <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Register your own Kite developer app API key and secret. When set, your trading operations use these credentials instead of the server's global ones.</p>
+  <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">Email</label>
+        <input id="credEmail" type="email" placeholder="user@example.com" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">API Key</label>
+        <input id="credAPIKey" type="text" placeholder="your_api_key" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">API Secret</label>
+        <input id="credAPISecret" type="password" placeholder="your_api_secret" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+      </div>
+      <button id="credSaveBtn" style="padding:6px 16px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans)">Save</button>
+    </div>
+    <div id="credStatus" style="margin-top:8px;font-size:12px;font-family:var(--mono);display:none"></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>API Key</th><th>Secret</th><th>Stored</th><th></th></tr></thead><tbody id="credBody"></tbody></table></div>
+  <div class="empty-state" id="credEmpty" style="display:none">No per-user credentials registered</div>
 </div>
 
 <div id="panel-logs" class="panel">
@@ -207,6 +233,7 @@ tr:hover td { background: var(--bg-2); }
         {label:'Tickers', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
         {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
         {label:'Cached Tokens', value:d.cached_tokens},
+        {label:'Credentials', value:d.per_user_credentials},
         {label:'Daily Users', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
       ];
       var grid = document.getElementById('statsGrid');
@@ -372,7 +399,59 @@ tr:hover td { background: var(--bg-2); }
   });
 
   // Auto-refresh
-  function refreshAll() { refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); }
+  // Credentials
+  function refreshCredentials() {
+    fetchJSON('credentials').then(function(data) {
+      var tbody = document.getElementById('credBody');
+      var empty = document.getElementById('credEmpty');
+      clearChildren(tbody);
+      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      data.forEach(function(c) {
+        var row = tr([td(c.email), td(c.api_key), td(c.api_secret_hint), td(fmtTime(c.stored_at))]);
+        var cell = document.createElement('td');
+        var btn = el('button', null, 'Delete');
+        btn.style.cssText = 'padding:2px 10px;border:1px solid var(--red,#e55);border-radius:3px;background:transparent;color:var(--red,#e55);font-size:11px;cursor:pointer;font-family:var(--mono)';
+        btn.addEventListener('click', function() {
+          fetch(basePath + '/api/credentials?email=' + encodeURIComponent(c.email), {method:'DELETE'})
+            .then(function() { refreshCredentials(); refreshOverview(); });
+        });
+        cell.appendChild(btn);
+        row.appendChild(cell);
+        tbody.appendChild(row);
+      });
+    });
+  }
+  document.getElementById('credSaveBtn').addEventListener('click', function() {
+    var email = document.getElementById('credEmail').value.trim();
+    var apiKey = document.getElementById('credAPIKey').value.trim();
+    var apiSecret = document.getElementById('credAPISecret').value.trim();
+    var status = document.getElementById('credStatus');
+    if (!email || !apiKey || !apiSecret) {
+      status.textContent = 'All fields are required';
+      status.style.color = 'var(--red,#e55)';
+      status.style.display = 'block';
+      return;
+    }
+    fetch(basePath + '/api/credentials', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email:email, api_key:apiKey, api_secret:apiSecret})
+    }).then(function(r) {
+      if (r.ok) {
+        status.textContent = 'Credentials saved. Re-login for changes to take effect.';
+        status.style.color = 'var(--green,#4a4)';
+        document.getElementById('credEmail').value = '';
+        document.getElementById('credAPIKey').value = '';
+        document.getElementById('credAPISecret').value = '';
+        refreshCredentials(); refreshOverview();
+      } else {
+        r.json().then(function(d) { status.textContent = d.error || 'Failed'; status.style.color = 'var(--red,#e55)'; });
+      }
+      status.style.display = 'block';
+    });
+  });
+
+  function refreshAll() { refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials(); }
   refreshAll();
   setInterval(refreshAll, 10000);
 })();

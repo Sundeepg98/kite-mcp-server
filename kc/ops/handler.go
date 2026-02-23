@@ -43,6 +43,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/tickers", wrap(h.tickers))
 	mux.Handle("/admin/ops/api/alerts", wrap(h.alerts))
 	mux.Handle("/admin/ops/api/logs", wrap(h.logStream))
+	mux.Handle("/admin/ops/api/credentials", wrap(h.credentials))
 }
 
 // servePage serves the embedded ops.html dashboard page.
@@ -78,6 +79,53 @@ func (h *Handler) tickers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildAlerts())
+}
+
+// credentials handles GET (list), POST (create), DELETE (remove) for per-user Kite credentials.
+func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		json.NewEncoder(w).Encode(h.manager.CredentialStore().ListAll())
+
+	case http.MethodPost:
+		var req struct {
+			Email     string `json:"email"`
+			APIKey    string `json:"api_key"`
+			APISecret string `json:"api_secret"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Email == "" || req.APIKey == "" || req.APISecret == "" {
+			http.Error(w, `{"error":"email, api_key, and api_secret are required"}`, http.StatusBadRequest)
+			return
+		}
+		h.manager.CredentialStore().Set(req.Email, &kc.KiteCredentialEntry{
+			APIKey:    req.APIKey,
+			APISecret: req.APISecret,
+		})
+		// Clear cached token — old token was generated with different credentials
+		h.manager.TokenStore().Delete(req.Email)
+		h.logger.Info("Stored Kite credentials", "email", req.Email)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case http.MethodDelete:
+		email := r.URL.Query().Get("email")
+		if email == "" {
+			http.Error(w, `{"error":"email query parameter required"}`, http.StatusBadRequest)
+			return
+		}
+		h.manager.CredentialStore().Delete(email)
+		h.manager.TokenStore().Delete(email)
+		h.logger.Info("Deleted Kite credentials", "email", email)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
 }
 
 // logStream serves an SSE stream of structured log entries.

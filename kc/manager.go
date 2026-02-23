@@ -72,7 +72,8 @@ func New(cfg Config) (*Manager, error) {
 		appMode:         cfg.AppMode,
 		externalURL:     cfg.ExternalURL,
 		adminSecretPath: cfg.AdminSecretPath,
-		tokenStore: NewKiteTokenStore(),
+		tokenStore:      NewKiteTokenStore(),
+		credentialStore: NewKiteCredentialStore(),
 	}
 
 	// Initialize alert system: store → notifier → evaluator → ticker
@@ -103,6 +104,14 @@ func New(cfg Config) (*Manager, error) {
 				cfg.Logger.Error("Failed to load tokens from DB", "error", err)
 			} else {
 				cfg.Logger.Info("Tokens loaded from database", "count", m.tokenStore.Count())
+			}
+			// Credential persistence: share the same DB
+			m.credentialStore.SetDB(alertDB)
+			m.credentialStore.SetLogger(cfg.Logger)
+			if err := m.credentialStore.LoadFromDB(); err != nil {
+				cfg.Logger.Error("Failed to load credentials from DB", "error", err)
+			} else {
+				cfg.Logger.Info("Credentials loaded from database", "count", m.credentialStore.Count())
 			}
 		}
 	}
@@ -140,7 +149,8 @@ func New(cfg Config) (*Manager, error) {
 	// Wire token rotation observer: when a user's token changes, update their ticker
 	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
 		if m.tickerService.IsRunning(email) {
-			if err := m.tickerService.UpdateToken(email, m.apiKey, entry.AccessToken); err != nil {
+			apiKey := m.GetAPIKeyForEmail(email)
+			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
 				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
 			} else {
 				m.Logger.Info("Ticker token rotated automatically", "email", email)
@@ -199,6 +209,7 @@ type Manager struct {
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
 	tokenStore         *KiteTokenStore           // per-email Kite token cache
+	credentialStore    *KiteCredentialStore      // per-email Kite developer app credentials
 	tickerService      *ticker.Service           // per-user WebSocket ticker connections
 	alertStore         *alerts.Store             // per-user price alerts
 	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
@@ -312,8 +323,10 @@ func (m *Manager) validateSessionID(sessionID string) error {
 func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionData {
 	m.Logger.Info("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
 
+	apiKey := m.GetAPIKeyForEmail(email)
+
 	kd := &KiteSessionData{
-		Kite:  NewKiteConnect(m.apiKey),
+		Kite:  NewKiteConnect(apiKey),
 		Email: email,
 	}
 
@@ -374,9 +387,29 @@ func (m *Manager) APIKey() string {
 	return m.apiKey
 }
 
-// GetAPIKeyForEmail returns the API key (always global).
+// CredentialStore returns the per-email Kite credential store.
+func (m *Manager) CredentialStore() *KiteCredentialStore {
+	return m.credentialStore
+}
+
+// GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
 func (m *Manager) GetAPIKeyForEmail(email string) string {
+	if email != "" {
+		if entry, ok := m.credentialStore.Get(email); ok {
+			return entry.APIKey
+		}
+	}
 	return m.apiKey
+}
+
+// GetAPISecretForEmail returns the API secret: per-user if registered, otherwise global.
+func (m *Manager) GetAPISecretForEmail(email string) string {
+	if email != "" {
+		if entry, ok := m.credentialStore.Get(email); ok {
+			return entry.APISecret
+		}
+	}
+	return m.apiSecret
 }
 
 // GetAccessTokenForEmail returns the cached access token for a given email.
@@ -599,13 +632,14 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 		return ErrSessionNotFound
 	}
 
-	if m.apiSecret == "" {
-		m.Logger.Error("No API secret configured", "session_id", mcpSessionID)
+	apiSecret := m.GetAPISecretForEmail(kiteData.Email)
+	if apiSecret == "" {
+		m.Logger.Error("No API secret configured", "session_id", mcpSessionID, "email", kiteData.Email)
 		return fmt.Errorf("no Kite API secret configured")
 	}
 
 	m.Logger.Debug("Generating Kite session with request token")
-	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, m.apiSecret)
+	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, apiSecret)
 	if err != nil {
 		m.Logger.Error("Failed to generate Kite session", "error", err)
 		return fmt.Errorf("failed to generate Kite session: %w", err)
