@@ -96,7 +96,10 @@ type ClientEntry struct {
 
 // maxClients is the maximum number of dynamically registered OAuth clients.
 // Once reached, the oldest client is evicted to make room.
-const maxClients = 1000
+const maxClients = 10000
+
+// maxRedirectURIs is the maximum number of redirect URIs per client.
+const maxRedirectURIs = 10
 
 // ClientStore is a thread-safe in-memory store for dynamically registered OAuth clients.
 type ClientStore struct {
@@ -211,11 +214,15 @@ func (s *ClientStore) IsKiteClient(clientID string) bool {
 }
 
 // AddRedirectURI adds a redirect URI to an existing client if not already present.
+// Capped at maxRedirectURIs per client to prevent abuse.
 func (s *ClientStore) AddRedirectURI(clientID, uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, ok := s.clients[clientID]
 	if !ok {
+		return
+	}
+	if len(c.RedirectURIs) >= maxRedirectURIs {
 		return
 	}
 	for _, u := range c.RedirectURIs {

@@ -60,24 +60,40 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 
 // overview returns the combined overview JSON.
 func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildOverview())
 }
 
 // sessions returns the sessions JSON.
 func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildSessions())
 }
 
 // tickers returns the tickers JSON.
 func (h *Handler) tickers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildTickers())
 }
 
 // alerts returns the alerts JSON.
 func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.buildAlerts())
 }
@@ -144,6 +160,10 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 
 // logStream serves an SSE stream of structured log entries.
 func (h *Handler) logStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
