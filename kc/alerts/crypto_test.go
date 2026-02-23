@@ -56,9 +56,9 @@ func TestDecryptWrongKey(t *testing.T) {
 	ciphertext, err := encrypt(key1, "sensitive-data")
 	require.NoError(t, err)
 
-	// Decrypt with wrong key falls back to returning ciphertext as-is
+	// Decrypt with wrong key returns empty string (don't leak ciphertext)
 	result := decrypt(key2, ciphertext)
-	assert.Equal(t, ciphertext, result)
+	assert.Equal(t, "", result)
 }
 
 func TestDecryptPlaintextFallback(t *testing.T) {
