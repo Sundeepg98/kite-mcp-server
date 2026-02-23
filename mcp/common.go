@@ -4,12 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// isTokenLikelyExpired checks if a Kite token stored at the given time has likely expired.
+// Kite tokens expire daily around 6 AM IST. We check if 6 AM IST has passed since the token was stored.
+func isTokenLikelyExpired(storedAt time.Time) bool {
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		return false // Can't determine — assume valid
+	}
+	now := time.Now().In(ist)
+	stored := storedAt.In(ist)
+
+	// Find the most recent 6 AM IST
+	expiry := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, ist)
+	if now.Before(expiry) {
+		// Before 6 AM today — expiry was yesterday 6 AM
+		expiry = expiry.AddDate(0, 0, -1)
+	}
+
+	return stored.Before(expiry)
+}
 
 // Context key for session type
 type contextKey string
@@ -105,6 +126,18 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		}
 	}
 
+	// For existing sessions, check if token likely expired (Kite tokens expire daily ~6 AM IST)
+	if !isNew && email != "" {
+		if entry, ok := h.manager.TokenStore().Get(email); ok && isTokenLikelyExpired(entry.StoredAt) {
+			if _, err := kiteSession.Kite.Client.GetUserProfile(); err != nil {
+				h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
+				h.manager.TokenStore().Delete(email)
+				h.trackToolError(ctx, toolName, "token_expired")
+				return mcp.NewToolResultError("Your Kite session has expired. Please use the login tool to re-authenticate."), nil
+			}
+		}
+	}
+
 	h.manager.Logger.Debug("Session validated successfully", "tool", toolName, "session_id", sessionID)
 	return fn(kiteSession)
 }
@@ -127,7 +160,7 @@ func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCal
 		data, err := apiCall(session)
 		if err != nil {
 			h.manager.Logger.Error("API call failed", "tool", toolName, "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 		}
 
 		return h.MarshalResponse(data, toolName)

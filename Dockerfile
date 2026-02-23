@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o kite-mcp-server .
 
-FROM alpine:latest
+FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /app/kite-mcp-server /usr/local/bin/
 CMD ["kite-mcp-server"]
