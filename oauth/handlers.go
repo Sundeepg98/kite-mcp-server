@@ -155,6 +155,13 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate redirect_uri scheme (only http/https allowed)
+	parsed, err := url.Parse(redirectURI)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri must use http or https scheme"})
+		return
+	}
+
 	// Validate client — if unknown, auto-register as a Kite API key client
 	if _, ok := h.clients.Get(clientID); !ok {
 		h.clients.RegisterKiteClient(clientID, []string{redirectURI})

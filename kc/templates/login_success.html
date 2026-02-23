@@ -23,7 +23,7 @@
     </p>
 </div>
 {{if .RedirectURL}}
-<script>setTimeout(function(){window.location.href={{.RedirectURL}}},1500)</script>
+<script>setTimeout(function(){var url={{.RedirectURL}};if(url.startsWith('http://')||url.startsWith('https://')){window.location.href=url}},1500)</script>
 {{end}}
 {{end}}
 

@@ -244,9 +244,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 // createHTTPServer creates and configures the HTTP server
 func (app *App) createHTTPServer(url string) *http.Server {
 	return &http.Server{
-		Addr:         url,
-		ReadTimeout:  0, // 0 implies no timeout
-		WriteTimeout: 0, // 0 implies no timeout
+		Addr:              url,
+		ReadHeaderTimeout: 30 * time.Second,
+		WriteTimeout:      0,
 	}
 }
 
@@ -259,16 +259,16 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		<-ctx.Done()
 		app.logger.Info("Shutting down server...")
 
-		// Shutdown Kite manager (includes session cleanup and instruments scheduler)
-		kcManager.Shutdown()
-
-		// Shutdown HTTP server with timeout
+		// Shutdown HTTP server first (stop accepting new requests)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			app.logger.Error("Server shutdown error", "error", err)
 		}
+
+		// Then shutdown Kite manager (session cleanup and instruments scheduler)
+		kcManager.Shutdown()
 
 		app.logger.Info("Server shutdown complete")
 	}()
@@ -387,8 +387,16 @@ func withSessionType(sessionType string, handler http.HandlerFunc) http.HandlerF
 
 // registerSSEEndpoints registers SSE-specific endpoints on the mux
 func (app *App) registerSSEEndpoints(mux *http.ServeMux, sse *server.SSEServer) {
-	mux.HandleFunc("/sse", withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP))
-	mux.HandleFunc("/message", withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP))
+	sseHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
+	messageHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
+
+	if app.oauthHandler != nil {
+		mux.Handle("/sse", app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler)))
+		mux.Handle("/message", app.oauthHandler.RequireAuth(http.HandlerFunc(messageHandler)))
+	} else {
+		mux.HandleFunc("/sse", sseHandler)
+		mux.HandleFunc("/message", messageHandler)
+	}
 }
 
 // configureAndStartServer sets up server handler and starts it

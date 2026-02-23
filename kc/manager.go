@@ -666,7 +666,6 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 	}
 
 	m.Logger.Info("Setting Kite access token for MCP session", "session_id", mcpSessionID)
-	m.Logger.Info("KITE_ACCESS_TOKEN for reuse", "access_token", userSess.AccessToken)
 	kiteData.Kite.Client.SetAccessToken(userSess.AccessToken)
 
 	// Cache the token for future sessions by this user
