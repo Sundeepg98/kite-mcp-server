@@ -268,10 +268,16 @@ func SafeAssertBool(v interface{}, fallback bool) bool {
 	return fallback
 }
 
-// SafeAssertStringArray safely converts interface{} to []string with fallback
+// SafeAssertStringArray safely converts interface{} to []string with fallback.
+// Handles both []interface{} (normal) and single string (wraps into slice).
 func SafeAssertStringArray(v interface{}) []string {
 	if v == nil {
 		return nil
+	}
+
+	// Handle single string — wrap into slice
+	if s, ok := v.(string); ok && s != "" {
+		return []string{s}
 	}
 
 	arr, ok := v.([]interface{})
@@ -289,6 +295,9 @@ func SafeAssertStringArray(v interface{}) []string {
 	return result
 }
 
+// MaxPaginationLimit caps the maximum number of items returned per page.
+const MaxPaginationLimit = 500
+
 // PaginationParams holds pagination parameters
 type PaginationParams struct {
 	From  int
@@ -297,9 +306,13 @@ type PaginationParams struct {
 
 // ParsePaginationParams extracts pagination parameters from arguments
 func ParsePaginationParams(args map[string]interface{}) PaginationParams {
+	limit := SafeAssertInt(args["limit"], 0)
+	if limit > MaxPaginationLimit {
+		limit = MaxPaginationLimit
+	}
 	return PaginationParams{
 		From:  SafeAssertInt(args["from"], 0),
-		Limit: SafeAssertInt(args["limit"], 0),
+		Limit: limit,
 	}
 }
 
@@ -406,7 +419,7 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 			if err != nil {
 				handler.manager.Logger.Error("API call failed", "tool", toolName, "error", err)
 				handler.trackToolError(ctx, toolName, "api_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to execute %s", toolName)), nil
+				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 			}
 
 			// Parse pagination parameters

@@ -62,8 +62,12 @@ func TestSafeAssertFunctions(t *testing.T) {
 		result = SafeAssertStringArray(nil)
 		assert.Nil(t, result)
 
-		// Non-array input
-		result = SafeAssertStringArray("not an array")
+		// Single string input — wraps into slice
+		result = SafeAssertStringArray("NSE:INFY")
+		assert.Equal(t, []string{"NSE:INFY"}, result)
+
+		// Empty string input
+		result = SafeAssertStringArray("")
 		assert.Nil(t, result)
 	})
 }

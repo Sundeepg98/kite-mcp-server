@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -109,11 +110,25 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Tag:               SafeAssertString(args["tag"], ""),
 		}
 
+		// Validate order parameters
+		if orderParams.OrderType == "LIMIT" && orderParams.Price <= 0 {
+			return mcp.NewToolResultError("price must be greater than 0 for LIMIT orders"), nil
+		}
+		if (orderParams.OrderType == "SL" || orderParams.OrderType == "SL-M") && orderParams.TriggerPrice <= 0 {
+			return mcp.NewToolResultError("trigger_price must be greater than 0 for SL/SL-M orders"), nil
+		}
+		if variety == "iceberg" && (orderParams.IcebergLegs <= 0 || orderParams.IcebergQty <= 0) {
+			return mcp.NewToolResultError("iceberg_legs and iceberg_quantity must be greater than 0 for iceberg orders"), nil
+		}
+		if orderParams.DisclosedQuantity > 0 && orderParams.DisclosedQuantity > orderParams.Quantity {
+			return mcp.NewToolResultError("disclosed_quantity cannot exceed quantity"), nil
+		}
+
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp, err := session.Kite.Client.PlaceOrder(variety, orderParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
-				return mcp.NewToolResultError("Failed to place order"), nil
+				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "place_order")

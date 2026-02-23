@@ -24,9 +24,6 @@ const (
 // TickCallback is invoked on each incoming tick for a user.
 type TickCallback func(email string, tick models.Tick)
 
-// TickListener is a per-stream tick handler (e.g. SSE dashboard stream).
-type TickListener func(tick models.Tick)
-
 // Config holds configuration for creating a new ticker Service.
 type Config struct {
 	Logger *slog.Logger
@@ -48,9 +45,8 @@ type UserTicker struct {
 
 // Service manages per-user WebSocket ticker connections.
 type Service struct {
-	tickers   map[string]*UserTicker                    // email -> ticker
-	listeners map[string]map[string]TickListener        // email -> listenerID -> callback
-	mu        sync.RWMutex
+	tickers map[string]*UserTicker // email -> ticker
+	mu      sync.RWMutex
 	logger    *slog.Logger
 	onTick    TickCallback
 }
@@ -62,10 +58,9 @@ func New(cfg Config) *Service {
 		logger = slog.Default()
 	}
 	return &Service{
-		tickers:   make(map[string]*UserTicker),
-		listeners: make(map[string]map[string]TickListener),
-		logger:    logger,
-		onTick:    cfg.OnTick,
+		tickers: make(map[string]*UserTicker),
+		logger:  logger,
+		onTick:  cfg.OnTick,
 	}
 }
 
@@ -136,18 +131,9 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 	})
 
 	t.OnTick(func(tick models.Tick) {
-		// Global tick handler (alert evaluator)
 		if s.onTick != nil {
 			s.onTick(email, tick)
 		}
-		// Per-stream listeners (SSE dashboard streams)
-		s.mu.RLock()
-		if emailListeners, ok := s.listeners[email]; ok {
-			for _, listener := range emailListeners {
-				listener(tick)
-			}
-		}
-		s.mu.RUnlock()
 	})
 
 	t.OnError(func(err error) {
@@ -347,32 +333,6 @@ func (s *Service) IsRunning(email string) bool {
 	defer s.mu.RUnlock()
 	_, ok := s.tickers[email]
 	return ok
-}
-
-// AddListener registers a per-stream tick listener for the given user.
-func (s *Service) AddListener(email, listenerID string, fn TickListener) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, ok := s.listeners[email]; !ok {
-		s.listeners[email] = make(map[string]TickListener)
-	}
-	s.listeners[email][listenerID] = fn
-	s.logger.Debug("Tick listener added", "email", email, "listener_id", listenerID)
-}
-
-// RemoveListener removes a per-stream tick listener.
-func (s *Service) RemoveListener(email, listenerID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if emailListeners, ok := s.listeners[email]; ok {
-		delete(emailListeners, listenerID)
-		if len(emailListeners) == 0 {
-			delete(s.listeners, email)
-		}
-	}
-	s.logger.Debug("Tick listener removed", "email", email, "listener_id", listenerID)
 }
 
 // UserTickerInfo is a summary of a user's ticker connection for admin display.

@@ -217,6 +217,10 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Failed to parse to_date, use format YYYY-MM-DD HH:MM:SS"), nil
 		}
 
+		if fromDate.After(toDate) {
+			return mcp.NewToolResultError("from_date must be before to_date"), nil
+		}
+
 		// Get other parameters
 		interval := SafeAssertString(args["interval"], "")
 		continuous := SafeAssertBool(args["continuous"], false)
