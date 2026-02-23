@@ -57,7 +57,7 @@ func (h *Handler) buildOverview() OverviewData {
 	return OverviewData{
 		Version:         h.version,
 		Uptime:          time.Since(h.startTime).Truncate(time.Second).String(),
-		ActiveSessions:  len(h.manager.SessionManager().ListActiveSessions()),
+		ActiveSessions:  len(h.buildSessions()),
 		ActiveTickers:   len(h.manager.TickerService().ListAll()),
 		TotalAlerts:     total,
 		ActiveAlerts:    active,
@@ -70,14 +70,18 @@ func (h *Handler) buildOverview() OverviewData {
 
 func (h *Handler) buildSessions() []SessionInfo {
 	sessions := h.manager.SessionManager().ListActiveSessions()
-	out := make([]SessionInfo, len(sessions))
-	for i, s := range sessions {
+	out := make([]SessionInfo, 0, len(sessions))
+	for _, s := range sessions {
 		kd, ok := s.Data.(*kc.KiteSessionData)
 		email := ""
 		if ok && kd != nil {
 			email = kd.Email
 		}
-		out[i] = SessionInfo{ID: s.ID, Email: email, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt}
+		// Skip orphan sessions from transport handshakes (no email = not authenticated)
+		if email == "" {
+			continue
+		}
+		out = append(out, SessionInfo{ID: s.ID, Email: email, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt})
 	}
 	return out
 }

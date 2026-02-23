@@ -153,6 +153,8 @@ func (h *Handler) ensureTickerForUser(email string) {
 		}
 	}
 
+	h.logger.Info("Holdings for ticker auto-subscribe", "email", email, "holdings", len(holdings), "with_tokens", len(tokens))
+
 	if len(tokens) > 0 {
 		if err := h.manager.TickerService().Subscribe(email, tokens, ticker.ModeQuote); err != nil {
 			h.logger.Warn("Failed to auto-subscribe holdings", "email", email, "error", err)

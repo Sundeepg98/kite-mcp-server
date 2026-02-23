@@ -95,6 +95,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 				return mcp.NewToolResultError("Your Kite session has expired. Please use the login tool to re-authenticate."), nil
 			}
 			h.manager.Logger.Info("Auto-authenticated via cached token", "tool", toolName, "email", email)
+			h.manager.TrackDailyUser(email)
 		} else if !h.manager.HasPreAuth() {
 			h.manager.Logger.Info("New session created, login required", "tool", toolName, "session_id", sessionID)
 			h.trackToolError(ctx, toolName, "auth_required")

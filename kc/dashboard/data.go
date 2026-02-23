@@ -13,6 +13,7 @@ type DashboardData struct {
 	Holdings  []HoldingItem  `json:"holdings"`
 	Positions []PositionItem `json:"positions"`
 	Summary   Summary        `json:"summary"`
+	Errors    []string       `json:"errors,omitempty"`
 }
 
 // HoldingItem represents a single holding with P&L.
@@ -74,7 +75,9 @@ func (h *Handler) serveData(w http.ResponseWriter, r *http.Request) {
 	holdings, err := kd.Client.GetHoldings()
 	if err != nil {
 		h.logger.Error("Failed to fetch holdings for dashboard", "email", email, "error", err)
+		data.Errors = append(data.Errors, "Failed to fetch holdings: "+err.Error())
 	} else {
+		h.logger.Info("Fetched holdings for dashboard", "email", email, "count", len(holdings))
 		var totalInvestment, currentValue, dayPnL float64
 
 		for _, holding := range holdings {
@@ -109,6 +112,7 @@ func (h *Handler) serveData(w http.ResponseWriter, r *http.Request) {
 	positions, err := kd.Client.GetPositions()
 	if err != nil {
 		h.logger.Error("Failed to fetch positions for dashboard", "email", email, "error", err)
+		data.Errors = append(data.Errors, "Failed to fetch positions: "+err.Error())
 	} else {
 		for _, pos := range positions.Net {
 			if pos.Quantity == 0 {

@@ -718,6 +718,13 @@ func (m *Manager) IncrementMetric(key string) {
 	}
 }
 
+// TrackDailyUser records a unique user interaction for today's counter
+func (m *Manager) TrackDailyUser(userID string) {
+	if m.metrics != nil {
+		m.metrics.TrackDailyUser(userID)
+	}
+}
+
 // IncrementDailyMetric increments a daily metric counter by 1
 func (m *Manager) IncrementDailyMetric(key string) {
 	if m.metrics != nil {
