@@ -185,6 +185,11 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		kiteAPIKey = clientID
 	}
 
+	if kiteAPIKey == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."})
+		return
+	}
+
 	// Redirect to Kite login
 	kiteURL := fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
 		kiteAPIKey, url.QueryEscape(redirectParams))

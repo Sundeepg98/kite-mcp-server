@@ -137,7 +137,10 @@ func (app *App) LoadConfig() error {
 	}
 
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
-		return fmt.Errorf("KITE_API_KEY and KITE_API_SECRET are required")
+		if app.Config.OAuthJWTSecret == "" {
+			return fmt.Errorf("KITE_API_KEY and KITE_API_SECRET are required (or enable OAuth with OAUTH_JWT_SECRET for per-user credentials)")
+		}
+		app.logger.Info("No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
 	}
 
 	return nil
