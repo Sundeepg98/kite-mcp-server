@@ -318,7 +318,7 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	// Read and verify signed target (contains "email|redirect")
+	// Read and verify signed target (contains "email::redirect")
 	signedTarget := r.URL.Query().Get("target")
 	redirect := "/admin/ops" // default
 	var dashEmail string
@@ -326,7 +326,7 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		decoded, err := h.signer.Verify(signedTarget)
 		if err != nil {
 			h.logger.Warn("Invalid dashboard callback signature", "error", err)
-		} else if parts := strings.SplitN(decoded, "|", 2); len(parts) == 2 {
+		} else if parts := strings.SplitN(decoded, "::", 2); len(parts) == 2 {
 			dashEmail = parts[0]
 			redirect = parts[1]
 		} else {
@@ -376,8 +376,9 @@ func (h *Handler) GenerateDashboardLoginURL(apiKey, email, redirect string) stri
 	if apiKey == "" {
 		apiKey = h.config.KiteAPIKey
 	}
-	// Encode email|redirect into the signed target so callback can recover both
-	signedTarget := h.signer.Sign(email + "|" + redirect)
+	// Encode email::redirect into the signed target so callback can recover both
+	// Using :: separator because the signer uses | internally (payload|timestamp)
+	signedTarget := h.signer.Sign(email + "::" + redirect)
 	redirectParams := "flow=dash&target=" + url.QueryEscape(signedTarget)
 	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
 		apiKey, url.QueryEscape(redirectParams))
