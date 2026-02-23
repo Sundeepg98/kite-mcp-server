@@ -10,7 +10,14 @@ import (
 
 // DB provides SQLite persistence for alerts and Telegram chat IDs.
 type DB struct {
-	db *sql.DB
+	db            *sql.DB
+	encryptionKey []byte // AES-256 key for credential encryption (nil = no encryption)
+}
+
+// SetEncryptionKey sets the AES-256 key used to encrypt/decrypt credentials at rest.
+// Derived from OAUTH_JWT_SECRET via HKDF. If not set, credentials are stored in plaintext.
+func (d *DB) SetEncryptionKey(key []byte) {
+	d.encryptionKey = key
 }
 
 // OpenDB opens (or creates) the SQLite database at path and ensures tables exist.
@@ -246,6 +253,8 @@ type CredentialEntry struct {
 }
 
 // LoadCredentials reads all stored Kite credentials from the database.
+// If an encryption key is set, api_key and api_secret are decrypted transparently.
+// Pre-encryption plaintext values are returned as-is (migration-safe).
 func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 	rows, err := d.db.Query(`SELECT email, api_key, api_secret, stored_at FROM kite_credentials`)
 	if err != nil {
@@ -260,6 +269,10 @@ func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 		if err := rows.Scan(&c.Email, &c.APIKey, &c.APISecret, &storedAtS); err != nil {
 			return nil, fmt.Errorf("scan credential: %w", err)
 		}
+		if d.encryptionKey != nil {
+			c.APIKey = decrypt(d.encryptionKey, c.APIKey)
+			c.APISecret = decrypt(d.encryptionKey, c.APISecret)
+		}
 		c.StoredAt, _ = time.Parse(time.RFC3339, storedAtS)
 		out = append(out, &c)
 	}
@@ -267,9 +280,22 @@ func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 }
 
 // SaveCredential stores or updates Kite credentials for the given email.
+// If an encryption key is set, api_key and api_secret are encrypted at rest.
 func (d *DB) SaveCredential(email, apiKey, apiSecret string, storedAt time.Time) error {
+	storeKey, storeSecret := apiKey, apiSecret
+	if d.encryptionKey != nil {
+		var err error
+		storeKey, err = encrypt(d.encryptionKey, apiKey)
+		if err != nil {
+			return fmt.Errorf("encrypt api_key: %w", err)
+		}
+		storeSecret, err = encrypt(d.encryptionKey, apiSecret)
+		if err != nil {
+			return fmt.Errorf("encrypt api_secret: %w", err)
+		}
+	}
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
-		email, apiKey, apiSecret, storedAt.Format(time.RFC3339))
+		email, storeKey, storeSecret, storedAt.Format(time.RFC3339))
 	if err != nil {
 		return fmt.Errorf("save credential: %w", err)
 	}

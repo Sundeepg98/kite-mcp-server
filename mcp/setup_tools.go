@@ -222,7 +222,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Include email in dashboard login URL for seamless browser auth
 		email := oauth.EmailFromContext(ctx)
 		if email != "" {
-			loginURL := baseURL + "/dashboard/login?email=" + url.QueryEscape(email) + "&redirect=/admin/ops"
+			loginURL := baseURL + "/auth/browser-login?email=" + url.QueryEscape(email) + "&redirect=/admin/ops"
 			dashURL = loginURL
 		}
 

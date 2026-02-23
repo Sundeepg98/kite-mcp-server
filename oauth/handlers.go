@@ -308,11 +308,12 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// --- Kite Dashboard Callback ---
+// --- Browser Auth Callback ---
 
-// HandleKiteDashCallback handles the Kite callback for dashboard login flow.
-// Called when flow=dash in the callback query params.
-func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request, requestToken string) {
+// HandleBrowserAuthCallback handles the Kite callback for browser login flow.
+// Called when flow=browser in the callback query params.
+// Sets a JWT cookie and redirects to the target page (e.g. /admin/ops).
+func (h *Handler) HandleBrowserAuthCallback(w http.ResponseWriter, r *http.Request, requestToken string) {
 	if requestToken == "" {
 		http.Error(w, "missing request_token", http.StatusBadRequest)
 		return
@@ -325,7 +326,7 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 	if signedTarget != "" {
 		decoded, err := h.signer.Verify(signedTarget)
 		if err != nil {
-			h.logger.Warn("Invalid dashboard callback signature", "error", err)
+			h.logger.Warn("Invalid browser auth callback signature", "error", err)
 		} else if rawBytes, b64err := base64.RawURLEncoding.DecodeString(decoded); b64err == nil {
 			if parts := strings.SplitN(string(rawBytes), "::", 2); len(parts) == 2 {
 				dashEmail = parts[0]
@@ -344,7 +345,7 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		// Per-user: look up stored API key/secret for this email
 		apiKey, apiSecret, ok := h.exchanger.GetCredentials(dashEmail)
 		if !ok {
-			h.logger.Error("No stored credentials for dashboard user", "email", dashEmail)
+			h.logger.Error("No stored credentials for browser auth user", "email", dashEmail)
 			http.Error(w, "Authentication failed: no credentials found", http.StatusUnauthorized)
 			return
 		}
@@ -354,7 +355,7 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		email, err = h.exchanger.ExchangeRequestToken(requestToken)
 	}
 	if err != nil {
-		h.logger.Error("Kite dashboard token exchange failed", "error", err)
+		h.logger.Error("Kite browser auth token exchange failed", "error", err)
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
 		return
 	}
@@ -366,16 +367,16 @@ func (h *Handler) HandleKiteDashCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	h.logger.Info("Dashboard login successful", "email", email)
+	h.logger.Info("Browser auth login successful", "email", email)
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
-// --- Dashboard Login URL ---
+// --- Browser Login URL ---
 
-// GenerateDashboardLoginURL generates a Kite login URL for dashboard browser auth.
+// GenerateBrowserLoginURL generates a Kite login URL for browser-based auth.
 // The email and redirect path are signed together and passed through as redirect_params,
 // so the callback can look up per-user credentials for the token exchange.
-func (h *Handler) GenerateDashboardLoginURL(apiKey, email, redirect string) string {
+func (h *Handler) GenerateBrowserLoginURL(apiKey, email, redirect string) string {
 	if apiKey == "" {
 		apiKey = h.config.KiteAPIKey
 	}
@@ -383,9 +384,64 @@ func (h *Handler) GenerateDashboardLoginURL(apiKey, email, redirect string) stri
 	// | and . as internal separators which conflict with email addresses
 	raw := base64.RawURLEncoding.EncodeToString([]byte(email + "::" + redirect))
 	signedTarget := h.signer.Sign(raw)
-	redirectParams := "flow=dash&target=" + url.QueryEscape(signedTarget)
+	redirectParams := "flow=browser&target=" + url.QueryEscape(signedTarget)
 	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
 		apiKey, url.QueryEscape(redirectParams))
+}
+
+// --- Browser Login Page ---
+
+// HandleBrowserLogin serves a login form or redirects to Kite login for browser-based auth.
+// If an email query param is provided, looks up stored credentials and redirects to Kite.
+// Otherwise, serves a login form where the user enters their email.
+func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/admin/ops"
+	}
+	email := r.URL.Query().Get("email")
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		email = r.FormValue("email")
+	}
+
+	if email == "" {
+		h.serveBrowserLoginForm(w, redirect, "")
+		return
+	}
+
+	apiKey, _, ok := h.exchanger.GetCredentials(email)
+	if !ok {
+		h.serveBrowserLoginForm(w, redirect, "No credentials found for this email. Please authenticate via your MCP client first.")
+		return
+	}
+
+	kiteURL := h.GenerateBrowserLoginURL(apiKey, email, redirect)
+	http.Redirect(w, r, kiteURL, http.StatusFound)
+}
+
+// serveBrowserLoginForm renders the browser login form template.
+func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, errorMsg string) {
+	tmpl, err := template.ParseFS(templates.FS, "base.html", "browser_login.html")
+	if err != nil {
+		h.logger.Error("Failed to parse browser login template", "error", err)
+		http.Error(w, "Failed to load login page", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct {
+		Title    string
+		Redirect string
+		Error    string
+	}{
+		Title:    "Login",
+		Redirect: redirect,
+		Error:    errorMsg,
+	}
+	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
+		h.logger.Error("Failed to render browser login template", "error", err)
+	}
 }
 
 // --- Token Endpoint ---

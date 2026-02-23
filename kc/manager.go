@@ -36,6 +36,7 @@ type Config struct {
 	AppMode            string                    // optional - "stdio", "http", "sse"
 	ExternalURL        string                    // optional - e.g. "https://kite-mcp-server.fly.dev"
 	AdminSecretPath    string                    // optional - admin endpoint secret for ops dashboard URL
+	EncryptionSecret   string                    // optional - secret for encrypting credentials at rest (typically OAUTH_JWT_SECRET)
 }
 
 // New creates a new kc Manager with the given configuration
@@ -91,6 +92,16 @@ func New(cfg Config) (*Manager, error) {
 			cfg.Logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
 		} else {
 			m.alertDB = alertDB
+			// Set up credential encryption if a secret is provided
+			if cfg.EncryptionSecret != "" {
+				encKey, encErr := alerts.DeriveEncryptionKey(cfg.EncryptionSecret)
+				if encErr != nil {
+					cfg.Logger.Error("Failed to derive encryption key", "error", encErr)
+				} else {
+					alertDB.SetEncryptionKey(encKey)
+					cfg.Logger.Info("Credential encryption enabled")
+				}
+			}
 			m.alertStore.SetDB(alertDB)
 			if err := m.alertStore.LoadFromDB(); err != nil {
 				cfg.Logger.Error("Failed to load alerts from DB", "error", err)

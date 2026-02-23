@@ -13,16 +13,16 @@
             />
         </svg>
     </div>
-    <h1>Dashboard Login</h1>
+    <h1>Login</h1>
     <p style="margin-bottom: 1.5rem;">
-        Enter the email associated with your Kite account to access the dashboard.
+        Enter the email associated with your Kite account to continue.
     </p>
     {{if .Error}}
     <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem; color: #e65100;">
         {{.Error}}
     </div>
     {{end}}
-    <form method="GET" action="/dashboard/login" style="text-align: left;">
+    <form method="GET" action="/auth/browser-login" style="text-align: left;">
         <input type="hidden" name="redirect" value="{{.Redirect}}" />
         <label for="email" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--heading); margin-bottom: 0.5rem;">Email</label>
         <input

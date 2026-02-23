@@ -18,7 +18,6 @@ import (
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/dashboard"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
@@ -210,6 +209,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		AppMode:          app.Config.AppMode,
 		ExternalURL:      app.Config.ExternalURL,
 		AdminSecretPath:  app.Config.AdminSecretPath,
+		EncryptionSecret: app.Config.OAuthJWTSecret,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -302,8 +302,8 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 
 	// Unified /callback handler: dispatches by flow param
 	// - flow=oauth → MCP OAuth callback (Kite → JWT → MCP auth code)
-	// - flow=dash  → Dashboard callback (Kite → JWT cookie)
-	// - default    → Login tool re-auth (existing session_id flow)
+	// - flow=browser → Browser auth callback (Kite → JWT cookie for ops dashboard)
+	// - default      → Login tool re-auth (existing session_id flow)
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		requestToken := r.URL.Query().Get("request_token")
 		flow := r.URL.Query().Get("flow")
@@ -314,9 +314,9 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			} else {
 				http.Error(w, "OAuth not configured", http.StatusInternalServerError)
 			}
-		case "dash":
+		case "browser":
 			if app.oauthHandler != nil {
-				app.oauthHandler.HandleKiteDashCallback(w, r, requestToken)
+				app.oauthHandler.HandleBrowserAuthCallback(w, r, requestToken)
 			} else {
 				http.Error(w, "OAuth not configured", http.StatusInternalServerError)
 			}
@@ -344,9 +344,10 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/oauth/authorize", app.oauthHandler.Authorize)
 		mux.HandleFunc("/oauth/token", app.oauthHandler.Token)
 	}
-	// Register dashboard routes (requires OAuth)
-	dash := dashboard.New(kcManager, app.oauthHandler, app.logger)
-	dash.RegisterRoutes(mux)
+	// Register browser login route for ops dashboard auth (requires OAuth)
+	if app.oauthHandler != nil {
+		mux.HandleFunc("/auth/browser-login", app.oauthHandler.HandleBrowserLogin)
+	}
 
 	app.serveStatusPage(mux)
 	return mux

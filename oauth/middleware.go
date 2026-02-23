@@ -44,7 +44,7 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// cookieName is the JWT cookie used for browser-based dashboard auth.
+// cookieName is the JWT cookie used for browser-based auth (ops dashboard, etc).
 const cookieName = "kite_jwt"
 
 // RequireAuthBrowser returns middleware for browser-based auth.
@@ -74,8 +74,8 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 			h.logger.Debug("Invalid dashboard cookie", "error", err)
 		}
 
-		// Redirect to Kite login with redirect back to original URL
-		redirectURL := h.config.ExternalURL + "/dashboard/login?redirect=" + r.URL.Path
+		// Redirect to browser login with redirect back to original URL
+		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + r.URL.Path
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
 }
