@@ -180,9 +180,28 @@ func (app *App) RunServer() error {
 		// Wire Kite token expiry check into OAuth middleware.
 		// When a cached Kite token expires (~6 AM IST daily), RequireAuth returns 401,
 		// forcing mcp-remote to re-authenticate — which includes a fresh Kite login.
+		// Three states:
+		//   1. Valid token cached → pass through (tools work)
+		//   2. Expired/missing token BUT credentials exist → 401 (force re-auth)
+		//   3. No credentials at all → pass through (first-time user, tool handler prompts)
 		tokenStore := kcManager.TokenStore()
+		credStore := kcManager.CredentialStore()
 		app.oauthHandler.SetKiteTokenChecker(func(email string) bool {
-			return !tokenStore.IsExpired(email)
+			if email == "" {
+				return true
+			}
+			// Check if a valid (non-expired) Kite token exists
+			entry, hasToken := tokenStore.Get(email)
+			if hasToken && !isKiteTokenExpired(entry.StoredAt) {
+				return true // valid token, pass through
+			}
+			// No valid token. If user has stored credentials, they're a returning
+			// user whose token expired or was cleaned up — force re-auth via 401.
+			if _, hasCredentials := credStore.Get(email); hasCredentials {
+				return false
+			}
+			// No credentials = first-time user, let tool handlers deal with onboarding
+			return true
 		})
 
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
@@ -197,6 +216,19 @@ func (app *App) RunServer() error {
 // buildServerURL constructs the server URL from host and port
 func (app *App) buildServerURL() string {
 	return app.Config.AppHost + ":" + app.Config.AppPort
+}
+
+// isKiteTokenExpired checks if a Kite token stored at the given time has likely expired.
+// Kite tokens expire daily around 6 AM IST.
+func isKiteTokenExpired(storedAt time.Time) bool {
+	ist := time.FixedZone("IST", 5*60*60+30*60)
+	now := time.Now().In(ist)
+	stored := storedAt.In(ist)
+	expiry := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, ist)
+	if now.Before(expiry) {
+		expiry = expiry.AddDate(0, 0, -1)
+	}
+	return stored.Before(expiry)
 }
 
 // httpClient is a package-level HTTP client with a timeout, used instead of
