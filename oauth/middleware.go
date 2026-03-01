@@ -48,6 +48,16 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		// Check if the Kite trading token has expired (daily ~6 AM IST).
+		// Returning 401 forces mcp-remote to re-authenticate, which goes through
+		// Kite login in the browser — seamlessly refreshing the trading session.
+		if h.kiteTokenChecker != nil && !h.kiteTokenChecker(claims.Subject) {
+			h.logger.Info("Kite token expired, forcing OAuth re-auth", "email", claims.Subject)
+			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token", resource_metadata="`+resourceMetadataURL+`"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		// Add email to context for downstream handlers
 		ctx := context.WithValue(r.Context(), emailContextKey{}, claims.Subject)
 		next.ServeHTTP(w, r.WithContext(ctx))

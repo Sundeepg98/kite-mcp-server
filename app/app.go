@@ -176,6 +176,15 @@ func (app *App) RunServer() error {
 			logger:          app.logger,
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+
+		// Wire Kite token expiry check into OAuth middleware.
+		// When a cached Kite token expires (~6 AM IST daily), RequireAuth returns 401,
+		// forcing mcp-remote to re-authenticate — which includes a fresh Kite login.
+		tokenStore := kcManager.TokenStore()
+		app.oauthHandler.SetKiteTokenChecker(func(email string) bool {
+			return !tokenStore.IsExpired(email)
+		})
+
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
 	}
 

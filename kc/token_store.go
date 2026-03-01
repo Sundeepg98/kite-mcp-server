@@ -154,3 +154,34 @@ func (s *KiteTokenStore) Count() int {
 	defer s.mu.RUnlock()
 	return len(s.tokens)
 }
+
+// kolkataLoc caches the Asia/Kolkata timezone for token expiry checks.
+var kolkataLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		panic("failed to load Asia/Kolkata timezone: " + err.Error())
+	}
+	return loc
+}()
+
+// IsExpired checks whether the cached Kite token for the given email has likely expired.
+// Kite tokens expire daily around 6 AM IST. Returns false if no token is cached
+// (first-time users should be handled by tool handlers, not the auth middleware).
+func (s *KiteTokenStore) IsExpired(email string) bool {
+	entry, ok := s.Get(email)
+	if !ok {
+		return false // no cached token — not "expired", just absent
+	}
+
+	ist := kolkataLoc
+	now := time.Now().In(ist)
+	stored := entry.StoredAt.In(ist)
+
+	// Find the most recent 6 AM IST
+	expiry := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, ist)
+	if now.Before(expiry) {
+		expiry = expiry.AddDate(0, 0, -1)
+	}
+
+	return stored.Before(expiry)
+}

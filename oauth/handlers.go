@@ -30,15 +30,20 @@ type KiteExchanger interface {
 	GetCredentials(email string) (apiKey, apiSecret string, ok bool)
 }
 
+// KiteTokenChecker checks whether the Kite trading token for a given email is still valid.
+// Returns true if the token is valid (or no token cached yet), false if expired.
+type KiteTokenChecker func(email string) bool
+
 // Handler implements all OAuth 2.1 HTTP endpoints.
 type Handler struct {
-	config    *Config
-	jwt       *JWTManager
-	authCodes *AuthCodeStore
-	clients   *ClientStore
-	signer    Signer
-	exchanger KiteExchanger
-	logger    *slog.Logger
+	config           *Config
+	jwt              *JWTManager
+	authCodes        *AuthCodeStore
+	clients          *ClientStore
+	signer           Signer
+	exchanger        KiteExchanger
+	logger           *slog.Logger
+	kiteTokenChecker KiteTokenChecker
 
 	// Cached templates (parsed once at startup)
 	loginSuccessTmpl  *template.Template
@@ -69,6 +74,13 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	}
 
 	return h
+}
+
+// SetKiteTokenChecker registers a callback that checks Kite token validity.
+// When set, RequireAuth returns 401 if the Kite token has expired, forcing
+// mcp-remote to re-authenticate (which includes a fresh Kite login).
+func (h *Handler) SetKiteTokenChecker(checker KiteTokenChecker) {
+	h.kiteTokenChecker = checker
 }
 
 // oauthState is packed into Kite's redirect_params to round-trip MCP client data.
