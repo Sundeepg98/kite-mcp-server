@@ -136,6 +136,19 @@ func (s *KiteCredentialStore) ListAll() []KiteCredentialSummary {
 	return out
 }
 
+// GetSecretByAPIKey finds the API secret for a given API key by scanning all stored credentials.
+// Used when the client_id (= API key) is known but the email is not yet resolved.
+func (s *KiteCredentialStore) GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, entry := range s.creds {
+		if entry.APIKey == apiKey {
+			return entry.APISecret, true
+		}
+	}
+	return "", false
+}
+
 // Count returns the number of stored credential entries.
 func (s *KiteCredentialStore) Count() int {
 	s.mu.RLock()

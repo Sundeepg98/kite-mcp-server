@@ -680,3 +680,7 @@ func (a *kiteExchangerAdapter) GetCredentials(email string) (string, string, boo
 	}
 	return entry.APIKey, entry.APISecret, true
 }
+
+func (a *kiteExchangerAdapter) GetSecretByAPIKey(apiKey string) (string, bool) {
+	return a.credentialStore.GetSecretByAPIKey(apiKey)
+}

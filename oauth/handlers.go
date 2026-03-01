@@ -28,6 +28,7 @@ type KiteExchanger interface {
 	ExchangeRequestToken(requestToken string) (email string, err error)
 	ExchangeWithCredentials(requestToken, apiKey, apiSecret string) (email string, err error)
 	GetCredentials(email string) (apiKey, apiSecret string, ok bool)
+	GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool)
 }
 
 // KiteTokenChecker checks whether the Kite trading token for a given email is still valid.
@@ -668,12 +669,20 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	email := entry.Email
 	if email == "" && entry.RequestToken != "" {
 		// Deferred exchange: client_id = Kite API key, client_secret = Kite API secret
-		if clientSecret == "" {
-			h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_secret (Kite API secret) required for per-user authentication"})
-			return
+		// If client_secret not in request (public OAuth clients like Claude Code native),
+		// fall back to the credential store which persists secrets from previous sessions.
+		secret := clientSecret
+		if secret == "" {
+			if storedSecret, ok := h.exchanger.GetSecretByAPIKey(clientID); ok {
+				secret = storedSecret
+				h.logger.Debug("Using stored API secret for deferred exchange", "client_id", clientID)
+			} else {
+				h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_secret (Kite API secret) required for per-user authentication"})
+				return
+			}
 		}
 		var err error
-		email, err = h.exchanger.ExchangeWithCredentials(entry.RequestToken, clientID, clientSecret)
+		email, err = h.exchanger.ExchangeWithCredentials(entry.RequestToken, clientID, secret)
 		if err != nil {
 			h.logger.Error("Deferred Kite token exchange failed", "client_id", clientID, "error", err)
 			h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "Kite authentication failed — check your API key and secret"})
