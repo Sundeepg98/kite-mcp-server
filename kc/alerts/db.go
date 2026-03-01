@@ -222,7 +222,11 @@ func (d *DB) LoadTokens() ([]*TokenEntry, error) {
 		if err := rows.Scan(&t.Email, &t.AccessToken, &t.UserID, &t.UserName, &storedAtS); err != nil {
 			return nil, fmt.Errorf("scan token: %w", err)
 		}
-		t.StoredAt, _ = time.Parse(time.RFC3339, storedAtS)
+		storedAt, err := time.Parse(time.RFC3339, storedAtS)
+		if err != nil {
+			storedAt = time.Time{}
+		}
+		t.StoredAt = storedAt
 		out = append(out, &t)
 	}
 	return out, rows.Err()
@@ -276,7 +280,11 @@ func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 			c.APIKey = decrypt(d.encryptionKey, c.APIKey)
 			c.APISecret = decrypt(d.encryptionKey, c.APISecret)
 		}
-		c.StoredAt, _ = time.Parse(time.RFC3339, storedAtS)
+		storedAt, err := time.Parse(time.RFC3339, storedAtS)
+		if err != nil {
+			storedAt = time.Time{}
+		}
+		c.StoredAt = storedAt
 		out = append(out, &c)
 	}
 	return out, rows.Err()

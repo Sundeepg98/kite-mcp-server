@@ -68,10 +68,17 @@ func (h *Handler) buildOverview() OverviewData {
 	}
 }
 
+// buildSessions returns a snapshot of active sessions.
+// All fields are copied by value to prevent callers from mutating internal session state.
 func (h *Handler) buildSessions() []SessionInfo {
 	sessions := h.manager.SessionManager().ListActiveSessions()
 	out := make([]SessionInfo, 0, len(sessions))
 	for _, s := range sessions {
+		// Copy scalar fields from the session to avoid holding pointers to internal state.
+		id := s.ID
+		createdAt := s.CreatedAt
+		expiresAt := s.ExpiresAt
+
 		kd, ok := s.Data.(*kc.KiteSessionData)
 		email := ""
 		if ok && kd != nil {
@@ -81,7 +88,7 @@ func (h *Handler) buildSessions() []SessionInfo {
 		if email == "" {
 			continue
 		}
-		out = append(out, SessionInfo{ID: s.ID, Email: email, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt})
+		out = append(out, SessionInfo{ID: id, Email: email, CreatedAt: createdAt, ExpiresAt: expiresAt})
 	}
 	return out
 }

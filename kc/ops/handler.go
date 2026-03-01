@@ -55,7 +55,18 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		h.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// writeJSON encodes data as JSON and writes it to the response writer.
+// Logs an error if encoding fails rather than silently discarding the error.
+func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		h.logger.Error("Failed to encode JSON response", "error", err)
+	}
 }
 
 // overview returns the combined overview JSON.
@@ -64,8 +75,7 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.buildOverview())
+	h.writeJSON(w, h.buildOverview())
 }
 
 // sessions returns the sessions JSON.
@@ -74,8 +84,7 @@ func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.buildSessions())
+	h.writeJSON(w, h.buildSessions())
 }
 
 // tickers returns the tickers JSON.
@@ -84,8 +93,7 @@ func (h *Handler) tickers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.buildTickers())
+	h.writeJSON(w, h.buildTickers())
 }
 
 // alerts returns the alerts JSON.
@@ -94,18 +102,18 @@ func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(h.buildAlerts())
+	h.writeJSON(w, h.buildAlerts())
 }
 
 // credentials handles GET (list own), POST (create own), DELETE (remove own) for per-user Kite credentials.
 // Operations are scoped to the authenticated user's email to prevent IDOR.
 func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	jsonError := func(status int, msg string) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(map[string]string{"error": msg})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+			h.logger.Error("Failed to encode JSON error response", "error", err)
+		}
 	}
 
 	// Get the authenticated user's email from context
@@ -120,9 +128,9 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		// Only return the authenticated user's own credentials
 		entry, ok := h.manager.CredentialStore().Get(authEmail)
 		if ok {
-			json.NewEncoder(w).Encode([]map[string]string{{"email": authEmail, "api_key": entry.APIKey}})
+			h.writeJSON(w, []map[string]string{{"email": authEmail, "api_key": entry.APIKey}})
 		} else {
-			json.NewEncoder(w).Encode([]map[string]string{})
+			h.writeJSON(w, []map[string]string{})
 		}
 
 	case http.MethodPost:
@@ -145,13 +153,13 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		// Clear cached token — old token was generated with different credentials
 		h.manager.TokenStore().Delete(authEmail)
 		h.logger.Info("Stored Kite credentials", "email", authEmail)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
 		h.manager.CredentialStore().Delete(authEmail)
 		h.manager.TokenStore().Delete(authEmail)
 		h.logger.Info("Deleted Kite credentials", "email", authEmail)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	default:
 		jsonError(http.StatusMethodNotAllowed, "method not allowed")

@@ -4,12 +4,23 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// isAlphanumeric returns true if s is non-empty and contains only ASCII letters and digits.
+func isAlphanumeric(s string) bool {
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return len(s) > 0
+}
 
 // dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
 func dashboardLink(manager *kc.Manager) string {
@@ -20,6 +31,15 @@ func dashboardLink(manager *kc.Manager) string {
 		base = manager.ExternalURL()
 	}
 	if base == "" {
+		return ""
+	}
+	// Validate that the base URL is well-formed with an http(s) scheme and non-empty host.
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if (scheme != "http" && scheme != "https") || parsed.Host == "" {
 		return ""
 	}
 	return fmt.Sprintf("\n\nOps dashboard: [Open Dashboard](%s/admin/ops)", base)
@@ -58,6 +78,14 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		apiKey := SafeAssertString(args["api_key"], "")
 		apiSecret := SafeAssertString(args["api_secret"], "")
 
+		// Validate that api_key and api_secret contain only alphanumeric characters
+		if apiKey != "" && !isAlphanumeric(apiKey) {
+			return mcp.NewToolResultError("Invalid api_key: must contain only alphanumeric characters (letters and digits)."), nil
+		}
+		if apiSecret != "" && !isAlphanumeric(apiSecret) {
+			return mcp.NewToolResultError("Invalid api_secret: must contain only alphanumeric characters (letters and digits)."), nil
+		}
+
 		if apiKey != "" && apiSecret != "" {
 			if email == "" {
 				return mcp.NewToolResultError("OAuth authentication required to register per-user credentials. Please connect via an OAuth-enabled client first."), nil
@@ -89,7 +117,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if err != nil {
 			manager.Logger.Error("Failed to get or create Kite session", "session_id", mcpSessionID, "error", err)
 			handler.trackToolError(ctx, "login", "session_error")
-			return mcp.NewToolResultError("Failed to get or create Kite session"), nil
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to get or create Kite session: %s", err.Error())), nil
 		}
 
 		// Ensure email is set on session for callback lookup
@@ -142,7 +170,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				// If we are still getting an error, lets clear session data and recreate
 				if clearErr := manager.ClearSessionData(mcpSessionID); clearErr != nil {
 					manager.Logger.Error("Failed to clear session data", "session_id", mcpSessionID, "error", clearErr)
-					return mcp.NewToolResultError("Failed to clear session data"), nil
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to clear session data: %s", clearErr.Error())), nil
 				}
 
 				// Clear cached token too if it exists
@@ -154,7 +182,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				_, _, err = manager.GetOrCreateSessionWithEmail(mcpSessionID, email)
 				if err != nil {
 					manager.Logger.Error("Failed to create new Kite session", "session_id", mcpSessionID, "error", err)
-					return mcp.NewToolResultError("Failed to create new Kite session"), nil
+					return mcp.NewToolResultError(fmt.Sprintf("Failed to create new Kite session: %s", err.Error())), nil
 				}
 			} else {
 				manager.Logger.Info("Kite profile check successful", "session_id", mcpSessionID, "user", profile.UserName)
@@ -173,7 +201,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		url, err := manager.SessionLoginURL(mcpSessionID)
 		if err != nil {
 			manager.Logger.Error("Error generating Kite login URL", "session_id", mcpSessionID, "error", err)
-			return mcp.NewToolResultError("Failed to generate Kite login URL"), nil
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to generate Kite login URL: %s", err.Error())), nil
 		}
 
 		manager.Logger.Info("Successfully generated Kite login URL", "session_id", mcpSessionID)

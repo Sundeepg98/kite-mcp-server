@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html/template"
@@ -189,9 +190,12 @@ func (app *App) buildServerURL() string {
 	return app.Config.AppHost + ":" + app.Config.AppPort
 }
 
-// configureHTTPClient sets up the default HTTP client with timeout
+// httpClient is a package-level HTTP client with a timeout, used instead of
+// modifying the global http.DefaultClient which would affect all code.
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
+// configureHTTPClient logs that the package-level HTTP client is ready.
 func (app *App) configureHTTPClient() {
-	http.DefaultClient.Timeout = 30 * time.Second
 	app.logger.Debug("HTTP client timeout set to 30 seconds")
 }
 
@@ -246,7 +250,7 @@ func (app *App) createHTTPServer(url string) *http.Server {
 	return &http.Server{
 		Addr:              url,
 		ReadHeaderTimeout: 30 * time.Second,
-		WriteTimeout:      0,
+		WriteTimeout:      120 * time.Second,
 	}
 }
 
@@ -527,13 +531,17 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 			return
 		}
 
+		data := app.getStatusData()
+		var buf bytes.Buffer
+		if err := app.statusTemplate.ExecuteTemplate(&buf, "base", data); err != nil {
+			app.logger.Error("Failed to execute status template", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-
-		data := app.getStatusData()
-		if err := app.statusTemplate.ExecuteTemplate(w, "base", data); err != nil {
-			app.logger.Error("Failed to execute status template", "error", err)
-			_, _ = w.Write([]byte("Error rendering status page"))
+		if _, err := buf.WriteTo(w); err != nil {
+			app.logger.Error("Failed to write status page", "error", err)
 		}
 	})
 
@@ -577,7 +585,7 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 		email = userSess.UserID
 	}
 
-	a.logger.Info("Kite token exchange successful", "email", email, "user_id", userSess.UserID)
+	a.logger.Debug("Kite token exchange successful", "email", email, "user_id", userSess.UserID)
 
 	// Cache the access token keyed by email
 	a.tokenStore.Set(strings.ToLower(email), &kc.KiteTokenEntry{
@@ -601,7 +609,7 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 		email = userSess.UserID
 	}
 
-	a.logger.Info("Kite token exchange (per-user credentials) successful", "email", email, "user_id", userSess.UserID)
+	a.logger.Debug("Kite token exchange (per-user credentials) successful", "email", email, "user_id", userSess.UserID)
 
 	// Cache the access token keyed by email
 	a.tokenStore.Set(strings.ToLower(email), &kc.KiteTokenEntry{

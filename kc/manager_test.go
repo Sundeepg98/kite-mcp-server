@@ -467,7 +467,10 @@ func TestNewConfigConstructor(t *testing.T) {
 
 	// Test with custom session signer
 	t.Run("custom_session_signer", func(t *testing.T) {
-		customSigner := NewSessionSignerWithKey([]byte("test-key-32-bytes-long-for-hmac"))
+		customSigner, err := NewSessionSignerWithKey([]byte("test-key-32-bytes-long-for-hmac"))
+		if err != nil {
+			t.Fatalf("Failed to create custom signer: %v", err)
+		}
 
 		manager, err := New(Config{
 			APIKey:             "test_key",

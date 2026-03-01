@@ -12,13 +12,19 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
+// kolkataLoc caches the Asia/Kolkata timezone at package init to avoid repeated lookups.
+var kolkataLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		panic("failed to load Asia/Kolkata timezone: " + err.Error())
+	}
+	return loc
+}()
+
 // isTokenLikelyExpired checks if a Kite token stored at the given time has likely expired.
 // Kite tokens expire daily around 6 AM IST. We check if 6 AM IST has passed since the token was stored.
 func isTokenLikelyExpired(storedAt time.Time) bool {
-	ist, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		return false // Can't determine — assume valid
-	}
+	ist := kolkataLoc
 	now := time.Now().In(ist)
 	stored := storedAt.In(ist)
 
@@ -101,7 +107,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	if err != nil {
 		h.manager.Logger.Error("Failed to establish session", "tool", toolName, "session_id", sessionID, "error", err)
 		h.trackToolError(ctx, toolName, "session_error")
-		return mcp.NewToolResultError("Failed to establish a session. Please try again."), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to establish a session: %s", err.Error())), nil
 	}
 
 	if isNew {
@@ -113,7 +119,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 				h.manager.Logger.Warn("Cached Kite token expired", "email", email, "error", err)
 				h.manager.TokenStore().Delete(email)
 				h.trackToolError(ctx, toolName, "auth_required")
-				return mcp.NewToolResultError("Your Kite session has expired. Please use the login tool to re-authenticate."), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error())), nil
 			}
 			h.manager.Logger.Info("Auto-authenticated via cached token", "tool", toolName, "email", email)
 			h.manager.TrackDailyUser(email)
@@ -133,7 +139,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 				h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
 				h.manager.TokenStore().Delete(email)
 				h.trackToolError(ctx, toolName, "token_expired")
-				return mcp.NewToolResultError("Your Kite session has expired. Please use the login tool to re-authenticate."), nil
+				return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error())), nil
 			}
 		}
 	}
@@ -147,7 +153,7 @@ func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.C
 	v, err := json.Marshal(data)
 	if err != nil {
 		h.manager.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
-		return mcp.NewToolResultError("Failed to process response data"), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to process response data: %s", err.Error())), nil
 	}
 
 	h.manager.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))

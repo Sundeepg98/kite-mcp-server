@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -40,13 +41,17 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		chatID := int64(SafeAssertFloat64(args["chat_id"], 0))
+		chatIDFloat := SafeAssertFloat64(args["chat_id"], 0)
+		if math.IsNaN(chatIDFloat) || math.IsInf(chatIDFloat, 0) || chatIDFloat > float64(math.MaxInt64) || chatIDFloat < float64(math.MinInt64) {
+			return mcp.NewToolResultError("Invalid chat_id: must be a valid integer"), nil
+		}
+		chatID := int64(chatIDFloat)
 		if chatID == 0 {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
 		manager.AlertStore().SetTelegramChatID(email, chatID)
-		manager.Logger.Info("Telegram chat ID registered", "email", email, "chat_id", chatID)
+		manager.Logger.Debug("Telegram chat ID registered", "email", email, "chat_id", chatID)
 
 		return mcp.NewToolResultText(fmt.Sprintf("Telegram notifications configured for %s. You'll receive alerts at chat ID %d.", email, chatID)), nil
 	}
@@ -113,7 +118,10 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		exchange := parts[0]
 		tradingsymbol := inst.Tradingsymbol
 
-		alertID := manager.AlertStore().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+		alertID, err := manager.AlertStore().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to set alert: %s", err)), nil
+		}
 
 		result := fmt.Sprintf("Alert set: %s %s %.2f (ID: %s)", instrumentID, directionStr, targetPrice, alertID)
 

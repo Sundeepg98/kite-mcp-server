@@ -347,22 +347,34 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		switch triggerType {
 		case "single":
+			triggerValue := SafeAssertFloat64(args["trigger_value"], 0.0)
+			if triggerValue <= 0 {
+				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
+			}
 			gttParams.Trigger = &kiteconnect.GTTSingleLegTrigger{
 				TriggerParams: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["trigger_value"], 0.0),
+					TriggerValue: triggerValue,
 					Quantity:     SafeAssertFloat64(args["quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["limit_price"], 0.0),
 				},
 			}
 		case "two-leg":
+			upperTriggerValue := SafeAssertFloat64(args["upper_trigger_value"], 0.0)
+			lowerTriggerValue := SafeAssertFloat64(args["lower_trigger_value"], 0.0)
+			if upperTriggerValue <= 0 {
+				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
+			}
+			if lowerTriggerValue <= 0 {
+				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
+			}
 			gttParams.Trigger = &kiteconnect.GTTOneCancelsOtherTrigger{
 				Upper: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
+					TriggerValue: upperTriggerValue,
 					Quantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
 				},
 				Lower: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
+					TriggerValue: lowerTriggerValue,
 					Quantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
 				},
@@ -519,22 +531,34 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		switch triggerType {
 		case "single":
+			triggerValue := SafeAssertFloat64(args["trigger_value"], 0.0)
+			if triggerValue <= 0 {
+				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
+			}
 			gttParams.Trigger = &kiteconnect.GTTSingleLegTrigger{
 				TriggerParams: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["trigger_value"], 0.0),
+					TriggerValue: triggerValue,
 					Quantity:     SafeAssertFloat64(args["quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["limit_price"], 0.0),
 				},
 			}
 		case "two-leg":
+			upperTriggerValue := SafeAssertFloat64(args["upper_trigger_value"], 0.0)
+			lowerTriggerValue := SafeAssertFloat64(args["lower_trigger_value"], 0.0)
+			if upperTriggerValue <= 0 {
+				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
+			}
+			if lowerTriggerValue <= 0 {
+				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
+			}
 			gttParams.Trigger = &kiteconnect.GTTOneCancelsOtherTrigger{
 				Upper: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
+					TriggerValue: upperTriggerValue,
 					Quantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
 				},
 				Lower: kiteconnect.TriggerParams{
-					TriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
+					TriggerValue: lowerTriggerValue,
 					Quantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
 					LimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
 				},

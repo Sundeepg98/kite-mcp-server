@@ -336,6 +336,26 @@ func (sm *SessionRegistry) UpdateSessionData(sessionID string, data any) error {
 	return nil
 }
 
+// UpdateSessionField updates a field within the session data under the registry lock.
+// The mutator function is called with the session's Data pointer while holding the write lock,
+// ensuring no concurrent reads or writes can race on session fields.
+func (sm *SessionRegistry) UpdateSessionField(sessionID string, mutator func(data any)) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, exists := sm.sessions[sessionID]
+	if !exists {
+		return errors.New(errSessionNotFound)
+	}
+
+	if session.Terminated {
+		return errors.New(errCannotUpdateTerminated)
+	}
+
+	mutator(session.Data)
+	return nil
+}
+
 // GetSessionData retrieves the Kite data for a MCP session
 func (sm *SessionRegistry) GetSessionData(sessionID string) (any, error) {
 	sm.mu.RLock()

@@ -65,19 +65,19 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	}
 
 	text := fmt.Sprintf(
-		"%s *%s:%s* crossed %s %.2f\nCurrent: %.2f\nTarget: %.2f (%s)",
+		"%s *%s:%s* crossed %s %s\nCurrent: %s\nTarget: %s \\(%s\\)",
 		emoji,
 		escapeTelegramMarkdown(alert.Exchange),
 		escapeTelegramMarkdown(alert.Tradingsymbol),
-		string(alert.Direction),
-		alert.TargetPrice,
-		currentPrice,
-		alert.TargetPrice,
-		string(alert.Direction),
+		escapeTelegramMarkdown(string(alert.Direction)),
+		escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+		escapeTelegramMarkdown(fmt.Sprintf("%.2f", currentPrice)),
+		escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+		escapeTelegramMarkdown(string(alert.Direction)),
 	)
 
 	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ParseMode = tgbotapi.ModeMarkdown
+	msg.ParseMode = tgbotapi.ModeMarkdownV2
 
 	if _, err := t.bot.Send(msg); err != nil {
 		t.logger.Error("Failed to send Telegram notification",

@@ -39,6 +39,12 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		instruments := SafeAssertStringArray(args["instruments"])
+		if len(instruments) == 0 {
+			return mcp.NewToolResultError("At least one instrument must be specified"), nil
+		}
+		if len(instruments) > 500 {
+			return mcp.NewToolResultError("Too many instruments: maximum 500 allowed per request"), nil
+		}
 
 		return handler.WithSession(ctx, "get_quotes", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			quotes, err := session.Kite.Client.GetQuote(instruments...)
@@ -276,6 +282,9 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if len(instruments) == 0 {
 			return mcp.NewToolResultError("At least one instrument must be specified"), nil
 		}
+		if len(instruments) > 500 {
+			return mcp.NewToolResultError("Too many instruments: maximum 500 allowed per request"), nil
+		}
 
 		return handler.WithSession(ctx, "get_ltp", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			ltp, err := session.Kite.Client.GetLTP(instruments...)
@@ -317,6 +326,9 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		instruments := SafeAssertStringArray(args["instruments"])
 		if len(instruments) == 0 {
 			return mcp.NewToolResultError("At least one instrument must be specified"), nil
+		}
+		if len(instruments) > 500 {
+			return mcp.NewToolResultError("Too many instruments: maximum 500 allowed per request"), nil
 		}
 
 		return handler.WithSession(ctx, "get_ohlc", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {

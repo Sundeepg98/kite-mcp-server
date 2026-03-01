@@ -30,6 +30,7 @@ func newTestManager() *Manager {
 		tokenToInstrument: make(map[uint32]*Instrument),
 		segmentIDs:        make(map[string]uint32),
 		lastUpdated:       time.Now(),
+		instrumentsURL:    defaultInstrumentsURL,
 		config:            config,
 		logger:            testLogger(),
 		schedulerCtx:      ctx,
@@ -61,6 +62,7 @@ func newTestManagerWithoutUpdate() *Manager {
 		tokenToInstrument: make(map[uint32]*Instrument),
 		segmentIDs:        make(map[string]uint32),
 		lastUpdated:       time.Now(),
+		instrumentsURL:    defaultInstrumentsURL,
 		config:            config,
 		logger:            testLogger(),
 		schedulerCtx:      ctx,
@@ -86,12 +88,12 @@ func setupTestServer() *httptest.Server {
 	}))
 }
 
-// hijackInstrumentsURL temporarily overrides the instruments URL for testing
-func hijackInstrumentsURL(testURL string) func() {
-	originalURL := instrumentsURL
-	instrumentsURL = testURL
+// hijackInstrumentsURL temporarily overrides the instruments URL on a manager for testing.
+func hijackInstrumentsURL(m *Manager, testURL string) func() {
+	originalURL := m.instrumentsURL
+	m.instrumentsURL = testURL
 	return func() {
-		instrumentsURL = originalURL
+		m.instrumentsURL = originalURL
 	}
 }
 
@@ -177,6 +179,7 @@ func TestManagerConcurrentOperations(t *testing.T) {
 		idToToken:         make(map[string]uint32),
 		tokenToInstrument: make(map[uint32]*Instrument),
 		segmentIDs:        make(map[string]uint32),
+		instrumentsURL:    defaultInstrumentsURL,
 	}
 
 	testInsts := getTestInstruments()
@@ -572,7 +575,6 @@ func TestManagerWithCustomConfig(t *testing.T) {
 		RetryAttempts:   5,
 		RetryDelay:      5 * time.Second,
 		EnableScheduler: false,
-		MemoryLimit:     1024 * 1024, // 1MB
 	}
 
 	manager := newTestManagerWithoutUpdate()
@@ -598,9 +600,6 @@ func TestManagerWithCustomConfig(t *testing.T) {
 	if managerConfig.EnableScheduler {
 		t.Error("Expected scheduler to be disabled")
 	}
-	if managerConfig.MemoryLimit != 1024*1024 {
-		t.Errorf("Expected memory limit 1MB, got %d", managerConfig.MemoryLimit)
-	}
 
 	// Test shutdown
 	manager.Shutdown()
@@ -611,11 +610,11 @@ func TestManagerUpdateStats(t *testing.T) {
 	// Setup mock server
 	server := setupTestServer()
 	defer server.Close()
-	restore := hijackInstrumentsURL(server.URL)
-	defer restore()
 
 	manager := newTestManagerWithoutUpdate()
 	defer manager.Shutdown()
+	restore := hijackInstrumentsURL(manager, server.URL)
+	defer restore()
 
 	// Get initial stats
 	stats := manager.GetUpdateStats()
@@ -654,7 +653,6 @@ func TestManagerUpdateConfig(t *testing.T) {
 		RetryAttempts:   2,
 		RetryDelay:      1 * time.Second,
 		EnableScheduler: false,
-		MemoryLimit:     512 * 1024,
 	}
 
 	manager.UpdateConfig(newConfig)
@@ -688,6 +686,7 @@ func TestManagerSchedulerShutdown(t *testing.T) {
 		tokenToInstrument: make(map[uint32]*Instrument),
 		segmentIDs:        make(map[string]uint32),
 		lastUpdated:       time.Now(),
+		instrumentsURL:    defaultInstrumentsURL,
 		config:            config,
 		logger:            testLogger(),
 		schedulerCtx:      ctx,
@@ -751,11 +750,11 @@ func TestManagerForceUpdate(t *testing.T) {
 	// Setup mock server
 	server := setupTestServer()
 	defer server.Close()
-	restore := hijackInstrumentsURL(server.URL)
-	defer restore()
 
 	manager := newTestManagerWithoutUpdate()
 	defer manager.Shutdown()
+	restore := hijackInstrumentsURL(manager, server.URL)
+	defer restore()
 
 	// Get initial stats
 	initialStats := manager.GetUpdateStats()
@@ -782,7 +781,6 @@ func TestManagerForceUpdate(t *testing.T) {
 // TestMemoryOptimizations tests memory usage optimizations
 func TestMemoryOptimizations(t *testing.T) {
 	manager := newTestManagerWithoutUpdate()
-	manager.config.MemoryLimit = 1024 * 1024 // 1MB limit
 	defer manager.Shutdown()
 
 	// Test that manager handles memory limits gracefully

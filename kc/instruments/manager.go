@@ -25,11 +25,6 @@ const (
 )
 
 var (
-	// instrumentsURL can be overridden for testing
-	instrumentsURL = defaultInstrumentsURL
-)
-
-var (
 	// ErrInstrumentNotFound is returned when instrument was not found in the
 	// loaded map.
 	ErrInstrumentNotFound = errors.New("instrument not found")
@@ -51,8 +46,6 @@ type UpdateConfig struct {
 	RetryDelay time.Duration
 	// EnableScheduler enables automatic scheduled updates
 	EnableScheduler bool
-	// MemoryLimit is the maximum memory usage in bytes (0 = no limit)
-	MemoryLimit int64
 }
 
 // DefaultUpdateConfig returns the default update configuration
@@ -63,7 +56,6 @@ func DefaultUpdateConfig() *UpdateConfig {
 		RetryAttempts:   defaultRetryAttempts,
 		RetryDelay:      defaultRetryDelay,
 		EnableScheduler: true,
-		MemoryLimit:     0, // No limit by default
 	}
 }
 
@@ -92,6 +84,10 @@ type Manager struct {
 
 	lastUpdated time.Time
 
+	// instrumentsURL is the URL to fetch instruments from.
+	// Defaults to defaultInstrumentsURL; configurable per-instance for testing.
+	instrumentsURL string
+
 	// Configuration and scheduling
 	config *UpdateConfig
 	stats  UpdateStats
@@ -111,9 +107,10 @@ type Manager struct {
 
 // Config holds configuration for creating a new instruments manager
 type Config struct {
-	UpdateConfig *UpdateConfig          // defaults to DefaultUpdateConfig() if nil
-	Logger       *slog.Logger           // required
-	TestData     map[uint32]*Instrument // if set, skips HTTP loading and uses test data
+	UpdateConfig   *UpdateConfig          // defaults to DefaultUpdateConfig() if nil
+	Logger         *slog.Logger           // required
+	TestData       map[uint32]*Instrument // if set, skips HTTP loading and uses test data
+	InstrumentsURL string                 // URL to fetch instruments from; defaults to Kite API URL
 }
 
 // New creates a new instruments manager with the given configuration
@@ -124,6 +121,10 @@ func New(cfg Config) (*Manager, error) {
 	}
 
 	manager := newManagerWithConfig(cfg.UpdateConfig, cfg.Logger)
+
+	if cfg.InstrumentsURL != "" {
+		manager.instrumentsURL = cfg.InstrumentsURL
+	}
 
 	if cfg.TestData != nil {
 		// Test mode - load test data
@@ -162,6 +163,7 @@ func newManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
 		tokenToInstrument: make(map[uint32]*Instrument),
 		segmentIDs:        make(map[string]uint32),
 		lastUpdated:       time.Now(),
+		instrumentsURL:    defaultInstrumentsURL,
 		config:            config,
 		logger:            logger,
 		schedulerCtx:      ctx,
@@ -348,9 +350,9 @@ func (m *Manager) updateInstruments(force bool) (int, error) {
 }
 
 func (m *Manager) loadFromURL() (map[uint32]*Instrument, error) {
-	m.logger.Debug("Creating HTTP request to fetch instruments", "url", instrumentsURL)
+	m.logger.Debug("Creating HTTP request to fetch instruments", "url", m.instrumentsURL)
 	// HTTP GET request to instruments URL
-	req, err := http.NewRequest("GET", instrumentsURL, nil)
+	req, err := http.NewRequest("GET", m.instrumentsURL, nil)
 	if err != nil {
 		m.logger.Error("Error creating HTTP request", "error", err)
 		return nil, fmt.Errorf("error creating request: %v", err)
@@ -381,7 +383,7 @@ func (m *Manager) loadFromURL() (map[uint32]*Instrument, error) {
 		"content-encoding", resp.Header.Get("Content-Encoding"))
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d fetching instruments from %s", resp.StatusCode, instrumentsURL)
+		return nil, fmt.Errorf("unexpected status code %d fetching instruments from %s", resp.StatusCode, m.instrumentsURL)
 	}
 
 	var reader io.Reader = resp.Body
@@ -532,11 +534,13 @@ func (m *Manager) GetUpdateStats() UpdateStats {
 	return stats
 }
 
-// GetConfig returns the current configuration
+// GetConfig returns a copy of the current configuration.
+// Returns a copy to prevent callers from mutating shared state.
 func (m *Manager) GetConfig() *UpdateConfig {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	return m.config
+	cp := *m.config
+	return &cp
 }
 
 // UpdateConfig updates the manager configuration

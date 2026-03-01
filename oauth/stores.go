@@ -3,6 +3,7 @@ package oauth
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
@@ -16,6 +17,10 @@ type AuthCodeEntry struct {
 	RequestToken  string // set at callback for deferred exchange (per-user Kite credentials)
 	ExpiresAt     time.Time
 }
+
+// maxAuthCodes is the maximum number of pending authorization codes.
+// Once reached, new codes are rejected to prevent unbounded growth.
+const maxAuthCodes = 10000
 
 // AuthCodeStore is a thread-safe in-memory store for OAuth authorization codes.
 type AuthCodeStore struct {
@@ -39,6 +44,9 @@ func (s *AuthCodeStore) Close() {
 	close(s.done)
 }
 
+// ErrAuthCodeStoreFull is returned when the auth code store has reached its capacity.
+var ErrAuthCodeStoreFull = errors.New("auth code store is full")
+
 // Generate creates a new random authorization code and stores the entry.
 func (s *AuthCodeStore) Generate(entry *AuthCodeEntry) (string, error) {
 	code, err := randomHex(32)
@@ -47,6 +55,10 @@ func (s *AuthCodeStore) Generate(entry *AuthCodeEntry) (string, error) {
 	}
 	entry.ExpiresAt = time.Now().Add(10 * time.Minute)
 	s.mu.Lock()
+	if len(s.entries) >= maxAuthCodes {
+		s.mu.Unlock()
+		return "", ErrAuthCodeStoreFull
+	}
 	s.entries[code] = entry
 	s.mu.Unlock()
 	return code, nil

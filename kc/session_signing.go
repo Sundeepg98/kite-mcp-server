@@ -46,16 +46,19 @@ func NewSessionSigner() (*SessionSigner, error) {
 	}, nil
 }
 
+// ErrEmptySecretKey is returned when an empty secret key is provided.
+var ErrEmptySecretKey = errors.New("secret key cannot be empty")
+
 // NewSessionSignerWithKey creates a new session signer with a provided secret key
-func NewSessionSignerWithKey(secretKey []byte) *SessionSigner {
+func NewSessionSignerWithKey(secretKey []byte) (*SessionSigner, error) {
 	if len(secretKey) == 0 {
-		panic("secret key cannot be empty")
+		return nil, ErrEmptySecretKey
 	}
 
 	return &SessionSigner{
 		secretKey:       secretKey,
 		signatureExpiry: DefaultSignatureExpiry,
-	}
+	}, nil
 }
 
 // SetSignatureExpiry sets the expiry duration for signed session parameters
@@ -170,8 +173,8 @@ func (s *SessionSigner) VerifyRedirectParams(redirectParams string) (string, err
 	return s.VerifySessionID(signedSessionID)
 }
 
-// GetSecretKey returns the secret key (for testing purposes only)
-func (s *SessionSigner) GetSecretKey() []byte {
+// getSecretKey returns the secret key (for testing purposes only)
+func (s *SessionSigner) getSecretKey() []byte {
 	// Return a copy to prevent external modification
 	key := make([]byte, len(s.secretKey))
 	copy(key, s.secretKey)

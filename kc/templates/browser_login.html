@@ -24,6 +24,7 @@
     {{end}}
     <form method="POST" action="/auth/browser-login" style="text-align: left;">
         <input type="hidden" name="redirect" value="{{.Redirect}}" />
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" />
         <label for="email" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--heading); margin-bottom: 0.5rem;">Email</label>
         <input
             type="email"

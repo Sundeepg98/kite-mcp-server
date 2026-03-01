@@ -15,6 +15,9 @@ type Direction string
 const (
 	DirectionAbove Direction = "above"
 	DirectionBelow Direction = "below"
+
+	// MaxAlertsPerUser is the maximum number of alerts a single user can have.
+	MaxAlertsPerUser = 100
 )
 
 // Alert represents a price alert for a specific instrument.
@@ -91,9 +94,14 @@ func (s *Store) LoadFromDB() error {
 }
 
 // Add creates a new alert and returns its ID.
-func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction Direction) string {
+// Returns an error if the user already has MaxAlertsPerUser alerts.
+func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction Direction) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if len(s.alerts[email]) >= MaxAlertsPerUser {
+		return "", fmt.Errorf("maximum number of alerts (%d) reached for this user", MaxAlertsPerUser)
+	}
 
 	alert := &Alert{
 		ID:              uuid.New().String()[:8],
@@ -112,7 +120,7 @@ func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint3
 			s.logger.Error("Failed to persist alert", "id", alert.ID, "error", err)
 		}
 	}
-	return alert.ID
+	return alert.ID, nil
 }
 
 // Delete removes an alert by ID for the given email.
@@ -141,13 +149,17 @@ func (s *Store) Delete(email, alertID string) error {
 }
 
 // List returns all alerts for the given email.
+// Returns deep copies to prevent callers from mutating shared state.
 func (s *Store) List(email string) []*Alert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	alerts := s.alerts[email]
 	result := make([]*Alert, len(alerts))
-	copy(result, alerts)
+	for i, a := range alerts {
+		cp := *a
+		result[i] = &cp
+	}
 	return result
 }
 
@@ -216,14 +228,18 @@ func (s *Store) GetTelegramChatID(email string) (int64, bool) {
 	return chatID, ok
 }
 
-// ListAll returns a copy of all alerts grouped by email.
+// ListAll returns a deep copy of all alerts grouped by email.
+// Returns deep copies to prevent callers from mutating shared state.
 func (s *Store) ListAll() map[string][]*Alert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make(map[string][]*Alert, len(s.alerts))
 	for email, alerts := range s.alerts {
 		cp := make([]*Alert, len(alerts))
-		copy(cp, alerts)
+		for i, a := range alerts {
+			aCopy := *a
+			cp[i] = &aCopy
+		}
 		out[email] = cp
 	}
 	return out

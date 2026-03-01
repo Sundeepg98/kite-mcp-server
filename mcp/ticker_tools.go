@@ -147,37 +147,42 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		email := oauth.EmailFromContext(ctx)
-		if email == "" {
-			return mcp.NewToolResultError("Email required"), nil
-		}
+		return handler.WithSession(ctx, "subscribe_instruments", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			email := oauth.EmailFromContext(ctx)
+			if email == "" {
+				email = session.Email
+			}
+			if email == "" {
+				return mcp.NewToolResultError("Email required"), nil
+			}
 
-		instrumentIDs := SafeAssertStringArray(args["instruments"])
-		if len(instrumentIDs) == 0 {
-			return mcp.NewToolResultError("At least one instrument must be specified"), nil
-		}
+			instrumentIDs := SafeAssertStringArray(args["instruments"])
+			if len(instrumentIDs) == 0 {
+				return mcp.NewToolResultError("At least one instrument must be specified"), nil
+			}
 
-		modeStr := SafeAssertString(args["mode"], "full")
+			modeStr := SafeAssertString(args["mode"], "full")
 
-		// Resolve instrument IDs to tokens using the instruments manager
-		tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
-		if len(tokens) == 0 {
-			return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
-		}
+			// Resolve instrument IDs to tokens using the instruments manager
+			tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
+			if len(tokens) == 0 {
+				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
+			}
 
-		// Map mode string to ticker mode
-		mode := resolveTickerMode(modeStr)
+			// Map mode string to ticker mode
+			mode := resolveTickerMode(modeStr)
 
-		if err := manager.TickerService().Subscribe(email, tokens, mode); err != nil {
-			handler.trackToolError(ctx, "subscribe_instruments", "subscribe_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to subscribe: %s", err)), nil
-		}
+			if err := manager.TickerService().Subscribe(email, tokens, mode); err != nil {
+				handler.trackToolError(ctx, "subscribe_instruments", "subscribe_error")
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to subscribe: %s", err)), nil
+			}
 
-		result := fmt.Sprintf("Subscribed to %d instruments in '%s' mode.", len(tokens), modeStr)
-		if len(failed) > 0 {
-			result += fmt.Sprintf(" Failed to resolve: %v", failed)
-		}
-		return mcp.NewToolResultText(result), nil
+			result := fmt.Sprintf("Subscribed to %d instruments in '%s' mode.", len(tokens), modeStr)
+			if len(failed) > 0 {
+				result += fmt.Sprintf(" Failed to resolve: %v", failed)
+			}
+			return mcp.NewToolResultText(result), nil
+		})
 	}
 }
 
@@ -205,31 +210,36 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		email := oauth.EmailFromContext(ctx)
-		if email == "" {
-			return mcp.NewToolResultError("Email required"), nil
-		}
+		return handler.WithSession(ctx, "unsubscribe_instruments", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			email := oauth.EmailFromContext(ctx)
+			if email == "" {
+				email = session.Email
+			}
+			if email == "" {
+				return mcp.NewToolResultError("Email required"), nil
+			}
 
-		instrumentIDs := SafeAssertStringArray(args["instruments"])
-		if len(instrumentIDs) == 0 {
-			return mcp.NewToolResultError("At least one instrument must be specified"), nil
-		}
+			instrumentIDs := SafeAssertStringArray(args["instruments"])
+			if len(instrumentIDs) == 0 {
+				return mcp.NewToolResultError("At least one instrument must be specified"), nil
+			}
 
-		tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
-		if len(tokens) == 0 {
-			return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
-		}
+			tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
+			if len(tokens) == 0 {
+				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
+			}
 
-		if err := manager.TickerService().Unsubscribe(email, tokens); err != nil {
-			handler.trackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to unsubscribe: %s", err)), nil
-		}
+			if err := manager.TickerService().Unsubscribe(email, tokens); err != nil {
+				handler.trackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to unsubscribe: %s", err)), nil
+			}
 
-		result := fmt.Sprintf("Unsubscribed from %d instruments.", len(tokens))
-		if len(failed) > 0 {
-			result += fmt.Sprintf(" Failed to resolve: %v", failed)
-		}
-		return mcp.NewToolResultText(result), nil
+			result := fmt.Sprintf("Unsubscribed from %d instruments.", len(tokens))
+			if len(failed) > 0 {
+				result += fmt.Sprintf(" Failed to resolve: %v", failed)
+			}
+			return mcp.NewToolResultText(result), nil
+		})
 	}
 }
 

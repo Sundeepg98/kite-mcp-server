@@ -91,24 +91,28 @@ func (s *KiteTokenStore) OnChange(cb TokenChangeCallback) {
 }
 
 // Set stores a token for the given email and notifies observers.
+// The entry is copied before storing to prevent the caller from mutating shared state.
 func (s *KiteTokenStore) Set(email string, entry *KiteTokenEntry) {
+	stored := *entry // copy before storing
+	stored.StoredAt = time.Now()
 	s.mu.Lock()
-	entry.StoredAt = time.Now()
 	key := strings.ToLower(email)
-	s.tokens[key] = entry
+	s.tokens[key] = &stored
 	callbacks := make([]TokenChangeCallback, len(s.onChange))
 	copy(callbacks, s.onChange)
 	s.mu.Unlock()
 
 	if s.db != nil {
-		if err := s.db.SaveToken(key, entry.AccessToken, entry.UserID, entry.UserName, entry.StoredAt); err != nil && s.logger != nil {
+		if err := s.db.SaveToken(key, stored.AccessToken, stored.UserID, stored.UserName, stored.StoredAt); err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist token", "email", key, "error", err)
 		}
 	}
 
-	// Notify observers outside the lock to avoid deadlocks
+	// Notify observers outside the lock to avoid deadlocks.
+	// Each callback receives its own copy to prevent cross-callback mutation.
 	for _, cb := range callbacks {
-		cb(key, entry)
+		cp := stored
+		cb(key, &cp)
 	}
 }
 

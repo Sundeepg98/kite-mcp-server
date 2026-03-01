@@ -1,8 +1,11 @@
 package oauth
 
 import (
+	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -84,7 +87,7 @@ func (h *Handler) ResourceMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"resource":              h.config.ExternalURL + "/mcp",
 		"authorization_servers": []string{h.config.ExternalURL},
 	})
@@ -96,7 +99,7 @@ func (h *Handler) AuthServerMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"issuer":                                h.config.ExternalURL,
 		"authorization_endpoint":                h.config.ExternalURL + "/oauth/authorize",
 		"token_endpoint":                        h.config.ExternalURL + "/oauth/token",
@@ -117,29 +120,35 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB limit
+
 	var req struct {
 		RedirectURIs []string `json:"redirect_uris"`
 		ClientName   string   `json:"client_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "invalid JSON body"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "invalid JSON body"})
 		return
 	}
 	if len(req.RedirectURIs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uris required"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uris required"})
+		return
+	}
+	if len(req.RedirectURIs) > 10 {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "too many redirect_uris (max 10)"})
 		return
 	}
 
 	clientID, clientSecret, err := h.clients.Register(req.RedirectURIs, req.ClientName)
 	if err != nil {
 		h.logger.Error("Failed to register client", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}
 
-	h.logger.Info("Registered OAuth client", "client_id", clientID, "client_name", req.ClientName)
+	h.logger.Debug("Registered OAuth client", "client_id", clientID, "client_name", req.ClientName)
 
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
+	h.writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"client_id":                  clientID,
 		"client_secret":              clientSecret,
 		"redirect_uris":              req.RedirectURIs,
@@ -168,26 +177,26 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required params
 	if responseType != "code" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_response_type"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_response_type"})
 		return
 	}
 	if clientID == "" || redirectURI == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_id and redirect_uri required"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_id and redirect_uri required"})
 		return
 	}
 	if codeChallengeMethod != "S256" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code_challenge_method must be S256"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code_challenge_method must be S256"})
 		return
 	}
 	if codeChallenge == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code_challenge required"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code_challenge required"})
 		return
 	}
 
 	// Validate redirect_uri scheme (only http/https allowed)
 	parsed, err := url.Parse(redirectURI)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri must use http or https scheme"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri must use http or https scheme"})
 		return
 	}
 
@@ -201,7 +210,7 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.clients.ValidateRedirectURI(clientID, redirectURI) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri mismatch for client"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "redirect_uri mismatch for client"})
 		return
 	}
 
@@ -212,7 +221,11 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		CodeChallenge: codeChallenge,
 		State:         state,
 	}
-	stateJSON, _ := json.Marshal(stateData)
+	stateJSON, err := json.Marshal(stateData)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
 	signedState := h.signer.Sign(encodedState)
 
@@ -226,7 +239,7 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if kiteAPIKey == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."})
 		return
 	}
 
@@ -308,18 +321,27 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
-		h.logger.Info("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
+		h.logger.Debug("Kite OAuth complete, issuing MCP auth code", "email", email, "client_id", st.ClientID)
 	}
 
-	// Build redirect URL back to MCP client
-	sep := "?"
-	if strings.Contains(st.RedirectURI, "?") {
-		sep = "&"
+	// Build redirect URL back to MCP client using proper url.URL construction
+	parsed, parseErr := url.Parse(st.RedirectURI)
+	if parseErr != nil {
+		h.logger.Error("Invalid redirect URI in state", "redirect_uri", st.RedirectURI, "error", parseErr)
+		http.Error(w, "invalid redirect URI", http.StatusBadRequest)
+		return
 	}
-	redirectURL := st.RedirectURI + sep + "code=" + url.QueryEscape(mcpCode)
+	params := parsed.Query()
+	params.Set("code", mcpCode)
 	if st.State != "" {
-		redirectURL += "&state=" + url.QueryEscape(st.State)
+		params.Set("state", st.State)
 	}
+	redirectURL := (&url.URL{
+		Scheme:   parsed.Scheme,
+		Host:     parsed.Host,
+		Path:     parsed.Path,
+		RawQuery: params.Encode(),
+	}).String()
 
 	// Serve the same success page as the non-OAuth callback, with auto-redirect
 	if h.loginSuccessTmpl == nil {
@@ -430,55 +452,139 @@ func (h *Handler) GenerateBrowserLoginURL(apiKey, email, redirect string) string
 
 // --- Browser Login Page ---
 
+// generateCSRFToken generates a random CSRF token using crypto/rand.
+func generateCSRFToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // HandleBrowserLogin serves a login form or redirects to Kite login for browser-based auth.
 // If an email query param is provided, looks up stored credentials and redirects to Kite.
 // Otherwise, serves a login form where the user enters their email.
+// CSRF protection: GET sets a random token as an HttpOnly cookie and hidden form field;
+// POST verifies the cookie matches the form value.
 func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
 		redirect = "/admin/ops"
 	}
-	email := r.URL.Query().Get("email")
+
 	if r.Method == http.MethodPost {
 		r.ParseForm()
-		email = r.FormValue("email")
-	}
+		email := r.FormValue("email")
+		redirect = r.FormValue("redirect")
+		if redirect == "" {
+			redirect = "/admin/ops"
+		}
 
-	if email == "" {
-		h.serveBrowserLoginForm(w, redirect, "")
+		// Verify CSRF token: cookie must match form value
+		csrfCookie, err := r.Cookie("csrf_token")
+		csrfForm := r.FormValue("csrf_token")
+		if err != nil || csrfCookie.Value == "" || csrfCookie.Value != csrfForm {
+			csrfToken, tokenErr := generateCSRFToken()
+			if tokenErr != nil {
+				h.logger.Error("Failed to generate CSRF token", "error", tokenErr)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			h.serveBrowserLoginForm(w, redirect, "Invalid or missing CSRF token. Please try again.", csrfToken)
+			return
+		}
+
+		if email == "" {
+			csrfToken, tokenErr := generateCSRFToken()
+			if tokenErr != nil {
+				h.logger.Error("Failed to generate CSRF token", "error", tokenErr)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			h.serveBrowserLoginForm(w, redirect, "", csrfToken)
+			return
+		}
+
+		apiKey, _, ok := h.exchanger.GetCredentials(email)
+		if !ok {
+			csrfToken, tokenErr := generateCSRFToken()
+			if tokenErr != nil {
+				h.logger.Error("Failed to generate CSRF token", "error", tokenErr)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			h.serveBrowserLoginForm(w, redirect, "No credentials found for this email. Please authenticate via your MCP client first.", csrfToken)
+			return
+		}
+
+		kiteURL := h.GenerateBrowserLoginURL(apiKey, email, redirect)
+		http.Redirect(w, r, kiteURL, http.StatusFound)
 		return
 	}
 
-	apiKey, _, ok := h.exchanger.GetCredentials(email)
-	if !ok {
-		h.serveBrowserLoginForm(w, redirect, "No credentials found for this email. Please authenticate via your MCP client first.")
-		return
+	// GET request: check for email query param
+	email := r.URL.Query().Get("email")
+	if email != "" {
+		apiKey, _, ok := h.exchanger.GetCredentials(email)
+		if ok {
+			kiteURL := h.GenerateBrowserLoginURL(apiKey, email, redirect)
+			http.Redirect(w, r, kiteURL, http.StatusFound)
+			return
+		}
 	}
 
-	kiteURL := h.GenerateBrowserLoginURL(apiKey, email, redirect)
-	http.Redirect(w, r, kiteURL, http.StatusFound)
+	// Serve form with a fresh CSRF token
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.Error("Failed to generate CSRF token", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	errorMsg := ""
+	if email != "" {
+		errorMsg = "No credentials found for this email. Please authenticate via your MCP client first."
+	}
+	h.serveBrowserLoginForm(w, redirect, errorMsg, csrfToken)
 }
 
 // serveBrowserLoginForm renders the browser login form template.
-func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, errorMsg string) {
+func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, errorMsg string, csrfToken string) {
 	if h.browserLoginTmpl == nil {
 		http.Error(w, "Failed to load login page", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Set CSRF token as HttpOnly cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		Path:     "/auth/browser-login",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+	})
+
 	data := struct {
-		Title    string
-		Redirect string
-		Error    string
+		Title     string
+		Redirect  string
+		Error     string
+		CSRFToken string
 	}{
-		Title:    "Login",
-		Redirect: redirect,
-		Error:    errorMsg,
+		Title:     "Login",
+		Redirect:  redirect,
+		Error:     errorMsg,
+		CSRFToken: csrfToken,
 	}
-	if err := h.browserLoginTmpl.ExecuteTemplate(w, "base", data); err != nil {
+
+	// Buffer template output to avoid partial writes on error
+	var buf bytes.Buffer
+	if err := h.browserLoginTmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		h.logger.Error("Failed to render browser login template", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 // --- Token Endpoint ---
@@ -490,8 +596,10 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64 KB limit
+
 	if err := r.ParseForm(); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 
@@ -502,36 +610,36 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	clientSecret := r.FormValue("client_secret")
 
 	if grantType != "authorization_code" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
 		return
 	}
 	if code == "" || codeVerifier == "" || clientID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code, code_verifier, and client_id required"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "code, code_verifier, and client_id required"})
 		return
 	}
 
 	// Validate client credentials
 	client, ok := h.clients.Get(clientID)
 	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
+		h.writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
 		return
 	}
 	// For Kite API key clients, skip secret comparison — validated by Kite's GenerateSession instead
 	if !client.IsKiteAPIKey && client.ClientSecret != clientSecret {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
+		h.writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
 		return
 	}
 
 	// Consume auth code
 	entry, ok := h.authCodes.Consume(code)
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "code expired or already used"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "code expired or already used"})
 		return
 	}
 
 	// Verify client_id matches
 	if entry.ClientID != clientID {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "client_id mismatch"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "client_id mismatch"})
 		return
 	}
 
@@ -540,7 +648,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	computed := base64.RawURLEncoding.EncodeToString(hash[:])
 	if computed != entry.CodeChallenge {
 		h.logger.Warn("PKCE verification failed", "client_id", clientID)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "PKCE verification failed"})
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "PKCE verification failed"})
 		return
 	}
 
@@ -549,22 +657,22 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	if email == "" && entry.RequestToken != "" {
 		// Deferred exchange: client_id = Kite API key, client_secret = Kite API secret
 		if clientSecret == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_secret (Kite API secret) required for per-user authentication"})
+			h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "client_secret (Kite API secret) required for per-user authentication"})
 			return
 		}
 		var err error
 		email, err = h.exchanger.ExchangeWithCredentials(entry.RequestToken, clientID, clientSecret)
 		if err != nil {
 			h.logger.Error("Deferred Kite token exchange failed", "client_id", clientID, "error", err)
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "Kite authentication failed — check your API key and secret"})
+			h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_grant", "error_description": "Kite authentication failed — check your API key and secret"})
 			return
 		}
-		h.logger.Info("Deferred Kite exchange successful", "email", email, "client_id", clientID)
+		h.logger.Debug("Deferred Kite exchange successful", "email", email, "client_id", clientID)
 	}
 
 	if email == "" {
 		h.logger.Error("No email resolved for token", "client_id", clientID)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error", "error_description": "failed to determine user identity"})
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error", "error_description": "failed to determine user identity"})
 		return
 	}
 
@@ -572,13 +680,13 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 	accessToken, err := h.jwt.GenerateToken(email, clientID)
 	if err != nil {
 		h.logger.Error("Failed to generate JWT", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 		return
 	}
 
-	h.logger.Info("Issued JWT access token", "email", email, "client_id", clientID)
+	h.logger.Debug("Issued JWT access token", "email", email, "client_id", clientID)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
 		"expires_in":   int(h.config.TokenExpiry.Seconds()),
@@ -594,8 +702,10 @@ func (h *Handler) generateKiteLoginURL(redirectParams string) string {
 }
 
 // writeJSON writes a JSON response with the given status code.
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		h.logger.Error("Failed to write JSON response", "error", err)
+	}
 }

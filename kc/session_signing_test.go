@@ -26,19 +26,20 @@ func TestNewSessionSigner(t *testing.T) {
 
 func TestNewSessionSignerWithKey(t *testing.T) {
 	secretKey := []byte("test-secret-key-32-bytes-long!!")
-	signer := NewSessionSignerWithKey(secretKey)
+	signer, err := NewSessionSignerWithKey(secretKey)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 
 	if len(signer.secretKey) != len(secretKey) {
 		t.Errorf("Expected secret key length %d, got %d", len(secretKey), len(signer.secretKey))
 	}
 
-	// Test panic with empty key
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic with empty secret key")
-		}
-	}()
-	NewSessionSignerWithKey([]byte{})
+	// Test error with empty key
+	_, err = NewSessionSignerWithKey([]byte{})
+	if err != ErrEmptySecretKey {
+		t.Errorf("Expected ErrEmptySecretKey, got %v", err)
+	}
 }
 
 func TestSignAndVerifySessionID(t *testing.T) {
@@ -281,18 +282,21 @@ func TestVerifyRedirectParamsInvalidFormat(t *testing.T) {
 
 func TestGetSecretKey(t *testing.T) {
 	secretKey := []byte("test-secret-key-32-bytes-long!!")
-	signer := NewSessionSignerWithKey(secretKey)
+	signer, err := NewSessionSignerWithKey(secretKey)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 
-	retrievedKey := signer.GetSecretKey()
+	retrievedKey := signer.getSecretKey()
 
 	// Should return a copy
 	if &retrievedKey[0] == &signer.secretKey[0] {
-		t.Error("GetSecretKey should return a copy, not the original slice")
+		t.Error("getSecretKey should return a copy, not the original slice")
 	}
 
 	// But content should be the same
 	if string(retrievedKey) != string(secretKey) {
-		t.Error("GetSecretKey should return the same content")
+		t.Error("getSecretKey should return the same content")
 	}
 
 	// Modifying the returned key shouldn't affect the original

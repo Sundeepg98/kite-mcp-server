@@ -175,7 +175,8 @@ func New(cfg Config) (*Manager, error) {
 // KiteConnect wraps the Kite Connect client
 type KiteConnect struct {
 	// Add fields here
-	Client *kiteconnect.Client // TODO: this can be made private ?
+	// Client is the authenticated Kite Connect client. Exported because 23+ tool handlers access it directly.
+	Client *kiteconnect.Client
 }
 
 // NewKiteConnect creates a new KiteConnect instance
@@ -231,8 +232,9 @@ type Manager struct {
 	adminSecretPath    string
 }
 
-// NewManager creates a new manager with default configuration
-// Deprecated: Use New(Config{APIKey: apiKey, APISecret: apiSecret, Logger: logger}) instead
+// NewManager creates a new manager with default configuration.
+//
+// Deprecated: Use New(Config{APIKey: apiKey, APISecret: apiSecret, Logger: logger}) instead.
 func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error) {
 	return New(Config{
 		APIKey:    apiKey,
@@ -258,18 +260,25 @@ func (m *Manager) AdminSecretPath() string {
 
 // OpenBrowser opens the given URL in the user's default browser.
 // Only works in local/STDIO mode where the server runs on the user's machine.
-func (m *Manager) OpenBrowser(url string) error {
+func (m *Manager) OpenBrowser(rawURL string) error {
 	if !m.IsLocalMode() {
 		return nil
 	}
+
+	// Validate URL scheme to prevent command injection via crafted URIs
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("invalid URL scheme: only http and https are allowed")
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL)
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", rawURL)
 	default:
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", rawURL)
 	}
 	return cmd.Start()
 }
@@ -317,7 +326,9 @@ func (m *Manager) initializeSessionManager() {
 func (m *Manager) kiteSessionCleanupHook(session *MCPSession) {
 	if kiteData, ok := session.Data.(*KiteSessionData); ok && kiteData != nil && kiteData.Kite != nil {
 		m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
-		_, _ = kiteData.Kite.Client.InvalidateAccessToken()
+		if _, err := kiteData.Kite.Client.InvalidateAccessToken(); err != nil {
+			m.Logger.Warn("Failed to invalidate access token", "session_id", session.ID, "error", err)
+		}
 	}
 }
 
@@ -345,7 +356,7 @@ func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionDat
 	if email != "" {
 		if entry, ok := m.tokenStore.Get(email); ok {
 			kd.Kite.Client.SetAccessToken(entry.AccessToken)
-			m.Logger.Info("Applied cached Kite token for user", "session_id", sessionID, "email", email, "user", entry.UserName)
+			m.Logger.Debug("Applied cached Kite token for user", "session_id", sessionID, "email", email, "user", entry.UserName)
 			return kd
 		}
 	}
@@ -353,7 +364,7 @@ func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionDat
 	// Priority 2: Global pre-auth token (local dev / env var)
 	if m.accessToken != "" {
 		kd.Kite.Client.SetAccessToken(m.accessToken)
-		m.Logger.Info("Pre-set access token for session", "session_id", sessionID)
+		m.Logger.Debug("Pre-set access token for session", "session_id", sessionID)
 	}
 	return kd
 }
@@ -497,9 +508,13 @@ func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*Kite
 		return nil, false, err
 	}
 
-	// Update email on existing sessions if not already set
+	// Update email on existing sessions if not already set (under registry lock to avoid data race)
 	if !isNew && email != "" && kiteData.Email == "" {
-		kiteData.Email = email
+		_ = m.sessionManager.UpdateSessionField(mcpSessionID, func(data any) {
+			if kd, ok := data.(*KiteSessionData); ok && kd != nil {
+				kd.Email = email
+			}
+		})
 	}
 
 	if isNew {
@@ -562,7 +577,7 @@ func (m *Manager) ClearSession(sessionID string) {
 	if _, err := m.sessionManager.Terminate(sessionID); err != nil {
 		m.Logger.Error("Error terminating session", "session_id", sessionID, "error", err)
 	} else {
-		m.Logger.Info("Cleaning up Kite session for MCP session ID", "session_id", sessionID)
+		m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", sessionID)
 	}
 }
 
@@ -590,7 +605,7 @@ func (m *Manager) ClearSessionData(sessionID string) error {
 		return err
 	}
 
-	m.Logger.Info("Cleared session data for MCP session ID", "session_id", sessionID)
+	m.Logger.Debug("Cleared session data for MCP session ID", "session_id", sessionID)
 	return nil
 }
 
@@ -599,7 +614,7 @@ func (m *Manager) GenerateSession() string {
 	m.Logger.Info("Generating new MCP session with Kite data")
 
 	sessionID := m.sessionManager.GenerateWithData(m.createKiteSessionData("", ""))
-	m.Logger.Info("Generated new MCP session with ID", "session_id", sessionID)
+	m.Logger.Debug("Generated new MCP session with ID", "session_id", sessionID)
 
 	return sessionID
 }
@@ -621,7 +636,7 @@ func (m *Manager) SessionLoginURL(mcpSessionID string) (string, error) {
 	}
 
 	if isNew {
-		m.Logger.Info("Created new Kite session for MCP session ID", "session_id", mcpSessionID)
+		m.Logger.Debug("Created new Kite session for MCP session ID", "session_id", mcpSessionID)
 	}
 
 	// Create signed redirect parameters for security
@@ -633,7 +648,7 @@ func (m *Manager) SessionLoginURL(mcpSessionID string) (string, error) {
 
 	redirectParams := url.QueryEscape(signedParams)
 	loginURL := kiteData.Kite.Client.GetLoginURL() + "&redirect_params=" + redirectParams
-	m.Logger.Info("Generated Kite login URL for MCP session", "session_id", mcpSessionID)
+	m.Logger.Debug("Generated Kite login URL for MCP session", "session_id", mcpSessionID)
 
 	return loginURL, nil
 }
@@ -665,7 +680,7 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 		return fmt.Errorf("failed to generate Kite session: %w", err)
 	}
 
-	m.Logger.Info("Setting Kite access token for MCP session", "session_id", mcpSessionID)
+	m.Logger.Debug("Setting Kite access token for MCP session", "session_id", mcpSessionID)
 	kiteData.Kite.Client.SetAccessToken(userSess.AccessToken)
 
 	// Cache the token for future sessions by this user
@@ -675,7 +690,7 @@ func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 			UserID:      userSess.UserID,
 			UserName:    userSess.UserName,
 		})
-		m.Logger.Info("Cached Kite token for user", "email", kiteData.Email, "user_id", userSess.UserID)
+		m.Logger.Debug("Cached Kite token for user", "email", kiteData.Email, "user_id", userSess.UserID)
 	}
 
 	// Compliance log for successful login
@@ -817,9 +832,10 @@ func setupTemplates() (map[string]*template.Template, error) {
 	return out, nil
 }
 
-// handleCallbackError handles error responses for callback processing
-func (m *Manager) handleCallbackError(w http.ResponseWriter, message string, statusCode int, logMessage string, args ...any) {
-	m.Logger.Error(logMessage, args...)
+// handleCallbackError handles error responses for callback processing.
+// keyvals must be slog-style key-value pairs (e.g. "key", value, "key2", value2).
+func (m *Manager) handleCallbackError(w http.ResponseWriter, message string, statusCode int, logMessage string, keyvals ...any) {
+	m.Logger.Error(logMessage, keyvals...)
 	http.Error(w, message, statusCode)
 }
 
@@ -833,10 +849,10 @@ func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		m.Logger.Info("Processing Kite callback for MCP session ID", "session_id", mcpSessionID, "request_token", requestToken)
+		m.Logger.Debug("Processing Kite callback for MCP session ID", "session_id", mcpSessionID, "request_token", requestToken)
 
 		if err := m.CompleteSession(mcpSessionID, requestToken); err != nil {
-			m.handleCallbackError(w, sessionErrorMessage, http.StatusInternalServerError, "Error completing Kite session for MCP session %s: %v", mcpSessionID, err)
+			m.handleCallbackError(w, sessionErrorMessage, http.StatusInternalServerError, "Error completing Kite session", "session_id", mcpSessionID, "error", err)
 			return
 		}
 

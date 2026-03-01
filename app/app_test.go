@@ -3,7 +3,6 @@ package app
 import (
 	"io"
 	"log/slog"
-	"os"
 	"testing"
 )
 
@@ -13,8 +12,9 @@ func testLogger() *slog.Logger {
 }
 
 func TestLoadConfig_MissingAPIKey(t *testing.T) {
-	_ = os.Unsetenv("KITE_API_KEY")
-	_ = os.Unsetenv("KITE_API_SECRET")
+	t.Setenv("KITE_API_KEY", "")
+	t.Setenv("KITE_API_SECRET", "")
+	t.Setenv("OAUTH_JWT_SECRET", "")
 
 	app := NewApp(testLogger())
 	err := app.LoadConfig()
@@ -25,9 +25,9 @@ func TestLoadConfig_MissingAPIKey(t *testing.T) {
 }
 
 func TestLoadConfig_MissingAPISecret(t *testing.T) {
-	_ = os.Setenv("KITE_API_KEY", "test_key")
-	_ = os.Unsetenv("KITE_API_SECRET")
-	defer func() { _ = os.Unsetenv("KITE_API_KEY") }()
+	t.Setenv("KITE_API_KEY", "test_key")
+	t.Setenv("KITE_API_SECRET", "")
+	t.Setenv("OAUTH_JWT_SECRET", "")
 
 	app := NewApp(testLogger())
 	err := app.LoadConfig()
@@ -38,12 +38,8 @@ func TestLoadConfig_MissingAPISecret(t *testing.T) {
 }
 
 func TestLoadConfig_ValidCredentials(t *testing.T) {
-	_ = os.Setenv("KITE_API_KEY", "test_key")
-	_ = os.Setenv("KITE_API_SECRET", "test_secret")
-	defer func() {
-		_ = os.Unsetenv("KITE_API_KEY")
-		_ = os.Unsetenv("KITE_API_SECRET")
-	}()
+	t.Setenv("KITE_API_KEY", "test_key")
+	t.Setenv("KITE_API_SECRET", "test_secret")
 
 	app := NewApp(testLogger())
 	err := app.LoadConfig()
@@ -61,15 +57,11 @@ func TestLoadConfig_ValidCredentials(t *testing.T) {
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {
-	_ = os.Unsetenv("APP_MODE")
-	_ = os.Unsetenv("APP_PORT")
-	_ = os.Unsetenv("APP_HOST")
-	_ = os.Setenv("KITE_API_KEY", "test_key")
-	_ = os.Setenv("KITE_API_SECRET", "test_secret")
-	defer func() {
-		_ = os.Unsetenv("KITE_API_KEY")
-		_ = os.Unsetenv("KITE_API_SECRET")
-	}()
+	t.Setenv("APP_MODE", "")
+	t.Setenv("APP_PORT", "")
+	t.Setenv("APP_HOST", "")
+	t.Setenv("KITE_API_KEY", "test_key")
+	t.Setenv("KITE_API_SECRET", "test_secret")
 
 	app := NewApp(testLogger())
 	err := app.LoadConfig()
