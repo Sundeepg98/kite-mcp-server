@@ -63,6 +63,7 @@ dist/
 target/
 
 # Documentation build artifacts
+docs/
 
 # Local data files
 instruments.json
