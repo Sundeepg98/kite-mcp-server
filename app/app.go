@@ -19,6 +19,7 @@ import (
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
@@ -205,6 +206,16 @@ func (app *App) RunServer() error {
 			// No credentials = first-time user, let tool handlers deal with onboarding
 			return true
 		})
+
+		// Wire OAuth client registration persistence
+		if alertDB := kcManager.AlertDB(); alertDB != nil {
+			app.oauthHandler.SetClientPersister(&clientPersisterAdapter{db: alertDB}, app.logger)
+			if err := app.oauthHandler.LoadClientsFromDB(); err != nil {
+				app.logger.Error("Failed to load OAuth clients from DB", "error", err)
+			} else {
+				app.logger.Info("OAuth clients loaded from database")
+			}
+		}
 
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
 	}
@@ -679,4 +690,36 @@ func (a *kiteExchangerAdapter) GetCredentials(email string) (string, string, boo
 
 func (a *kiteExchangerAdapter) GetSecretByAPIKey(apiKey string) (string, bool) {
 	return a.credentialStore.GetSecretByAPIKey(apiKey)
+}
+
+// clientPersisterAdapter bridges alerts.DB to oauth.ClientPersister.
+type clientPersisterAdapter struct {
+	db *alerts.DB
+}
+
+func (a *clientPersisterAdapter) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
+	return a.db.SaveClient(clientID, clientSecret, redirectURIsJSON, clientName, createdAt, isKiteKey)
+}
+
+func (a *clientPersisterAdapter) LoadClients() ([]*oauth.ClientLoadEntry, error) {
+	entries, err := a.db.LoadClients()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*oauth.ClientLoadEntry, len(entries))
+	for i, e := range entries {
+		result[i] = &oauth.ClientLoadEntry{
+			ClientID:     e.ClientID,
+			ClientSecret: e.ClientSecret,
+			RedirectURIs: e.RedirectURIs,
+			ClientName:   e.ClientName,
+			CreatedAt:    e.CreatedAt,
+			IsKiteAPIKey: e.IsKiteAPIKey,
+		}
+	}
+	return result, nil
+}
+
+func (a *clientPersisterAdapter) DeleteClient(clientID string) error {
+	return a.db.DeleteClient(clientID)
 }

@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -462,6 +463,150 @@ func TestClientStore_Eviction(t *testing.T) {
 	_, ok := store.Get(oldestID)
 	if ok {
 		t.Error("Oldest client should have been evicted")
+	}
+}
+
+// --- ClientStore persistence tests ---
+
+// mockPersister implements ClientPersister for testing.
+type mockPersister struct {
+	mu      sync.Mutex
+	clients map[string]*ClientLoadEntry
+}
+
+func newMockPersister() *mockPersister {
+	return &mockPersister{clients: make(map[string]*ClientLoadEntry)}
+}
+
+func (m *mockPersister) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.clients[clientID] = &ClientLoadEntry{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURIs: redirectURIsJSON,
+		ClientName:   clientName,
+		CreatedAt:    createdAt,
+		IsKiteAPIKey: isKiteKey,
+	}
+	return nil
+}
+
+func (m *mockPersister) LoadClients() ([]*ClientLoadEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*ClientLoadEntry
+	for _, c := range m.clients {
+		cp := *c
+		out = append(out, &cp)
+	}
+	return out, nil
+}
+
+func (m *mockPersister) DeleteClient(clientID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.clients, clientID)
+	return nil
+}
+
+func (m *mockPersister) get(clientID string) (*ClientLoadEntry, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.clients[clientID]
+	return c, ok
+}
+
+func TestClientStore_Persistence(t *testing.T) {
+	t.Parallel()
+	mock := newMockPersister()
+	store := NewClientStore()
+	store.SetPersister(mock)
+
+	// Register a normal client → verify persisted
+	clientID, clientSecret, err := store.Register([]string{"https://example.com/cb"}, "test-app")
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	persisted, ok := mock.get(clientID)
+	if !ok {
+		t.Fatal("Register should persist client")
+	}
+	if persisted.ClientSecret != clientSecret {
+		t.Error("Persisted client_secret mismatch")
+	}
+	if persisted.ClientName != "test-app" {
+		t.Errorf("Persisted client_name = %q, want %q", persisted.ClientName, "test-app")
+	}
+	if persisted.IsKiteAPIKey {
+		t.Error("Normal client should not have IsKiteAPIKey=true")
+	}
+	var uris []string
+	if err := json.Unmarshal([]byte(persisted.RedirectURIs), &uris); err != nil {
+		t.Fatalf("Failed to unmarshal redirect_uris: %v", err)
+	}
+	if len(uris) != 1 || uris[0] != "https://example.com/cb" {
+		t.Errorf("Persisted redirect_uris = %v, want [https://example.com/cb]", uris)
+	}
+
+	// RegisterKiteClient → verify persisted with IsKiteAPIKey=true
+	kiteKey := "kite-api-key-test1234"
+	store.RegisterKiteClient(kiteKey, []string{"https://kite.example.com/cb"})
+	persisted, ok = mock.get(kiteKey)
+	if !ok {
+		t.Fatal("RegisterKiteClient should persist client")
+	}
+	if !persisted.IsKiteAPIKey {
+		t.Error("Kite client should have IsKiteAPIKey=true")
+	}
+	if persisted.ClientSecret != "" {
+		t.Errorf("Kite client should have empty client_secret, got %q", persisted.ClientSecret)
+	}
+
+	// AddRedirectURI → verify updated in persister
+	store.AddRedirectURI(clientID, "https://example.com/cb2")
+	persisted, ok = mock.get(clientID)
+	if !ok {
+		t.Fatal("AddRedirectURI should update persisted client")
+	}
+	if err := json.Unmarshal([]byte(persisted.RedirectURIs), &uris); err != nil {
+		t.Fatalf("Failed to unmarshal updated redirect_uris: %v", err)
+	}
+	if len(uris) != 2 {
+		t.Errorf("Expected 2 redirect URIs after AddRedirectURI, got %d", len(uris))
+	}
+
+	// LoadFromDB: create a new store, load from persister, verify clients exist
+	store2 := NewClientStore()
+	store2.SetPersister(mock)
+	if err := store2.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB failed: %v", err)
+	}
+	entry, ok := store2.Get(clientID)
+	if !ok {
+		t.Fatal("LoadFromDB should restore normal client")
+	}
+	if entry.ClientSecret != clientSecret {
+		t.Error("Loaded client_secret mismatch")
+	}
+	if len(entry.RedirectURIs) != 2 {
+		t.Errorf("Loaded redirect_uris count = %d, want 2", len(entry.RedirectURIs))
+	}
+	kiteEntry, ok := store2.Get(kiteKey)
+	if !ok {
+		t.Fatal("LoadFromDB should restore Kite client")
+	}
+	if !kiteEntry.IsKiteAPIKey {
+		t.Error("Loaded Kite client should have IsKiteAPIKey=true")
+	}
+}
+
+func TestClientStore_LoadFromDB_NoPersister(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+	// LoadFromDB with no persister should be a no-op
+	if err := store.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB with no persister should return nil, got: %v", err)
 	}
 }
 

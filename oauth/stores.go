@@ -3,7 +3,9 @@ package oauth
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -100,6 +102,23 @@ func (s *AuthCodeStore) cleanup() {
 	}
 }
 
+// ClientPersister provides optional persistence for OAuth clients.
+type ClientPersister interface {
+	SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error
+	LoadClients() ([]*ClientLoadEntry, error)
+	DeleteClient(clientID string) error
+}
+
+// ClientLoadEntry represents a client loaded from persistence.
+type ClientLoadEntry struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURIs string // JSON-encoded []string
+	ClientName   string
+	CreatedAt    time.Time
+	IsKiteAPIKey bool
+}
+
 // ClientEntry stores a dynamically registered client.
 type ClientEntry struct {
 	ClientSecret string
@@ -117,14 +136,54 @@ const maxClients = 10000
 const maxRedirectURIs = 10
 
 // ClientStore is a thread-safe in-memory store for dynamically registered OAuth clients.
+// Optionally backed by a ClientPersister for persistence via SetPersister.
 type ClientStore struct {
-	mu      sync.RWMutex
-	clients map[string]*ClientEntry
+	mu        sync.RWMutex
+	clients   map[string]*ClientEntry
+	persister ClientPersister
+	logger    *slog.Logger
 }
 
 // NewClientStore creates a new client store.
 func NewClientStore() *ClientStore {
 	return &ClientStore{clients: make(map[string]*ClientEntry)}
+}
+
+// SetPersister enables write-through persistence for OAuth clients.
+func (s *ClientStore) SetPersister(p ClientPersister) {
+	s.persister = p
+}
+
+// SetLogger sets the logger for persistence error reporting.
+func (s *ClientStore) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
+// LoadFromDB populates the in-memory store from the persister.
+func (s *ClientStore) LoadFromDB() error {
+	if s.persister == nil {
+		return nil
+	}
+	entries, err := s.persister.LoadClients()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range entries {
+		var uris []string
+		if err := json.Unmarshal([]byte(e.RedirectURIs), &uris); err != nil {
+			uris = nil
+		}
+		s.clients[e.ClientID] = &ClientEntry{
+			ClientSecret: e.ClientSecret,
+			RedirectURIs: uris,
+			ClientName:   e.ClientName,
+			CreatedAt:    e.CreatedAt,
+			IsKiteAPIKey: e.IsKiteAPIKey,
+		}
+	}
+	return nil
 }
 
 // evictOldest removes the oldest client by CreatedAt. Must be called with mu held.
@@ -152,6 +211,7 @@ func (s *ClientStore) Register(redirectURIs []string, clientName string) (client
 	if err != nil {
 		return "", "", err
 	}
+	now := time.Now()
 	s.mu.Lock()
 	if len(s.clients) >= maxClients {
 		s.evictOldest()
@@ -160,9 +220,17 @@ func (s *ClientStore) Register(redirectURIs []string, clientName string) (client
 		ClientSecret: clientSecret,
 		RedirectURIs: redirectURIs,
 		ClientName:   clientName,
-		CreatedAt:    time.Now(),
+		CreatedAt:    now,
 	}
 	s.mu.Unlock()
+
+	if s.persister != nil {
+		urisJSON, _ := json.Marshal(redirectURIs)
+		if err := s.persister.SaveClient(clientID, clientSecret, string(urisJSON), clientName, now, false); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist OAuth client", "client_id", clientID, "error", err)
+		}
+	}
+
 	return clientID, clientSecret, nil
 }
 
@@ -200,9 +268,10 @@ func (s *ClientStore) ValidateRedirectURI(clientID, uri string) bool {
 // RegisterKiteClient auto-registers a client where client_id is a Kite API key.
 // No client_secret is stored — validation happens via Kite's GenerateSession at token exchange.
 func (s *ClientStore) RegisterKiteClient(clientID string, redirectURIs []string) {
+	now := time.Now()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if _, exists := s.clients[clientID]; exists {
+		s.mu.Unlock()
 		return
 	}
 	if len(s.clients) >= maxClients {
@@ -215,8 +284,16 @@ func (s *ClientStore) RegisterKiteClient(clientID string, redirectURIs []string)
 	s.clients[clientID] = &ClientEntry{
 		RedirectURIs: redirectURIs,
 		ClientName:   name,
-		CreatedAt:    time.Now(),
+		CreatedAt:    now,
 		IsKiteAPIKey: true,
+	}
+	s.mu.Unlock()
+
+	if s.persister != nil {
+		urisJSON, _ := json.Marshal(redirectURIs)
+		if err := s.persister.SaveClient(clientID, "", string(urisJSON), name, now, true); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist Kite OAuth client", "client_id", clientID, "error", err)
+		}
 	}
 }
 
@@ -232,20 +309,37 @@ func (s *ClientStore) IsKiteClient(clientID string) bool {
 // Capped at maxRedirectURIs per client to prevent abuse.
 func (s *ClientStore) AddRedirectURI(clientID, uri string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	c, ok := s.clients[clientID]
 	if !ok {
+		s.mu.Unlock()
 		return
 	}
 	if len(c.RedirectURIs) >= maxRedirectURIs {
+		s.mu.Unlock()
 		return
 	}
 	for _, u := range c.RedirectURIs {
 		if u == uri {
+			s.mu.Unlock()
 			return
 		}
 	}
 	c.RedirectURIs = append(c.RedirectURIs, uri)
+	// Capture values for persistence before releasing lock.
+	uris := make([]string, len(c.RedirectURIs))
+	copy(uris, c.RedirectURIs)
+	secret := c.ClientSecret
+	name := c.ClientName
+	createdAt := c.CreatedAt
+	isKiteKey := c.IsKiteAPIKey
+	s.mu.Unlock()
+
+	if s.persister != nil {
+		urisJSON, _ := json.Marshal(uris)
+		if err := s.persister.SaveClient(clientID, secret, string(urisJSON), name, createdAt, isKiteKey); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist redirect URI update", "client_id", clientID, "error", err)
+		}
+	}
 }
 
 func randomHex(n int) (string, error) {

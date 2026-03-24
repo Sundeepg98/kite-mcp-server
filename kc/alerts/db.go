@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS kite_credentials (
     api_key    TEXT NOT NULL,
     api_secret TEXT NOT NULL,
     stored_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id     TEXT PRIMARY KEY,
+    client_secret TEXT NOT NULL,
+    redirect_uris TEXT NOT NULL,
+    client_name   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    is_kite_key   INTEGER NOT NULL DEFAULT 0
 );`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
@@ -318,6 +327,66 @@ func (d *DB) DeleteCredential(email string) error {
 	_, err := d.db.Exec(`DELETE FROM kite_credentials WHERE email = ?`, email)
 	if err != nil {
 		return fmt.Errorf("delete credential: %w", err)
+	}
+	return nil
+}
+
+// ClientDBEntry represents an OAuth client stored in the database.
+type ClientDBEntry struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURIs string // JSON-encoded []string
+	ClientName   string
+	CreatedAt    time.Time
+	IsKiteAPIKey bool
+}
+
+// LoadClients reads all OAuth clients from the database.
+func (d *DB) LoadClients() ([]*ClientDBEntry, error) {
+	rows, err := d.db.Query(`SELECT client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key FROM oauth_clients`)
+	if err != nil {
+		return nil, fmt.Errorf("query oauth clients: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*ClientDBEntry
+	for rows.Next() {
+		var c ClientDBEntry
+		var createdAtS string
+		var isKiteKey int
+		if err := rows.Scan(&c.ClientID, &c.ClientSecret, &c.RedirectURIs, &c.ClientName, &createdAtS, &isKiteKey); err != nil {
+			return nil, fmt.Errorf("scan oauth client: %w", err)
+		}
+		createdAt, err := time.Parse(time.RFC3339, createdAtS)
+		if err != nil {
+			createdAt = time.Time{}
+		}
+		c.CreatedAt = createdAt
+		c.IsKiteAPIKey = isKiteKey != 0
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+// SaveClient stores or updates an OAuth client in the database.
+func (d *DB) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
+	isKiteKeyInt := 0
+	if isKiteKey {
+		isKiteKeyInt = 1
+	}
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO oauth_clients (client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key) VALUES (?,?,?,?,?,?)`,
+		clientID, clientSecret, redirectURIsJSON, clientName, createdAt.Format(time.RFC3339), isKiteKeyInt)
+	if err != nil {
+		return fmt.Errorf("save oauth client: %w", err)
+	}
+	return nil
+}
+
+// DeleteClient removes an OAuth client by ID.
+func (d *DB) DeleteClient(clientID string) error {
+	_, err := d.db.Exec(`DELETE FROM oauth_clients WHERE client_id = ?`, clientID)
+	if err != nil {
+		return fmt.Errorf("delete oauth client: %w", err)
 	}
 	return nil
 }

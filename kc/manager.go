@@ -415,6 +415,12 @@ func (m *Manager) CredentialStore() *KiteCredentialStore {
 	return m.credentialStore
 }
 
+// AlertDB returns the optional SQLite database used for persistence.
+// Returns nil if no database path was configured.
+func (m *Manager) AlertDB() *alerts.DB {
+	return m.alertDB
+}
+
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
 func (m *Manager) HasUserCredentials(email string) bool {
 	if email == "" {

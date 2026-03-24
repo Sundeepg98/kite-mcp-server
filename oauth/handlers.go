@@ -82,6 +82,17 @@ func (h *Handler) Close() {
 	h.authCodes.Close()
 }
 
+// SetClientPersister enables persistence for the OAuth client store.
+func (h *Handler) SetClientPersister(p ClientPersister, logger *slog.Logger) {
+	h.clients.SetPersister(p)
+	h.clients.SetLogger(logger)
+}
+
+// LoadClientsFromDB loads persisted OAuth clients into the in-memory store.
+func (h *Handler) LoadClientsFromDB() error {
+	return h.clients.LoadFromDB()
+}
+
 // SetKiteTokenChecker registers a callback that checks Kite token validity.
 // When set, RequireAuth returns 401 if the Kite token has expired, forcing
 // mcp-remote to re-authenticate (which includes a fresh Kite login).
