@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard · Kite MCP</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.valid { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
+.status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.content { padding: 20px 24px; max-width: 1200px; }
+
+.auth-banner { background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; display: none; }
+.auth-banner-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.auth-banner-msg { font-size: 14px; font-weight: 500; color: var(--red); }
+.auth-btn { padding: 6px 18px; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-dim); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); text-decoration: none; display: inline-block; }
+.auth-btn:hover { background: rgba(34,211,238,0.2); }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--text-0); }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+
+.section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+.tbl-wrap { overflow-x: auto; margin-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+th.right, td.right { text-align: right; }
+td { padding: 7px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; color: var(--text-0); background: var(--bg-2); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); }
+
+.empty-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; }
+.loading-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+
+.cred-row { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.cred-item { display: flex; flex-direction: column; gap: 4px; }
+.cred-item-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.cred-item-value { font-family: var(--mono); font-size: 13px; color: var(--text-1); }
+
+@media (max-width: 640px) {
+  .content { padding: 14px 12px; }
+  .topbar { padding: 0 12px; }
+  .stats-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .stat-value { font-size: 18px; }
+  .cred-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .auth-banner-row { flex-direction: column; align-items: flex-start; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Dashboard</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-email" id="userEmail">--</span>
+    <div class="status-dot" id="tokenDot"></div>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="auth-banner" id="authBanner">
+    <div class="auth-banner-row">
+      <span class="auth-banner-msg" id="authBannerMsg">Your Kite session has expired. Please re-authenticate.</span>
+      <a class="auth-btn" id="authBannerBtn" href="/auth/browser-login">Re-authenticate</a>
+    </div>
+  </div>
+
+  <!-- Status Cards -->
+  <div class="stats-grid" id="statusCards">
+    <div class="stat-card"><div class="stat-label">Kite Token</div><div class="stat-value" id="cardToken">--</div></div>
+    <div class="stat-card"><div class="stat-label">Holdings</div><div class="stat-value" id="cardHoldings">--</div></div>
+    <div class="stat-card"><div class="stat-label">Today's P&amp;L</div><div class="stat-value" id="cardPnl">--</div></div>
+    <div class="stat-card"><div class="stat-label">Active Alerts</div><div class="stat-value" id="cardAlerts">--</div></div>
+    <div class="stat-card"><div class="stat-label">Ticker</div><div class="stat-value" id="cardTicker">--</div></div>
+  </div>
+
+  <!-- Holdings -->
+  <div class="section-header">Holdings</div>
+  <div id="holdingsLoading" class="loading-state">Loading...</div>
+  <div id="holdingsWrap" class="tbl-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th>Symbol</th><th>Exchange</th><th class="right">Qty</th><th class="right">Avg Price</th>
+        <th class="right">LTP</th><th class="right">P&amp;L</th><th class="right">Day %</th>
+      </tr></thead>
+      <tbody id="holdingsBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="holdingsEmpty" style="display:none">No holdings found</div>
+
+  <!-- Positions -->
+  <div class="section-header">Positions</div>
+  <div id="positionsLoading" class="loading-state">Loading...</div>
+  <div id="positionsWrap" class="tbl-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th>Symbol</th><th>Exchange</th><th>Product</th><th class="right">Qty</th>
+        <th class="right">Avg Price</th><th class="right">LTP</th><th class="right">P&amp;L</th>
+      </tr></thead>
+      <tbody id="positionsBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="positionsEmpty" style="display:none">No open positions</div>
+
+  <!-- Alerts -->
+  <div class="section-header">Active Alerts</div>
+  <div id="activeAlertsWrap" class="tbl-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th>Symbol</th><th>Exchange</th><th class="right">Target</th>
+        <th>Direction</th><th>Created</th>
+      </tr></thead>
+      <tbody id="activeAlertsBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="activeAlertsEmpty" style="display:none">No active alerts</div>
+  <div id="activeAlertsLoading" class="loading-state">Loading...</div>
+
+  <div class="section-header">Recently Triggered</div>
+  <div id="triggeredAlertsWrap" class="tbl-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th>Symbol</th><th>Exchange</th><th class="right">Target</th>
+        <th>Direction</th><th class="right">Triggered At</th><th class="right">Triggered Price</th>
+      </tr></thead>
+      <tbody id="triggeredAlertsBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">No recently triggered alerts</div>
+
+  <!-- Credentials -->
+  <div class="section-header">Credentials</div>
+  <div id="credSection" class="cred-row" style="display:none">
+    <div class="cred-item">
+      <span class="cred-item-label">API Key</span>
+      <span class="cred-item-value" id="credApiKey">--</span>
+    </div>
+    <div class="cred-item">
+      <span class="cred-item-label">Credentials</span>
+      <span class="cred-item-value" id="credStored">--</span>
+    </div>
+    <a class="auth-btn" id="reauthBtn" href="/auth/browser-login">Re-authenticate</a>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var authError = false;
+
+  // --- Safe DOM helpers (same pattern as ops.html) ---
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function tdEl(text, cls) {
+    var c = document.createElement('td');
+    if (cls) c.className = cls;
+    if (text != null) c.textContent = String(text);
+    return c;
+  }
+  function trEl(cells) {
+    var r = document.createElement('tr');
+    cells.forEach(function(c) { r.appendChild(c); });
+    return r;
+  }
+  function badge(text, type) { return el('span', 'badge badge-' + type, text); }
+  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function fmtTime(iso) {
+    if (!iso) return '--';
+    var d = new Date(iso);
+    return d.toLocaleTimeString('en-GB', {hour12: false}) + ' ' + d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
+  }
+
+  // Indian number formatting: 1,00,000.00
+  function formatINR(amount) {
+    if (amount == null || isNaN(amount)) return '--';
+    var negative = amount < 0;
+    var abs = Math.abs(amount);
+    var parts = abs.toFixed(2).split('.');
+    var intPart = parts[0];
+    var decPart = parts[1];
+    var result = '';
+    if (intPart.length <= 3) {
+      result = intPart;
+    } else {
+      result = intPart.slice(-3);
+      var remaining = intPart.slice(0, -3);
+      while (remaining.length > 2) {
+        result = remaining.slice(-2) + ',' + result;
+        remaining = remaining.slice(0, -2);
+      }
+      if (remaining.length > 0) result = remaining + ',' + result;
+    }
+    return (negative ? '-' : '') + '\u20B9' + result + '.' + decPart;
+  }
+
+  function pnlClass(val) { return val >= 0 ? 'green' : 'red'; }
+  function pnlSign(val) { return val >= 0 ? '+' + formatINR(val) : formatINR(val); }
+  function pctStr(val) {
+    if (val == null || isNaN(val)) return '--';
+    var s = val >= 0 ? '+' : '';
+    return s + val.toFixed(2) + '%';
+  }
+
+  function maskKey(key) {
+    if (!key || key.length < 8) return key || '--';
+    return key.slice(0, 4) + '****' + key.slice(-4);
+  }
+
+  // --- Fetch helper ---
+  function fetchJSON(endpoint) {
+    return fetch('/dashboard/api/' + endpoint).then(function(r) {
+      if (!r.ok) {
+        return r.json().then(function(d) {
+          var err = new Error(d.message || 'HTTP ' + r.status);
+          err.code = d.error || 'unknown';
+          throw err;
+        });
+      }
+      return r.json();
+    });
+  }
+
+  function showAuthBanner(msg) {
+    authError = true;
+    var banner = document.getElementById('authBanner');
+    banner.style.display = 'block';
+    if (msg) document.getElementById('authBannerMsg').textContent = msg;
+  }
+  function hideAuthBanner() {
+    authError = false;
+    document.getElementById('authBanner').style.display = 'none';
+  }
+
+  // --- Refresh Status ---
+  function refreshStatus() {
+    fetchJSON('status').then(function(d) {
+      document.getElementById('userEmail').textContent = d.email || '--';
+      var dot = document.getElementById('tokenDot');
+      var cardToken = document.getElementById('cardToken');
+      var tokenValid = d.kite_token && d.kite_token.valid;
+      if (tokenValid) {
+        dot.className = 'status-dot valid';
+        cardToken.textContent = 'Valid';
+        cardToken.className = 'stat-value green';
+        hideAuthBanner();
+      } else {
+        dot.className = 'status-dot expired';
+        cardToken.textContent = 'Expired';
+        cardToken.className = 'stat-value red';
+        showAuthBanner('Your Kite session has expired. Please re-authenticate.');
+      }
+      // Ticker
+      var cardTicker = document.getElementById('cardTicker');
+      var tickerRunning = d.ticker && d.ticker.running;
+      cardTicker.textContent = tickerRunning ? 'Running' : 'Stopped';
+      cardTicker.className = 'stat-value ' + (tickerRunning ? 'green' : '');
+      // Credentials
+      var credSection = document.getElementById('credSection');
+      credSection.style.display = 'flex';
+      var credStored = d.credentials && d.credentials.stored;
+      document.getElementById('credStored').textContent = credStored ? 'Stored' : 'Not configured';
+      document.getElementById('credApiKey').textContent = credStored ? maskKey(d.credentials.api_key) : '--';
+    }).catch(function(e) {
+      if (e.code === 'not_authenticated') {
+        showAuthBanner(e.message || 'Kite token expired. Please re-authenticate.');
+        document.getElementById('tokenDot').className = 'status-dot expired';
+        var cardToken = document.getElementById('cardToken');
+        cardToken.textContent = 'Expired';
+        cardToken.className = 'stat-value red';
+      }
+    });
+  }
+
+  // --- Refresh Portfolio ---
+  function refreshPortfolio() {
+    fetchJSON('portfolio').then(function(d) {
+      hideAuthBanner();
+      var summary = d.summary || {};
+      // Status cards
+      document.getElementById('cardHoldings').textContent = summary.holdings_count != null ? summary.holdings_count : '--';
+      var pnlCard = document.getElementById('cardPnl');
+      var totalPnl = (summary.total_pnl || 0) + (summary.positions_pnl || 0);
+      pnlCard.textContent = pnlSign(totalPnl);
+      pnlCard.className = 'stat-value ' + pnlClass(totalPnl);
+
+      // Holdings table
+      var holdings = d.holdings || [];
+      var holdingsBody = document.getElementById('holdingsBody');
+      var holdingsWrap = document.getElementById('holdingsWrap');
+      var holdingsEmpty = document.getElementById('holdingsEmpty');
+      var holdingsLoading = document.getElementById('holdingsLoading');
+      holdingsLoading.style.display = 'none';
+      clearChildren(holdingsBody);
+
+      if (holdings.length === 0) {
+        holdingsWrap.style.display = 'none';
+        holdingsEmpty.style.display = 'block';
+      } else {
+        holdingsEmpty.style.display = 'none';
+        holdingsWrap.style.display = 'block';
+        // Sort by P&L descending (largest loss at bottom)
+        holdings.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); });
+        var totalHoldingsPnl = 0;
+        holdings.forEach(function(h) {
+          totalHoldingsPnl += (h.pnl || 0);
+          var pnlTd = tdEl(pnlSign(h.pnl), 'right');
+          pnlTd.style.color = h.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+          var dayTd = tdEl(pctStr(h.day_change_percentage), 'right');
+          dayTd.style.color = (h.day_change_percentage || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+          holdingsBody.appendChild(trEl([
+            tdEl(h.tradingsymbol), tdEl(h.exchange),
+            tdEl(h.quantity, 'right'), tdEl(formatINR(h.average_price), 'right'),
+            tdEl(formatINR(h.last_price), 'right'), pnlTd, dayTd
+          ]));
+        });
+        // Total row
+        var totalPnlTd = tdEl(pnlSign(totalHoldingsPnl), 'right');
+        totalPnlTd.style.color = totalHoldingsPnl >= 0 ? 'var(--green)' : 'var(--red)';
+        var totalRow = trEl([
+          tdEl('TOTAL'), tdEl(''), tdEl('', 'right'), tdEl('', 'right'),
+          tdEl('', 'right'), totalPnlTd, tdEl('', 'right')
+        ]);
+        totalRow.className = 'total-row';
+        holdingsBody.appendChild(totalRow);
+      }
+
+      // Positions table
+      var positions = d.positions || [];
+      var positionsBody = document.getElementById('positionsBody');
+      var positionsWrap = document.getElementById('positionsWrap');
+      var positionsEmpty = document.getElementById('positionsEmpty');
+      var positionsLoading = document.getElementById('positionsLoading');
+      positionsLoading.style.display = 'none';
+      clearChildren(positionsBody);
+
+      if (positions.length === 0) {
+        positionsWrap.style.display = 'none';
+        positionsEmpty.style.display = 'block';
+      } else {
+        positionsEmpty.style.display = 'none';
+        positionsWrap.style.display = 'block';
+        positions.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); });
+        var totalPosPnl = 0;
+        positions.forEach(function(p) {
+          totalPosPnl += (p.pnl || 0);
+          var pnlTd = tdEl(pnlSign(p.pnl), 'right');
+          pnlTd.style.color = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+          positionsBody.appendChild(trEl([
+            tdEl(p.tradingsymbol), tdEl(p.exchange), tdEl(p.product),
+            tdEl(p.quantity, 'right'), tdEl(formatINR(p.average_price), 'right'),
+            tdEl(formatINR(p.last_price), 'right'), pnlTd
+          ]));
+        });
+        var totalPosTd = tdEl(pnlSign(totalPosPnl), 'right');
+        totalPosTd.style.color = totalPosPnl >= 0 ? 'var(--green)' : 'var(--red)';
+        var posTotalRow = trEl([
+          tdEl('TOTAL'), tdEl(''), tdEl(''), tdEl('', 'right'),
+          tdEl('', 'right'), tdEl('', 'right'), totalPosTd
+        ]);
+        posTotalRow.className = 'total-row';
+        positionsBody.appendChild(posTotalRow);
+      }
+    }).catch(function(e) {
+      document.getElementById('holdingsLoading').style.display = 'none';
+      document.getElementById('positionsLoading').style.display = 'none';
+      if (e.code === 'not_authenticated') {
+        showAuthBanner(e.message || 'Kite token expired. Please re-authenticate.');
+        document.getElementById('holdingsEmpty').style.display = 'block';
+        document.getElementById('positionsEmpty').style.display = 'block';
+      }
+    });
+  }
+
+  // --- Refresh Alerts ---
+  function refreshAlerts() {
+    fetchJSON('alerts').then(function(d) {
+      // Active alerts count card
+      document.getElementById('cardAlerts').textContent = d.active_count != null ? d.active_count : '--';
+
+      // Active alerts table
+      var activeBody = document.getElementById('activeAlertsBody');
+      var activeWrap = document.getElementById('activeAlertsWrap');
+      var activeEmpty = document.getElementById('activeAlertsEmpty');
+      var activeLoading = document.getElementById('activeAlertsLoading');
+      activeLoading.style.display = 'none';
+      clearChildren(activeBody);
+      var active = d.active || [];
+
+      if (active.length === 0) {
+        activeWrap.style.display = 'none';
+        activeEmpty.style.display = 'block';
+      } else {
+        activeEmpty.style.display = 'none';
+        activeWrap.style.display = 'block';
+        active.forEach(function(a) {
+          var dirTd = document.createElement('td');
+          dirTd.appendChild(badge(a.direction, 'green'));
+          activeBody.appendChild(trEl([
+            tdEl(a.tradingsymbol), tdEl(a.exchange),
+            tdEl(formatINR(a.target_price), 'right'), dirTd,
+            tdEl(fmtTime(a.created_at))
+          ]));
+        });
+      }
+
+      // Triggered alerts table
+      var trigBody = document.getElementById('triggeredAlertsBody');
+      var trigWrap = document.getElementById('triggeredAlertsWrap');
+      var trigEmpty = document.getElementById('triggeredAlertsEmpty');
+      clearChildren(trigBody);
+      var triggered = d.triggered || [];
+
+      if (triggered.length === 0) {
+        trigWrap.style.display = 'none';
+        trigEmpty.style.display = 'block';
+      } else {
+        trigEmpty.style.display = 'none';
+        trigWrap.style.display = 'block';
+        triggered.forEach(function(t) {
+          var dirTd = document.createElement('td');
+          dirTd.appendChild(badge(t.direction, 'amber'));
+          trigBody.appendChild(trEl([
+            tdEl(t.tradingsymbol), tdEl(t.exchange),
+            tdEl(formatINR(t.target_price), 'right'), dirTd,
+            tdEl(fmtTime(t.triggered_at), 'right'),
+            tdEl(formatINR(t.triggered_price), 'right')
+          ]));
+        });
+      }
+    }).catch(function(e) {
+      document.getElementById('activeAlertsLoading').style.display = 'none';
+      if (e.code === 'not_authenticated') {
+        document.getElementById('activeAlertsEmpty').style.display = 'block';
+        document.getElementById('triggeredAlertsEmpty').style.display = 'block';
+      }
+    });
+  }
+
+  // --- Initial load + auto-refresh ---
+  refreshStatus();
+  refreshPortfolio();
+  refreshAlerts();
+  setInterval(refreshStatus, 10000);
+  setInterval(refreshPortfolio, 30000);
+  setInterval(refreshAlerts, 60000);
+})();
+</script>
+</body>
+</html>

@@ -389,6 +389,14 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		// Fallback for local dev: use identity middleware (no auth)
 		opsHandler.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
 	}
+	// User dashboard: protected by OAuth if available, otherwise identity middleware
+	dashHandler := ops.NewDashboardHandler(kcManager, app.logger)
+	if app.oauthHandler != nil {
+		dashHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
+	} else {
+		dashHandler.RegisterRoutes(mux, func(h http.Handler) http.Handler { return h })
+	}
+
 	// Register OAuth 2.1 endpoints if enabled
 	if app.oauthHandler != nil {
 		mux.HandleFunc("/.well-known/oauth-protected-resource", app.oauthHandler.ResourceMetadata)
