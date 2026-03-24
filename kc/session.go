@@ -118,11 +118,10 @@ func checkSessionID(sessionID string) error {
 	return nil
 }
 
-// Validate checks if a MCP session ID is valid and not terminated
+// Validate checks if a MCP session ID is valid and not terminated.
+// Uses a read lock for the common (non-expired) path and only upgrades
+// to a write lock when the session needs to be marked as terminated.
 func (sm *SessionRegistry) Validate(sessionID string) (isTerminated bool, err error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
 	// Log validation attempt
 	sm.logger.Debug("Validating MCP session ID", "session_id", sessionID)
 
@@ -130,22 +129,31 @@ func (sm *SessionRegistry) Validate(sessionID string) (isTerminated bool, err er
 		return false, err
 	}
 
+	// Read lock for the common lookup path
+	sm.mu.RLock()
 	sm.logger.Debug("checking for session", "session_id", sessionID)
 	sm.logger.Debug("sessions in map", "sessions", len(sm.sessions))
 	session, exists := sm.sessions[sessionID]
 	if !exists {
+		sm.mu.RUnlock()
 		sm.logger.Warn("MCP session ID not found", "session_id", sessionID)
 		return false, errors.New(errSessionNotFound)
 	}
 
 	// Check if session has expired
 	if time.Now().After(session.ExpiresAt) {
-		sm.logger.Info("MCP session has expired", "session_id", sessionID, "expiry", session.ExpiresAt)
-		session.Terminated = true
+		sm.mu.RUnlock()
+		// Need write lock to mark as terminated
+		sm.mu.Lock()
+		// Re-fetch under write lock — the pointer captured under RLock may be stale
+		if s, ok := sm.sessions[sessionID]; ok {
+			sm.logger.Info("MCP session has expired", "session_id", sessionID, "expiry", s.ExpiresAt)
+			s.Terminated = true
+		}
+		sm.mu.Unlock()
 		return true, nil
 	}
 
-	// Log validation result
 	// Log session status
 	if session.Terminated {
 		sm.logger.Debug("MCP session is already terminated", "session_id", sessionID)
@@ -153,7 +161,10 @@ func (sm *SessionRegistry) Validate(sessionID string) (isTerminated bool, err er
 		sm.logger.Debug("MCP session is valid", "session_id", sessionID, "expires_at", session.ExpiresAt)
 	}
 
-	return session.Terminated, nil
+	terminated := session.Terminated
+	sm.mu.RUnlock()
+
+	return terminated, nil
 }
 
 // Terminate marks a MCP session ID as terminated and cleans up associated Kite session

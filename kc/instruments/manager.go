@@ -32,6 +32,15 @@ var (
 	// ErrSegmentNotFound is returned when segment was not found in the
 	// loaded map.
 	ErrSegmentNotFound = errors.New("instrument segment not found")
+
+	// kolkataLoc is the cached Asia/Kolkata timezone, loaded once at init.
+	kolkataLoc = func() *time.Location {
+		loc, err := time.LoadLocation("Asia/Kolkata")
+		if err != nil {
+			panic("failed to load Asia/Kolkata timezone: " + err.Error())
+		}
+		return loc
+	}()
 )
 
 // UpdateConfig holds configuration for instrument updates
@@ -139,20 +148,7 @@ func New(cfg Config) (*Manager, error) {
 	return manager, nil
 }
 
-// NewManager creates a new instruments manager that loads from the API
-// Deprecated: Use New(Config{Logger: logger}) instead
-func NewManager(logger *slog.Logger) *Manager {
-	return NewManagerWithConfig(DefaultUpdateConfig(), logger)
-}
-
-// NewManagerWithConfig creates a new instruments manager with the specified configuration
-// Does not load instruments automatically - call LoadInitialData() to load data
-// Deprecated: Use New(Config{UpdateConfig: config, Logger: logger}) instead
-func NewManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
-	return newManagerWithConfig(config, logger)
-}
-
-// newManagerWithConfig is the internal constructor used by both old and new APIs
+// newManagerWithConfig is the internal constructor
 func newManagerWithConfig(config *UpdateConfig, logger *slog.Logger) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -192,17 +188,11 @@ func (m *Manager) LoadInitialData() error {
 }
 
 func isPreviousDayIST(t time.Time) bool {
-	// Define IST location (UTC+5:30)
-	ist, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		ist = time.FixedZone("IST", 5*60*60+30*60)
-	}
-
-	// Convert current time to IST
-	nowIST := time.Now().In(ist)
+	// Convert current time to IST using cached timezone
+	nowIST := time.Now().In(kolkataLoc)
 
 	// Convert the provided time to IST
-	tIST := t.In(ist)
+	tIST := t.In(kolkataLoc)
 
 	// Extract date components (year, month, day) from both times
 	nowYear, nowMonth, nowDay := nowIST.Date()
@@ -618,13 +608,7 @@ func (m *Manager) startScheduler() {
 
 // shouldUpdate checks if it's time for a scheduled update
 func (m *Manager) shouldUpdate() bool {
-	now := time.Now()
-	ist, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		// Fallback: IST is UTC+5:30
-		ist = time.FixedZone("IST", 5*60*60+30*60)
-	}
-	nowIST := now.In(ist)
+	nowIST := time.Now().In(kolkataLoc)
 
 	// Safely read config values
 	m.mutex.RLock()
@@ -643,7 +627,7 @@ func (m *Manager) shouldUpdate() bool {
 	m.mutex.RUnlock()
 
 	if !lastUpdated.IsZero() {
-		lastUpdatedIST := lastUpdated.In(ist)
+		lastUpdatedIST := lastUpdated.In(kolkataLoc)
 
 		// If last update was today, don't update again
 		if nowIST.Year() == lastUpdatedIST.Year() &&
@@ -657,16 +641,12 @@ func (m *Manager) shouldUpdate() bool {
 
 // getNextScheduledUpdate calculates the next scheduled update time
 func (m *Manager) getNextScheduledUpdate() time.Time {
-	ist, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		ist = time.FixedZone("IST", 5*60*60+30*60)
-	}
-	now := time.Now().In(ist)
+	now := time.Now().In(kolkataLoc)
 
 	// Get config with lock protection (this method is called while holding RLock already)
 	// So we don't need additional locking here as it's called from GetUpdateStats which already has RLock
 	nextUpdate := time.Date(now.Year(), now.Month(), now.Day(),
-		m.config.UpdateHour, m.config.UpdateMinute, 0, 0, ist)
+		m.config.UpdateHour, m.config.UpdateMinute, 0, 0, kolkataLoc)
 
 	// If the time has already passed today, schedule for tomorrow
 	if nextUpdate.Before(now) {

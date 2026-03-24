@@ -17,6 +17,12 @@ func EmailFromContext(ctx context.Context) string {
 	return ""
 }
 
+// ContextWithEmail returns a new context with the given email set.
+// Useful for testing handlers that depend on EmailFromContext.
+func ContextWithEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, emailContextKey{}, email)
+}
+
 // RequireAuth returns middleware that validates Bearer JWT tokens on requests.
 // Unauthenticated requests get a 401 with WWW-Authenticate pointing to the resource metadata.
 func (h *Handler) RequireAuth(next http.Handler) http.Handler {
@@ -67,6 +73,10 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 // cookieName is the JWT cookie used for browser-based auth (ops dashboard, etc).
 const cookieName = "kite_jwt"
 
+// RequireAuthBrowser checks for a valid JWT cookie (audience=dashboard).
+// Unlike RequireAuth, this does NOT check Kite token expiry — the browser auth
+// flow has its own re-auth path via HandleBrowserAuthCallback.
+//
 // RequireAuthBrowser returns middleware for browser-based auth.
 // Tries Bearer token first, then falls back to a JWT cookie.
 // If neither is valid, redirects to the Kite login flow.

@@ -134,6 +134,7 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64 KB limit
 		var req struct {
 			APIKey    string `json:"api_key"`
 			APISecret string `json:"api_secret"`

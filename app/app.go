@@ -83,6 +83,8 @@ const (
 // NewApp creates and initializes a new App instance
 // NewApp creates a new application instance with logger
 func NewApp(logger *slog.Logger) *App {
+	adminSecretPath := os.Getenv("ADMIN_ENDPOINT_SECRET_PATH")
+
 	return &App{
 		Config: &Config{
 			KiteAPIKey:      os.Getenv("KITE_API_KEY"),
@@ -93,7 +95,7 @@ func NewApp(logger *slog.Logger) *App {
 			AppHost:       os.Getenv("APP_HOST"),
 
 			ExcludedTools:   os.Getenv("EXCLUDED_TOOLS"),
-			AdminSecretPath: os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+			AdminSecretPath: adminSecretPath,
 
 			OAuthJWTSecret: os.Getenv("OAUTH_JWT_SECRET"),
 			ExternalURL:    os.Getenv("EXTERNAL_URL"),
@@ -106,7 +108,7 @@ func NewApp(logger *slog.Logger) *App {
 		logger:    logger,
 		metrics: metrics.New(metrics.Config{
 			ServiceName:     "kite-mcp-server",
-			AdminSecretPath: os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+			AdminSecretPath: adminSecretPath,
 			AutoCleanup:     true,
 		}),
 	}
@@ -192,7 +194,7 @@ func (app *App) RunServer() error {
 			}
 			// Check if a valid (non-expired) Kite token exists
 			entry, hasToken := tokenStore.Get(email)
-			if hasToken && !isKiteTokenExpired(entry.StoredAt) {
+			if hasToken && !kc.IsKiteTokenExpired(entry.StoredAt) {
 				return true // valid token, pass through
 			}
 			// No valid token. If user has stored credentials, they're a returning
@@ -216,19 +218,6 @@ func (app *App) RunServer() error {
 // buildServerURL constructs the server URL from host and port
 func (app *App) buildServerURL() string {
 	return app.Config.AppHost + ":" + app.Config.AppPort
-}
-
-// isKiteTokenExpired checks if a Kite token stored at the given time has likely expired.
-// Kite tokens expire daily around 6 AM IST.
-func isKiteTokenExpired(storedAt time.Time) bool {
-	ist := time.FixedZone("IST", 5*60*60+30*60)
-	now := time.Now().In(ist)
-	stored := storedAt.In(ist)
-	expiry := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, ist)
-	if now.Before(expiry) {
-		expiry = expiry.AddDate(0, 0, -1)
-	}
-	return stored.Before(expiry)
 }
 
 // httpClient is a package-level HTTP client with a timeout, used instead of
@@ -295,7 +284,10 @@ func (app *App) createHTTPServer(url string) *http.Server {
 	}
 }
 
-// setupGracefulShutdown configures graceful shutdown for the server
+// setupGracefulShutdown configures graceful shutdown for the server.
+// Note: stop() is deferred inside the goroutine. If the server exits without
+// receiving a signal (e.g., startup error), the goroutine and signal registration
+// are cleaned up by process exit. This is acceptable for a long-running server.
 func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
@@ -314,6 +306,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 
 		// Then shutdown Kite manager (session cleanup and instruments scheduler)
 		kcManager.Shutdown()
+
+		// Close OAuth auth code store cleanup goroutine
+		if app.oauthHandler != nil {
+			app.oauthHandler.Close()
+		}
 
 		app.logger.Info("Server shutdown complete")
 	}()
@@ -433,14 +430,13 @@ func withSessionType(sessionType string, handler http.HandlerFunc) http.HandlerF
 // registerSSEEndpoints registers SSE-specific endpoints on the mux
 func (app *App) registerSSEEndpoints(mux *http.ServeMux, sse *server.SSEServer) {
 	sseHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
-	messageHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
 
 	if app.oauthHandler != nil {
 		mux.Handle("/sse", app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler)))
-		mux.Handle("/message", app.oauthHandler.RequireAuth(http.HandlerFunc(messageHandler)))
+		mux.Handle("/message", app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler)))
 	} else {
 		mux.HandleFunc("/sse", sseHandler)
-		mux.HandleFunc("/message", messageHandler)
+		mux.HandleFunc("/message", sseHandler)
 	}
 }
 

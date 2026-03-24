@@ -77,6 +77,11 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	return h
 }
 
+// Close releases resources held by the handler (e.g., background goroutines).
+func (h *Handler) Close() {
+	h.authCodes.Close()
+}
+
 // SetKiteTokenChecker registers a callback that checks Kite token validity.
 // When set, RequireAuth returns 401 if the Kite token has expired, forcing
 // mcp-remote to re-authenticate (which includes a fresh Kite login).
@@ -434,6 +439,10 @@ func (h *Handler) HandleBrowserAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if dashEmail != "" && email != dashEmail {
+		h.logger.Warn("Browser auth email mismatch", "signed_email", dashEmail, "kite_email", email)
+	}
+
 	// Set JWT cookie for browser auth
 	if err := h.SetAuthCookie(w, email); err != nil {
 		h.logger.Error("Failed to set auth cookie", "error", err)
@@ -597,7 +606,9 @@ func (h *Handler) serveBrowserLoginForm(w http.ResponseWriter, redirect string, 
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	buf.WriteTo(w)
+	if _, err := buf.WriteTo(w); err != nil {
+		h.logger.Debug("Failed to write browser login response", "error", err)
+	}
 }
 
 // --- Token Endpoint ---
@@ -673,6 +684,10 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 		// fall back to the credential store which persists secrets from previous sessions.
 		secret := clientSecret
 		if secret == "" {
+			// Fallback for public OAuth clients (e.g., Claude Code native) that don't send
+			// client_secret on token exchange. Safe because: (1) this branch is only reachable
+			// for Kite API key clients (entry.RequestToken is only set in HandleKiteOAuthCallback
+			// for IsKiteAPIKey clients), and (2) Kite API keys are globally unique per app.
 			if storedSecret, ok := h.exchanger.GetSecretByAPIKey(clientID); ok {
 				secret = storedSecret
 				h.logger.Debug("Using stored API secret for deferred exchange", "client_id", clientID)
@@ -715,12 +730,6 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Internal helpers ---
-
-// generateKiteLoginURL builds a Kite Connect login URL with the given redirect_params.
-func (h *Handler) generateKiteLoginURL(redirectParams string) string {
-	return fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
-		h.config.KiteAPIKey, url.QueryEscape(redirectParams))
-}
 
 // writeJSON writes a JSON response with the given status code.
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {

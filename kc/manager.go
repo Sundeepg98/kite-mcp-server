@@ -235,6 +235,7 @@ type Manager struct {
 // NewManager creates a new manager with default configuration.
 //
 // Deprecated: Use New(Config{APIKey: apiKey, APISecret: apiSecret, Logger: logger}) instead.
+// NOTE: Still used by kc/manager_test.go (TestNewManager). Remove once tests are migrated to New().
 func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error) {
 	return New(Config{
 		APIKey:    apiKey,
@@ -464,21 +465,6 @@ func (m *Manager) extractKiteSessionData(data any, sessionID string) (*KiteSessi
 	return kiteData, nil
 }
 
-// logSessionCreated logs when a new session is created
-func (m *Manager) logSessionCreated(sessionID string) {
-	m.Logger.Debug("Successfully created new Kite data for MCP session ID", "session_id", sessionID)
-}
-
-// logSessionRetrieved logs when an existing session is retrieved
-func (m *Manager) logSessionRetrieved(sessionID string) {
-	m.Logger.Debug("Successfully retrieved existing Kite data for MCP session ID", "session_id", sessionID)
-}
-
-// logSessionRetrievedData logs when session data is successfully retrieved
-func (m *Manager) logSessionRetrievedData(sessionID string) {
-	m.Logger.Debug("Successfully retrieved Kite data for MCP session ID", "session_id", sessionID)
-}
-
 // GetOrCreateSession retrieves an existing Kite session or creates a new one atomically.
 // For email-aware session creation (Fly.io with OAuth), use GetOrCreateSessionWithEmail.
 func (m *Manager) GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error) {
@@ -518,9 +504,9 @@ func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*Kite
 	}
 
 	if isNew {
-		m.logSessionCreated(mcpSessionID)
+		m.Logger.Debug("Successfully created new Kite data for MCP session ID", "session_id", mcpSessionID)
 	} else {
-		m.logSessionRetrieved(mcpSessionID)
+		m.Logger.Debug("Successfully retrieved existing Kite data for MCP session ID", "session_id", mcpSessionID)
 	}
 
 	return kiteData, isNew, nil
@@ -550,7 +536,7 @@ func (m *Manager) GetSession(mcpSessionID string) (*KiteSessionData, error) {
 		return nil, err
 	}
 
-	m.logSessionRetrievedData(mcpSessionID)
+	m.Logger.Debug("Successfully retrieved Kite data for MCP session ID", "session_id", mcpSessionID)
 	return kiteData, nil
 }
 

@@ -79,13 +79,20 @@ func (s *KiteCredentialStore) Get(email string) (*KiteCredentialEntry, bool) {
 // Set stores credentials for the given email.
 func (s *KiteCredentialStore) Set(email string, entry *KiteCredentialEntry) {
 	s.mu.Lock()
-	entry.StoredAt = time.Now()
-	key := strings.ToLower(email)
-	s.creds[key] = entry
+	stored := *entry // copy to prevent caller mutation
+	stored.StoredAt = time.Now()
+	key := strings.ToLower(strings.TrimSpace(email))
+	s.creds[key] = &stored
+	// Capture values for DB persist before releasing lock.
+	// After unlock, &stored is reachable via the map and could be read
+	// concurrently; using locals avoids any data-race concern.
+	apiKey := stored.APIKey
+	apiSecret := stored.APISecret
+	storedAt := stored.StoredAt
 	s.mu.Unlock()
 
 	if s.db != nil {
-		if err := s.db.SaveCredential(key, entry.APIKey, entry.APISecret, entry.StoredAt); err != nil && s.logger != nil {
+		if err := s.db.SaveCredential(key, apiKey, apiSecret, storedAt); err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist credential", "email", key, "error", err)
 		}
 	}

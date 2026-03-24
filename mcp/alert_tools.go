@@ -115,6 +115,9 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Parse exchange and tradingsymbol from the instrument ID
 		parts := strings.SplitN(instrumentID, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid instrument ID format: %s (expected exchange:symbol)", instrumentID)
+		}
 		exchange := parts[0]
 		tradingsymbol := inst.Tradingsymbol
 

@@ -4,39 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
-
-// kolkataLoc caches the Asia/Kolkata timezone at package init to avoid repeated lookups.
-var kolkataLoc = func() *time.Location {
-	loc, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		panic("failed to load Asia/Kolkata timezone: " + err.Error())
-	}
-	return loc
-}()
-
-// isTokenLikelyExpired checks if a Kite token stored at the given time has likely expired.
-// Kite tokens expire daily around 6 AM IST. We check if 6 AM IST has passed since the token was stored.
-func isTokenLikelyExpired(storedAt time.Time) bool {
-	ist := kolkataLoc
-	now := time.Now().In(ist)
-	stored := storedAt.In(ist)
-
-	// Find the most recent 6 AM IST
-	expiry := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, ist)
-	if now.Before(expiry) {
-		// Before 6 AM today — expiry was yesterday 6 AM
-		expiry = expiry.AddDate(0, 0, -1)
-	}
-
-	return stored.Before(expiry)
-}
 
 // Context key for session type
 type contextKey string
@@ -134,7 +107,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 
 	// For existing sessions, check if token likely expired (Kite tokens expire daily ~6 AM IST)
 	if !isNew && email != "" {
-		if entry, ok := h.manager.TokenStore().Get(email); ok && isTokenLikelyExpired(entry.StoredAt) {
+		if entry, ok := h.manager.TokenStore().Get(email); ok && kc.IsKiteTokenExpired(entry.StoredAt) {
 			if _, err := kiteSession.Kite.Client.GetUserProfile(); err != nil {
 				h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
 				h.manager.TokenStore().Delete(email)

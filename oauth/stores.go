@@ -24,9 +24,10 @@ const maxAuthCodes = 10000
 
 // AuthCodeStore is a thread-safe in-memory store for OAuth authorization codes.
 type AuthCodeStore struct {
-	mu      sync.RWMutex
-	entries map[string]*AuthCodeEntry
-	done    chan struct{}
+	mu        sync.RWMutex
+	entries   map[string]*AuthCodeEntry
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewAuthCodeStore creates a store and starts a background cleanup goroutine.
@@ -39,9 +40,11 @@ func NewAuthCodeStore() *AuthCodeStore {
 	return s
 }
 
-// Close stops the background cleanup goroutine.
+// Close stops the background cleanup goroutine. Safe to call multiple times.
 func (s *AuthCodeStore) Close() {
-	close(s.done)
+	s.closeOnce.Do(func() {
+		close(s.done)
+	})
 }
 
 // ErrAuthCodeStoreFull is returned when the auth code store has reached its capacity.

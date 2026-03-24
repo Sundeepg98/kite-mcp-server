@@ -75,8 +75,13 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 	}
 
 	// Check for existing running ticker
-	if ut, ok := s.tickers[email]; ok && ut.Connected {
-		return fmt.Errorf("ticker already running for %s", email)
+	if ut, ok := s.tickers[email]; ok {
+		ut.mu.RLock()
+		connected := ut.Connected
+		ut.mu.RUnlock()
+		if connected {
+			return fmt.Errorf("ticker already running for %s", email)
+		}
 	}
 
 	// Create a new Kite Ticker
@@ -97,6 +102,27 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 	}
 
 	// Wire callbacks
+	s.wireCallbacks(ut, t)
+
+	s.tickers[email] = ut
+
+	// Start serving in a goroutine (blocking call)
+	go func() {
+		s.logger.Info("Starting ticker", "email", email)
+		t.ServeWithContext(ctx)
+		s.logger.Info("Ticker serve exited", "email", email)
+	}()
+
+	return nil
+}
+
+// wireCallbacks sets up all WebSocket event handlers (OnConnect, OnClose,
+// OnError, OnTick, OnReconnect, OnNoReconnect) on the given kiteticker.Ticker,
+// binding them to the provided UserTicker. This is shared between Start and
+// UpdateToken to eliminate callback-wiring duplication.
+func (s *Service) wireCallbacks(ut *UserTicker, t *kiteticker.Ticker) {
+	email := ut.Email
+
 	t.OnConnect(func() {
 		ut.mu.Lock()
 		ut.Connected = true
@@ -157,17 +183,6 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 		ut.Connected = false
 		ut.mu.Unlock()
 	})
-
-	s.tickers[email] = ut
-
-	// Start serving in a goroutine (blocking call)
-	go func() {
-		s.logger.Info("Starting ticker", "email", email)
-		t.ServeWithContext(ctx)
-		s.logger.Info("Ticker serve exited", "email", email)
-	}()
-
-	return nil
 }
 
 // Stop stops the ticker for the given user.
@@ -188,42 +203,58 @@ func (s *Service) Stop(email string) error {
 
 // UpdateToken stops the existing ticker and starts a new one with the fresh token.
 // Preserves subscriptions across the restart.
+// The entire operation is serialized under s.mu to prevent concurrent callers from
+// seeing inconsistent state between stop and start.
 func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 	s.mu.Lock()
-	ut, ok := s.tickers[email]
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
+	oldUT, ok := s.tickers[email]
 	if !ok {
 		return fmt.Errorf("no ticker found for %s", email)
 	}
 
 	// Capture current subscriptions before stopping
-	ut.mu.RLock()
-	subs := make(map[uint32]kiteticker.Mode, len(ut.Subscribed))
-	for token, mode := range ut.Subscribed {
+	oldUT.mu.RLock()
+	subs := make(map[uint32]kiteticker.Mode, len(oldUT.Subscribed))
+	for token, mode := range oldUT.Subscribed {
 		subs[token] = mode
 	}
-	ut.mu.RUnlock()
+	oldUT.mu.RUnlock()
 
-	// Stop the existing ticker
-	if err := s.Stop(email); err != nil {
-		return fmt.Errorf("failed to stop existing ticker: %w", err)
+	// Stop the old ticker directly (not via s.Stop which would re-acquire s.mu)
+	oldUT.Cancel()
+	delete(s.tickers, email)
+	s.logger.Info("Ticker stopped for token update", "email", email)
+
+	// Create a new Kite Ticker
+	t := kiteticker.New(apiKey, accessToken)
+	t.SetAutoReconnect(true)
+	t.SetReconnectMaxRetries(300)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	newUT := &UserTicker{
+		Email:       email,
+		APIKey:      apiKey,
+		AccessToken: accessToken,
+		Ticker:      t,
+		Cancel:      cancel,
+		StartedAt:   time.Now(),
+		Subscribed:  subs, // Set subscriptions BEFORE wiring OnConnect
 	}
 
-	// Start a new ticker with the fresh token
-	if err := s.Start(email, apiKey, accessToken); err != nil {
-		return fmt.Errorf("failed to start ticker with new token: %w", err)
-	}
+	// Wire callbacks
+	s.wireCallbacks(newUT, t)
 
-	// Restore subscriptions (they'll be applied on connect callback)
-	s.mu.RLock()
-	newUT, ok := s.tickers[email]
-	s.mu.RUnlock()
-	if ok {
-		newUT.mu.Lock()
-		newUT.Subscribed = subs
-		newUT.mu.Unlock()
-	}
+	s.tickers[email] = newUT
+
+	// Start serving in a goroutine (blocking call)
+	go func() {
+		s.logger.Info("Starting ticker", "email", email)
+		t.ServeWithContext(ctx)
+		s.logger.Info("Ticker serve exited", "email", email)
+	}()
 
 	s.logger.Info("Ticker token updated", "email", email, "subscriptions_preserved", len(subs))
 	return nil
