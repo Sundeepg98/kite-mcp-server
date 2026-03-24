@@ -79,6 +79,14 @@ CREATE TABLE IF NOT EXISTS oauth_clients (
     client_name   TEXT NOT NULL,
     created_at    TEXT NOT NULL,
     is_kite_key   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS mcp_sessions (
+    session_id  TEXT PRIMARY KEY,
+    email       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    terminated  INTEGER NOT NULL DEFAULT 0
 );`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
@@ -387,6 +395,70 @@ func (d *DB) DeleteClient(clientID string) error {
 	_, err := d.db.Exec(`DELETE FROM oauth_clients WHERE client_id = ?`, clientID)
 	if err != nil {
 		return fmt.Errorf("delete oauth client: %w", err)
+	}
+	return nil
+}
+
+// SessionDBEntry represents an MCP session stored in the database.
+type SessionDBEntry struct {
+	SessionID  string
+	Email      string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	Terminated bool
+}
+
+// LoadSessions reads all MCP sessions from the database.
+func (d *DB) LoadSessions() ([]*SessionDBEntry, error) {
+	rows, err := d.db.Query(`SELECT session_id, email, created_at, expires_at, terminated FROM mcp_sessions`)
+	if err != nil {
+		return nil, fmt.Errorf("query sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*SessionDBEntry
+	for rows.Next() {
+		var s SessionDBEntry
+		var createdAtS, expiresAtS string
+		var terminatedI int
+		if err := rows.Scan(&s.SessionID, &s.Email, &createdAtS, &expiresAtS, &terminatedI); err != nil {
+			return nil, fmt.Errorf("scan session: %w", err)
+		}
+		createdAt, err := time.Parse(time.RFC3339, createdAtS)
+		if err != nil {
+			return nil, fmt.Errorf("parse session created_at: %w", err)
+		}
+		expiresAt, err := time.Parse(time.RFC3339, expiresAtS)
+		if err != nil {
+			return nil, fmt.Errorf("parse session expires_at: %w", err)
+		}
+		s.CreatedAt = createdAt
+		s.ExpiresAt = expiresAt
+		s.Terminated = terminatedI != 0
+		out = append(out, &s)
+	}
+	return out, rows.Err()
+}
+
+// SaveSession stores or updates an MCP session in the database.
+func (d *DB) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
+	terminatedI := 0
+	if terminated {
+		terminatedI = 1
+	}
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO mcp_sessions (session_id, email, created_at, expires_at, terminated) VALUES (?,?,?,?,?)`,
+		sessionID, email, createdAt.Format(time.RFC3339), expiresAt.Format(time.RFC3339), terminatedI)
+	if err != nil {
+		return fmt.Errorf("save session: %w", err)
+	}
+	return nil
+}
+
+// DeleteSession removes an MCP session by ID.
+func (d *DB) DeleteSession(sessionID string) error {
+	_, err := d.db.Exec(`DELETE FROM mcp_sessions WHERE session_id = ?`, sessionID)
+	if err != nil {
+		return fmt.Errorf("delete session: %w", err)
 	}
 	return nil
 }

@@ -615,6 +615,210 @@ func TestSessionExpiration(t *testing.T) {
 	}
 }
 
+// mockSessionDB is a test double for SessionDB that records all calls.
+type mockSessionDB struct {
+	sessions map[string]*SessionLoadEntry
+}
+
+func newMockSessionDB() *mockSessionDB {
+	return &mockSessionDB{sessions: make(map[string]*SessionLoadEntry)}
+}
+
+func (m *mockSessionDB) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
+	m.sessions[sessionID] = &SessionLoadEntry{
+		SessionID:  sessionID,
+		Email:      email,
+		CreatedAt:  createdAt,
+		ExpiresAt:  expiresAt,
+		Terminated: terminated,
+	}
+	return nil
+}
+
+func (m *mockSessionDB) LoadSessions() ([]*SessionLoadEntry, error) {
+	var out []*SessionLoadEntry
+	for _, s := range m.sessions {
+		cp := *s
+		out = append(out, &cp)
+	}
+	return out, nil
+}
+
+func (m *mockSessionDB) DeleteSession(sessionID string) error {
+	delete(m.sessions, sessionID)
+	return nil
+}
+
+func TestGenerateWithDataPersists(t *testing.T) {
+	db := newMockSessionDB()
+	manager := NewSessionRegistry(testLogger())
+	manager.SetDB(db)
+
+	data := &KiteSessionData{Email: "test@example.com"}
+	sessionID := manager.GenerateWithData(data)
+
+	// Verify session was persisted to DB
+	entry, exists := db.sessions[sessionID]
+	if !exists {
+		t.Fatal("Expected session to be persisted to DB")
+	}
+	if entry.Email != "test@example.com" {
+		t.Errorf("Expected email 'test@example.com', got '%s'", entry.Email)
+	}
+	if entry.Terminated {
+		t.Error("Expected session to not be terminated in DB")
+	}
+}
+
+func TestTerminatePersists(t *testing.T) {
+	db := newMockSessionDB()
+	manager := NewSessionRegistry(testLogger())
+	manager.SetDB(db)
+
+	sessionID := manager.GenerateWithData(&KiteSessionData{Email: "test@example.com"})
+
+	// Verify session exists in DB
+	if _, exists := db.sessions[sessionID]; !exists {
+		t.Fatal("Expected session to be persisted to DB after Generate")
+	}
+
+	// Terminate
+	_, err := manager.Terminate(sessionID)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify session was deleted from DB
+	if _, exists := db.sessions[sessionID]; exists {
+		t.Error("Expected session to be deleted from DB after Terminate")
+	}
+}
+
+func TestCleanupExpiredSessionsPersists(t *testing.T) {
+	db := newMockSessionDB()
+	manager := NewSessionRegistry(testLogger())
+	manager.SetDB(db)
+
+	// Create sessions
+	id1 := manager.GenerateWithData(&KiteSessionData{Email: "a@x.com"})
+	id2 := manager.GenerateWithData(&KiteSessionData{Email: "b@x.com"})
+	_ = manager.GenerateWithData(&KiteSessionData{Email: "c@x.com"}) // not expired
+
+	// Expire two sessions
+	manager.mu.Lock()
+	manager.sessions[id1].ExpiresAt = time.Now().Add(-time.Hour)
+	manager.sessions[id2].ExpiresAt = time.Now().Add(-time.Minute)
+	manager.mu.Unlock()
+
+	cleaned := manager.CleanupExpiredSessions()
+	if cleaned != 2 {
+		t.Errorf("Expected 2 cleaned sessions, got %d", cleaned)
+	}
+
+	// Verify expired sessions were deleted from DB
+	if _, exists := db.sessions[id1]; exists {
+		t.Error("Expected expired session to be deleted from DB")
+	}
+	if _, exists := db.sessions[id2]; exists {
+		t.Error("Expected expired session to be deleted from DB")
+	}
+
+	// Verify non-expired session still in DB
+	if len(db.sessions) != 1 {
+		t.Errorf("Expected 1 session remaining in DB, got %d", len(db.sessions))
+	}
+}
+
+func TestLoadFromDB(t *testing.T) {
+	db := newMockSessionDB()
+	now := time.Now()
+
+	// Pre-populate DB with sessions
+	db.sessions["kitemcp-valid"] = &SessionLoadEntry{
+		SessionID: "kitemcp-valid",
+		Email:     "valid@example.com",
+		CreatedAt: now.Add(-time.Hour),
+		ExpiresAt: now.Add(11 * time.Hour),
+	}
+	db.sessions["kitemcp-expired"] = &SessionLoadEntry{
+		SessionID: "kitemcp-expired",
+		Email:     "expired@example.com",
+		CreatedAt: now.Add(-13 * time.Hour),
+		ExpiresAt: now.Add(-time.Hour),
+	}
+	db.sessions["kitemcp-terminated"] = &SessionLoadEntry{
+		SessionID:  "kitemcp-terminated",
+		Email:      "term@example.com",
+		CreatedAt:  now.Add(-time.Hour),
+		ExpiresAt:  now.Add(11 * time.Hour),
+		Terminated: true,
+	}
+
+	manager := NewSessionRegistry(testLogger())
+	manager.SetDB(db)
+	if err := manager.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	// Only the valid session should be loaded
+	manager.mu.RLock()
+	if len(manager.sessions) != 1 {
+		t.Errorf("Expected 1 loaded session, got %d", len(manager.sessions))
+	}
+	session, exists := manager.sessions["kitemcp-valid"]
+	manager.mu.RUnlock()
+
+	if !exists {
+		t.Fatal("Expected valid session to be loaded")
+	}
+	if session.Data == nil {
+		t.Fatal("Expected session Data to be set")
+	}
+	kd, ok := session.Data.(*KiteSessionData)
+	if !ok {
+		t.Fatalf("Expected KiteSessionData, got %T", session.Data)
+	}
+	if kd.Email != "valid@example.com" {
+		t.Errorf("Expected email 'valid@example.com', got '%s'", kd.Email)
+	}
+	if kd.Kite != nil {
+		t.Error("Expected Kite client to be nil for loaded sessions")
+	}
+
+	// Expired and terminated sessions should be cleaned from DB
+	if _, exists := db.sessions["kitemcp-expired"]; exists {
+		t.Error("Expected expired session to be deleted from DB")
+	}
+	if _, exists := db.sessions["kitemcp-terminated"]; exists {
+		t.Error("Expected terminated session to be deleted from DB")
+	}
+}
+
+func TestLoadFromDBNilDB(t *testing.T) {
+	manager := NewSessionRegistry(testLogger())
+	// No DB set — should be a no-op
+	if err := manager.LoadFromDB(); err != nil {
+		t.Fatalf("Expected no error with nil DB, got: %v", err)
+	}
+}
+
+func TestGenerateWithNilDataPersistsEmptyEmail(t *testing.T) {
+	db := newMockSessionDB()
+	manager := NewSessionRegistry(testLogger())
+	manager.SetDB(db)
+
+	// Generate with nil data (no KiteSessionData)
+	sessionID := manager.Generate()
+
+	entry, exists := db.sessions[sessionID]
+	if !exists {
+		t.Fatal("Expected session to be persisted to DB")
+	}
+	if entry.Email != "" {
+		t.Errorf("Expected empty email for nil data, got '%s'", entry.Email)
+	}
+}
+
 func TestExternalSessionIDFormat(t *testing.T) {
 	manager := NewSessionRegistry(testLogger())
 

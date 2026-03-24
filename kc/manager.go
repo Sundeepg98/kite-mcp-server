@@ -157,6 +157,16 @@ func New(cfg Config) (*Manager, error) {
 	m.Instruments = instrumentsManager
 	m.initializeSessionManager()
 
+	// Session persistence: share the same DB (if available)
+	if m.alertDB != nil {
+		m.sessionManager.SetDB(&sessionDBAdapter{db: m.alertDB})
+		if err := m.sessionManager.LoadFromDB(); err != nil {
+			cfg.Logger.Error("Failed to load sessions from DB", "error", err)
+		} else {
+			cfg.Logger.Info("Sessions loaded from database")
+		}
+	}
+
 	// Wire token rotation observer: when a user's token changes, update their ticker
 	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
 		if m.tickerService.IsRunning(email) {
@@ -747,6 +757,37 @@ func (m *Manager) IncrementDailyMetric(key string) {
 	if m.metrics != nil {
 		m.metrics.IncrementDaily(key)
 	}
+}
+
+// sessionDBAdapter bridges alerts.DB to the SessionDB interface expected by SessionRegistry.
+type sessionDBAdapter struct {
+	db *alerts.DB
+}
+
+func (a *sessionDBAdapter) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
+	return a.db.SaveSession(sessionID, email, createdAt, expiresAt, terminated)
+}
+
+func (a *sessionDBAdapter) LoadSessions() ([]*SessionLoadEntry, error) {
+	entries, err := a.db.LoadSessions()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*SessionLoadEntry, len(entries))
+	for i, e := range entries {
+		result[i] = &SessionLoadEntry{
+			SessionID:  e.SessionID,
+			Email:      e.Email,
+			CreatedAt:  e.CreatedAt,
+			ExpiresAt:  e.ExpiresAt,
+			Terminated: e.Terminated,
+		}
+	}
+	return result, nil
+}
+
+func (a *sessionDBAdapter) DeleteSession(sessionID string) error {
+	return a.db.DeleteSession(sessionID)
 }
 
 // Shutdown gracefully shuts down the manager and all its components

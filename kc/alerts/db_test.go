@@ -127,3 +127,67 @@ func TestMultipleCredentials(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, creds, 3)
 }
+
+func TestSessionCRUD(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+
+	// Save
+	err := db.SaveSession("kitemcp-abc-123", "user@example.com", now, expires, false)
+	require.NoError(t, err)
+
+	// Load
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "kitemcp-abc-123", sessions[0].SessionID)
+	assert.Equal(t, "user@example.com", sessions[0].Email)
+	assert.Equal(t, now.UTC(), sessions[0].CreatedAt.UTC())
+	assert.Equal(t, expires.UTC(), sessions[0].ExpiresAt.UTC())
+	assert.False(t, sessions[0].Terminated)
+
+	// Update (upsert) — mark as terminated
+	err = db.SaveSession("kitemcp-abc-123", "user@example.com", now, expires, true)
+	require.NoError(t, err)
+	sessions, err = db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.True(t, sessions[0].Terminated)
+
+	// Delete
+	err = db.DeleteSession("kitemcp-abc-123")
+	require.NoError(t, err)
+	sessions, err = db.LoadSessions()
+	require.NoError(t, err)
+	assert.Empty(t, sessions)
+}
+
+func TestSessionEmptyEmail(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+
+	// Sessions can have empty email (local dev, pre-OAuth)
+	err := db.SaveSession("kitemcp-no-email", "", now, expires, false)
+	require.NoError(t, err)
+
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "", sessions[0].Email)
+}
+
+func TestMultipleSessions(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+
+	db.SaveSession("kitemcp-s1", "a@x.com", now, expires, false)
+	db.SaveSession("kitemcp-s2", "b@x.com", now, expires, false)
+	db.SaveSession("kitemcp-s3", "a@x.com", now, expires, true)
+
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	assert.Len(t, sessions, 3)
+}

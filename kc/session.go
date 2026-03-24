@@ -12,6 +12,23 @@ import (
 	"github.com/google/uuid"
 )
 
+// SessionDB is an optional persistence backend for MCP sessions.
+// Implemented by an adapter that wraps alerts.DB to avoid circular imports.
+type SessionDB interface {
+	SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error
+	LoadSessions() ([]*SessionLoadEntry, error)
+	DeleteSession(sessionID string) error
+}
+
+// SessionLoadEntry represents a session loaded from the database.
+type SessionLoadEntry struct {
+	SessionID  string
+	Email      string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	Terminated bool
+}
+
 const (
 	// Default session configuration
 	DefaultSessionDuration = 12 * time.Hour
@@ -41,6 +58,7 @@ type SessionRegistry struct {
 	cleanupContext  context.Context
 	cleanupCancel   context.CancelFunc
 	logger          *slog.Logger
+	db              SessionDB // optional persistence
 }
 
 // CleanupHook is called when a session is terminated or expires
@@ -72,6 +90,48 @@ func NewSessionRegistryWithDuration(duration time.Duration, logger *slog.Logger)
 	}
 }
 
+// SetDB enables write-through persistence to the given session database.
+func (sm *SessionRegistry) SetDB(db SessionDB) {
+	sm.db = db
+}
+
+// LoadFromDB populates the in-memory session registry from the database.
+// Expired and terminated sessions are skipped (and deleted from DB).
+// Valid sessions are restored with Data set to &KiteSessionData{Email: email}.
+func (sm *SessionRegistry) LoadFromDB() error {
+	if sm.db == nil {
+		return nil
+	}
+	entries, err := sm.db.LoadSessions()
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	loaded := 0
+	for _, e := range entries {
+		// Skip expired or terminated sessions
+		if e.Terminated || now.After(e.ExpiresAt) {
+			// Best-effort cleanup from DB
+			if delErr := sm.db.DeleteSession(e.SessionID); delErr != nil {
+				sm.logger.Error("Failed to delete stale session from DB", "session_id", e.SessionID, "error", delErr)
+			}
+			continue
+		}
+		sm.sessions[e.SessionID] = &MCPSession{
+			ID:         e.SessionID,
+			Terminated: false,
+			CreatedAt:  e.CreatedAt,
+			ExpiresAt:  e.ExpiresAt,
+			Data:       &KiteSessionData{Email: e.Email},
+		}
+		loaded++
+	}
+	sm.logger.Info("Loaded sessions from database", "loaded", loaded, "skipped", len(entries)-loaded)
+	return nil
+}
+
 // Generate creates a new MCP session ID and stores it in memory
 func (sm *SessionRegistry) Generate() string {
 	return sm.GenerateWithData(nil)
@@ -80,7 +140,6 @@ func (sm *SessionRegistry) Generate() string {
 // GenerateWithData creates a new MCP session ID with associated Kite data and stores it in memory
 func (sm *SessionRegistry) GenerateWithData(data any) string {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
 
 	sessionID := mcpSessionPrefix + uuid.New().String()
 	now := time.Now()
@@ -94,7 +153,22 @@ func (sm *SessionRegistry) GenerateWithData(data any) string {
 		Data:       data,
 	}
 
+	// Capture DB and values before releasing lock
+	db := sm.db
+	sm.mu.Unlock()
+
 	sm.logger.Info("Generated new MCP session ID", "session_id", sessionID, "expires_at", expiresAt)
+
+	// Persist outside the lock
+	if db != nil {
+		email := ""
+		if kd, ok := data.(*KiteSessionData); ok && kd != nil {
+			email = kd.Email
+		}
+		if err := db.SaveSession(sessionID, email, now, expiresAt, false); err != nil {
+			sm.logger.Error("Failed to persist session", "session_id", sessionID, "error", err)
+		}
+	}
 
 	return sessionID
 }
@@ -188,14 +262,22 @@ func (sm *SessionRegistry) Terminate(sessionID string) (isNotAllowed bool, err e
 	s.Terminated = true
 	session = s
 
-	// Copy hooks to call outside lock
+	// Copy hooks and DB ref to use outside lock
 	hooks = make([]CleanupHook, len(sm.cleanupHooks))
 	copy(hooks, sm.cleanupHooks)
+	db := sm.db
 	sm.mu.Unlock()
 
 	// Call cleanup hooks outside the lock to avoid deadlocks
 	for _, hook := range hooks {
 		hook(session)
+	}
+
+	// Delete from persistent store
+	if db != nil {
+		if err := db.DeleteSession(sessionID); err != nil {
+			sm.logger.Error("Failed to delete persisted session", "session_id", sessionID, "error", err)
+		}
 	}
 
 	return false, nil
@@ -262,12 +344,22 @@ func (sm *SessionRegistry) CleanupExpiredSessions() int {
 
 	hooks := make([]CleanupHook, len(sm.cleanupHooks))
 	copy(hooks, sm.cleanupHooks)
+	db := sm.db
 	sm.mu.Unlock()
 
 	// Call cleanup hooks outside the lock to avoid deadlocks
 	for _, session := range toClean {
 		for _, hook := range hooks {
 			hook(session)
+		}
+	}
+
+	// Delete from persistent store
+	if db != nil {
+		for _, sessionID := range toDelete {
+			if err := db.DeleteSession(sessionID); err != nil {
+				sm.logger.Error("Failed to delete expired session from DB", "session_id", sessionID, "error", err)
+			}
 		}
 	}
 
@@ -398,14 +490,18 @@ func (sm *SessionRegistry) GetSessionData(sessionID string) (any, error) {
 // GetOrCreateSessionData atomically validates session and retrieves/creates data to eliminate TOCTOU races
 func (sm *SessionRegistry) GetOrCreateSessionData(sessionID string, createDataFn func() any) (data any, isNew bool, err error) {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
 
 	sm.logger.Debug("Getting or creating data for session ID", "session_id", sessionID)
 
 	// Check session ID format
 	if err := checkSessionID(sessionID); err != nil {
+		sm.mu.Unlock()
 		return nil, false, err
 	}
+
+	// Track whether we need to persist a newly created session
+	var needsPersist bool
+	var persistCreatedAt, persistExpiresAt time.Time
 
 	session, exists := sm.sessions[sessionID]
 	if !exists {
@@ -422,6 +518,13 @@ func (sm *SessionRegistry) GetOrCreateSessionData(sessionID string, createDataFn
 			Data:       nil,
 		}
 		sm.sessions[sessionID] = session
+
+		// Only persist kitemcp- prefixed sessions (our sessions)
+		if strings.HasPrefix(sessionID, mcpSessionPrefix) {
+			needsPersist = true
+			persistCreatedAt = now
+			persistExpiresAt = expiresAt
+		}
 	}
 
 	now := time.Now()
@@ -430,17 +533,20 @@ func (sm *SessionRegistry) GetOrCreateSessionData(sessionID string, createDataFn
 	if now.After(session.ExpiresAt) {
 		sm.logger.Info("Session has expired", "session_id", sessionID, "expiry", session.ExpiresAt)
 		session.Terminated = true
+		sm.mu.Unlock()
 		return nil, false, errors.New(errSessionNotFound)
 	}
 
 	if session.Terminated {
 		sm.logger.Info("Session is terminated, cannot get/create data", "session_id", sessionID)
+		sm.mu.Unlock()
 		return nil, false, errors.New(errSessionNotFound)
 	}
 
 	// If data exists and is valid, return it
 	if session.Data != nil {
 		sm.logger.Debug("Successfully retrieved existing data for session ID", "session_id", sessionID)
+		sm.mu.Unlock()
 		return session.Data, false, nil
 	}
 
@@ -449,6 +555,23 @@ func (sm *SessionRegistry) GetOrCreateSessionData(sessionID string, createDataFn
 	newData := createDataFn()
 	session.Data = newData
 
+	// Capture email for persistence
+	persistEmail := ""
+	if kd, ok := newData.(*KiteSessionData); ok && kd != nil {
+		persistEmail = kd.Email
+	}
+
+	db := sm.db
+	sm.mu.Unlock()
+
 	sm.logger.Debug("Successfully created new data for session ID", "session_id", sessionID)
+
+	// Persist outside the lock
+	if needsPersist && db != nil {
+		if err := db.SaveSession(sessionID, persistEmail, persistCreatedAt, persistExpiresAt, false); err != nil {
+			sm.logger.Error("Failed to persist session", "session_id", sessionID, "error", err)
+		}
+	}
+
 	return newData, true, nil
 }
