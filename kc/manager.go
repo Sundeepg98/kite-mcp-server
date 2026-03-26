@@ -510,6 +510,27 @@ func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*Kite
 		return nil, false, err
 	}
 
+	// Restore Kite client for sessions loaded from DB (Data.Kite is nil after restart)
+	if kiteData.Kite == nil {
+		resolvedEmail := email
+		if resolvedEmail == "" {
+			resolvedEmail = kiteData.Email
+		}
+		m.Logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
+		kiteData.Kite = NewKiteConnect(m.GetAPIKeyForEmail(resolvedEmail))
+		// Apply cached token if available
+		if resolvedEmail != "" {
+			if entry, ok := m.tokenStore.Get(resolvedEmail); ok {
+				kiteData.Kite.Client.SetAccessToken(entry.AccessToken)
+				m.Logger.Debug("Applied cached token to restored session", "session_id", mcpSessionID, "email", resolvedEmail)
+			}
+		} else if m.accessToken != "" {
+			kiteData.Kite.Client.SetAccessToken(m.accessToken)
+		}
+		// Treat as new session so WithSession runs the auth check
+		isNew = true
+	}
+
 	// Update email on existing sessions if not already set (under registry lock to avoid data race)
 	if !isNew && email != "" && kiteData.Email == "" {
 		_ = m.sessionManager.UpdateSessionField(mcpSessionID, func(data any) {
