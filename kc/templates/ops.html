@@ -94,6 +94,7 @@ tr:hover td { background: var(--bg-2); }
     <span class="topbar-title">Ops Dashboard</span>
   </div>
   <div class="topbar-right">
+    <span class="topbar-uptime" id="userDisplay" style="color:var(--text-1)"></span>
     <span class="topbar-uptime" id="uptimeDisplay">--</span>
     <div class="pulse-dot" id="pulseDot"></div>
   </div>
@@ -136,11 +137,7 @@ tr:hover td { background: var(--bg-2); }
   <div class="section-header">Per-User Kite Credentials</div>
   <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Register your own Kite developer app API key and secret. When set, your trading operations use these credentials instead of the server's global ones.</p>
   <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:20px">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">Email</label>
-        <input id="credEmail" type="email" placeholder="user@example.com" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
-      </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
       <div>
         <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">API Key</label>
         <input id="credAPIKey" type="text" placeholder="your_api_key" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
@@ -177,6 +174,19 @@ tr:hover td { background: var(--bg-2); }
   var logEntries = [];
   var MAX_LOG = 500;
   var evtSource = null;
+  var isAdmin = document.body.dataset.admin === 'true';
+  var userEmail = document.body.dataset.email || '';
+
+  // Hide Logs tab for non-admin users
+  if (!isAdmin) {
+    var logsTab = document.querySelector('[data-tab="logs"]');
+    if (logsTab) logsTab.style.display = 'none';
+  }
+
+  // Show logged-in user email in topbar
+  if (userEmail) {
+    document.getElementById('userDisplay').textContent = userEmail + (isAdmin ? ' (admin)' : '');
+  }
 
   // Safe DOM helpers — never use innerHTML with data
   function el(tag, cls, text) {
@@ -423,24 +433,22 @@ tr:hover td { background: var(--bg-2); }
     });
   }
   document.getElementById('credSaveBtn').addEventListener('click', function() {
-    var email = document.getElementById('credEmail').value.trim();
     var apiKey = document.getElementById('credAPIKey').value.trim();
     var apiSecret = document.getElementById('credAPISecret').value.trim();
     var status = document.getElementById('credStatus');
-    if (!email || !apiKey || !apiSecret) {
-      status.textContent = 'All fields are required';
+    if (!apiKey || !apiSecret) {
+      status.textContent = 'API Key and API Secret are required';
       status.style.color = 'var(--red,#e55)';
       status.style.display = 'block';
       return;
     }
     fetch(basePath + '/api/credentials', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({email:email, api_key:apiKey, api_secret:apiSecret})
+      body: JSON.stringify({api_key:apiKey, api_secret:apiSecret})
     }).then(function(r) {
       if (r.ok) {
         status.textContent = 'Credentials saved. Re-login for changes to take effect.';
         status.style.color = 'var(--green,#4a4)';
-        document.getElementById('credEmail').value = '';
         document.getElementById('credAPIKey').value = '';
         document.getElementById('credAPISecret').value = '';
         refreshCredentials(); refreshOverview();

@@ -68,6 +68,9 @@ type Config struct {
 
 	// Alert persistence (opt-in: set ALERT_DB_PATH to enable SQLite persistence)
 	AlertDBPath string
+
+	// Admin emails (comma-separated list of admin emails for ops dashboard)
+	AdminEmails string
 }
 
 // Server mode constants
@@ -104,6 +107,7 @@ func NewApp(logger *slog.Logger) *App {
 
 			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 			AlertDBPath:      os.Getenv("ALERT_DB_PATH"),
+			AdminEmails:      os.Getenv("ADMIN_EMAILS"),
 		},
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
@@ -386,7 +390,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
 	// Ops dashboard: protected by OAuth if available, otherwise by secret path
-	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime)
+	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, app.Config.AdminEmails)
 	if app.oauthHandler != nil {
 		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
 	} else if app.Config.AdminSecretPath != "" {

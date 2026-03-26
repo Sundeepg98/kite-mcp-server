@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
@@ -15,24 +16,38 @@ import (
 
 // Handler serves the ops dashboard pages and API endpoints.
 type Handler struct {
-	manager   *kc.Manager
-	metrics   *metrics.Manager
-	logBuffer *LogBuffer
-	logger    *slog.Logger
-	startTime time.Time
-	version   string
+	manager     *kc.Manager
+	metrics     *metrics.Manager
+	logBuffer   *LogBuffer
+	logger      *slog.Logger
+	startTime   time.Time
+	version     string
+	adminEmails map[string]bool
 }
 
 // New creates a new ops Handler.
-func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time) *Handler {
-	return &Handler{
-		manager:   manager,
-		metrics:   metrics,
-		logBuffer: logBuffer,
-		logger:    logger,
-		startTime: startTime,
-		version:   version,
+func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, adminEmails string) *Handler {
+	admins := make(map[string]bool)
+	for _, email := range strings.Split(adminEmails, ",") {
+		email = strings.TrimSpace(strings.ToLower(email))
+		if email != "" {
+			admins[email] = true
+		}
 	}
+	return &Handler{
+		manager:     manager,
+		metrics:     metrics,
+		logBuffer:   logBuffer,
+		logger:      logger,
+		startTime:   startTime,
+		version:     version,
+		adminEmails: admins,
+	}
+}
+
+// isAdmin returns true if the given email is in the admin email set.
+func (h *Handler) isAdmin(email string) bool {
+	return h.adminEmails[strings.ToLower(email)]
 }
 
 // RegisterRoutes mounts all ops routes under /admin/ops, protected by the provided auth middleware.
@@ -47,15 +62,28 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/credentials", wrap(h.credentials))
 }
 
-// servePage serves the embedded ops.html dashboard page.
+// servePage serves the embedded ops.html dashboard page, injecting the user's
+// email and admin status as data attributes on the body element.
 func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 	data, err := templates.FS.ReadFile("ops.html")
 	if err != nil {
 		http.Error(w, "failed to load ops page", http.StatusInternalServerError)
 		return
 	}
+
+	email := oauth.EmailFromContext(r.Context())
+	admin := h.isAdmin(email)
+
+	// Inject data attributes into <body> tag
+	adminVal := "false"
+	if admin {
+		adminVal = "true"
+	}
+	bodyAttrs := fmt.Sprintf(`<body data-email="%s" data-admin="%s">`, email, adminVal)
+	html := strings.Replace(string(data), "<body>", bodyAttrs, 1)
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write([]byte(html)); err != nil {
 		h.logger.Error("Failed to write response", "error", err)
 	}
 }
@@ -70,39 +98,63 @@ func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}) {
 }
 
 // overview returns the combined overview JSON.
+// Admin sees global counts; non-admin sees only their own data.
 func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, h.buildOverview())
+	email := oauth.EmailFromContext(r.Context())
+	if h.isAdmin(email) {
+		h.writeJSON(w, h.buildOverview())
+	} else {
+		h.writeJSON(w, h.buildOverviewForUser(email))
+	}
 }
 
 // sessions returns the sessions JSON.
+// Admin sees all sessions; non-admin sees only their own.
 func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, h.buildSessions())
+	email := oauth.EmailFromContext(r.Context())
+	if h.isAdmin(email) {
+		h.writeJSON(w, h.buildSessions())
+	} else {
+		h.writeJSON(w, h.buildSessionsForUser(email))
+	}
 }
 
 // tickers returns the tickers JSON.
+// Admin sees all tickers; non-admin sees only their own.
 func (h *Handler) tickers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, h.buildTickers())
+	email := oauth.EmailFromContext(r.Context())
+	if h.isAdmin(email) {
+		h.writeJSON(w, h.buildTickers())
+	} else {
+		h.writeJSON(w, h.buildTickersForUser(email))
+	}
 }
 
 // alerts returns the alerts JSON.
+// Admin sees all alerts; non-admin sees only their own.
 func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, h.buildAlerts())
+	email := oauth.EmailFromContext(r.Context())
+	if h.isAdmin(email) {
+		h.writeJSON(w, h.buildAlerts())
+	} else {
+		h.writeJSON(w, h.buildAlertsForUser(email))
+	}
 }
 
 // credentials handles GET (list own), POST (create own), DELETE (remove own) for per-user Kite credentials.
@@ -168,9 +220,15 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 }
 
 // logStream serves an SSE stream of structured log entries.
+// Only admin users can access the log stream.
 func (h *Handler) logStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

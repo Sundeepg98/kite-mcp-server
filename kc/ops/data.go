@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"strings"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
@@ -99,4 +100,89 @@ func (h *Handler) buildTickers() TickerData {
 
 func (h *Handler) buildAlerts() AlertData {
 	return AlertData{Alerts: h.manager.AlertStore().ListAll(), Telegram: h.manager.AlertStore().ListAllTelegram()}
+}
+
+// --- Per-user filtered data builders (for non-admin users) ---
+
+// buildOverviewForUser returns overview data scoped to a single user's email.
+func (h *Handler) buildOverviewForUser(email string) OverviewData {
+	emailLower := strings.ToLower(email)
+
+	userAlerts := h.manager.AlertStore().List(emailLower)
+	var total, active int
+	for _, a := range userAlerts {
+		total++
+		if !a.Triggered {
+			active++
+		}
+	}
+
+	userSessions := h.buildSessionsForUser(email)
+	userTickers := h.buildTickersForUser(email)
+
+	// Check if user has a cached token
+	cachedTokens := 0
+	if _, ok := h.manager.TokenStore().Get(emailLower); ok {
+		cachedTokens = 1
+	}
+
+	// Check if user has stored credentials
+	perUserCreds := 0
+	if _, ok := h.manager.CredentialStore().Get(emailLower); ok {
+		perUserCreds = 1
+	}
+
+	return OverviewData{
+		Version:            h.version,
+		Uptime:             time.Since(h.startTime).Truncate(time.Second).String(),
+		ActiveSessions:     len(userSessions),
+		ActiveTickers:      len(userTickers.Tickers),
+		TotalAlerts:        total,
+		ActiveAlerts:       active,
+		CachedTokens:       cachedTokens,
+		PerUserCredentials: perUserCreds,
+		ToolUsage:          nil, // tool usage is global, not per-user
+		DailyUsers:         0,   // not applicable for per-user view
+	}
+}
+
+// buildSessionsForUser returns sessions filtered to the given email.
+func (h *Handler) buildSessionsForUser(email string) []SessionInfo {
+	all := h.buildSessions()
+	emailLower := strings.ToLower(email)
+	out := make([]SessionInfo, 0)
+	for _, s := range all {
+		if strings.ToLower(s.Email) == emailLower {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// buildTickersForUser returns tickers filtered to the given email.
+func (h *Handler) buildTickersForUser(email string) TickerData {
+	all := h.manager.TickerService().ListAll()
+	emailLower := strings.ToLower(email)
+	out := make([]ticker.UserTickerInfo, 0)
+	for _, t := range all {
+		if strings.ToLower(t.Email) == emailLower {
+			out = append(out, t)
+		}
+	}
+	return TickerData{Tickers: out}
+}
+
+// buildAlertsForUser returns alerts and telegram data for a single user.
+func (h *Handler) buildAlertsForUser(email string) AlertData {
+	emailLower := strings.ToLower(email)
+	userAlerts := h.manager.AlertStore().List(emailLower)
+	alertMap := map[string][]*alerts.Alert{}
+	if len(userAlerts) > 0 {
+		alertMap[emailLower] = userAlerts
+	}
+	telegramMap := map[string]int64{}
+	if chatID, ok := h.manager.AlertStore().GetTelegramChatID(emailLower); ok {
+		telegramMap[emailLower] = chatID
+	}
+	return AlertData{Alerts: alertMap, Telegram: telegramMap}
 }
