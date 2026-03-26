@@ -225,6 +225,8 @@ type TokenEntry struct {
 }
 
 // LoadTokens reads all cached Kite tokens from the database.
+// If an encryption key is set, access tokens are decrypted transparently.
+// Pre-encryption plaintext values are returned as-is (migration-safe).
 func (d *DB) LoadTokens() ([]*TokenEntry, error) {
 	rows, err := d.db.Query(`SELECT email, access_token, user_id, user_name, stored_at FROM kite_tokens`)
 	if err != nil {
@@ -239,6 +241,9 @@ func (d *DB) LoadTokens() ([]*TokenEntry, error) {
 		if err := rows.Scan(&t.Email, &t.AccessToken, &t.UserID, &t.UserName, &storedAtS); err != nil {
 			return nil, fmt.Errorf("scan token: %w", err)
 		}
+		if d.encryptionKey != nil {
+			t.AccessToken = decrypt(d.encryptionKey, t.AccessToken)
+		}
 		storedAt, err := time.Parse(time.RFC3339, storedAtS)
 		if err != nil {
 			storedAt = time.Time{}
@@ -250,9 +255,18 @@ func (d *DB) LoadTokens() ([]*TokenEntry, error) {
 }
 
 // SaveToken stores or updates a Kite token for the given email.
+// If an encryption key is set, the access token is encrypted at rest.
 func (d *DB) SaveToken(email, accessToken, userID, userName string, storedAt time.Time) error {
+	storeToken := accessToken
+	if d.encryptionKey != nil {
+		var err error
+		storeToken, err = encrypt(d.encryptionKey, accessToken)
+		if err != nil {
+			return fmt.Errorf("encrypt access_token: %w", err)
+		}
+	}
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
-		email, accessToken, userID, userName, storedAt.Format(time.RFC3339))
+		email, storeToken, userID, userName, storedAt.Format(time.RFC3339))
 	if err != nil {
 		return fmt.Errorf("save token: %w", err)
 	}
@@ -350,6 +364,8 @@ type ClientDBEntry struct {
 }
 
 // LoadClients reads all OAuth clients from the database.
+// If an encryption key is set, client_secret is decrypted transparently.
+// Pre-encryption plaintext values are returned as-is (migration-safe).
 func (d *DB) LoadClients() ([]*ClientDBEntry, error) {
 	rows, err := d.db.Query(`SELECT client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key FROM oauth_clients`)
 	if err != nil {
@@ -365,6 +381,9 @@ func (d *DB) LoadClients() ([]*ClientDBEntry, error) {
 		if err := rows.Scan(&c.ClientID, &c.ClientSecret, &c.RedirectURIs, &c.ClientName, &createdAtS, &isKiteKey); err != nil {
 			return nil, fmt.Errorf("scan oauth client: %w", err)
 		}
+		if d.encryptionKey != nil && c.ClientSecret != "" {
+			c.ClientSecret = decrypt(d.encryptionKey, c.ClientSecret)
+		}
 		createdAt, err := time.Parse(time.RFC3339, createdAtS)
 		if err != nil {
 			createdAt = time.Time{}
@@ -377,13 +396,22 @@ func (d *DB) LoadClients() ([]*ClientDBEntry, error) {
 }
 
 // SaveClient stores or updates an OAuth client in the database.
+// If an encryption key is set and client_secret is non-empty, it is encrypted at rest.
 func (d *DB) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
 	isKiteKeyInt := 0
 	if isKiteKey {
 		isKiteKeyInt = 1
 	}
+	storeSecret := clientSecret
+	if d.encryptionKey != nil && clientSecret != "" {
+		var err error
+		storeSecret, err = encrypt(d.encryptionKey, clientSecret)
+		if err != nil {
+			return fmt.Errorf("encrypt client_secret: %w", err)
+		}
+	}
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO oauth_clients (client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key) VALUES (?,?,?,?,?,?)`,
-		clientID, clientSecret, redirectURIsJSON, clientName, createdAt.Format(time.RFC3339), isKiteKeyInt)
+		clientID, storeSecret, redirectURIsJSON, clientName, createdAt.Format(time.RFC3339), isKiteKeyInt)
 	if err != nil {
 		return fmt.Errorf("save oauth client: %w", err)
 	}

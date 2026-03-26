@@ -191,3 +191,119 @@ func TestMultipleSessions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, sessions, 3)
 }
+
+func TestTokenEncryption(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	now := time.Now().Truncate(time.Second)
+	err = db.SaveToken("enc@example.com", "my-access-token", "uid1", "TestUser", now)
+	require.NoError(t, err)
+
+	// Verify the raw value in SQLite is NOT plaintext
+	var rawToken string
+	row := db.db.QueryRow(`SELECT access_token FROM kite_tokens WHERE email = ?`, "enc@example.com")
+	require.NoError(t, row.Scan(&rawToken))
+	assert.NotEqual(t, "my-access-token", rawToken, "access_token should be encrypted in DB")
+
+	// Load decrypts transparently
+	tokens, err := db.LoadTokens()
+	require.NoError(t, err)
+	require.Len(t, tokens, 1)
+	assert.Equal(t, "my-access-token", tokens[0].AccessToken)
+	assert.Equal(t, "enc@example.com", tokens[0].Email)
+	assert.Equal(t, "uid1", tokens[0].UserID)
+	assert.Equal(t, "TestUser", tokens[0].UserName)
+}
+
+func TestTokenEncryptionMigration(t *testing.T) {
+	db := openTestDB(t)
+
+	// Insert a plaintext token directly (simulates pre-encryption data)
+	now := time.Now().Truncate(time.Second)
+	_, err := db.db.Exec(`INSERT INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
+		"old@example.com", "plaintext-token", "uid2", "OldUser", now.Format(time.RFC3339))
+	require.NoError(t, err)
+
+	// Now enable encryption and load — plaintext should be returned as-is
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	tokens, err := db.LoadTokens()
+	require.NoError(t, err)
+	require.Len(t, tokens, 1)
+	assert.Equal(t, "plaintext-token", tokens[0].AccessToken)
+}
+
+func TestClientSecretEncryption(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	now := time.Now().Truncate(time.Second)
+	err = db.SaveClient("client-id-1", "super-secret", `["http://localhost"]`, "TestApp", now, false)
+	require.NoError(t, err)
+
+	// Verify the raw value in SQLite is NOT plaintext
+	var rawSecret string
+	row := db.db.QueryRow(`SELECT client_secret FROM oauth_clients WHERE client_id = ?`, "client-id-1")
+	require.NoError(t, row.Scan(&rawSecret))
+	assert.NotEqual(t, "super-secret", rawSecret, "client_secret should be encrypted in DB")
+
+	// Load decrypts transparently
+	clients, err := db.LoadClients()
+	require.NoError(t, err)
+	require.Len(t, clients, 1)
+	assert.Equal(t, "super-secret", clients[0].ClientSecret)
+	assert.Equal(t, "client-id-1", clients[0].ClientID)
+	assert.Equal(t, "TestApp", clients[0].ClientName)
+	assert.False(t, clients[0].IsKiteAPIKey)
+}
+
+func TestClientSecretEncryptionEmptySecret(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	now := time.Now().Truncate(time.Second)
+	// Kite API key clients may have empty secret — encryption should be skipped
+	err = db.SaveClient("kite-api-key", "", `["http://localhost"]`, "KiteApp", now, true)
+	require.NoError(t, err)
+
+	// Raw value should still be empty
+	var rawSecret string
+	row := db.db.QueryRow(`SELECT client_secret FROM oauth_clients WHERE client_id = ?`, "kite-api-key")
+	require.NoError(t, row.Scan(&rawSecret))
+	assert.Equal(t, "", rawSecret, "empty secret should remain empty")
+
+	clients, err := db.LoadClients()
+	require.NoError(t, err)
+	require.Len(t, clients, 1)
+	assert.Equal(t, "", clients[0].ClientSecret)
+	assert.True(t, clients[0].IsKiteAPIKey)
+}
+
+func TestClientSecretEncryptionMigration(t *testing.T) {
+	db := openTestDB(t)
+
+	// Insert a plaintext client_secret directly (simulates pre-encryption data)
+	now := time.Now().Truncate(time.Second)
+	_, err := db.db.Exec(`INSERT INTO oauth_clients (client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key) VALUES (?,?,?,?,?,?)`,
+		"old-client", "plaintext-secret", `["http://localhost"]`, "OldApp", now.Format(time.RFC3339), 0)
+	require.NoError(t, err)
+
+	// Now enable encryption and load — plaintext should be returned as-is
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	clients, err := db.LoadClients()
+	require.NoError(t, err)
+	require.Len(t, clients, 1)
+	assert.Equal(t, "plaintext-secret", clients[0].ClientSecret)
+}
