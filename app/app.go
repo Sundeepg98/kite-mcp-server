@@ -37,6 +37,7 @@ type App struct {
 	logger         *slog.Logger
 	metrics        *metrics.Manager
 	logBuffer      *ops.LogBuffer
+	rateLimiters   *rateLimiters
 }
 
 // StatusPageData holds template data for the status page
@@ -353,6 +354,9 @@ func (app *App) startServer(srv *http.Server, kcManager *kc.Manager, mcpServer *
 func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Initialize per-IP rate limiters (cleanup goroutine runs in background)
+	app.rateLimiters = newRateLimiters()
+
 	// Unified /callback handler: dispatches by flow param
 	// - flow=oauth → MCP OAuth callback (Kite → JWT → MCP auth code)
 	// - flow=browser → Browser auth callback (Kite → JWT cookie for ops dashboard)
@@ -397,17 +401,17 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		dashHandler.RegisterRoutes(mux, func(h http.Handler) http.Handler { return h })
 	}
 
-	// Register OAuth 2.1 endpoints if enabled
+	// Register OAuth 2.1 endpoints if enabled (with per-IP rate limiting)
 	if app.oauthHandler != nil {
 		mux.HandleFunc("/.well-known/oauth-protected-resource", app.oauthHandler.ResourceMetadata)
 		mux.HandleFunc("/.well-known/oauth-authorization-server", app.oauthHandler.AuthServerMetadata)
-		mux.HandleFunc("/oauth/register", app.oauthHandler.Register)
-		mux.HandleFunc("/oauth/authorize", app.oauthHandler.Authorize)
-		mux.HandleFunc("/oauth/token", app.oauthHandler.Token)
+		mux.Handle("/oauth/register", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.Register))
+		mux.Handle("/oauth/authorize", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.Authorize))
+		mux.Handle("/oauth/token", rateLimitFunc(app.rateLimiters.token, app.oauthHandler.Token))
 	}
 	// Register browser login route for ops dashboard auth (requires OAuth)
 	if app.oauthHandler != nil {
-		mux.HandleFunc("/auth/browser-login", app.oauthHandler.HandleBrowserLogin)
+		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
 	}
 
 	app.serveStatusPage(mux)
@@ -451,11 +455,11 @@ func (app *App) registerSSEEndpoints(mux *http.ServeMux, sse *server.SSEServer) 
 	sseHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
 
 	if app.oauthHandler != nil {
-		mux.Handle("/sse", app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler)))
-		mux.Handle("/message", app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler)))
+		mux.Handle("/sse", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler))))
+		mux.Handle("/message", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler))))
 	} else {
-		mux.HandleFunc("/sse", sseHandler)
-		mux.HandleFunc("/message", sseHandler)
+		mux.Handle("/sse", rateLimitFunc(app.rateLimiters.mcp, sseHandler))
+		mux.Handle("/message", rateLimitFunc(app.rateLimiters.mcp, sseHandler))
 	}
 }
 
@@ -480,9 +484,9 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	app.registerSSEEndpoints(mux, sse)
 	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
 	if app.oauthHandler != nil {
-		mux.Handle("/mcp", app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler)))
+		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler))))
 	} else {
-		mux.HandleFunc("/mcp", mcpHandler)
+		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
 
 	app.logger.Info("Hybrid mode enabled with both SSE and MCP endpoints on the same server")
@@ -529,13 +533,13 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	// Setup mux with common handlers
 	mux := app.setupMux(kcManager)
 
-	// Register /mcp with optional OAuth middleware
+	// Register /mcp with optional OAuth middleware (rate limited)
 	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
 	if app.oauthHandler != nil {
-		mux.Handle("/mcp", app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler)))
+		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler))))
 		app.logger.Info("OAuth middleware enabled for /mcp endpoint")
 	} else {
-		mux.HandleFunc("/mcp", mcpHandler)
+		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
 
 	app.logger.Info("MCP session manager configured with automatic cleanup for both MCP and Kite sessions")

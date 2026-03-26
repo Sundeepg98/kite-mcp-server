@@ -28,7 +28,7 @@ func (c *Config) Validate() error {
 	// Strip trailing slash
 	c.ExternalURL = strings.TrimRight(c.ExternalURL, "/")
 	if c.TokenExpiry == 0 {
-		c.TokenExpiry = 24 * time.Hour
+		c.TokenExpiry = 4 * time.Hour
 	}
 	return nil
 }

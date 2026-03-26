@@ -124,7 +124,7 @@ func (h *Handler) SetAuthCookie(w http.ResponseWriter, email string) error {
 		Name:     cookieName,
 		Value:    token,
 		Path:     "/",
-		MaxAge:   86400, // 24 hours
+		MaxAge:   14400, // 4 hours
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,

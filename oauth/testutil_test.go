@@ -96,7 +96,7 @@ func newTestHandler(opts ...func(*Config, *mockSigner, *mockExchanger)) *Handler
 		KiteAPIKey:  "test-api-key",
 		JWTSecret:   "super-secret-jwt-key-for-testing",
 		ExternalURL: "https://test.example.com",
-		TokenExpiry: 24 * time.Hour,
+		TokenExpiry: 4 * time.Hour,
 		Logger:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
 	}
 	signer := &mockSigner{}
