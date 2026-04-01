@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -157,5 +158,7 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 			"email", alert.Email,
 			"instrument", alert.Exchange+":"+alert.Tradingsymbol,
 		)
+		// Record when the notification was sent.
+		t.store.MarkNotificationSent(alert.ID, time.Now())
 	}
 }

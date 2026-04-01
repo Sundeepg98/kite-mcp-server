@@ -37,18 +37,19 @@ func IsPercentageDirection(d Direction) bool {
 
 // Alert represents a price alert for a specific instrument.
 type Alert struct {
-	ID              string    `json:"id"`
-	Email           string    `json:"email"`
-	Tradingsymbol   string    `json:"tradingsymbol"`
-	Exchange        string    `json:"exchange"`
-	InstrumentToken uint32    `json:"instrument_token"`
-	TargetPrice     float64   `json:"target_price"`
-	Direction       Direction `json:"direction"`
-	ReferencePrice  float64   `json:"reference_price,omitempty"`
-	Triggered       bool      `json:"triggered"`
-	CreatedAt       time.Time `json:"created_at"`
-	TriggeredAt     time.Time `json:"triggered_at,omitempty"`
-	TriggeredPrice  float64   `json:"triggered_price,omitempty"`
+	ID                 string    `json:"id"`
+	Email              string    `json:"email"`
+	Tradingsymbol      string    `json:"tradingsymbol"`
+	Exchange           string    `json:"exchange"`
+	InstrumentToken    uint32    `json:"instrument_token"`
+	TargetPrice        float64   `json:"target_price"`
+	Direction          Direction `json:"direction"`
+	ReferencePrice     float64   `json:"reference_price,omitempty"`
+	Triggered          bool      `json:"triggered"`
+	CreatedAt          time.Time `json:"created_at"`
+	TriggeredAt        time.Time `json:"triggered_at,omitempty"`
+	TriggeredPrice     float64   `json:"triggered_price,omitempty"`
+	NotificationSentAt time.Time `json:"notification_sent_at,omitempty"`
 }
 
 // NotifyCallback is invoked when an alert is triggered.
@@ -229,6 +230,26 @@ func (s *Store) MarkTriggered(alertID string, currentPrice float64) bool {
 		}
 	}
 	return false
+}
+
+// MarkNotificationSent records when a Telegram notification was sent for an alert.
+func (s *Store) MarkNotificationSent(alertID string, sentAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, alerts := range s.alerts {
+		for _, a := range alerts {
+			if a.ID == alertID {
+				a.NotificationSentAt = sentAt
+				break
+			}
+		}
+	}
+	if s.db != nil {
+		if err := s.db.UpdateAlertNotification(alertID, sentAt); err != nil {
+			s.logger.Error("Failed to persist notification sent time", "id", alertID, "error", err)
+		}
+	}
 }
 
 // SetTelegramChatID sets the Telegram chat ID for a user.

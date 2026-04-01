@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -67,6 +68,27 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 				// Estimate output size.
 				if outJSON, jsonErr := json.Marshal(result); jsonErr == nil {
 					entry.OutputSize = len(outJSON)
+				}
+			}
+
+			// Extract order_id from order placement/modification responses.
+			if toolName == "place_order" || toolName == "modify_order" || toolName == "place_gtt_order" {
+				if text := extractText(result); text != "" {
+					// Try to parse as JSON and extract order_id.
+					var resp map[string]any
+					if json.Unmarshal([]byte(text), &resp) == nil {
+						if oid, ok := resp["order_id"]; ok {
+							entry.OrderID = fmt.Sprintf("%v", oid)
+						}
+						// Also check nested data.order_id
+						if entry.OrderID == "" {
+							if data, ok := resp["data"].(map[string]any); ok {
+								if oid, ok := data["order_id"]; ok {
+									entry.OrderID = fmt.Sprintf("%v", oid)
+								}
+							}
+						}
+					}
 				}
 			}
 

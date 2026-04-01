@@ -26,6 +26,7 @@ type ToolCall struct {
 	IsError       bool      `json:"is_error"`
 	ErrorMessage  string    `json:"error_message"`
 	ErrorType     string    `json:"error_type"`
+	OrderID       string    `json:"order_id,omitempty"` // extracted from place_order/place_gtt_order responses
 	StartedAt     time.Time `json:"started_at"`
 	CompletedAt   time.Time `json:"completed_at"`
 	DurationMs    int64     `json:"duration_ms"`
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     is_error        INTEGER NOT NULL DEFAULT 0,
     error_message   TEXT,
     error_type      TEXT,
+    order_id        TEXT,
     started_at      TEXT NOT NULL,
     completed_at    TEXT NOT NULL,
     duration_ms     INTEGER NOT NULL DEFAULT 0
@@ -130,6 +132,11 @@ CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error =
 	if err := s.db.ExecDDL(ddl); err != nil {
 		return fmt.Errorf("audit: create tool_calls table: %w", err)
 	}
+
+	// Migrate existing databases: add order_id column if missing.
+	// SQLite returns an error if the column already exists; ignore it.
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN order_id TEXT`)
+
 	return nil
 }
 
@@ -143,9 +150,9 @@ func (s *Store) Record(entry *ToolCall) error {
 	query := `INSERT OR IGNORE INTO tool_calls
 		(call_id, email, session_id, tool_name, tool_category,
 		 input_params, input_summary, output_summary, output_size,
-		 is_error, error_message, error_type,
+		 is_error, error_message, error_type, order_id,
 		 started_at, completed_at, duration_ms)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 	err := s.db.ExecInsert(query,
 		entry.CallID,
 		entry.Email,
@@ -159,6 +166,7 @@ func (s *Store) Record(entry *ToolCall) error {
 		isErr,
 		entry.ErrorMessage,
 		entry.ErrorType,
+		entry.OrderID,
 		entry.StartedAt.Format(time.RFC3339Nano),
 		entry.CompletedAt.Format(time.RFC3339Nano),
 		entry.DurationMs,
@@ -208,7 +216,7 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 	// Fetch rows with ordering and pagination.
 	dataQuery := "SELECT id, call_id, email, session_id, tool_name, tool_category, " +
 		"input_params, input_summary, output_summary, output_size, " +
-		"is_error, error_message, error_type, started_at, completed_at, duration_ms " +
+		"is_error, error_message, error_type, order_id, started_at, completed_at, duration_ms " +
 		"FROM tool_calls WHERE " + whereClause + " ORDER BY started_at DESC"
 
 	if opts.Limit > 0 {
@@ -244,14 +252,14 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	var (
 		isErr                                              int
 		inputParams, inputSummary, outputSummary           sql.NullString
-		errorMessage, errorType                            sql.NullString
+		errorMessage, errorType, orderID                   sql.NullString
 		startedAtS, completedAtS                           string
 	)
 	if err := rows.Scan(
 		&tc.ID, &tc.CallID, &tc.Email, &tc.SessionID,
 		&tc.ToolName, &tc.ToolCategory,
 		&inputParams, &inputSummary, &outputSummary, &tc.OutputSize,
-		&isErr, &errorMessage, &errorType,
+		&isErr, &errorMessage, &errorType, &orderID,
 		&startedAtS, &completedAtS, &tc.DurationMs,
 	); err != nil {
 		return nil, fmt.Errorf("audit: scan tool call: %w", err)
@@ -263,6 +271,7 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	tc.OutputSummary = outputSummary.String
 	tc.ErrorMessage = errorMessage.String
 	tc.ErrorType = errorType.String
+	tc.OrderID = orderID.String
 
 	var err error
 	tc.StartedAt, err = time.Parse(time.RFC3339Nano, startedAtS)

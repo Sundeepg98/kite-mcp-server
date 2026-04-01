@@ -38,18 +38,19 @@ func OpenDB(path string) (*DB, error) {
 
 	ddl := `
 CREATE TABLE IF NOT EXISTS alerts (
-    id               TEXT PRIMARY KEY,
-    email            TEXT NOT NULL,
-    tradingsymbol    TEXT NOT NULL,
-    exchange         TEXT NOT NULL,
-    instrument_token INTEGER NOT NULL,
-    target_price     REAL NOT NULL,
-    direction        TEXT NOT NULL CHECK(direction IN ('above','below','drop_pct','rise_pct')),
-    triggered        INTEGER NOT NULL DEFAULT 0,
-    created_at       TEXT NOT NULL,
-    triggered_at     TEXT,
-    triggered_price  REAL,
-    reference_price  REAL
+    id                   TEXT PRIMARY KEY,
+    email                TEXT NOT NULL,
+    tradingsymbol        TEXT NOT NULL,
+    exchange             TEXT NOT NULL,
+    instrument_token     INTEGER NOT NULL,
+    target_price         REAL NOT NULL,
+    direction            TEXT NOT NULL CHECK(direction IN ('above','below','drop_pct','rise_pct')),
+    triggered            INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT NOT NULL,
+    triggered_at         TEXT,
+    triggered_price      REAL,
+    reference_price      REAL,
+    notification_sent_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_email ON alerts(email);
 
@@ -114,13 +115,19 @@ func migrateAlerts(db *sql.DB) error {
 			return fmt.Errorf("add reference_price column: %w", err)
 		}
 	}
+
+	// Add notification_sent_at column if missing.
+	// SQLite returns an error if the column already exists; ignore it.
+	db.Exec(`ALTER TABLE alerts ADD COLUMN notification_sent_at TEXT`) //nolint:errcheck
+
 	return nil
 }
 
 // LoadAlerts reads all alerts from the database grouped by email.
 func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 	rows, err := d.db.Query(`SELECT id, email, tradingsymbol, exchange, instrument_token,
-		target_price, direction, triggered, created_at, triggered_at, triggered_price, reference_price FROM alerts`)
+		target_price, direction, triggered, created_at, triggered_at, triggered_price,
+		reference_price, notification_sent_at FROM alerts`)
 	if err != nil {
 		return nil, fmt.Errorf("query alerts: %w", err)
 	}
@@ -129,17 +136,19 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 	out := make(map[string][]*Alert)
 	for rows.Next() {
 		var (
-			a              Alert
-			dir            string
-			triggeredI     int
-			createdAtS     string
-			triggeredAt    sql.NullString
-			trigPrice      sql.NullFloat64
-			referencePrice sql.NullFloat64
+			a                  Alert
+			dir                string
+			triggeredI         int
+			createdAtS         string
+			triggeredAt        sql.NullString
+			trigPrice          sql.NullFloat64
+			referencePrice     sql.NullFloat64
+			notificationSentAt sql.NullString
 		)
 		if err := rows.Scan(&a.ID, &a.Email, &a.Tradingsymbol, &a.Exchange,
 			&a.InstrumentToken, &a.TargetPrice, &dir, &triggeredI,
-			&createdAtS, &triggeredAt, &trigPrice, &referencePrice); err != nil {
+			&createdAtS, &triggeredAt, &trigPrice, &referencePrice,
+			&notificationSentAt); err != nil {
 			return nil, fmt.Errorf("scan alert: %w", err)
 		}
 		a.Direction = Direction(dir)
@@ -159,6 +168,9 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 		}
 		if referencePrice.Valid {
 			a.ReferencePrice = referencePrice.Float64
+		}
+		if notificationSentAt.Valid {
+			a.NotificationSentAt, _ = time.Parse(time.RFC3339, notificationSentAt.String)
 		}
 		out[a.Email] = append(out[a.Email], &a)
 	}
@@ -183,15 +195,20 @@ func (d *DB) SaveAlert(alert *Alert) error {
 	if alert.ReferencePrice != 0 {
 		refPrice = sql.NullFloat64{Float64: alert.ReferencePrice, Valid: true}
 	}
+	var notifSentAt sql.NullString
+	if !alert.NotificationSentAt.IsZero() {
+		notifSentAt = sql.NullString{String: alert.NotificationSentAt.Format(time.RFC3339), Valid: true}
+	}
 
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO alerts
 		(id, email, tradingsymbol, exchange, instrument_token, target_price,
-		 direction, triggered, created_at, triggered_at, triggered_price, reference_price)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 direction, triggered, created_at, triggered_at, triggered_price,
+		 reference_price, notification_sent_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		alert.ID, alert.Email, alert.Tradingsymbol, alert.Exchange,
 		alert.InstrumentToken, alert.TargetPrice, string(alert.Direction),
 		triggered, alert.CreatedAt.Format(time.RFC3339),
-		triggeredAt, trigPrice, refPrice)
+		triggeredAt, trigPrice, refPrice, notifSentAt)
 	if err != nil {
 		return fmt.Errorf("save alert: %w", err)
 	}
@@ -203,6 +220,16 @@ func (d *DB) DeleteAlert(email, alertID string) error {
 	_, err := d.db.Exec(`DELETE FROM alerts WHERE id = ? AND email = ?`, alertID, email)
 	if err != nil {
 		return fmt.Errorf("delete alert: %w", err)
+	}
+	return nil
+}
+
+// UpdateAlertNotification records when a Telegram notification was sent for an alert.
+func (d *DB) UpdateAlertNotification(alertID string, sentAt time.Time) error {
+	_, err := d.db.Exec("UPDATE alerts SET notification_sent_at = ? WHERE id = ?",
+		sentAt.Format(time.RFC3339), alertID)
+	if err != nil {
+		return fmt.Errorf("update notification_sent_at: %w", err)
 	}
 	return nil
 }
