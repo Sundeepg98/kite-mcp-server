@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -40,6 +41,8 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/activity", wrap(d.serveActivityPage))
 	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
+	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPage))
+	mux.Handle("/dashboard/api/orders", wrap(d.ordersAPI))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
@@ -499,4 +502,247 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.writeJSON(w, resp)
+}
+
+// --- Orders P&L types ---
+
+type orderEntry struct {
+	OrderID      string   `json:"order_id"`
+	Symbol       string   `json:"symbol"`
+	Exchange     string   `json:"exchange"`
+	Side         string   `json:"side"`
+	Quantity     float64  `json:"quantity"`
+	OrderType    string   `json:"order_type"`
+	PlacedAt     string   `json:"placed_at"`
+	Status       string   `json:"status"`
+	FillPrice    *float64 `json:"fill_price"`
+	CurrentPrice *float64 `json:"current_price"`
+	PnL          *float64 `json:"pnl"`
+	PnLPct       *float64 `json:"pnl_pct"`
+	Error        string   `json:"error,omitempty"`
+}
+
+type ordersSummary struct {
+	TotalOrders   int      `json:"total_orders"`
+	Completed     int      `json:"completed"`
+	TotalPnL      *float64 `json:"total_pnl"`
+	WinningTrades int      `json:"winning_trades"`
+	LosingTrades  int      `json:"losing_trades"`
+}
+
+type ordersResponse struct {
+	Orders  []orderEntry  `json:"orders"`
+	Summary ordersSummary `json:"summary"`
+}
+
+// serveOrdersPage serves the embedded orders.html page.
+func (d *DashboardHandler) serveOrdersPage(w http.ResponseWriter, r *http.Request) {
+	data, err := templates.FS.ReadFile("orders.html")
+	if err != nil {
+		http.Error(w, "failed to load orders page", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(data); err != nil {
+		d.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// ordersAPI returns order entries with P&L enrichment from the Kite API.
+func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	if d.auditStore == nil {
+		d.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		return
+	}
+
+	// Parse since param (default: 7 days ago)
+	since := time.Now().AddDate(0, 0, -7)
+	if s := r.URL.Query().Get("since"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			since = t
+		}
+	}
+
+	toolCalls, err := d.auditStore.ListOrders(email, since)
+	if err != nil {
+		d.logger.Error("Failed to list orders", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build base order entries from audit trail
+	entries := make([]orderEntry, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		oe := orderEntry{
+			OrderID:  tc.OrderID,
+			PlacedAt: tc.StartedAt.Format(time.RFC3339),
+		}
+
+		// Parse symbol/exchange/side/order_type from input_params JSON
+		if tc.InputParams != "" {
+			var params map[string]interface{}
+			if jsonErr := json.Unmarshal([]byte(tc.InputParams), &params); jsonErr == nil {
+				if v, ok := params["tradingsymbol"].(string); ok {
+					oe.Symbol = v
+				}
+				if v, ok := params["exchange"].(string); ok {
+					oe.Exchange = v
+				}
+				if v, ok := params["transaction_type"].(string); ok {
+					oe.Side = v
+				}
+				if v, ok := params["order_type"].(string); ok {
+					oe.OrderType = v
+				}
+				if v, ok := params["quantity"].(float64); ok {
+					oe.Quantity = v
+				}
+			}
+		}
+
+		entries = append(entries, oe)
+	}
+
+	// Try to enrich with Kite API data
+	var client *kiteconnect.Client
+	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	if hasCreds && hasToken {
+		client = kiteconnect.New(credEntry.APIKey)
+		client.SetAccessToken(tokenEntry.AccessToken)
+	}
+
+	if client != nil {
+		// Enrich each order with fill details from order history
+		// Collect symbols for batched LTP lookup
+		type ltpKey struct {
+			exchange string
+			symbol   string
+		}
+		ltpKeys := make(map[string]ltpKey) // "exchange:symbol" -> ltpKey
+		for i := range entries {
+			oe := &entries[i]
+			history, histErr := client.GetOrderHistory(oe.OrderID)
+			if histErr != nil {
+				oe.Error = "order history: " + histErr.Error()
+				continue
+			}
+
+			// Find the latest status entry in the order history
+			if len(history) > 0 {
+				latest := history[len(history)-1]
+				oe.Status = latest.Status
+
+				// Use symbol/exchange from order history if not set from params
+				if oe.Symbol == "" {
+					oe.Symbol = latest.TradingSymbol
+				}
+				if oe.Exchange == "" {
+					oe.Exchange = latest.Exchange
+				}
+				if oe.Side == "" {
+					oe.Side = latest.TransactionType
+				}
+				if oe.OrderType == "" {
+					oe.OrderType = latest.OrderType
+				}
+				if oe.Quantity == 0 {
+					oe.Quantity = latest.Quantity
+				}
+
+				// Only set fill price for completed orders
+				if latest.Status == "COMPLETE" && latest.AveragePrice > 0 {
+					fp := latest.AveragePrice
+					oe.FillPrice = &fp
+					if latest.FilledQuantity > 0 {
+						oe.Quantity = latest.FilledQuantity
+					}
+
+					// Queue for LTP lookup
+					if oe.Exchange != "" && oe.Symbol != "" {
+						key := oe.Exchange + ":" + oe.Symbol
+						ltpKeys[key] = ltpKey{exchange: oe.Exchange, symbol: oe.Symbol}
+					}
+				}
+			}
+		}
+
+		// Batch LTP lookup for all completed orders
+		if len(ltpKeys) > 0 {
+			instruments := make([]string, 0, len(ltpKeys))
+			for k := range ltpKeys {
+				instruments = append(instruments, k)
+			}
+			ltpMap, ltpErr := client.GetLTP(instruments...)
+			if ltpErr != nil {
+				d.logger.Error("Failed to get LTP for orders", "email", email, "error", ltpErr)
+			} else {
+				// Apply current prices and compute P&L
+				for i := range entries {
+					oe := &entries[i]
+					if oe.FillPrice == nil || oe.Exchange == "" || oe.Symbol == "" {
+						continue
+					}
+					key := oe.Exchange + ":" + oe.Symbol
+					if quote, ok := ltpMap[key]; ok && quote.LastPrice > 0 {
+						cp := quote.LastPrice
+						oe.CurrentPrice = &cp
+
+						// Direction: BUY = +1, SELL = -1
+						dir := 1.0
+						if oe.Side == "SELL" {
+							dir = -1.0
+						}
+						pnl := (cp - *oe.FillPrice) * oe.Quantity * dir
+						pnl = math.Round(pnl*100) / 100
+						oe.PnL = &pnl
+
+						if *oe.FillPrice > 0 {
+							pnlPct := ((cp - *oe.FillPrice) / *oe.FillPrice) * 100 * dir
+							pnlPct = math.Round(pnlPct*100) / 100
+							oe.PnLPct = &pnlPct
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Compute summary
+	summary := ordersSummary{TotalOrders: len(entries)}
+	var totalPnL float64
+	hasPnL := false
+	for _, oe := range entries {
+		if oe.Status == "COMPLETE" {
+			summary.Completed++
+		}
+		if oe.PnL != nil {
+			hasPnL = true
+			totalPnL += *oe.PnL
+			if *oe.PnL > 0 {
+				summary.WinningTrades++
+			} else if *oe.PnL < 0 {
+				summary.LosingTrades++
+			}
+		}
+	}
+	if hasPnL {
+		rounded := math.Round(totalPnL*100) / 100
+		summary.TotalPnL = &rounded
+	}
+
+	d.writeJSON(w, ordersResponse{
+		Orders:  entries,
+		Summary: summary,
+	})
 }

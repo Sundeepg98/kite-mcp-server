@@ -286,6 +286,35 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	return &tc, nil
 }
 
+// ListOrders returns tool calls with order IDs for the given email.
+func (s *Store) ListOrders(email string, since time.Time) ([]*ToolCall, error) {
+	query := `SELECT id, call_id, email, session_id, tool_name, tool_category,
+		input_params, input_summary, output_summary, output_size,
+		is_error, error_message, error_type, order_id, started_at, completed_at, duration_ms
+		FROM tool_calls
+		WHERE email = ? AND order_id IS NOT NULL AND order_id != '' AND started_at >= ?
+		ORDER BY started_at DESC LIMIT 100`
+
+	rows, err := s.db.RawQuery(query, email, since.Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, fmt.Errorf("audit: list orders: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*ToolCall
+	for rows.Next() {
+		tc, err := scanToolCall(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, tc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: iterate order rows: %w", err)
+	}
+	return results, nil
+}
+
 // DeleteOlderThan removes tool_calls older than the given time.
 // Returns the number of rows deleted.
 func (s *Store) DeleteOlderThan(before time.Time) (int64, error) {

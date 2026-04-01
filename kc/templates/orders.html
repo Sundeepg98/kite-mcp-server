@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orders P&amp;L · Kite MCP</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
+.dash-nav-link:hover { color: var(--text-1); }
+.dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.content { padding: 20px 24px; max-width: 1200px; }
+
+.filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-group { display: flex; gap: 4px; align-items: center; }
+.fbtn { padding: 5px 12px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.fbtn:hover { border-color: var(--border-hi); color: var(--text-0); }
+.fbtn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--text-0); }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--text-2); margin-top: 2px; }
+
+.orders-table { width: 100%; border-collapse: collapse; }
+.orders-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+.orders-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.orders-table tr:hover td { background: var(--bg-2); }
+
+.side-buy { color: var(--green); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+.side-sell { color: var(--red); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.text-muted { color: var(--text-2); }
+.pnl-pos { color: var(--green); font-family: var(--mono); font-weight: 600; }
+.pnl-neg { color: var(--red); font-family: var(--mono); font-weight: 600; }
+.pnl-zero { color: var(--text-2); font-family: var(--mono); }
+
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.status-complete { background: var(--green-dim); color: var(--green); }
+.status-cancelled { background: rgba(100,116,139,0.12); color: var(--text-2); }
+.status-rejected { background: var(--red-dim); color: var(--red); }
+.status-open { background: var(--accent-dim); color: var(--accent); }
+.status-pending { background: var(--amber-dim); color: var(--amber); }
+
+.loading-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
+.error-state { text-align: center; padding: 32px 20px; color: var(--red); font-size: 13px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; margin-bottom: 16px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-1); }
+.order-error { font-size: 11px; color: var(--amber); margin-top: 2px; }
+
+@media (max-width: 640px) {
+  .content { padding: 14px 12px; }
+  .topbar { padding: 0 12px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-value { font-size: 18px; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Orders P&amp;L</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-email" id="userEmail">--</span>
+  </div>
+</div>
+
+<nav class="dash-nav">
+  <a href="/dashboard" class="dash-nav-link">Portfolio</a>
+  <a href="/dashboard/activity" class="dash-nav-link">Activity</a>
+  <a href="/dashboard/orders" class="dash-nav-link active">Orders</a>
+  <a href="/admin/ops" class="dash-nav-link">Ops</a>
+</nav>
+
+<div class="content">
+  <div id="errorBanner" class="error-state" style="display:none"></div>
+
+  <div class="filter-bar">
+    <div class="filter-group" id="dateFilters">
+      <button class="fbtn active" data-days="7">7 Days</button>
+      <button class="fbtn" data-days="30">30 Days</button>
+      <button class="fbtn" data-days="90">90 Days</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Total Orders</div><div class="stat-value" id="statTotal">--</div></div>
+    <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value" id="statCompleted">--</div></div>
+    <div class="stat-card"><div class="stat-label">Total P&amp;L</div><div class="stat-value" id="statPnL">--</div></div>
+    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="statWinRate">--</div><div class="stat-sub" id="statWinRateSub"></div></div>
+  </div>
+
+  <div id="loadingState" class="loading-state">Loading orders...</div>
+  <div id="emptyState" class="empty-state" style="display:none">No AI-assisted orders found in this period.</div>
+  <div class="table-wrap" id="tableWrap" style="display:none">
+    <table class="orders-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Side</th>
+          <th>Qty</th>
+          <th>Fill Price</th>
+          <th>Current Price</th>
+          <th>P&amp;L</th>
+          <th>P&amp;L %</th>
+          <th>Status</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var REFRESH_MS = 60000;
+  var state = { days: 7 };
+  var refreshTimer = null;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function fmtPrice(v) {
+    if (v == null) return '--';
+    return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtPnL(v) {
+    if (v == null) return '--';
+    var prefix = v > 0 ? '+' : '';
+    return prefix + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtPct(v) {
+    if (v == null) return '--';
+    var prefix = v > 0 ? '+' : '';
+    return prefix + v.toFixed(2) + '%';
+  }
+
+  function fmtTime(isoStr) {
+    if (!isoStr) return '--';
+    var d = new Date(isoStr);
+    var day = String(d.getDate()).padStart(2, '0');
+    var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    return day + ' ' + mon + ' ' + h + ':' + m;
+  }
+
+  function statusClass(s) {
+    if (!s) return 'status-pending';
+    var sl = s.toUpperCase();
+    if (sl === 'COMPLETE') return 'status-complete';
+    if (sl === 'CANCELLED') return 'status-cancelled';
+    if (sl === 'REJECTED') return 'status-rejected';
+    if (sl === 'OPEN' || sl === 'TRIGGER PENDING') return 'status-open';
+    return 'status-pending';
+  }
+
+  function pnlClass(v) {
+    if (v == null || v === 0) return 'pnl-zero';
+    return v > 0 ? 'pnl-pos' : 'pnl-neg';
+  }
+
+  function fetchEmail() {
+    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.email) document.getElementById('userEmail').textContent = d.email;
+    }).catch(function() {});
+  }
+
+  function buildURL() {
+    var since = new Date();
+    since.setDate(since.getDate() - state.days);
+    since.setHours(0, 0, 0, 0);
+    return '/dashboard/api/orders?since=' + encodeURIComponent(since.toISOString());
+  }
+
+  function fetchOrders() {
+    var loading = document.getElementById('loadingState');
+    var empty = document.getElementById('emptyState');
+    var tableWrap = document.getElementById('tableWrap');
+    var errorBanner = document.getElementById('errorBanner');
+
+    loading.style.display = 'block';
+    empty.style.display = 'none';
+    tableWrap.style.display = 'none';
+    errorBanner.style.display = 'none';
+
+    fetch(buildURL()).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      loading.style.display = 'none';
+
+      var orders = data.orders || [];
+      var summary = data.summary || {};
+
+      updateStats(summary, orders.length);
+
+      if (orders.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+
+      tableWrap.style.display = 'block';
+      renderTable(orders);
+    }).catch(function(err) {
+      loading.style.display = 'none';
+      errorBanner.textContent = 'Failed to load orders: ' + err.message;
+      errorBanner.style.display = 'block';
+    });
+  }
+
+  function updateStats(summary, count) {
+    document.getElementById('statTotal').textContent = summary.total_orders != null ? summary.total_orders : count;
+    document.getElementById('statCompleted').textContent = summary.completed != null ? summary.completed : '--';
+
+    var pnlEl = document.getElementById('statPnL');
+    if (summary.total_pnl != null) {
+      pnlEl.textContent = fmtPnL(summary.total_pnl);
+      pnlEl.className = 'stat-value ' + (summary.total_pnl > 0 ? 'green' : (summary.total_pnl < 0 ? 'red' : ''));
+    } else {
+      pnlEl.textContent = '--';
+      pnlEl.className = 'stat-value';
+    }
+
+    var winEl = document.getElementById('statWinRate');
+    var winSub = document.getElementById('statWinRateSub');
+    var total = (summary.winning_trades || 0) + (summary.losing_trades || 0);
+    if (total > 0) {
+      var rate = ((summary.winning_trades || 0) / total * 100).toFixed(0);
+      winEl.textContent = rate + '%';
+      winEl.className = 'stat-value ' + (parseInt(rate) >= 50 ? 'green' : 'red');
+      winSub.textContent = (summary.winning_trades || 0) + 'W / ' + (summary.losing_trades || 0) + 'L';
+    } else {
+      winEl.textContent = '--';
+      winEl.className = 'stat-value';
+      winSub.textContent = '';
+    }
+  }
+
+  function renderTable(orders) {
+    var body = document.getElementById('ordersBody');
+    clearChildren(body);
+
+    for (var i = 0; i < orders.length; i++) {
+      var o = orders[i];
+      var tr = document.createElement('tr');
+
+      // Symbol
+      var tdSym = el('td', '', null);
+      var symSpan = el('span', 'mono', o.symbol || o.order_id);
+      tdSym.appendChild(symSpan);
+      if (o.exchange) {
+        var exchSpan = el('span', 'text-muted', ' ' + o.exchange);
+        exchSpan.style.fontSize = '11px';
+        tdSym.appendChild(exchSpan);
+      }
+      if (o.error) {
+        tdSym.appendChild(el('div', 'order-error', o.error));
+      }
+      tr.appendChild(tdSym);
+
+      // Side
+      var sideClass = o.side === 'BUY' ? 'side-buy' : (o.side === 'SELL' ? 'side-sell' : 'mono');
+      tr.appendChild(el('td', sideClass, o.side || '--'));
+
+      // Qty
+      tr.appendChild(el('td', 'mono', o.quantity || '--'));
+
+      // Fill Price
+      tr.appendChild(el('td', 'mono', fmtPrice(o.fill_price)));
+
+      // Current Price
+      tr.appendChild(el('td', 'mono', fmtPrice(o.current_price)));
+
+      // P&L
+      tr.appendChild(el('td', pnlClass(o.pnl), fmtPnL(o.pnl)));
+
+      // P&L %
+      tr.appendChild(el('td', pnlClass(o.pnl_pct), fmtPct(o.pnl_pct)));
+
+      // Status
+      var tdStatus = el('td', '', null);
+      var badge = el('span', 'status-badge ' + statusClass(o.status), o.status || 'UNKNOWN');
+      tdStatus.appendChild(badge);
+      tr.appendChild(tdStatus);
+
+      // Time
+      tr.appendChild(el('td', 'mono text-muted', fmtTime(o.placed_at)));
+
+      body.appendChild(tr);
+    }
+  }
+
+  // Date filter
+  document.getElementById('dateFilters').addEventListener('click', function(ev) {
+    var btn = ev.target.closest('.fbtn');
+    if (!btn) return;
+    var btns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+    state.days = parseInt(btn.getAttribute('data-days'), 10) || 7;
+    fetchOrders();
+    scheduleRefresh();
+  });
+
+  function scheduleRefresh() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    refreshTimer = setInterval(function() { fetchOrders(); }, REFRESH_MS);
+  }
+
+  fetchEmail();
+  fetchOrders();
+  scheduleRefresh();
+})();
+</script>
+</body>
+</html>
