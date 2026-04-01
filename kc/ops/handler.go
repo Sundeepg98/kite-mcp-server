@@ -60,6 +60,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/alerts", wrap(h.alerts))
 	mux.Handle("/admin/ops/api/logs", wrap(h.logStream))
 	mux.Handle("/admin/ops/api/credentials", wrap(h.credentials))
+	mux.Handle("/admin/ops/api/force-reauth", wrap(h.forceReauth))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
@@ -217,6 +218,31 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 	default:
 		jsonError(http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+// forceReauth deletes a user's cached Kite token so their next MCP call triggers re-authentication.
+// Only admin users can invoke this endpoint.
+func (h *Handler) forceReauth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+
+	// Delete the cached Kite token — next MCP call will trigger 401 + re-auth
+	h.manager.TokenStore().Delete(targetEmail)
+	h.logger.Info("Admin forced re-auth", "admin", adminEmail, "target", targetEmail)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Token deleted, user will re-authenticate on next MCP call"})
 }
 
 // logStream serves an SSE stream of structured log entries.
