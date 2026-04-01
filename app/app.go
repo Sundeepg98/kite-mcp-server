@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
@@ -38,6 +39,7 @@ type App struct {
 	metrics        *metrics.Manager
 	logBuffer      *ops.LogBuffer
 	rateLimiters   *rateLimiters
+	auditStore     *audit.Store
 }
 
 // StatusPageData holds template data for the status page
@@ -275,11 +277,28 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	app.logger.Debug("Kite Connect manager created successfully")
 
+	// Create audit store (reuse the same SQLite DB used for alerts).
+	var auditMiddleware server.ToolHandlerMiddleware
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		app.auditStore = audit.New(alertDB)
+		if err := app.auditStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize audit table", "error", err)
+		} else {
+			app.logger.Info("Audit trail enabled")
+			auditMiddleware = audit.Middleware(app.auditStore)
+		}
+	}
+
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
+	var serverOpts []server.ServerOption
+	if auditMiddleware != nil {
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
+	}
 	mcpServer := server.NewMCPServer(
 		"Kite MCP Server",
 		app.Version,
+		serverOpts...,
 	)
 	app.logger.Debug("MCP server created successfully")
 
