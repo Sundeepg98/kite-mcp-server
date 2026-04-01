@@ -491,6 +491,22 @@ func (d *DB) DeleteSession(sessionID string) error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Generic helpers for external packages that need raw SQL access.
+// ---------------------------------------------------------------------------
+
+// ExecDDL executes a DDL statement (CREATE TABLE, CREATE INDEX, etc.).
+func (d *DB) ExecDDL(ddl string) error { _, err := d.db.Exec(ddl); return err }
+
+// ExecInsert executes an INSERT (or similar DML) statement with arguments.
+func (d *DB) ExecInsert(query string, args ...any) error { _, err := d.db.Exec(query, args...); return err }
+
+// QueryRow executes a query expected to return at most one row.
+func (d *DB) QueryRow(query string, args ...any) *sql.Row { return d.db.QueryRow(query, args...) }
+
+// RawQuery executes a query that returns rows.
+func (d *DB) RawQuery(query string, args ...any) (*sql.Rows, error) { return d.db.Query(query, args...) }
+
 // Close closes the underlying database connection.
 func (d *DB) Close() error {
 	return d.db.Close()
