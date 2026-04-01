@@ -163,6 +163,94 @@ func TestStore_ListWithFilters(t *testing.T) {
 	assert.Empty(t, results)
 }
 
+func TestStore_GetStats(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	email := "stats@example.com"
+	base := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
+
+	// Insert entries with varying tools, durations, and error states.
+	entries := []*ToolCall{
+		makeEntry("s-0", email, "get_holdings", "query", false, base),
+		makeEntry("s-1", email, "get_holdings", "query", false, base.Add(1*time.Minute)),
+		makeEntry("s-2", email, "place_order", "order", false, base.Add(2*time.Minute)),
+		makeEntry("s-3", email, "get_ltp", "market_data", true, base.Add(3*time.Minute)),
+		makeEntry("s-4", email, "get_holdings", "query", false, base.Add(4*time.Minute)),
+	}
+	// Customize durations.
+	entries[0].DurationMs = 100
+	entries[1].DurationMs = 200
+	entries[2].DurationMs = 300
+	entries[3].DurationMs = 50
+	entries[3].ErrorMessage = "token expired"
+	entries[4].DurationMs = 150
+
+	for _, e := range entries {
+		require.NoError(t, s.Record(e))
+	}
+
+	// Stats for all entries.
+	stats, err := s.GetStats(email, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 5, stats.TotalCalls)
+	assert.Equal(t, 1, stats.ErrorCount)
+	assert.InDelta(t, 160.0, stats.AvgLatencyMs, 0.5) // (100+200+300+50+150)/5 = 160
+	assert.Equal(t, "get_holdings", stats.TopTool)
+	assert.Equal(t, 3, stats.TopToolCount)
+
+	// Stats with a since filter (only entries at T+2min and later).
+	stats, err = s.GetStats(email, base.Add(2*time.Minute))
+	require.NoError(t, err)
+	assert.Equal(t, 3, stats.TotalCalls)
+	assert.Equal(t, 1, stats.ErrorCount)
+
+	// Stats for a different user — empty.
+	stats, err = s.GetStats("nobody@example.com", time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ErrorCount)
+	assert.Equal(t, "", stats.TopTool)
+}
+
+func TestStore_EnqueueAndWorker(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	s.StartWorker()
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	entry := makeEntry("enq-001", "worker@example.com", "get_ltp", "market_data", false, now)
+
+	s.Enqueue(entry)
+
+	// Stop drains the buffer and waits for completion.
+	s.Stop()
+
+	// Verify the entry was written.
+	results, total, err := s.List("worker@example.com", ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	require.Len(t, results, 1)
+	assert.Equal(t, "enq-001", results[0].CallID)
+}
+
+func TestStore_EnqueueWithoutWorker(t *testing.T) {
+	// When StartWorker is not called, Enqueue falls back to synchronous write.
+	t.Parallel()
+	s := openTestStore(t)
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	entry := makeEntry("sync-001", "sync@example.com", "get_ltp", "market_data", false, now)
+
+	s.Enqueue(entry)
+
+	results, total, err := s.List("sync@example.com", ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	require.Len(t, results, 1)
+	assert.Equal(t, "sync-001", results[0].CallID)
+}
+
 func TestStore_RecordDuplicate(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)

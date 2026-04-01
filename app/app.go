@@ -284,6 +284,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		if err := app.auditStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize audit table", "error", err)
 		} else {
+			app.auditStore.SetLogger(app.logger)
+			app.auditStore.StartWorker()
 			app.logger.Info("Audit trail enabled")
 			auditMiddleware = audit.Middleware(app.auditStore)
 		}
@@ -330,6 +332,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		defer stop()
 		<-ctx.Done()
 		app.logger.Info("Shutting down server...")
+
+		// Drain audit buffer first so in-flight records are persisted.
+		if app.auditStore != nil {
+			app.auditStore.Stop()
+		}
 
 		// Shutdown HTTP server first (stop accepting new requests)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

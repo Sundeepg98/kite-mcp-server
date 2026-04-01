@@ -129,11 +129,20 @@ func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Compute aggregate stats from the DB (not just the current page).
+	var stats *audit.Stats
+	stats, err = d.auditStore.GetStats(email, opts.Since)
+	if err != nil {
+		d.logger.Error("Failed to get audit stats", "error", err)
+		// Non-fatal: return entries without stats.
+	}
+
 	d.writeJSON(w, map[string]any{
 		"entries": results,
 		"total":   total,
 		"limit":   opts.Limit,
 		"offset":  opts.Offset,
+		"stats":   stats,
 	})
 }
 

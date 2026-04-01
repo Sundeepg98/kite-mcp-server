@@ -262,6 +262,164 @@ func TestSummarizeOutput_SuccessTruncated(t *testing.T) {
 	assert.True(t, strings.HasSuffix(summary, "..."))
 }
 
+// --- Per-tool output summarizer tests ---
+
+func TestSummarizeOutput_Holdings(t *testing.T) {
+	holdingsJSON := `{"data":[
+		{"tradingsymbol":"RELIANCE","average_price":2500,"quantity":10,"last_price":2600},
+		{"tradingsymbol":"INFY","average_price":1500,"quantity":20,"last_price":1400}
+	],"pagination":{"total":2}}`
+	result := gomcp.NewToolResultText(holdingsJSON)
+	summary := SummarizeOutput("get_holdings", result)
+	assert.Contains(t, summary, "2 holdings")
+	assert.Contains(t, summary, "invested")
+	assert.Contains(t, summary, "current")
+}
+
+func TestSummarizeOutput_HoldingsEmpty(t *testing.T) {
+	result := gomcp.NewToolResultText(`{"data":[],"pagination":{"total":0}}`)
+	summary := SummarizeOutput("get_holdings", result)
+	assert.Equal(t, "No holdings", summary)
+}
+
+func TestSummarizeOutput_HoldingsInvalidJSON(t *testing.T) {
+	result := gomcp.NewToolResultText("not json at all")
+	summary := SummarizeOutput("get_holdings", result)
+	assert.Equal(t, "not json at all", summary)
+}
+
+func TestSummarizeOutput_Positions(t *testing.T) {
+	posJSON := `{"data":[
+		{"tradingsymbol":"RELIANCE","pnl":1250.50},
+		{"tradingsymbol":"INFY","pnl":-500}
+	]}`
+	result := gomcp.NewToolResultText(posJSON)
+	summary := SummarizeOutput("get_positions", result)
+	assert.Contains(t, summary, "2 positions")
+	assert.Contains(t, summary, "P&L")
+}
+
+func TestSummarizeOutput_PositionsEmpty(t *testing.T) {
+	result := gomcp.NewToolResultText(`{"data":[]}`)
+	summary := SummarizeOutput("get_positions", result)
+	assert.Equal(t, "No positions", summary)
+}
+
+func TestSummarizeOutput_Orders(t *testing.T) {
+	ordersJSON := `{"data":[
+		{"order_id":"1","status":"COMPLETE"},
+		{"order_id":"2","status":"COMPLETE"},
+		{"order_id":"3","status":"OPEN"},
+		{"order_id":"4","status":"CANCELLED"}
+	]}`
+	result := gomcp.NewToolResultText(ordersJSON)
+	summary := SummarizeOutput("get_orders", result)
+	assert.Contains(t, summary, "4 orders")
+	assert.Contains(t, summary, "2 complete")
+	assert.Contains(t, summary, "1 open")
+	assert.Contains(t, summary, "1 cancelled")
+}
+
+func TestSummarizeOutput_Profile(t *testing.T) {
+	profileJSON := `{"data":{"user_id":"CQP281","user_name":"Sundeep","email":"sundeepg8@gmail.com","pan":"ABCDE1234F"}}`
+	result := gomcp.NewToolResultText(profileJSON)
+	summary := SummarizeOutput("get_profile", result)
+	// PII must be redacted — only a fixed string
+	assert.Equal(t, "Profile retrieved", summary)
+	assert.NotContains(t, summary, "sundeepg8")
+	assert.NotContains(t, summary, "Sundeep")
+	assert.NotContains(t, summary, "ABCDE")
+}
+
+func TestSummarizeOutput_PlaceOrderResult(t *testing.T) {
+	result := gomcp.NewToolResultText(`{"data":{"order_id":"220101000012345"}}`)
+	summary := SummarizeOutput("place_order", result)
+	assert.Equal(t, "Order ID: 220101000012345", summary)
+}
+
+func TestSummarizeOutput_PlaceOrderResultTopLevel(t *testing.T) {
+	result := gomcp.NewToolResultText(`{"order_id":"99999"}`)
+	summary := SummarizeOutput("place_order", result)
+	assert.Equal(t, "Order ID: 99999", summary)
+}
+
+func TestSummarizeOutput_LTP(t *testing.T) {
+	ltpJSON := `{"data":{"NSE:RELIANCE":{"last_price":2600},"NSE:INFY":{"last_price":1400}}}`
+	result := gomcp.NewToolResultText(ltpJSON)
+	summary := SummarizeOutput("get_ltp", result)
+	assert.Contains(t, summary, "2 instruments")
+	assert.Contains(t, summary, "RELIANCE")
+	assert.Contains(t, summary, "INFY")
+}
+
+func TestSummarizeOutput_Margins(t *testing.T) {
+	marginsJSON := `{"data":{"equity":{"available":125000},"commodity":{"available":50000}}}`
+	result := gomcp.NewToolResultText(marginsJSON)
+	summary := SummarizeOutput("get_margins", result)
+	assert.Contains(t, summary, "Available")
+	assert.Contains(t, summary, "equity")
+}
+
+func TestSummarizeOutput_Search(t *testing.T) {
+	searchJSON := `{"data":[{"instrument_token":1},{"instrument_token":2},{"instrument_token":3}]}`
+	result := gomcp.NewToolResultText(searchJSON)
+	summary := SummarizeOutput("search_instruments", result)
+	assert.Equal(t, "Found 3 instruments", summary)
+}
+
+func TestFormatRupee(t *testing.T) {
+	assert.Equal(t, "\u20b9500", formatRupee(500))
+	assert.Equal(t, "\u20b925K", formatRupee(25000))
+	assert.Equal(t, "\u20b91.2L", formatRupee(120000))
+	assert.Equal(t, "\u20b95.5L", formatRupee(550000))
+	assert.Equal(t, "\u20b91.0Cr", formatRupee(10000000))
+	assert.Equal(t, "-\u20b91.2L", formatRupee(-120000))
+}
+
+func TestExtractDataArray(t *testing.T) {
+	// Paginated format
+	arr := extractDataArray(`{"data":[1,2,3],"pagination":{"total":3}}`)
+	assert.Len(t, arr, 3)
+
+	// Raw array
+	arr = extractDataArray(`[1,2,3]`)
+	assert.Len(t, arr, 3)
+
+	// Invalid JSON
+	arr = extractDataArray("not json")
+	assert.Nil(t, arr)
+
+	// Object without data key
+	arr = extractDataArray(`{"status":"ok"}`)
+	assert.Nil(t, arr)
+}
+
+func TestJSONFloat(t *testing.T) {
+	m := map[string]any{
+		"f":   3.14,
+		"i":   float64(42),
+		"nil": nil,
+		"str": "hello",
+	}
+	assert.InDelta(t, 3.14, jsonFloat(m, "f"), 0.001)
+	assert.InDelta(t, 42.0, jsonFloat(m, "i"), 0.001)
+	assert.InDelta(t, 0.0, jsonFloat(m, "nil"), 0.001)
+	assert.InDelta(t, 0.0, jsonFloat(m, "str"), 0.001)
+	assert.InDelta(t, 0.0, jsonFloat(m, "missing"), 0.001)
+}
+
+func TestJSONString(t *testing.T) {
+	m := map[string]any{
+		"str": "hello",
+		"num": 42,
+		"nil": nil,
+	}
+	assert.Equal(t, "hello", jsonString(m, "str"))
+	assert.Equal(t, "42", jsonString(m, "num"))
+	assert.Equal(t, "", jsonString(m, "nil"))
+	assert.Equal(t, "", jsonString(m, "missing"))
+}
+
 func TestExtractText_NilResult(t *testing.T) {
 	text := extractText(nil)
 	assert.Equal(t, "", text)

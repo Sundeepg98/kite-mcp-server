@@ -4,6 +4,7 @@ package audit
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -40,14 +41,65 @@ type ListOptions struct {
 	Until      time.Time
 }
 
+const auditBufferSize = 1000
+
 // Store provides audit trail persistence backed by SQLite via alerts.DB.
 type Store struct {
-	db *alerts.DB
+	db      *alerts.DB
+	writeCh chan *ToolCall
+	done    chan struct{}
+	logger  *slog.Logger
 }
 
 // New creates a new audit Store using the given database handle.
 func New(db *alerts.DB) *Store {
 	return &Store{db: db}
+}
+
+// SetLogger assigns a structured logger for background worker diagnostics.
+func (s *Store) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
+// StartWorker starts a background goroutine that drains the write channel.
+// Call Stop() to gracefully drain and close.
+func (s *Store) StartWorker() {
+	s.writeCh = make(chan *ToolCall, auditBufferSize)
+	s.done = make(chan struct{})
+	go func() {
+		defer close(s.done)
+		for entry := range s.writeCh {
+			if err := s.Record(entry); err != nil {
+				if s.logger != nil {
+					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
+				}
+			}
+		}
+	}()
+}
+
+// Enqueue adds a tool call to the write buffer. Non-blocking; drops if buffer full.
+func (s *Store) Enqueue(entry *ToolCall) {
+	if s.writeCh == nil {
+		// Worker not started — fall back to synchronous write.
+		_ = s.Record(entry)
+		return
+	}
+	select {
+	case s.writeCh <- entry:
+	default:
+		if s.logger != nil {
+			s.logger.Warn("Audit buffer full, dropping entry", "call_id", entry.CallID)
+		}
+	}
+}
+
+// Stop gracefully drains the buffer and waits for completion.
+func (s *Store) Stop() {
+	if s.writeCh != nil {
+		close(s.writeCh)
+		<-s.done
+	}
 }
 
 // InitTable creates the tool_calls table and indexes if they do not exist.
@@ -223,4 +275,61 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	}
 
 	return &tc, nil
+}
+
+// Stats holds aggregate metrics for a set of audit trail entries.
+type Stats struct {
+	TotalCalls   int     `json:"total_calls"`
+	ErrorCount   int     `json:"error_count"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	TopTool      string  `json:"top_tool"`
+	TopToolCount int     `json:"top_tool_count"`
+}
+
+// GetStats returns aggregate stats for a given email since the given time.
+// If since is zero, all records are included.
+func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
+	var where []string
+	var args []any
+
+	where = append(where, "email = ?")
+	args = append(args, email)
+
+	if !since.IsZero() {
+		where = append(where, "started_at >= ?")
+		args = append(args, since.Format(time.RFC3339Nano))
+	}
+
+	whereClause := strings.Join(where, " AND ")
+
+	// Aggregate: total, error count, avg latency
+	aggQuery := "SELECT COUNT(*), COALESCE(SUM(is_error), 0), COALESCE(AVG(duration_ms), 0) FROM tool_calls WHERE " + whereClause
+	var totalCalls, errorCount int
+	var avgLatency float64
+	if err := s.db.QueryRow(aggQuery, args...).Scan(&totalCalls, &errorCount, &avgLatency); err != nil {
+		return nil, fmt.Errorf("audit: stats aggregate: %w", err)
+	}
+
+	// Top tool by count
+	topQuery := "SELECT tool_name, COUNT(*) AS cnt FROM tool_calls WHERE " + whereClause +
+		" GROUP BY tool_name ORDER BY cnt DESC LIMIT 1"
+	var topTool string
+	var topToolCount int
+	row := s.db.QueryRow(topQuery, args...)
+	if err := row.Scan(&topTool, &topToolCount); err != nil {
+		if err == sql.ErrNoRows {
+			topTool = ""
+			topToolCount = 0
+		} else {
+			return nil, fmt.Errorf("audit: stats top tool: %w", err)
+		}
+	}
+
+	return &Stats{
+		TotalCalls:   totalCalls,
+		ErrorCount:   errorCount,
+		AvgLatencyMs: avgLatency,
+		TopTool:      topTool,
+		TopToolCount: topToolCount,
+	}, nil
 }

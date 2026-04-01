@@ -240,14 +240,16 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       state.entries = data.entries || [];
       state.total = data.total || 0;
 
+      var stats = data.stats || null;
+
       if (state.entries.length === 0) {
         empty.style.display = 'block';
-        updateStats([], state.total);
+        updateStats([], state.total, stats);
         return;
       }
 
       timeline.style.display = 'flex';
-      updateStats(state.entries, state.total);
+      updateStats(state.entries, state.total, stats);
       renderTimeline(state.entries);
       renderPagination();
     }).catch(function(err) {
@@ -258,32 +260,44 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   }
 
   // --- Stats ---
-  function updateStats(entries, total) {
-    document.getElementById('statTotal').textContent = total;
+  // Uses server-side aggregate stats (from data.stats) when available.
+  // Falls back to page-level computation only if stats are missing.
+  function updateStats(entries, total, stats) {
+    document.getElementById('statTotal').textContent = (stats && stats.total_calls != null) ? stats.total_calls : total;
 
-    var errCount = 0;
-    var totalDur = 0;
-    var toolCounts = {};
-    for (var i = 0; i < entries.length; i++) {
-      if (entries[i].is_error) errCount++;
-      totalDur += (entries[i].duration_ms || 0);
-      var tn = entries[i].tool_name || 'unknown';
-      toolCounts[tn] = (toolCounts[tn] || 0) + 1;
+    var errCount, avgMs, topTool, topCount;
+
+    if (stats) {
+      errCount = stats.error_count || 0;
+      avgMs = Math.round(stats.avg_latency_ms || 0);
+      topTool = stats.top_tool || '--';
+      topCount = stats.top_tool_count || 0;
+    } else {
+      // Fallback: compute from current page entries.
+      errCount = 0;
+      var totalDur = 0;
+      var toolCounts = {};
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].is_error) errCount++;
+        totalDur += (entries[i].duration_ms || 0);
+        var tn = entries[i].tool_name || 'unknown';
+        toolCounts[tn] = (toolCounts[tn] || 0) + 1;
+      }
+      avgMs = entries.length > 0 ? Math.round(totalDur / entries.length) : 0;
+      topTool = '--';
+      topCount = 0;
+      for (var t in toolCounts) {
+        if (toolCounts[t] > topCount) { topTool = t; topCount = toolCounts[t]; }
+      }
     }
 
     var statErrors = document.getElementById('statErrors');
     statErrors.textContent = errCount;
     statErrors.className = 'stat-value' + (errCount > 0 ? ' red' : '');
 
-    var avgMs = entries.length > 0 ? Math.round(totalDur / entries.length) : 0;
     document.getElementById('statLatency').textContent = avgMs + 'ms';
-    document.getElementById('statLatencySub').textContent = entries.length > 0 ? 'from ' + entries.length + ' calls' : '';
+    document.getElementById('statLatencySub').textContent = (stats ? 'across all calls' : (entries.length > 0 ? 'from ' + entries.length + ' calls' : ''));
 
-    var topTool = '--';
-    var topCount = 0;
-    for (var t in toolCounts) {
-      if (toolCounts[t] > topCount) { topTool = t; topCount = toolCounts[t]; }
-    }
     document.getElementById('statTopTool').textContent = topTool;
     document.getElementById('statTopToolSub').textContent = topCount > 0 ? topCount + ' calls' : '';
   }

@@ -1,7 +1,9 @@
 package audit
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -48,24 +50,294 @@ func SummarizeInput(toolName string, args map[string]any) string {
 }
 
 // SummarizeOutput returns a human-readable summary of tool output.
+// It has per-tool formatters that produce concise summaries instead of raw JSON.
 func SummarizeOutput(toolName string, result *gomcp.CallToolResult) string {
 	if result == nil {
 		return "(no result)"
 	}
 
+	text := extractText(result)
+
 	if result.IsError {
-		text := extractText(result)
 		if text == "" {
 			return "ERROR: (empty)"
 		}
 		return truncate("ERROR: "+text, 200)
 	}
 
-	text := extractText(result)
 	if text == "" {
 		return "(empty response)"
 	}
+
+	// Per-tool smart summaries.
+	switch toolName {
+	case "get_holdings":
+		return summarizeHoldings(text)
+	case "get_positions":
+		return summarizePositions(text)
+	case "get_orders":
+		return summarizeOrders(text)
+	case "get_profile":
+		return summarizeProfile()
+	case "place_order", "modify_order":
+		return summarizeOrderResult(text)
+	case "get_ltp":
+		return summarizeLTP(text)
+	case "get_margins":
+		return summarizeMargins(text)
+	case "search_instruments":
+		return summarizeSearch(text)
+	}
+
+	// Default: truncate.
 	return truncate(text, 200)
+}
+
+// --- Per-tool output summarizers ---
+
+// summarizeHoldings parses holdings JSON and produces a compact summary.
+// Expected format: {"data": [...], "pagination": {...}} or a raw array.
+func summarizeHoldings(text string) string {
+	items := extractDataArray(text)
+	if items == nil {
+		return truncate(text, 200)
+	}
+	n := len(items)
+	if n == 0 {
+		return "No holdings"
+	}
+
+	var totalInvested, totalCurrent float64
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		avgPrice := jsonFloat(m, "average_price")
+		qty := jsonFloat(m, "quantity")
+		lastPrice := jsonFloat(m, "last_price")
+		totalInvested += avgPrice * qty
+		totalCurrent += lastPrice * qty
+	}
+	return fmt.Sprintf("%d holdings, invested %s, current %s", n, formatRupee(totalInvested), formatRupee(totalCurrent))
+}
+
+// summarizePositions parses positions JSON and produces a compact summary.
+func summarizePositions(text string) string {
+	items := extractDataArray(text)
+	if items == nil {
+		return truncate(text, 200)
+	}
+	n := len(items)
+	if n == 0 {
+		return "No positions"
+	}
+	var dayPnL float64
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		dayPnL += jsonFloat(m, "pnl")
+	}
+	return fmt.Sprintf("%d positions, day P&L %s", n, formatRupee(dayPnL))
+}
+
+// summarizeOrders parses orders JSON and counts by status.
+func summarizeOrders(text string) string {
+	items := extractDataArray(text)
+	if items == nil {
+		return truncate(text, 200)
+	}
+	n := len(items)
+	if n == 0 {
+		return "No orders"
+	}
+	statusCounts := make(map[string]int)
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		status := strings.ToLower(jsonString(m, "status"))
+		if status == "" {
+			status = "unknown"
+		}
+		statusCounts[status]++
+	}
+	parts := make([]string, 0, len(statusCounts))
+	for status, count := range statusCounts {
+		parts = append(parts, fmt.Sprintf("%d %s", count, status))
+	}
+	sort.Strings(parts)
+	return fmt.Sprintf("%d orders (%s)", n, strings.Join(parts, ", "))
+}
+
+// summarizeProfile returns a fixed string to avoid PII leakage (name, email, PAN).
+func summarizeProfile() string {
+	return "Profile retrieved"
+}
+
+// summarizeOrderResult extracts the order_id from the response.
+func summarizeOrderResult(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	// Check for data.order_id or order_id
+	if data, ok := obj["data"].(map[string]any); ok {
+		if oid := jsonString(data, "order_id"); oid != "" {
+			return "Order ID: " + oid
+		}
+	}
+	if oid := jsonString(obj, "order_id"); oid != "" {
+		return "Order ID: " + oid
+	}
+	return truncate(text, 200)
+}
+
+// summarizeLTP extracts instrument prices.
+func summarizeLTP(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	// Try "data" key first, then top-level
+	data, ok := obj["data"].(map[string]any)
+	if !ok {
+		data = obj
+	}
+	if len(data) == 0 {
+		return truncate(text, 200)
+	}
+	parts := make([]string, 0, len(data))
+	for key, val := range data {
+		m, ok := val.(map[string]any)
+		if !ok {
+			continue
+		}
+		ltp := jsonFloat(m, "last_price")
+		// Extract symbol from "EXCHANGE:SYMBOL" key
+		symbol := key
+		if idx := strings.LastIndex(key, ":"); idx >= 0 {
+			symbol = key[idx+1:]
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", symbol, formatRupee(ltp)))
+	}
+	sort.Strings(parts)
+	return fmt.Sprintf("%d instruments: %s", len(parts), strings.Join(parts, ", "))
+}
+
+// summarizeMargins extracts available margin info.
+func summarizeMargins(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	data, ok := obj["data"].(map[string]any)
+	if !ok {
+		data = obj
+	}
+	parts := make([]string, 0, 2)
+	for _, segment := range []string{"equity", "commodity"} {
+		seg, ok := data[segment].(map[string]any)
+		if !ok {
+			continue
+		}
+		avail := jsonFloat(seg, "available")
+		if avail == 0 {
+			// Try nested available.live_balance
+			if a, ok := seg["available"].(map[string]any); ok {
+				avail = jsonFloat(a, "live_balance")
+			}
+		}
+		if avail > 0 {
+			parts = append(parts, fmt.Sprintf("%s (%s)", formatRupee(avail), segment))
+		}
+	}
+	if len(parts) == 0 {
+		return truncate(text, 200)
+	}
+	return "Available " + strings.Join(parts, " ")
+}
+
+// summarizeSearch counts search results.
+func summarizeSearch(text string) string {
+	items := extractDataArray(text)
+	if items == nil {
+		return truncate(text, 200)
+	}
+	return fmt.Sprintf("Found %d instruments", len(items))
+}
+
+// --- JSON helper utilities ---
+
+// extractDataArray tries to extract []any from paginated or raw JSON.
+func extractDataArray(text string) []any {
+	// Try paginated format: {"data": [...], "pagination": {...}}
+	var paginated struct {
+		Data []any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(text), &paginated); err == nil && paginated.Data != nil {
+		return paginated.Data
+	}
+	// Try raw array
+	var arr []any
+	if err := json.Unmarshal([]byte(text), &arr); err == nil {
+		return arr
+	}
+	return nil
+}
+
+// jsonFloat extracts a float64 from a JSON object map, returning 0 on failure.
+func jsonFloat(m map[string]any, key string) float64 {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+// jsonString extracts a string from a JSON object map.
+func jsonString(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return fmt.Sprintf("%v", v)
+	}
+	return s
+}
+
+// formatRupee formats a float as a compact rupee string (e.g. "5.2L", "50K", "1,250").
+func formatRupee(amount float64) string {
+	abs := math.Abs(amount)
+	sign := ""
+	if amount < 0 {
+		sign = "-"
+	}
+	switch {
+	case abs >= 1_00_00_000: // 1 crore
+		return fmt.Sprintf("%s\u20b9%.1fCr", sign, abs/1_00_00_000)
+	case abs >= 1_00_000: // 1 lakh
+		return fmt.Sprintf("%s\u20b9%.1fL", sign, abs/1_00_000)
+	case abs >= 1_000:
+		return fmt.Sprintf("%s\u20b9%.0fK", sign, abs/1_000)
+	default:
+		return fmt.Sprintf("%s\u20b9%.0f", sign, abs)
+	}
 }
 
 // extractText gets text from the first TextContent in result.Content.

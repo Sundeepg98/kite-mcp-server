@@ -70,8 +70,8 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 				}
 			}
 
-			// Write to DB asynchronously (don't block the response).
-			go store.Record(entry)
+			// Write to DB via buffered channel (non-blocking, graceful shutdown).
+			store.Enqueue(entry)
 
 			return result, err
 		}
