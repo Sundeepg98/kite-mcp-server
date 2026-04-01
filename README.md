@@ -1,4 +1,68 @@
-# Kite MCP Server
+# Kite MCP Server (Self-Hosted Fork)
+
+> **This is a private fork** of [zerodha/kite-mcp-server](https://github.com/zerodha/kite-mcp-server) with significant additions for self-hosted multi-user deployment on Fly.io.
+
+## Fork Additions (v1.0.0)
+
+### 40 MCP Tools
+| Category | Tools |
+|----------|-------|
+| Orders | place_order, modify_order, cancel_order, convert_position, place/modify/delete_gtt_order |
+| Portfolio | get_profile, get_margins, get_holdings, get_positions, get_trades, get_orders, get_order_history, get_order_trades, get_gtts, get_mf_holdings |
+| Market Data | get_quotes, search_instruments, get_historical_data, get_ltp, get_ohlc |
+| Analytics | portfolio_summary, portfolio_concentration, position_analysis, trading_context |
+| Margins | get_order_margins, get_basket_margins, get_order_charges |
+| Alerts | setup_telegram, set_alert (above/below/drop_pct/rise_pct), list_alerts, delete_alert |
+| Ticker | start/stop_ticker, ticker_status, subscribe/unsubscribe_instruments |
+| Setup | login, open_dashboard |
+
+### Infrastructure
+- **Per-user OAuth 2.1 + PKCE** — each user brings their own Kite developer app
+- **Full SQLite persistence** — credentials, tokens, OAuth clients, MCP sessions (all AES-256-GCM encrypted)
+- **AI Activity Audit Trail** — every tool call logged with summaries, filterable timeline at `/dashboard/activity`
+- **Telegram daily briefings** — morning 9 AM (alerts, token status) + P&L summary 3:35 PM IST
+- **SSO** — dashboard cookie set during MCP OAuth callback (Callback Session Establishment pattern)
+- **Rate limiting** — per-IP on all endpoints (auth 2/sec, token 5/sec, MCP 20/sec)
+- **SEBI compliant** — static egress IP `209.71.68.157`, market_protection parameter, gokiteconnect v4.4.0
+- **270+ tests**, security score ~8.5/10
+
+### Deployment
+```bash
+# Fly.io (production)
+flyctl deploy -a kite-mcp-server
+
+# Required secrets
+flyctl secrets set OAUTH_JWT_SECRET=<random-32-bytes>
+flyctl secrets set EXTERNAL_URL=https://kite-mcp-server.fly.dev
+flyctl secrets set ADMIN_EMAILS=your@email.com
+flyctl secrets set TELEGRAM_BOT_TOKEN=<bot-token>  # optional
+flyctl secrets set ALERT_DB_PATH=/data/alerts.db
+```
+
+### Dashboards
+- `/dashboard` — user portfolio (holdings, P&L, alerts, credentials)
+- `/dashboard/activity` — AI activity audit trail with filters and export
+- `/admin/ops` — admin monitoring (all users, sessions, logs)
+
+### Trading Skill Plugin
+```bash
+# Load the plugin
+claude --plugin-dir ~/.claude/plugins/local/kite-trading
+
+# Commands
+/morning          # Morning briefing
+/trade RELIANCE 10  # Pre-flight check
+/eod              # End-of-day review
+/price RELIANCE   # Quick price check
+```
+
+---
+
+*Below is the original upstream README.*
+
+---
+
+# Kite MCP Server (Upstream)
 
 A Model Context Protocol (MCP) server that provides AI assistants with secure access to the Kite Connect trading API. This server enables AI agents to retrieve market data, manage portfolios, and execute trades through a standardized interface.
 
