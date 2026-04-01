@@ -13,12 +13,27 @@ import (
 type Direction string
 
 const (
-	DirectionAbove Direction = "above"
-	DirectionBelow Direction = "below"
+	DirectionAbove   Direction = "above"
+	DirectionBelow   Direction = "below"
+	DirectionDropPct Direction = "drop_pct"
+	DirectionRisePct Direction = "rise_pct"
 
 	// MaxAlertsPerUser is the maximum number of alerts a single user can have.
 	MaxAlertsPerUser = 100
 )
+
+// ValidDirections is the set of all supported alert directions.
+var ValidDirections = map[Direction]bool{
+	DirectionAbove:   true,
+	DirectionBelow:   true,
+	DirectionDropPct: true,
+	DirectionRisePct: true,
+}
+
+// IsPercentageDirection returns true if the direction is a percentage-change type.
+func IsPercentageDirection(d Direction) bool {
+	return d == DirectionDropPct || d == DirectionRisePct
+}
 
 // Alert represents a price alert for a specific instrument.
 type Alert struct {
@@ -29,6 +44,7 @@ type Alert struct {
 	InstrumentToken uint32    `json:"instrument_token"`
 	TargetPrice     float64   `json:"target_price"`
 	Direction       Direction `json:"direction"`
+	ReferencePrice  float64   `json:"reference_price,omitempty"`
 	Triggered       bool      `json:"triggered"`
 	CreatedAt       time.Time `json:"created_at"`
 	TriggeredAt     time.Time `json:"triggered_at,omitempty"`
@@ -96,6 +112,12 @@ func (s *Store) LoadFromDB() error {
 // Add creates a new alert and returns its ID.
 // Returns an error if the user already has MaxAlertsPerUser alerts.
 func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction Direction) (string, error) {
+	return s.AddWithReferencePrice(email, tradingsymbol, exchange, instrumentToken, targetPrice, direction, 0)
+}
+
+// AddWithReferencePrice creates a new alert with an optional reference price (for percentage alerts) and returns its ID.
+// Returns an error if the user already has MaxAlertsPerUser alerts.
+func (s *Store) AddWithReferencePrice(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction Direction, referencePrice float64) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -111,6 +133,7 @@ func (s *Store) Add(email, tradingsymbol, exchange string, instrumentToken uint3
 		InstrumentToken: instrumentToken,
 		TargetPrice:     targetPrice,
 		Direction:       direction,
+		ReferencePrice:  referencePrice,
 		CreatedAt:       time.Now(),
 	}
 

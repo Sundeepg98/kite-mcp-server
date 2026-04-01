@@ -55,6 +55,11 @@ func GetAllTools() []Tool {
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
 
+		// Portfolio analytics
+		&PortfolioSummaryTool{},
+		&PortfolioConcentrationTool{},
+		&PositionAnalysisTool{},
+
 		// Tools for margin and charges calculation
 		&OrderMarginsTool{},
 		&BasketMarginsTool{},

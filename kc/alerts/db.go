@@ -44,11 +44,12 @@ CREATE TABLE IF NOT EXISTS alerts (
     exchange         TEXT NOT NULL,
     instrument_token INTEGER NOT NULL,
     target_price     REAL NOT NULL,
-    direction        TEXT NOT NULL CHECK(direction IN ('above','below')),
+    direction        TEXT NOT NULL CHECK(direction IN ('above','below','drop_pct','rise_pct')),
     triggered        INTEGER NOT NULL DEFAULT 0,
     created_at       TEXT NOT NULL,
     triggered_at     TEXT,
-    triggered_price  REAL
+    triggered_price  REAL,
+    reference_price  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_email ON alerts(email);
 
@@ -91,13 +92,35 @@ CREATE TABLE IF NOT EXISTS mcp_sessions (
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
 	}
+
+	// Migrate existing databases: add reference_price column if missing.
+	if err := migrateAlerts(db); err != nil {
+		return nil, fmt.Errorf("migrate alerts: %w", err)
+	}
+
 	return &DB{db: db}, nil
+}
+
+// migrateAlerts applies incremental schema migrations to the alerts table.
+func migrateAlerts(db *sql.DB) error {
+	// Check if reference_price column exists.
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('alerts') WHERE name = 'reference_price'`).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check reference_price column: %w", err)
+	}
+	if count == 0 {
+		if _, err := db.Exec(`ALTER TABLE alerts ADD COLUMN reference_price REAL`); err != nil {
+			return fmt.Errorf("add reference_price column: %w", err)
+		}
+	}
+	return nil
 }
 
 // LoadAlerts reads all alerts from the database grouped by email.
 func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 	rows, err := d.db.Query(`SELECT id, email, tradingsymbol, exchange, instrument_token,
-		target_price, direction, triggered, created_at, triggered_at, triggered_price FROM alerts`)
+		target_price, direction, triggered, created_at, triggered_at, triggered_price, reference_price FROM alerts`)
 	if err != nil {
 		return nil, fmt.Errorf("query alerts: %w", err)
 	}
@@ -106,16 +129,17 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 	out := make(map[string][]*Alert)
 	for rows.Next() {
 		var (
-			a           Alert
-			dir         string
-			triggeredI  int
-			createdAtS  string
-			triggeredAt sql.NullString
-			trigPrice   sql.NullFloat64
+			a              Alert
+			dir            string
+			triggeredI     int
+			createdAtS     string
+			triggeredAt    sql.NullString
+			trigPrice      sql.NullFloat64
+			referencePrice sql.NullFloat64
 		)
 		if err := rows.Scan(&a.ID, &a.Email, &a.Tradingsymbol, &a.Exchange,
 			&a.InstrumentToken, &a.TargetPrice, &dir, &triggeredI,
-			&createdAtS, &triggeredAt, &trigPrice); err != nil {
+			&createdAtS, &triggeredAt, &trigPrice, &referencePrice); err != nil {
 			return nil, fmt.Errorf("scan alert: %w", err)
 		}
 		a.Direction = Direction(dir)
@@ -132,6 +156,9 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 		}
 		if trigPrice.Valid {
 			a.TriggeredPrice = trigPrice.Float64
+		}
+		if referencePrice.Valid {
+			a.ReferencePrice = referencePrice.Float64
 		}
 		out[a.Email] = append(out[a.Email], &a)
 	}
@@ -152,15 +179,19 @@ func (d *DB) SaveAlert(alert *Alert) error {
 	if alert.TriggeredPrice != 0 {
 		trigPrice = sql.NullFloat64{Float64: alert.TriggeredPrice, Valid: true}
 	}
+	var refPrice sql.NullFloat64
+	if alert.ReferencePrice != 0 {
+		refPrice = sql.NullFloat64{Float64: alert.ReferencePrice, Valid: true}
+	}
 
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO alerts
 		(id, email, tradingsymbol, exchange, instrument_token, target_price,
-		 direction, triggered, created_at, triggered_at, triggered_price)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		 direction, triggered, created_at, triggered_at, triggered_price, reference_price)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		alert.ID, alert.Email, alert.Tradingsymbol, alert.Exchange,
 		alert.InstrumentToken, alert.TargetPrice, string(alert.Direction),
 		triggered, alert.CreatedAt.Format(time.RFC3339),
-		triggeredAt, trigPrice)
+		triggeredAt, trigPrice, refPrice)
 	if err != nil {
 		return fmt.Errorf("save alert: %w", err)
 	}

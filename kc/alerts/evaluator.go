@@ -33,14 +33,18 @@ func (e *Evaluator) Evaluate(email string, tick models.Tick) {
 				continue
 			}
 
-			e.logger.Info("Alert triggered",
+			logAttrs := []any{
 				"alert_id", alert.ID,
 				"email", alert.Email,
-				"instrument", alert.Exchange+":"+alert.Tradingsymbol,
+				"instrument", alert.Exchange + ":" + alert.Tradingsymbol,
 				"target", alert.TargetPrice,
 				"current", tick.LastPrice,
 				"direction", alert.Direction,
-			)
+			}
+			if IsPercentageDirection(alert.Direction) {
+				logAttrs = append(logAttrs, "reference_price", alert.ReferencePrice)
+			}
+			e.logger.Info("Alert triggered", logAttrs...)
 
 			if e.store.onNotify != nil {
 				e.store.onNotify(alert, tick.LastPrice)
@@ -56,6 +60,18 @@ func shouldTrigger(alert *Alert, currentPrice float64) bool {
 		return currentPrice >= alert.TargetPrice
 	case DirectionBelow:
 		return currentPrice <= alert.TargetPrice
+	case DirectionDropPct:
+		if alert.ReferencePrice <= 0 {
+			return false
+		}
+		pctChange := (alert.ReferencePrice - currentPrice) / alert.ReferencePrice * 100
+		return pctChange >= alert.TargetPrice
+	case DirectionRisePct:
+		if alert.ReferencePrice <= 0 {
+			return false
+		}
+		pctChange := (currentPrice - alert.ReferencePrice) / alert.ReferencePrice * 100
+		return pctChange >= alert.TargetPrice
 	default:
 		return false
 	}

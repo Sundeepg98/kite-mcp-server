@@ -62,19 +62,25 @@ type SetAlertTool struct{}
 
 func (*SetAlertTool) Tool() mcp.Tool {
 	return mcp.NewTool("set_alert",
-		mcp.WithDescription("Set a price alert for an instrument. When the price crosses the target in the specified direction, you'll be notified via Telegram (if configured). Requires the ticker to be running with the instrument subscribed."),
+		mcp.WithDescription("Set a price alert for an instrument. Supports absolute price alerts (above/below) and percentage-change alerts (drop_pct/rise_pct). "+
+			"For percentage alerts, 'price' is the percentage threshold (e.g. 5.0 for 5%) and 'reference_price' is the baseline price to measure against. "+
+			"If reference_price is omitted for percentage alerts, the current LTP is used. "+
+			"Requires the ticker to be running with the instrument subscribed."),
 		mcp.WithString("instrument",
 			mcp.Description("Instrument in exchange:tradingsymbol format (e.g. 'NSE:INFY')"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("price",
-			mcp.Description("Target price to trigger the alert"),
+			mcp.Description("For above/below: the target price. For drop_pct/rise_pct: the percentage threshold (e.g. 5.0 for 5%)"),
 			mcp.Required(),
 		),
 		mcp.WithString("direction",
-			mcp.Description("Trigger when price goes 'above' or 'below' the target"),
+			mcp.Description("Alert direction: 'above' (price >= target), 'below' (price <= target), 'drop_pct' (price drops X% from reference), 'rise_pct' (price rises X% from reference)"),
 			mcp.Required(),
-			mcp.Enum("above", "below"),
+			mcp.Enum("above", "below", "drop_pct", "rise_pct"),
+		),
+		mcp.WithNumber("reference_price",
+			mcp.Description("Baseline price for percentage alerts (drop_pct/rise_pct). If omitted, the current LTP is fetched automatically. Ignored for above/below alerts."),
 		),
 	)
 }
@@ -97,14 +103,20 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		instrumentID := SafeAssertString(args["instrument"], "")
 		targetPrice := SafeAssertFloat64(args["price"], 0)
 		directionStr := SafeAssertString(args["direction"], "above")
+		referencePrice := SafeAssertFloat64(args["reference_price"], 0)
 
 		if targetPrice <= 0 {
 			return mcp.NewToolResultError("Price must be positive"), nil
 		}
 
 		direction := alerts.Direction(directionStr)
-		if direction != alerts.DirectionAbove && direction != alerts.DirectionBelow {
-			return mcp.NewToolResultError("Direction must be 'above' or 'below'"), nil
+		if !alerts.ValidDirections[direction] {
+			return mcp.NewToolResultError("Direction must be 'above', 'below', 'drop_pct', or 'rise_pct'"), nil
+		}
+
+		// For percentage alerts, validate the threshold is reasonable
+		if alerts.IsPercentageDirection(direction) && targetPrice > 100 {
+			return mcp.NewToolResultError("Percentage threshold cannot exceed 100%"), nil
 		}
 
 		// Resolve instrument to get token, exchange, and tradingsymbol
@@ -121,12 +133,36 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		exchange := parts[0]
 		tradingsymbol := inst.Tradingsymbol
 
-		alertID, err := manager.AlertStore().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+		// For percentage alerts, fetch current LTP as reference if not provided
+		if alerts.IsPercentageDirection(direction) && referencePrice <= 0 {
+			sess := server.ClientSessionFromContext(ctx)
+			sessionID := sess.SessionID()
+			kiteSession, _, clientErr := manager.GetOrCreateSessionWithEmail(sessionID, email)
+			if clientErr != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
+			}
+			ltpResp, ltpErr := kiteSession.Kite.Client.GetLTP(instrumentID)
+			if ltpErr != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch current LTP for reference price: %s", ltpErr)), nil
+			}
+			ltpData, ok := ltpResp[instrumentID]
+			if !ok || ltpData.LastPrice <= 0 {
+				return mcp.NewToolResultError(fmt.Sprintf("No LTP available for %s — provide reference_price manually", instrumentID)), nil
+			}
+			referencePrice = ltpData.LastPrice
+		}
+
+		alertID, err := manager.AlertStore().AddWithReferencePrice(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction, referencePrice)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to set alert: %s", err)), nil
 		}
 
-		result := fmt.Sprintf("Alert set: %s %s %.2f (ID: %s)", instrumentID, directionStr, targetPrice, alertID)
+		var result string
+		if alerts.IsPercentageDirection(direction) {
+			result = fmt.Sprintf("Alert set: %s %s %.2f%% from reference %.2f (ID: %s)", instrumentID, directionStr, targetPrice, referencePrice, alertID)
+		} else {
+			result = fmt.Sprintf("Alert set: %s %s %.2f (ID: %s)", instrumentID, directionStr, targetPrice, alertID)
+		}
 
 		// Check if Telegram is configured
 		if _, ok := manager.AlertStore().GetTelegramChatID(email); !ok {

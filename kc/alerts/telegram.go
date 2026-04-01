@@ -98,23 +98,50 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	}
 
 	var emoji string
-	if alert.Direction == DirectionAbove {
+	switch alert.Direction {
+	case DirectionAbove, DirectionRisePct:
 		emoji = "\U0001F4C8" // chart increasing
-	} else {
+	default:
 		emoji = "\U0001F4C9" // chart decreasing
 	}
 
-	text := fmt.Sprintf(
-		"%s *%s:%s* crossed %s %s\nCurrent: %s\nTarget: %s \\(%s\\)",
-		emoji,
-		escapeTelegramMarkdown(alert.Exchange),
-		escapeTelegramMarkdown(alert.Tradingsymbol),
-		escapeTelegramMarkdown(string(alert.Direction)),
-		escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
-		escapeTelegramMarkdown(fmt.Sprintf("%.2f", currentPrice)),
-		escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
-		escapeTelegramMarkdown(string(alert.Direction)),
-	)
+	var text string
+	if IsPercentageDirection(alert.Direction) {
+		var dirLabel string
+		if alert.Direction == DirectionDropPct {
+			dirLabel = "dropped"
+		} else {
+			dirLabel = "risen"
+		}
+		actualPct := 0.0
+		if alert.ReferencePrice > 0 {
+			actualPct = (currentPrice - alert.ReferencePrice) / alert.ReferencePrice * 100
+		}
+		text = fmt.Sprintf(
+			"%s *%s:%s* has %s by %s%% from ref %s\nCurrent: %s \\(%s%%\\)\nThreshold: %s%%",
+			emoji,
+			escapeTelegramMarkdown(alert.Exchange),
+			escapeTelegramMarkdown(alert.Tradingsymbol),
+			escapeTelegramMarkdown(dirLabel),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.ReferencePrice)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", currentPrice)),
+			escapeTelegramMarkdown(fmt.Sprintf("%+.2f", actualPct)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+		)
+	} else {
+		text = fmt.Sprintf(
+			"%s *%s:%s* crossed %s %s\nCurrent: %s\nTarget: %s \\(%s\\)",
+			emoji,
+			escapeTelegramMarkdown(alert.Exchange),
+			escapeTelegramMarkdown(alert.Tradingsymbol),
+			escapeTelegramMarkdown(string(alert.Direction)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", currentPrice)),
+			escapeTelegramMarkdown(fmt.Sprintf("%.2f", alert.TargetPrice)),
+			escapeTelegramMarkdown(string(alert.Direction)),
+		)
+	}
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = tgbotapi.ModeMarkdownV2

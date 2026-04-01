@@ -1,11 +1,13 @@
 package alerts
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
 
 func openTestDB(t *testing.T) *DB {
@@ -286,6 +288,142 @@ func TestClientSecretEncryptionEmptySecret(t *testing.T) {
 	require.Len(t, clients, 1)
 	assert.Equal(t, "", clients[0].ClientSecret)
 	assert.True(t, clients[0].IsKiteAPIKey)
+}
+
+func TestAlertCRUD_WithReferencePrice(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "test1234",
+		Email:           "user@example.com",
+		Tradingsymbol:   "RELIANCE",
+		Exchange:        "NSE",
+		InstrumentToken: 738561,
+		TargetPrice:     5.0,
+		Direction:       DirectionDropPct,
+		ReferencePrice:  2500.0,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+
+	// Save
+	err := db.SaveAlert(alert)
+	require.NoError(t, err)
+
+	// Load
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+
+	loaded := alertMap["user@example.com"][0]
+	assert.Equal(t, "test1234", loaded.ID)
+	assert.Equal(t, DirectionDropPct, loaded.Direction)
+	assert.Equal(t, 5.0, loaded.TargetPrice)
+	assert.Equal(t, 2500.0, loaded.ReferencePrice)
+	assert.False(t, loaded.Triggered)
+}
+
+func TestAlertCRUD_WithoutReferencePrice(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "test5678",
+		Email:           "user@example.com",
+		Tradingsymbol:   "INFY",
+		Exchange:        "NSE",
+		InstrumentToken: 408065,
+		TargetPrice:     1500.0,
+		Direction:       DirectionAbove,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+
+	// Save (no reference price)
+	err := db.SaveAlert(alert)
+	require.NoError(t, err)
+
+	// Load — reference_price should be 0
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+
+	loaded := alertMap["user@example.com"][0]
+	assert.Equal(t, DirectionAbove, loaded.Direction)
+	assert.Equal(t, 1500.0, loaded.TargetPrice)
+	assert.Equal(t, 0.0, loaded.ReferencePrice)
+}
+
+func TestAlertCRUD_RisePct(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "test9012",
+		Email:           "user@example.com",
+		Tradingsymbol:   "TCS",
+		Exchange:        "NSE",
+		InstrumentToken: 2953217,
+		TargetPrice:     10.0,
+		Direction:       DirectionRisePct,
+		ReferencePrice:  3500.0,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+
+	err := db.SaveAlert(alert)
+	require.NoError(t, err)
+
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+
+	loaded := alertMap["user@example.com"][0]
+	assert.Equal(t, DirectionRisePct, loaded.Direction)
+	assert.Equal(t, 10.0, loaded.TargetPrice)
+	assert.Equal(t, 3500.0, loaded.ReferencePrice)
+}
+
+func TestAlertMigration_AddReferencePrice(t *testing.T) {
+	// Simulate an old database without the reference_price column.
+	// Create a DB with old schema, then open it with OpenDB which runs migration.
+	db, err := sql.Open("sqlite", ":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create old schema (without reference_price, old CHECK constraint)
+	oldDDL := `
+CREATE TABLE IF NOT EXISTS alerts (
+    id               TEXT PRIMARY KEY,
+    email            TEXT NOT NULL,
+    tradingsymbol    TEXT NOT NULL,
+    exchange         TEXT NOT NULL,
+    instrument_token INTEGER NOT NULL,
+    target_price     REAL NOT NULL,
+    direction        TEXT NOT NULL CHECK(direction IN ('above','below')),
+    triggered        INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL,
+    triggered_at     TEXT,
+    triggered_price  REAL
+);`
+	_, err = db.Exec(oldDDL)
+	require.NoError(t, err)
+
+	// Insert an old-style alert
+	_, err = db.Exec(`INSERT INTO alerts (id, email, tradingsymbol, exchange, instrument_token, target_price, direction, triggered, created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+		"old123", "user@example.com", "RELIANCE", "NSE", 738561, 2500.0, "above", 0, time.Now().Format(time.RFC3339))
+	require.NoError(t, err)
+
+	// Run migration
+	err = migrateAlerts(db)
+	require.NoError(t, err)
+
+	// Verify the column was added
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('alerts') WHERE name = 'reference_price'`).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// Verify existing data is intact (reference_price should be NULL)
+	var refPrice sql.NullFloat64
+	err = db.QueryRow(`SELECT reference_price FROM alerts WHERE id = ?`, "old123").Scan(&refPrice)
+	require.NoError(t, err)
+	assert.False(t, refPrice.Valid, "reference_price should be NULL for old alerts")
 }
 
 func TestClientSecretEncryptionMigration(t *testing.T) {

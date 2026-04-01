@@ -454,6 +454,235 @@ func TestEvaluator_NoAlertsForToken(t *testing.T) {
 	assert.False(t, called)
 }
 
+// ---------------------------------------------------------------------------
+// Percentage alert tests (drop_pct, rise_pct)
+// ---------------------------------------------------------------------------
+
+func TestShouldTrigger_DropPct(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    5.0, // 5% drop threshold
+		Direction:      DirectionDropPct,
+		ReferencePrice: 1000.0,
+	}
+
+	// Price dropped 5% (1000 -> 950) — should trigger
+	assert.True(t, shouldTrigger(alert, 950.0))
+
+	// Price dropped more than 5% — should trigger
+	assert.True(t, shouldTrigger(alert, 900.0))
+
+	// Price dropped exactly 5% — should trigger (>=)
+	assert.True(t, shouldTrigger(alert, 950.0))
+
+	// Price dropped less than 5% — should NOT trigger
+	assert.False(t, shouldTrigger(alert, 960.0))
+
+	// Price went UP — should NOT trigger
+	assert.False(t, shouldTrigger(alert, 1050.0))
+}
+
+func TestShouldTrigger_RisePct(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    10.0, // 10% rise threshold
+		Direction:      DirectionRisePct,
+		ReferencePrice: 500.0,
+	}
+
+	// Price rose 10% (500 -> 550) — should trigger
+	assert.True(t, shouldTrigger(alert, 550.0))
+
+	// Price rose more than 10% — should trigger
+	assert.True(t, shouldTrigger(alert, 600.0))
+
+	// Price rose exactly 10% — should trigger (>=)
+	assert.True(t, shouldTrigger(alert, 550.0))
+
+	// Price rose less than 10% — should NOT trigger
+	assert.False(t, shouldTrigger(alert, 540.0))
+
+	// Price went DOWN — should NOT trigger
+	assert.False(t, shouldTrigger(alert, 450.0))
+}
+
+func TestShouldTrigger_DropPct_ZeroReferencePrice(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    5.0,
+		Direction:      DirectionDropPct,
+		ReferencePrice: 0, // invalid — should not trigger
+	}
+	assert.False(t, shouldTrigger(alert, 950.0))
+}
+
+func TestShouldTrigger_RisePct_ZeroReferencePrice(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    5.0,
+		Direction:      DirectionRisePct,
+		ReferencePrice: 0, // invalid — should not trigger
+	}
+	assert.False(t, shouldTrigger(alert, 550.0))
+}
+
+func TestShouldTrigger_DropPct_NegativeReferencePrice(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    5.0,
+		Direction:      DirectionDropPct,
+		ReferencePrice: -100.0, // invalid — should not trigger
+	}
+	assert.False(t, shouldTrigger(alert, 50.0))
+}
+
+func TestShouldTrigger_RisePct_NegativeReferencePrice(t *testing.T) {
+	alert := &Alert{
+		TargetPrice:    5.0,
+		Direction:      DirectionRisePct,
+		ReferencePrice: -100.0, // invalid — should not trigger
+	}
+	assert.False(t, shouldTrigger(alert, 50.0))
+}
+
+func TestShouldTrigger_DropPct_ExactThreshold(t *testing.T) {
+	// 5% of 200 = 10, so price at 190 is exactly 5% drop
+	alert := &Alert{
+		TargetPrice:    5.0,
+		Direction:      DirectionDropPct,
+		ReferencePrice: 200.0,
+	}
+	assert.True(t, shouldTrigger(alert, 190.0))
+}
+
+func TestShouldTrigger_RisePct_ExactThreshold(t *testing.T) {
+	// 10% of 200 = 20, so price at 220 is exactly 10% rise
+	alert := &Alert{
+		TargetPrice:    10.0,
+		Direction:      DirectionRisePct,
+		ReferencePrice: 200.0,
+	}
+	assert.True(t, shouldTrigger(alert, 220.0))
+}
+
+func TestShouldTrigger_DropPct_SmallPercentage(t *testing.T) {
+	// 0.5% of 100 = 0.5, so price at 99.5 is exactly 0.5% drop
+	alert := &Alert{
+		TargetPrice:    0.5,
+		Direction:      DirectionDropPct,
+		ReferencePrice: 100.0,
+	}
+	assert.True(t, shouldTrigger(alert, 99.5))
+	assert.False(t, shouldTrigger(alert, 99.6))
+}
+
+func TestStore_AddWithReferencePrice(t *testing.T) {
+	s := newTestStore()
+
+	id, err := s.AddWithReferencePrice("user@example.com", "RELIANCE", "NSE", 738561, 5.0, DirectionDropPct, 2500.0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, id)
+
+	alertList := s.List("user@example.com")
+	require.Len(t, alertList, 1)
+
+	a := alertList[0]
+	assert.Equal(t, id, a.ID)
+	assert.Equal(t, 5.0, a.TargetPrice)
+	assert.Equal(t, DirectionDropPct, a.Direction)
+	assert.Equal(t, 2500.0, a.ReferencePrice)
+}
+
+func TestIsPercentageDirection(t *testing.T) {
+	assert.True(t, IsPercentageDirection(DirectionDropPct))
+	assert.True(t, IsPercentageDirection(DirectionRisePct))
+	assert.False(t, IsPercentageDirection(DirectionAbove))
+	assert.False(t, IsPercentageDirection(DirectionBelow))
+}
+
+func TestValidDirections(t *testing.T) {
+	assert.True(t, ValidDirections[DirectionAbove])
+	assert.True(t, ValidDirections[DirectionBelow])
+	assert.True(t, ValidDirections[DirectionDropPct])
+	assert.True(t, ValidDirections[DirectionRisePct])
+	assert.False(t, ValidDirections[Direction("invalid")])
+}
+
+func TestEvaluator_Evaluate_DropPct(t *testing.T) {
+	var notified []*Alert
+	var notifiedPrices []float64
+	var mu sync.Mutex
+
+	s := NewStore(func(alert *Alert, currentPrice float64) {
+		mu.Lock()
+		defer mu.Unlock()
+		notified = append(notified, alert)
+		notifiedPrices = append(notifiedPrices, currentPrice)
+	})
+
+	// Alert: trigger when RELIANCE drops 5% from 2500 (i.e., price <= 2375)
+	s.AddWithReferencePrice("user@example.com", "RELIANCE", "NSE", 738561, 5.0, DirectionDropPct, 2500.0)
+
+	eval := NewEvaluator(s, defaultTestLogger())
+
+	// Tick at 2400 (4% drop) — should NOT trigger
+	eval.Evaluate("user@example.com", models.Tick{
+		InstrumentToken: 738561,
+		LastPrice:       2400.0,
+	})
+
+	mu.Lock()
+	assert.Len(t, notified, 0)
+	mu.Unlock()
+
+	// Tick at 2375 (exactly 5% drop) — should trigger
+	eval.Evaluate("user@example.com", models.Tick{
+		InstrumentToken: 738561,
+		LastPrice:       2375.0,
+	})
+
+	mu.Lock()
+	assert.Len(t, notified, 1)
+	assert.Equal(t, "RELIANCE", notified[0].Tradingsymbol)
+	assert.Equal(t, 2375.0, notifiedPrices[0])
+	mu.Unlock()
+}
+
+func TestEvaluator_Evaluate_RisePct(t *testing.T) {
+	var notified []*Alert
+	var notifiedPrices []float64
+	var mu sync.Mutex
+
+	s := NewStore(func(alert *Alert, currentPrice float64) {
+		mu.Lock()
+		defer mu.Unlock()
+		notified = append(notified, alert)
+		notifiedPrices = append(notifiedPrices, currentPrice)
+	})
+
+	// Alert: trigger when INFY rises 10% from 1500 (i.e., price >= 1650)
+	s.AddWithReferencePrice("user@example.com", "INFY", "NSE", 408065, 10.0, DirectionRisePct, 1500.0)
+
+	eval := NewEvaluator(s, defaultTestLogger())
+
+	// Tick at 1600 (6.67% rise) — should NOT trigger
+	eval.Evaluate("user@example.com", models.Tick{
+		InstrumentToken: 408065,
+		LastPrice:       1600.0,
+	})
+
+	mu.Lock()
+	assert.Len(t, notified, 0)
+	mu.Unlock()
+
+	// Tick at 1650 (exactly 10% rise) — should trigger
+	eval.Evaluate("user@example.com", models.Tick{
+		InstrumentToken: 408065,
+		LastPrice:       1650.0,
+	})
+
+	mu.Lock()
+	assert.Len(t, notified, 1)
+	assert.Equal(t, "INFY", notified[0].Tradingsymbol)
+	assert.Equal(t, 1650.0, notifiedPrices[0])
+	mu.Unlock()
+}
+
 // defaultTestLogger returns a no-op slog.Logger for tests.
 func defaultTestLogger() *slog.Logger {
 	return slog.Default()
