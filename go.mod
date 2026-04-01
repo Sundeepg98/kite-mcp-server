@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.44.0
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/gokiteconnect/v4 v4.3.5
+	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	golang.org/x/crypto v0.48.0
 	modernc.org/sqlite v1.46.1
 )

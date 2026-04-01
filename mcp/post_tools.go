@@ -78,6 +78,9 @@ func (*PlaceOrderTool) Tool() mcp.Tool {
 			mcp.Description("An optional tag to apply to an order to identify it (alphanumeric, max 20 chars)"),
 			mcp.MaxLength(20),
 		),
+		mcp.WithNumber("market_protection",
+			mcp.Description("Market protection percentage for MARKET orders (0-100). Use -1 for auto (recommended). Required by SEBI for market orders since April 2026."),
+		),
 	)
 }
 
@@ -108,6 +111,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			IcebergLegs:       SafeAssertInt(args["iceberg_legs"], 0),
 			IcebergQty:        SafeAssertInt(args["iceberg_quantity"], 0),
 			Tag:               SafeAssertString(args["tag"], ""),
+			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
 		}
 
 		// Validate order parameters
@@ -174,6 +178,9 @@ func (*ModifyOrderTool) Tool() mcp.Tool {
 		mcp.WithNumber("disclosed_quantity",
 			mcp.Description("Quantity to disclose publicly (for equity trades)"),
 		),
+		mcp.WithNumber("market_protection",
+			mcp.Description("Market protection percentage for MARKET orders (0-100). Use -1 for auto (recommended)."),
+		),
 	)
 }
 
@@ -198,6 +205,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			TriggerPrice:      SafeAssertFloat64(args["trigger_price"], 0.0),
 			Validity:          SafeAssertString(args["validity"], ""),
 			DisclosedQuantity: SafeAssertInt(args["disclosed_quantity"], 0),
+			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
