@@ -126,6 +126,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       <button class="fbtn" data-days="7">7 Days</button>
       <button class="fbtn" data-days="30">30 Days</button>
     </div>
+    <div class="filter-sep"></div>
+    <a id="exportBtn" class="fbtn" href="#" style="text-decoration:none;">Export CSV</a>
   </div>
 
   <div class="stats-grid">
@@ -431,6 +433,23 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       refreshTimer = setInterval(function() { fetchActivity(); }, REFRESH_MS);
     }
   }
+
+  // --- Export CSV ---
+  document.getElementById('exportBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    var url = '/dashboard/api/activity/export?format=csv';
+    if (state.days > 0) {
+      var since = new Date();
+      since.setDate(since.getDate() - state.days);
+      since.setHours(0, 0, 0, 0);
+      url += '&since=' + encodeURIComponent(since.toISOString());
+    } else {
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      url += '&since=' + encodeURIComponent(today.toISOString());
+    }
+    window.location.href = url;
+  });
 
   // --- Init ---
   fetchEmail();

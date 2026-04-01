@@ -441,6 +441,81 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
+type ConvertPositionTool struct{}
+
+func (*ConvertPositionTool) Tool() mcp.Tool {
+	return mcp.NewTool("convert_position",
+		mcp.WithDescription("Convert a position's product type (e.g., MIS to CNC for carrying intraday positions overnight, or CNC to MIS). This is commonly used at end of day to decide whether to carry or square off positions."),
+		mcp.WithString("exchange",
+			mcp.Description("Exchange"),
+			mcp.Required(),
+			mcp.Enum("NSE", "BSE", "NFO", "BFO", "MCX"),
+		),
+		mcp.WithString("tradingsymbol",
+			mcp.Description("Trading symbol"),
+			mcp.Required(),
+		),
+		mcp.WithString("transaction_type",
+			mcp.Description("BUY or SELL"),
+			mcp.Required(),
+			mcp.Enum("BUY", "SELL"),
+		),
+		mcp.WithNumber("quantity",
+			mcp.Description("Quantity to convert"),
+			mcp.Required(),
+			mcp.Min(1),
+		),
+		mcp.WithString("old_product",
+			mcp.Description("Current product type"),
+			mcp.Required(),
+			mcp.Enum("CNC", "NRML", "MIS"),
+		),
+		mcp.WithString("new_product",
+			mcp.Description("Target product type"),
+			mcp.Required(),
+			mcp.Enum("CNC", "NRML", "MIS"),
+		),
+		mcp.WithString("position_type",
+			mcp.Description("Position type"),
+			mcp.Required(),
+			mcp.Enum("day", "overnight"),
+		),
+	)
+}
+
+func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "convert_position")
+		args := request.GetArguments()
+
+		// Validate required parameters
+		if err := ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "old_product", "new_product", "position_type"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		positionParams := kiteconnect.ConvertPositionParams{
+			Exchange:        SafeAssertString(args["exchange"], ""),
+			TradingSymbol:   SafeAssertString(args["tradingsymbol"], ""),
+			TransactionType: SafeAssertString(args["transaction_type"], ""),
+			Quantity:        SafeAssertInt(args["quantity"], 0),
+			OldProduct:      SafeAssertString(args["old_product"], ""),
+			NewProduct:      SafeAssertString(args["new_product"], ""),
+			PositionType:    SafeAssertString(args["position_type"], ""),
+		}
+
+		return handler.WithSession(ctx, "convert_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			ok, err := session.Kite.Client.ConvertPosition(positionParams)
+			if err != nil {
+				handler.manager.Logger.Error("Failed to convert position", "error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert position: %s", err.Error())), nil
+			}
+
+			return handler.MarshalResponse(map[string]bool{"success": ok}, "convert_position")
+		})
+	}
+}
+
 type ModifyGTTOrderTool struct{}
 
 func (*ModifyGTTOrderTool) Tool() mcp.Tool {

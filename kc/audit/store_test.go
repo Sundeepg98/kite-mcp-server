@@ -251,6 +251,48 @@ func TestStore_EnqueueWithoutWorker(t *testing.T) {
 	assert.Equal(t, "sync-001", results[0].CallID)
 }
 
+func TestStore_DeleteOlderThan(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	// Insert old and new entries
+	oldEntry := makeEntry("old-001", "retention@test.com", "get_ltp", "market_data", false, now.Add(-100*24*time.Hour))
+	newEntry := makeEntry("new-001", "retention@test.com", "get_ltp", "market_data", false, now)
+
+	require.NoError(t, s.Record(oldEntry))
+	require.NoError(t, s.Record(newEntry))
+
+	// Verify both exist
+	results, total, err := s.List("retention@test.com", ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	assert.Len(t, results, 2)
+
+	// Delete entries older than 50 days ago
+	cutoff := now.Add(-50 * 24 * time.Hour)
+	deleted, err := s.DeleteOlderThan(cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted, "expected 1 row deleted")
+
+	// Verify only the new entry remains
+	results, total, err = s.List("retention@test.com", ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "expected 1 remaining")
+	require.Len(t, results, 1)
+	assert.Equal(t, "new-001", results[0].CallID)
+}
+
+func TestStore_DeleteOlderThan_NoRows(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	// Nothing to delete on an empty table
+	deleted, err := s.DeleteOlderThan(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), deleted)
+}
+
 func TestStore_RecordDuplicate(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)

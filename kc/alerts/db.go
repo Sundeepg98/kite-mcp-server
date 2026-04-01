@@ -532,6 +532,11 @@ func (d *DB) ExecDDL(ddl string) error { _, err := d.db.Exec(ddl); return err }
 // ExecInsert executes an INSERT (or similar DML) statement with arguments.
 func (d *DB) ExecInsert(query string, args ...any) error { _, err := d.db.Exec(query, args...); return err }
 
+// ExecResult executes a DML statement and returns the sql.Result for inspecting rows affected.
+func (d *DB) ExecResult(query string, args ...any) (sql.Result, error) {
+	return d.db.Exec(query, args...)
+}
+
 // QueryRow executes a query expected to return at most one row.
 func (d *DB) QueryRow(query string, args ...any) *sql.Row { return d.db.QueryRow(query, args...) }
 

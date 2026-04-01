@@ -317,37 +317,66 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	return kcManager, mcpServer, nil
 }
 
-// initScheduler wires the Telegram morning briefing and daily P&L summary tasks.
+// initScheduler wires the Telegram morning briefing, daily P&L summary, and
+// audit trail retention cleanup tasks.
 func (app *App) initScheduler(kcManager *kc.Manager) {
-	notifier := kcManager.TelegramNotifier()
-	if notifier == nil {
-		app.logger.Info("Telegram not configured, skipping briefing scheduler")
-		return
-	}
-
-	tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
-	credAdapter := &briefingCredAdapter{manager: kcManager}
-	briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStore(), tokenAdapter, credAdapter, app.logger)
-	if briefingSvc == nil {
-		return
-	}
-
 	sched := scheduler.New(app.logger)
-	sched.Add(scheduler.Task{
-		Name:   "morning_briefing",
-		Hour:   9,
-		Minute: 0,
-		Fn:     briefingSvc.SendMorningBriefings,
-	})
-	sched.Add(scheduler.Task{
-		Name:   "daily_summary",
-		Hour:   15,
-		Minute: 35,
-		Fn:     briefingSvc.SendDailySummaries,
-	})
+	var taskNames []string
+
+	// --- Telegram briefings (opt-in: requires TELEGRAM_BOT_TOKEN) ---
+	notifier := kcManager.TelegramNotifier()
+	if notifier != nil {
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
+		credAdapter := &briefingCredAdapter{manager: kcManager}
+		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStore(), tokenAdapter, credAdapter, app.logger)
+		if briefingSvc != nil {
+			sched.Add(scheduler.Task{
+				Name:   "morning_briefing",
+				Hour:   9,
+				Minute: 0,
+				Fn:     briefingSvc.SendMorningBriefings,
+			})
+			sched.Add(scheduler.Task{
+				Name:   "daily_summary",
+				Hour:   15,
+				Minute: 35,
+				Fn:     briefingSvc.SendDailySummaries,
+			})
+			taskNames = append(taskNames, "morning_briefing(09:00)", "daily_summary(15:35)")
+		}
+	} else {
+		app.logger.Info("Telegram not configured, skipping briefing tasks")
+	}
+
+	// --- Audit trail retention cleanup — daily at 3:00 AM IST ---
+	if app.auditStore != nil {
+		const retentionDays = 90
+		sched.Add(scheduler.Task{
+			Name:   "audit_cleanup",
+			Hour:   3,
+			Minute: 0,
+			Fn: func() {
+				cutoff := time.Now().AddDate(0, 0, -retentionDays)
+				deleted, err := app.auditStore.DeleteOlderThan(cutoff)
+				if err != nil {
+					app.logger.Error("Audit cleanup failed", "error", err)
+				} else if deleted > 0 {
+					app.logger.Info("Audit cleanup completed", "deleted", deleted, "retention_days", retentionDays)
+				}
+			},
+		})
+		taskNames = append(taskNames, "audit_cleanup(03:00)")
+	}
+
+	// Only start the scheduler if there are tasks to run.
+	if len(taskNames) == 0 {
+		app.logger.Info("No scheduled tasks configured")
+		return
+	}
+
 	sched.Start()
 	app.scheduler = sched
-	app.logger.Info("Briefing scheduler started (morning 09:00 IST, summary 15:35 IST)")
+	app.logger.Info("Scheduler started", "tasks", taskNames)
 }
 
 // briefingTokenAdapter bridges kc.KiteTokenStore to alerts.TokenChecker.

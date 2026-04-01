@@ -277,6 +277,16 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	return &tc, nil
 }
 
+// DeleteOlderThan removes tool_calls older than the given time.
+// Returns the number of rows deleted.
+func (s *Store) DeleteOlderThan(before time.Time) (int64, error) {
+	result, err := s.db.ExecResult("DELETE FROM tool_calls WHERE started_at < ?", before.Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, fmt.Errorf("audit: delete older than %s: %w", before.Format(time.RFC3339), err)
+	}
+	return result.RowsAffected()
+}
+
 // Stats holds aggregate metrics for a set of audit trail entries.
 type Stats struct {
 	TotalCalls   int     `json:"total_calls"`

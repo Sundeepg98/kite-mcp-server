@@ -1,7 +1,9 @@
 package ops
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -37,6 +39,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard", wrap(d.servePage))
 	mux.Handle("/dashboard/activity", wrap(d.serveActivityPage))
 	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
+	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
@@ -144,6 +147,77 @@ func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 		"offset":  opts.Offset,
 		"stats":   stats,
 	})
+}
+
+// activityExport streams audit trail entries as CSV or JSON for download.
+func (d *DashboardHandler) activityExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" || d.auditStore == nil {
+		http.Error(w, "not available", http.StatusBadRequest)
+		return
+	}
+
+	// Parse format (csv or json)
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "csv"
+	}
+
+	// Parse time range
+	opts := audit.ListOptions{Limit: 10000} // cap at 10K rows per export
+	if since := r.URL.Query().Get("since"); since != "" {
+		if t, err := time.Parse(time.RFC3339, since); err == nil {
+			opts.Since = t
+		}
+	}
+	if until := r.URL.Query().Get("until"); until != "" {
+		if t, err := time.Parse(time.RFC3339, until); err == nil {
+			opts.Until = t
+		}
+	}
+
+	results, _, err := d.auditStore.List(email, opts)
+	if err != nil {
+		d.logger.Error("Failed to export activity", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", "attachment; filename=activity.json")
+		if err := json.NewEncoder(w).Encode(results); err != nil {
+			d.logger.Error("Failed to encode JSON export", "error", err)
+		}
+		return
+	}
+
+	// CSV export
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=activity.csv")
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{"Time", "Tool", "Category", "Input", "Output", "Duration (ms)", "Error", "Error Message"})
+	for _, e := range results {
+		isErr := "false"
+		if e.IsError {
+			isErr = "true"
+		}
+		_ = cw.Write([]string{
+			e.StartedAt.Format(time.RFC3339),
+			e.ToolName,
+			e.ToolCategory,
+			e.InputSummary,
+			e.OutputSummary,
+			fmt.Sprintf("%d", e.DurationMs),
+			isErr,
+			e.ErrorMessage,
+		})
+	}
+	cw.Flush()
 }
 
 // intParam parses an integer query parameter, returning defaultVal if missing, invalid, or negative.

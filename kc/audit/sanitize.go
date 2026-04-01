@@ -39,7 +39,8 @@ var toolCategories = map[string]string{
 	"cancel_order":     "order",
 	"place_gtt_order":  "order",
 	"modify_gtt_order": "order",
-	"delete_gtt_order": "order",
+	"delete_gtt_order":  "order",
+	"convert_position": "order",
 
 	// query
 	"get_profile":       "query",

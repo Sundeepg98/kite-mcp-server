@@ -26,6 +26,13 @@ func SummarizeInput(toolName string, args map[string]any) string {
 		return summarizeGTTOrder(args)
 	case "delete_gtt_order":
 		return summarizeDeleteGTT(args)
+	case "convert_position":
+		return fmt.Sprintf("Convert %s %s %s→%s qty=%v",
+			strVal(args, "tradingsymbol"),
+			strVal(args, "exchange"),
+			strVal(args, "old_product"),
+			strVal(args, "new_product"),
+			args["quantity"])
 	case "get_ltp", "get_ohlc", "get_quotes":
 		return strVal(args, "instruments")
 	case "search_instruments":
