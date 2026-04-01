@@ -92,6 +92,8 @@ func SummarizeOutput(toolName string, result *gomcp.CallToolResult) string {
 		return summarizeLTP(text)
 	case "get_margins":
 		return summarizeMargins(text)
+	case "trading_context":
+		return summarizeTradingContext(text)
 	case "search_instruments":
 		return summarizeSearch(text)
 	}
@@ -275,6 +277,34 @@ func summarizeSearch(text string) string {
 		return truncate(text, 200)
 	}
 	return fmt.Sprintf("Found %d instruments", len(items))
+}
+
+// summarizeTradingContext extracts key metrics from trading_context output.
+func summarizeTradingContext(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	parts := make([]string, 0, 4)
+
+	if avail := jsonFloat(obj, "margin_available"); avail > 0 {
+		parts = append(parts, fmt.Sprintf("margin %s", formatRupee(avail)))
+	}
+	if pos := jsonFloat(obj, "open_positions"); pos > 0 {
+		pnl := jsonFloat(obj, "positions_pnl")
+		parts = append(parts, fmt.Sprintf("%.0f pos (P&L %s)", pos, formatRupee(pnl)))
+	}
+	if h := jsonFloat(obj, "holdings_count"); h > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f holdings", h))
+	}
+	if alerts := jsonFloat(obj, "active_alerts"); alerts > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f alerts", alerts))
+	}
+
+	if len(parts) == 0 {
+		return truncate(text, 200)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // --- JSON helper utilities ---

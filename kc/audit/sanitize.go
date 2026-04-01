@@ -43,6 +43,7 @@ var toolCategories = map[string]string{
 	"convert_position": "order",
 
 	// query
+	"trading_context":   "query",
 	"get_profile":       "query",
 	"get_margins":       "query",
 	"get_holdings":      "query",
@@ -53,6 +54,11 @@ var toolCategories = map[string]string{
 	"get_order_trades":  "query",
 	"get_gtts":          "query",
 	"get_mf_holdings":   "query",
+
+	// analytics
+	"portfolio_summary":       "query",
+	"portfolio_concentration": "query",
+	"position_analysis":       "query",
 
 	// market_data
 	"get_quotes":          "market_data",

@@ -55,6 +55,9 @@ func GetAllTools() []Tool {
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
 
+		// Trading context (unified snapshot — start here)
+		&TradingContextTool{},
+
 		// Portfolio analytics
 		&PortfolioSummaryTool{},
 		&PortfolioConcentrationTool{},
