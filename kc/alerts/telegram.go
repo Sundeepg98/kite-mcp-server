@@ -45,6 +45,46 @@ func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*T
 	}, nil
 }
 
+// SendMessage sends an arbitrary MarkdownV2 message to a specific chat.
+// Returns an error if the send fails. Callers are responsible for escaping
+// user-supplied text with EscapeMarkdown before embedding it.
+func (t *TelegramNotifier) SendMessage(chatID int64, text string) error {
+	if t == nil || t.bot == nil {
+		return fmt.Errorf("telegram notifier not initialized")
+	}
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeMarkdownV2
+	_, err := t.bot.Send(msg)
+	return err
+}
+
+// SendHTMLMessage sends an arbitrary HTML-formatted message to a specific chat.
+func (t *TelegramNotifier) SendHTMLMessage(chatID int64, text string) error {
+	if t == nil || t.bot == nil {
+		return fmt.Errorf("telegram notifier not initialized")
+	}
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	_, err := t.bot.Send(msg)
+	return err
+}
+
+// EscapeMarkdown escapes special MarkdownV2 characters for Telegram messages.
+// This is the exported version of escapeTelegramMarkdown.
+func EscapeMarkdown(s string) string {
+	return escapeTelegramMarkdown(s)
+}
+
+// Store returns the underlying alert store (used by briefing to iterate users).
+func (t *TelegramNotifier) Store() *Store {
+	return t.store
+}
+
+// Logger returns the notifier's logger.
+func (t *TelegramNotifier) Logger() *slog.Logger {
+	return t.logger
+}
+
 // Notify sends a price alert notification to the user's Telegram.
 func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	if t == nil || t.bot == nil {

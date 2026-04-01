@@ -55,6 +55,11 @@ func GetAllTools() []Tool {
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
 
+		// Tools for margin and charges calculation
+		&OrderMarginsTool{},
+		&BasketMarginsTool{},
+		&OrderChargesTool{},
+
 		// Tools that post data to Kite Connect
 		&PlaceOrderTool{},
 		&ModifyOrderTool{},

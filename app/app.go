@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
+	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -40,6 +41,7 @@ type App struct {
 	logBuffer      *ops.LogBuffer
 	rateLimiters   *rateLimiters
 	auditStore     *audit.Store
+	scheduler      *scheduler.Scheduler
 }
 
 // StatusPageData holds template data for the status page
@@ -309,7 +311,69 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.logger)
 	app.logger.Debug("MCP tools registered successfully")
 
+	// Initialize scheduled Telegram briefings (morning + daily P&L).
+	app.initScheduler(kcManager)
+
 	return kcManager, mcpServer, nil
+}
+
+// initScheduler wires the Telegram morning briefing and daily P&L summary tasks.
+func (app *App) initScheduler(kcManager *kc.Manager) {
+	notifier := kcManager.TelegramNotifier()
+	if notifier == nil {
+		app.logger.Info("Telegram not configured, skipping briefing scheduler")
+		return
+	}
+
+	tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
+	credAdapter := &briefingCredAdapter{manager: kcManager}
+	briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStore(), tokenAdapter, credAdapter, app.logger)
+	if briefingSvc == nil {
+		return
+	}
+
+	sched := scheduler.New(app.logger)
+	sched.Add(scheduler.Task{
+		Name:   "morning_briefing",
+		Hour:   9,
+		Minute: 0,
+		Fn:     briefingSvc.SendMorningBriefings,
+	})
+	sched.Add(scheduler.Task{
+		Name:   "daily_summary",
+		Hour:   15,
+		Minute: 35,
+		Fn:     briefingSvc.SendDailySummaries,
+	})
+	sched.Start()
+	app.scheduler = sched
+	app.logger.Info("Briefing scheduler started (morning 09:00 IST, summary 15:35 IST)")
+}
+
+// briefingTokenAdapter bridges kc.KiteTokenStore to alerts.TokenChecker.
+type briefingTokenAdapter struct {
+	store *kc.KiteTokenStore
+}
+
+func (a *briefingTokenAdapter) GetToken(email string) (string, time.Time, bool) {
+	entry, ok := a.store.Get(email)
+	if !ok {
+		return "", time.Time{}, false
+	}
+	return entry.AccessToken, entry.StoredAt, true
+}
+
+func (a *briefingTokenAdapter) IsExpired(storedAt time.Time) bool {
+	return kc.IsKiteTokenExpired(storedAt)
+}
+
+// briefingCredAdapter bridges kc.Manager to alerts.CredentialGetter.
+type briefingCredAdapter struct {
+	manager *kc.Manager
+}
+
+func (a *briefingCredAdapter) GetAPIKey(email string) string {
+	return a.manager.GetAPIKeyForEmail(email)
 }
 
 // createHTTPServer creates and configures the HTTP server
@@ -332,6 +396,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		defer stop()
 		<-ctx.Done()
 		app.logger.Info("Shutting down server...")
+
+		// Stop briefing scheduler first (prevent new Kite API calls).
+		if app.scheduler != nil {
+			app.scheduler.Stop()
+		}
 
 		// Drain audit buffer first so in-flight records are persisted.
 		if app.auditStore != nil {

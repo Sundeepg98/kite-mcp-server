@@ -431,6 +431,11 @@ func (m *Manager) AlertDB() *alerts.DB {
 	return m.alertDB
 }
 
+// TelegramNotifier returns the Telegram notifier (nil if not configured).
+func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
+	return m.telegramNotifier
+}
+
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
 func (m *Manager) HasUserCredentials(email string) bool {
 	if email == "" {
