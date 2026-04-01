@@ -54,6 +54,8 @@ var toolCategories = map[string]string{
 	"get_order_trades":  "query",
 	"get_gtts":          "query",
 	"get_mf_holdings":   "query",
+	"get_mf_orders":     "query",
+	"get_mf_sips":       "query",
 
 	// analytics
 	"portfolio_summary":       "query",

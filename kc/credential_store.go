@@ -82,6 +82,12 @@ func (s *KiteCredentialStore) Set(email string, entry *KiteCredentialEntry) {
 	stored := *entry // copy to prevent caller mutation
 	stored.StoredAt = time.Now()
 	key := strings.ToLower(strings.TrimSpace(email))
+	if existing, ok := s.creds[key]; ok && existing.APIKey != stored.APIKey {
+		if s.logger != nil {
+			s.logger.Warn("Overwriting credentials with different API key",
+				"email", key, "old_key", existing.APIKey[:8]+"...", "new_key", stored.APIKey[:8]+"...")
+		}
+	}
 	s.creds[key] = &stored
 	// Capture values for DB persist before releasing lock.
 	// After unlock, &stored is reachable via the map and could be read

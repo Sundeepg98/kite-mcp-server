@@ -46,6 +46,18 @@ func encrypt(key []byte, plaintext string) (string, error) {
 	return hex.EncodeToString(sealed), nil
 }
 
+// Encrypt encrypts plaintext using AES-256-GCM with the given key.
+// This is the exported wrapper around encrypt for use by external tools (e.g. key rotation CLI).
+func Encrypt(key []byte, plaintext string) (string, error) {
+	return encrypt(key, plaintext)
+}
+
+// Decrypt decrypts hex-encoded AES-256-GCM ciphertext with the given key.
+// This is the exported wrapper around decrypt for use by external tools (e.g. key rotation CLI).
+func Decrypt(key []byte, hexCiphertext string) string {
+	return decrypt(key, hexCiphertext)
+}
+
 // decrypt decrypts hex-encoded AES-256-GCM ciphertext.
 // Returns the plaintext string. If the value is not valid hex or fails
 // decryption, returns it as-is (plaintext fallback for migration).

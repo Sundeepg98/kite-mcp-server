@@ -34,6 +34,8 @@ func GetAllTools() []Tool {
 		&OrderTradesTool{},
 		&GTTOrdersTool{},
 		&MFHoldingsTool{},
+		&MFOrdersTool{},
+		&MFSIPsTool{},
 
 		// Tools for market data
 		&QuotesTool{},
