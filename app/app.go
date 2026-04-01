@@ -417,7 +417,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		opsHandler.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
 	}
 	// User dashboard: protected by OAuth if available, otherwise identity middleware
-	dashHandler := ops.NewDashboardHandler(kcManager, app.logger)
+	dashHandler := ops.NewDashboardHandler(kcManager, app.logger, app.auditStore)
 	if app.oauthHandler != nil {
 		dashHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
 	} else {

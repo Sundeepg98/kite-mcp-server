@@ -4,24 +4,30 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // DashboardHandler serves the per-user trading dashboard and its API endpoints.
 type DashboardHandler struct {
-	manager *kc.Manager
-	logger  *slog.Logger
+	manager    *kc.Manager
+	logger     *slog.Logger
+	auditStore *audit.Store
 }
 
-// NewDashboardHandler creates a new DashboardHandler.
-func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger) *DashboardHandler {
+// NewDashboardHandler creates a new DashboardHandler. The auditStore parameter
+// can be nil if the audit trail feature is not enabled.
+func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *audit.Store) *DashboardHandler {
 	return &DashboardHandler{
-		manager: manager,
-		logger:  logger,
+		manager:    manager,
+		logger:     logger,
+		auditStore: auditStore,
 	}
 }
 
@@ -29,6 +35,8 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger) *DashboardHan
 func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler) {
 	wrap := func(f http.HandlerFunc) http.Handler { return auth(f) }
 	mux.Handle("/dashboard", wrap(d.servePage))
+	mux.Handle("/dashboard/activity", wrap(d.serveActivityPage))
+	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
@@ -65,6 +73,81 @@ func (d *DashboardHandler) servePage(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(data); err != nil {
 		d.logger.Error("Failed to write response", "error", err)
 	}
+}
+
+// serveActivityPage serves the embedded activity.html page.
+func (d *DashboardHandler) serveActivityPage(w http.ResponseWriter, r *http.Request) {
+	data, err := templates.FS.ReadFile("activity.html")
+	if err != nil {
+		http.Error(w, "failed to load activity page", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(data); err != nil {
+		d.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// activityAPI returns paginated, filterable audit trail entries for the authenticated user.
+func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if d.auditStore == nil {
+		d.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		return
+	}
+
+	// Parse query params
+	opts := audit.ListOptions{
+		Limit:      intParam(r, "limit", 50),
+		Offset:     intParam(r, "offset", 0),
+		Category:   r.URL.Query().Get("category"),
+		OnlyErrors: r.URL.Query().Get("errors") == "true",
+	}
+	if since := r.URL.Query().Get("since"); since != "" {
+		if t, err := time.Parse(time.RFC3339, since); err == nil {
+			opts.Since = t
+		}
+	}
+	if until := r.URL.Query().Get("until"); until != "" {
+		if t, err := time.Parse(time.RFC3339, until); err == nil {
+			opts.Until = t
+		}
+	}
+
+	results, total, err := d.auditStore.List(email, opts)
+	if err != nil {
+		d.logger.Error("Failed to list audit entries", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	d.writeJSON(w, map[string]any{
+		"entries": results,
+		"total":   total,
+		"limit":   opts.Limit,
+		"offset":  opts.Offset,
+	})
+}
+
+// intParam parses an integer query parameter, returning defaultVal if missing, invalid, or negative.
+func intParam(r *http.Request, key string, defaultVal int) int {
+	s := r.URL.Query().Get(key)
+	if s == "" {
+		return defaultVal
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v < 0 {
+		return defaultVal
+	}
+	return v
 }
 
 // --- Portfolio types ---

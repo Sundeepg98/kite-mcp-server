@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Trail · Kite MCP</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+
+.content { padding: 20px 24px; max-width: 1200px; }
+
+.filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-group { display: flex; gap: 4px; align-items: center; }
+.filter-sep { width: 1px; height: 24px; background: var(--border); margin: 0 8px; }
+.fbtn { padding: 5px 12px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.fbtn:hover { border-color: var(--border-hi); color: var(--text-0); }
+.fbtn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.fbtn.error-toggle.active { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--text-0); }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--text-2); margin-top: 2px; }
+
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.entry { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; cursor: pointer; transition: border-color 0.12s; border-left: 3px solid var(--border); }
+.entry:hover { border-color: var(--border-hi); }
+.entry.error { border-left-color: var(--red); }
+.entry-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.entry-time { font-family: var(--mono); font-size: 12px; color: var(--text-2); flex-shrink: 0; }
+.entry-tool { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); }
+.entry-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-left: auto; }
+.entry-input { font-size: 12px; color: var(--text-1); margin-bottom: 2px; }
+.entry-output { font-size: 12px; color: var(--text-2); }
+.entry-output-arrow { color: var(--accent); margin-right: 4px; }
+.entry-footer { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.entry-duration { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.entry-status { font-family: var(--mono); font-size: 11px; font-weight: 600; margin-left: auto; }
+.entry-status.success { color: var(--green); }
+.entry-status.fail { color: var(--red); }
+.entry-error-msg { font-size: 12px; color: var(--red); margin-top: 4px; }
+.entry-detail { display: none; margin-top: 10px; padding: 10px 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--text-1); white-space: pre-wrap; word-break: break-all; line-height: 1.6; max-height: 300px; overflow-y: auto; }
+.entry.expanded .entry-detail { display: block; }
+
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; padding: 12px 0; }
+.page-btn { padding: 5px 14px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--sans); cursor: pointer; transition: all 0.12s; }
+.page-btn:hover:not(:disabled) { border-color: var(--border-hi); color: var(--text-0); }
+.page-btn:disabled { opacity: 0.3; cursor: default; }
+.page-info { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+
+.loading-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
+.error-state { text-align: center; padding: 32px 20px; color: var(--red); font-size: 13px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; margin-bottom: 16px; }
+
+@media (max-width: 640px) {
+  .content { padding: 14px 12px; }
+  .topbar { padding: 0 12px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-value { font-size: 18px; }
+  .entry-badge { display: none; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Activity Trail</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-email" id="userEmail">--</span>
+  </div>
+</div>
+
+<div class="content">
+  <div id="errorBanner" class="error-state" style="display:none"></div>
+
+  <div class="filter-bar">
+    <div class="filter-group" id="categoryFilters">
+      <button class="fbtn active" data-cat="">All</button>
+      <button class="fbtn" data-cat="order">Orders</button>
+      <button class="fbtn" data-cat="query">Queries</button>
+      <button class="fbtn" data-cat="market_data">Market Data</button>
+      <button class="fbtn" data-cat="alert">Alerts</button>
+      <button class="fbtn" data-cat="ticker">Ticker</button>
+      <button class="fbtn" data-cat="setup">Setup</button>
+    </div>
+    <div class="filter-sep"></div>
+    <button class="fbtn error-toggle" id="errorToggle">Errors Only</button>
+    <div class="filter-sep"></div>
+    <div class="filter-group" id="dateFilters">
+      <button class="fbtn active" data-days="0">Today</button>
+      <button class="fbtn" data-days="7">7 Days</button>
+      <button class="fbtn" data-days="30">30 Days</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="statTotal">--</div></div>
+    <div class="stat-card"><div class="stat-label">Errors</div><div class="stat-value" id="statErrors">--</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Latency</div><div class="stat-value" id="statLatency">--</div><div class="stat-sub" id="statLatencySub"></div></div>
+    <div class="stat-card"><div class="stat-label">Top Tool</div><div class="stat-value" id="statTopTool">--</div><div class="stat-sub" id="statTopToolSub"></div></div>
+  </div>
+
+  <div id="loadingState" class="loading-state">Loading activity...</div>
+  <div id="emptyState" class="empty-state" style="display:none">No activity recorded yet. Use MCP tools to see them here.</div>
+  <div class="timeline" id="timeline" style="display:none"></div>
+  <div class="pagination" id="pagination" style="display:none">
+    <button class="page-btn" id="prevBtn" disabled>&lt; Prev</button>
+    <span class="page-info" id="pageInfo">--</span>
+    <button class="page-btn" id="nextBtn" disabled>Next &gt;</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var PAGE_SIZE = 50;
+  var REFRESH_MS = 30000;
+  var state = { offset: 0, category: '', errors: false, days: 0, entries: [], total: 0 };
+  var refreshTimer = null;
+
+  // --- Category badge config ---
+  var catColors = {
+    order:       { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
+    query:       { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
+    market_data: { bg: 'var(--green-dim)', fg: 'var(--green)' },
+    alert:       { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    ticker:      { bg: 'var(--purple-dim)', fg: 'var(--purple)' },
+    setup:       { bg: 'rgba(100,116,139,0.12)', fg: 'var(--text-2)' }
+  };
+  function getCatColor(cat) { return catColors[cat] || catColors.setup; }
+  function catLabel(cat) {
+    var map = { order: 'ORDER', query: 'QUERY', market_data: 'MARKET', alert: 'ALERT', ticker: 'TICKER', setup: 'SETUP' };
+    return map[cat] || (cat ? cat.toUpperCase() : 'OTHER');
+  }
+
+  // --- Safe DOM helpers ---
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function fmtHMS(isoStr) {
+    if (!isoStr) return '--:--:--';
+    var d = new Date(isoStr);
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    var s = String(d.getSeconds()).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  function prettyJSON(str) {
+    if (!str) return '';
+    try { return JSON.stringify(JSON.parse(str), null, 2); } catch(e) { return str; }
+  }
+
+  // --- Fetch user email ---
+  function fetchEmail() {
+    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.email) document.getElementById('userEmail').textContent = d.email;
+    }).catch(function() {});
+  }
+
+  // --- Build query string ---
+  function buildURL() {
+    var params = ['limit=' + PAGE_SIZE, 'offset=' + state.offset];
+    if (state.category) params.push('category=' + encodeURIComponent(state.category));
+    if (state.errors) params.push('errors=true');
+    if (state.days > 0) {
+      var since = new Date();
+      since.setDate(since.getDate() - state.days);
+      since.setHours(0, 0, 0, 0);
+      params.push('since=' + encodeURIComponent(since.toISOString()));
+    } else {
+      // Today: start of day
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      params.push('since=' + encodeURIComponent(today.toISOString()));
+    }
+    return '/dashboard/api/activity?' + params.join('&');
+  }
+
+  // --- Fetch & render ---
+  function fetchActivity() {
+    var loading = document.getElementById('loadingState');
+    var empty = document.getElementById('emptyState');
+    var timeline = document.getElementById('timeline');
+    var pag = document.getElementById('pagination');
+    var errorBanner = document.getElementById('errorBanner');
+
+    loading.style.display = 'block';
+    empty.style.display = 'none';
+    timeline.style.display = 'none';
+    pag.style.display = 'none';
+    errorBanner.style.display = 'none';
+
+    fetch(buildURL()).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      loading.style.display = 'none';
+      state.entries = data.entries || [];
+      state.total = data.total || 0;
+
+      if (state.entries.length === 0) {
+        empty.style.display = 'block';
+        updateStats([], state.total);
+        return;
+      }
+
+      timeline.style.display = 'flex';
+      updateStats(state.entries, state.total);
+      renderTimeline(state.entries);
+      renderPagination();
+    }).catch(function(err) {
+      loading.style.display = 'none';
+      errorBanner.textContent = 'Failed to load activity: ' + err.message;
+      errorBanner.style.display = 'block';
+    });
+  }
+
+  // --- Stats ---
+  function updateStats(entries, total) {
+    document.getElementById('statTotal').textContent = total;
+
+    var errCount = 0;
+    var totalDur = 0;
+    var toolCounts = {};
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].is_error) errCount++;
+      totalDur += (entries[i].duration_ms || 0);
+      var tn = entries[i].tool_name || 'unknown';
+      toolCounts[tn] = (toolCounts[tn] || 0) + 1;
+    }
+
+    var statErrors = document.getElementById('statErrors');
+    statErrors.textContent = errCount;
+    statErrors.className = 'stat-value' + (errCount > 0 ? ' red' : '');
+
+    var avgMs = entries.length > 0 ? Math.round(totalDur / entries.length) : 0;
+    document.getElementById('statLatency').textContent = avgMs + 'ms';
+    document.getElementById('statLatencySub').textContent = entries.length > 0 ? 'from ' + entries.length + ' calls' : '';
+
+    var topTool = '--';
+    var topCount = 0;
+    for (var t in toolCounts) {
+      if (toolCounts[t] > topCount) { topTool = t; topCount = toolCounts[t]; }
+    }
+    document.getElementById('statTopTool').textContent = topTool;
+    document.getElementById('statTopToolSub').textContent = topCount > 0 ? topCount + ' calls' : '';
+  }
+
+  // --- Render timeline ---
+  function renderTimeline(entries) {
+    var container = document.getElementById('timeline');
+    clearChildren(container);
+
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      var card = el('div', 'entry' + (e.is_error ? ' error' : ''));
+
+      // Top row: time, tool name, category badge
+      var top = el('div', 'entry-top');
+      top.appendChild(el('span', 'entry-time', fmtHMS(e.started_at)));
+      top.appendChild(el('span', 'entry-tool', e.tool_name));
+      var bdg = el('span', 'entry-badge', catLabel(e.tool_category));
+      var cc = getCatColor(e.tool_category);
+      bdg.style.background = cc.bg;
+      bdg.style.color = cc.fg;
+      top.appendChild(bdg);
+      card.appendChild(top);
+
+      // Input summary
+      if (e.input_summary) {
+        card.appendChild(el('div', 'entry-input', e.input_summary));
+      }
+
+      // Output summary
+      if (e.output_summary) {
+        var outDiv = el('div', 'entry-output');
+        var arrow = el('span', 'entry-output-arrow', '\u2192 ');
+        outDiv.appendChild(arrow);
+        outDiv.appendChild(document.createTextNode(e.output_summary));
+        card.appendChild(outDiv);
+      }
+
+      // Error message
+      if (e.is_error && e.error_message) {
+        card.appendChild(el('div', 'entry-error-msg', e.error_message));
+      }
+
+      // Footer: duration + status
+      var footer = el('div', 'entry-footer');
+      footer.appendChild(el('span', 'entry-duration', (e.duration_ms || 0) + 'ms'));
+      var statusEl = el('span', 'entry-status ' + (e.is_error ? 'fail' : 'success'), e.is_error ? 'ERROR' : 'SUCCESS');
+      footer.appendChild(statusEl);
+      card.appendChild(footer);
+
+      // Expandable detail (InputParams JSON)
+      if (e.input_params) {
+        var detail = el('div', 'entry-detail', prettyJSON(e.input_params));
+        card.appendChild(detail);
+        (function(c) {
+          c.addEventListener('click', function() { c.classList.toggle('expanded'); });
+        })(card);
+      }
+
+      container.appendChild(card);
+    }
+  }
+
+  // --- Pagination ---
+  function renderPagination() {
+    var pag = document.getElementById('pagination');
+    if (state.total <= PAGE_SIZE && state.offset === 0) { pag.style.display = 'none'; return; }
+    pag.style.display = 'flex';
+
+    var start = state.offset + 1;
+    var end = Math.min(state.offset + state.entries.length, state.total);
+    document.getElementById('pageInfo').textContent = 'Showing ' + start + '-' + end + ' of ' + state.total;
+
+    var prevBtn = document.getElementById('prevBtn');
+    var nextBtn = document.getElementById('nextBtn');
+    prevBtn.disabled = state.offset === 0;
+    nextBtn.disabled = (state.offset + PAGE_SIZE) >= state.total;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', function() {
+    state.offset = Math.max(0, state.offset - PAGE_SIZE);
+    fetchActivity();
+  });
+  document.getElementById('nextBtn').addEventListener('click', function() {
+    state.offset += PAGE_SIZE;
+    fetchActivity();
+  });
+
+  // --- Filter: category ---
+  document.getElementById('categoryFilters').addEventListener('click', function(ev) {
+    var btn = ev.target.closest('.fbtn');
+    if (!btn) return;
+    var btns = document.getElementById('categoryFilters').querySelectorAll('.fbtn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+    state.category = btn.getAttribute('data-cat');
+    state.offset = 0;
+    fetchActivity();
+    scheduleRefresh();
+  });
+
+  // --- Filter: errors ---
+  document.getElementById('errorToggle').addEventListener('click', function() {
+    this.classList.toggle('active');
+    state.errors = this.classList.contains('active');
+    state.offset = 0;
+    fetchActivity();
+    scheduleRefresh();
+  });
+
+  // --- Filter: date range ---
+  document.getElementById('dateFilters').addEventListener('click', function(ev) {
+    var btn = ev.target.closest('.fbtn');
+    if (!btn) return;
+    var btns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+    state.days = parseInt(btn.getAttribute('data-days'), 10) || 0;
+    state.offset = 0;
+    fetchActivity();
+    scheduleRefresh();
+  });
+
+  // --- Auto-refresh (only page 1, no category filter, no error filter) ---
+  function shouldAutoRefresh() {
+    return state.offset === 0 && !state.category && !state.errors;
+  }
+  function scheduleRefresh() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (shouldAutoRefresh()) {
+      refreshTimer = setInterval(function() { fetchActivity(); }, REFRESH_MS);
+    }
+  }
+
+  // --- Init ---
+  fetchEmail();
+  fetchActivity();
+  scheduleRefresh();
+})();
+</script>
+</body>
+</html>
