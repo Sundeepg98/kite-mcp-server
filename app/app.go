@@ -324,6 +324,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.auditStore.StartWorker()
 			app.logger.Info("Audit trail enabled")
 			auditMiddleware = audit.Middleware(app.auditStore)
+
+			// Wire audit store into manager for alert trigger + trailing stop notifications.
+			kcManager.SetAuditStore(app.auditStore)
 		}
 	}
 

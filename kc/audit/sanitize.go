@@ -109,6 +109,10 @@ var toolCategories = map[string]string{
 	// setup
 	"login":          "setup",
 	"open_dashboard": "setup",
+
+	// notification (synthetic events from alert triggers / trailing stop modifications)
+	"alert_triggered":        "notification",
+	"trailing_stop_modified": "notification",
 }
 
 // ToolCategory returns the category for a given tool name.

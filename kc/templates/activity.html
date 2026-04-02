@@ -128,6 +128,12 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <a href="/admin/ops" class="dash-nav-link">Ops</a>
 </nav>
 
+<div id="notifBanner" style="display:none; padding:8px 24px; background:var(--accent-dim); border-bottom:1px solid rgba(34,211,238,0.25); font-size:12px; color:var(--text-1);">
+  Enable browser notifications for alerts and order updates?
+  <button id="notifEnable" style="margin-left:12px; padding:3px 12px; border-radius:3px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:11px; font-family:var(--sans); font-weight:600; cursor:pointer;">Enable</button>
+  <button id="notifDismiss" style="margin-left:6px; padding:3px 12px; border-radius:3px; border:1px solid var(--border); background:transparent; color:var(--text-2); font-size:11px; font-family:var(--sans); cursor:pointer;">Dismiss</button>
+</div>
+
 <div class="content">
   <div id="errorBanner" class="error-state" style="display:none"></div>
 
@@ -138,6 +144,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       <button class="fbtn" data-cat="query">Queries</button>
       <button class="fbtn" data-cat="market_data">Market Data</button>
       <button class="fbtn" data-cat="alert">Alerts</button>
+      <button class="fbtn" data-cat="notification">Notifications</button>
       <button class="fbtn" data-cat="ticker">Ticker</button>
       <button class="fbtn" data-cat="setup">Setup</button>
     </div>
@@ -190,16 +197,17 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
   // --- Category badge config ---
   var catColors = {
-    order:       { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
-    query:       { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
-    market_data: { bg: 'var(--green-dim)', fg: 'var(--green)' },
-    alert:       { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
-    ticker:      { bg: 'var(--purple-dim)', fg: 'var(--purple)' },
-    setup:       { bg: 'rgba(100,116,139,0.12)', fg: 'var(--text-2)' }
+    order:        { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
+    query:        { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
+    market_data:  { bg: 'var(--green-dim)', fg: 'var(--green)' },
+    alert:        { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    notification: { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    ticker:       { bg: 'var(--purple-dim)', fg: 'var(--purple)' },
+    setup:        { bg: 'rgba(100,116,139,0.12)', fg: 'var(--text-2)' }
   };
   function getCatColor(cat) { return catColors[cat] || catColors.setup; }
   function catLabel(cat) {
-    var map = { order: 'ORDER', query: 'QUERY', market_data: 'MARKET', alert: 'ALERT', ticker: 'TICKER', setup: 'SETUP' };
+    var map = { order: 'ORDER', query: 'QUERY', market_data: 'MARKET', alert: 'ALERT', notification: 'NOTIF', ticker: 'TICKER', setup: 'SETUP' };
     return map[cat] || (cat ? cat.toUpperCase() : 'OTHER');
   }
 
@@ -571,6 +579,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       sseSource.onmessage = function(event) {
         try {
           var entry = JSON.parse(event.data);
+          // Browser notification for important events (background tab only)
+          maybeBrowserNotify(entry);
           // Only prepend if we're on page 1 with no filters
           if (state.offset === 0 && !state.category && !state.errors) {
             // Add to the beginning of current entries
@@ -654,11 +664,43 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     return card;
   }
 
+  // --- Browser Notification API ---
+  function initNotifBanner() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'default') return;
+    if (localStorage.getItem('kite_notif_dismissed') === '1') return;
+    document.getElementById('notifBanner').style.display = 'block';
+  }
+  document.getElementById('notifEnable').addEventListener('click', function() {
+    Notification.requestPermission().then(function() {
+      document.getElementById('notifBanner').style.display = 'none';
+    });
+  });
+  document.getElementById('notifDismiss').addEventListener('click', function() {
+    document.getElementById('notifBanner').style.display = 'none';
+    localStorage.setItem('kite_notif_dismissed', '1');
+  });
+
+  function maybeBrowserNotify(entry) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (document.visibilityState === 'visible') return; // only notify when tab is in background
+    var dominated = (entry.tool_category === 'notification') ||
+                    (entry.tool_category === 'order' && !entry.is_error);
+    if (!dominated) return;
+    var body = (entry.input_summary || '') + (entry.output_summary ? ': ' + entry.output_summary : '');
+    new Notification('Kite MCP — ' + (entry.tool_name || '').replace(/_/g, ' '), {
+      body: body,
+      tag: entry.call_id,
+      icon: '/favicon.ico'
+    });
+  }
+
   // --- Init ---
   fetchEmail();
   fetchActivity();
   scheduleRefresh();
   connectSSE();
+  initNotifBanner();
 })();
 </script>
 </body>

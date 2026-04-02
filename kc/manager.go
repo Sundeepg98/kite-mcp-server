@@ -16,6 +16,7 @@ import (
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
@@ -84,6 +85,20 @@ func New(cfg Config) (*Manager, error) {
 	m.alertStore = alerts.NewStore(func(alert *alerts.Alert, currentPrice float64) {
 		if m.telegramNotifier != nil {
 			m.telegramNotifier.Notify(alert, currentPrice)
+		}
+		// Log alert trigger to audit trail for SSE browser notifications.
+		if m.auditStore != nil {
+			now := time.Now()
+			m.auditStore.Enqueue(&audit.ToolCall{
+				CallID:        fmt.Sprintf("alert-%s-%d", alert.ID, now.UnixNano()),
+				Email:         alert.Email,
+				ToolName:      "alert_triggered",
+				ToolCategory:  "notification",
+				InputSummary:  fmt.Sprintf("%s:%s %s %.2f", alert.Exchange, alert.Tradingsymbol, alert.Direction, alert.TargetPrice),
+				OutputSummary: fmt.Sprintf("Triggered at %.2f, notified via Telegram", currentPrice),
+				StartedAt:     now,
+				CompletedAt:   now,
+			})
 		}
 	})
 	m.alertStore.SetLogger(cfg.Logger)
@@ -214,6 +229,25 @@ func New(cfg Config) (*Manager, error) {
 
 	// Wire trailing stop modification notification to Telegram
 	m.trailingStopMgr.SetOnModify(func(ts *alerts.TrailingStop, oldStop, newStop float64) {
+		// Log trailing stop modification to audit trail for SSE browser notifications.
+		if m.auditStore != nil {
+			now := time.Now()
+			trailDesc := fmt.Sprintf("%.2f", ts.TrailAmount)
+			if ts.TrailPct > 0 {
+				trailDesc = fmt.Sprintf("%.1f%%", ts.TrailPct)
+			}
+			m.auditStore.Enqueue(&audit.ToolCall{
+				CallID:        fmt.Sprintf("trail-%s-%d", ts.ID, now.UnixNano()),
+				Email:         ts.Email,
+				ToolName:      "trailing_stop_modified",
+				ToolCategory:  "notification",
+				InputSummary:  fmt.Sprintf("%s:%s SL moved %.2f -> %.2f", ts.Exchange, ts.Tradingsymbol, oldStop, newStop),
+				OutputSummary: fmt.Sprintf("High: %.2f, Trail: %s", ts.HighWaterMark, trailDesc),
+				StartedAt:     now,
+				CompletedAt:   now,
+			})
+		}
+
 		if m.telegramNotifier == nil {
 			return
 		}
@@ -348,6 +382,7 @@ type Manager struct {
 	registryStore      *registry.Store                // pre-registered Kite app credentials (key registry)
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
+	auditStore         *audit.Store                   // optional: audit trail for synthetic events
 	appMode            string
 	externalURL        string
 	adminSecretPath    string
@@ -634,6 +669,12 @@ func (m *Manager) PnLService() *alerts.PnLSnapshotService {
 // SetPnLService sets the P&L snapshot service (called from app layer after initialization).
 func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
 	m.pnlService = svc
+}
+
+// SetAuditStore wires the audit store into alert trigger and trailing stop
+// modification callbacks so that these events appear in the SSE activity stream.
+func (m *Manager) SetAuditStore(store *audit.Store) {
+	m.auditStore = store
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
