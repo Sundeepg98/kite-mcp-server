@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -18,27 +19,29 @@ import (
 
 // Handler serves the ops dashboard pages and API endpoints.
 type Handler struct {
-	manager     *kc.Manager
-	metrics     *metrics.Manager
-	logBuffer   *LogBuffer
-	logger      *slog.Logger
-	startTime   time.Time
-	version     string
-	userStore   *users.Store
-	auditStore  *audit.Store
+	manager       *kc.Manager
+	metrics       *metrics.Manager
+	logBuffer     *LogBuffer
+	logger        *slog.Logger
+	startTime     time.Time
+	version       string
+	userStore     *users.Store
+	auditStore    *audit.Store
+	registryStore *registry.Store
 }
 
 // New creates a new ops Handler.
 func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, userStore *users.Store, auditStore *audit.Store) *Handler {
 	return &Handler{
-		manager:    manager,
-		metrics:    metrics,
-		logBuffer:  logBuffer,
-		logger:     logger,
-		startTime:  startTime,
-		version:    version,
-		userStore:  userStore,
-		auditStore: auditStore,
+		manager:       manager,
+		metrics:       metrics,
+		logBuffer:     logBuffer,
+		logger:        logger,
+		startTime:     startTime,
+		version:       version,
+		userStore:     userStore,
+		auditStore:    auditStore,
+		registryStore: manager.RegistryStore(),
 	}
 }
 
@@ -68,6 +71,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/users/activate", wrap(h.activateUser))
 	mux.Handle("/admin/ops/api/users/offboard", wrap(h.offboardUser))
 	mux.Handle("/admin/ops/api/users/role", wrap(h.changeRole))
+	// Key registry (admin only)
+	mux.Handle("/admin/ops/api/registry", wrap(h.registryHandler))
+	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
@@ -503,5 +509,122 @@ func (h *Handler) logStream(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, ": keepalive\n\n")
 			flusher.Flush()
 		}
+	}
+}
+
+// --- Key Registry endpoints (admin only) ---
+
+// registryHandler handles GET (list) and POST (create) for /admin/ops/api/registry.
+func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.registryStore == nil {
+		h.writeJSON(w, map[string]string{"error": "registry not initialized"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		h.writeJSON(w, h.registryStore.List())
+
+	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+		var req struct {
+			ID         string `json:"id"`
+			APIKey     string `json:"api_key"`
+			APISecret  string `json:"api_secret"`
+			AssignedTo string `json:"assigned_to"`
+			Label      string `json:"label"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			h.writeJSON(w, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		if req.ID == "" || req.APIKey == "" || req.APISecret == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			h.writeJSON(w, map[string]string{"error": "id, api_key, and api_secret are required"})
+			return
+		}
+		reg := &registry.AppRegistration{
+			ID:           req.ID,
+			APIKey:       req.APIKey,
+			APISecret:    req.APISecret,
+			AssignedTo:   req.AssignedTo,
+			Label:        req.Label,
+			RegisteredBy: email,
+		}
+		if err := h.registryStore.Register(reg); err != nil {
+			w.WriteHeader(http.StatusConflict)
+			h.writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		h.logger.Info("Admin registered app in key registry", "admin", email, "id", req.ID, "api_key", req.APIKey[:8]+"...")
+		h.logAdminAction(email, "register_app", req.ID+" ("+req.Label+")")
+		w.WriteHeader(http.StatusCreated)
+		h.writeJSON(w, map[string]string{"status": "ok", "id": req.ID})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// registryItemHandler handles PUT (update) and DELETE (remove) for /admin/ops/api/registry/{id}.
+func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.registryStore == nil {
+		h.writeJSON(w, map[string]string{"error": "registry not initialized"})
+		return
+	}
+
+	// Extract ID from URL: /admin/ops/api/registry/{id}
+	id := strings.TrimPrefix(r.URL.Path, "/admin/ops/api/registry/")
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		h.writeJSON(w, map[string]string{"error": "id is required in URL path"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPut:
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+		var req struct {
+			AssignedTo string `json:"assigned_to"`
+			Label      string `json:"label"`
+			Status     string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			h.writeJSON(w, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		if err := h.registryStore.Update(id, req.AssignedTo, req.Label, req.Status); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			h.writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		h.logger.Info("Admin updated registry entry", "admin", email, "id", id)
+		h.logAdminAction(email, "update_registry", id)
+		h.writeJSON(w, map[string]string{"status": "ok"})
+
+	case http.MethodDelete:
+		if err := h.registryStore.Delete(id); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			h.writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		h.logger.Info("Admin deleted registry entry", "admin", email, "id", id)
+		h.logAdminAction(email, "delete_registry", id)
+		h.writeJSON(w, map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }

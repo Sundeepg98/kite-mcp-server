@@ -17,6 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -184,6 +185,18 @@ func New(cfg Config) (*Manager, error) {
 			cfg.Logger.Info("Users loaded from database", "count", m.userStore.Count())
 		}
 	}
+	// Initialize key registry store (zero-config onboarding)
+	m.registryStore = registry.New()
+	m.registryStore.SetLogger(cfg.Logger)
+	if m.alertDB != nil {
+		m.registryStore.SetDB(m.alertDB)
+		if err := m.registryStore.LoadFromDB(); err != nil {
+			cfg.Logger.Error("Failed to load registry from DB", "error", err)
+		} else {
+			cfg.Logger.Info("App registry loaded from database", "count", m.registryStore.Count())
+		}
+	}
+
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
 		apiKey := m.GetAPIKeyForEmail(email)
@@ -329,6 +342,7 @@ type Manager struct {
 	pnlService         *alerts.PnLSnapshotService     // daily P&L snapshots
 	watchlistStore     *watchlist.Store               // per-user watchlists
 	userStore          *users.Store                   // registered users (RBAC, lifecycle)
+	registryStore      *registry.Store                // pre-registered Kite app credentials (key registry)
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	appMode            string
@@ -527,6 +541,11 @@ func (m *Manager) CredentialStore() *KiteCredentialStore {
 // UserStore returns the user identity store (RBAC, lifecycle).
 func (m *Manager) UserStore() *users.Store {
 	return m.userStore
+}
+
+// RegistryStore returns the key registry store for zero-config onboarding.
+func (m *Manager) RegistryStore() *registry.Store {
+	return m.registryStore
 }
 
 // AlertDB returns the optional SQLite database used for persistence.

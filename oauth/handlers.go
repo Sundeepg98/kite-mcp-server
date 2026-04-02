@@ -43,6 +43,14 @@ type AdminUserStore interface {
 	VerifyPassword(email, password string) (bool, error)
 }
 
+// KeyRegistry provides access to the pre-registered Kite app credentials.
+// Implemented by registry.Store to avoid direct import.
+type KeyRegistry interface {
+	HasEntries() bool
+	GetByEmail(email string) (apiKey, apiSecret string, ok bool)
+	GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool)
+}
+
 // Handler implements all OAuth 2.1 HTTP endpoints.
 type Handler struct {
 	config           *Config
@@ -54,11 +62,13 @@ type Handler struct {
 	logger           *slog.Logger
 	kiteTokenChecker KiteTokenChecker
 	userStore        AdminUserStore
+	registry         KeyRegistry
 
 	// Cached templates (parsed once at startup)
 	loginSuccessTmpl   *template.Template
 	browserLoginTmpl   *template.Template
 	adminLoginTmpl     *template.Template
+	emailPromptTmpl    *template.Template
 }
 
 // NewHandler creates a new OAuth handler. Config must be validated first.
@@ -87,6 +97,10 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	if err != nil {
 		cfg.Logger.Error("Failed to parse admin_login template", "error", err)
 	}
+	h.emailPromptTmpl, err = template.ParseFS(templates.FS, "base.html", "email_prompt.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse email_prompt template", "error", err)
+	}
 
 	return h
 }
@@ -114,12 +128,19 @@ func (h *Handler) SetKiteTokenChecker(checker KiteTokenChecker) {
 	h.kiteTokenChecker = checker
 }
 
+// SetRegistry sets the key registry for zero-config onboarding.
+// When set, generic OAuth clients can be matched to Kite apps by email.
+func (h *Handler) SetRegistry(r KeyRegistry) {
+	h.registry = r
+}
+
 // oauthState is packed into Kite's redirect_params to round-trip MCP client data.
 type oauthState struct {
 	ClientID      string `json:"c"`
 	RedirectURI   string `json:"r"`
 	CodeChallenge string `json:"k"`
 	State         string `json:"s"`
+	RegistryKey   string `json:"g,omitempty"` // Kite API key from registry (zero-config flow)
 }
 
 // --- Well-Known Metadata Endpoints ---
@@ -257,13 +278,41 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pack MCP client state into signed redirect_params
+	// Pack MCP client state — redirectToKiteLogin/serveEmailPrompt will sign and encode it
 	stateData := oauthState{
 		ClientID:      clientID,
 		RedirectURI:   redirectURI,
 		CodeChallenge: codeChallenge,
 		State:         state,
 	}
+
+	// Determine Kite API key for login redirect
+	if h.clients.IsKiteClient(clientID) {
+		// Per-user Kite API key client: redirect directly to Kite login
+		h.redirectToKiteLogin(w, r, clientID, stateData)
+		return
+	}
+
+	// Generic (dynamically registered) client
+	// If the key registry has entries, show the email prompt instead of going to Kite directly.
+	// This enables zero-config onboarding: user enters email, server looks up registry for their app.
+	if h.registry != nil && h.registry.HasEntries() {
+		h.serveEmailPrompt(w, stateData, "")
+		return
+	}
+
+	// Fallback: use global Kite API key if available
+	kiteAPIKey := h.config.KiteAPIKey
+	if kiteAPIKey == "" {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."})
+		return
+	}
+
+	h.redirectToKiteLogin(w, r, kiteAPIKey, stateData)
+}
+
+// redirectToKiteLogin packs the OAuth state and redirects to Kite's login page.
+func (h *Handler) redirectToKiteLogin(w http.ResponseWriter, r *http.Request, kiteAPIKey string, stateData oauthState) {
 	stateJSON, err := json.Marshal(stateData)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -272,25 +321,151 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
 	signedState := h.signer.Sign(encodedState)
 
-	// Build redirect_params: flow=oauth&data=<signed>
 	redirectParams := "flow=oauth&data=" + url.QueryEscape(signedState)
+	kiteURL := fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
+		kiteAPIKey, url.QueryEscape(redirectParams))
+	h.logger.Info("Redirecting to Kite login", "client_id", stateData.ClientID, "api_key", kiteAPIKey[:8]+"...", "registry_flow", stateData.RegistryKey != "")
+	http.Redirect(w, r, kiteURL, http.StatusFound)
+}
 
-	// Use per-user API key for Kite login if this is a Kite API key client
-	kiteAPIKey := h.config.KiteAPIKey
-	if h.clients.IsKiteClient(clientID) {
-		kiteAPIKey = clientID
-	}
-
-	if kiteAPIKey == "" {
-		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "No Kite API credentials configured. Set oauth_client_id and oauth_client_secret in your MCP client config."})
+// serveEmailPrompt renders the email prompt page for zero-config onboarding.
+func (h *Handler) serveEmailPrompt(w http.ResponseWriter, stateData oauthState, errorMsg string) {
+	if h.emailPromptTmpl == nil {
+		http.Error(w, "email prompt page unavailable", http.StatusInternalServerError)
 		return
 	}
 
-	// Redirect to Kite login
-	kiteURL := fmt.Sprintf("https://kite.zerodha.com/connect/login?api_key=%s&v=3&redirect_params=%s",
-		kiteAPIKey, url.QueryEscape(redirectParams))
-	h.logger.Info("Redirecting to Kite login", "client_id", clientID, "is_kite_key", h.clients.IsKiteClient(clientID))
-	http.Redirect(w, r, kiteURL, http.StatusFound)
+	// Pack the OAuth state into a signed string so it survives the email form POST
+	stateJSON, err := json.Marshal(stateData)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
+	signedOAuthState := h.signer.Sign(encodedState)
+
+	// Generate CSRF token
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		Path:     "/oauth/email-lookup",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+	})
+
+	data := struct {
+		Title      string
+		Error      string
+		CSRFToken  string
+		OAuthState string
+	}{
+		Title:      "Connect to Kite",
+		Error:      errorMsg,
+		CSRFToken:  csrfToken,
+		OAuthState: signedOAuthState,
+	}
+
+	var buf bytes.Buffer
+	if err := h.emailPromptTmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+		h.logger.Error("Failed to render email prompt template", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := buf.WriteTo(w); err != nil {
+		h.logger.Debug("Failed to write email prompt response", "error", err)
+	}
+}
+
+// HandleEmailLookup handles POST /oauth/email-lookup — looks up registry for user's email,
+// then redirects to Kite login with the registered app's API key.
+func (h *Handler) HandleEmailLookup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	email := strings.TrimSpace(r.FormValue("email"))
+	signedOAuthState := r.FormValue("oauth_state")
+
+	// Verify CSRF token
+	csrfCookie, err := r.Cookie("csrf_token")
+	csrfForm := r.FormValue("csrf_token")
+	if err != nil || csrfCookie.Value == "" || csrfCookie.Value != csrfForm {
+		h.logger.Warn("CSRF verification failed on email-lookup")
+		// Re-render with error — need to recover oauthState from signed form field
+		if st, ok := h.recoverOAuthState(signedOAuthState); ok {
+			h.serveEmailPrompt(w, st, "Invalid or expired form. Please try again.")
+		} else {
+			http.Error(w, "invalid or expired session", http.StatusBadRequest)
+		}
+		return
+	}
+
+	// Recover the OAuth state from the signed form field
+	st, ok := h.recoverOAuthState(signedOAuthState)
+	if !ok {
+		http.Error(w, "invalid or expired OAuth state", http.StatusBadRequest)
+		return
+	}
+
+	if email == "" {
+		h.serveEmailPrompt(w, st, "Please enter your email address.")
+		return
+	}
+
+	// Look up registry for this email
+	if h.registry == nil || !h.registry.HasEntries() {
+		http.Error(w, "key registry not configured", http.StatusInternalServerError)
+		return
+	}
+
+	apiKey, _, ok := h.registry.GetByEmail(email)
+	if !ok {
+		h.logger.Info("Email not found in key registry", "email", email)
+		h.serveEmailPrompt(w, st, "No app registered for this email. Contact your admin.")
+		return
+	}
+
+	// Set the RegistryKey in the state so callback knows to use registry credentials
+	st.RegistryKey = apiKey
+	h.logger.Info("Registry lookup successful, redirecting to Kite login", "email", email, "api_key", apiKey[:8]+"...")
+
+	// Redirect to Kite login with the registry-provided API key
+	h.redirectToKiteLogin(w, r, apiKey, st)
+}
+
+// recoverOAuthState decodes and verifies a signed OAuth state string.
+func (h *Handler) recoverOAuthState(signed string) (oauthState, bool) {
+	if signed == "" {
+		return oauthState{}, false
+	}
+	encodedState, err := h.signer.Verify(signed)
+	if err != nil {
+		return oauthState{}, false
+	}
+	stateJSON, err := base64.URLEncoding.DecodeString(encodedState)
+	if err != nil {
+		return oauthState{}, false
+	}
+	var st oauthState
+	if err := json.Unmarshal(stateJSON, &st); err != nil {
+		return oauthState{}, false
+	}
+	return st, true
 }
 
 // --- Kite OAuth Callback ---
@@ -377,6 +552,39 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 			}
 			h.logger.Info("Kite OAuth callback (deferred exchange)", "client_id", st.ClientID)
 		}
+	} else if st.RegistryKey != "" {
+		// Registry flow: user came through the email prompt, RegistryKey is the Kite API key
+		// Look up the registry's stored API secret for this key
+		apiSecret := ""
+		if h.registry != nil {
+			if secret, ok := h.registry.GetSecretByAPIKey(st.RegistryKey); ok {
+				apiSecret = secret
+			}
+		}
+		if apiSecret == "" {
+			h.logger.Error("Registry key not found in registry", "registry_key", st.RegistryKey)
+			http.Error(w, "failed to authenticate: registry credentials not found", http.StatusInternalServerError)
+			return
+		}
+		email, err := h.exchanger.ExchangeWithCredentials(requestToken, st.RegistryKey, apiSecret)
+		if err != nil {
+			h.logger.Error("Registry flow Kite token exchange failed", "registry_key", st.RegistryKey, "error", err)
+			http.Error(w, "failed to authenticate with Kite", http.StatusInternalServerError)
+			return
+		}
+		mcpCode, err = h.authCodes.Generate(&AuthCodeEntry{
+			ClientID:      st.ClientID,
+			CodeChallenge: st.CodeChallenge,
+			RedirectURI:   st.RedirectURI,
+			Email:         email,
+		})
+		if err != nil {
+			h.logger.Error("Failed to generate auth code (registry)", "error", err)
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+		ssoEmail = email
+		h.logger.Info("Registry flow Kite OAuth complete", "email", email, "registry_key", st.RegistryKey[:8]+"...", "client_id", st.ClientID)
 	} else {
 		// Normal flow: exchange immediately with global credentials
 		email, err := h.exchanger.ExchangeRequestToken(requestToken)

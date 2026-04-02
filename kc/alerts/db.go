@@ -132,7 +132,21 @@ CREATE TABLE IF NOT EXISTS daily_pnl (
     trades_count   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (date, email)
 );
-CREATE INDEX IF NOT EXISTS idx_daily_pnl_email ON daily_pnl(email);`
+CREATE INDEX IF NOT EXISTS idx_daily_pnl_email ON daily_pnl(email);
+
+CREATE TABLE IF NOT EXISTS app_registry (
+    id            TEXT PRIMARY KEY,
+    api_key       TEXT NOT NULL,
+    api_secret    TEXT NOT NULL,
+    assigned_to   TEXT NOT NULL DEFAULT '',
+    label         TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','disabled')),
+    registered_by TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_app_registry_assigned ON app_registry(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_app_registry_api_key ON app_registry(api_key);`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
 	}
@@ -835,4 +849,83 @@ func (d *DB) LoadDailyPnL(email, fromDate, toDate string) ([]*DailyPnLEntry, err
 		out = append(out, &e)
 	}
 	return out, rows.Err()
+}
+
+// --- App Registry (Key Registry for zero-config onboarding) ---
+
+// RegistryDBEntry represents an app registration stored in the database.
+type RegistryDBEntry struct {
+	ID           string
+	APIKey       string
+	APISecret    string
+	AssignedTo   string
+	Label        string
+	Status       string
+	RegisteredBy string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// LoadRegistryEntries reads all app registrations from the database.
+// If an encryption key is set, api_secret is decrypted transparently.
+func (d *DB) LoadRegistryEntries() (map[string]*RegistryDBEntry, error) {
+	rows, err := d.db.Query(`SELECT id, api_key, api_secret, assigned_to, label, status, registered_by, created_at, updated_at FROM app_registry`)
+	if err != nil {
+		return nil, fmt.Errorf("query app_registry: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]*RegistryDBEntry)
+	for rows.Next() {
+		var e RegistryDBEntry
+		var createdAtS, updatedAtS string
+		if err := rows.Scan(&e.ID, &e.APIKey, &e.APISecret, &e.AssignedTo, &e.Label, &e.Status, &e.RegisteredBy, &createdAtS, &updatedAtS); err != nil {
+			return nil, fmt.Errorf("scan app_registry: %w", err)
+		}
+		if d.encryptionKey != nil {
+			e.APIKey = decrypt(d.encryptionKey, e.APIKey)
+			e.APISecret = decrypt(d.encryptionKey, e.APISecret)
+		}
+		if t, err := time.Parse(time.RFC3339, createdAtS); err == nil {
+			e.CreatedAt = t
+		}
+		if t, err := time.Parse(time.RFC3339, updatedAtS); err == nil {
+			e.UpdatedAt = t
+		}
+		out[e.ID] = &e
+	}
+	return out, rows.Err()
+}
+
+// SaveRegistryEntry stores or updates an app registration.
+// If an encryption key is set, api_key and api_secret are encrypted at rest.
+func (d *DB) SaveRegistryEntry(e *RegistryDBEntry) error {
+	storeKey, storeSecret := e.APIKey, e.APISecret
+	if d.encryptionKey != nil {
+		var err error
+		storeKey, err = encrypt(d.encryptionKey, e.APIKey)
+		if err != nil {
+			return fmt.Errorf("encrypt registry api_key: %w", err)
+		}
+		storeSecret, err = encrypt(d.encryptionKey, e.APISecret)
+		if err != nil {
+			return fmt.Errorf("encrypt registry api_secret: %w", err)
+		}
+	}
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO app_registry (id, api_key, api_secret, assigned_to, label, status, registered_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+		e.ID, storeKey, storeSecret, e.AssignedTo, e.Label, e.Status, e.RegisteredBy,
+		e.CreatedAt.Format(time.RFC3339), e.UpdatedAt.Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("save registry entry: %w", err)
+	}
+	return nil
+}
+
+// DeleteRegistryEntry removes an app registration by ID.
+func (d *DB) DeleteRegistryEntry(id string) error {
+	_, err := d.db.Exec(`DELETE FROM app_registry WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete registry entry: %w", err)
+	}
+	return nil
 }

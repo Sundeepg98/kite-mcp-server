@@ -25,6 +25,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
@@ -239,6 +240,12 @@ func (app *App) RunServer() error {
 			} else {
 				app.logger.Info("OAuth clients loaded from database")
 			}
+		}
+
+		// Wire key registry for zero-config onboarding
+		if regStore := kcManager.RegistryStore(); regStore != nil {
+			app.oauthHandler.SetRegistry(&registryAdapter{store: regStore})
+			app.logger.Info("Key registry wired into OAuth handler", "entries", regStore.Count())
 		}
 
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
@@ -626,6 +633,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/oauth/register", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.Register))
 		mux.Handle("/oauth/authorize", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.Authorize))
 		mux.Handle("/oauth/token", rateLimitFunc(app.rateLimiters.token, app.oauthHandler.Token))
+		mux.Handle("/oauth/email-lookup", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleEmailLookup))
 	}
 	// Register browser login route for ops dashboard auth (requires OAuth)
 	if app.oauthHandler != nil {
@@ -1052,4 +1060,29 @@ func (a *clientPersisterAdapter) LoadClients() ([]*oauth.ClientLoadEntry, error)
 
 func (a *clientPersisterAdapter) DeleteClient(clientID string) error {
 	return a.db.DeleteClient(clientID)
+}
+
+// registryAdapter bridges registry.Store to oauth.KeyRegistry.
+type registryAdapter struct {
+	store *registry.Store
+}
+
+func (a *registryAdapter) HasEntries() bool {
+	return a.store.HasEntries()
+}
+
+func (a *registryAdapter) GetByEmail(email string) (apiKey, apiSecret string, ok bool) {
+	reg, found := a.store.GetByEmail(email)
+	if !found {
+		return "", "", false
+	}
+	return reg.APIKey, reg.APISecret, true
+}
+
+func (a *registryAdapter) GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool) {
+	reg, found := a.store.GetByAPIKey(apiKey)
+	if !found {
+		return "", false
+	}
+	return reg.APISecret, true
 }
