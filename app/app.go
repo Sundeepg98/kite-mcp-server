@@ -340,6 +340,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if auditMiddleware != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
 	}
+	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
+	// responses that have a relevant dashboard page.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
+
 	mcpServer := server.NewMCPServer(
 		"Kite MCP Server",
 		app.Version,

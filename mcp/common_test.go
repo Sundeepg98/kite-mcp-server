@@ -228,6 +228,72 @@ func TestToolExclusion(t *testing.T) {
 	})
 }
 
+// TestToolDashboardPage verifies the tool-to-dashboard-page mapping
+func TestToolDashboardPage(t *testing.T) {
+	t.Run("portfolio tools map to /dashboard", func(t *testing.T) {
+		portfolioTools := []string{
+			"get_holdings", "get_positions", "get_margins", "get_profile",
+			"portfolio_summary", "portfolio_concentration", "position_analysis",
+			"trading_context", "pre_trade_check", "get_pnl_journal", "get_mf_holdings",
+		}
+		for _, tool := range portfolioTools {
+			path, ok := toolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			assert.Equal(t, "/dashboard", path, "tool %s should map to /dashboard", tool)
+		}
+	})
+
+	t.Run("order tools map to /dashboard/orders", func(t *testing.T) {
+		orderTools := []string{
+			"get_orders", "get_order_history", "get_order_trades", "get_trades",
+			"place_order", "modify_order", "cancel_order",
+			"close_position", "close_all_positions",
+			"get_gtts", "place_gtt_order", "modify_gtt_order", "delete_gtt_order",
+		}
+		for _, tool := range orderTools {
+			path, ok := toolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			assert.Equal(t, "/dashboard/orders", path, "tool %s should map to /dashboard/orders", tool)
+		}
+	})
+
+	t.Run("alert tools map to /dashboard/alerts", func(t *testing.T) {
+		alertTools := []string{
+			"list_alerts", "set_alert", "delete_alert",
+			"set_trailing_stop", "list_trailing_stops", "cancel_trailing_stop",
+		}
+		for _, tool := range alertTools {
+			path, ok := toolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			assert.Equal(t, "/dashboard/alerts", path, "tool %s should map to /dashboard/alerts", tool)
+		}
+	})
+
+	t.Run("unmapped tools return empty", func(t *testing.T) {
+		unmappedTools := []string{
+			"login", "open_dashboard", "get_ltp", "get_quotes",
+			"search_instruments", "start_ticker", "stop_ticker",
+			"create_watchlist", "get_watchlist",
+		}
+		for _, tool := range unmappedTools {
+			_, ok := toolDashboardPage[tool]
+			assert.False(t, ok, "tool %s should NOT be in toolDashboardPage", tool)
+		}
+	})
+
+	t.Run("all mapped tools exist in GetAllTools", func(t *testing.T) {
+		allTools := GetAllTools()
+		registeredNames := make(map[string]bool)
+		for _, tool := range allTools {
+			registeredNames[tool.Tool().Name] = true
+		}
+		for toolName := range toolDashboardPage {
+			assert.True(t, registeredNames[toolName],
+				"toolDashboardPage has %s but it is not in GetAllTools()", toolName)
+		}
+	})
+}
+
 // TestRaceConditions tests thread safety
 func TestRaceConditions(t *testing.T) {
 	t.Run("SafeAssert functions", func(t *testing.T) {

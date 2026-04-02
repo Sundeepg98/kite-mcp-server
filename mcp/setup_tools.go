@@ -73,6 +73,87 @@ var pageRoutes = map[string]string{
 	"ops":       "/admin/ops",
 }
 
+// toolDashboardPage maps tool names to the dashboard page path that is most
+// relevant for viewing the data returned by that tool.  Used by
+// DashboardURLMiddleware to auto-append a dashboard link to successful tool
+// responses.
+var toolDashboardPage = map[string]string{
+	// Portfolio / overview page
+	"get_holdings":             "/dashboard",
+	"get_positions":            "/dashboard",
+	"get_margins":              "/dashboard",
+	"get_profile":              "/dashboard",
+	"portfolio_summary":        "/dashboard",
+	"portfolio_concentration":  "/dashboard",
+	"position_analysis":        "/dashboard",
+	"trading_context":          "/dashboard",
+	"pre_trade_check":          "/dashboard",
+	"get_pnl_journal":          "/dashboard",
+	"get_mf_holdings":          "/dashboard",
+
+	// Orders page
+	"get_orders":               "/dashboard/orders",
+	"get_order_history":        "/dashboard/orders",
+	"get_order_trades":         "/dashboard/orders",
+	"get_trades":               "/dashboard/orders",
+	"place_order":              "/dashboard/orders",
+	"modify_order":             "/dashboard/orders",
+	"cancel_order":             "/dashboard/orders",
+	"close_position":           "/dashboard/orders",
+	"close_all_positions":      "/dashboard/orders",
+	"get_gtts":                 "/dashboard/orders",
+	"place_gtt_order":          "/dashboard/orders",
+	"modify_gtt_order":         "/dashboard/orders",
+	"delete_gtt_order":         "/dashboard/orders",
+
+	// Alerts page
+	"list_alerts":              "/dashboard/alerts",
+	"set_alert":                "/dashboard/alerts",
+	"delete_alert":             "/dashboard/alerts",
+	"set_trailing_stop":        "/dashboard/alerts",
+	"list_trailing_stops":      "/dashboard/alerts",
+	"cancel_trailing_stop":     "/dashboard/alerts",
+
+	// Activity page
+	"get_option_chain":         "/dashboard/activity",
+}
+
+// DashboardURLForTool returns the full dashboard URL for a given tool name,
+// or empty string if the tool has no associated dashboard page.
+func DashboardURLForTool(manager *kc.Manager, toolName string) string {
+	pagePath, ok := toolDashboardPage[toolName]
+	if !ok {
+		return ""
+	}
+	return dashboardPageURL(manager, pagePath)
+}
+
+// DashboardURLMiddleware returns server-level middleware that auto-appends a
+// dashboard_url hint as a second TextContent block on successful tool responses
+// when the tool has a relevant dashboard page.
+func DashboardURLMiddleware(manager *kc.Manager) server.ToolHandlerMiddleware {
+	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			result, err := next(ctx, request)
+			if err != nil || result == nil || result.IsError {
+				return result, err
+			}
+
+			toolName := request.Params.Name
+			dashURL := DashboardURLForTool(manager, toolName)
+			if dashURL == "" {
+				return result, err
+			}
+
+			result.Content = append(result.Content, mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf(`{"dashboard_url":"%s"}`, dashURL),
+			})
+			return result, err
+		}
+	}
+}
+
 type LoginTool struct{}
 
 func (*LoginTool) Tool() mcp.Tool {
@@ -254,7 +335,7 @@ type OpenDashboardTool struct{}
 
 func (*OpenDashboardTool) Tool() mcp.Tool {
 	return mcp.NewTool("open_dashboard",
-		mcp.WithDescription("Open a dashboard page in the user's browser. Supports deep-linking to specific pages with filters. In local mode, automatically opens the browser. In remote mode, returns a clickable link."),
+		mcp.WithDescription("Open a specific dashboard page in the user's browser. Use this when the user asks to see their portfolio, orders, alerts, or activity visually. Supports deep-linking with filters. In local mode, auto-opens the browser. In remote mode, returns a clickable link. Pages: portfolio (default), orders, alerts, activity, ops."),
 		mcp.WithString("page",
 			mcp.Description("Dashboard page to open: portfolio, activity, orders, alerts, ops"),
 			mcp.DefaultString("portfolio"),

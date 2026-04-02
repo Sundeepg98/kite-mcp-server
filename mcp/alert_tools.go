@@ -225,13 +225,9 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultText("No alerts configured. Use set_alert to create one."), nil
 		}
 
-		resp := map[string]interface{}{
+		return handler.MarshalResponse(map[string]interface{}{
 			"alerts": alertList,
-		}
-		if u := dashboardPageURL(manager, "/dashboard/alerts"); u != "" {
-			resp["dashboard_url"] = u
-		}
-		return handler.MarshalResponse(resp, "list_alerts")
+		}, "list_alerts")
 	}
 }
 

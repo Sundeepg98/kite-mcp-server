@@ -42,7 +42,6 @@ type portfolioSummaryResponse struct {
 	TopGainers      []holdingSummaryEntry  `json:"top_gainers"`
 	TopLosers       []holdingSummaryEntry  `json:"top_losers"`
 	BiggestHoldings []holdingSummaryEntry  `json:"biggest_holdings"`
-	DashboardURL    string                `json:"dashboard_url,omitempty"`
 }
 
 func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
@@ -65,7 +64,6 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 
 			resp := computePortfolioSummary(holdings)
-			resp.DashboardURL = dashboardPageURL(manager, "/dashboard")
 			return handler.MarshalResponse(resp, "portfolio_summary")
 		})
 	}
