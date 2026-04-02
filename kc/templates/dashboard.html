@@ -90,6 +90,23 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.tl-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-bottom: 8px; }
+.tl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.tl-symbol { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); }
+.tl-dir { font-size: 12px; }
+.tl-price { font-family: var(--mono); font-size: 12px; color: var(--text-1); margin-left: auto; }
+.tl-stages { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; }
+.tl-stage { display: flex; align-items: center; gap: 5px; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tl-dot-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.tl-dot-amber { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.tl-dot-cyan { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+.tl-dot-red { background: var(--red); box-shadow: 0 0 4px var(--red); }
+.tl-label { color: var(--text-2); }
+.tl-time { color: var(--text-1); }
+.tl-delta { color: var(--text-2); font-size: 10px; }
+.tl-arrow { color: var(--text-2); margin: 0 6px; }
 </style>
 </head>
 <body>
@@ -174,15 +191,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <div id="activeAlertsLoading" class="loading-state">Loading...</div>
 
   <div class="section-header">Recently Triggered</div>
-  <div id="triggeredAlertsWrap" class="tbl-wrap" style="display:none">
-    <table>
-      <thead><tr>
-        <th>Symbol</th><th>Exchange</th><th class="right">Target</th>
-        <th>Direction</th><th class="right">Triggered At</th><th class="right">Triggered Price</th>
-      </tr></thead>
-      <tbody id="triggeredAlertsBody"></tbody>
-    </table>
-  </div>
+  <div id="triggeredAlertsWrap" style="display:none"></div>
   <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">No recently triggered alerts</div>
 
   <!-- Credentials -->
@@ -232,6 +241,21 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     if (!iso) return '--';
     var d = new Date(iso);
     return d.toLocaleTimeString('en-GB', {hour12: false}) + ' ' + d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
+  }
+
+  function timeDelta(fromISO, toISO) {
+    var ms = new Date(toISO) - new Date(fromISO);
+    if (ms < 0) ms = 0;
+    var secs = Math.floor(ms / 1000);
+    if (secs < 60) return secs + 's';
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + 'm';
+    var hrs = Math.floor(mins / 60);
+    var remMins = mins % 60;
+    if (hrs < 24) return hrs + 'h ' + remMins + 'm';
+    var days = Math.floor(hrs / 24);
+    var remHrs = hrs % 24;
+    return days + 'd ' + remHrs + 'h';
   }
 
   // Indian number formatting: 1,00,000.00
@@ -467,11 +491,10 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
         });
       }
 
-      // Triggered alerts table
-      var trigBody = document.getElementById('triggeredAlertsBody');
+      // Triggered alerts — lifecycle timeline
       var trigWrap = document.getElementById('triggeredAlertsWrap');
       var trigEmpty = document.getElementById('triggeredAlertsEmpty');
-      clearChildren(trigBody);
+      clearChildren(trigWrap);
       var triggered = d.triggered || [];
 
       if (triggered.length === 0) {
@@ -481,14 +504,49 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
         trigEmpty.style.display = 'none';
         trigWrap.style.display = 'block';
         triggered.forEach(function(t) {
-          var dirTd = document.createElement('td');
-          dirTd.appendChild(badge(t.direction, 'amber'));
-          trigBody.appendChild(trEl([
-            tdEl(t.tradingsymbol), tdEl(t.exchange),
-            tdEl(formatINR(t.target_price), 'right'), dirTd,
-            tdEl(fmtTime(t.triggered_at), 'right'),
-            tdEl(formatINR(t.triggered_price), 'right')
-          ]));
+          var card = el('div', 'tl-card');
+          // Header: symbol + direction + triggered price
+          var header = el('div', 'tl-header');
+          header.appendChild(el('span', 'tl-symbol', t.tradingsymbol + ' ' + t.exchange));
+          header.appendChild(badge(t.direction, 'amber'));
+          header.appendChild(el('span', 'tl-price', 'Target ' + formatINR(t.target_price) + (t.triggered_price ? '  Triggered @ ' + formatINR(t.triggered_price) : '')));
+          card.appendChild(header);
+          // Lifecycle stages
+          var stages = el('div', 'tl-stages');
+          // Created
+          var s1 = el('span', 'tl-stage');
+          s1.appendChild(el('span', 'tl-dot tl-dot-green'));
+          s1.appendChild(el('span', 'tl-label', 'Created'));
+          s1.appendChild(el('span', 'tl-time', fmtTime(t.created_at)));
+          stages.appendChild(s1);
+          stages.appendChild(el('span', 'tl-arrow', '\u2192'));
+          // Triggered
+          var s2 = el('span', 'tl-stage');
+          s2.appendChild(el('span', 'tl-dot tl-dot-amber'));
+          s2.appendChild(el('span', 'tl-label', 'Triggered'));
+          s2.appendChild(el('span', 'tl-time', fmtTime(t.triggered_at)));
+          if (t.created_at && t.triggered_at) {
+            s2.appendChild(el('span', 'tl-delta', '(' + timeDelta(t.created_at, t.triggered_at) + ')'));
+          }
+          stages.appendChild(s2);
+          stages.appendChild(el('span', 'tl-arrow', '\u2192'));
+          // Notified
+          var s3 = el('span', 'tl-stage');
+          if (t.notification_sent_at) {
+            s3.appendChild(el('span', 'tl-dot tl-dot-cyan'));
+            s3.appendChild(el('span', 'tl-label', 'Notified'));
+            s3.appendChild(el('span', 'tl-time', fmtTime(t.notification_sent_at)));
+            if (t.triggered_at && t.notification_sent_at) {
+              var nd = timeDelta(t.triggered_at, t.notification_sent_at);
+              s3.appendChild(el('span', 'tl-delta', '(' + (nd === '0s' ? 'instant' : nd) + ')'));
+            }
+          } else {
+            s3.appendChild(el('span', 'tl-dot tl-dot-red'));
+            s3.appendChild(el('span', 'tl-label', 'Not notified'));
+          }
+          stages.appendChild(s3);
+          card.appendChild(stages);
+          trigWrap.appendChild(card);
         });
       }
     }).catch(function(e) {

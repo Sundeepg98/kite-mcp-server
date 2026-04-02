@@ -23,7 +23,7 @@ func TestCredentialCRUD(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	// Save
-	err := db.SaveCredential("user@example.com", "key123", "secret456", now)
+	err := db.SaveCredential("user@example.com", "key123", "secret456", "key123", now)
 	require.NoError(t, err)
 
 	// Load
@@ -33,9 +33,10 @@ func TestCredentialCRUD(t *testing.T) {
 	assert.Equal(t, "user@example.com", creds[0].Email)
 	assert.Equal(t, "key123", creds[0].APIKey)
 	assert.Equal(t, "secret456", creds[0].APISecret)
+	assert.Equal(t, "key123", creds[0].AppID)
 
 	// Update (upsert)
-	err = db.SaveCredential("user@example.com", "newkey", "newsecret", now)
+	err = db.SaveCredential("user@example.com", "newkey", "newsecret", "newkey", now)
 	require.NoError(t, err)
 	creds, err = db.LoadCredentials()
 	require.NoError(t, err)
@@ -57,7 +58,7 @@ func TestCredentialEncryption(t *testing.T) {
 	db.SetEncryptionKey(key)
 
 	now := time.Now()
-	err = db.SaveCredential("enc@example.com", "mykey", "mysecret", now)
+	err = db.SaveCredential("enc@example.com", "mykey", "mysecret", "mykey", now)
 	require.NoError(t, err)
 
 	// Verify values are encrypted in DB (raw query)
@@ -80,7 +81,7 @@ func TestCredentialPlaintextMigration(t *testing.T) {
 
 	// Save without encryption (simulates pre-encryption data)
 	now := time.Now()
-	err := db.SaveCredential("old@example.com", "plainkey", "plainsecret", now)
+	err := db.SaveCredential("old@example.com", "plainkey", "plainsecret", "plainkey", now)
 	require.NoError(t, err)
 
 	// Now enable encryption and load — plaintext values should load fine
@@ -121,9 +122,9 @@ func TestMultipleCredentials(t *testing.T) {
 	db := openTestDB(t)
 	now := time.Now()
 
-	db.SaveCredential("a@x.com", "k1", "s1", now)
-	db.SaveCredential("b@x.com", "k2", "s2", now)
-	db.SaveCredential("c@x.com", "k3", "s3", now)
+	db.SaveCredential("a@x.com", "k1", "s1", "k1", now)
+	db.SaveCredential("b@x.com", "k2", "s2", "k2", now)
+	db.SaveCredential("c@x.com", "k3", "s3", "k3", now)
 
 	creds, err := db.LoadCredentials()
 	require.NoError(t, err)

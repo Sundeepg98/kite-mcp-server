@@ -99,6 +99,9 @@ CREATE TABLE IF NOT EXISTS mcp_sessions (
 		return nil, fmt.Errorf("migrate alerts: %w", err)
 	}
 
+	// Migrate kite_credentials: add app_id column if missing.
+	db.Exec(`ALTER TABLE kite_credentials ADD COLUMN app_id TEXT DEFAULT ''`) //nolint:errcheck
+
 	return &DB{db: db}, nil
 }
 
@@ -345,6 +348,7 @@ type CredentialEntry struct {
 	Email     string
 	APIKey    string
 	APISecret string
+	AppID     string
 	StoredAt  time.Time
 }
 
@@ -352,7 +356,7 @@ type CredentialEntry struct {
 // If an encryption key is set, api_key and api_secret are decrypted transparently.
 // Pre-encryption plaintext values are returned as-is (migration-safe).
 func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
-	rows, err := d.db.Query(`SELECT email, api_key, api_secret, stored_at FROM kite_credentials`)
+	rows, err := d.db.Query(`SELECT email, api_key, api_secret, stored_at, COALESCE(app_id, '') FROM kite_credentials`)
 	if err != nil {
 		return nil, fmt.Errorf("query credentials: %w", err)
 	}
@@ -362,7 +366,7 @@ func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 	for rows.Next() {
 		var c CredentialEntry
 		var storedAtS string
-		if err := rows.Scan(&c.Email, &c.APIKey, &c.APISecret, &storedAtS); err != nil {
+		if err := rows.Scan(&c.Email, &c.APIKey, &c.APISecret, &storedAtS, &c.AppID); err != nil {
 			return nil, fmt.Errorf("scan credential: %w", err)
 		}
 		if d.encryptionKey != nil {
@@ -381,7 +385,7 @@ func (d *DB) LoadCredentials() ([]*CredentialEntry, error) {
 
 // SaveCredential stores or updates Kite credentials for the given email.
 // If an encryption key is set, api_key and api_secret are encrypted at rest.
-func (d *DB) SaveCredential(email, apiKey, apiSecret string, storedAt time.Time) error {
+func (d *DB) SaveCredential(email, apiKey, apiSecret, appID string, storedAt time.Time) error {
 	storeKey, storeSecret := apiKey, apiSecret
 	if d.encryptionKey != nil {
 		var err error
@@ -394,8 +398,8 @@ func (d *DB) SaveCredential(email, apiKey, apiSecret string, storedAt time.Time)
 			return fmt.Errorf("encrypt api_secret: %w", err)
 		}
 	}
-	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
-		email, storeKey, storeSecret, storedAt.Format(time.RFC3339))
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO kite_credentials (email, api_key, api_secret, stored_at, app_id) VALUES (?,?,?,?,?)`,
+		email, storeKey, storeSecret, storedAt.Format(time.RFC3339), appID)
 	if err != nil {
 		return fmt.Errorf("save credential: %w", err)
 	}

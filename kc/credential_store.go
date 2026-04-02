@@ -13,6 +13,7 @@ import (
 type KiteCredentialEntry struct {
 	APIKey    string
 	APISecret string
+	AppID     string // AppID = API key for Kite developer apps
 	StoredAt  time.Time
 }
 
@@ -57,6 +58,7 @@ func (s *KiteCredentialStore) LoadFromDB() error {
 		s.creds[strings.ToLower(c.Email)] = &KiteCredentialEntry{
 			APIKey:    c.APIKey,
 			APISecret: c.APISecret,
+			AppID:     c.AppID,
 			StoredAt:  c.StoredAt,
 		}
 	}
@@ -88,17 +90,19 @@ func (s *KiteCredentialStore) Set(email string, entry *KiteCredentialEntry) {
 				"email", key, "old_key", existing.APIKey[:8]+"...", "new_key", stored.APIKey[:8]+"...")
 		}
 	}
+	stored.AppID = stored.APIKey // AppID = API key for Kite developer apps
 	s.creds[key] = &stored
 	// Capture values for DB persist before releasing lock.
 	// After unlock, &stored is reachable via the map and could be read
 	// concurrently; using locals avoids any data-race concern.
 	apiKey := stored.APIKey
 	apiSecret := stored.APISecret
+	appID := stored.AppID
 	storedAt := stored.StoredAt
 	s.mu.Unlock()
 
 	if s.db != nil {
-		if err := s.db.SaveCredential(key, apiKey, apiSecret, storedAt); err != nil && s.logger != nil {
+		if err := s.db.SaveCredential(key, apiKey, apiSecret, appID, storedAt); err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist credential", "email", key, "error", err)
 		}
 	}
