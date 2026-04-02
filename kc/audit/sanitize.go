@@ -40,7 +40,8 @@ var toolCategories = map[string]string{
 	"place_gtt_order":  "order",
 	"modify_gtt_order": "order",
 	"delete_gtt_order":  "order",
-	"convert_position": "order",
+	"convert_position":     "order",
+	"close_all_positions": "order",
 
 	// query
 	"trading_context":   "query",

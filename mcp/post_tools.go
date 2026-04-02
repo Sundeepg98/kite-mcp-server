@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -133,6 +134,25 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
+			}
+
+			// Brief delay then check fill status for immediate feedback
+			orderID := resp.OrderID
+			if orderID != "" {
+				time.Sleep(1500 * time.Millisecond)
+				history, histErr := session.Kite.Client.GetOrderHistory(orderID)
+				if histErr == nil && len(history) > 0 {
+					latest := history[len(history)-1]
+					enriched := map[string]any{
+						"order_id":         orderID,
+						"status":           latest.Status,
+						"filled_quantity":   latest.FilledQuantity,
+						"average_price":     latest.AveragePrice,
+						"pending_quantity":  latest.PendingQuantity,
+						"status_message":    latest.StatusMessage,
+					}
+					return handler.MarshalResponse(enriched, "place_order")
+				}
 			}
 
 			return handler.MarshalResponse(resp, "place_order")

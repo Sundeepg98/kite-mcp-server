@@ -348,12 +348,18 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 				Fn:     briefingSvc.SendMorningBriefings,
 			})
 			sched.Add(scheduler.Task{
+				Name:   "mis_warning",
+				Hour:   14,
+				Minute: 30,
+				Fn:     briefingSvc.SendMISWarnings,
+			})
+			sched.Add(scheduler.Task{
 				Name:   "daily_summary",
 				Hour:   15,
 				Minute: 35,
 				Fn:     briefingSvc.SendDailySummaries,
 			})
-			taskNames = append(taskNames, "morning_briefing(09:00)", "daily_summary(15:35)")
+			taskNames = append(taskNames, "morning_briefing(09:00)", "mis_warning(14:30)", "daily_summary(15:35)")
 		}
 	} else {
 		app.logger.Info("Telegram not configured, skipping briefing tasks")

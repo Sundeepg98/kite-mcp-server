@@ -327,3 +327,87 @@ func filterNegativeChanges(changes []stockChange, n int) []stockChange {
 	}
 	return negatives
 }
+
+// SendMISWarnings sends a Telegram warning to users who have open MIS positions.
+// Intended to run at 2:30 PM IST, giving ~45 minutes before auto square-off.
+func (b *BriefingService) SendMISWarnings() {
+	if b == nil {
+		return
+	}
+
+	chatIDs := b.alertStore.ListAllTelegram()
+	if len(chatIDs) == 0 {
+		b.logger.Info("Briefing: no users with Telegram chat IDs, skipping MIS warning")
+		return
+	}
+
+	for email, chatID := range chatIDs {
+		accessToken, storedAt, hasToken := b.tokens.GetToken(email)
+		if !hasToken || b.tokens.IsExpired(storedAt) {
+			continue
+		}
+
+		apiKey := b.creds.GetAPIKey(email)
+		if apiKey == "" {
+			continue
+		}
+
+		client := kiteconnect.New(apiKey)
+		client.SetAccessToken(accessToken)
+
+		positions, err := client.GetPositions()
+		if err != nil {
+			b.logger.Error("MIS warning: failed to fetch positions", "email", email, "error", err)
+			continue
+		}
+
+		// Filter MIS positions with non-zero quantity
+		type misPos struct {
+			Symbol   string
+			Quantity int
+			PnL      float64
+		}
+		var open []misPos
+		for _, p := range positions.Net {
+			if p.Quantity != 0 && strings.ToUpper(p.Product) == "MIS" {
+				open = append(open, misPos{Symbol: p.Tradingsymbol, Quantity: p.Quantity, PnL: p.PnL})
+			}
+		}
+
+		if len(open) == 0 {
+			continue
+		}
+
+		// Build warning message
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("\u26A0\uFE0F <b>MIS Square-Off Warning</b>\n\n"))
+		sb.WriteString(fmt.Sprintf("You have <b>%d open MIS position(s)</b> that will be auto-squared off around 3:15-3:20 PM IST.\n\n", len(open)))
+
+		var totalPnL float64
+		for _, p := range open {
+			direction := "LONG"
+			if p.Quantity < 0 {
+				direction = "SHORT"
+			}
+			sb.WriteString(fmt.Sprintf("  \u2022 %s: %s %d @ %s\n",
+				html.EscapeString(p.Symbol), direction, abs(p.Quantity), formatRupee(p.PnL)))
+			totalPnL += p.PnL
+		}
+		sb.WriteString(fmt.Sprintf("\nMIS P&amp;L: <b>%s</b>\n", formatRupee(totalPnL)))
+		sb.WriteString("\nAction: Close manually or convert to CNC/NRML to carry overnight.")
+
+		if err := b.notifier.SendHTMLMessage(chatID, sb.String()); err != nil {
+			b.logger.Error("MIS warning: failed to send", "email", email, "error", err)
+		} else {
+			b.logger.Info("MIS warning: sent", "email", email, "open_mis", len(open))
+		}
+	}
+}
+
+// abs returns the absolute value of an int.
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
