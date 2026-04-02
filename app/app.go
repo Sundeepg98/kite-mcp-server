@@ -630,6 +630,12 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		dashHandler.RegisterRoutes(mux, func(h http.Handler) http.Handler { return h })
 	}
 
+	// Serve security.txt for responsible disclosure (RFC 9116)
+	mux.HandleFunc("/.well-known/security.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("Contact: mailto:sundeepg8@gmail.com\nExpires: 2027-04-02T00:00:00.000Z\nPreferred-Languages: en\n"))
+	})
+
 	// Register OAuth 2.1 endpoints if enabled (with per-IP rate limiting)
 	if app.oauthHandler != nil {
 		mux.HandleFunc("/.well-known/oauth-protected-resource", app.oauthHandler.ResourceMetadata)
