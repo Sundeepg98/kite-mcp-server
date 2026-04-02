@@ -371,7 +371,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 
 	// --- Audit trail retention cleanup — daily at 3:00 AM IST ---
 	if app.auditStore != nil {
-		const retentionDays = 90
+		const retentionDays = 1825 // 5 years — SEBI algo trading audit trail requirement
 		sched.Add(scheduler.Task{
 			Name:   "audit_cleanup",
 			Hour:   3,
