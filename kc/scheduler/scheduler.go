@@ -85,8 +85,9 @@ func (s *Scheduler) loop() {
 	}
 }
 
-// nseHolidays2026 lists NSE trading holidays for 2026.
-var nseHolidays2026 = map[string]bool{
+// nseHolidays lists NSE trading holidays.
+// Add 2027 holidays when NSE announces them.
+var nseHolidays = map[string]bool{
 	"2026-01-26": true, // Republic Day
 	"2026-02-26": true, // Maha Shivaratri
 	"2026-03-10": true, // Holi
@@ -112,7 +113,7 @@ var nseHolidays2026 = map[string]bool{
 // IsMarketHoliday returns true if the given time falls on an NSE trading holiday.
 func IsMarketHoliday(t time.Time) bool {
 	dateStr := t.In(kolkataLoc).Format("2006-01-02")
-	return nseHolidays2026[dateStr]
+	return nseHolidays[dateStr]
 }
 
 // IsTradingDay returns true if the given time is a weekday and not a market holiday.
@@ -157,6 +158,30 @@ func (s *Scheduler) tick() {
 				fn()
 			}()
 		}
+	}
+}
+
+// MarketStatus returns the current market status based on IST time.
+// Possible values: "pre_open", "open", "closing_session", "closed", "closed_weekend", "closed_holiday".
+func MarketStatus(t time.Time) string {
+	ist := t.In(kolkataLoc)
+	if IsWeekend(ist) {
+		return "closed_weekend"
+	}
+	if IsMarketHoliday(ist) {
+		return "closed_holiday"
+	}
+	h, m := ist.Hour(), ist.Minute()
+	mins := h*60 + m
+	switch {
+	case mins >= 540 && mins < 555:
+		return "pre_open"
+	case mins >= 555 && mins < 930:
+		return "open"
+	case mins >= 930 && mins < 960:
+		return "closing_session"
+	default:
+		return "closed"
 	}
 }
 

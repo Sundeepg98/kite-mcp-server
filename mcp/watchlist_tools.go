@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -395,6 +396,8 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			LTP           float64 `json:"ltp,omitempty"`
 			DistanceEntry string  `json:"distance_to_entry,omitempty"`
 			DistanceExit  string  `json:"distance_to_exit,omitempty"`
+			NearTarget    bool    `json:"near_target,omitempty"`
+			Suggestion    string  `json:"suggestion,omitempty"`
 		}
 
 		type watchlistResponse struct {
@@ -426,10 +429,26 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				if item.TargetEntry > 0 {
 					pct := ((ltp - item.TargetEntry) / item.TargetEntry) * 100
 					ir.DistanceEntry = fmt.Sprintf("%.2f%%", pct)
+					if math.Abs(pct) <= 5.0 {
+						ir.NearTarget = true
+						if ltp <= item.TargetEntry {
+							ir.Suggestion = fmt.Sprintf("Price is %.1f%% below target entry (%.2f) — consider buying", math.Abs(pct), item.TargetEntry)
+						} else {
+							ir.Suggestion = fmt.Sprintf("Price is %.1f%% above target entry (%.2f) — entry zone passed", pct, item.TargetEntry)
+						}
+					}
 				}
 				if item.TargetExit > 0 {
 					pct := ((ltp - item.TargetExit) / item.TargetExit) * 100
 					ir.DistanceExit = fmt.Sprintf("%.2f%%", pct)
+					if math.Abs(pct) <= 5.0 {
+						ir.NearTarget = true
+						if ltp >= item.TargetExit {
+							ir.Suggestion = fmt.Sprintf("Price is %.1f%% above target exit (%.2f) — consider selling", pct, item.TargetExit)
+						} else {
+							ir.Suggestion = fmt.Sprintf("Price is %.1f%% below target exit (%.2f) — approaching exit target", math.Abs(pct), item.TargetExit)
+						}
+					}
 				}
 			}
 

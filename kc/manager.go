@@ -181,6 +181,37 @@ func New(cfg Config) (*Manager, error) {
 		return client, nil
 	})
 
+	// Wire trailing stop modification notification to Telegram
+	m.trailingStopMgr.SetOnModify(func(ts *alerts.TrailingStop, oldStop, newStop float64) {
+		if m.telegramNotifier == nil {
+			return
+		}
+		chatID, ok := m.alertStore.GetTelegramChatID(ts.Email)
+		if !ok {
+			return
+		}
+		arrow := "\u2B06\uFE0F" // up arrow
+		if newStop < oldStop {
+			arrow = "\u2B07\uFE0F" // down arrow
+		}
+		msg := fmt.Sprintf(
+			"%s <b>Trailing Stop Modified</b>\n\n"+
+				"%s:%s (%s)\n"+
+				"SL: \u20B9%.2f \u2192 \u20B9%.2f\n"+
+				"High water mark: \u20B9%.2f\n"+
+				"Modifications: %d",
+			arrow,
+			ts.Exchange, ts.Tradingsymbol, ts.Direction,
+			oldStop, newStop,
+			ts.HighWaterMark,
+			ts.ModifyCount,
+		)
+		if err := m.telegramNotifier.SendHTMLMessage(chatID, msg); err != nil {
+			m.Logger.Warn("Failed to send trailing stop Telegram notification",
+				"email", ts.Email, "error", err)
+		}
+	})
+
 	// Initialize ticker with alert evaluator + trailing stop manager as OnTick callbacks
 	m.tickerService = ticker.New(ticker.Config{
 		Logger: cfg.Logger,

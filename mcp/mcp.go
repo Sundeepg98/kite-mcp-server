@@ -97,6 +97,7 @@ func GetAllTools() []Tool {
 		&ModifyOrderTool{},
 		&CancelOrderTool{},
 		&ConvertPositionTool{},
+		&ClosePositionTool{},
 		&CloseAllPositionsTool{},
 		&PlaceGTTOrderTool{},
 		&ModifyGTTOrderTool{},

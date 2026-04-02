@@ -124,6 +124,45 @@ func (b *BriefingService) buildMorningBriefing(email, dateStr string, now time.T
 		sb.WriteString("Token status: <b>Not found</b> \u2717\n")
 	}
 
+	// Portfolio day P&L, margin available, and index levels (if token valid)
+	accessToken, storedAt, hasToken := b.tokens.GetToken(email)
+	if hasToken && !b.tokens.IsExpired(storedAt) {
+		apiKey := b.creds.GetAPIKey(email)
+		if apiKey != "" {
+			client := kiteconnect.New(apiKey)
+			client.SetAccessToken(accessToken)
+
+			// Portfolio day P&L from holdings
+			holdings, err := client.GetHoldings()
+			if err == nil && len(holdings) > 0 {
+				var dayPnL float64
+				for _, h := range holdings {
+					dayPnL += h.DayChange
+				}
+				sb.WriteString(fmt.Sprintf("\nPortfolio: %s day P&amp;L (%d stocks)\n", formatRupee(dayPnL), len(holdings)))
+			}
+
+			// Margin available
+			margins, err := client.GetUserMargins()
+			if err == nil {
+				sb.WriteString(fmt.Sprintf("Margin available: \u20B9%.0f\n", margins.Equity.Net))
+			}
+
+			// Index levels (NIFTY 50, BANK NIFTY)
+			ltpResp, err := client.GetLTP("NSE:NIFTY 50", "NSE:NIFTY BANK")
+			if err == nil {
+				sb.WriteString("\n<b>Indices:</b>\n")
+				if nifty, ok := ltpResp["NSE:NIFTY 50"]; ok {
+					sb.WriteString(fmt.Sprintf("  NIFTY 50: \u20B9%.2f\n", nifty.LastPrice))
+				}
+				if bankNifty, ok := ltpResp["NSE:NIFTY BANK"]; ok {
+					sb.WriteString(fmt.Sprintf("  BANK NIFTY: \u20B9%.2f\n", bankNifty.LastPrice))
+				}
+			}
+		}
+	}
+	sb.WriteString("\n")
+
 	// Market timing
 	marketOpen := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, kolkataLoc)
 	if now.Before(marketOpen) {

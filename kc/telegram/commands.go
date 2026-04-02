@@ -47,7 +47,8 @@ func (h *BotHandler) handleHelp(_ int64) string {
 /orders — Today's orders
 /pnl — Today's P&amp;L
 /alerts — Active price alerts
-/watchlist SYM1,SYM2 — Check multiple prices
+/prices SYM1,SYM2 — Check multiple prices
+/mywatchlist — View MCP watchlist items with LTP
 /status — Token and system status
 /help — This message`
 }
@@ -346,10 +347,10 @@ func (h *BotHandler) handleAlerts(_ int64, email string) string {
 	return sb.String()
 }
 
-// handleWatchlist fetches prices for a comma-separated list of symbols.
-func (h *BotHandler) handleWatchlist(_ int64, email string, args string) string {
+// handlePrices fetches prices for a comma-separated list of symbols.
+func (h *BotHandler) handlePrices(_ int64, email string, args string) string {
 	if args == "" {
-		return "Usage: /watchlist RELIANCE,TCS,INFY"
+		return "Usage: /prices RELIANCE,TCS,INFY"
 	}
 
 	client, errMsg := h.newKiteClient(email)
@@ -380,7 +381,7 @@ func (h *BotHandler) handleWatchlist(_ int64, email string, args string) string 
 	}
 
 	var sb strings.Builder
-	sb.WriteString("<b>Watchlist</b>\n\n")
+	sb.WriteString("<b>Prices</b>\n\n")
 
 	for _, sym := range symbols {
 		q, ok := quotes[sym]
@@ -403,6 +404,73 @@ func (h *BotHandler) handleWatchlist(_ int64, email string, args string) string 
 
 		sb.WriteString(fmt.Sprintf("  <b>%s</b> \u20B9%.2f (%s)\n",
 			escapeHTML(display), q.LastPrice, formatPctChange(changePct)))
+	}
+
+	return sb.String()
+}
+
+// handleMyWatchlist shows MCP watchlist items with current LTP.
+func (h *BotHandler) handleMyWatchlist(_ int64, email string) string {
+	store := h.manager.WatchlistStore()
+	if store == nil {
+		return "Watchlist feature not available."
+	}
+
+	watchlists := store.ListWatchlists(email)
+	if len(watchlists) == 0 {
+		return "No watchlists configured. Create one via the MCP <code>create_watchlist</code> tool."
+	}
+
+	client, errMsg := h.newKiteClient(email)
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>My Watchlists (%d)</b>\n", len(watchlists)))
+
+	for _, wl := range watchlists {
+		items := store.GetItems(wl.ID)
+		sb.WriteString(fmt.Sprintf("\n<b>%s</b> (%d items)\n", escapeHTML(wl.Name), len(items)))
+
+		if len(items) == 0 {
+			sb.WriteString("  (empty)\n")
+			continue
+		}
+
+		// Build instrument IDs for batch LTP
+		instrIDs := make([]string, 0, len(items))
+		for _, item := range items {
+			instrIDs = append(instrIDs, item.Exchange+":"+item.Tradingsymbol)
+		}
+
+		// Fetch LTP if we have a valid client
+		ltpMap := make(map[string]float64)
+		if client != nil {
+			ltpResp, err := client.GetLTP(instrIDs...)
+			if err == nil {
+				for key, data := range ltpResp {
+					ltpMap[key] = data.LastPrice
+				}
+			}
+		}
+
+		for _, item := range items {
+			instrID := item.Exchange + ":" + item.Tradingsymbol
+			if ltp, ok := ltpMap[instrID]; ok && ltp > 0 {
+				sb.WriteString(fmt.Sprintf("  <b>%s</b> \u20B9%.2f", escapeHTML(item.Tradingsymbol), ltp))
+				if item.TargetEntry > 0 {
+					sb.WriteString(fmt.Sprintf(" (entry: \u20B9%.2f)", item.TargetEntry))
+				}
+				if item.TargetExit > 0 {
+					sb.WriteString(fmt.Sprintf(" (exit: \u20B9%.2f)", item.TargetExit))
+				}
+				sb.WriteString("\n")
+			} else {
+				sb.WriteString(fmt.Sprintf("  %s", escapeHTML(item.Tradingsymbol)))
+				if client == nil {
+					sb.WriteString(fmt.Sprintf(" — %s", errMsg))
+				}
+				sb.WriteString("\n")
+			}
+		}
 	}
 
 	return sb.String()

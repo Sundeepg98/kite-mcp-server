@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -177,6 +178,26 @@ func doSetTrailingStop(manager *kc.Manager, email, exchange, tradingsymbol strin
 		trailDesc = fmt.Sprintf("Rs.%.2f", trailAmount)
 	}
 
+	// Auto-start ticker and subscribe instrument
+	tickerMsg := ""
+	if !manager.TickerService().IsRunning(email) {
+		apiKey := manager.GetAPIKeyForEmail(email)
+		if entry, ok := manager.TokenStore().Get(email); ok {
+			if startErr := manager.TickerService().Start(email, apiKey, entry.AccessToken); startErr != nil {
+				manager.Logger.Warn("Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
+			} else {
+				tickerMsg = "\nTicker auto-started."
+			}
+		}
+	}
+	if manager.TickerService().IsRunning(email) {
+		if subErr := manager.TickerService().Subscribe(email, []uint32{instrumentToken}, ticker.ModeLTP); subErr != nil {
+			manager.Logger.Warn("Failed to auto-subscribe instrument for trailing stop", "email", email, "error", subErr)
+		} else {
+			tickerMsg += fmt.Sprintf("\nSubscribed %s:%s for real-time trailing.", exchange, tradingsymbol)
+		}
+	}
+
 	result := fmt.Sprintf("Trailing stop set (ID: %s)\n"+
 		"Instrument: %s:%s\n"+
 		"Order: %s (%s)\n"+
@@ -186,8 +207,8 @@ func doSetTrailingStop(manager *kc.Manager, email, exchange, tradingsymbol strin
 		id, exchange, tradingsymbol, orderID, variety,
 		direction, trailDesc, currentStop, referencePrice)
 
-	if !manager.TickerService().IsRunning(email) {
-		result += "\n\nWARNING: Ticker not running. Use start_ticker and subscribe_instruments for real-time trailing."
+	if tickerMsg != "" {
+		result += tickerMsg
 	}
 
 	return mcp.NewToolResultText(result), nil

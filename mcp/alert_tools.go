@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -159,6 +160,26 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to set alert: %s", err)), nil
 		}
 
+		// Auto-start ticker and subscribe instrument
+		tickerMsg := ""
+		if !manager.TickerService().IsRunning(email) {
+			apiKey := manager.GetAPIKeyForEmail(email)
+			if entry, ok := manager.TokenStore().Get(email); ok {
+				if startErr := manager.TickerService().Start(email, apiKey, entry.AccessToken); startErr != nil {
+					manager.Logger.Warn("Failed to auto-start ticker for alert", "email", email, "error", startErr)
+				} else {
+					tickerMsg = "\nTicker auto-started."
+				}
+			}
+		}
+		if manager.TickerService().IsRunning(email) {
+			if subErr := manager.TickerService().Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr != nil {
+				manager.Logger.Warn("Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
+			} else {
+				tickerMsg += fmt.Sprintf("\nSubscribed %s for real-time alerts.", instrumentID)
+			}
+		}
+
 		var result string
 		if alerts.IsPercentageDirection(direction) {
 			result = fmt.Sprintf("Alert set: %s %s %.2f%% from reference %.2f (ID: %s)", instrumentID, directionStr, targetPrice, referencePrice, alertID)
@@ -166,14 +187,13 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			result = fmt.Sprintf("Alert set: %s %s %.2f (ID: %s)", instrumentID, directionStr, targetPrice, alertID)
 		}
 
+		if tickerMsg != "" {
+			result += tickerMsg
+		}
+
 		// Check if Telegram is configured
 		if _, ok := manager.AlertStore().GetTelegramChatID(email); !ok {
 			result += "\n\nNote: Telegram not configured. Use setup_telegram to receive notifications."
-		}
-
-		// Check if ticker is running
-		if !manager.TickerService().IsRunning(email) {
-			result += "\n\nNote: Ticker not running. Use start_ticker and subscribe_instruments for real-time alerts."
 		}
 
 		return mcp.NewToolResultText(result), nil

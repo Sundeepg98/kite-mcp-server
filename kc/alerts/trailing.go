@@ -55,6 +55,10 @@ type TrailingStopManager struct {
 	// getModifier returns a KiteOrderModifier for the given email.
 	// Injected by the app layer since the manager package doesn't know about kc.Manager sessions.
 	getModifier func(email string) (KiteOrderModifier, error)
+
+	// onModify is called after a successful SL order modification.
+	// Parameters: the trailing stop, old stop price, new stop price.
+	onModify func(ts *TrailingStop, oldStop, newStop float64)
 }
 
 // NewTrailingStopManager creates a new trailing stop manager.
@@ -75,6 +79,11 @@ func (m *TrailingStopManager) SetDB(db *DB) {
 // SetModifier sets the function that provides a KiteOrderModifier for a given email.
 func (m *TrailingStopManager) SetModifier(fn func(email string) (KiteOrderModifier, error)) {
 	m.getModifier = fn
+}
+
+// SetOnModify sets the callback invoked after a successful SL order modification.
+func (m *TrailingStopManager) SetOnModify(fn func(ts *TrailingStop, oldStop, newStop float64)) {
+	m.onModify = fn
 }
 
 // LoadFromDB loads active trailing stops from the database.
@@ -326,4 +335,9 @@ func (m *TrailingStopManager) evaluateOne(id, email string, lastPrice float64) {
 		"old_stop", fmt.Sprintf("%.2f", oldStop),
 		"new_stop", fmt.Sprintf("%.2f", newStop),
 		"modify_count", ts.ModifyCount)
+
+	// Notify via callback (e.g. Telegram)
+	if m.onModify != nil {
+		m.onModify(ts, oldStop, newStop)
+	}
 }

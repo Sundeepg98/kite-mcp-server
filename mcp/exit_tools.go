@@ -12,6 +12,106 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
+// ClosePositionTool closes a single position by placing an opposite MARKET order.
+type ClosePositionTool struct{}
+
+func (*ClosePositionTool) Tool() mcp.Tool {
+	return mcp.NewTool("close_position",
+		mcp.WithDescription("Close a single open position by placing an opposite MARKET order. Specify the instrument in exchange:tradingsymbol format."),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("instrument",
+			mcp.Description("Instrument in exchange:tradingsymbol format (e.g. 'NSE:INFY')"),
+			mcp.Required(),
+		),
+		mcp.WithString("product",
+			mcp.Description("Product type filter: MIS, CNC, or NRML. If omitted, closes the first matching position regardless of product."),
+		),
+	)
+}
+
+func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "close_position")
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "instrument"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		instrumentID := SafeAssertString(args["instrument"], "")
+		productFilter := strings.ToUpper(SafeAssertString(args["product"], ""))
+
+		parts := strings.SplitN(instrumentID, ":", 2)
+		if len(parts) != 2 {
+			return mcp.NewToolResultError(fmt.Sprintf("Invalid instrument format: %s (expected exchange:symbol)", instrumentID)), nil
+		}
+		exchange := parts[0]
+		symbol := parts[1]
+
+		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			positions, err := session.Kite.Client.GetPositions()
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch positions: %s", err.Error())), nil
+			}
+
+			// Find the matching position
+			var matched *kiteconnect.Position
+			for i, p := range positions.Net {
+				if p.Quantity == 0 {
+					continue
+				}
+				if strings.EqualFold(p.Exchange, exchange) && strings.EqualFold(p.Tradingsymbol, symbol) {
+					if productFilter != "" && strings.ToUpper(p.Product) != productFilter {
+						continue
+					}
+					matched = &positions.Net[i]
+					break
+				}
+			}
+
+			if matched == nil {
+				return mcp.NewToolResultError(fmt.Sprintf("No open position found for %s", instrumentID)), nil
+			}
+
+			// Determine opposite direction
+			var txnType string
+			qty := int(math.Abs(float64(matched.Quantity)))
+			if matched.Quantity > 0 {
+				txnType = "SELL"
+			} else {
+				txnType = "BUY"
+			}
+
+			orderParams := kiteconnect.OrderParams{
+				Exchange:         matched.Exchange,
+				Tradingsymbol:    matched.Tradingsymbol,
+				TransactionType:  txnType,
+				Quantity:         qty,
+				Product:          matched.Product,
+				OrderType:        "MARKET",
+				Validity:         "DAY",
+				MarketProtection: kiteconnect.MarketProtectionAuto,
+			}
+
+			resp, placeErr := session.Kite.Client.PlaceOrder("regular", orderParams)
+			if placeErr != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to close position %s: %s", instrumentID, placeErr.Error())), nil
+			}
+
+			return handler.MarshalResponse(map[string]any{
+				"message":       fmt.Sprintf("Position closed: %s %s %d x %s", txnType, instrumentID, qty, matched.Product),
+				"order_id":      resp.OrderID,
+				"instrument":    instrumentID,
+				"quantity":      qty,
+				"direction":     txnType,
+				"product":       matched.Product,
+				"position_pnl":  matched.PnL,
+			}, "close_position")
+		})
+	}
+}
+
 type CloseAllPositionsTool struct{}
 
 func (*CloseAllPositionsTool) Tool() mcp.Tool {

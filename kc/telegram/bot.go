@@ -1,6 +1,6 @@
 // Package telegram implements a Telegram bot webhook handler that provides
 // read-only commands (/price, /portfolio, /positions, /orders, /pnl, /alerts,
-// /watchlist, /status, /help) for registered users.
+// /prices, /mywatchlist, /status, /help) for registered users.
 package telegram
 
 import (
@@ -17,12 +17,14 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
 // Using an interface avoids a circular import between kc and kc/telegram.
 type KiteManager interface {
 	AlertStore() *alerts.Store
+	WatchlistStore() *watchlist.Store
 	GetAPIKeyForEmail(email string) string
 	GetAccessTokenForEmail(email string) string
 	TelegramNotifier() *alerts.TelegramNotifier
@@ -133,8 +135,13 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply = h.handlePnL(chatID, email)
 	case "/alerts":
 		reply = h.handleAlerts(chatID, email)
+	case "/prices":
+		reply = h.handlePrices(chatID, email, args)
+	case "/mywatchlist":
+		reply = h.handleMyWatchlist(chatID, email)
 	case "/watchlist":
-		reply = h.handleWatchlist(chatID, email, args)
+		// Backward compatibility: redirect to /prices
+		reply = h.handlePrices(chatID, email, args)
 	case "/status":
 		reply = h.handleStatus(chatID, email)
 	case "/help", "/start":

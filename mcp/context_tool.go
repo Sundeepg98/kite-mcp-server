@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -28,16 +30,20 @@ func (*TradingContextTool) Tool() mcp.Tool {
 
 // TradingContext is the structured response returned by the trading_context tool.
 type TradingContext struct {
+	// Market status
+	MarketStatus string `json:"market_status"`
+
 	// Margin status
 	MarginAvailable   float64 `json:"margin_available"`
 	MarginUsed        float64 `json:"margin_used"`
 	MarginUtilization float64 `json:"margin_utilization_pct"`
 
 	// Positions summary
-	OpenPositions int     `json:"open_positions"`
-	PositionsPnL  float64 `json:"positions_pnl"`
-	MISPositions  int     `json:"mis_positions"`
-	NRMLPositions int     `json:"nrml_positions"`
+	OpenPositions   int               `json:"open_positions"`
+	PositionsPnL    float64           `json:"positions_pnl"`
+	MISPositions    int               `json:"mis_positions"`
+	NRMLPositions   int               `json:"nrml_positions"`
+	PositionDetails []positionDetail  `json:"position_details,omitempty"`
 
 	// Orders
 	PendingOrders int `json:"pending_orders"`
@@ -57,6 +63,18 @@ type TradingContext struct {
 
 	// Errors from API calls that failed
 	Errors map[string]string `json:"errors,omitempty"`
+}
+
+// positionDetail shows per-trade P&L for each open position.
+type positionDetail struct {
+	Symbol       string  `json:"symbol"`
+	Exchange     string  `json:"exchange"`
+	Product      string  `json:"product"`
+	Quantity     int     `json:"quantity"`
+	AveragePrice float64 `json:"average_price"`
+	LTP          float64 `json:"ltp"`
+	PnL          float64 `json:"pnl"`
+	PnLPct       float64 `json:"pnl_pct"`
 }
 
 // alertSummary is a compact representation of an active alert.
@@ -140,6 +158,21 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		Warnings: make([]string, 0),
 	}
 
+	// Market status
+	tc.MarketStatus = scheduler.MarketStatus(time.Now())
+	switch tc.MarketStatus {
+	case "closed":
+		tc.Warnings = append(tc.Warnings, "Market is closed. Orders will queue for next trading session.")
+	case "closed_weekend":
+		tc.Warnings = append(tc.Warnings, "Market is closed (weekend). Orders will queue for Monday.")
+	case "closed_holiday":
+		tc.Warnings = append(tc.Warnings, "Market is closed (holiday). Orders will queue for next trading day.")
+	case "pre_open":
+		tc.Warnings = append(tc.Warnings, "Market is in pre-open session (9:00-9:15 AM IST).")
+	case "closing_session":
+		tc.Warnings = append(tc.Warnings, "Market is in closing session (3:30-4:00 PM IST).")
+	}
+
 	// Copy API errors
 	if len(apiErrors) > 0 {
 		tc.Errors = apiErrors
@@ -169,6 +202,7 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		positions := positionsRaw.(kiteconnect.Positions)
 		var totalPnL float64
 		var misCount, nrmlCount, openCount int
+		var details []positionDetail
 
 		for _, p := range positions.Net {
 			if p.Quantity != 0 {
@@ -181,6 +215,21 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 				case "NRML":
 					nrmlCount++
 				}
+
+				pnlPct := 0.0
+				if p.AveragePrice > 0 && p.Quantity != 0 {
+					pnlPct = (p.PnL / (p.AveragePrice * math.Abs(float64(p.Quantity)))) * 100
+				}
+				details = append(details, positionDetail{
+					Symbol:       p.Tradingsymbol,
+					Exchange:     p.Exchange,
+					Product:      p.Product,
+					Quantity:     p.Quantity,
+					AveragePrice: roundTo2(p.AveragePrice),
+					LTP:          roundTo2(p.LastPrice),
+					PnL:          roundTo2(p.PnL),
+					PnLPct:       roundTo2(pnlPct),
+				})
 			}
 		}
 
@@ -188,6 +237,9 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		tc.PositionsPnL = roundTo2(totalPnL)
 		tc.MISPositions = misCount
 		tc.NRMLPositions = nrmlCount
+		if len(details) > 0 {
+			tc.PositionDetails = details
+		}
 
 		// MIS close warning: market closes at 3:30 PM IST, auto square-off around 3:15-3:20 PM
 		if misCount > 0 {
