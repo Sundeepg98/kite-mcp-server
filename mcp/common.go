@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -37,6 +38,32 @@ func SessionTypeFromContext(ctx context.Context) string {
 		return sessionType
 	}
 	return SessionTypeUnknown // default fallback for undetermined sessions
+}
+
+// writeTools is the set of tools that modify state (orders, alerts, watchlists, etc.).
+// Users with the "viewer" role are blocked from calling these tools.
+var writeTools = map[string]bool{
+	"place_order":            true,
+	"modify_order":           true,
+	"cancel_order":           true,
+	"close_position":         true,
+	"close_all_positions":    true,
+	"convert_position":       true,
+	"set_alert":              true,
+	"delete_alert":           true,
+	"set_trailing_stop":      true,
+	"cancel_trailing_stop":   true,
+	"place_gtt_order":        true,
+	"modify_gtt_order":       true,
+	"delete_gtt_order":       true,
+	"place_mf_order":         true,
+	"cancel_mf_order":        true,
+	"place_mf_sip":           true,
+	"cancel_mf_sip":          true,
+	"create_watchlist":       true,
+	"delete_watchlist":       true,
+	"add_to_watchlist":       true,
+	"remove_from_watchlist":  true,
 }
 
 // ToolHandler provides common functionality for all MCP tools
@@ -73,6 +100,15 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	sess := server.ClientSessionFromContext(ctx)
 	sessionID := sess.SessionID()
 	email := oauth.EmailFromContext(ctx)
+
+	// Enforce viewer role: block write tools for read-only users.
+	if email != "" && writeTools[toolName] {
+		if uStore := h.manager.UserStore(); uStore != nil {
+			if uStore.GetRole(email) == users.RoleViewer {
+				return mcp.NewToolResultError("Read-only access: your account has viewer role. Contact admin for trader access."), nil
+			}
+		}
+	}
 
 	h.manager.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
 

@@ -4,25 +4,21 @@
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="12" fill="var(--primary)" />
             <path
-                d="M12 7v5l3 3"
-                fill="none"
-                stroke="#fff"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                d="M12 7a3 3 0 0 0-3 3v2H8v5h8v-5h-1v-2a3 3 0 0 0-3-3zm-1 3a1 1 0 1 1 2 0v2h-2v-2z"
+                fill="#fff"
             />
         </svg>
     </div>
-    <h1>Login</h1>
+    <h1>Admin Login</h1>
     <p style="margin-bottom: 1.5rem;">
-        Enter the email associated with your Kite account to continue.
+        Sign in with your admin email and password.
     </p>
     {{if .Error}}
     <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem; color: #e65100;">
         {{.Error}}
     </div>
     {{end}}
-    <form method="POST" action="/auth/browser-login" style="text-align: left;">
+    <form method="POST" action="/auth/admin-login" style="text-align: left;">
         <input type="hidden" name="redirect" value="{{.Redirect}}" />
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" />
         <label for="email" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--heading); margin-bottom: 0.5rem;">Email</label>
@@ -30,7 +26,18 @@
             type="email"
             id="email"
             name="email"
-            placeholder="you@example.com"
+            placeholder="admin@example.com"
+            required
+            style="width: 100%; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.875rem; outline: none; transition: border-color 0.2s; margin-bottom: 1rem;"
+            onfocus="this.style.borderColor='var(--primary)'"
+            onblur="this.style.borderColor='var(--border)'"
+        />
+        <label for="password" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--heading); margin-bottom: 0.5rem;">Password</label>
+        <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter your password"
             required
             style="width: 100%; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.875rem; outline: none; transition: border-color 0.2s;"
             onfocus="this.style.borderColor='var(--primary)'"
@@ -42,11 +49,11 @@
             onmouseover="this.style.opacity='0.9'"
             onmouseout="this.style.opacity='1'"
         >
-            Continue with Kite
+            Sign In
         </button>
     </form>
     <p style="margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted);">
-        Admin? <a href="/auth/admin-login" style="color: var(--primary); text-decoration: none;">Log in with password</a>
+        Not admin? <a href="/auth/browser-login" style="color: var(--primary); text-decoration: none;">Log in with Kite</a>
     </p>
 </div>
 {{end}}

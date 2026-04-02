@@ -31,6 +31,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // App represents the main application structure
@@ -575,6 +576,34 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		app.logger.Info("Admin users seeded from ADMIN_EMAILS", "count", len(strings.Split(app.Config.AdminEmails, ",")))
 	}
 
+	// Seed admin password from ADMIN_PASSWORD env var (first boot only).
+	if adminPassword := os.Getenv("ADMIN_PASSWORD"); adminPassword != "" && userStore != nil && app.Config.AdminEmails != "" {
+		for _, email := range strings.Split(app.Config.AdminEmails, ",") {
+			email = strings.TrimSpace(email)
+			if email == "" {
+				continue
+			}
+			if !userStore.HasPassword(email) {
+				hash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), 12)
+				if err != nil {
+					app.logger.Error("Failed to hash admin password", "email", email, "error", err)
+					continue
+				}
+				if err := userStore.SetPasswordHash(email, string(hash)); err != nil {
+					app.logger.Error("Failed to set admin password hash", "email", email, "error", err)
+				} else {
+					app.logger.Info("Admin password set", "email", email)
+				}
+			}
+		}
+		app.logger.Warn("ADMIN_PASSWORD env var is set. Consider unsetting it after first boot for security.")
+	}
+
+	// Wire user store into OAuth handler for admin login
+	if app.oauthHandler != nil && userStore != nil {
+		app.oauthHandler.SetUserStore(userStore)
+	}
+
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
 	if app.oauthHandler != nil {
 		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
@@ -601,6 +630,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	// Register browser login route for ops dashboard auth (requires OAuth)
 	if app.oauthHandler != nil {
 		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
+		mux.Handle("/auth/admin-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleAdminLogin))
 	}
 
 	// Register Telegram bot webhook if configured.

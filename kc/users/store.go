@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Role constants for user access control.
@@ -26,16 +27,17 @@ const (
 
 // User represents a registered user of the system.
 type User struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	KiteUID     string    `json:"kite_uid,omitempty"`
-	DisplayName string    `json:"display_name,omitempty"`
-	Role        string    `json:"role"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	LastLogin   time.Time `json:"last_login,omitempty"`
-	OnboardedBy string    `json:"onboarded_by"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	KiteUID      string    `json:"kite_uid,omitempty"`
+	DisplayName  string    `json:"display_name,omitempty"`
+	Role         string    `json:"role"`
+	Status       string    `json:"status"`
+	PasswordHash string    `json:"-"` // bcrypt hash, never serialized
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	LastLogin    time.Time `json:"last_login,omitempty"`
+	OnboardedBy  string    `json:"onboarded_by"`
 }
 
 // Store is a thread-safe in-memory user store backed by SQLite.
@@ -84,7 +86,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);`
-	return s.db.ExecDDL(ddl)
+	if err := s.db.ExecDDL(ddl); err != nil {
+		return err
+	}
+	// Migration: add password_hash column for admin password-based login.
+	// ALTER TABLE ADD COLUMN is idempotent-safe in SQLite (errors if column exists).
+	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''`)
+	return nil
 }
 
 // LoadFromDB populates the in-memory store from the database.
@@ -93,7 +101,7 @@ func (s *Store) LoadFromDB() error {
 		return nil
 	}
 	rows, err := s.db.RawQuery(`SELECT id, email, kite_uid, display_name, role, status,
-		created_at, updated_at, COALESCE(last_login, ''), onboarded_by FROM users`)
+		created_at, updated_at, COALESCE(last_login, ''), onboarded_by, COALESCE(password_hash, '') FROM users`)
 	if err != nil {
 		return fmt.Errorf("query users: %w", err)
 	}
@@ -106,7 +114,7 @@ func (s *Store) LoadFromDB() error {
 		var u User
 		var createdAtS, updatedAtS, lastLoginS, onboardedBy string
 		if err := rows.Scan(&u.ID, &u.Email, &u.KiteUID, &u.DisplayName, &u.Role, &u.Status,
-			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy); err != nil {
+			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy, &u.PasswordHash); err != nil {
 			return fmt.Errorf("scan user: %w", err)
 		}
 		u.CreatedAt, _ = time.Parse(time.RFC3339, createdAtS)
@@ -430,6 +438,79 @@ func (s *Store) EnsureUser(email, kiteUID, displayName, onboardedBy string) *Use
 	}
 	cp := *u
 	return &cp
+}
+
+// GetRole returns the user's role. Returns empty string if user not found.
+func (s *Store) GetRole(email string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	u, ok := s.users[strings.ToLower(email)]
+	if !ok {
+		return ""
+	}
+	return u.Role
+}
+
+// SetPasswordHash stores a bcrypt password hash for the given user.
+func (s *Store) SetPasswordHash(email, hash string) error {
+	key := strings.ToLower(email)
+	now := time.Now()
+
+	s.mu.Lock()
+	u, ok := s.users[key]
+	if !ok {
+		s.mu.Unlock()
+		return fmt.Errorf("user not found: %s", key)
+	}
+	u.PasswordHash = hash
+	u.UpdatedAt = now
+	s.mu.Unlock()
+
+	if s.db != nil {
+		nowStr := now.Format(time.RFC3339)
+		if err := s.db.ExecInsert(`UPDATE users SET password_hash = ?, updated_at = ? WHERE email = ?`, hash, nowStr, key); err != nil {
+			return fmt.Errorf("persist password hash: %w", err)
+		}
+	}
+	return nil
+}
+
+// HasPassword returns true if the given user has a non-empty password hash.
+func (s *Store) HasPassword(email string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	u, ok := s.users[strings.ToLower(email)]
+	return ok && u.PasswordHash != ""
+}
+
+// VerifyPassword checks the given plaintext password against the stored bcrypt hash.
+// Returns (true, nil) on match, (false, nil) on mismatch, (false, error) on lookup failure.
+// For timing safety, always runs bcrypt comparison even for unknown users.
+func (s *Store) VerifyPassword(email, password string) (bool, error) {
+	s.mu.RLock()
+	u, ok := s.users[strings.ToLower(email)]
+	var storedHash string
+	if ok {
+		storedHash = u.PasswordHash
+	}
+	s.mu.RUnlock()
+
+	if storedHash == "" {
+		// Timing-safe: always run bcrypt even for missing users/empty hash.
+		// Use a dummy hash so the timing is indistinguishable.
+		dummyHash := "$2a$12$000000000000000000000u4JuJnGbPZNqXxQxVv3Q3E3Q3E3Q3E3Q" // invalid but takes constant time
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+		return false, nil
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password))
+	if err == bcrypt.ErrMismatchedHashAndPassword {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("bcrypt compare: %w", err)
+	}
+	return true, nil
 }
 
 // generateID creates a simple time-based unique ID for users.
