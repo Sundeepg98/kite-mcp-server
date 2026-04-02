@@ -158,8 +158,24 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// Invalid status
-	if err := s.Update("app-1", "", "", "invalid"); err == nil {
+	if err := s.Update("app-1", "", "", "bogus"); err == nil {
 		t.Fatal("Expected error on invalid status")
+	}
+
+	// Valid new statuses (invalid, replaced)
+	if err := s.Update("app-1", "", "", StatusInvalid); err != nil {
+		t.Fatalf("Update (invalid) failed: %v", err)
+	}
+	got, _ = s.Get("app-1")
+	if got.Status != StatusInvalid {
+		t.Errorf("Status = %q, want %q", got.Status, StatusInvalid)
+	}
+	if err := s.Update("app-1", "", "", StatusReplaced); err != nil {
+		t.Fatalf("Update (replaced) failed: %v", err)
+	}
+	got, _ = s.Get("app-1")
+	if got.Status != StatusReplaced {
+		t.Errorf("Status = %q, want %q", got.Status, StatusReplaced)
 	}
 
 	// Not found

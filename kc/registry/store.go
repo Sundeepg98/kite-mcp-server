@@ -18,28 +18,38 @@ type AppRegistration struct {
 	APISecret    string    `json:"api_secret"`      // Kite API secret (encrypted at rest)
 	AssignedTo   string    `json:"assigned_to"`     // expected email (empty = unassigned / open)
 	Label        string    `json:"label"`           // e.g. "Personal Trading", "Mom's Account"
-	Status       string    `json:"status"`          // active, disabled
+	Status       string    `json:"status"`          // active, disabled, invalid, replaced
 	RegisteredBy string    `json:"registered_by"`   // admin email who registered it
+	Source       string    `json:"source"`          // "admin", "self-provisioned", "migrated"
+	LastUsedAt   *time.Time `json:"last_used_at"`   // last successful token exchange with this key
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // AppRegistrationSummary is a redacted view of a registration (API secret masked).
 type AppRegistrationSummary struct {
-	ID           string    `json:"id"`
-	APIKey       string    `json:"api_key"`
-	APISecretHint string  `json:"api_secret_hint"`
-	AssignedTo   string    `json:"assigned_to"`
-	Label        string    `json:"label"`
-	Status       string    `json:"status"`
-	RegisteredBy string    `json:"registered_by"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            string     `json:"id"`
+	APIKey        string     `json:"api_key"`
+	APISecretHint string     `json:"api_secret_hint"`
+	AssignedTo    string     `json:"assigned_to"`
+	Label         string     `json:"label"`
+	Status        string     `json:"status"`
+	RegisteredBy  string     `json:"registered_by"`
+	Source        string     `json:"source"`
+	LastUsedAt    *time.Time `json:"last_used_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 const (
 	StatusActive   = "active"
 	StatusDisabled = "disabled"
+	StatusInvalid  = "invalid"   // Kite API rejected this key
+	StatusReplaced = "replaced"  // User re-authenticated with a different key
+
+	SourceAdmin           = "admin"
+	SourceSelfProvisioned = "self-provisioned"
+	SourceMigrated        = "migrated"
 )
 
 // Store is a thread-safe in-memory key registry, optionally backed by SQLite.
@@ -87,6 +97,8 @@ func (s *Store) LoadFromDB() error {
 			Label:        e.Label,
 			Status:       e.Status,
 			RegisteredBy: e.RegisteredBy,
+			Source:       e.Source,
+			LastUsedAt:   e.LastUsedAt,
 			CreatedAt:    e.CreatedAt,
 			UpdatedAt:    e.UpdatedAt,
 		}
@@ -106,9 +118,11 @@ func (s *Store) Register(reg *AppRegistration) error {
 	now := time.Now()
 	entry := *reg // copy
 	entry.AssignedTo = strings.ToLower(strings.TrimSpace(entry.AssignedTo))
-	entry.Status = StatusActive
 	if entry.Status == "" {
 		entry.Status = StatusActive
+	}
+	if entry.Source == "" {
+		entry.Source = SourceAdmin
 	}
 	entry.CreatedAt = now
 	entry.UpdatedAt = now
@@ -198,6 +212,8 @@ func (s *Store) List() []AppRegistrationSummary {
 			Label:         e.Label,
 			Status:        e.Status,
 			RegisteredBy:  e.RegisteredBy,
+			Source:        e.Source,
+			LastUsedAt:    e.LastUsedAt,
 			CreatedAt:     e.CreatedAt,
 			UpdatedAt:     e.UpdatedAt,
 		})
@@ -220,9 +236,9 @@ func (s *Store) Update(id string, assignedTo, label, status string) error {
 		e.Label = label
 	}
 	if status != "" {
-		if status != StatusActive && status != StatusDisabled {
+		if status != StatusActive && status != StatusDisabled && status != StatusInvalid && status != StatusReplaced {
 			s.mu.Unlock()
-			return fmt.Errorf("invalid status %q (must be 'active' or 'disabled')", status)
+			return fmt.Errorf("invalid status %q (must be 'active', 'disabled', 'invalid', or 'replaced')", status)
 		}
 		e.Status = status
 	}
@@ -237,6 +253,73 @@ func (s *Store) Update(id string, assignedTo, label, status string) error {
 		}
 	}
 	return nil
+}
+
+// UpdateLastUsedAt records the most recent successful token exchange for this API key.
+func (s *Store) UpdateLastUsedAt(apiKey string) {
+	s.mu.Lock()
+	var found *AppRegistration
+	for _, e := range s.entries {
+		if e.APIKey == apiKey && e.Status == StatusActive {
+			found = e
+			break
+		}
+	}
+	if found == nil {
+		s.mu.Unlock()
+		return
+	}
+	now := time.Now()
+	found.LastUsedAt = &now
+	found.UpdatedAt = now
+	entry := *found
+	s.mu.Unlock()
+
+	if s.db != nil {
+		if err := s.db.SaveRegistryEntry(toDBEntry(&entry)); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist registry last_used_at", "id", entry.ID, "error", err)
+		}
+	}
+}
+
+// MarkStatus sets the status of a registration found by API key.
+// Unlike Update(), this does not require an ID and accepts any valid status.
+func (s *Store) MarkStatus(apiKey, status string) {
+	s.mu.Lock()
+	var found *AppRegistration
+	for _, e := range s.entries {
+		if e.APIKey == apiKey {
+			found = e
+			break
+		}
+	}
+	if found == nil {
+		s.mu.Unlock()
+		return
+	}
+	found.Status = status
+	found.UpdatedAt = time.Now()
+	entry := *found
+	s.mu.Unlock()
+
+	if s.db != nil {
+		if err := s.db.SaveRegistryEntry(toDBEntry(&entry)); err != nil && s.logger != nil {
+			s.logger.Error("Failed to persist registry status change", "id", entry.ID, "status", status, "error", err)
+		}
+	}
+}
+
+// GetByAPIKeyAnyStatus finds a registration by its API key regardless of status.
+func (s *Store) GetByAPIKeyAnyStatus(apiKey string) (*AppRegistration, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, e := range s.entries {
+		if e.APIKey == apiKey {
+			cp := *e
+			return &cp, true
+		}
+	}
+	return nil, false
 }
 
 // Delete removes a registration by ID.
@@ -290,6 +373,8 @@ func toDBEntry(r *AppRegistration) *alerts.RegistryDBEntry {
 		Label:        r.Label,
 		Status:       r.Status,
 		RegisteredBy: r.RegisteredBy,
+		Source:       r.Source,
+		LastUsedAt:   r.LastUsedAt,
 		CreatedAt:    r.CreatedAt,
 		UpdatedAt:    r.UpdatedAt,
 	}

@@ -171,6 +171,28 @@ func (s *KiteCredentialStore) ListAll() []KiteCredentialSummary {
 	return out
 }
 
+// RawCredentialEntry is an unredacted credential entry used for internal operations like backfill.
+type RawCredentialEntry struct {
+	Email     string
+	APIKey    string
+	APISecret string
+}
+
+// ListAllRaw returns all credentials unredacted. Used internally for registry backfill.
+func (s *KiteCredentialStore) ListAllRaw() []RawCredentialEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]RawCredentialEntry, 0, len(s.creds))
+	for email, v := range s.creds {
+		out = append(out, RawCredentialEntry{
+			Email:     email,
+			APIKey:    v.APIKey,
+			APISecret: v.APISecret,
+		})
+	}
+	return out
+}
+
 // GetSecretByAPIKey finds the API secret for a given API key by scanning all stored credentials.
 // Used when the client_id (= API key) is known but the email is not yet resolved.
 func (s *KiteCredentialStore) GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool) {

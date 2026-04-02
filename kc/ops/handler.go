@@ -219,6 +219,26 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		})
 		// Clear cached token — old token was generated with different credentials
 		h.manager.TokenStore().Delete(authEmail)
+
+		// Auto-register in registry if not already present
+		if h.registryStore != nil {
+			if _, found := h.registryStore.GetByAPIKeyAnyStatus(req.APIKey); !found {
+				regID := fmt.Sprintf("self-%s-%s", authEmail, truncKey(req.APIKey, 8))
+				if err := h.registryStore.Register(&registry.AppRegistration{
+					ID:           regID,
+					APIKey:       req.APIKey,
+					APISecret:    req.APISecret,
+					AssignedTo:   authEmail,
+					Label:        "Self-provisioned (dashboard)",
+					Status:       registry.StatusActive,
+					Source:       registry.SourceSelfProvisioned,
+					RegisteredBy: authEmail,
+				}); err != nil {
+					h.logger.Warn("Failed to auto-register credentials in registry", "email", authEmail, "error", err)
+				}
+			}
+		}
+
 		h.logger.Info("Stored Kite credentials", "email", authEmail)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
@@ -556,6 +576,7 @@ func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
 			AssignedTo:   req.AssignedTo,
 			Label:        req.Label,
 			RegisteredBy: email,
+			Source:       registry.SourceAdmin,
 		}
 		if err := h.registryStore.Register(reg); err != nil {
 			w.WriteHeader(http.StatusConflict)
@@ -627,4 +648,12 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// truncKey safely returns the first n characters of a string, or the whole string if shorter.
+func truncKey(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }

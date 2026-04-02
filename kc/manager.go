@@ -197,6 +197,9 @@ func New(cfg Config) (*Manager, error) {
 		}
 	}
 
+	// Backfill registry from existing credentials (handles pre-registry self-provisioned keys)
+	m.backfillRegistryFromCredentials()
+
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
 		apiKey := m.GetAPIKeyForEmail(email)
@@ -552,6 +555,51 @@ func (m *Manager) RegistryStore() *registry.Store {
 // Returns nil if no database path was configured.
 func (m *Manager) AlertDB() *alerts.DB {
 	return m.alertDB
+}
+
+// truncKey safely returns the first n characters of a string, or the whole string if shorter.
+func truncKey(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+// backfillRegistryFromCredentials syncs existing credentials into the registry.
+// This handles pre-registry self-provisioned keys that were stored before the registry existed.
+func (m *Manager) backfillRegistryFromCredentials() {
+	if m.registryStore == nil {
+		return
+	}
+	creds := m.credentialStore.ListAllRaw()
+	if len(creds) == 0 {
+		return
+	}
+	backfilled := 0
+	for _, cred := range creds {
+		if _, found := m.registryStore.GetByAPIKeyAnyStatus(cred.APIKey); found {
+			continue // already in registry
+		}
+		regID := fmt.Sprintf("migrated-%s-%s", cred.Email, truncKey(cred.APIKey, 8))
+		if err := m.registryStore.Register(&registry.AppRegistration{
+			ID:           regID,
+			APIKey:       cred.APIKey,
+			APISecret:    cred.APISecret,
+			AssignedTo:   cred.Email,
+			Label:        "Migrated",
+			Status:       registry.StatusActive,
+			Source:       registry.SourceMigrated,
+			RegisteredBy: cred.Email,
+		}); err != nil {
+			m.Logger.Warn("Failed to backfill registry from credentials",
+				"email", cred.Email, "error", err)
+		} else {
+			backfilled++
+		}
+	}
+	if backfilled > 0 {
+		m.Logger.Info("Backfilled registry from existing credentials", "count", backfilled)
+	}
 }
 
 // TelegramNotifier returns the Telegram notifier (nil if not configured).

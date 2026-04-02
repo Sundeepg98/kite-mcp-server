@@ -192,6 +192,7 @@ func (app *App) RunServer() error {
 			apiSecret:       app.Config.KiteAPISecret,
 			tokenStore:      kcManager.TokenStore(),
 			credentialStore: kcManager.CredentialStore(),
+			registryStore:   kcManager.RegistryStore(),
 			userStore:       kcManager.UserStore(),
 			logger:          app.logger,
 		}
@@ -902,6 +903,14 @@ type signerAdapter struct {
 	signer *kc.SessionSigner
 }
 
+// truncKey safely returns the first n characters of a string, or the whole string if shorter.
+func truncKey(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 func (s *signerAdapter) Sign(data string) string {
 	return s.signer.SignSessionID(data)
 }
@@ -916,6 +925,7 @@ type kiteExchangerAdapter struct {
 	apiSecret       string
 	tokenStore      *kc.KiteTokenStore
 	credentialStore *kc.KiteCredentialStore
+	registryStore   *registry.Store
 	userStore       *users.Store
 	logger          *slog.Logger
 }
@@ -975,6 +985,11 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 		UserName:    userSess.UserName,
 	})
 
+	// Update last-used timestamp for the global API key in the registry
+	if a.registryStore != nil && a.apiKey != "" {
+		a.registryStore.UpdateLastUsedAt(a.apiKey)
+	}
+
 	return email, nil
 }
 
@@ -1005,10 +1020,49 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 	})
 
 	// Store per-user credentials so all future operations use them
-	a.credentialStore.Set(strings.ToLower(email), &kc.KiteCredentialEntry{
+	lowerEmail := strings.ToLower(email)
+	a.credentialStore.Set(lowerEmail, &kc.KiteCredentialEntry{
 		APIKey:    apiKey,
 		APISecret: apiSecret,
 	})
+
+	// Auto-register self-provisioned keys in the registry (single source of truth).
+	if a.registryStore != nil {
+		// Check if user previously had a DIFFERENT key — must check before registering new one.
+		oldEntry, oldFound := a.registryStore.GetByEmail(lowerEmail)
+		if oldFound && oldEntry.APIKey != apiKey {
+			a.registryStore.MarkStatus(oldEntry.APIKey, registry.StatusReplaced)
+			a.logger.Info("Marked old registry key as replaced",
+				"email", lowerEmail, "old_key", truncKey(oldEntry.APIKey, 8)+"...", "new_key", truncKey(apiKey, 8)+"...")
+		}
+
+		existing, found := a.registryStore.GetByAPIKeyAnyStatus(apiKey)
+		if !found {
+			// New key — register it
+			regID := fmt.Sprintf("self-%s-%s", lowerEmail, truncKey(apiKey, 8))
+			if err := a.registryStore.Register(&registry.AppRegistration{
+				ID:           regID,
+				APIKey:       apiKey,
+				APISecret:    apiSecret,
+				AssignedTo:   lowerEmail,
+				Label:        "Self-provisioned",
+				Status:       registry.StatusActive,
+				Source:       registry.SourceSelfProvisioned,
+				RegisteredBy: lowerEmail,
+			}); err != nil {
+				a.logger.Warn("Failed to auto-register self-provisioned key in registry",
+					"email", lowerEmail, "error", err)
+			} else {
+				a.logger.Info("Auto-registered self-provisioned key in registry",
+					"email", lowerEmail, "api_key", truncKey(apiKey, 8)+"...")
+			}
+		} else if existing.AssignedTo != lowerEmail {
+			// Key exists but assigned to a different user — update assignment
+			_ = a.registryStore.Update(existing.ID, lowerEmail, "", "")
+		}
+		// Record last used time for this key
+		a.registryStore.UpdateLastUsedAt(apiKey)
+	}
 
 	return email, nil
 }
