@@ -440,6 +440,61 @@ func (s *Store) ListOrders(email string, since time.Time) ([]*ToolCall, error) {
 	return results, nil
 }
 
+// GetOrderAttribution returns the tool call that placed the given order and
+// all other tool calls from the same session in the 60 seconds before the order,
+// providing a decision trace that shows how the AI arrived at the trade.
+func (s *Store) GetOrderAttribution(email, orderID string) ([]*ToolCall, error) {
+	queryEmail := s.hmacEmail(email)
+
+	// Step 1: find the tool call with this order_id
+	orderQuery := `SELECT session_id, started_at
+		FROM tool_calls
+		WHERE email = ? AND order_id = ?
+		LIMIT 1`
+	var sessionID, startedAtS string
+	err := s.db.QueryRow(orderQuery, queryEmail, orderID).Scan(&sessionID, &startedAtS)
+	if err != nil {
+		return nil, fmt.Errorf("audit: order %s not found: %w", orderID, err)
+	}
+
+	orderTime, err := time.Parse(time.RFC3339Nano, startedAtS)
+	if err != nil {
+		return nil, fmt.Errorf("audit: parse order time: %w", err)
+	}
+
+	// Step 2: find all tool calls from the same session in the 60s before the order (inclusive)
+	windowStart := orderTime.Add(-60 * time.Second)
+	traceQuery := `SELECT id, call_id, email, session_id, tool_name, tool_category,
+		input_params, input_summary, output_summary, output_size,
+		is_error, error_message, error_type, order_id,
+		email_encrypted, prev_hash, entry_hash,
+		started_at, completed_at, duration_ms
+		FROM tool_calls
+		WHERE email = ? AND session_id = ? AND started_at >= ? AND started_at <= ?
+		ORDER BY started_at ASC
+		LIMIT 50`
+
+	rows, err := s.db.RawQuery(traceQuery, queryEmail, sessionID,
+		windowStart.Format(time.RFC3339Nano), orderTime.Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, fmt.Errorf("audit: get order attribution: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*ToolCall
+	for rows.Next() {
+		tc, err := scanToolCall(rows, s.encryptionKey)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, tc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: iterate attribution rows: %w", err)
+	}
+	return results, nil
+}
+
 // DeleteOlderThan removes tool_calls older than the given time.
 // If hash chaining is active, a chain-break marker is inserted before the
 // deletion to preserve chain continuity for verification.

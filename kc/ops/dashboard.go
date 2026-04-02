@@ -47,6 +47,8 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
 	mux.Handle("/dashboard/api/alerts-enriched", wrap(d.alertsEnrichedAPI))
+	mux.Handle("/dashboard/api/pnl-chart", wrap(d.pnlChartAPI))
+	mux.Handle("/dashboard/api/order-attribution", wrap(d.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
 }
 
@@ -989,6 +991,144 @@ func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Requ
 		Active:    enrichedActive,
 		Triggered: enrichedTriggered,
 		Summary:   summary,
+	})
+}
+
+// --- P&L Chart API ---
+
+type pnlChartPoint struct {
+	Date       string  `json:"date"`
+	NetPnL     float64 `json:"net_pnl"`
+	Cumulative float64 `json:"cumulative"`
+}
+
+type pnlChartResponse struct {
+	Points []pnlChartPoint `json:"points"`
+	Period int             `json:"period"`
+}
+
+// pnlChartAPI returns daily P&L data for charting on the portfolio page.
+// Query params: period (days, default 30)
+func (d *DashboardHandler) pnlChartAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	alertDB := d.manager.AlertDB()
+	if alertDB == nil {
+		d.writeJSON(w, pnlChartResponse{Points: []pnlChartPoint{}, Period: 0})
+		return
+	}
+
+	period := intParam(r, "period", 30)
+	if period < 1 {
+		period = 30
+	}
+	if period > 365 {
+		period = 365
+	}
+
+	toDate := time.Now().Format("2006-01-02")
+	fromDate := time.Now().AddDate(0, 0, -period).Format("2006-01-02")
+
+	entries, err := alertDB.LoadDailyPnL(email, fromDate, toDate)
+	if err != nil {
+		d.logger.Error("Failed to load daily P&L for chart", "email", email, "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	points := make([]pnlChartPoint, 0, len(entries))
+	var cumulative float64
+	for _, e := range entries {
+		cumulative += e.NetPnL
+		points = append(points, pnlChartPoint{
+			Date:       e.Date,
+			NetPnL:     math.Round(e.NetPnL*100) / 100,
+			Cumulative: math.Round(cumulative*100) / 100,
+		})
+	}
+
+	d.writeJSON(w, pnlChartResponse{
+		Points: points,
+		Period: period,
+	})
+}
+
+// --- Order Attribution API ---
+
+type attributionStep struct {
+	Time         string `json:"time"`
+	ToolName     string `json:"tool_name"`
+	ToolCategory string `json:"tool_category"`
+	InputSummary string `json:"input_summary"`
+	OutputSummary string `json:"output_summary"`
+	DurationMs   int64  `json:"duration_ms"`
+	IsError      bool   `json:"is_error"`
+	IsOrder      bool   `json:"is_order"`
+}
+
+type attributionResponse struct {
+	OrderID string            `json:"order_id"`
+	Steps   []attributionStep `json:"steps"`
+}
+
+// orderAttributionAPI returns the tool call sequence that led to a specific order.
+// Query params: order_id (required)
+func (d *DashboardHandler) orderAttributionAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		d.writeJSONError(w, http.StatusBadRequest, "bad_request", "order_id parameter is required.")
+		return
+	}
+
+	if d.auditStore == nil {
+		d.writeJSON(w, attributionResponse{OrderID: orderID, Steps: []attributionStep{}})
+		return
+	}
+
+	toolCalls, err := d.auditStore.GetOrderAttribution(email, orderID)
+	if err != nil {
+		d.logger.Error("Failed to get order attribution", "email", email, "order_id", orderID, "error", err)
+		d.writeJSON(w, attributionResponse{OrderID: orderID, Steps: []attributionStep{}})
+		return
+	}
+
+	steps := make([]attributionStep, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		steps = append(steps, attributionStep{
+			Time:          tc.StartedAt.Format("15:04:05"),
+			ToolName:      tc.ToolName,
+			ToolCategory:  tc.ToolCategory,
+			InputSummary:  tc.InputSummary,
+			OutputSummary: tc.OutputSummary,
+			DurationMs:    tc.DurationMs,
+			IsError:       tc.IsError,
+			IsOrder:       tc.OrderID != "",
+		})
+	}
+
+	d.writeJSON(w, attributionResponse{
+		OrderID: orderID,
+		Steps:   steps,
 	})
 }
 

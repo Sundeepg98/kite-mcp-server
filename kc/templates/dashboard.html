@@ -92,6 +92,11 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+.chart-period-btns { display: flex; gap: 4px; }
+.cpbtn { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-2); font-size: 11px; font-family: var(--mono); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.cpbtn:hover { border-color: var(--border-hi); color: var(--text-1); }
+.cpbtn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
 .tl-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-bottom: 8px; }
 .tl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .tl-symbol { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); }
@@ -149,6 +154,23 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     <div class="stat-card"><div class="stat-label">Today's P&amp;L</div><div class="stat-value" id="cardPnl">--</div></div>
     <div class="stat-card"><div class="stat-label">Active Alerts</div><div class="stat-value" id="cardAlerts">--</div></div>
     <div class="stat-card"><div class="stat-label">Ticker</div><div class="stat-value" id="cardTicker">--</div></div>
+  </div>
+
+  <!-- P&L Equity Curve -->
+  <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>P&amp;L Equity Curve</span>
+    <div class="chart-period-btns" id="chartPeriodBtns">
+      <button class="cpbtn" data-period="7">7D</button>
+      <button class="cpbtn" data-period="30">30D</button>
+      <button class="cpbtn active" data-period="90">90D</button>
+      <button class="cpbtn" data-period="365">1Y</button>
+    </div>
+  </div>
+  <div id="pnlChartWrap" style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:24px;">
+    <div id="pnlChartLoading" class="loading-state" style="height:300px;display:flex;align-items:center;justify-content:center;">Loading chart...</div>
+    <div id="pnlChartEmpty" class="empty-state" style="height:300px;display:none;align-items:center;justify-content:center;">No P&amp;L data yet. Data is recorded at 3:40 PM IST daily.</div>
+    <div id="pnlCumulativeChart" style="height:220px;display:none;"></div>
+    <div id="pnlDailyChart" style="height:120px;display:none;border-top:1px solid var(--border);"></div>
   </div>
 
   <!-- Holdings -->
@@ -213,6 +235,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 
 </div>
 
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 (function() {
   'use strict';
@@ -568,13 +591,194 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
   }
 
+  // --- P&L Equity Curve Chart ---
+  var cumulativeChart = null;
+  var dailyChart = null;
+  var cumulativeSeries = null;
+  var dailySeries = null;
+  var chartPeriod = 90;
+
+  var chartColors = {
+    bg: '#161b24',
+    gridLines: '#1e2430',
+    borderColor: '#252d3a',
+    textColor: '#64748b',
+    crosshairColor: '#334155',
+    green: '#34d399',
+    greenArea: 'rgba(52,211,153,0.08)',
+    red: '#f87171',
+    redArea: 'rgba(248,113,113,0.06)',
+  };
+
+  function initCharts() {
+    if (typeof LightweightCharts === 'undefined') return;
+    var cumEl = document.getElementById('pnlCumulativeChart');
+    var dailyEl = document.getElementById('pnlDailyChart');
+
+    var commonOpts = {
+      layout: {
+        background: { type: 'solid', color: chartColors.bg },
+        textColor: chartColors.textColor,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: chartColors.gridLines },
+        horzLines: { color: chartColors.gridLines },
+      },
+      crosshair: {
+        vertLine: { color: chartColors.crosshairColor, width: 1, style: 3 },
+        horzLine: { color: chartColors.crosshairColor, width: 1, style: 3 },
+      },
+      rightPriceScale: {
+        borderColor: chartColors.borderColor,
+        scaleMargins: { top: 0.12, bottom: 0.08 },
+      },
+      timeScale: {
+        borderColor: chartColors.borderColor,
+        timeVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { mouseWheel: true, pinch: true },
+    };
+
+    // Cumulative P&L area chart
+    cumulativeChart = LightweightCharts.createChart(cumEl, Object.assign({}, commonOpts, {
+      height: 220,
+      timeScale: Object.assign({}, commonOpts.timeScale, { visible: false }),
+    }));
+    cumulativeSeries = cumulativeChart.addSeries(LightweightCharts.AreaSeries, {
+      lineColor: chartColors.green,
+      topColor: chartColors.greenArea,
+      bottomColor: 'transparent',
+      lineWidth: 2,
+      crosshairMarkerRadius: 4,
+      priceFormat: { type: 'custom', formatter: function(p) { return (p >= 0 ? '+' : '') + p.toFixed(0); } },
+    });
+
+    // Daily P&L bar chart
+    dailyChart = LightweightCharts.createChart(dailyEl, Object.assign({}, commonOpts, {
+      height: 120,
+      rightPriceScale: Object.assign({}, commonOpts.rightPriceScale, {
+        scaleMargins: { top: 0.15, bottom: 0.05 },
+      }),
+    }));
+    dailySeries = dailyChart.addSeries(LightweightCharts.HistogramSeries, {
+      priceFormat: { type: 'custom', formatter: function(p) { return (p >= 0 ? '+' : '') + p.toFixed(0); } },
+    });
+
+    // Sync crosshair between charts
+    cumulativeChart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+      if (range) dailyChart.timeScale().setVisibleLogicalRange(range);
+    });
+    dailyChart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+      if (range) cumulativeChart.timeScale().setVisibleLogicalRange(range);
+    });
+  }
+
+  function refreshPnlChart() {
+    fetchJSON('pnl-chart?period=' + chartPeriod).then(function(d) {
+      var loading = document.getElementById('pnlChartLoading');
+      var empty = document.getElementById('pnlChartEmpty');
+      var cumEl = document.getElementById('pnlCumulativeChart');
+      var dailyEl = document.getElementById('pnlDailyChart');
+
+      loading.style.display = 'none';
+
+      var points = d.points || [];
+      if (points.length === 0) {
+        empty.style.display = 'flex';
+        cumEl.style.display = 'none';
+        dailyEl.style.display = 'none';
+        return;
+      }
+
+      empty.style.display = 'none';
+      cumEl.style.display = 'block';
+      dailyEl.style.display = 'block';
+
+      if (!cumulativeChart) initCharts();
+      if (!cumulativeChart) return; // library not loaded
+
+      // Determine if overall trend is positive or negative
+      var lastCum = points[points.length - 1].cumulative;
+      var lineColor = lastCum >= 0 ? chartColors.green : chartColors.red;
+      var areaColor = lastCum >= 0 ? chartColors.greenArea : chartColors.redArea;
+      cumulativeSeries.applyOptions({
+        lineColor: lineColor,
+        topColor: areaColor,
+      });
+
+      // Build data for cumulative area chart
+      var cumData = [];
+      for (var i = 0; i < points.length; i++) {
+        cumData.push({ time: points[i].date, value: points[i].cumulative });
+      }
+      cumulativeSeries.setData(cumData);
+
+      // Build data for daily bar chart
+      var dailyData = [];
+      for (var j = 0; j < points.length; j++) {
+        dailyData.push({
+          time: points[j].date,
+          value: points[j].net_pnl,
+          color: points[j].net_pnl >= 0 ? chartColors.green : chartColors.red,
+        });
+      }
+      dailySeries.setData(dailyData);
+
+      cumulativeChart.timeScale().fitContent();
+      dailyChart.timeScale().fitContent();
+
+      // Resize charts to fit container
+      var wrapEl = document.getElementById('pnlChartWrap');
+      var w = wrapEl.clientWidth;
+      if (w > 0) {
+        cumulativeChart.resize(w, 220);
+        dailyChart.resize(w, 120);
+      }
+    }).catch(function(e) {
+      document.getElementById('pnlChartLoading').style.display = 'none';
+      if (e.code !== 'not_authenticated') {
+        document.getElementById('pnlChartEmpty').style.display = 'flex';
+      }
+    });
+  }
+
+  // Chart period button handler
+  document.getElementById('chartPeriodBtns').addEventListener('click', function(ev) {
+    var btn = ev.target.closest('.cpbtn');
+    if (!btn) return;
+    var btns = document.getElementById('chartPeriodBtns').querySelectorAll('.cpbtn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+    chartPeriod = parseInt(btn.getAttribute('data-period'), 10) || 90;
+    refreshPnlChart();
+  });
+
+  // Resize charts on window resize
+  window.addEventListener('resize', function() {
+    if (cumulativeChart && dailyChart) {
+      var wrapEl = document.getElementById('pnlChartWrap');
+      var w = wrapEl.clientWidth;
+      if (w > 0) {
+        cumulativeChart.resize(w, 220);
+        dailyChart.resize(w, 120);
+      }
+    }
+  });
+
   // --- Initial load + auto-refresh ---
   refreshStatus();
   refreshPortfolio();
   refreshAlerts();
+  refreshPnlChart();
   setInterval(refreshStatus, 10000);
   setInterval(refreshPortfolio, 30000);
   setInterval(refreshAlerts, 60000);
+  setInterval(refreshPnlChart, 300000); // refresh chart every 5 min
 })();
 </script>
 </body>
