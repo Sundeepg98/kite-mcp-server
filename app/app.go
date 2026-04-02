@@ -286,6 +286,17 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		if err := app.auditStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize audit table", "error", err)
 		} else {
+			// Wire encryption key for HMAC email hashing, AES-GCM email encryption,
+			// and HMAC-SHA256 hash chaining.
+			if app.Config.OAuthJWTSecret != "" {
+				if encKey, err := alerts.DeriveEncryptionKey(app.Config.OAuthJWTSecret); err == nil {
+					app.auditStore.SetEncryptionKey(encKey)
+					app.auditStore.SeedChain()
+					app.logger.Info("Audit trail encryption and hash chaining enabled")
+				} else {
+					app.logger.Error("Failed to derive audit encryption key", "error", err)
+				}
+			}
 			app.auditStore.SetLogger(app.logger)
 			app.auditStore.StartWorker()
 			app.logger.Info("Audit trail enabled")
@@ -514,7 +525,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
 	// Ops dashboard: protected by OAuth if available, otherwise by secret path
-	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, app.Config.AdminEmails)
+	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, app.Config.AdminEmails, app.auditStore)
 	if app.oauthHandler != nil {
 		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
 	} else if app.Config.AdminSecretPath != "" {

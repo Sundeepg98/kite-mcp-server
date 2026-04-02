@@ -2,12 +2,17 @@
 package audit
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 )
 
@@ -30,6 +35,8 @@ type ToolCall struct {
 	StartedAt     time.Time `json:"started_at"`
 	CompletedAt   time.Time `json:"completed_at"`
 	DurationMs    int64     `json:"duration_ms"`
+	PrevHash      string    `json:"prev_hash,omitempty"`
+	EntryHash     string    `json:"entry_hash,omitempty"`
 }
 
 // ListOptions controls filtering and pagination for List queries.
@@ -46,10 +53,14 @@ const auditBufferSize = 1000
 
 // Store provides audit trail persistence backed by SQLite via alerts.DB.
 type Store struct {
-	db      *alerts.DB
-	writeCh chan *ToolCall
-	done    chan struct{}
-	logger  *slog.Logger
+	db            *alerts.DB
+	writeCh       chan *ToolCall
+	done          chan struct{}
+	logger        *slog.Logger
+	encryptionKey []byte // AES-256 key for email encryption + HMAC email hashing
+	lastHash      string // last entry_hash in the chain
+	hashKey       []byte // HMAC key for hash chaining
+	chainMu       sync.Mutex
 }
 
 // New creates a new audit Store using the given database handle.
@@ -62,6 +73,48 @@ func (s *Store) SetLogger(logger *slog.Logger) {
 	s.logger = logger
 }
 
+// SetEncryptionKey configures the key used for HMAC email hashing, AES-GCM
+// email encryption, and HMAC hash chaining. Call this before StartWorker.
+func (s *Store) SetEncryptionKey(key []byte) {
+	s.encryptionKey = key
+	// Derive a separate key for hash chaining using HMAC to provide domain separation.
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte("audit-chain-key-v1"))
+	s.hashKey = mac.Sum(nil)
+}
+
+// hmacEmail returns the hex-encoded HMAC-SHA256 of the email using the
+// encryption key. If no key is set or email is empty, returns the email as-is.
+func (s *Store) hmacEmail(email string) string {
+	if s.encryptionKey == nil || email == "" {
+		return email
+	}
+	mac := hmac.New(sha256.New, s.encryptionKey)
+	mac.Write([]byte(email))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// SeedChain reads the last entry_hash from the database to resume the hash
+// chain after a restart. Must be called after InitTable and SetEncryptionKey.
+func (s *Store) SeedChain() {
+	if s.hashKey == nil {
+		return
+	}
+	s.chainMu.Lock()
+	defer s.chainMu.Unlock()
+
+	row := s.db.QueryRow("SELECT entry_hash FROM tool_calls ORDER BY id DESC LIMIT 1")
+	var hash sql.NullString
+	if row.Scan(&hash) == nil && hash.Valid && hash.String != "" {
+		s.lastHash = hash.String
+	} else {
+		// Genesis: no prior entries, compute a deterministic seed.
+		mac := hmac.New(sha256.New, s.hashKey)
+		mac.Write([]byte("genesis-v1"))
+		s.lastHash = hex.EncodeToString(mac.Sum(nil))
+	}
+}
+
 // StartWorker starts a background goroutine that drains the write channel.
 // Call Stop() to gracefully drain and close.
 func (s *Store) StartWorker() {
@@ -70,6 +123,8 @@ func (s *Store) StartWorker() {
 	go func() {
 		defer close(s.done)
 		for entry := range s.writeCh {
+			// Compute hash chain link (sequential in worker goroutine).
+			s.computeChainLink(entry)
 			if err := s.Record(entry); err != nil {
 				if s.logger != nil {
 					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
@@ -77,6 +132,22 @@ func (s *Store) StartWorker() {
 			}
 		}
 	}()
+}
+
+// computeChainLink sets PrevHash and EntryHash on the entry using the HMAC
+// hash chain. Must be called sequentially (worker goroutine or under chainMu).
+func (s *Store) computeChainLink(entry *ToolCall) {
+	if s.hashKey == nil {
+		return
+	}
+	s.chainMu.Lock()
+	defer s.chainMu.Unlock()
+
+	entry.PrevHash = s.lastHash
+	mac := hmac.New(sha256.New, s.hashKey)
+	mac.Write([]byte(entry.PrevHash + entry.CallID + entry.Email + entry.ToolName + entry.StartedAt.Format(time.RFC3339Nano)))
+	entry.EntryHash = hex.EncodeToString(mac.Sum(nil))
+	s.lastHash = entry.EntryHash
 }
 
 // Enqueue adds a tool call to the write buffer. Non-blocking; drops if buffer full.
@@ -121,6 +192,10 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     error_message   TEXT,
     error_type      TEXT,
     order_id        TEXT,
+    email_hash      TEXT,
+    email_encrypted TEXT,
+    prev_hash       TEXT DEFAULT '',
+    entry_hash      TEXT DEFAULT '',
     started_at      TEXT NOT NULL,
     completed_at    TEXT NOT NULL,
     duration_ms     INTEGER NOT NULL DEFAULT 0
@@ -128,34 +203,57 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 CREATE INDEX IF NOT EXISTS idx_tc_email_time ON tool_calls(email, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tc_tool_time ON tool_calls(tool_name, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tc_category ON tool_calls(tool_category, started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error = 1;`
+CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error = 1;
+CREATE INDEX IF NOT EXISTS idx_tc_email_hash ON tool_calls(email_hash, started_at DESC);`
 	if err := s.db.ExecDDL(ddl); err != nil {
 		return fmt.Errorf("audit: create tool_calls table: %w", err)
 	}
 
-	// Migrate existing databases: add order_id column if missing.
+	// Migrate existing databases: add columns if missing.
 	// SQLite returns an error if the column already exists; ignore it.
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN order_id TEXT`)
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN email_hash TEXT`)
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN email_encrypted TEXT`)
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN prev_hash TEXT DEFAULT ''`)
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN entry_hash TEXT DEFAULT ''`)
 
 	return nil
 }
 
 // Record inserts a tool call entry into the audit log.
 // Duplicate call_ids are silently ignored (INSERT OR IGNORE).
+// When an encryption key is set, the email column stores the HMAC hash
+// (for queryable lookups) and email_encrypted stores the AES-GCM ciphertext
+// (for display/export). Legacy rows without encryption store plaintext.
 func (s *Store) Record(entry *ToolCall) error {
 	isErr := 0
 	if entry.IsError {
 		isErr = 1
 	}
+
+	// Email encryption: HMAC for queries, AES-GCM for display.
+	emailForDB := entry.Email
+	emailHash := ""
+	emailEncrypted := ""
+	if s.encryptionKey != nil && entry.Email != "" {
+		emailHash = s.hmacEmail(entry.Email)
+		enc, err := alerts.Encrypt(s.encryptionKey, entry.Email)
+		if err == nil {
+			emailEncrypted = enc
+		}
+		emailForDB = emailHash // store hash in email column for backward-compat queries
+	}
+
 	query := `INSERT OR IGNORE INTO tool_calls
 		(call_id, email, session_id, tool_name, tool_category,
 		 input_params, input_summary, output_summary, output_size,
 		 is_error, error_message, error_type, order_id,
+		 email_hash, email_encrypted, prev_hash, entry_hash,
 		 started_at, completed_at, duration_ms)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 	err := s.db.ExecInsert(query,
 		entry.CallID,
-		entry.Email,
+		emailForDB,
 		entry.SessionID,
 		entry.ToolName,
 		entry.ToolCategory,
@@ -167,6 +265,10 @@ func (s *Store) Record(entry *ToolCall) error {
 		entry.ErrorMessage,
 		entry.ErrorType,
 		entry.OrderID,
+		emailHash,
+		emailEncrypted,
+		entry.PrevHash,
+		entry.EntryHash,
 		entry.StartedAt.Format(time.RFC3339Nano),
 		entry.CompletedAt.Format(time.RFC3339Nano),
 		entry.DurationMs,
@@ -185,8 +287,9 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 	var where []string
 	var args []any
 
+	queryEmail := s.hmacEmail(email)
 	where = append(where, "email = ?")
-	args = append(args, email)
+	args = append(args, queryEmail)
 
 	if opts.Category != "" {
 		where = append(where, "tool_category = ?")
@@ -216,7 +319,9 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 	// Fetch rows with ordering and pagination.
 	dataQuery := "SELECT id, call_id, email, session_id, tool_name, tool_category, " +
 		"input_params, input_summary, output_summary, output_size, " +
-		"is_error, error_message, error_type, order_id, started_at, completed_at, duration_ms " +
+		"is_error, error_message, error_type, order_id, " +
+		"email_encrypted, prev_hash, entry_hash, " +
+		"started_at, completed_at, duration_ms " +
 		"FROM tool_calls WHERE " + whereClause + " ORDER BY started_at DESC"
 
 	if opts.Limit > 0 {
@@ -234,7 +339,7 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 
 	var results []*ToolCall
 	for rows.Next() {
-		tc, err := scanToolCall(rows)
+		tc, err := scanToolCall(rows, s.encryptionKey)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -247,12 +352,16 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 }
 
 // scanToolCall scans a single row into a ToolCall struct.
-func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
+// When encKey is non-nil and email_encrypted is populated, the email field
+// is decrypted for display. Otherwise the raw email column value is used
+// (legacy plaintext rows).
+func scanToolCall(rows *sql.Rows, encKey []byte) (*ToolCall, error) {
 	var tc ToolCall
 	var (
 		isErr                                              int
 		inputParams, inputSummary, outputSummary           sql.NullString
 		errorMessage, errorType, orderID                   sql.NullString
+		emailEncrypted, prevHash, entryHash                sql.NullString
 		startedAtS, completedAtS                           string
 	)
 	if err := rows.Scan(
@@ -260,6 +369,7 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 		&tc.ToolName, &tc.ToolCategory,
 		&inputParams, &inputSummary, &outputSummary, &tc.OutputSize,
 		&isErr, &errorMessage, &errorType, &orderID,
+		&emailEncrypted, &prevHash, &entryHash,
 		&startedAtS, &completedAtS, &tc.DurationMs,
 	); err != nil {
 		return nil, fmt.Errorf("audit: scan tool call: %w", err)
@@ -272,6 +382,16 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 	tc.ErrorMessage = errorMessage.String
 	tc.ErrorType = errorType.String
 	tc.OrderID = orderID.String
+	tc.PrevHash = prevHash.String
+	tc.EntryHash = entryHash.String
+
+	// Decrypt email for display if encrypted form is available.
+	if encKey != nil && emailEncrypted.Valid && emailEncrypted.String != "" {
+		decrypted := alerts.Decrypt(encKey, emailEncrypted.String)
+		if decrypted != "" {
+			tc.Email = decrypted
+		}
+	}
 
 	var err error
 	tc.StartedAt, err = time.Parse(time.RFC3339Nano, startedAtS)
@@ -288,14 +408,17 @@ func scanToolCall(rows *sql.Rows) (*ToolCall, error) {
 
 // ListOrders returns tool calls with order IDs for the given email.
 func (s *Store) ListOrders(email string, since time.Time) ([]*ToolCall, error) {
+	queryEmail := s.hmacEmail(email)
 	query := `SELECT id, call_id, email, session_id, tool_name, tool_category,
 		input_params, input_summary, output_summary, output_size,
-		is_error, error_message, error_type, order_id, started_at, completed_at, duration_ms
+		is_error, error_message, error_type, order_id,
+		email_encrypted, prev_hash, entry_hash,
+		started_at, completed_at, duration_ms
 		FROM tool_calls
 		WHERE email = ? AND order_id IS NOT NULL AND order_id != '' AND started_at >= ?
 		ORDER BY started_at DESC LIMIT 100`
 
-	rows, err := s.db.RawQuery(query, email, since.Format(time.RFC3339Nano))
+	rows, err := s.db.RawQuery(query, queryEmail, since.Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("audit: list orders: %w", err)
 	}
@@ -303,7 +426,7 @@ func (s *Store) ListOrders(email string, since time.Time) ([]*ToolCall, error) {
 
 	var results []*ToolCall
 	for rows.Next() {
-		tc, err := scanToolCall(rows)
+		tc, err := scanToolCall(rows, s.encryptionKey)
 		if err != nil {
 			return nil, err
 		}
@@ -316,13 +439,59 @@ func (s *Store) ListOrders(email string, since time.Time) ([]*ToolCall, error) {
 }
 
 // DeleteOlderThan removes tool_calls older than the given time.
-// Returns the number of rows deleted.
+// If hash chaining is active, a chain-break marker is inserted before the
+// deletion to preserve chain continuity for verification.
+// Returns the number of rows deleted (excluding the marker).
 func (s *Store) DeleteOlderThan(before time.Time) (int64, error) {
+	// Capture the hash of the last entry being deleted so the marker can reference it.
+	var lastDeletedHash string
+	if s.hashKey != nil {
+		_ = s.db.QueryRow(
+			"SELECT entry_hash FROM tool_calls WHERE started_at < ? ORDER BY id DESC LIMIT 1",
+			before.Format(time.RFC3339Nano),
+		).Scan(&lastDeletedHash)
+	}
+
 	result, err := s.db.ExecResult("DELETE FROM tool_calls WHERE started_at < ?", before.Format(time.RFC3339Nano))
 	if err != nil {
 		return 0, fmt.Errorf("audit: delete older than %s: %w", before.Format(time.RFC3339), err)
 	}
-	return result.RowsAffected()
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	// Insert a chain-break marker so VerifyChain knows about the gap.
+	if deleted > 0 && lastDeletedHash != "" && s.hashKey != nil {
+		now := time.Now().UTC()
+		marker := &ToolCall{
+			CallID:       uuid.New().String(),
+			ToolName:     "__chain_break",
+			ToolCategory: "system",
+			InputSummary: fmt.Sprintf("Retention cleanup: deleted %d entries before %s", deleted, before.Format(time.RFC3339)),
+			StartedAt:    now,
+			CompletedAt:  now,
+		}
+		// Set PrevHash to the last deleted entry's hash.
+		marker.PrevHash = lastDeletedHash
+		// Compute this marker's own hash.
+		mac := hmac.New(sha256.New, s.hashKey)
+		mac.Write([]byte(marker.PrevHash + marker.CallID + marker.Email + marker.ToolName + marker.StartedAt.Format(time.RFC3339Nano)))
+		marker.EntryHash = hex.EncodeToString(mac.Sum(nil))
+
+		// Update chain state under lock.
+		s.chainMu.Lock()
+		s.lastHash = marker.EntryHash
+		s.chainMu.Unlock()
+
+		if recErr := s.Record(marker); recErr != nil {
+			if s.logger != nil {
+				s.logger.Error("Failed to insert chain-break marker", "error", recErr)
+			}
+		}
+	}
+
+	return deleted, nil
 }
 
 // Stats holds aggregate metrics for a set of audit trail entries.
@@ -340,8 +509,9 @@ func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
 	var where []string
 	var args []any
 
+	queryEmail := s.hmacEmail(email)
 	where = append(where, "email = ?")
-	args = append(args, email)
+	args = append(args, queryEmail)
 
 	if !since.IsZero() {
 		where = append(where, "started_at >= ?")
@@ -379,5 +549,123 @@ func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
 		AvgLatencyMs: avgLatency,
 		TopTool:      topTool,
 		TopToolCount: topToolCount,
+	}, nil
+}
+
+// ChainVerification holds the result of VerifyChain.
+type ChainVerification struct {
+	Valid      bool   `json:"valid"`
+	BrokenAt  int64  `json:"broken_at_id,omitempty"` // ID of the first entry with a mismatched hash
+	Total     int    `json:"total_entries"`
+	Verified  int    `json:"verified_entries"`
+	Message   string `json:"message"`
+}
+
+// VerifyChain walks every entry in id order, recomputes HMAC hashes, and
+// compares them with the stored entry_hash. Chain-break markers
+// (tool_name = "__chain_break") are expected discontinuities and reset the
+// expected prev_hash.
+func (s *Store) VerifyChain() (*ChainVerification, error) {
+	if s.hashKey == nil {
+		return &ChainVerification{Valid: false, Message: "hash chaining not configured (no encryption key)"}, nil
+	}
+
+	rows, err := s.db.RawQuery(
+		"SELECT id, call_id, email, tool_name, started_at, prev_hash, entry_hash FROM tool_calls ORDER BY id ASC",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("audit: verify chain query: %w", err)
+	}
+	defer rows.Close()
+
+	var (
+		expectedPrev string
+		total        int
+		verified     int
+		first        = true
+	)
+
+	for rows.Next() {
+		var (
+			id                                    int64
+			callID, email, toolName, startedAtStr string
+			prevHash, entryHash                   sql.NullString
+		)
+		if err := rows.Scan(&id, &callID, &email, &toolName, &startedAtStr, &prevHash, &entryHash); err != nil {
+			return nil, fmt.Errorf("audit: verify chain scan: %w", err)
+		}
+		total++
+
+		storedPrev := prevHash.String
+		storedHash := entryHash.String
+
+		// Legacy rows without hashes — skip but count.
+		if storedHash == "" {
+			// Reset chain expectation; the next hashed entry becomes a new anchor.
+			expectedPrev = ""
+			continue
+		}
+
+		// Chain-break marker: accept any prev_hash and reset the chain.
+		if toolName == "__chain_break" {
+			// Recompute and verify the marker's own hash.
+			startedAt, _ := time.Parse(time.RFC3339Nano, startedAtStr)
+			mac := hmac.New(sha256.New, s.hashKey)
+			mac.Write([]byte(storedPrev + callID + email + toolName + startedAt.Format(time.RFC3339Nano)))
+			recomputed := hex.EncodeToString(mac.Sum(nil))
+			if recomputed != storedHash {
+				return &ChainVerification{
+					Valid:    false,
+					BrokenAt: id,
+					Total:    total,
+					Verified: verified,
+					Message:  fmt.Sprintf("chain-break marker at id %d has tampered entry_hash", id),
+				}, nil
+			}
+			expectedPrev = storedHash
+			verified++
+			continue
+		}
+
+		// Normal entry: verify prev_hash matches expected.
+		if !first && expectedPrev != "" && storedPrev != expectedPrev {
+			return &ChainVerification{
+				Valid:    false,
+				BrokenAt: id,
+				Total:    total,
+				Verified: verified,
+				Message:  fmt.Sprintf("prev_hash mismatch at id %d", id),
+			}, nil
+		}
+
+		// Recompute entry_hash.
+		startedAt, _ := time.Parse(time.RFC3339Nano, startedAtStr)
+		mac := hmac.New(sha256.New, s.hashKey)
+		mac.Write([]byte(storedPrev + callID + email + toolName + startedAt.Format(time.RFC3339Nano)))
+		recomputed := hex.EncodeToString(mac.Sum(nil))
+		if recomputed != storedHash {
+			return &ChainVerification{
+				Valid:    false,
+				BrokenAt: id,
+				Total:    total,
+				Verified: verified,
+				Message:  fmt.Sprintf("entry_hash mismatch at id %d (tampered data)", id),
+			}, nil
+		}
+
+		expectedPrev = storedHash
+		verified++
+		first = false
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: verify chain iterate: %w", err)
+	}
+
+	return &ChainVerification{
+		Valid:    true,
+		Total:    total,
+		Verified: verified,
+		Message:  "chain integrity verified",
 	}, nil
 }

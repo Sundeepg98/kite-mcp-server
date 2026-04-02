@@ -10,6 +10,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -23,10 +24,11 @@ type Handler struct {
 	startTime   time.Time
 	version     string
 	adminEmails map[string]bool
+	auditStore  *audit.Store
 }
 
 // New creates a new ops Handler.
-func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, adminEmails string) *Handler {
+func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, adminEmails string, auditStore *audit.Store) *Handler {
 	admins := make(map[string]bool)
 	for _, email := range strings.Split(adminEmails, ",") {
 		email = strings.TrimSpace(strings.ToLower(email))
@@ -42,6 +44,7 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 		startTime:   startTime,
 		version:     version,
 		adminEmails: admins,
+		auditStore:  auditStore,
 	}
 }
 
@@ -61,6 +64,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/logs", wrap(h.logStream))
 	mux.Handle("/admin/ops/api/credentials", wrap(h.credentials))
 	mux.Handle("/admin/ops/api/force-reauth", wrap(h.forceReauth))
+	mux.Handle("/admin/ops/api/verify-chain", wrap(h.verifyChain))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
@@ -243,6 +247,31 @@ func (h *Handler) forceReauth(w http.ResponseWriter, r *http.Request) {
 	h.manager.TokenStore().Delete(targetEmail)
 	h.logger.Info("Admin forced re-auth", "admin", adminEmail, "target", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Token deleted, user will re-authenticate on next MCP call"})
+}
+
+// verifyChain runs the HMAC-SHA256 hash chain verification over the entire
+// audit trail. Only admin users can invoke this endpoint.
+func (h *Handler) verifyChain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.auditStore == nil {
+		h.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		return
+	}
+	result, err := h.auditStore.VerifyChain()
+	if err != nil {
+		h.logger.Error("Chain verification failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.writeJSON(w, result)
 }
 
 // logStream serves an SSE stream of structured log entries.

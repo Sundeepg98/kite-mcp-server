@@ -35,7 +35,7 @@ func newTestHandler(t *testing.T) *Handler {
 	t.Cleanup(func() { mgr.Shutdown() })
 
 	lb := NewLogBuffer(100)
-	return New(mgr, nil, lb, logger, "test-v1", time.Now(), "")
+	return New(mgr, nil, lb, logger, "test-v1", time.Now(), "", nil)
 }
 
 // devNull implements io.Writer and discards all bytes.
