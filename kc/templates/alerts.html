@@ -29,6 +29,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.topbar-updated { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .status-dot.valid { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
 .status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
@@ -72,6 +73,8 @@ tr:hover td { background: var(--bg-2); }
 .dist-green { color: var(--green); font-weight: 600; }
 .dist-amber { color: var(--amber); font-weight: 600; }
 .dist-red { color: var(--red); font-weight: 600; }
+.btn-delete { padding: 2px 10px; border: 1px solid var(--red); border-radius: 3px; background: transparent; color: var(--red); font-size: 11px; cursor: pointer; font-family: var(--mono); transition: background 0.12s; }
+.btn-delete:hover { background: var(--red-dim); }
 
 .loading-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
@@ -115,6 +118,7 @@ tr:hover td { background: var(--bg-2); }
     <span class="topbar-title">Alerts</span>
   </div>
   <div class="topbar-right">
+    <span class="topbar-updated" id="lastUpdated">--</span>
     <span class="topbar-email" id="userEmail">--</span>
     <div class="status-dot" id="tokenDot"></div>
   </div>
@@ -155,6 +159,7 @@ tr:hover td { background: var(--bg-2); }
         <th class="right">Current</th>
         <th class="right">Distance</th>
         <th>Created</th>
+        <th></th>
       </tr></thead>
       <tbody id="activeBody"></tbody>
     </table>
@@ -227,6 +232,24 @@ tr:hover td { background: var(--bg-2); }
     if (pct < 2) return 'dist-green';
     if (pct < 5) return 'dist-amber';
     return 'dist-red';
+  }
+
+  function updateTimestamp() {
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
+  }
+
+  function deleteAlert(alertID) {
+    if (!confirm('Delete this alert?')) return;
+    fetch('/dashboard/api/alerts-enriched?alert_id=' + encodeURIComponent(alertID), { method: 'DELETE' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        fetchAlerts();
+      })
+      .catch(function(err) {
+        var errorBanner = document.getElementById('errorBanner');
+        errorBanner.textContent = 'Failed to delete alert: ' + err.message;
+        errorBanner.style.display = 'block';
+      });
   }
 
   // --- Fetch status for topbar ---
@@ -331,13 +354,22 @@ tr:hover td { background: var(--bg-2); }
             distTd.className = 'right';
           }
 
+          // Delete button
+          var delTd = document.createElement('td');
+          var delBtn = el('button', 'btn-delete', 'Delete');
+          (function(id) {
+            delBtn.addEventListener('click', function() { deleteAlert(id); });
+          })(a.id);
+          delTd.appendChild(delBtn);
+
           activeBody.appendChild(trEl([
             tdEl(a.tradingsymbol + ' ' + a.exchange),
             dirTd,
             tdEl(fmtPrice(a.target_price), 'right'),
             tdEl(a.current_price > 0 ? fmtPrice(a.current_price) : '--', 'right'),
             distTd,
-            tdEl(fmtTimeShort(a.created_at))
+            tdEl(fmtTimeShort(a.created_at)),
+            delTd
           ]));
         });
       }
@@ -416,6 +448,7 @@ tr:hover td { background: var(--bg-2); }
           triggeredWrap.appendChild(card);
         });
       }
+      updateTimestamp();
     }).catch(function(err) {
       activeLoading.style.display = 'none';
       triggeredLoading.style.display = 'none';

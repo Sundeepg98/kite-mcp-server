@@ -830,15 +830,30 @@ func (d *DashboardHandler) serveAlertsPage(w http.ResponseWriter, r *http.Reques
 }
 
 // alertsEnrichedAPI returns enriched alert data with lifecycle metrics and current prices.
+// It also supports DELETE method to remove an active alert by ID.
 func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	email := oauth.EmailFromContext(r.Context())
 	if email == "" {
 		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		alertID := r.URL.Query().Get("alert_id")
+		if alertID == "" {
+			http.Error(w, "alert_id required", http.StatusBadRequest)
+			return
+		}
+		if err := d.manager.AlertStore().Delete(email, alertID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		d.writeJSON(w, map[string]string{"status": "ok"})
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 

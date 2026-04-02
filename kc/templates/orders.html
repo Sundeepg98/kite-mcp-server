@@ -29,6 +29,11 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.topbar-updated { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.valid { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
+.status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
@@ -99,7 +104,9 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     <span class="topbar-title">Orders P&amp;L</span>
   </div>
   <div class="topbar-right">
+    <span class="topbar-updated" id="lastUpdated">--</span>
     <span class="topbar-email" id="userEmail">--</span>
+    <div class="status-dot" id="tokenDot"></div>
   </div>
 </div>
 
@@ -116,7 +123,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
   <div class="filter-bar">
     <div class="filter-group" id="dateFilters">
-      <button class="fbtn active" data-days="7">7 Days</button>
+      <button class="fbtn active" data-days="0">Today</button>
+      <button class="fbtn" data-days="7">7 Days</button>
       <button class="fbtn" data-days="30">30 Days</button>
       <button class="fbtn" data-days="90">90 Days</button>
     </div>
@@ -156,7 +164,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   'use strict';
 
   var REFRESH_MS = 60000;
-  var state = { days: 7 };
+  var state = { days: 0 };
   var refreshTimer = null;
 
   function el(tag, cls, text) {
@@ -209,15 +217,24 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     return v > 0 ? 'pnl-pos' : 'pnl-neg';
   }
 
+  function updateTimestamp() {
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
+  }
+
   function fetchEmail() {
     fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
       if (d.email) document.getElementById('userEmail').textContent = d.email;
+      var dot = document.getElementById('tokenDot');
+      var valid = d.kite_token && d.kite_token.valid;
+      dot.className = 'status-dot ' + (valid ? 'valid' : 'expired');
     }).catch(function() {});
   }
 
   function buildURL() {
     var since = new Date();
-    since.setDate(since.getDate() - state.days);
+    if (state.days > 0) {
+      since.setDate(since.getDate() - state.days);
+    }
     since.setHours(0, 0, 0, 0);
     return '/dashboard/api/orders?since=' + encodeURIComponent(since.toISOString());
   }
@@ -246,11 +263,13 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
       if (orders.length === 0) {
         empty.style.display = 'block';
+        updateTimestamp();
         return;
       }
 
       tableWrap.style.display = 'block';
       renderTable(orders);
+      updateTimestamp();
     }).catch(function(err) {
       loading.style.display = 'none';
       errorBanner.textContent = 'Failed to load orders: ' + err.message;
@@ -347,7 +366,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     var btns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
     for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
     btn.classList.add('active');
-    state.days = parseInt(btn.getAttribute('data-days'), 10) || 7;
+    var d = parseInt(btn.getAttribute('data-days'), 10);
+    state.days = isNaN(d) ? 0 : d;
     fetchOrders();
     scheduleRefresh();
   });
