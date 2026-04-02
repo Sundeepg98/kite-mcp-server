@@ -537,6 +537,122 @@ func TestSessionHashedID_NoEncryptionKey(t *testing.T) {
 	assert.Empty(t, sessions)
 }
 
+func TestDailyPnLCRUD(t *testing.T) {
+	db := openTestDB(t)
+
+	// Save
+	entry := &DailyPnLEntry{
+		Date:          "2026-04-01",
+		Email:         "user@example.com",
+		HoldingsPnL:   1500.50,
+		PositionsPnL:  -200.25,
+		NetPnL:        1300.25,
+		HoldingsCount: 10,
+		TradesCount:   3,
+	}
+	err := db.SaveDailyPnL(entry)
+	require.NoError(t, err)
+
+	// Save another day
+	entry2 := &DailyPnLEntry{
+		Date:          "2026-04-02",
+		Email:         "user@example.com",
+		HoldingsPnL:   -500.00,
+		PositionsPnL:  800.00,
+		NetPnL:        300.00,
+		HoldingsCount: 10,
+		TradesCount:   5,
+	}
+	err = db.SaveDailyPnL(entry2)
+	require.NoError(t, err)
+
+	// Load range
+	entries, err := db.LoadDailyPnL("user@example.com", "2026-04-01", "2026-04-02")
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "2026-04-01", entries[0].Date)
+	assert.InDelta(t, 1300.25, entries[0].NetPnL, 0.01)
+	assert.Equal(t, "2026-04-02", entries[1].Date)
+	assert.InDelta(t, 300.00, entries[1].NetPnL, 0.01)
+
+	// Load single day
+	entries, err = db.LoadDailyPnL("user@example.com", "2026-04-02", "2026-04-02")
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+
+	// Load empty range
+	entries, err = db.LoadDailyPnL("user@example.com", "2025-01-01", "2025-01-31")
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+
+	// Upsert (replace)
+	entry.NetPnL = 9999.99
+	err = db.SaveDailyPnL(entry)
+	require.NoError(t, err)
+	entries, err = db.LoadDailyPnL("user@example.com", "2026-04-01", "2026-04-01")
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.InDelta(t, 9999.99, entries[0].NetPnL, 0.01)
+
+	// Different user
+	entries, err = db.LoadDailyPnL("other@example.com", "2026-04-01", "2026-04-02")
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestTrailingStopDBCRUD(t *testing.T) {
+	db := openTestDB(t)
+
+	ts := &TrailingStop{
+		ID:              "ts001",
+		Email:           "user@example.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		InstrumentToken: 408065,
+		OrderID:         "ORD001",
+		Variety:         "regular",
+		TrailAmount:     20,
+		Direction:       "long",
+		HighWaterMark:   1500,
+		CurrentStop:     1480,
+		Active:          true,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+
+	// Save
+	err := db.SaveTrailingStop(ts)
+	require.NoError(t, err)
+
+	// Load
+	stops, err := db.LoadTrailingStops()
+	require.NoError(t, err)
+	require.Len(t, stops, 1)
+	assert.Equal(t, "ts001", stops[0].ID)
+	assert.Equal(t, "ORD001", stops[0].OrderID)
+	assert.InDelta(t, 1500, stops[0].HighWaterMark, 0.01)
+	assert.InDelta(t, 1480, stops[0].CurrentStop, 0.01)
+
+	// Update
+	err = db.UpdateTrailingStop("ts001", 1550, 1530, 1)
+	require.NoError(t, err)
+
+	stops, err = db.LoadTrailingStops()
+	require.NoError(t, err)
+	require.Len(t, stops, 1)
+	assert.InDelta(t, 1550, stops[0].HighWaterMark, 0.01)
+	assert.InDelta(t, 1530, stops[0].CurrentStop, 0.01)
+	assert.Equal(t, 1, stops[0].ModifyCount)
+
+	// Deactivate
+	err = db.DeactivateTrailingStop("ts001")
+	require.NoError(t, err)
+
+	// LoadTrailingStops only returns active
+	stops, err = db.LoadTrailingStops()
+	require.NoError(t, err)
+	assert.Empty(t, stops)
+}
+
 func TestSessionHashedID_UpsertSameSession(t *testing.T) {
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
