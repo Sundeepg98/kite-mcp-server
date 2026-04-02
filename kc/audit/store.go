@@ -203,8 +203,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 CREATE INDEX IF NOT EXISTS idx_tc_email_time ON tool_calls(email, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tc_tool_time ON tool_calls(tool_name, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tc_category ON tool_calls(tool_category, started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error = 1;
-CREATE INDEX IF NOT EXISTS idx_tc_email_hash ON tool_calls(email_hash, started_at DESC);`
+CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error = 1;`
 	if err := s.db.ExecDDL(ddl); err != nil {
 		return fmt.Errorf("audit: create tool_calls table: %w", err)
 	}
@@ -216,6 +215,9 @@ CREATE INDEX IF NOT EXISTS idx_tc_email_hash ON tool_calls(email_hash, started_a
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN email_encrypted TEXT`)
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN prev_hash TEXT DEFAULT ''`)
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN entry_hash TEXT DEFAULT ''`)
+
+	// Create index on email_hash AFTER migration ensures the column exists
+	_ = s.db.ExecDDL(`CREATE INDEX IF NOT EXISTS idx_tc_email_hash ON tool_calls(email_hash, started_at DESC)`)
 
 	return nil
 }
