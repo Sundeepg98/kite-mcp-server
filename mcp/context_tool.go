@@ -63,6 +63,9 @@ type TradingContext struct {
 
 	// Errors from API calls that failed
 	Errors map[string]string `json:"errors,omitempty"`
+
+	// Dashboard link for the AI to present to the user
+	DashboardURL string `json:"dashboard_url,omitempty"`
 }
 
 // positionDetail shows per-trade P&L for each open position.
@@ -147,6 +150,7 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			email := oauth.EmailFromContext(ctx)
 
 			tradingCtx := buildTradingContext(data, errs, manager, email)
+			tradingCtx.DashboardURL = dashboardPageURL(manager, "/dashboard")
 			return handler.MarshalResponse(tradingCtx, "trading_context")
 		})
 	}

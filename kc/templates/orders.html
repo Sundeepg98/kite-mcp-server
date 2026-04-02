@@ -217,6 +217,15 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   var state = { days: 0 };
   var refreshTimer = null;
 
+  // Seed state from URL parameters for deep-link support
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('days')) {
+      var d = parseInt(params.get('days'), 10);
+      if (!isNaN(d) && d > 0) state.days = d;
+    }
+  })();
+
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -625,6 +634,22 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     refreshTimer = setInterval(function() { fetchOrders(); }, REFRESH_MS);
   }
+
+  // Sync date filter UI with URL-seeded state
+  (function() {
+    if (state.days > 0) {
+      var dayBtns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
+      var matched = false;
+      for (var i = 0; i < dayBtns.length; i++) {
+        dayBtns[i].classList.remove('active');
+        if (parseInt(dayBtns[i].getAttribute('data-days'), 10) === state.days) {
+          dayBtns[i].classList.add('active');
+          matched = true;
+        }
+      }
+      if (!matched && dayBtns.length > 0) dayBtns[0].classList.add('active');
+    }
+  })();
 
   fetchEmail();
   fetchOrders();

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -22,8 +23,8 @@ func isAlphanumeric(s string) bool {
 	return len(s) > 0
 }
 
-// dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
-func dashboardLink(manager *kc.Manager) string {
+// dashboardBaseURL returns the validated base URL for the dashboard, or empty string.
+func dashboardBaseURL(manager *kc.Manager) string {
 	var base string
 	if manager.IsLocalMode() {
 		base = "http://127.0.0.1:8080"
@@ -42,7 +43,34 @@ func dashboardLink(manager *kc.Manager) string {
 	if (scheme != "http" && scheme != "https") || parsed.Host == "" {
 		return ""
 	}
+	return base
+}
+
+// dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
+func dashboardLink(manager *kc.Manager) string {
+	base := dashboardBaseURL(manager)
+	if base == "" {
+		return ""
+	}
 	return fmt.Sprintf("\n\nOps dashboard: [Open Dashboard](%s/admin/ops)", base)
+}
+
+// dashboardPageURL returns the full dashboard URL for a specific page path (e.g. "/dashboard", "/dashboard/activity").
+func dashboardPageURL(manager *kc.Manager, pagePath string) string {
+	base := dashboardBaseURL(manager)
+	if base == "" {
+		return ""
+	}
+	return base + pagePath
+}
+
+// pageRoutes maps page names to URL paths for the open_dashboard tool.
+var pageRoutes = map[string]string{
+	"portfolio": "/dashboard",
+	"activity":  "/dashboard/activity",
+	"orders":    "/dashboard/orders",
+	"alerts":    "/dashboard/alerts",
+	"ops":       "/admin/ops",
 }
 
 type LoginTool struct{}
@@ -226,7 +254,20 @@ type OpenDashboardTool struct{}
 
 func (*OpenDashboardTool) Tool() mcp.Tool {
 	return mcp.NewTool("open_dashboard",
-		mcp.WithDescription("Open the ops dashboard in the user's browser. Shows server health: active sessions, ticker connections, price alerts, and real-time logs. In local mode, automatically opens the browser. In remote mode, returns a clickable link."),
+		mcp.WithDescription("Open a dashboard page in the user's browser. Supports deep-linking to specific pages with filters. In local mode, automatically opens the browser. In remote mode, returns a clickable link."),
+		mcp.WithString("page",
+			mcp.Description("Dashboard page to open: portfolio, activity, orders, alerts, ops"),
+			mcp.DefaultString("portfolio"),
+		),
+		mcp.WithString("category",
+			mcp.Description("Filter by category (activity page only): order, query, market_data, alert, notification, ticker, setup"),
+		),
+		mcp.WithNumber("days",
+			mcp.Description("Time range in days (activity/orders pages): e.g. 1, 7, 30"),
+		),
+		mcp.WithBoolean("errors",
+			mcp.Description("Show only errors (activity page only)"),
+		),
 	)
 }
 
@@ -235,7 +276,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler := NewToolHandler(manager)
 		handler.trackToolCall(ctx, "open_dashboard")
 
-		// Build dashboard URL
+		// Build base URL
 		var baseURL string
 		if manager.IsLocalMode() {
 			baseURL = "http://127.0.0.1:8080"
@@ -245,13 +286,41 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("External URL not configured"), nil
 			}
 		}
-		dashURL := baseURL + "/admin/ops"
+
+		// Parse page parameter
+		args := request.GetArguments()
+		page := SafeAssertString(args["page"], "portfolio")
+		pagePath, ok := pageRoutes[page]
+		if !ok {
+			pagePath = pageRoutes["portfolio"]
+			page = "portfolio"
+		}
+
+		// Build query parameters for deep-linking
+		queryParams := url.Values{}
+		if category := SafeAssertString(args["category"], ""); category != "" && page == "activity" {
+			queryParams.Set("category", category)
+		}
+		if days, ok := args["days"].(float64); ok && days > 0 && (page == "activity" || page == "orders") {
+			queryParams.Set("days", strconv.Itoa(int(days)))
+		}
+		if errorsOnly, ok := args["errors"].(bool); ok && errorsOnly && page == "activity" {
+			queryParams.Set("errors", "true")
+		}
+
+		// Construct the full path with query string
+		fullPath := pagePath
+		if len(queryParams) > 0 {
+			fullPath += "?" + queryParams.Encode()
+		}
 
 		// Include email in dashboard login URL for seamless browser auth
 		email := oauth.EmailFromContext(ctx)
+		var dashURL string
 		if email != "" {
-			loginURL := baseURL + "/auth/browser-login?email=" + url.QueryEscape(email) + "&redirect=/admin/ops"
-			dashURL = loginURL
+			dashURL = baseURL + "/auth/browser-login?email=" + url.QueryEscape(email) + "&redirect=" + url.QueryEscape(fullPath)
+		} else {
+			dashURL = baseURL + fullPath
 		}
 
 		// Auto-open browser in local mode
@@ -259,17 +328,20 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			manager.Logger.Warn("Failed to auto-open dashboard", "error", err)
 		}
 
+		// Page title for display
+		pageTitle := strings.ToUpper(page[:1]) + page[1:]
+
 		if manager.IsLocalMode() {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
-					mcp.TextContent{Type: "text", Text: fmt.Sprintf("Ops dashboard opened in your browser: %s", dashURL)},
+					mcp.TextContent{Type: "text", Text: fmt.Sprintf("%s dashboard opened in your browser: %s", pageTitle, dashURL)},
 				},
 			}, nil
 		}
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{Type: "text", Text: fmt.Sprintf("Open the ops dashboard: [Ops Dashboard](%s)", dashURL)},
+				mcp.TextContent{Type: "text", Text: fmt.Sprintf("Open the %s dashboard: [%s Dashboard](%s)", page, pageTitle, dashURL)},
 			},
 		}, nil
 	}

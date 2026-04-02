@@ -198,6 +198,17 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   var sseSource = null;
   var toolBarChartInstance = null;
 
+  // Seed state from URL parameters for deep-link support
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('category')) state.category = params.get('category');
+    if (params.get('errors') === 'true') state.errors = true;
+    if (params.get('days')) {
+      var d = parseInt(params.get('days'), 10);
+      if (!isNaN(d) && d > 0) state.days = d;
+    }
+  })();
+
   // --- Category badge config ---
   var catColors = {
     order:        { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
@@ -712,6 +723,32 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       icon: '/favicon.ico'
     });
   }
+
+  // --- Sync filter UI with URL-seeded state ---
+  (function() {
+    if (state.category) {
+      var catBtns = document.getElementById('categoryFilters').querySelectorAll('.fbtn');
+      for (var i = 0; i < catBtns.length; i++) {
+        catBtns[i].classList.remove('active');
+        if (catBtns[i].getAttribute('data-cat') === state.category) catBtns[i].classList.add('active');
+      }
+    }
+    if (state.errors) {
+      document.getElementById('errorToggle').classList.add('active');
+    }
+    if (state.days > 0) {
+      var dayBtns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
+      var matched = false;
+      for (var i = 0; i < dayBtns.length; i++) {
+        dayBtns[i].classList.remove('active');
+        if (parseInt(dayBtns[i].getAttribute('data-days'), 10) === state.days) {
+          dayBtns[i].classList.add('active');
+          matched = true;
+        }
+      }
+      if (!matched && dayBtns.length > 0) dayBtns[0].classList.add('active');
+    }
+  })();
 
   // --- Init ---
   fetchEmail();

@@ -154,7 +154,7 @@ func (*OrdersTool) Tool() mcp.Tool {
 }
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	inner := PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
 		orders, err := session.Kite.Client.GetOrders()
 		if err != nil {
 			return nil, err
@@ -167,6 +167,20 @@ func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		return result, nil
 	})
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		result, err := inner(ctx, request)
+		if err != nil || result == nil || result.IsError {
+			return result, err
+		}
+		// Append dashboard URL hint as a second text content block
+		if u := dashboardPageURL(manager, "/dashboard/orders"); u != "" {
+			result.Content = append(result.Content, mcp.TextContent{
+				Type: "text",
+				Text: fmt.Sprintf(`{"dashboard_url":"%s"}`, u),
+			})
+		}
+		return result, nil
+	}
 }
 
 type GTTOrdersTool struct{}
