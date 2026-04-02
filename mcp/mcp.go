@@ -153,10 +153,18 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	allTools := GetAllTools()
 	filteredTools, registeredCount, excludedCount := filterTools(allTools, excludedSet)
 
-	// Register filtered tools
+	// Register filtered tools, injecting _meta.ui.resourceUri for MCP Apps
+	// where the tool has an associated dashboard page.
 	for _, tool := range filteredTools {
-		srv.AddTool(tool.Tool(), tool.Handler(manager))
+		t := tool.Tool()
+		if uri := resourceURIForTool(t.Name); uri != "" {
+			t = withAppUI(t, uri)
+		}
+		srv.AddTool(t, tool.Handler(manager))
 	}
+
+	// Register dashboard pages as MCP App resources (ui:// scheme).
+	RegisterAppResources(srv, manager, logger)
 
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,
