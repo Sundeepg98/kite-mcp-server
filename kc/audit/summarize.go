@@ -33,6 +33,13 @@ func SummarizeInput(toolName string, args map[string]any) string {
 			strVal(args, "old_product"),
 			strVal(args, "new_product"),
 			args["quantity"])
+	case "pre_trade_check":
+		return fmt.Sprintf("%s %s %s %s qty=%s",
+			strings.ToUpper(strVal(args, "transaction_type")),
+			strVal(args, "quantity"),
+			strings.ToUpper(strVal(args, "tradingsymbol")),
+			strings.ToUpper(strVal(args, "exchange")),
+			strVal(args, "quantity"))
 	case "get_ltp", "get_ohlc", "get_quotes":
 		return strVal(args, "instruments")
 	case "search_instruments":
@@ -96,6 +103,8 @@ func SummarizeOutput(toolName string, result *gomcp.CallToolResult) string {
 		return summarizeTradingContext(text)
 	case "search_instruments":
 		return summarizeSearch(text)
+	case "pre_trade_check":
+		return summarizePreTradeCheck(text)
 	}
 
 	// Default: truncate.
@@ -305,6 +314,20 @@ func summarizeTradingContext(text string) string {
 		return truncate(text, 200)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// summarizePreTradeCheck extracts key metrics from pre_trade_check output.
+func summarizePreTradeCheck(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	symbol := jsonString(obj, "symbol")
+	side := jsonString(obj, "side")
+	qty := jsonFloat(obj, "quantity")
+	price := jsonFloat(obj, "current_price")
+	recommendation := jsonString(obj, "recommendation")
+	return fmt.Sprintf("%s %.0f %s @ %s -> %s", side, qty, symbol, formatRupee(price), recommendation)
 }
 
 // --- JSON helper utilities ---

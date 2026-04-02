@@ -62,6 +62,7 @@ var toolCategories = map[string]string{
 	"portfolio_summary":       "query",
 	"portfolio_concentration": "query",
 	"position_analysis":       "query",
+	"pre_trade_check":         "query",
 
 	// market_data
 	"get_quotes":          "market_data",
