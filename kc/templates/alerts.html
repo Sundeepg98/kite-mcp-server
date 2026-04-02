@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alerts · Kite MCP</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-email { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.valid { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
+.status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
+.dash-nav-link:hover { color: var(--text-1); }
+.dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.content { padding: 20px 24px; max-width: 1200px; }
+
+.error-state { text-align: center; padding: 32px 20px; color: var(--red); font-size: 13px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; margin-bottom: 16px; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--text-0); }
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.accent { color: var(--accent); }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--text-2); margin-top: 2px; }
+
+.section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.section-header .refresh-hint { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: normal; color: var(--text-2); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-1); margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+th.right, td.right { text-align: right; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+
+.dist-green { color: var(--green); font-weight: 600; }
+.dist-amber { color: var(--amber); font-weight: 600; }
+.dist-red { color: var(--red); font-weight: 600; }
+
+.loading-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
+
+/* Triggered alert lifecycle cards */
+.tl-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-bottom: 8px; }
+.tl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.tl-symbol { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); }
+.tl-price { font-family: var(--mono); font-size: 12px; color: var(--text-1); margin-left: auto; }
+.tl-stages { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; }
+.tl-stage { display: flex; align-items: center; gap: 5px; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tl-dot-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.tl-dot-amber { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.tl-dot-cyan { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+.tl-dot-red { background: var(--red); box-shadow: 0 0 4px var(--red); }
+.tl-label { color: var(--text-2); }
+.tl-time { color: var(--text-1); }
+.tl-delta { color: var(--text-2); font-size: 10px; }
+.tl-arrow { color: var(--text-2); margin: 0 6px; }
+
+@media (max-width: 640px) {
+  .content { padding: 14px 12px; }
+  .topbar { padding: 0 12px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-value { font-size: 18px; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Alerts</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-email" id="userEmail">--</span>
+    <div class="status-dot" id="tokenDot"></div>
+  </div>
+</div>
+
+<nav class="dash-nav">
+  <a href="/dashboard" class="dash-nav-link">Portfolio</a>
+  <a href="/dashboard/activity" class="dash-nav-link">Activity</a>
+  <a href="/dashboard/orders" class="dash-nav-link">Orders</a>
+  <a href="/dashboard/alerts" class="dash-nav-link active">Alerts</a>
+  <a href="/admin/ops" class="dash-nav-link">Ops</a>
+</nav>
+
+<div class="content">
+  <div id="errorBanner" class="error-state" style="display:none"></div>
+
+  <!-- Summary Cards -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Active Alerts</div><div class="stat-value" id="statActive">--</div></div>
+    <div class="stat-card"><div class="stat-label">Triggered</div><div class="stat-value" id="statTriggered">--</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Time to Trigger</div><div class="stat-value" id="statAvgTime">--</div></div>
+    <div class="stat-card"><div class="stat-label">Nearest Alert</div><div class="stat-value" id="statNearest">--</div><div class="stat-sub" id="statNearestSub"></div></div>
+  </div>
+
+  <!-- Active Alerts -->
+  <div class="section-header">
+    <span>Active Alerts</span>
+    <span class="refresh-hint">Auto-refreshes every 30s</span>
+  </div>
+  <div id="activeLoading" class="loading-state">Loading alerts...</div>
+  <div id="activeEmpty" class="empty-state" style="display:none">No active alerts</div>
+  <div id="activeWrap" class="table-wrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th>Symbol</th>
+        <th>Direction</th>
+        <th class="right">Target</th>
+        <th class="right">Current</th>
+        <th class="right">Distance</th>
+        <th>Created</th>
+      </tr></thead>
+      <tbody id="activeBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Triggered History -->
+  <div class="section-header"><span>Triggered History</span></div>
+  <div id="triggeredLoading" class="loading-state">Loading...</div>
+  <div id="triggeredEmpty" class="empty-state" style="display:none">No triggered alerts yet</div>
+  <div id="triggeredWrap" style="display:none"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var REFRESH_MS = 30000;
+  var refreshTimer = null;
+
+  // --- DOM helpers ---
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function tdEl(text, cls) {
+    var c = document.createElement('td');
+    if (cls) c.className = cls;
+    if (text != null) c.textContent = String(text);
+    return c;
+  }
+  function trEl(cells) {
+    var r = document.createElement('tr');
+    cells.forEach(function(c) { r.appendChild(c); });
+    return r;
+  }
+  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function fmtPrice(v) {
+    if (v == null || v === 0) return '--';
+    return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return '--';
+    var d = new Date(iso);
+    var day = String(d.getDate()).padStart(2, '0');
+    var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    return day + ' ' + mon + ' ' + h + ':' + m;
+  }
+
+  function fmtTimeShort(iso) {
+    if (!iso) return '--';
+    var d = new Date(iso);
+    var day = String(d.getDate()).padStart(2, '0');
+    var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    return day + ' ' + mon;
+  }
+
+  function dirBadgeType(dir) {
+    if (dir === 'above' || dir === 'rise_pct') return 'green';
+    if (dir === 'below' || dir === 'drop_pct') return 'red';
+    return 'amber';
+  }
+
+  function distClass(pct) {
+    if (pct < 2) return 'dist-green';
+    if (pct < 5) return 'dist-amber';
+    return 'dist-red';
+  }
+
+  // --- Fetch status for topbar ---
+  function fetchStatus() {
+    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.email) document.getElementById('userEmail').textContent = d.email;
+      var dot = document.getElementById('tokenDot');
+      var valid = d.kite_token && d.kite_token.valid;
+      dot.className = 'status-dot ' + (valid ? 'valid' : 'expired');
+    }).catch(function() {});
+  }
+
+  // --- Fetch enriched alerts ---
+  function fetchAlerts() {
+    var activeLoading = document.getElementById('activeLoading');
+    var activeEmpty = document.getElementById('activeEmpty');
+    var activeWrap = document.getElementById('activeWrap');
+    var triggeredLoading = document.getElementById('triggeredLoading');
+    var triggeredEmpty = document.getElementById('triggeredEmpty');
+    var triggeredWrap = document.getElementById('triggeredWrap');
+    var errorBanner = document.getElementById('errorBanner');
+
+    errorBanner.style.display = 'none';
+
+    fetch('/dashboard/api/alerts-enriched').then(function(r) {
+      if (!r.ok) {
+        return r.json().then(function(d) {
+          var err = new Error(d.message || 'HTTP ' + r.status);
+          err.code = d.error || 'unknown';
+          throw err;
+        });
+      }
+      return r.json();
+    }).then(function(data) {
+      activeLoading.style.display = 'none';
+      triggeredLoading.style.display = 'none';
+
+      var active = data.active || [];
+      var triggered = data.triggered || [];
+      var summary = data.summary || {};
+
+      // --- Summary cards ---
+      document.getElementById('statActive').textContent = summary.active_count != null ? summary.active_count : '--';
+      document.getElementById('statTriggered').textContent = summary.triggered_count != null ? summary.triggered_count : '--';
+      document.getElementById('statAvgTime').textContent = summary.avg_time_to_trigger || '--';
+
+      // Find nearest alert (smallest distance_pct)
+      var nearest = null;
+      for (var i = 0; i < active.length; i++) {
+        if (active[i].distance_pct > 0) {
+          if (!nearest || active[i].distance_pct < nearest.distance_pct) {
+            nearest = active[i];
+          }
+        }
+      }
+      var nearestEl = document.getElementById('statNearest');
+      var nearestSub = document.getElementById('statNearestSub');
+      if (nearest) {
+        nearestEl.textContent = nearest.tradingsymbol;
+        nearestEl.className = 'stat-value accent';
+        nearestSub.textContent = nearest.distance_pct.toFixed(1) + '% away (' + nearest.direction + ' ' + fmtPrice(nearest.target_price) + ')';
+      } else if (active.length > 0) {
+        nearestEl.textContent = active[0].tradingsymbol;
+        nearestEl.className = 'stat-value';
+        nearestSub.textContent = 'No LTP data';
+      } else {
+        nearestEl.textContent = '--';
+        nearestEl.className = 'stat-value';
+        nearestSub.textContent = '';
+      }
+
+      // --- Active alerts table ---
+      var activeBody = document.getElementById('activeBody');
+      clearChildren(activeBody);
+
+      if (active.length === 0) {
+        activeWrap.style.display = 'none';
+        activeEmpty.style.display = 'block';
+      } else {
+        activeEmpty.style.display = 'none';
+        activeWrap.style.display = 'block';
+
+        // Sort by distance ascending (closest to trigger first)
+        active.sort(function(a, b) {
+          var da = a.distance_pct || 9999;
+          var db = b.distance_pct || 9999;
+          return da - db;
+        });
+
+        active.forEach(function(a) {
+          // Direction badge
+          var dirTd = document.createElement('td');
+          dirTd.appendChild(el('span', 'badge badge-' + dirBadgeType(a.direction), a.direction));
+
+          // Distance
+          var distTd = tdEl('', 'right');
+          if (a.distance_pct > 0) {
+            distTd.textContent = a.distance_pct.toFixed(1) + '%';
+            distTd.className = 'right ' + distClass(a.distance_pct);
+          } else {
+            distTd.textContent = '--';
+            distTd.className = 'right';
+          }
+
+          activeBody.appendChild(trEl([
+            tdEl(a.tradingsymbol + ' ' + a.exchange),
+            dirTd,
+            tdEl(fmtPrice(a.target_price), 'right'),
+            tdEl(a.current_price > 0 ? fmtPrice(a.current_price) : '--', 'right'),
+            distTd,
+            tdEl(fmtTimeShort(a.created_at))
+          ]));
+        });
+      }
+
+      // --- Triggered history (lifecycle cards) ---
+      clearChildren(triggeredWrap);
+
+      if (triggered.length === 0) {
+        triggeredWrap.style.display = 'none';
+        triggeredEmpty.style.display = 'block';
+      } else {
+        triggeredEmpty.style.display = 'none';
+        triggeredWrap.style.display = 'block';
+
+        // Sort by triggered_at descending (most recent first)
+        triggered.sort(function(a, b) {
+          return new Date(b.triggered_at || 0) - new Date(a.triggered_at || 0);
+        });
+
+        triggered.forEach(function(t) {
+          var card = el('div', 'tl-card');
+
+          // Header
+          var header = el('div', 'tl-header');
+          header.appendChild(el('span', 'tl-symbol', t.tradingsymbol + ' ' + t.exchange));
+          header.appendChild(el('span', 'badge badge-' + dirBadgeType(t.direction), t.direction));
+          var priceText = 'Target ' + fmtPrice(t.target_price);
+          if (t.triggered_price > 0) {
+            priceText += '  Triggered @ ' + fmtPrice(t.triggered_price);
+            if (t.trigger_delta_pct > 0) {
+              priceText += ' (' + t.trigger_delta_pct.toFixed(1) + '% delta)';
+            }
+          }
+          header.appendChild(el('span', 'tl-price', priceText));
+          card.appendChild(header);
+
+          // Lifecycle stages
+          var stages = el('div', 'tl-stages');
+
+          // Created
+          var s1 = el('span', 'tl-stage');
+          s1.appendChild(el('span', 'tl-dot tl-dot-green'));
+          s1.appendChild(el('span', 'tl-label', 'Created'));
+          s1.appendChild(el('span', 'tl-time', fmtTime(t.created_at)));
+          stages.appendChild(s1);
+          stages.appendChild(el('span', 'tl-arrow', '\u2192'));
+
+          // Triggered
+          var s2 = el('span', 'tl-stage');
+          s2.appendChild(el('span', 'tl-dot tl-dot-amber'));
+          s2.appendChild(el('span', 'tl-label', 'Triggered'));
+          s2.appendChild(el('span', 'tl-time', fmtTime(t.triggered_at)));
+          if (t.time_to_trigger) {
+            s2.appendChild(el('span', 'tl-delta', '(' + t.time_to_trigger + ')'));
+          }
+          stages.appendChild(s2);
+          stages.appendChild(el('span', 'tl-arrow', '\u2192'));
+
+          // Notified
+          var s3 = el('span', 'tl-stage');
+          if (t.notification_sent_at) {
+            s3.appendChild(el('span', 'tl-dot tl-dot-cyan'));
+            s3.appendChild(el('span', 'tl-label', 'Notified'));
+            s3.appendChild(el('span', 'tl-time', fmtTime(t.notification_sent_at)));
+            if (t.notification_delay) {
+              var nd = t.notification_delay;
+              s3.appendChild(el('span', 'tl-delta', '(' + (nd === '0s' ? 'instant' : nd) + ')'));
+            }
+          } else {
+            s3.appendChild(el('span', 'tl-dot tl-dot-red'));
+            s3.appendChild(el('span', 'tl-label', 'Not notified'));
+          }
+          stages.appendChild(s3);
+
+          card.appendChild(stages);
+          triggeredWrap.appendChild(card);
+        });
+      }
+    }).catch(function(err) {
+      activeLoading.style.display = 'none';
+      triggeredLoading.style.display = 'none';
+      if (err.code === 'not_authenticated') {
+        activeEmpty.style.display = 'block';
+        activeEmpty.textContent = 'Authentication required. Please log in via your MCP client.';
+        triggeredEmpty.style.display = 'block';
+      } else {
+        errorBanner.textContent = 'Failed to load alerts: ' + err.message;
+        errorBanner.style.display = 'block';
+      }
+    });
+  }
+
+  // --- Init ---
+  fetchStatus();
+  fetchAlerts();
+  setInterval(fetchStatus, 10000);
+  refreshTimer = setInterval(fetchAlerts, REFRESH_MS);
+})();
+</script>
+</body>
+</html>

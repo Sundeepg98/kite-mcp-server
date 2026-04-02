@@ -42,9 +42,11 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
 	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPage))
+	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPage))
 	mux.Handle("/dashboard/api/orders", wrap(d.ordersAPI))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
+	mux.Handle("/dashboard/api/alerts-enriched", wrap(d.alertsEnrichedAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
 }
 
@@ -745,4 +747,247 @@ func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 		Orders:  entries,
 		Summary: summary,
 	})
+}
+
+// --- Alerts enriched types ---
+
+type enrichedActiveAlert struct {
+	ID              string  `json:"id"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	Exchange        string  `json:"exchange"`
+	Direction       string  `json:"direction"`
+	TargetPrice     float64 `json:"target_price"`
+	ReferencePrice  float64 `json:"reference_price,omitempty"`
+	CurrentPrice    float64 `json:"current_price,omitempty"`
+	DistancePct     float64 `json:"distance_pct,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+}
+
+type enrichedTriggeredAlert struct {
+	ID                string  `json:"id"`
+	Tradingsymbol     string  `json:"tradingsymbol"`
+	Exchange          string  `json:"exchange"`
+	Direction         string  `json:"direction"`
+	TargetPrice       float64 `json:"target_price"`
+	ReferencePrice    float64 `json:"reference_price,omitempty"`
+	TriggeredPrice    float64 `json:"triggered_price,omitempty"`
+	TriggerDeltaPct   float64 `json:"trigger_delta_pct,omitempty"`
+	CreatedAt         string  `json:"created_at"`
+	TriggeredAt       string  `json:"triggered_at,omitempty"`
+	TimeToTrigger     string  `json:"time_to_trigger,omitempty"`
+	NotificationSentAt string `json:"notification_sent_at,omitempty"`
+	NotificationDelay string  `json:"notification_delay,omitempty"`
+}
+
+type alertsSummary struct {
+	ActiveCount      int    `json:"active_count"`
+	TriggeredCount   int    `json:"triggered_count"`
+	AvgTimeToTrigger string `json:"avg_time_to_trigger"`
+}
+
+type enrichedAlertsResponse struct {
+	Active    []enrichedActiveAlert    `json:"active"`
+	Triggered []enrichedTriggeredAlert `json:"triggered"`
+	Summary   alertsSummary            `json:"summary"`
+}
+
+// formatDuration formats a time.Duration into a human-readable string like "5d 1h 32m".
+func formatDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	secs := int(d.Seconds())
+	if secs > 0 {
+		return fmt.Sprintf("%ds", secs)
+	}
+	return "0s"
+}
+
+// serveAlertsPage serves the embedded alerts.html page.
+func (d *DashboardHandler) serveAlertsPage(w http.ResponseWriter, r *http.Request) {
+	data, err := templates.FS.ReadFile("alerts.html")
+	if err != nil {
+		http.Error(w, "failed to load alerts page", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(data); err != nil {
+		d.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// alertsEnrichedAPI returns enriched alert data with lifecycle metrics and current prices.
+func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	allAlerts := d.manager.AlertStore().List(email)
+
+	// Separate active and triggered
+	var activeAlerts, triggeredAlerts []*alertCopy
+	for _, a := range allAlerts {
+		ac := &alertCopy{
+			ID:                 a.ID,
+			Tradingsymbol:      a.Tradingsymbol,
+			Exchange:           a.Exchange,
+			Direction:          string(a.Direction),
+			TargetPrice:        a.TargetPrice,
+			ReferencePrice:     a.ReferencePrice,
+			Triggered:          a.Triggered,
+			CreatedAt:          a.CreatedAt,
+			TriggeredAt:        a.TriggeredAt,
+			TriggeredPrice:     a.TriggeredPrice,
+			NotificationSentAt: a.NotificationSentAt,
+		}
+		if a.Triggered {
+			triggeredAlerts = append(triggeredAlerts, ac)
+		} else {
+			activeAlerts = append(activeAlerts, ac)
+		}
+	}
+
+	// Try to get a Kite client for LTP enrichment
+	var client *kiteconnect.Client
+	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
+		client = kiteconnect.New(credEntry.APIKey)
+		client.SetAccessToken(tokenEntry.AccessToken)
+	}
+
+	// Batch LTP lookup for active alerts
+	ltpMap := make(map[string]float64) // "exchange:symbol" -> last price
+	if client != nil && len(activeAlerts) > 0 {
+		instruments := make(map[string]bool)
+		for _, a := range activeAlerts {
+			key := a.Exchange + ":" + a.Tradingsymbol
+			instruments[key] = true
+		}
+		instList := make([]string, 0, len(instruments))
+		for k := range instruments {
+			instList = append(instList, k)
+		}
+		ltpData, err := client.GetLTP(instList...)
+		if err != nil {
+			d.logger.Error("Failed to get LTP for alerts", "email", email, "error", err)
+		} else {
+			for k, v := range ltpData {
+				if v.LastPrice > 0 {
+					ltpMap[k] = v.LastPrice
+				}
+			}
+		}
+	}
+
+	// Build enriched active alerts
+	enrichedActive := make([]enrichedActiveAlert, 0, len(activeAlerts))
+	for _, a := range activeAlerts {
+		ea := enrichedActiveAlert{
+			ID:             a.ID,
+			Tradingsymbol:  a.Tradingsymbol,
+			Exchange:       a.Exchange,
+			Direction:      a.Direction,
+			TargetPrice:    a.TargetPrice,
+			ReferencePrice: a.ReferencePrice,
+			CreatedAt:      a.CreatedAt.Format(time.RFC3339),
+		}
+		key := a.Exchange + ":" + a.Tradingsymbol
+		if cp, ok := ltpMap[key]; ok {
+			ea.CurrentPrice = cp
+			if cp > 0 {
+				ea.DistancePct = math.Round(math.Abs(cp-a.TargetPrice)/cp*10000) / 100
+			}
+		}
+		enrichedActive = append(enrichedActive, ea)
+	}
+
+	// Build enriched triggered alerts
+	enrichedTriggered := make([]enrichedTriggeredAlert, 0, len(triggeredAlerts))
+	var totalTriggerDuration time.Duration
+	triggerDurationCount := 0
+	for _, a := range triggeredAlerts {
+		et := enrichedTriggeredAlert{
+			ID:             a.ID,
+			Tradingsymbol:  a.Tradingsymbol,
+			Exchange:       a.Exchange,
+			Direction:      a.Direction,
+			TargetPrice:    a.TargetPrice,
+			ReferencePrice: a.ReferencePrice,
+			TriggeredPrice: a.TriggeredPrice,
+			CreatedAt:      a.CreatedAt.Format(time.RFC3339),
+		}
+		// Trigger delta percentage
+		if a.TriggeredPrice > 0 && a.TargetPrice > 0 {
+			et.TriggerDeltaPct = math.Round(math.Abs(a.TriggeredPrice-a.TargetPrice)/a.TargetPrice*10000) / 100
+		}
+		// Time to trigger
+		if !a.TriggeredAt.IsZero() {
+			et.TriggeredAt = a.TriggeredAt.Format(time.RFC3339)
+			ttd := a.TriggeredAt.Sub(a.CreatedAt)
+			et.TimeToTrigger = formatDuration(ttd)
+			totalTriggerDuration += ttd
+			triggerDurationCount++
+		}
+		// Notification delay
+		if !a.NotificationSentAt.IsZero() {
+			et.NotificationSentAt = a.NotificationSentAt.Format(time.RFC3339)
+			if !a.TriggeredAt.IsZero() {
+				nd := a.NotificationSentAt.Sub(a.TriggeredAt)
+				et.NotificationDelay = formatDuration(nd)
+			}
+		}
+		enrichedTriggered = append(enrichedTriggered, et)
+	}
+
+	// Compute summary
+	summary := alertsSummary{
+		ActiveCount:    len(enrichedActive),
+		TriggeredCount: len(enrichedTriggered),
+	}
+	if triggerDurationCount > 0 {
+		avg := totalTriggerDuration / time.Duration(triggerDurationCount)
+		summary.AvgTimeToTrigger = formatDuration(avg)
+	}
+
+	d.writeJSON(w, enrichedAlertsResponse{
+		Active:    enrichedActive,
+		Triggered: enrichedTriggered,
+		Summary:   summary,
+	})
+}
+
+// alertCopy is an internal struct for processing alerts without importing the alerts package directly.
+type alertCopy struct {
+	ID                 string
+	Tradingsymbol      string
+	Exchange           string
+	Direction          string
+	TargetPrice        float64
+	ReferencePrice     float64
+	Triggered          bool
+	CreatedAt          time.Time
+	TriggeredAt        time.Time
+	TriggeredPrice     float64
+	NotificationSentAt time.Time
 }
