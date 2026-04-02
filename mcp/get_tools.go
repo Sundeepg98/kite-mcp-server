@@ -14,6 +14,7 @@ type ProfileTool struct{}
 func (*ProfileTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_profile",
 		mcp.WithDescription("Retrieve the user's profile information, including user ID, name, email, and account details like products orders, and exchanges available to the user. Use this to get basic user details."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -28,6 +29,7 @@ type MarginsTool struct{}
 func (*MarginsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_margins",
 		mcp.WithDescription("Get margins"),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -42,6 +44,7 @@ type HoldingsTool struct{}
 func (*HoldingsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_holdings",
 		mcp.WithDescription("Get holdings for the current user. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -72,6 +75,7 @@ type PositionsTool struct{}
 func (*PositionsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_positions",
 		mcp.WithDescription("Get current positions. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -108,6 +112,7 @@ type TradesTool struct{}
 func (*TradesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_trades",
 		mcp.WithDescription("Get trading history. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -138,6 +143,7 @@ type OrdersTool struct{}
 func (*OrdersTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_orders",
 		mcp.WithDescription("Get all orders. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -168,6 +174,7 @@ type GTTOrdersTool struct{}
 func (*GTTOrdersTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_gtts",
 		mcp.WithDescription("Get all active GTT orders. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -198,6 +205,7 @@ type OrderTradesTool struct{}
 func (*OrderTradesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_trades",
 		mcp.WithDescription("Get trades for a specific order"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("order_id",
 			mcp.Description("ID of the order to fetch trades for"),
 			mcp.Required(),
@@ -234,6 +242,7 @@ type OrderHistoryTool struct{}
 func (*OrderHistoryTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_history",
 		mcp.WithDescription("Get order history for a specific order"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("order_id",
 			mcp.Description("ID of the order to fetch history for"),
 			mcp.Required(),

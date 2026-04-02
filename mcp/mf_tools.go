@@ -11,6 +11,7 @@ type MFOrdersTool struct{}
 func (*MFOrdersTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_mf_orders",
 		mcp.WithDescription("Get all mutual fund orders. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -40,6 +41,7 @@ type MFSIPsTool struct{}
 func (*MFSIPsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_mf_sips",
 		mcp.WithDescription("Get all mutual fund SIPs (Systematic Investment Plans). Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -69,6 +71,7 @@ type MFHoldingsTool struct{}
 func (*MFHoldingsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_mf_holdings",
 		mcp.WithDescription("Get all mutual fund holdings. Supports pagination for large datasets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),

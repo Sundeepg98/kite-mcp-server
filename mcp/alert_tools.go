@@ -19,6 +19,7 @@ type SetupTelegramTool struct{}
 func (*SetupTelegramTool) Tool() mcp.Tool {
 	return mcp.NewTool("setup_telegram",
 		mcp.WithDescription("Register your Telegram chat ID for price alert notifications. To get your chat ID: 1) Message @userinfobot on Telegram, 2) It will reply with your chat ID."),
+		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithNumber("chat_id",
 			mcp.Description("Your Telegram chat ID (get it from @userinfobot)"),
 			mcp.Required(),
@@ -62,6 +63,7 @@ type SetAlertTool struct{}
 
 func (*SetAlertTool) Tool() mcp.Tool {
 	return mcp.NewTool("set_alert",
+		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithDescription("Set a price alert for an instrument. Supports absolute price alerts (above/below) and percentage-change alerts (drop_pct/rise_pct). "+
 			"For percentage alerts, 'price' is the percentage threshold (e.g. 5.0 for 5%) and 'reference_price' is the baseline price to measure against. "+
 			"If reference_price is omitted for percentage alerts, the current LTP is used. "+
@@ -184,6 +186,7 @@ type ListAlertsTool struct{}
 func (*ListAlertsTool) Tool() mcp.Tool {
 	return mcp.NewTool("list_alerts",
 		mcp.WithDescription("List all price alerts for the current user, including triggered and active alerts."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -212,6 +215,7 @@ type DeleteAlertTool struct{}
 func (*DeleteAlertTool) Tool() mcp.Tool {
 	return mcp.NewTool("delete_alert",
 		mcp.WithDescription("Delete a price alert by its ID."),
+		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("alert_id",
 			mcp.Description("The alert ID to delete (from list_alerts)"),
 			mcp.Required(),

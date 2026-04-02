@@ -91,6 +91,7 @@ type TickerStatusTool struct{}
 func (*TickerStatusTool) Tool() mcp.Tool {
 	return mcp.NewTool("ticker_status",
 		mcp.WithDescription("Show the current WebSocket ticker connection status and subscribed instruments."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 

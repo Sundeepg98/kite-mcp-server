@@ -22,6 +22,7 @@ type TradingContextTool struct{}
 func (*TradingContextTool) Tool() mcp.Tool {
 	return mcp.NewTool("trading_context",
 		mcp.WithDescription("Get a unified trading context snapshot — positions, margins, active alerts, pending orders, and portfolio summary in one call. Use this to understand the user's current trading state before making decisions. More efficient than calling multiple tools separately."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 

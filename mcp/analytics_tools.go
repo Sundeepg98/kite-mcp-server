@@ -18,6 +18,7 @@ type PortfolioSummaryTool struct{}
 func (*PortfolioSummaryTool) Tool() mcp.Tool {
 	return mcp.NewTool("portfolio_summary",
 		mcp.WithDescription("Get a comprehensive portfolio analysis including total invested value, current value, overall P&L, day P&L, top gainers/losers, and biggest holdings by value. More useful than raw get_holdings for understanding portfolio health."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -164,6 +165,7 @@ type PortfolioConcentrationTool struct{}
 func (*PortfolioConcentrationTool) Tool() mcp.Tool {
 	return mcp.NewTool("portfolio_concentration",
 		mcp.WithDescription("Analyze portfolio concentration and diversification. Shows what percentage each holding represents, identifies over-concentration risks, and computes a Herfindahl-Hirschman Index (HHI) diversification score. HHI < 1500 = diversified, 1500-2500 = moderate, > 2500 = concentrated."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 
@@ -300,6 +302,7 @@ type PositionAnalysisTool struct{}
 func (*PositionAnalysisTool) Tool() mcp.Tool {
 	return mcp.NewTool("position_analysis",
 		mcp.WithDescription("Analyze open positions with detailed P&L breakdown by product type (MIS/NRML/CNC), net quantity, unrealized P&L, and day change. Provides aggregated view that is more actionable than raw get_positions."),
+		mcp.WithReadOnlyHintAnnotation(true),
 	)
 }
 

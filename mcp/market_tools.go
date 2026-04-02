@@ -17,6 +17,7 @@ type QuotesTool struct{}
 func (*QuotesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_quotes",
 		mcp.WithDescription("Get market data quotes for a list of instruments"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithArray("instruments",
 			mcp.Description("Eg. ['NSE:INFY', 'NSE:SBIN']. This API returns the complete market data snapshot of up to 500 instruments in one go. It includes the quantity, OHLC, and Open Interest fields, and the complete bid/ask market depth amongst others. Instruments are identified by the exchange:tradingsymbol combination and are passed as values to the query parameter i which is repeated for every instrument. If there is no data available for a given key, the key will be absent from the response."),
 			mcp.Required(),
@@ -62,6 +63,7 @@ type InstrumentsSearchTool struct{}
 func (*InstrumentsSearchTool) Tool() mcp.Tool {
 	return mcp.NewTool("search_instruments", // TODO this can be multiplexed into various modes. Currently only the filter mode is implemented but other instruments queries in the instruments manager can be exposed here as well.
 		mcp.WithDescription("Search instruments. Supports pagination for large result sets."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Description("Search query"),
 			mcp.Required(),
@@ -171,6 +173,7 @@ type HistoricalDataTool struct{}
 func (*HistoricalDataTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_historical_data",
 		mcp.WithDescription("Get historical price data for an instrument"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("instrument_token",
 			mcp.Description("Instrument token (can be obtained from search_instruments tool)"),
 			mcp.Required(),
@@ -257,6 +260,7 @@ type LTPTool struct{}
 func (*LTPTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_ltp",
 		mcp.WithDescription("Get latest trading prices for a list of instruments"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithArray("instruments",
 			mcp.Description("Eg. ['NSE:INFY', 'NSE:SBIN']. This API returns the lastest price for the given list of instruments in the format of exchange:tradingsymbol."),
 			mcp.Required(),
@@ -302,6 +306,7 @@ type OHLCTool struct{}
 func (*OHLCTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_ohlc",
 		mcp.WithDescription("Get OHLC (Open, High, Low, Close) data for a list of instruments"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithArray("instruments",
 			mcp.Description("Eg. ['NSE:INFY', 'NSE:SBIN']. This API returns OHLC data for the given list of instruments in the format of exchange:tradingsymbol."),
 			mcp.Required(),

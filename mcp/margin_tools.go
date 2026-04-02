@@ -17,6 +17,7 @@ type OrderMarginsTool struct{}
 func (*OrderMarginsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_margins",
 		mcp.WithDescription("Calculate margin required for an order before placing it. Use this to check if you have sufficient funds."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("exchange",
 			mcp.Description("Exchange"),
 			mcp.Required(),
@@ -115,6 +116,7 @@ type BasketMarginsTool struct{}
 func (*BasketMarginsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_basket_margins",
 		mcp.WithDescription("Calculate combined margin for a basket of orders. Useful for multi-leg strategies like spreads. Shows margin benefit from hedging."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("orders",
 			mcp.Description("JSON array of orders, each with: exchange, tradingsymbol, transaction_type, quantity, product, order_type, price (optional), trigger_price (optional), variety (optional, defaults to 'regular')"),
 			mcp.Required(),
@@ -181,6 +183,7 @@ type OrderChargesTool struct{}
 func (*OrderChargesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_charges",
 		mcp.WithDescription("Calculate brokerage, STT, stamp duty, exchange charges, and GST breakdown for orders. Useful for understanding the total cost of a trade."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("orders",
 			mcp.Description("JSON array of orders, each with: order_id, exchange, tradingsymbol, transaction_type, quantity, average_price, product, order_type, variety"),
 			mcp.Required(),

@@ -9,8 +9,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
-// TODO: add destructive, openworld and readonly hints where applicable.
-
 type Tool interface {
 	Tool() gomcp.Tool
 	Handler(*kc.Manager) server.ToolHandlerFunc
@@ -64,6 +62,9 @@ func GetAllTools() []Tool {
 		&PortfolioSummaryTool{},
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},
+
+		// Pre-trade composite check (replaces 5 separate tool calls)
+		&PreTradeCheckTool{},
 
 		// Tools for margin and charges calculation
 		&OrderMarginsTool{},
