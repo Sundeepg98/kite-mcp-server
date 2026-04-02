@@ -93,7 +93,46 @@ CREATE TABLE IF NOT EXISTS mcp_sessions (
     expires_at      TEXT NOT NULL,
     terminated      INTEGER NOT NULL DEFAULT 0,
     session_id_enc  TEXT NOT NULL DEFAULT ''
-);`
+);
+
+CREATE TABLE IF NOT EXISTS config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trailing_stops (
+    id               TEXT PRIMARY KEY,
+    email            TEXT NOT NULL,
+    exchange         TEXT NOT NULL,
+    tradingsymbol    TEXT NOT NULL,
+    instrument_token INTEGER NOT NULL,
+    order_id         TEXT NOT NULL,
+    variety          TEXT NOT NULL DEFAULT 'regular',
+    trail_amount     REAL NOT NULL DEFAULT 0,
+    trail_pct        REAL NOT NULL DEFAULT 0,
+    direction        TEXT NOT NULL CHECK(direction IN ('long','short')),
+    high_water_mark  REAL NOT NULL,
+    current_stop     REAL NOT NULL,
+    active           INTEGER NOT NULL DEFAULT 1,
+    created_at       TEXT NOT NULL,
+    deactivated_at   TEXT,
+    modify_count     INTEGER NOT NULL DEFAULT 0,
+    last_modified_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_trailing_stops_email ON trailing_stops(email);
+CREATE INDEX IF NOT EXISTS idx_trailing_stops_active ON trailing_stops(active);
+
+CREATE TABLE IF NOT EXISTS daily_pnl (
+    date           TEXT NOT NULL,
+    email          TEXT NOT NULL,
+    holdings_pnl   REAL NOT NULL DEFAULT 0,
+    positions_pnl  REAL NOT NULL DEFAULT 0,
+    net_pnl        REAL NOT NULL DEFAULT 0,
+    holdings_count INTEGER NOT NULL DEFAULT 0,
+    trades_count   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (date, email)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_pnl_email ON daily_pnl(email);`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
 	}
@@ -631,4 +670,169 @@ func (d *DB) RawQuery(query string, args ...any) (*sql.Rows, error) { return d.d
 // Close closes the underlying database connection.
 func (d *DB) Close() error {
 	return d.db.Close()
+}
+
+// GetConfig retrieves a value from the config table by key.
+// Returns ("", sql.ErrNoRows) if the key does not exist.
+func (d *DB) GetConfig(key string) (string, error) {
+	var value string
+	err := d.db.QueryRow(`SELECT value FROM config WHERE key = ?`, key).Scan(&value)
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// SetConfig stores or updates a key-value pair in the config table.
+func (d *DB) SetConfig(key, value string) error {
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)`, key, value)
+	if err != nil {
+		return fmt.Errorf("set config %s: %w", key, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Trailing Stop persistence
+// ---------------------------------------------------------------------------
+
+// SaveTrailingStop inserts or replaces a trailing stop in the database.
+func (d *DB) SaveTrailingStop(ts *TrailingStop) error {
+	active := 0
+	if ts.Active {
+		active = 1
+	}
+	var deactivatedAt, lastModifiedAt sql.NullString
+	if !ts.DeactivatedAt.IsZero() {
+		deactivatedAt = sql.NullString{String: ts.DeactivatedAt.Format(time.RFC3339), Valid: true}
+	}
+	if !ts.LastModifiedAt.IsZero() {
+		lastModifiedAt = sql.NullString{String: ts.LastModifiedAt.Format(time.RFC3339), Valid: true}
+	}
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO trailing_stops
+		(id, email, exchange, tradingsymbol, instrument_token, order_id, variety,
+		 trail_amount, trail_pct, direction, high_water_mark, current_stop,
+		 active, created_at, deactivated_at, modify_count, last_modified_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		ts.ID, ts.Email, ts.Exchange, ts.Tradingsymbol, ts.InstrumentToken,
+		ts.OrderID, ts.Variety, ts.TrailAmount, ts.TrailPct, ts.Direction,
+		ts.HighWaterMark, ts.CurrentStop, active,
+		ts.CreatedAt.Format(time.RFC3339), deactivatedAt, ts.ModifyCount, lastModifiedAt)
+	if err != nil {
+		return fmt.Errorf("save trailing stop: %w", err)
+	}
+	return nil
+}
+
+// LoadTrailingStops reads all active trailing stops from the database.
+func (d *DB) LoadTrailingStops() ([]*TrailingStop, error) {
+	rows, err := d.db.Query(`SELECT id, email, exchange, tradingsymbol, instrument_token,
+		order_id, variety, trail_amount, trail_pct, direction,
+		high_water_mark, current_stop, active, created_at, deactivated_at,
+		modify_count, last_modified_at
+		FROM trailing_stops WHERE active = 1`)
+	if err != nil {
+		return nil, fmt.Errorf("query trailing stops: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*TrailingStop
+	for rows.Next() {
+		var (
+			ts             TrailingStop
+			activeI        int
+			createdAtS     string
+			deactivatedAt  sql.NullString
+			lastModifiedAt sql.NullString
+		)
+		if err := rows.Scan(&ts.ID, &ts.Email, &ts.Exchange, &ts.Tradingsymbol,
+			&ts.InstrumentToken, &ts.OrderID, &ts.Variety,
+			&ts.TrailAmount, &ts.TrailPct, &ts.Direction,
+			&ts.HighWaterMark, &ts.CurrentStop, &activeI,
+			&createdAtS, &deactivatedAt, &ts.ModifyCount, &lastModifiedAt); err != nil {
+			return nil, fmt.Errorf("scan trailing stop: %w", err)
+		}
+		ts.Active = activeI != 0
+		ts.CreatedAt, _ = time.Parse(time.RFC3339, createdAtS)
+		if deactivatedAt.Valid {
+			ts.DeactivatedAt, _ = time.Parse(time.RFC3339, deactivatedAt.String)
+		}
+		if lastModifiedAt.Valid {
+			ts.LastModifiedAt, _ = time.Parse(time.RFC3339, lastModifiedAt.String)
+		}
+		out = append(out, &ts)
+	}
+	return out, rows.Err()
+}
+
+// DeactivateTrailingStop marks a trailing stop as inactive.
+func (d *DB) DeactivateTrailingStop(id string) error {
+	_, err := d.db.Exec(`UPDATE trailing_stops SET active = 0, deactivated_at = ? WHERE id = ?`,
+		time.Now().Format(time.RFC3339), id)
+	if err != nil {
+		return fmt.Errorf("deactivate trailing stop: %w", err)
+	}
+	return nil
+}
+
+// UpdateTrailingStop updates the high water mark, current stop, and modify count.
+func (d *DB) UpdateTrailingStop(id string, hwm, currentStop float64, modifyCount int) error {
+	_, err := d.db.Exec(`UPDATE trailing_stops SET high_water_mark = ?, current_stop = ?, modify_count = ?, last_modified_at = ? WHERE id = ?`,
+		hwm, currentStop, modifyCount, time.Now().Format(time.RFC3339), id)
+	if err != nil {
+		return fmt.Errorf("update trailing stop: %w", err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Daily P&L persistence
+// ---------------------------------------------------------------------------
+
+// DailyPnLEntry represents a single day's P&L snapshot.
+type DailyPnLEntry struct {
+	Date          string  `json:"date"`
+	Email         string  `json:"email"`
+	HoldingsPnL   float64 `json:"holdings_pnl"`
+	PositionsPnL  float64 `json:"positions_pnl"`
+	NetPnL        float64 `json:"net_pnl"`
+	HoldingsCount int     `json:"holdings_count"`
+	TradesCount   int     `json:"trades_count"`
+}
+
+// SaveDailyPnL inserts or replaces a daily P&L entry.
+func (d *DB) SaveDailyPnL(entry *DailyPnLEntry) error {
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO daily_pnl
+		(date, email, holdings_pnl, positions_pnl, net_pnl, holdings_count, trades_count)
+		VALUES (?,?,?,?,?,?,?)`,
+		entry.Date, entry.Email, entry.HoldingsPnL, entry.PositionsPnL,
+		entry.NetPnL, entry.HoldingsCount, entry.TradesCount)
+	if err != nil {
+		return fmt.Errorf("save daily pnl: %w", err)
+	}
+	return nil
+}
+
+// LoadDailyPnL reads daily P&L entries for a user within a date range (inclusive).
+// Dates are in "2006-01-02" format.
+func (d *DB) LoadDailyPnL(email, fromDate, toDate string) ([]*DailyPnLEntry, error) {
+	rows, err := d.db.Query(`SELECT date, email, holdings_pnl, positions_pnl, net_pnl,
+		holdings_count, trades_count
+		FROM daily_pnl WHERE email = ? AND date >= ? AND date <= ?
+		ORDER BY date ASC`, email, fromDate, toDate)
+	if err != nil {
+		return nil, fmt.Errorf("query daily pnl: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*DailyPnLEntry
+	for rows.Next() {
+		var e DailyPnLEntry
+		if err := rows.Scan(&e.Date, &e.Email, &e.HoldingsPnL, &e.PositionsPnL,
+			&e.NetPnL, &e.HoldingsCount, &e.TradesCount); err != nil {
+			return nil, fmt.Errorf("scan daily pnl: %w", err)
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -22,16 +23,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Derive both keys
-	oldKey, err := alerts.DeriveEncryptionKey(*oldSecret)
-	if err != nil {
-		log.Fatal("derive old key: ", err)
-	}
-	newKey, err := alerts.DeriveEncryptionKey(*newSecret)
-	if err != nil {
-		log.Fatal("derive new key: ", err)
-	}
-
 	// Open DB directly
 	db, err := sql.Open("sqlite", *dbPath)
 	if err != nil {
@@ -39,8 +30,33 @@ func main() {
 	}
 	defer db.Close()
 
+	// Load HKDF salt from config table (may be empty for pre-salt databases).
+	var salt []byte
+	var saltHex string
+	err = db.QueryRow(`SELECT value FROM config WHERE key = 'hkdf_salt'`).Scan(&saltHex)
+	if err == nil && saltHex != "" {
+		salt, err = hex.DecodeString(saltHex)
+		if err != nil {
+			log.Fatal("decode stored salt: ", err)
+		}
+		fmt.Printf("Using HKDF salt from database (%d bytes)\n", len(salt))
+	} else {
+		fmt.Println("No HKDF salt found in database, using nil salt (legacy)")
+	}
+
+	// Derive both keys with the same salt
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt(*oldSecret, salt)
+	if err != nil {
+		log.Fatal("derive old key: ", err)
+	}
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt(*newSecret, salt)
+	if err != nil {
+		log.Fatal("derive new key: ", err)
+	}
+
 	// Re-encrypt each table's sensitive columns
-	// Tables: kite_tokens (access_token), kite_credentials (api_key, api_secret), oauth_clients (client_secret)
+	// Tables: kite_tokens (access_token), kite_credentials (api_key, api_secret),
+	// oauth_clients (client_secret), mcp_sessions (session_id_enc)
 	tables := []struct {
 		table   string
 		pkCol   string
@@ -49,6 +65,7 @@ func main() {
 		{"kite_tokens", "email", []string{"access_token"}},
 		{"kite_credentials", "email", []string{"api_key", "api_secret"}},
 		{"oauth_clients", "client_id", []string{"client_secret"}},
+		{"mcp_sessions", "session_id", []string{"session_id_enc"}},
 	}
 
 	for _, t := range tables {

@@ -289,7 +289,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// Wire encryption key for HMAC email hashing, AES-GCM email encryption,
 			// and HMAC-SHA256 hash chaining.
 			if app.Config.OAuthJWTSecret != "" {
-				if encKey, err := alerts.DeriveEncryptionKey(app.Config.OAuthJWTSecret); err == nil {
+				if encKey, err := alerts.EnsureEncryptionSalt(alertDB, app.Config.OAuthJWTSecret); err == nil {
 					app.auditStore.SetEncryptionKey(encKey)
 					app.auditStore.SeedChain()
 					app.logger.Info("Audit trail encryption and hash chaining enabled")

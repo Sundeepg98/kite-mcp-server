@@ -94,12 +94,12 @@ func New(cfg Config) (*Manager, error) {
 			m.alertDB = alertDB
 			// Set up credential encryption if a secret is provided
 			if cfg.EncryptionSecret != "" {
-				encKey, encErr := alerts.DeriveEncryptionKey(cfg.EncryptionSecret)
+				encKey, encErr := alerts.EnsureEncryptionSalt(alertDB, cfg.EncryptionSecret)
 				if encErr != nil {
-					cfg.Logger.Error("Failed to derive encryption key", "error", encErr)
+					cfg.Logger.Error("Failed to derive encryption key with salt", "error", encErr)
 				} else {
 					alertDB.SetEncryptionKey(encKey)
-					cfg.Logger.Info("Credential encryption enabled")
+					cfg.Logger.Info("Credential encryption enabled (with HKDF salt)")
 				}
 			}
 			m.alertStore.SetDB(alertDB)
@@ -144,11 +144,32 @@ func New(cfg Config) (*Manager, error) {
 
 	m.alertEvaluator = alerts.NewEvaluator(m.alertStore, cfg.Logger)
 
-	// Initialize ticker with alert evaluator as the OnTick callback
+	// Initialize trailing stop manager
+	m.trailingStopMgr = alerts.NewTrailingStopManager(cfg.Logger)
+	if m.alertDB != nil {
+		m.trailingStopMgr.SetDB(m.alertDB)
+		if err := m.trailingStopMgr.LoadFromDB(); err != nil {
+			cfg.Logger.Error("Failed to load trailing stops from DB", "error", err)
+		}
+	}
+	// Wire the order modifier: creates a Kite client from cached tokens
+	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
+		apiKey := m.GetAPIKeyForEmail(email)
+		accessToken := m.GetAccessTokenForEmail(email)
+		if accessToken == "" {
+			return nil, fmt.Errorf("no Kite access token for %s", email)
+		}
+		client := kiteconnect.New(apiKey)
+		client.SetAccessToken(accessToken)
+		return client, nil
+	})
+
+	// Initialize ticker with alert evaluator + trailing stop manager as OnTick callbacks
 	m.tickerService = ticker.New(ticker.Config{
 		Logger: cfg.Logger,
 		OnTick: func(email string, tick models.Tick) {
 			m.alertEvaluator.Evaluate(email, tick)
+			m.trailingStopMgr.Evaluate(email, tick)
 		},
 	})
 
@@ -238,11 +259,13 @@ type Manager struct {
 	sessionSigner  *SessionSigner
 	tokenStore         *KiteTokenStore           // per-email Kite token cache
 	credentialStore    *KiteCredentialStore      // per-email Kite developer app credentials
-	tickerService      *ticker.Service           // per-user WebSocket ticker connections
-	alertStore         *alerts.Store             // per-user price alerts
-	alertEvaluator     *alerts.Evaluator         // tick-to-alert matcher
-	telegramNotifier   *alerts.TelegramNotifier  // Telegram alert sender
-	alertDB            *alerts.DB                // optional: SQLite persistence for alerts
+	tickerService      *ticker.Service                // per-user WebSocket ticker connections
+	alertStore         *alerts.Store                  // per-user price alerts
+	alertEvaluator     *alerts.Evaluator              // tick-to-alert matcher
+	trailingStopMgr    *alerts.TrailingStopManager    // trailing stop-loss manager
+	pnlService         *alerts.PnLSnapshotService     // daily P&L snapshots
+	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
+	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	appMode            string
 	externalURL        string
 	adminSecretPath    string
