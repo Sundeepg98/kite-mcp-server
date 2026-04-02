@@ -160,11 +160,11 @@ CREATE INDEX IF NOT EXISTS idx_app_registry_api_key ON app_registry(api_key);`
 	}
 
 	// Migrate kite_credentials: add app_id column if missing.
-	db.Exec(`ALTER TABLE kite_credentials ADD COLUMN app_id TEXT DEFAULT ''`) //nolint:errcheck
+	db.Exec(`ALTER TABLE kite_credentials ADD COLUMN app_id TEXT DEFAULT ''`) // #nosec G104 -- idempotent migration
 
 	// Migrate app_registry: add source and last_used_at columns if missing.
-	db.Exec(`ALTER TABLE app_registry ADD COLUMN source TEXT DEFAULT 'admin'`)         //nolint:errcheck
-	db.Exec(`ALTER TABLE app_registry ADD COLUMN last_used_at TEXT DEFAULT ''`)         //nolint:errcheck
+	db.Exec(`ALTER TABLE app_registry ADD COLUMN source TEXT DEFAULT 'admin'`)         // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE app_registry ADD COLUMN last_used_at TEXT DEFAULT ''`)         // #nosec G104 -- idempotent migration
 
 	// Migrate app_registry: relax CHECK constraint to allow 'invalid' and 'replaced' statuses.
 	// SQLite cannot ALTER CHECK constraints, so we recreate the table.
@@ -176,10 +176,10 @@ CREATE INDEX IF NOT EXISTS idx_app_registry_api_key ON app_registry(api_key);`
 	// If the column doesn't exist, add it and clear existing rows (they stored plaintext IDs).
 	var hasEncCol int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('mcp_sessions') WHERE name = 'session_id_enc'`).Scan(&hasEncCol); err == nil && hasEncCol == 0 {
-		db.Exec(`ALTER TABLE mcp_sessions ADD COLUMN session_id_enc TEXT DEFAULT ''`) //nolint:errcheck
+		db.Exec(`ALTER TABLE mcp_sessions ADD COLUMN session_id_enc TEXT DEFAULT ''`) // #nosec G104 -- idempotent migration
 		// Clear existing sessions — they have plaintext session IDs as PKs, which are
 		// incompatible with the new HMAC-hashed PK scheme. 12h expiry makes this acceptable.
-		db.Exec(`DELETE FROM mcp_sessions`)                                           //nolint:errcheck
+		db.Exec(`DELETE FROM mcp_sessions`) // #nosec G104 -- idempotent migration cleanup
 	}
 
 	return &DB{db: db}, nil
@@ -205,7 +205,7 @@ func migrateRegistryCheckConstraint(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("begin registry migration: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer tx.Rollback() // #nosec G104 -- rollback after commit is a no-op
 
 	if _, err := tx.Exec(`CREATE TABLE app_registry_new (
 		id            TEXT PRIMARY KEY,
@@ -238,8 +238,8 @@ func migrateRegistryCheckConstraint(db *sql.DB) error {
 		return fmt.Errorf("rename registry: %w", err)
 	}
 	// Recreate indexes
-	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_app_registry_assigned ON app_registry(assigned_to)`) //nolint:errcheck
-	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_app_registry_api_key ON app_registry(api_key)`)     //nolint:errcheck
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_app_registry_assigned ON app_registry(assigned_to)`) // #nosec G104 -- idempotent index creation
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_app_registry_api_key ON app_registry(api_key)`)     // #nosec G104 -- idempotent index creation
 
 	return tx.Commit()
 }
@@ -260,7 +260,7 @@ func migrateAlerts(db *sql.DB) error {
 
 	// Add notification_sent_at column if missing.
 	// SQLite returns an error if the column already exists; ignore it.
-	db.Exec(`ALTER TABLE alerts ADD COLUMN notification_sent_at TEXT`) //nolint:errcheck
+	db.Exec(`ALTER TABLE alerts ADD COLUMN notification_sent_at TEXT`) // #nosec G104 -- idempotent migration
 
 	return nil
 }

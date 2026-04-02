@@ -633,7 +633,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	// Serve security.txt for responsible disclosure (RFC 9116)
 	mux.HandleFunc("/.well-known/security.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Contact: mailto:sundeepg8@gmail.com\nExpires: 2027-04-02T00:00:00.000Z\nPreferred-Languages: en\n"))
+		_, _ = w.Write([]byte("Contact: mailto:sundeepg8@gmail.com\nExpires: 2027-04-02T00:00:00.000Z\nPreferred-Languages: en\n"))
 	})
 
 	// Register OAuth 2.1 endpoints if enabled (with per-IP rate limiting)
