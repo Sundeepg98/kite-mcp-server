@@ -69,6 +69,7 @@ type Handler struct {
 	browserLoginTmpl   *template.Template
 	adminLoginTmpl     *template.Template
 	emailPromptTmpl    *template.Template
+	loginChoiceTmpl    *template.Template
 }
 
 // NewHandler creates a new OAuth handler. Config must be validated first.
@@ -100,6 +101,10 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	h.emailPromptTmpl, err = template.ParseFS(templates.FS, "base.html", "email_prompt.html")
 	if err != nil {
 		cfg.Logger.Error("Failed to parse email_prompt template", "error", err)
+	}
+	h.loginChoiceTmpl, err = template.ParseFS(templates.FS, "base.html", "login_choice.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse login_choice template", "error", err)
 	}
 
 	return h
@@ -749,6 +754,47 @@ func (h *Handler) GenerateBrowserLoginURL(apiKey, email, redirect string) string
 
 // --- Browser Login Page ---
 
+// HandleLoginChoice serves a unified login page offering Kite login and admin login.
+// If the user already has a valid dashboard cookie, redirects to the dashboard.
+func (h *Handler) HandleLoginChoice(w http.ResponseWriter, r *http.Request) {
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" {
+		redirect = "/dashboard"
+	}
+
+	// If the user already has a valid cookie, skip the login page.
+	if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
+		if _, err := h.jwt.ValidateToken(cookie.Value, "dashboard"); err == nil {
+			http.Redirect(w, r, redirect, http.StatusFound)
+			return
+		}
+	}
+
+	if h.loginChoiceTmpl == nil {
+		http.Error(w, "Failed to load login page", http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		Title    string
+		Redirect string
+	}{
+		Title:    "Sign In",
+		Redirect: redirect,
+	}
+
+	var buf bytes.Buffer
+	if err := h.loginChoiceTmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+		h.logger.Error("Failed to render login choice template", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := buf.WriteTo(w); err != nil {
+		h.logger.Error("Failed to write login choice page", "error", err)
+	}
+}
+
 // generateCSRFToken generates a random CSRF token using crypto/rand.
 func generateCSRFToken() (string, error) {
 	b := make([]byte, 32)
@@ -766,7 +812,7 @@ func generateCSRFToken() (string, error) {
 func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
-		redirect = "/admin/ops"
+		redirect = "/dashboard"
 	}
 
 	if r.Method == http.MethodPost {
@@ -774,7 +820,7 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		redirect = r.FormValue("redirect")
 		if redirect == "" {
-			redirect = "/admin/ops"
+			redirect = "/dashboard"
 		}
 
 		// Verify CSRF token: cookie must match form value
@@ -803,6 +849,14 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		apiKey, _, ok := h.exchanger.GetCredentials(email)
+		if !ok && h.registry != nil {
+			// Fallback: check the key registry for pre-registered credentials
+			if regKey, _, regOK := h.registry.GetByEmail(email); regOK {
+				apiKey = regKey
+				ok = true
+				h.logger.Info("Browser login: found credentials via key registry", "email", email)
+			}
+		}
 		if !ok {
 			csrfToken, tokenErr := generateCSRFToken()
 			if tokenErr != nil {
@@ -823,6 +877,14 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Query().Get("email")
 	if email != "" {
 		apiKey, _, ok := h.exchanger.GetCredentials(email)
+		if !ok && h.registry != nil {
+			// Fallback: check the key registry for pre-registered credentials
+			if regKey, _, regOK := h.registry.GetByEmail(email); regOK {
+				apiKey = regKey
+				ok = true
+				h.logger.Info("Browser login: found credentials via key registry (GET)", "email", email)
+			}
+		}
 		if ok {
 			kiteURL := h.GenerateBrowserLoginURL(apiKey, email, redirect)
 			http.Redirect(w, r, kiteURL, http.StatusFound)

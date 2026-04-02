@@ -78,6 +78,9 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
 .loading-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
+.role-badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 8px; text-transform: uppercase; font-family: var(--mono); font-weight: 600; letter-spacing: 0.04em; }
+.role-badge-admin { background: var(--accent-dim); color: var(--accent); }
+.role-badge-trader { background: var(--green-dim); color: var(--green); }
 .error-state { text-align: center; padding: 32px 20px; color: var(--red); font-size: 13px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; margin-bottom: 16px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-1); }
 .order-error { font-size: 11px; color: var(--amber); margin-top: 2px; }
@@ -268,12 +271,27 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
   }
 
+  var roleApplied = false;
   function fetchEmail() {
     fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
       if (d.email) document.getElementById('userEmail').textContent = d.email;
       var dot = document.getElementById('tokenDot');
       var valid = d.kite_token && d.kite_token.valid;
       dot.className = 'status-dot ' + (valid ? 'valid' : 'expired');
+      if (!roleApplied) {
+        roleApplied = true;
+        if (!d.is_admin) {
+          var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
+          if (opsLink) opsLink.style.display = 'none';
+        }
+        if (d.role) {
+          var emailEl = document.getElementById('userEmail');
+          var badge = document.createElement('span');
+          badge.textContent = d.role;
+          badge.className = 'role-badge role-badge-' + d.role;
+          emailEl.parentNode.insertBefore(badge, emailEl.nextSibling);
+        }
+      }
     }).catch(function() {});
   }
 

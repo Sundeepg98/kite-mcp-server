@@ -65,6 +65,10 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .badge-red { background: var(--red-dim); color: var(--red); }
 .badge-amber { background: var(--amber-dim); color: var(--amber); }
 
+.role-badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 8px; text-transform: uppercase; font-family: var(--mono); font-weight: 600; letter-spacing: 0.04em; }
+.role-badge-admin { background: var(--accent-dim); color: var(--accent); }
+.role-badge-trader { background: var(--green-dim); color: var(--green); }
+
 .empty-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; }
 .loading-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
 
@@ -362,9 +366,28 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   }
 
   // --- Refresh Status ---
+  var roleApplied = false;
+  function applyRoleUI(d) {
+    if (roleApplied) return;
+    roleApplied = true;
+    // Hide Ops nav for non-admins
+    if (!d.is_admin) {
+      var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
+      if (opsLink) opsLink.style.display = 'none';
+    }
+    // Add role badge next to email
+    if (d.role) {
+      var emailEl = document.getElementById('userEmail');
+      var badge = document.createElement('span');
+      badge.textContent = d.role;
+      badge.className = 'role-badge role-badge-' + d.role;
+      emailEl.parentNode.insertBefore(badge, emailEl.nextSibling);
+    }
+  }
   function refreshStatus() {
     fetchJSON('status').then(function(d) {
       document.getElementById('userEmail').textContent = d.email || '--';
+      applyRoleUI(d);
       var dot = document.getElementById('tokenDot');
       var cardToken = document.getElementById('cardToken');
       var tokenValid = d.kite_token && d.kite_token.valid;

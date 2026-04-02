@@ -231,8 +231,8 @@ func TestRequireAuthBrowser_NoCookie(t *testing.T) {
 		t.Errorf("Status = %d, want 302 redirect", rr.Code)
 	}
 	location := rr.Header().Get("Location")
-	if !strings.Contains(location, "/auth/browser-login") {
-		t.Errorf("Location = %q, should redirect to browser-login", location)
+	if !strings.Contains(location, "/auth/login") {
+		t.Errorf("Location = %q, should redirect to /auth/login", location)
 	}
 }
 
@@ -252,8 +252,8 @@ func TestRequireAuthBrowser_InvalidCookie(t *testing.T) {
 		t.Errorf("Status = %d, want 302 redirect", rr.Code)
 	}
 	location := rr.Header().Get("Location")
-	if !strings.Contains(location, "/auth/browser-login") {
-		t.Errorf("Location = %q, should redirect to browser-login", location)
+	if !strings.Contains(location, "/auth/login") {
+		t.Errorf("Location = %q, should redirect to /auth/login", location)
 	}
 }
 
@@ -363,8 +363,8 @@ func TestRequireAuthBrowser_OpenRedirectProtection(t *testing.T) {
 		wantPath string // expected redirect= query param value (URL-decoded)
 	}{
 		{"normal path", "/admin/ops", "/admin/ops"},
-		{"double slash", "//evil.com", "/admin/ops"},    // should default to safe path
-		{"no leading slash", "evil.com", "/admin/ops"},  // httptest builds Path="/evil.com" which starts with / but doesn't start with //
+		{"double slash", "//evil.com", "/dashboard"},    // should default to safe path
+		{"no leading slash", "evil.com", "/dashboard"},  // httptest builds Path="/evil.com" which starts with / but doesn't start with //
 	}
 
 	for _, tc := range tests {

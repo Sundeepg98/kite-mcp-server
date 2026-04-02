@@ -53,10 +53,14 @@ type App struct {
 
 // StatusPageData holds template data for the status page
 type StatusPageData struct {
-	Title   string
-	Version string
-	Mode    string
+	Title        string
+	Version      string
+	Mode         string
+	OAuthEnabled bool
 }
+
+// cookieName must match the JWT cookie name used by oauth.RequireAuthBrowser.
+const cookieName = "kite_jwt"
 
 // Config holds the application configuration
 type Config struct {
@@ -624,6 +628,9 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	}
 	// User dashboard: protected by OAuth if available, otherwise identity middleware
 	dashHandler := ops.NewDashboardHandler(kcManager, app.logger, app.auditStore)
+	if userStore != nil {
+		dashHandler.SetAdminCheck(userStore.IsAdmin)
+	}
 	if app.oauthHandler != nil {
 		dashHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
 	} else {
@@ -645,8 +652,9 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/oauth/token", rateLimitFunc(app.rateLimiters.token, app.oauthHandler.Token))
 		mux.Handle("/oauth/email-lookup", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleEmailLookup))
 	}
-	// Register browser login route for ops dashboard auth (requires OAuth)
+	// Register browser login routes for dashboard auth (requires OAuth)
 	if app.oauthHandler != nil {
+		mux.Handle("/auth/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleLoginChoice))
 		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
 		mux.Handle("/auth/admin-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleAdminLogin))
 	}
@@ -879,7 +887,9 @@ func (app *App) getStatusData() StatusPageData {
 	}
 }
 
-// serveStatusPage configures the HTTP mux to serve status page using templates
+// serveStatusPage configures the HTTP mux to serve status page using templates.
+// If OAuth is enabled and the user has a valid cookie, redirects to /dashboard.
+// Otherwise shows the status page with login links.
 func (app *App) serveStatusPage(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -892,6 +902,17 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 			return
 		}
 
+		// If OAuth is configured, check for an existing valid dashboard cookie.
+		// Authenticated users get redirected straight to the dashboard.
+		if app.oauthHandler != nil {
+			if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
+				if _, err := app.oauthHandler.JWTManager().ValidateToken(cookie.Value, "dashboard"); err == nil {
+					http.Redirect(w, r, "/dashboard", http.StatusFound)
+					return
+				}
+			}
+		}
+
 		// Serve status page with template data
 		if app.statusTemplate == nil {
 			// Fallback to simple text if template failed to load
@@ -902,6 +923,7 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 		}
 
 		data := app.getStatusData()
+		data.OAuthEnabled = app.oauthHandler != nil
 		var buf bytes.Buffer
 		if err := app.statusTemplate.ExecuteTemplate(&buf, "base", data); err != nil {
 			app.logger.Error("Failed to execute status template", "error", err)

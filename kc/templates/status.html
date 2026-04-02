@@ -13,6 +13,18 @@
     <div class="info">
         Version: <span class="version">{{.Version}}</span>
     </div>
+    {{if .OAuthEnabled}}
+    <div style="margin-top: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <a href="/auth/browser-login?redirect=/dashboard"
+           style="display: inline-block; padding: 10px 24px; background: var(--primary); color: #fff; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 0.875rem;">
+            Sign in with Kite
+        </a>
+        <a href="/auth/admin-login"
+           style="font-size: 0.8rem; color: var(--text-muted); text-decoration: underline;">
+            Admin Login
+        </a>
+    </div>
+    {{end}}
 </div>
 {{end}}
 

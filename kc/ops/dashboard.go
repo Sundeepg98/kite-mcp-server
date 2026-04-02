@@ -22,6 +22,7 @@ type DashboardHandler struct {
 	manager    *kc.Manager
 	logger     *slog.Logger
 	auditStore *audit.Store
+	adminCheck func(string) bool // returns true if email is admin
 }
 
 // NewDashboardHandler creates a new DashboardHandler. The auditStore parameter
@@ -32,6 +33,11 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 		logger:     logger,
 		auditStore: auditStore,
 	}
+}
+
+// SetAdminCheck registers a callback to check if an email belongs to an admin.
+func (d *DashboardHandler) SetAdminCheck(fn func(string) bool) {
+	d.adminCheck = fn
 }
 
 // RegisterRoutes mounts all dashboard routes, protected by the provided auth middleware.
@@ -373,6 +379,8 @@ type tickerStatus struct {
 
 type statusResponse struct {
 	Email       string           `json:"email"`
+	Role        string           `json:"role,omitempty"`
+	IsAdmin     bool             `json:"is_admin"`
 	KiteToken   tokenStatus      `json:"kite_token"`
 	Credentials credentialStatus `json:"credentials"`
 	Ticker      tickerStatus     `json:"ticker"`
@@ -535,6 +543,14 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 
 	resp := statusResponse{
 		Email: email,
+	}
+
+	// Determine role and admin status
+	if d.adminCheck != nil && d.adminCheck(email) {
+		resp.Role = "admin"
+		resp.IsAdmin = true
+	} else {
+		resp.Role = "trader"
 	}
 
 	// Check token

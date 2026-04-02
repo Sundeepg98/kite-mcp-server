@@ -104,12 +104,13 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 			h.logger.Debug("Invalid dashboard cookie", "error", err)
 		}
 
-		// Redirect to browser login with redirect back to original URL
+		// Redirect to the unified landing page which offers both Kite login
+		// and admin password login, with a return path after auth.
 		redirect := r.URL.Path
 		if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-			redirect = "/admin/ops"
+			redirect = "/dashboard"
 		}
-		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + url.QueryEscape(redirect)
+		redirectURL := h.config.ExternalURL + "/auth/login?redirect=" + url.QueryEscape(redirect)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
 }
