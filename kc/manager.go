@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
 // Config holds configuration for creating a new kc Manager
@@ -152,6 +153,22 @@ func New(cfg Config) (*Manager, error) {
 			cfg.Logger.Error("Failed to load trailing stops from DB", "error", err)
 		}
 	}
+
+	// Initialize watchlist store
+	m.watchlistStore = watchlist.NewStore()
+	m.watchlistStore.SetLogger(cfg.Logger)
+	if m.alertDB != nil {
+		if err := watchlist.InitTables(m.alertDB); err != nil {
+			cfg.Logger.Error("Failed to create watchlist tables", "error", err)
+		} else {
+			m.watchlistStore.SetDB(m.alertDB)
+			if err := m.watchlistStore.LoadFromDB(); err != nil {
+				cfg.Logger.Error("Failed to load watchlists from DB", "error", err)
+			} else {
+				cfg.Logger.Info("Watchlists loaded from database")
+			}
+		}
+	}
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
 		apiKey := m.GetAPIKeyForEmail(email)
@@ -264,6 +281,7 @@ type Manager struct {
 	alertEvaluator     *alerts.Evaluator              // tick-to-alert matcher
 	trailingStopMgr    *alerts.TrailingStopManager    // trailing stop-loss manager
 	pnlService         *alerts.PnLSnapshotService     // daily P&L snapshots
+	watchlistStore     *watchlist.Store               // per-user watchlists
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	appMode            string
@@ -444,6 +462,11 @@ func (m *Manager) AlertStore() *alerts.Store {
 	return m.alertStore
 }
 
+// WatchlistStore returns the per-user watchlist store.
+func (m *Manager) WatchlistStore() *watchlist.Store {
+	return m.watchlistStore
+}
+
 // APIKey returns the global Kite API key.
 func (m *Manager) APIKey() string {
 	return m.apiKey
@@ -463,6 +486,20 @@ func (m *Manager) AlertDB() *alerts.DB {
 // TelegramNotifier returns the Telegram notifier (nil if not configured).
 func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
 	return m.telegramNotifier
+}
+
+// InstrumentsManager returns the instruments manager.
+func (m *Manager) InstrumentsManager() *instruments.Manager {
+	return m.Instruments
+}
+
+// IsTokenValid returns true if the user has a cached Kite token that has not expired.
+func (m *Manager) IsTokenValid(email string) bool {
+	entry, ok := m.tokenStore.Get(email)
+	if !ok {
+		return false
+	}
+	return !IsKiteTokenExpired(entry.StoredAt)
 }
 
 // TrailingStopManager returns the trailing stop manager (nil if not initialized).

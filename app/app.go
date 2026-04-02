@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -23,6 +26,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -577,8 +581,68 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
 	}
 
+	// Register Telegram bot webhook if configured.
+	app.registerTelegramWebhook(mux, kcManager)
+
 	app.serveStatusPage(mux)
 	return mux
+}
+
+// registerTelegramWebhook registers the Telegram bot webhook endpoint and
+// sets up bot commands with BotFather. The webhook URL contains a secret
+// derived from OAUTH_JWT_SECRET to prevent unauthorized requests.
+func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manager) {
+	notifier := kcManager.TelegramNotifier()
+	if notifier == nil || notifier.Bot() == nil {
+		return
+	}
+	if app.Config.OAuthJWTSecret == "" || app.Config.ExternalURL == "" {
+		app.logger.Info("Telegram webhook: skipping (no OAUTH_JWT_SECRET or EXTERNAL_URL)")
+		return
+	}
+
+	// Derive a deterministic webhook secret from the JWT secret.
+	hash := sha256.Sum256([]byte(app.Config.OAuthJWTSecret + "telegram-webhook"))
+	webhookSecret := hex.EncodeToString(hash[:])[:32]
+
+	// Create bot command handler.
+	botHandler := tgbot.NewBotHandler(notifier.Bot(), webhookSecret, kcManager, app.logger)
+
+	// Register the webhook endpoint (the secret in the path prevents spoofing).
+	webhookPath := "/telegram/webhook/" + webhookSecret
+	mux.Handle(webhookPath, botHandler)
+
+	// Register webhook URL with Telegram API.
+	webhookURL := app.Config.ExternalURL + webhookPath
+	wh, err := tgbotapi.NewWebhook(webhookURL)
+	if err != nil {
+		app.logger.Error("Telegram webhook: failed to create webhook config", "error", err)
+		return
+	}
+	wh.MaxConnections = 10
+	wh.AllowedUpdates = []string{"message"}
+	if _, err := notifier.Bot().Request(wh); err != nil {
+		app.logger.Error("Telegram webhook: failed to register with Telegram", "error", err)
+		return
+	}
+
+	// Register bot commands with BotFather for autocomplete.
+	commands := tgbotapi.NewSetMyCommands(
+		tgbotapi.BotCommand{Command: "price", Description: "Check stock price"},
+		tgbotapi.BotCommand{Command: "portfolio", Description: "Holdings summary"},
+		tgbotapi.BotCommand{Command: "positions", Description: "Open positions"},
+		tgbotapi.BotCommand{Command: "orders", Description: "Today's orders"},
+		tgbotapi.BotCommand{Command: "pnl", Description: "Today's P&L"},
+		tgbotapi.BotCommand{Command: "alerts", Description: "Active alerts"},
+		tgbotapi.BotCommand{Command: "watchlist", Description: "Watchlist prices"},
+		tgbotapi.BotCommand{Command: "status", Description: "Token and system status"},
+		tgbotapi.BotCommand{Command: "help", Description: "Command list"},
+	)
+	if _, err := notifier.Bot().Request(commands); err != nil {
+		app.logger.Error("Telegram webhook: failed to register bot commands", "error", err)
+	}
+
+	app.logger.Info("Telegram bot webhook registered", "url", webhookURL)
 }
 
 // serveHTTPServer starts the HTTP server with error handling

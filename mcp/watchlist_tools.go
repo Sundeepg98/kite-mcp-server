@@ -1,0 +1,519 @@
+package mcp
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/zerodha/kite-mcp-server/oauth"
+)
+
+// CreateWatchlistTool creates a new named watchlist.
+type CreateWatchlistTool struct{}
+
+func (*CreateWatchlistTool) Tool() mcp.Tool {
+	return mcp.NewTool("create_watchlist",
+		mcp.WithDescription("Create a new named watchlist for tracking instruments. Max 10 watchlists per user."),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("name",
+			mcp.Description("Name for the watchlist (e.g. 'Tech Stocks', 'Swing Trades')"),
+			mcp.Required(),
+		),
+	)
+}
+
+func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "create_watchlist")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "name"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		name := strings.TrimSpace(SafeAssertString(args["name"], ""))
+		if name == "" {
+			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
+		}
+
+		// Check for duplicate name
+		if existing := manager.WatchlistStore().FindWatchlistByName(email, name); existing != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q already exists (ID: %s)", name, existing.ID)), nil
+		}
+
+		id, err := manager.WatchlistStore().CreateWatchlist(email, name)
+		if err != nil {
+			handler.trackToolError(ctx, "create_watchlist", "create_error")
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to create watchlist: %s", err)), nil
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", name, id)), nil
+	}
+}
+
+// DeleteWatchlistTool deletes a watchlist and all its items.
+type DeleteWatchlistTool struct{}
+
+func (*DeleteWatchlistTool) Tool() mcp.Tool {
+	return mcp.NewTool("delete_watchlist",
+		mcp.WithDescription("Delete a watchlist and all its items."),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("watchlist",
+			mcp.Description("Watchlist ID or name"),
+			mcp.Required(),
+		),
+	)
+}
+
+func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "delete_watchlist")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "watchlist"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		watchlistRef := SafeAssertString(args["watchlist"], "")
+		wl := resolveWatchlist(manager, email, watchlistRef)
+		if wl == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
+		}
+
+		itemCount := manager.WatchlistStore().ItemCount(wl.ID)
+		if err := manager.WatchlistStore().DeleteWatchlist(email, wl.ID); err != nil {
+			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete watchlist: %s", err)), nil
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", wl.Name, itemCount)), nil
+	}
+}
+
+// AddToWatchlistTool adds instruments to a watchlist.
+type AddToWatchlistTool struct{}
+
+func (*AddToWatchlistTool) Tool() mcp.Tool {
+	return mcp.NewTool("add_to_watchlist",
+		mcp.WithDescription("Add instruments to a watchlist. Max 50 items per watchlist. Optionally set notes and price targets."),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("watchlist",
+			mcp.Description("Watchlist ID or name"),
+			mcp.Required(),
+		),
+		mcp.WithString("instruments",
+			mcp.Description("Comma-separated instruments in exchange:symbol format (e.g. 'NSE:RELIANCE,NSE:TCS,NSE:INFY')"),
+			mcp.Required(),
+		),
+		mcp.WithString("notes",
+			mcp.Description("Optional notes for all instruments being added"),
+		),
+		mcp.WithNumber("target_entry",
+			mcp.Description("Optional target entry price (0 = not set)"),
+		),
+		mcp.WithNumber("target_exit",
+			mcp.Description("Optional target exit price (0 = not set)"),
+		),
+	)
+}
+
+func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "add_to_watchlist")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "watchlist", "instruments"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		watchlistRef := SafeAssertString(args["watchlist"], "")
+		instrumentsStr := SafeAssertString(args["instruments"], "")
+		notes := SafeAssertString(args["notes"], "")
+		targetEntry := SafeAssertFloat64(args["target_entry"], 0)
+		targetExit := SafeAssertFloat64(args["target_exit"], 0)
+
+		wl := resolveWatchlist(manager, email, watchlistRef)
+		if wl == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found. Use create_watchlist first.", watchlistRef)), nil
+		}
+
+		instruments := parseInstrumentList(instrumentsStr)
+		if len(instruments) == 0 {
+			return mcp.NewToolResultError("No valid instruments provided. Use exchange:symbol format (e.g. 'NSE:RELIANCE')."), nil
+		}
+
+		var added, failed []string
+		for _, instID := range instruments {
+			parts := strings.SplitN(instID, ":", 2)
+			if len(parts) != 2 {
+				failed = append(failed, fmt.Sprintf("%s (invalid format)", instID))
+				continue
+			}
+			exchange := parts[0]
+			symbol := parts[1]
+
+			// Resolve instrument to get token
+			inst, err := manager.Instruments.GetByID(instID)
+			if err != nil {
+				failed = append(failed, fmt.Sprintf("%s (not found)", instID))
+				continue
+			}
+
+			item := &watchlist.WatchlistItem{
+				Exchange:        exchange,
+				Tradingsymbol:   inst.Tradingsymbol,
+				InstrumentToken: inst.InstrumentToken,
+				Notes:           notes,
+				TargetEntry:     targetEntry,
+				TargetExit:      targetExit,
+			}
+			_ = symbol // already resolved via GetByID
+
+			if err := manager.WatchlistStore().AddItem(email, wl.ID, item); err != nil {
+				failed = append(failed, fmt.Sprintf("%s (%s)", instID, err))
+				continue
+			}
+			added = append(added, instID)
+		}
+
+		var result strings.Builder
+		if len(added) > 0 {
+			result.WriteString(fmt.Sprintf("Added %d instrument(s) to %q: %s", len(added), wl.Name, strings.Join(added, ", ")))
+		}
+		if len(failed) > 0 {
+			if result.Len() > 0 {
+				result.WriteString("\n")
+			}
+			result.WriteString(fmt.Sprintf("Failed: %s", strings.Join(failed, "; ")))
+		}
+
+		if len(added) == 0 {
+			handler.trackToolError(ctx, "add_to_watchlist", "all_failed")
+			return mcp.NewToolResultError(result.String()), nil
+		}
+
+		return mcp.NewToolResultText(result.String()), nil
+	}
+}
+
+// RemoveFromWatchlistTool removes instruments from a watchlist.
+type RemoveFromWatchlistTool struct{}
+
+func (*RemoveFromWatchlistTool) Tool() mcp.Tool {
+	return mcp.NewTool("remove_from_watchlist",
+		mcp.WithDescription("Remove instruments from a watchlist by item ID or exchange:symbol."),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("watchlist",
+			mcp.Description("Watchlist ID or name"),
+			mcp.Required(),
+		),
+		mcp.WithString("items",
+			mcp.Description("Comma-separated item IDs or exchange:symbol (e.g. 'abc123,NSE:TCS')"),
+			mcp.Required(),
+		),
+	)
+}
+
+func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "remove_from_watchlist")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "watchlist", "items"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		watchlistRef := SafeAssertString(args["watchlist"], "")
+		itemsStr := SafeAssertString(args["items"], "")
+
+		wl := resolveWatchlist(manager, email, watchlistRef)
+		if wl == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
+		}
+
+		refs := parseInstrumentList(itemsStr)
+		if len(refs) == 0 {
+			return mcp.NewToolResultError("No items specified"), nil
+		}
+
+		var removed, failed []string
+		for _, ref := range refs {
+			itemID := ref
+			// If ref looks like exchange:symbol, resolve to item ID
+			if strings.Contains(ref, ":") {
+				parts := strings.SplitN(ref, ":", 2)
+				if len(parts) == 2 {
+					found := manager.WatchlistStore().FindItemBySymbol(wl.ID, parts[0], parts[1])
+					if found != nil {
+						itemID = found.ID
+					} else {
+						failed = append(failed, fmt.Sprintf("%s (not in watchlist)", ref))
+						continue
+					}
+				}
+			}
+
+			if err := manager.WatchlistStore().RemoveItem(email, wl.ID, itemID); err != nil {
+				failed = append(failed, fmt.Sprintf("%s (%s)", ref, err))
+				continue
+			}
+			removed = append(removed, ref)
+		}
+
+		var result strings.Builder
+		if len(removed) > 0 {
+			result.WriteString(fmt.Sprintf("Removed %d item(s) from %q: %s", len(removed), wl.Name, strings.Join(removed, ", ")))
+		}
+		if len(failed) > 0 {
+			if result.Len() > 0 {
+				result.WriteString("\n")
+			}
+			result.WriteString(fmt.Sprintf("Failed: %s", strings.Join(failed, "; ")))
+		}
+
+		if len(removed) == 0 {
+			handler.trackToolError(ctx, "remove_from_watchlist", "all_failed")
+			return mcp.NewToolResultError(result.String()), nil
+		}
+
+		return mcp.NewToolResultText(result.String()), nil
+	}
+}
+
+// GetWatchlistTool returns items in a watchlist with optional LTP enrichment.
+type GetWatchlistTool struct{}
+
+func (*GetWatchlistTool) Tool() mcp.Tool {
+	return mcp.NewTool("get_watchlist",
+		mcp.WithDescription("Get all instruments in a watchlist with current prices (LTP). Shows distance to target entry/exit."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("watchlist",
+			mcp.Description("Watchlist ID or name"),
+			mcp.Required(),
+		),
+		mcp.WithBoolean("include_ltp",
+			mcp.Description("Include current LTP prices (default: true). Requires an active Kite session."),
+		),
+	)
+}
+
+func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "get_watchlist")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		args := request.GetArguments()
+		if err := ValidateRequired(args, "watchlist"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		watchlistRef := SafeAssertString(args["watchlist"], "")
+		includeLTP := true
+		if v, ok := args["include_ltp"]; ok {
+			if b, isBool := v.(bool); isBool {
+				includeLTP = b
+			}
+		}
+
+		wl := resolveWatchlist(manager, email, watchlistRef)
+		if wl == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
+		}
+
+		items := manager.WatchlistStore().GetItems(wl.ID)
+		if len(items) == 0 {
+			return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q is empty. Use add_to_watchlist to add instruments.", wl.Name)), nil
+		}
+
+		// Build LTP map if requested
+		ltpMap := make(map[string]float64) // "EXCHANGE:SYMBOL" -> last_price
+		if includeLTP {
+			// Build instrument list for batch LTP call
+			instrIDs := make([]string, 0, len(items))
+			for _, item := range items {
+				instrIDs = append(instrIDs, item.Exchange+":"+item.Tradingsymbol)
+			}
+
+			// Get Kite session for LTP call
+			sess := server.ClientSessionFromContext(ctx)
+			sessionID := sess.SessionID()
+			kiteSession, _, clientErr := manager.GetOrCreateSessionWithEmail(sessionID, email)
+			if clientErr == nil {
+				ltpResp, ltpErr := kiteSession.Kite.Client.GetLTP(instrIDs...)
+				if ltpErr == nil {
+					for key, data := range ltpResp {
+						ltpMap[key] = data.LastPrice
+					}
+				} else {
+					manager.Logger.Warn("Failed to fetch LTP for watchlist", "error", ltpErr)
+				}
+			} else {
+				manager.Logger.Warn("Failed to get Kite session for watchlist LTP", "error", clientErr)
+			}
+		}
+
+		// Build response
+		type itemResponse struct {
+			ID            string  `json:"id"`
+			Instrument    string  `json:"instrument"`
+			Notes         string  `json:"notes,omitempty"`
+			TargetEntry   float64 `json:"target_entry,omitempty"`
+			TargetExit    float64 `json:"target_exit,omitempty"`
+			LTP           float64 `json:"ltp,omitempty"`
+			DistanceEntry string  `json:"distance_to_entry,omitempty"`
+			DistanceExit  string  `json:"distance_to_exit,omitempty"`
+		}
+
+		type watchlistResponse struct {
+			Name      string         `json:"name"`
+			ID        string         `json:"id"`
+			ItemCount int            `json:"item_count"`
+			Items     []itemResponse `json:"items"`
+		}
+
+		resp := watchlistResponse{
+			Name:      wl.Name,
+			ID:        wl.ID,
+			ItemCount: len(items),
+			Items:     make([]itemResponse, 0, len(items)),
+		}
+
+		for _, item := range items {
+			instrID := item.Exchange + ":" + item.Tradingsymbol
+			ir := itemResponse{
+				ID:          item.ID,
+				Instrument:  instrID,
+				Notes:       item.Notes,
+				TargetEntry: item.TargetEntry,
+				TargetExit:  item.TargetExit,
+			}
+
+			if ltp, ok := ltpMap[instrID]; ok && ltp > 0 {
+				ir.LTP = ltp
+				if item.TargetEntry > 0 {
+					pct := ((ltp - item.TargetEntry) / item.TargetEntry) * 100
+					ir.DistanceEntry = fmt.Sprintf("%.2f%%", pct)
+				}
+				if item.TargetExit > 0 {
+					pct := ((ltp - item.TargetExit) / item.TargetExit) * 100
+					ir.DistanceExit = fmt.Sprintf("%.2f%%", pct)
+				}
+			}
+
+			resp.Items = append(resp.Items, ir)
+		}
+
+		return handler.MarshalResponse(resp, "get_watchlist")
+	}
+}
+
+// ListWatchlistsTool lists all watchlists for the current user.
+type ListWatchlistsTool struct{}
+
+func (*ListWatchlistsTool) Tool() mcp.Tool {
+	return mcp.NewTool("list_watchlists",
+		mcp.WithDescription("List all watchlists for the current user with item counts."),
+		mcp.WithReadOnlyHintAnnotation(true),
+	)
+}
+
+func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "list_watchlists")
+
+		email := oauth.EmailFromContext(ctx)
+		if email == "" {
+			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
+		}
+
+		watchlists := manager.WatchlistStore().ListWatchlists(email)
+		if len(watchlists) == 0 {
+			return mcp.NewToolResultText("No watchlists. Use create_watchlist to create one."), nil
+		}
+
+		type watchlistInfo struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			ItemCount int    `json:"item_count"`
+			UpdatedAt string `json:"updated_at"`
+		}
+
+		result := make([]watchlistInfo, 0, len(watchlists))
+		for _, wl := range watchlists {
+			result = append(result, watchlistInfo{
+				ID:        wl.ID,
+				Name:      wl.Name,
+				ItemCount: manager.WatchlistStore().ItemCount(wl.ID),
+				UpdatedAt: wl.UpdatedAt.Format("2006-01-02 15:04"),
+			})
+		}
+
+		return handler.MarshalResponse(result, "list_watchlists")
+	}
+}
+
+// --- Helper functions ---
+
+// resolveWatchlist finds a watchlist by ID or name for the given user.
+func resolveWatchlist(manager *kc.Manager, email, ref string) *watchlist.Watchlist {
+	store := manager.WatchlistStore()
+	// Try by name first (more user-friendly)
+	if wl := store.FindWatchlistByName(email, ref); wl != nil {
+		return wl
+	}
+	// Try by ID
+	watchlists := store.ListWatchlists(email)
+	for _, wl := range watchlists {
+		if wl.ID == ref {
+			return wl
+		}
+	}
+	return nil
+}
+
+// parseInstrumentList splits a comma-separated string into trimmed, non-empty items.
+func parseInstrumentList(s string) []string {
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}

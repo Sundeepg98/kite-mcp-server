@@ -272,6 +272,19 @@ func (s *Store) GetTelegramChatID(email string) (int64, bool) {
 	return chatID, ok
 }
 
+// GetEmailByChatID performs a reverse lookup: given a Telegram chat ID,
+// returns the associated email. Returns ("", false) if not found.
+func (s *Store) GetEmailByChatID(chatID int64) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for email, id := range s.telegram {
+		if id == chatID {
+			return email, true
+		}
+	}
+	return "", false
+}
+
 // ListAll returns a deep copy of all alerts grouped by email.
 // Returns deep copies to prevent callers from mutating shared state.
 func (s *Store) ListAll() map[string][]*Alert {

@@ -83,6 +83,18 @@ func SummarizeInput(toolName string, args map[string]any) string {
 			strings.ToUpper(strVal(args, "underlying")),
 			expiry,
 			strVal(args, "strikes_around_atm"))
+	case "create_watchlist":
+		return fmt.Sprintf("Create %q", strVal(args, "name"))
+	case "delete_watchlist":
+		return fmt.Sprintf("Delete watchlist %s", strVal(args, "watchlist"))
+	case "add_to_watchlist":
+		return fmt.Sprintf("Add to %s: %s", strVal(args, "watchlist"), strVal(args, "instruments"))
+	case "remove_from_watchlist":
+		return fmt.Sprintf("Remove from %s: %s", strVal(args, "watchlist"), strVal(args, "items"))
+	case "get_watchlist":
+		return fmt.Sprintf("Get %s", strVal(args, "watchlist"))
+	case "list_watchlists":
+		return "(no params)"
 	default:
 		return summarizeDefault(args)
 	}

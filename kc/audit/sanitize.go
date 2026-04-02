@@ -95,6 +95,14 @@ var toolCategories = map[string]string{
 	"list_trailing_stops":  "trailing_stop",
 	"cancel_trailing_stop": "trailing_stop",
 
+	// watchlist
+	"create_watchlist":       "watchlist",
+	"delete_watchlist":       "watchlist",
+	"add_to_watchlist":       "watchlist",
+	"remove_from_watchlist":  "watchlist",
+	"get_watchlist":          "watchlist",
+	"list_watchlists":        "watchlist",
+
 	// pnl
 	"get_pnl_journal": "query",
 

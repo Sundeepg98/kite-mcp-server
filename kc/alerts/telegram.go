@@ -76,6 +76,14 @@ func EscapeMarkdown(s string) string {
 	return escapeTelegramMarkdown(s)
 }
 
+// Bot returns the underlying Telegram bot API instance.
+func (t *TelegramNotifier) Bot() *tgbotapi.BotAPI {
+	if t == nil {
+		return nil
+	}
+	return t.bot
+}
+
 // Store returns the underlying alert store (used by briefing to iterate users).
 func (t *TelegramNotifier) Store() *Store {
 	return t.store

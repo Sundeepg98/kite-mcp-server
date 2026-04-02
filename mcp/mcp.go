@@ -65,6 +65,14 @@ func GetAllTools() []Tool {
 		&ListTrailingStopsTool{},
 		&CancelTrailingStopTool{},
 
+		// Watchlist tools
+		&CreateWatchlistTool{},
+		&DeleteWatchlistTool{},
+		&AddToWatchlistTool{},
+		&RemoveFromWatchlistTool{},
+		&GetWatchlistTool{},
+		&ListWatchlistsTool{},
+
 		// P&L journal
 		&GetPnLJournalTool{},
 
