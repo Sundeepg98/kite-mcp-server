@@ -35,7 +35,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -99,8 +99,11 @@ tr:hover td { background: var(--bg-2); }
 @media (max-width: 640px) {
   .content { padding: 14px 12px; }
   .topbar { padding: 0 12px; }
+  .topbar-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .stat-value { font-size: 18px; }
+  .dash-nav-link { padding: 12px 14px; }
+  button, .btn-delete { min-height: 44px; }
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

@@ -35,7 +35,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .status-dot.expired { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -111,11 +111,29 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .attr-loading { font-family: var(--mono); font-size: 11px; color: var(--text-2); padding: 8px 0; }
 .attr-empty { font-size: 11px; color: var(--text-2); padding: 8px 0; }
 
+/* Order lifecycle timeline */
+.order-lifecycle { margin-top: 10px; }
+.order-lifecycle-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 8px; font-family: var(--sans); }
+.tl-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 4px; }
+.tl-stages { display: flex; align-items: center; gap: 0; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; }
+.tl-stage { display: flex; align-items: center; gap: 5px; }
+.tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tl-dot-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.tl-dot-amber { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.tl-dot-cyan { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+.tl-dot-red { background: var(--red); box-shadow: 0 0 4px var(--red); }
+.tl-label { color: var(--text-2); }
+.tl-time { color: var(--text-1); }
+.tl-arrow { color: var(--text-2); margin: 0 6px; }
+
 @media (max-width: 640px) {
   .content { padding: 14px 12px; }
   .topbar { padding: 0 12px; }
+  .topbar-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .stat-value { font-size: 18px; }
+  .dash-nav-link { padding: 12px 14px; }
+  button, .fbtn { min-height: 44px; }
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -336,6 +354,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
   // Cache for attribution data per order_id
   var attrCache = {};
+  // Cache for order lifecycle data per order_id
+  var orderLifecycleCache = {};
 
   function buildAttrPlaceholder() {
     var inner = el('div', 'attr-inner', '');
@@ -349,6 +369,10 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
+      // Store lifecycle data for later rendering
+      if (o.lifecycle && o.lifecycle.length > 0) {
+        orderLifecycleCache[o.order_id] = o.lifecycle;
+      }
       var tr = document.createElement('tr');
       tr.className = 'expandable';
       tr.setAttribute('data-order-id', o.order_id || '');
@@ -409,6 +433,60 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     }
   }
 
+  // --- Order Lifecycle Timeline ---
+  function lifecycleDotClass(status) {
+    if (!status) return 'tl-dot-amber';
+    var s = status.toUpperCase();
+    if (s === 'COMPLETE') return 'tl-dot-green';
+    if (s === 'CANCELLED' || s === 'REJECTED') return 'tl-dot-red';
+    if (s === 'OPEN' || s === 'TRIGGER PENDING') return 'tl-dot-cyan';
+    return 'tl-dot-amber';
+  }
+
+  function renderOrderLifecycle(container, lifecycle) {
+    if (!lifecycle || lifecycle.length === 0) return;
+
+    var wrap = el('div', 'order-lifecycle', '');
+    wrap.appendChild(el('div', 'order-lifecycle-label', 'Order Lifecycle'));
+
+    var card = el('div', 'tl-card', '');
+    var stages = el('div', 'tl-stages', '');
+
+    for (var i = 0; i < lifecycle.length; i++) {
+      var step = lifecycle[i];
+      if (i > 0) {
+        stages.appendChild(el('span', 'tl-arrow', '\u2192'));
+      }
+      var stage = el('span', 'tl-stage', '');
+      stage.appendChild(el('span', 'tl-dot ' + lifecycleDotClass(step.status)));
+      stage.appendChild(el('span', 'tl-label', step.status));
+      if (step.timestamp) {
+        var ts = new Date(step.timestamp);
+        var h = String(ts.getHours()).padStart(2, '0');
+        var m = String(ts.getMinutes()).padStart(2, '0');
+        var s2 = String(ts.getSeconds()).padStart(2, '0');
+        stage.appendChild(el('span', 'tl-time', h + ':' + m + ':' + s2));
+      }
+      stages.appendChild(stage);
+    }
+
+    card.appendChild(stages);
+
+    // Show the last status message if present
+    var lastWithMsg = null;
+    for (var j = lifecycle.length - 1; j >= 0; j--) {
+      if (lifecycle[j].message) { lastWithMsg = lifecycle[j]; break; }
+    }
+    if (lastWithMsg && lastWithMsg.message) {
+      var msgEl = el('div', '', lastWithMsg.message);
+      msgEl.style.cssText = 'font-size:11px; color:var(--text-2); margin-top:6px; font-family:var(--mono);';
+      card.appendChild(msgEl);
+    }
+
+    wrap.appendChild(card);
+    container.appendChild(wrap);
+  }
+
   function renderAttribution(orderID, data) {
     var attrRow = document.querySelector('tr.attr-row[data-attr-for="' + orderID + '"]');
     if (!attrRow) return;
@@ -416,50 +494,58 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     if (!inner) return;
     clearChildren(inner);
 
+    // Render order lifecycle first (from the order data we stored)
+    var orderData = orderLifecycleCache[orderID];
+    if (orderData) {
+      renderOrderLifecycle(inner, orderData);
+    }
+
     var steps = data.steps || [];
-    if (steps.length === 0) {
+    if (steps.length === 0 && !orderData) {
       inner.appendChild(el('div', 'attr-empty', 'No AI decision trace found for this order.'));
       return;
     }
 
-    // Label with icon
-    var label = el('div', 'attr-label', '');
-    var svgNS = 'http://www.w3.org/2000/svg';
-    var svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    var path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('d', 'M13 10V3L4 14h7v7l9-11h-7z');
-    svg.appendChild(path);
-    label.appendChild(svg);
-    label.appendChild(document.createTextNode('AI Decision Trace (' + steps.length + ' steps)'));
-    inner.appendChild(label);
+    if (steps.length > 0) {
+      // Label with icon
+      var label = el('div', 'attr-label', '');
+      var svgNS = 'http://www.w3.org/2000/svg';
+      var svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      var path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', 'M13 10V3L4 14h7v7l9-11h-7z');
+      svg.appendChild(path);
+      label.appendChild(svg);
+      label.appendChild(document.createTextNode('AI Decision Trace (' + steps.length + ' steps)'));
+      inner.appendChild(label);
 
-    // Timeline
-    var timeline = el('div', 'attr-timeline', '');
-    for (var j = 0; j < steps.length; j++) {
-      var s = steps[j];
-      var stepCls = 'attr-step';
-      if (s.is_order) stepCls += ' is-order';
-      if (s.is_error) stepCls += ' is-error';
-      var step = el('div', stepCls, '');
-      step.appendChild(el('span', 'attr-step-time', s.time));
-      step.appendChild(el('span', 'attr-step-tool', s.tool_name));
-      var summaryText = s.input_summary || '';
-      if (s.output_summary && !s.is_error) {
-        summaryText += (summaryText ? ' \u2192 ' : '') + s.output_summary;
+      // Timeline
+      var timeline = el('div', 'attr-timeline', '');
+      for (var j = 0; j < steps.length; j++) {
+        var s = steps[j];
+        var stepCls = 'attr-step';
+        if (s.is_order) stepCls += ' is-order';
+        if (s.is_error) stepCls += ' is-error';
+        var step = el('div', stepCls, '');
+        step.appendChild(el('span', 'attr-step-time', s.time));
+        step.appendChild(el('span', 'attr-step-tool', s.tool_name));
+        var summaryText = s.input_summary || '';
+        if (s.output_summary && !s.is_error) {
+          summaryText += (summaryText ? ' \u2192 ' : '') + s.output_summary;
+        }
+        if (summaryText) {
+          step.appendChild(el('span', 'attr-step-summary', summaryText));
+        }
+        if (s.duration_ms > 0) {
+          step.appendChild(el('span', 'attr-step-dur', s.duration_ms + 'ms'));
+        }
+        timeline.appendChild(step);
       }
-      if (summaryText) {
-        step.appendChild(el('span', 'attr-step-summary', summaryText));
-      }
-      if (s.duration_ms > 0) {
-        step.appendChild(el('span', 'attr-step-dur', s.duration_ms + 'ms'));
-      }
-      timeline.appendChild(step);
+      inner.appendChild(timeline);
     }
-    inner.appendChild(timeline);
   }
 
   // Click handler for expandable order rows

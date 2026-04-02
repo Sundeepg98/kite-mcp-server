@@ -76,10 +76,13 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 @media (max-width: 640px) {
   .content { padding: 14px 12px; }
   .topbar { padding: 0 12px; }
+  .topbar-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stats-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .stat-value { font-size: 18px; }
   .cred-row { flex-direction: column; align-items: flex-start; gap: 12px; }
   .auth-banner-row { flex-direction: column; align-items: flex-start; }
+  .dash-nav-link { padding: 12px 14px; }
+  button, .cpbtn { min-height: 44px; }
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -87,7 +90,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -187,6 +190,12 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   </div>
   <div class="empty-state" id="holdingsEmpty" style="display:none">No holdings found</div>
 
+  <!-- Holdings Donut Chart -->
+  <div id="holdingsChartWrap" style="display:none; background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:16px; margin-bottom:24px; max-width:500px;">
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-2); margin-bottom:12px;">Portfolio Allocation</div>
+    <canvas id="holdingsDonut" width="300" height="300"></canvas>
+  </div>
+
   <!-- Positions -->
   <div class="section-header">Positions</div>
   <div id="positionsLoading" class="loading-state">Loading...</div>
@@ -236,6 +245,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 </div>
 
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -437,6 +447,83 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
         ]);
         totalRow.className = 'total-row';
         holdingsBody.appendChild(totalRow);
+      }
+
+      // Holdings Donut Chart
+      var chartWrap = document.getElementById('holdingsChartWrap');
+      if (holdings.length > 0 && typeof Chart !== 'undefined') {
+        chartWrap.style.display = 'block';
+        // Compute values and sort descending
+        var holdingValues = holdings.map(function(h) {
+          return { name: h.tradingsymbol, value: Math.abs(h.last_price * h.quantity) };
+        }).sort(function(a, b) { return b.value - a.value; });
+
+        // Top 10 + Others
+        var chartLabels = [];
+        var chartData = [];
+        var othersValue = 0;
+        for (var ci = 0; ci < holdingValues.length; ci++) {
+          if (ci < 10) {
+            chartLabels.push(holdingValues[ci].name);
+            chartData.push(holdingValues[ci].value);
+          } else {
+            othersValue += holdingValues[ci].value;
+          }
+        }
+        if (othersValue > 0) {
+          chartLabels.push('Others');
+          chartData.push(othersValue);
+        }
+
+        var donutColors = [
+          '#22d3ee','#34d399','#fbbf24','#f87171','#a78bfa',
+          '#818cf8','#fb923c','#e879f9','#38bdf8','#4ade80','#94a3b8'
+        ];
+
+        // Destroy previous chart instance if it exists
+        var canvas = document.getElementById('holdingsDonut');
+        if (window._holdingsChart) { window._holdingsChart.destroy(); }
+        window._holdingsChart = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: chartLabels,
+            datasets: [{
+              data: chartData,
+              backgroundColor: donutColors.slice(0, chartLabels.length),
+              borderColor: '#0a0c10',
+              borderWidth: 2,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '55%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: {
+                  color: '#94a3b8',
+                  font: { family: "'JetBrains Mono', monospace", size: 11 },
+                  padding: 8,
+                  boxWidth: 12,
+                  boxHeight: 12,
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    var val = context.parsed;
+                    var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                    var pct = total > 0 ? (val / total * 100).toFixed(1) : '0.0';
+                    return context.label + ': ' + formatINR(val) + ' (' + pct + '%)';
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else {
+        chartWrap.style.display = 'none';
       }
 
       // Positions table

@@ -86,9 +86,12 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 @media (max-width: 640px) {
   .content { padding: 14px 12px; }
   .topbar { padding: 0 12px; }
+  .topbar-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .stat-value { font-size: 18px; }
   .entry-badge { display: none; }
+  .dash-nav-link { padding: 12px 14px; }
+  button, .fbtn { min-height: 44px; }
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -96,7 +99,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -157,6 +160,12 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     <div class="stat-card"><div class="stat-label">Top Tool</div><div class="stat-value" id="statTopTool">--</div><div class="stat-sub" id="statTopToolSub"></div></div>
   </div>
 
+  <!-- Tool Usage Bar Chart -->
+  <div id="toolChartWrap" style="display:none; background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:16px; margin-bottom:20px;">
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-2); margin-bottom:12px;">Tool Usage</div>
+    <canvas id="toolBarChart" height="200"></canvas>
+  </div>
+
   <div id="loadingState" class="loading-state">Loading activity...</div>
   <div id="emptyState" class="empty-state" style="display:none">No activity recorded yet. Use MCP tools to see them here.</div>
   <div class="timeline" id="timeline" style="display:none"></div>
@@ -167,6 +176,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -175,6 +185,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   var REFRESH_MS = 30000;
   var state = { offset: 0, category: '', errors: false, days: 0, entries: [], total: 0 };
   var refreshTimer = null;
+  var sseSource = null;
+  var toolBarChartInstance = null;
 
   // --- Category badge config ---
   var catColors = {
@@ -274,12 +286,14 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       if (state.entries.length === 0) {
         empty.style.display = 'block';
         updateStats([], state.total, stats);
+        renderToolChart(data.tool_counts);
         updateTimestamp();
         return;
       }
 
       timeline.style.display = 'flex';
       updateStats(state.entries, state.total, stats);
+      renderToolChart(data.tool_counts);
       renderTimeline(state.entries);
       renderPagination();
       updateTimestamp();
@@ -480,10 +494,171 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     window.location.href = url;
   });
 
+  // --- Tool Usage Bar Chart ---
+  function renderToolChart(toolCounts) {
+    var chartWrap = document.getElementById('toolChartWrap');
+    if (!toolCounts || typeof Chart === 'undefined') {
+      chartWrap.style.display = 'none';
+      return;
+    }
+    // Convert map to sorted arrays
+    var items = [];
+    for (var name in toolCounts) {
+      if (toolCounts.hasOwnProperty(name)) {
+        items.push({ name: name, count: toolCounts[name] });
+      }
+    }
+    if (items.length === 0) {
+      chartWrap.style.display = 'none';
+      return;
+    }
+    items.sort(function(a, b) { return b.count - a.count; });
+    // Take top 15
+    items = items.slice(0, 15);
+
+    var labels = items.map(function(i) { return i.name; });
+    var data = items.map(function(i) { return i.count; });
+
+    chartWrap.style.display = 'block';
+    var canvas = document.getElementById('toolBarChart');
+    if (toolBarChartInstance) { toolBarChartInstance.destroy(); }
+    toolBarChartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: 'rgba(34,211,238,0.3)',
+          borderColor: '#22d3ee',
+          borderWidth: 1,
+          borderRadius: 3,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.parsed.x + ' calls'; }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: '#1e2430' },
+            ticks: { color: '#64748b', font: { family: "'JetBrains Mono', monospace", size: 11 } }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: '#94a3b8', font: { family: "'JetBrains Mono', monospace", size: 11 } }
+          }
+        }
+      }
+    });
+    // Adjust canvas height based on number of items
+    canvas.parentElement.style.height = Math.max(200, items.length * 28 + 40) + 'px';
+    canvas.style.height = '100%';
+  }
+
+  // --- SSE Real-time Stream ---
+  function connectSSE() {
+    if (sseSource) { sseSource.close(); sseSource = null; }
+    try {
+      sseSource = new EventSource('/dashboard/api/activity/stream');
+      sseSource.onmessage = function(event) {
+        try {
+          var entry = JSON.parse(event.data);
+          // Only prepend if we're on page 1 with no filters
+          if (state.offset === 0 && !state.category && !state.errors) {
+            // Add to the beginning of current entries
+            state.entries.unshift(entry);
+            state.total++;
+            // Update the timeline display
+            var timeline = document.getElementById('timeline');
+            var emptyState = document.getElementById('emptyState');
+            if (timeline.style.display === 'none') {
+              emptyState.style.display = 'none';
+              timeline.style.display = 'flex';
+            }
+            // Build the new entry card and prepend it
+            var card = buildEntryCard(entry);
+            if (card) {
+              card.style.animation = 'fadeIn 0.3s ease';
+              if (timeline.firstChild) {
+                timeline.insertBefore(card, timeline.firstChild);
+              } else {
+                timeline.appendChild(card);
+              }
+              // Cap displayed entries
+              while (timeline.children.length > PAGE_SIZE) {
+                timeline.removeChild(timeline.lastChild);
+              }
+            }
+            updateTimestamp();
+          }
+        } catch(e) { /* ignore parse errors */ }
+      };
+      sseSource.onerror = function() {
+        // SSE disconnected, will rely on polling fallback
+        if (sseSource) { sseSource.close(); sseSource = null; }
+        // Retry SSE connection after 10 seconds
+        setTimeout(connectSSE, 10000);
+      };
+    } catch(e) {
+      // SSE not supported, rely on polling
+    }
+  }
+
+  // Build a single entry card element (extracted from renderTimeline for reuse)
+  function buildEntryCard(e) {
+    var card = el('div', 'entry' + (e.is_error ? ' error' : ''));
+
+    var top = el('div', 'entry-top');
+    top.appendChild(el('span', 'entry-time', fmtHMS(e.started_at)));
+    top.appendChild(el('span', 'entry-tool', e.tool_name));
+    var bdg = el('span', 'entry-badge', catLabel(e.tool_category));
+    var cc = getCatColor(e.tool_category);
+    bdg.style.background = cc.bg;
+    bdg.style.color = cc.fg;
+    top.appendChild(bdg);
+    card.appendChild(top);
+
+    if (e.input_summary) {
+      card.appendChild(el('div', 'entry-input', e.input_summary));
+    }
+    if (e.output_summary) {
+      var outDiv = el('div', 'entry-output');
+      var arrow = el('span', 'entry-output-arrow', '\u2192 ');
+      outDiv.appendChild(arrow);
+      outDiv.appendChild(document.createTextNode(e.output_summary));
+      card.appendChild(outDiv);
+    }
+    if (e.is_error && e.error_message) {
+      card.appendChild(el('div', 'entry-error-msg', e.error_message));
+    }
+    var footer = el('div', 'entry-footer');
+    footer.appendChild(el('span', 'entry-duration', (e.duration_ms || 0) + 'ms'));
+    var statusEl = el('span', 'entry-status ' + (e.is_error ? 'fail' : 'success'), e.is_error ? 'ERROR' : 'SUCCESS');
+    footer.appendChild(statusEl);
+    card.appendChild(footer);
+
+    if (e.input_params) {
+      var detail = el('div', 'entry-detail', prettyJSON(e.input_params));
+      card.appendChild(detail);
+      card.addEventListener('click', function() { card.classList.toggle('expanded'); });
+    }
+
+    return card;
+  }
+
   // --- Init ---
   fetchEmail();
   fetchActivity();
   scheduleRefresh();
+  connectSSE();
 })();
 </script>
 </body>

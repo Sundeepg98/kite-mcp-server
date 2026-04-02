@@ -61,6 +61,9 @@ type Store struct {
 	lastHash      string // last entry_hash in the chain
 	hashKey       []byte // HMAC key for hash chaining
 	chainMu       sync.Mutex
+
+	listenerMu        sync.RWMutex
+	activityListeners map[string]chan *ToolCall
 }
 
 // New creates a new audit Store using the given database handle.
@@ -129,6 +132,9 @@ func (s *Store) StartWorker() {
 				if s.logger != nil {
 					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
 				}
+			} else {
+				// Broadcast to SSE listeners after successful write.
+				s.broadcastToListeners(entry)
 			}
 		}
 	}()
@@ -607,6 +613,83 @@ func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
 		TopTool:      topTool,
 		TopToolCount: topToolCount,
 	}, nil
+}
+
+// GetToolCounts returns tool_name -> count for the given email since the given time.
+// Results are ordered by count descending, limited to the top 20 tools.
+func (s *Store) GetToolCounts(email string, since time.Time) (map[string]int, error) {
+	var where []string
+	var args []any
+
+	queryEmail := s.hmacEmail(email)
+	where = append(where, "email = ?")
+	args = append(args, queryEmail)
+
+	if !since.IsZero() {
+		where = append(where, "started_at >= ?")
+		args = append(args, since.Format(time.RFC3339Nano))
+	}
+
+	whereClause := strings.Join(where, " AND ")
+	query := "SELECT tool_name, COUNT(*) AS cnt FROM tool_calls WHERE " + whereClause +
+		" GROUP BY tool_name ORDER BY cnt DESC LIMIT 20"
+
+	rows, err := s.db.RawQuery(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("audit: get tool counts: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]int)
+	for rows.Next() {
+		var name string
+		var count int
+		if err := rows.Scan(&name, &count); err != nil {
+			return nil, fmt.Errorf("audit: scan tool count: %w", err)
+		}
+		result[name] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: iterate tool counts: %w", err)
+	}
+	return result, nil
+}
+
+// --- SSE Listener support for real-time activity streaming ---
+
+// AddActivityListener registers a buffered channel that receives new ToolCall entries as they are recorded.
+func (s *Store) AddActivityListener(id string) chan *ToolCall {
+	ch := make(chan *ToolCall, 100)
+	s.listenerMu.Lock()
+	if s.activityListeners == nil {
+		s.activityListeners = make(map[string]chan *ToolCall)
+	}
+	s.activityListeners[id] = ch
+	s.listenerMu.Unlock()
+	return ch
+}
+
+// RemoveActivityListener unregisters a listener by id and closes its channel.
+func (s *Store) RemoveActivityListener(id string) {
+	s.listenerMu.Lock()
+	ch, exists := s.activityListeners[id]
+	delete(s.activityListeners, id)
+	s.listenerMu.Unlock()
+	if exists {
+		close(ch)
+	}
+}
+
+// broadcastToListeners fans out a tool call entry to all registered activity listeners.
+func (s *Store) broadcastToListeners(entry *ToolCall) {
+	s.listenerMu.RLock()
+	for _, ch := range s.activityListeners {
+		select {
+		case ch <- entry:
+		default:
+		}
+	}
+	s.listenerMu.RUnlock()
 }
 
 // ChainVerification holds the result of VerifyChain.

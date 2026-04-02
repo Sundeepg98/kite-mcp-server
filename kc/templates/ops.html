@@ -32,7 +32,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.tabs { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.tabs { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .tab { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .tab:hover { color: var(--text-1); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -85,10 +85,19 @@ tr:hover td { background: var(--bg-2); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
 .dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
 .dash-nav-link:hover { color: var(--text-1); }
 .dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+@media (max-width: 640px) {
+  .content, .panel { padding: 14px 12px; }
+  .topbar { padding: 0 12px; }
+  .topbar-uptime { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .dash-nav-link { padding: 12px 14px; }
+  .tab { padding: 12px 14px; min-height: 44px; }
+  button, .log-filter { min-height: 44px; }
+}
 </style>
 </head>
 <body>

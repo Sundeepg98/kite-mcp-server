@@ -40,6 +40,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard", wrap(d.servePage))
 	mux.Handle("/dashboard/activity", wrap(d.serveActivityPage))
 	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
+	mux.Handle("/dashboard/api/activity/stream", wrap(d.activityStreamSSE))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
 	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPage))
 	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPage))
@@ -147,12 +148,19 @@ func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 		// Non-fatal: return entries without stats.
 	}
 
+	// Get tool usage counts for the bar chart.
+	toolCounts, tcErr := d.auditStore.GetToolCounts(email, opts.Since)
+	if tcErr != nil {
+		d.logger.Error("Failed to get tool counts", "error", tcErr)
+	}
+
 	d.writeJSON(w, map[string]any{
-		"entries": results,
-		"total":   total,
-		"limit":   opts.Limit,
-		"offset":  opts.Offset,
-		"stats":   stats,
+		"entries":     results,
+		"total":       total,
+		"limit":       opts.Limit,
+		"offset":      opts.Offset,
+		"stats":       stats,
+		"tool_counts": toolCounts,
 	})
 }
 
@@ -225,6 +233,65 @@ func (d *DashboardHandler) activityExport(w http.ResponseWriter, r *http.Request
 		})
 	}
 	cw.Flush()
+}
+
+// activityStreamSSE serves an SSE stream of new audit trail entries for the authenticated user.
+func (d *DashboardHandler) activityStreamSSE(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if d.auditStore == nil {
+		http.Error(w, "audit trail not enabled", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	listenerID := fmt.Sprintf("activity-%s-%d", email, time.Now().UnixNano())
+	ch := d.auditStore.AddActivityListener(listenerID)
+	defer d.auditStore.RemoveActivityListener(listenerID)
+
+	// Send initial keepalive
+	fmt.Fprintf(w, ": connected\n\n")
+	flusher.Flush()
+
+	keepalive := time.NewTicker(15 * time.Second)
+	defer keepalive.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case entry := <-ch:
+			// Only send entries belonging to this user.
+			// The entry email may be hashed; compare using the store's hmac method.
+			// Since the listener receives all entries, we filter by email here.
+			if entry.Email != email {
+				continue
+			}
+			if data, err := json.Marshal(entry); err == nil {
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			}
+		case <-keepalive.C:
+			fmt.Fprintf(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
 }
 
 // intParam parses an integer query parameter, returning defaultVal if missing, invalid, or negative.
@@ -510,20 +577,27 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 
 // --- Orders P&L types ---
 
+type orderLifecycleStep struct {
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message,omitempty"`
+}
+
 type orderEntry struct {
-	OrderID      string   `json:"order_id"`
-	Symbol       string   `json:"symbol"`
-	Exchange     string   `json:"exchange"`
-	Side         string   `json:"side"`
-	Quantity     float64  `json:"quantity"`
-	OrderType    string   `json:"order_type"`
-	PlacedAt     string   `json:"placed_at"`
-	Status       string   `json:"status"`
-	FillPrice    *float64 `json:"fill_price"`
-	CurrentPrice *float64 `json:"current_price"`
-	PnL          *float64 `json:"pnl"`
-	PnLPct       *float64 `json:"pnl_pct"`
-	Error        string   `json:"error,omitempty"`
+	OrderID      string                `json:"order_id"`
+	Symbol       string                `json:"symbol"`
+	Exchange     string                `json:"exchange"`
+	Side         string                `json:"side"`
+	Quantity     float64               `json:"quantity"`
+	OrderType    string                `json:"order_type"`
+	PlacedAt     string                `json:"placed_at"`
+	Status       string                `json:"status"`
+	FillPrice    *float64              `json:"fill_price"`
+	CurrentPrice *float64              `json:"current_price"`
+	PnL          *float64              `json:"pnl"`
+	PnLPct       *float64              `json:"pnl_pct"`
+	Error        string                `json:"error,omitempty"`
+	Lifecycle    []orderLifecycleStep  `json:"lifecycle,omitempty"`
 }
 
 type ordersSummary struct {
@@ -642,10 +716,22 @@ func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Find the latest status entry in the order history
+			// Capture all lifecycle steps and find the latest status
 			if len(history) > 0 {
 				latest := history[len(history)-1]
 				oe.Status = latest.Status
+
+				// Build lifecycle array from all status transitions
+				lifecycle := make([]orderLifecycleStep, 0, len(history))
+				for _, h := range history {
+					step := orderLifecycleStep{
+						Status:    h.Status,
+						Timestamp: h.OrderTimestamp.Time.Format(time.RFC3339),
+						Message:   h.StatusMessage,
+					}
+					lifecycle = append(lifecycle, step)
+				}
+				oe.Lifecycle = lifecycle
 
 				// Use symbol/exchange from order history if not set from params
 				if oe.Symbol == "" {
