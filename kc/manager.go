@@ -465,6 +465,21 @@ func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
 	return m.telegramNotifier
 }
 
+// TrailingStopManager returns the trailing stop manager (nil if not initialized).
+func (m *Manager) TrailingStopManager() *alerts.TrailingStopManager {
+	return m.trailingStopMgr
+}
+
+// PnLService returns the P&L snapshot service (nil if not initialized).
+func (m *Manager) PnLService() *alerts.PnLSnapshotService {
+	return m.pnlService
+}
+
+// SetPnLService sets the P&L snapshot service (called from app layer after initialization).
+func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
+	m.pnlService = svc
+}
+
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
 func (m *Manager) HasUserCredentials(email string) bool {
 	if email == "" {

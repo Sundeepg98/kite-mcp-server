@@ -58,6 +58,31 @@ func SummarizeInput(toolName string, args map[string]any) string {
 		return fmt.Sprintf("chat_id=%s", strVal(args, "chat_id"))
 	case "get_order_history", "get_order_trades":
 		return fmt.Sprintf("order %s", strVal(args, "order_id"))
+	case "place_mf_order":
+		return fmt.Sprintf("%s MF %s amt=%s qty=%s",
+			strings.ToUpper(strVal(args, "transaction_type")),
+			strVal(args, "tradingsymbol"),
+			strVal(args, "amount"),
+			strVal(args, "quantity"))
+	case "cancel_mf_order":
+		return fmt.Sprintf("Cancel MF order %s", strVal(args, "order_id"))
+	case "place_mf_sip":
+		return fmt.Sprintf("SIP %s %s %s x%s",
+			strVal(args, "tradingsymbol"),
+			strVal(args, "amount"),
+			strVal(args, "frequency"),
+			strVal(args, "instalments"))
+	case "cancel_mf_sip":
+		return fmt.Sprintf("Cancel SIP %s", strVal(args, "sip_id"))
+	case "get_option_chain":
+		expiry := strVal(args, "expiry")
+		if expiry == "" {
+			expiry = "nearest"
+		}
+		return fmt.Sprintf("%s expiry=%s strikes=%s",
+			strings.ToUpper(strVal(args, "underlying")),
+			expiry,
+			strVal(args, "strikes_around_atm"))
 	default:
 		return summarizeDefault(args)
 	}
@@ -105,6 +130,12 @@ func SummarizeOutput(toolName string, result *gomcp.CallToolResult) string {
 		return summarizeSearch(text)
 	case "pre_trade_check":
 		return summarizePreTradeCheck(text)
+	case "place_mf_order", "cancel_mf_order":
+		return summarizeMFOrderResult(text)
+	case "place_mf_sip", "cancel_mf_sip":
+		return summarizeMFSIPResult(text)
+	case "get_option_chain":
+		return summarizeOptionChain(text)
 	}
 
 	// Default: truncate.
@@ -505,6 +536,52 @@ func nonEmpty(parts []string) []string {
 		}
 	}
 	return result
+}
+
+// summarizeMFOrderResult extracts the order_id from an MF order response.
+func summarizeMFOrderResult(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	if oid := jsonString(obj, "order_id"); oid != "" {
+		return "MF Order ID: " + oid
+	}
+	return truncate(text, 200)
+}
+
+// summarizeMFSIPResult extracts the sip_id from an MF SIP response.
+func summarizeMFSIPResult(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	if sid := jsonString(obj, "sip_id"); sid != "" {
+		return "SIP ID: " + sid
+	}
+	return truncate(text, 200)
+}
+
+// summarizeOptionChain extracts key metrics from option chain response.
+func summarizeOptionChain(text string) string {
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		return truncate(text, 200)
+	}
+	underlying := jsonString(obj, "underlying")
+	expiry := jsonString(obj, "expiry")
+	spot := jsonFloat(obj, "spot_price")
+	pcr := jsonFloat(obj, "pcr")
+	maxPain := jsonFloat(obj, "max_pain")
+
+	// Count chain entries
+	chainCount := 0
+	if chain, ok := obj["chain"].([]any); ok {
+		chainCount = len(chain)
+	}
+
+	return fmt.Sprintf("%s %d strikes, spot %s, PCR %.2f, max pain %.0f, expiry %s",
+		underlying, chainCount, formatRupee(spot), pcr, maxPain, expiry)
 }
 
 // truncate shortens s to maxLen characters, appending "..." if truncated.

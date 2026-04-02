@@ -43,6 +43,12 @@ var toolCategories = map[string]string{
 	"convert_position":     "order",
 	"close_all_positions": "order",
 
+	// mf_order
+	"place_mf_order":  "mf_order",
+	"cancel_mf_order": "mf_order",
+	"place_mf_sip":    "mf_order",
+	"cancel_mf_sip":   "mf_order",
+
 	// query
 	"trading_context":   "query",
 	"get_profile":       "query",
@@ -83,6 +89,14 @@ var toolCategories = map[string]string{
 	"set_alert":      "alert",
 	"list_alerts":    "alert",
 	"delete_alert":   "alert",
+
+	// trailing_stop
+	"set_trailing_stop":    "trailing_stop",
+	"list_trailing_stops":  "trailing_stop",
+	"cancel_trailing_stop": "trailing_stop",
+
+	// pnl
+	"get_pnl_journal": "query",
 
 	// setup
 	"login":          "setup",

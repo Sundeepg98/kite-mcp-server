@@ -385,6 +385,24 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 		taskNames = append(taskNames, "audit_cleanup(03:00)")
 	}
 
+	// --- Daily P&L snapshot — 3:40 PM IST (after market close, after Telegram summary) ---
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
+		credAdapter := &briefingCredAdapter{manager: kcManager}
+		pnlService := alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
+		if pnlService != nil {
+			kcManager.SetPnLService(pnlService)
+			sched.Add(scheduler.Task{
+				Name:   "pnl_snapshot",
+				Hour:   15,
+				Minute: 40,
+				Fn:     pnlService.TakeSnapshots,
+			})
+			taskNames = append(taskNames, "pnl_snapshot(15:40)")
+			app.logger.Info("P&L journal snapshot service enabled")
+		}
+	}
+
 	// Only start the scheduler if there are tasks to run.
 	if len(taskNames) == 0 {
 		app.logger.Info("No scheduled tasks configured")

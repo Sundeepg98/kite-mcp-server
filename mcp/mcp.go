@@ -34,6 +34,10 @@ func GetAllTools() []Tool {
 		&MFHoldingsTool{},
 		&MFOrdersTool{},
 		&MFSIPsTool{},
+		&PlaceMFOrderTool{},
+		&CancelMFOrderTool{},
+		&PlaceMFSIPTool{},
+		&CancelMFSIPTool{},
 
 		// Tools for market data
 		&QuotesTool{},
@@ -41,6 +45,7 @@ func GetAllTools() []Tool {
 		&HistoricalDataTool{},
 		&LTPTool{},
 		&OHLCTool{},
+		&OptionChainTool{},
 
 		// Tools for real-time market data (WebSocket ticker)
 		&StartTickerTool{},
@@ -54,6 +59,14 @@ func GetAllTools() []Tool {
 		&SetAlertTool{},
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
+
+		// Trailing stop-loss tools
+		&SetTrailingStopTool{},
+		&ListTrailingStopsTool{},
+		&CancelTrailingStopTool{},
+
+		// P&L journal
+		&GetPnLJournalTool{},
 
 		// Trading context (unified snapshot — start here)
 		&TradingContextTool{},
