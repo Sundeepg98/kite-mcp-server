@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
@@ -11,16 +12,16 @@ import (
 )
 
 func TestWithAppUI(t *testing.T) {
-	t.Run("sets _meta.ui.resourceUri", func(t *testing.T) {
+	t.Run("sets flat _meta ui/resourceUri key", func(t *testing.T) {
 		tool := gomcp.NewTool("test_tool", gomcp.WithDescription("test"))
 		result := withAppUI(tool, "ui://kite-mcp/portfolio")
 
 		require.NotNil(t, result.Meta)
 		require.NotNil(t, result.Meta.AdditionalFields)
 
-		ui, ok := result.Meta.AdditionalFields["ui"].(map[string]any)
-		require.True(t, ok, "expected ui to be map[string]any")
-		assert.Equal(t, "ui://kite-mcp/portfolio", ui["resourceUri"])
+		uri, ok := result.Meta.AdditionalFields["ui/resourceUri"].(string)
+		require.True(t, ok, "expected ui/resourceUri to be string")
+		assert.Equal(t, "ui://kite-mcp/portfolio", uri)
 	})
 
 	t.Run("empty URI returns tool unchanged", func(t *testing.T) {
@@ -30,7 +31,7 @@ func TestWithAppUI(t *testing.T) {
 		assert.Nil(t, result.Meta)
 	})
 
-	t.Run("serializes correctly in JSON", func(t *testing.T) {
+	t.Run("serializes as flat key in JSON", func(t *testing.T) {
 		tool := gomcp.NewTool("test_tool", gomcp.WithDescription("test"))
 		tool = withAppUI(tool, "ui://kite-mcp/orders")
 
@@ -43,9 +44,10 @@ func TestWithAppUI(t *testing.T) {
 		meta, ok := parsed["_meta"].(map[string]any)
 		require.True(t, ok, "expected _meta in serialized JSON")
 
-		ui, ok := meta["ui"].(map[string]any)
-		require.True(t, ok, "expected ui in _meta")
-		assert.Equal(t, "ui://kite-mcp/orders", ui["resourceUri"])
+		// Flat key format: _meta["ui/resourceUri"]
+		uri, ok := meta["ui/resourceUri"].(string)
+		require.True(t, ok, "expected flat ui/resourceUri key in _meta")
+		assert.Equal(t, "ui://kite-mcp/orders", uri)
 	})
 }
 
@@ -119,7 +121,7 @@ func TestPagePathToResourceURI(t *testing.T) {
 func TestAppResources(t *testing.T) {
 	t.Run("all app resources have valid template files", func(t *testing.T) {
 		for _, res := range appResources {
-			data, err := readEmbeddedTemplate(res.TemplateFile)
+			data, err := templates.FS.ReadFile(res.TemplateFile)
 			assert.NoError(t, err, "template %s should be readable", res.TemplateFile)
 			assert.True(t, len(data) > 0, "template %s should not be empty", res.TemplateFile)
 		}
@@ -143,44 +145,48 @@ func TestAppResources(t *testing.T) {
 				"appResource URI %s not found in pagePathToResourceURI", res.URI)
 		}
 	})
+
+	t.Run("all widget templates contain data placeholder", func(t *testing.T) {
+		for _, res := range appResources {
+			data, _ := templates.FS.ReadFile(res.TemplateFile)
+			assert.True(t, strings.Contains(string(data), dataPlaceholder),
+				"template %s should contain data placeholder %s", res.TemplateFile, dataPlaceholder)
+		}
+	})
 }
 
-func TestInjectBaseURL(t *testing.T) {
-	t.Run("injects after <head>", func(t *testing.T) {
-		html := `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body></body></html>`
-		result := injectBaseURL(html, "https://example.com")
-		assert.Contains(t, result, `<base href="https://example.com/">`)
-		// <base> should appear between <head> and <meta
-		headIdx := len(`<!DOCTYPE html><html><head>`)
-		baseIdx := findIndex(result, `<base href=`)
-		assert.Greater(t, baseIdx, headIdx-1)
+func TestInjectData(t *testing.T) {
+	t.Run("replaces placeholder with JSON data", func(t *testing.T) {
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		data := map[string]any{"holdings": []string{"RELIANCE"}}
+		result := injectData(html, data)
+		assert.Contains(t, result, `"holdings":["RELIANCE"]`)
+		assert.NotContains(t, result, dataPlaceholder)
 	})
 
-	t.Run("adds trailing slash", func(t *testing.T) {
-		html := `<head></head>`
-		result := injectBaseURL(html, "https://example.com")
-		assert.Contains(t, result, `href="https://example.com/"`)
+	t.Run("nil data injects null", func(t *testing.T) {
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		result := injectData(html, nil)
+		assert.Contains(t, result, `window.__DATA__ = null;`)
 	})
 
-	t.Run("preserves existing trailing slash", func(t *testing.T) {
-		html := `<head></head>`
-		result := injectBaseURL(html, "https://example.com/")
-		assert.Contains(t, result, `href="https://example.com/"`)
-		// Should not double-slash
-		assert.NotContains(t, result, `href="https://example.com//"`)
+	t.Run("Go json.Marshal escapes script tags in values", func(t *testing.T) {
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		data := map[string]string{"name": "test</script><script>alert(1)//"}
+		result := injectData(html, data)
+		// Go's json.Marshal escapes < and > to \u003c and \u003e, preventing XSS.
+		assert.Contains(t, result, `\u003c/script\u003e`)
+		// The literal </script> should NOT appear in the output.
+		// Count occurrences: only the closing tag of the actual script element.
+		assert.Equal(t, 1, strings.Count(result, "</script>"), "only the real closing tag")
 	})
 
-	t.Run("empty baseURL returns HTML unchanged", func(t *testing.T) {
-		html := `<head><title>Test</title></head>`
-		result := injectBaseURL(html, "")
-		assert.Equal(t, html, result)
-	})
-
-	t.Run("no <head> tag falls back to prepend", func(t *testing.T) {
-		html := `<div>hello</div>`
-		result := injectBaseURL(html, "https://example.com")
-		assert.True(t, len(result) > len(html))
-		assert.Contains(t, result, `<base href="https://example.com/">`)
+	t.Run("Go json.Marshal escapes HTML comments in values", func(t *testing.T) {
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		data := map[string]string{"name": "<!--injection"}
+		result := injectData(html, data)
+		// Go escapes < to \u003c, so <!-- becomes \u003c!--
+		assert.Contains(t, result, `\u003c!--injection`)
 	})
 }
 
@@ -188,19 +194,4 @@ func TestResourceMIMEType(t *testing.T) {
 	t.Run("MIME type matches MCP Apps spec", func(t *testing.T) {
 		assert.Equal(t, "text/html;profile=mcp-app", ResourceMIMEType)
 	})
-}
-
-// readEmbeddedTemplate is a test helper to read from the embedded FS.
-func readEmbeddedTemplate(name string) ([]byte, error) {
-	return templates.FS.ReadFile(name)
-}
-
-// findIndex returns the position of substr in s, or -1.
-func findIndex(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

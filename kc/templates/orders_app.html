@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Orders · Kite MCP</title>
+<style>
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
+  --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+  --accent-dim: rgba(34,211,238,0.08); --green-dim: rgba(52,211,153,0.08);
+  --red-dim: rgba(248,113,113,0.06); --amber-dim: rgba(251,191,36,0.06);
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); -webkit-font-smoothing: antialiased; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-1); }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.sep { width: 1px; height: 16px; background: var(--border); }
+.title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.dash-link { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.8; }
+.dash-link:hover { opacity: 1; }
+
+.content { padding: 16px 20px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.stat-value { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.green { color: var(--green); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.red { color: var(--red); }
+.stat-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-top: 2px; }
+
+.section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-1); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 9px 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+th.right, td.right { text-align: right; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-1); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-2); }
+
+.badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-family: var(--mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-2); font-size: 13px; }
+
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.refresh-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-error { text-align: center; padding: 40px 16px; color: var(--text-2); font-size: 13px; }
+.auth-error strong { color: var(--red); }
+
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .content { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span><span class="sep"></span><span class="title">Orders</span>
+  </div>
+  <a href="#" class="dash-link" onclick="AppBridge.openLink('https://kite-mcp-server.fly.dev/dashboard/orders'); return false;">&#8599; Full Dashboard</a>
+</div>
+
+<div class="content">
+  <div class="stats-row" id="statsRow"></div>
+  <div class="section-title">Orders</div>
+  <div id="ordersTable"></div>
+</div>
+<div class="footer" id="footerBar">
+  <span class="footer-ts" id="footerTs"></span>
+  <span class="footer-ts" style="font-style:italic">Data loaded at page render</span>
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch(e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      // Handle incoming requests from host
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); } }, 30000);
+    });
+  }
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {} return result.content[0].text;
+    }
+    return result;
+  }
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => { window.open(url, '_blank'); });
+  }
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }}, '*');
+  }
+
+  // ResizeObserver for automatic size notifications
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+})();
+
+function formatINR(n) {
+  if (n == null || isNaN(n)) return '--';
+  const neg = n < 0; const abs = Math.abs(n);
+  const [int, dec] = abs.toFixed(2).split('.');
+  let r = '';
+  if (int.length <= 3) { r = int; }
+  else { r = int.slice(-3); let rem = int.slice(0,-3);
+    while (rem.length > 2) { r = rem.slice(-2)+','+r; rem = rem.slice(0,-2); }
+    if (rem.length) r = rem+','+r;
+  }
+  return (neg?'-':'')+'₹'+r+'.'+dec;
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = String(text);
+  return e;
+}
+
+function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function statusBadgeCls(status) {
+  const s = (status || '').toUpperCase();
+  if (s === 'COMPLETE') return 'badge badge-green';
+  if (s === 'OPEN' || s === 'PENDING' || s === 'TRIGGER PENDING') return 'badge badge-amber';
+  if (s === 'REJECTED' || s === 'CANCELLED') return 'badge badge-red';
+  return 'badge badge-accent';
+}
+
+function typeBadgeCls(type) {
+  const t = (type || '').toUpperCase();
+  if (t === 'BUY') return 'badge badge-green';
+  if (t === 'SELL') return 'badge badge-red';
+  return 'badge badge-accent';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return hh + ':' + mm + ':' + ss;
+}
+
+function isDataEmpty(d) {
+  if (!d || typeof d !== 'object') return true;
+  return Object.keys(d).length === 0;
+}
+
+function updateFooterTs() {
+  const ts = document.getElementById('footerTs');
+  if (ts) {
+    const now = new Date();
+    ts.textContent = 'Last updated: ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
+}
+
+function render() {
+  const data = window.__DATA__;
+
+  if (isDataEmpty(data)) {
+    document.getElementById('statsRow').innerHTML = '';
+    document.getElementById('ordersTable').innerHTML = '<div class="auth-error"><strong>Not authenticated</strong><br>Please log in via your MCP client</div>';
+    AppBridge.notifySize();
+    return;
+  }
+
+  const summary = data.summary || {};
+  const orders = data.orders || [];
+
+  // Stats row
+  const statsRow = document.getElementById('statsRow');
+  clearEl(statsRow);
+
+  function makeStat(label, value, cls, sub) {
+    const card = el('div', 'stat');
+    card.appendChild(el('div', 'stat-label', label));
+    card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), String(value)));
+    if (sub) card.appendChild(el('div', 'stat-sub', sub));
+    return card;
+  }
+
+  statsRow.appendChild(makeStat(
+    'Total Orders',
+    summary.total != null ? summary.total : '--',
+    'accent',
+    'Buy ' + formatINR(summary.total_buy_value) + ' / Sell ' + formatINR(summary.total_sell_value)
+  ));
+  statsRow.appendChild(makeStat('Completed', summary.completed != null ? summary.completed : '--', 'green'));
+  statsRow.appendChild(makeStat('Pending', summary.pending != null ? summary.pending : '--', 'amber'));
+  statsRow.appendChild(makeStat('Rejected', summary.rejected != null ? summary.rejected : '--', 'red'));
+
+  // Orders table
+  const container = document.getElementById('ordersTable');
+  clearEl(container);
+
+  if (orders.length === 0) {
+    container.appendChild(el('div', 'empty-state', 'No orders today'));
+  } else {
+    const wrap = el('div', 'table-wrap');
+    const tbl = document.createElement('table');
+
+    // Header
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    var headers = [
+      {text: 'Symbol', right: false},
+      {text: 'Type', right: false},
+      {text: 'Order Type', right: false},
+      {text: 'Qty', right: true},
+      {text: 'Price', right: true},
+      {text: 'Avg Price', right: true},
+      {text: 'Status', right: false},
+      {text: 'Time', right: false}
+    ];
+    headers.forEach(function(h) {
+      headRow.appendChild(el('th', h.right ? 'right' : '', h.text));
+    });
+    thead.appendChild(headRow);
+    tbl.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement('tbody');
+    orders.forEach(function(o) {
+      const tr = document.createElement('tr');
+
+      // Symbol + exchange
+      const tdSym = document.createElement('td');
+      const symSpan = el('span', '', o.tradingsymbol || '--');
+      symSpan.style.cssText = 'color:var(--text-0);font-weight:600';
+      tdSym.appendChild(symSpan);
+      const exchSpan = el('span', '', o.exchange || '');
+      exchSpan.style.cssText = 'color:var(--text-2);font-size:10px;margin-left:4px';
+      tdSym.appendChild(exchSpan);
+      tr.appendChild(tdSym);
+
+      // Transaction type badge
+      const tdType = document.createElement('td');
+      tdType.appendChild(el('span', typeBadgeCls(o.transaction_type), (o.transaction_type || '--').toUpperCase()));
+      tr.appendChild(tdType);
+
+      // Order type
+      tr.appendChild(el('td', '', o.order_type || '--'));
+
+      // Qty (filled/total)
+      const qtyText = (o.filled_quantity != null ? o.filled_quantity : '--') + ' / ' + (o.quantity != null ? o.quantity : '--');
+      tr.appendChild(el('td', 'right', qtyText));
+
+      // Price
+      tr.appendChild(el('td', 'right', o.price ? formatINR(o.price) : '--'));
+
+      // Avg price
+      tr.appendChild(el('td', 'right', o.average_price ? formatINR(o.average_price) : '--'));
+
+      // Status badge
+      const tdStatus = document.createElement('td');
+      tdStatus.appendChild(el('span', statusBadgeCls(o.status), (o.status || '--').toUpperCase()));
+      tr.appendChild(tdStatus);
+
+      // Time
+      tr.appendChild(el('td', '', fmtTime(o.placed_at)));
+
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    container.appendChild(wrap);
+  }
+
+  updateFooterTs();
+  AppBridge.notifySize();
+}
+
+AppBridge.init().then(function() { render(); }).catch(function() { render(); });
+</script>
+</body>
+</html>

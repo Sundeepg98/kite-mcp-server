@@ -7,6 +7,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 )
 
 type Tool interface {
@@ -140,7 +141,7 @@ func filterTools(allTools []Tool, excludedSet map[string]bool) ([]Tool, int, int
 	return filteredTools, len(filteredTools), excludedCount
 }
 
-func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools string, logger *slog.Logger) {
+func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools string, auditStore *audit.Store, logger *slog.Logger) {
 	// Parse excluded tools list
 	excludedSet := parseExcludedTools(excludedTools)
 
@@ -153,7 +154,7 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	allTools := GetAllTools()
 	filteredTools, registeredCount, excludedCount := filterTools(allTools, excludedSet)
 
-	// Register filtered tools, injecting _meta.ui.resourceUri for MCP Apps
+	// Register filtered tools, injecting _meta["ui/resourceUri"] for MCP Apps
 	// where the tool has an associated dashboard page.
 	for _, tool := range filteredTools {
 		t := tool.Tool()
@@ -163,8 +164,8 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 		srv.AddTool(t, tool.Handler(manager))
 	}
 
-	// Register dashboard pages as MCP App resources (ui:// scheme).
-	RegisterAppResources(srv, manager, logger)
+	// Register widget pages as MCP App resources (ui:// scheme).
+	RegisterAppResources(srv, manager, auditStore, logger)
 
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,

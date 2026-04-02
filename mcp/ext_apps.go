@@ -2,63 +2,82 @@ package mcp
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// ResourceMIMEType is the MIME type that signals MCP App hosts (Cowork, claude.ai)
-// to render the resource as an interactive iframe widget rather than displaying
-// the raw HTML source.
+// ResourceMIMEType is the MIME type that signals MCP App hosts (claude.ai,
+// ChatGPT, VS Code) to render the resource as an interactive iframe widget.
 const ResourceMIMEType = "text/html;profile=mcp-app"
 
-// appResource defines a UI resource served as an MCP App.
+// dataPlaceholder is replaced with pre-injected JSON in widget HTML.
+const dataPlaceholder = `"__INJECTED_DATA__"`
+
+// appResource defines a UI resource served as an MCP App widget.
 type appResource struct {
-	// URI is the ui:// URI for the resource (e.g. "ui://kite-mcp/portfolio").
-	URI string
-	// Name is the human-readable name shown in resource listings.
-	Name string
-	// TemplateFile is the filename inside the embedded kc/templates/ directory.
-	TemplateFile string
+	URI          string
+	Name         string
+	TemplateFile string // *_app.html widget file
+	// DataFunc returns JSON-serializable data to inject as window.__DATA__.
+	// Receives the authenticated email. Returns nil if unauthenticated.
+	DataFunc func(manager *kc.Manager, auditStore *audit.Store, email string) any
 }
 
-// appResources lists all dashboard pages exposed as MCP App resources.
+// appResources lists the widget pages exposed as MCP App resources.
+// Each uses a dedicated *_app.html optimized for iframe rendering
+// (no external deps, AppBridge communication, pre-injected data).
 var appResources = []appResource{
-	{URI: "ui://kite-mcp/portfolio", Name: "Portfolio Dashboard", TemplateFile: "dashboard.html"},
-	{URI: "ui://kite-mcp/activity", Name: "Activity Timeline", TemplateFile: "activity.html"},
-	{URI: "ui://kite-mcp/orders", Name: "Orders Dashboard", TemplateFile: "orders.html"},
-	{URI: "ui://kite-mcp/alerts", Name: "Alerts Dashboard", TemplateFile: "alerts.html"},
-	{URI: "ui://kite-mcp/ops", Name: "Ops Dashboard", TemplateFile: "ops.html"},
+	{
+		URI: "ui://kite-mcp/portfolio", Name: "Portfolio Widget",
+		TemplateFile: "portfolio_app.html",
+		DataFunc:     portfolioData,
+	},
+	{
+		URI: "ui://kite-mcp/activity", Name: "Activity Widget",
+		TemplateFile: "activity_app.html",
+		DataFunc:     activityData,
+	},
+	{
+		URI: "ui://kite-mcp/orders", Name: "Orders Widget",
+		TemplateFile: "orders_app.html",
+		DataFunc:     ordersData,
+	},
+	{
+		URI: "ui://kite-mcp/alerts", Name: "Alerts Widget",
+		TemplateFile: "alerts_app.html",
+		DataFunc:     alertsData,
+	},
 }
 
-// pagePathToResourceURI maps dashboard URL paths (from toolDashboardPage) to
-// ui:// resource URIs for MCP Apps.
+// pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
 var pagePathToResourceURI = map[string]string{
 	"/dashboard":          "ui://kite-mcp/portfolio",
 	"/dashboard/activity": "ui://kite-mcp/activity",
 	"/dashboard/orders":   "ui://kite-mcp/orders",
 	"/dashboard/alerts":   "ui://kite-mcp/alerts",
-	"/admin/ops":          "ui://kite-mcp/ops",
 }
 
-// withAppUI returns a copy of the tool with _meta.ui.resourceUri set, which
-// tells MCP App hosts (Cowork, claude.ai) to render the associated UI resource
-// inline when the tool is called. If resourceURI is empty, the tool is returned
-// unchanged.
+// withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
+// Claude.ai only recognizes this flat format (not nested _meta.ui.resourceUri).
+// The ext-apps SDK's getToolUiResourceUri() accepts both formats.
 func withAppUI(t gomcp.Tool, resourceURI string) gomcp.Tool {
 	if resourceURI == "" {
 		return t
 	}
 	t.Meta = &gomcp.Meta{
 		AdditionalFields: map[string]any{
-			"ui": map[string]any{
-				"resourceUri": resourceURI,
-			},
+			"ui/resourceUri": resourceURI,
 		},
 	}
 	return t
@@ -74,53 +93,44 @@ func resourceURIForTool(toolName string) string {
 	return pagePathToResourceURI[pagePath]
 }
 
-// injectBaseURL prepends a <base href> tag into the HTML so that relative
-// fetch() calls in the dashboard pages resolve against the server's external
-// URL when rendered inside an MCP App iframe.  If baseURL is empty the HTML
-// is returned unchanged.
-func injectBaseURL(html string, baseURL string) string {
-	if baseURL == "" {
-		return html
+// injectData replaces the dataPlaceholder in HTML with the JSON-encoded data.
+// If data is nil, injects "null". Escapes "</script>" sequences in the JSON
+// to prevent XSS breakout from the <script> tag context.
+func injectData(html string, data any) string {
+	var jsonStr string
+	if data == nil {
+		jsonStr = "null"
+	} else {
+		b, err := json.Marshal(data)
+		if err != nil {
+			jsonStr = "null"
+		} else {
+			jsonStr = string(b)
+		}
 	}
-	// Ensure trailing slash for <base href>.
-	if !strings.HasSuffix(baseURL, "/") {
-		baseURL += "/"
-	}
-	// Insert <base> right after <head> or after the opening <meta charset> line.
-	// We look for the first <meta charset line and inject after it.
-	tag := fmt.Sprintf(`<base href="%s">`, baseURL)
-	// Try inserting after <head> tag.
-	if idx := strings.Index(html, "<head>"); idx >= 0 {
-		insertAt := idx + len("<head>")
-		return html[:insertAt] + "\n" + tag + "\n" + html[insertAt:]
-	}
-	// Fallback: prepend to the entire HTML.
-	return tag + "\n" + html
+	// Defense-in-depth: Go's json.Marshal already escapes "<" as "\u003c",
+	// so these replacements are no-ops in practice. They guard against future
+	// changes to the JSON encoding (e.g., SetEscapeHTML(false)).
+	jsonStr = strings.ReplaceAll(jsonStr, "</", `<\/`)
+	jsonStr = strings.ReplaceAll(jsonStr, "<!--", `<\!--`)
+	return strings.Replace(html, dataPlaceholder, jsonStr, 1)
 }
 
-// RegisterAppResources registers the dashboard HTML pages as MCP App resources
-// using the ui:// URI scheme. When an MCP App host (Cowork, claude.ai) sees a
-// tool with _meta.ui.resourceUri, it fetches the corresponding resource and
-// renders it inline as an interactive iframe.
-func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, logger *slog.Logger) {
-	// Determine the base URL for injecting into HTML pages.
-	baseURL := dashboardBaseURL(manager)
-
+// RegisterAppResources registers widget HTML pages as MCP App resources.
+// Each resource handler dynamically injects user-specific data so widgets
+// render instantly without needing AppBridge round-trips for initial load.
+func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore *audit.Store, logger *slog.Logger) {
 	registered := 0
 	for _, res := range appResources {
-		// Capture loop variable for closure.
 		res := res
 
-		// Read the embedded HTML template.
 		htmlBytes, err := templates.FS.ReadFile(res.TemplateFile)
 		if err != nil {
-			logger.Warn("Failed to read template for MCP App resource",
+			logger.Warn("Failed to read widget template",
 				"uri", res.URI, "file", res.TemplateFile, "error", err)
 			continue
 		}
-
-		// Inject base URL for cross-origin fetch resolution in iframe context.
-		html := injectBaseURL(string(htmlBytes), baseURL)
+		htmlTemplate := string(htmlBytes)
 
 		srv.AddResource(
 			gomcp.Resource{
@@ -129,6 +139,15 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, logger *sl
 				MIMEType: ResourceMIMEType,
 			},
 			func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
+				// Extract authenticated email from MCP session context.
+				email := oauth.EmailFromContext(ctx)
+				var data any
+				if email != "" && res.DataFunc != nil {
+					data = res.DataFunc(manager, auditStore, email)
+				}
+
+				html := injectData(htmlTemplate, data)
+
 				return []gomcp.ResourceContents{
 					gomcp.TextResourceContents{
 						URI:      res.URI,
@@ -141,5 +160,289 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, logger *sl
 		registered++
 	}
 
-	logger.Info("MCP App resources registered", "count", registered)
+	logger.Info("MCP App widget resources registered", "count", registered)
+}
+
+// --- Data functions for each widget ---
+
+// portfolioData fetches holdings + positions in parallel for the portfolio widget.
+func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
+	client := kiteClientForEmail(manager, email)
+	if client == nil {
+		return nil
+	}
+
+	// Parallel API calls to reduce latency.
+	var holdings kiteconnect.Holdings
+	var positions kiteconnect.Positions
+	var holdingsErr, positionsErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); holdings, holdingsErr = client.GetHoldings() }()
+	go func() { defer wg.Done(); positions, positionsErr = client.GetPositions() }()
+	wg.Wait()
+
+	if holdingsErr != nil {
+		return map[string]string{"error": "Failed to fetch holdings: " + holdingsErr.Error()}
+	}
+	if positionsErr != nil {
+		return map[string]string{"error": "Failed to fetch positions: " + positionsErr.Error()}
+	}
+
+	type holdingItem struct {
+		Symbol     string  `json:"tradingsymbol"`
+		Exchange   string  `json:"exchange"`
+		Quantity   int     `json:"quantity"`
+		AvgPrice   float64 `json:"average_price"`
+		LastPrice  float64 `json:"last_price"`
+		PnL        float64 `json:"pnl"`
+		DayChgPct  float64 `json:"day_change_percentage"`
+	}
+	type posItem struct {
+		Symbol   string  `json:"tradingsymbol"`
+		Exchange string  `json:"exchange"`
+		Quantity int     `json:"quantity"`
+		AvgPrice float64 `json:"average_price"`
+		LastPrice float64 `json:"last_price"`
+		PnL      float64 `json:"pnl"`
+		Product  string  `json:"product"`
+	}
+
+	hItems := make([]holdingItem, 0, len(holdings))
+	var totalInvested, totalCurrent, totalPnL float64
+	for _, h := range holdings {
+		hItems = append(hItems, holdingItem{
+			Symbol: h.Tradingsymbol, Exchange: h.Exchange, Quantity: h.Quantity,
+			AvgPrice: h.AveragePrice, LastPrice: h.LastPrice, PnL: h.PnL,
+			DayChgPct: h.DayChangePercentage,
+		})
+		totalInvested += h.AveragePrice * float64(h.Quantity)
+		totalCurrent += h.LastPrice * float64(h.Quantity)
+		totalPnL += h.PnL
+	}
+
+	pItems := make([]posItem, 0, len(positions.Net))
+	var posPnL float64
+	for _, p := range positions.Net {
+		pItems = append(pItems, posItem{
+			Symbol: p.Tradingsymbol, Exchange: p.Exchange, Quantity: p.Quantity,
+			AvgPrice: p.AveragePrice, LastPrice: p.LastPrice, PnL: p.PnL,
+			Product: p.Product,
+		})
+		posPnL += p.PnL
+	}
+
+	return map[string]any{
+		"holdings":  hItems,
+		"positions": pItems,
+		"summary": map[string]any{
+			"holdings_count":  len(holdings),
+			"total_invested":  totalInvested,
+			"total_current":   totalCurrent,
+			"total_pnl":       totalPnL,
+			"positions_count": len(positions.Net),
+			"positions_pnl":   posPnL,
+		},
+	}
+}
+
+// activityData fetches recent audit trail entries for the activity widget.
+func activityData(_ *kc.Manager, auditStore *audit.Store, email string) any {
+	if auditStore == nil {
+		return nil
+	}
+
+	since := time.Now().AddDate(0, 0, -7)
+	entries, _, err := auditStore.List(email, audit.ListOptions{
+		Limit: 20,
+		Since: since,
+	})
+	if err != nil {
+		return nil
+	}
+
+	stats, _ := auditStore.GetStats(email, since)
+	toolCounts, _ := auditStore.GetToolCounts(email, since)
+
+	return map[string]any{
+		"entries":     entries,
+		"stats":       stats,
+		"tool_counts": toolCounts,
+	}
+}
+
+// ordersData fetches recent order entries for the orders widget.
+func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any {
+	if auditStore == nil {
+		return nil
+	}
+
+	since := time.Now().AddDate(0, 0, -1) // today
+	toolCalls, err := auditStore.ListOrders(email, since)
+	if err != nil {
+		return nil
+	}
+
+	client := kiteClientForEmail(manager, email)
+
+	type orderEntry struct {
+		OrderID        string  `json:"order_id"`
+		Symbol         string  `json:"tradingsymbol"`
+		Exchange       string  `json:"exchange"`
+		Side           string  `json:"transaction_type"`
+		OrderType      string  `json:"order_type"`
+		Quantity       float64 `json:"quantity"`
+		FilledQuantity float64 `json:"filled_quantity"`
+		Price          float64 `json:"price"`
+		AveragePrice   float64 `json:"average_price"`
+		Status         string  `json:"status"`
+		PlacedAt       string  `json:"placed_at"`
+	}
+
+	// Fetch all orders in a single API call (instead of N GetOrderHistory calls).
+	orderStatusMap := make(map[string]kiteconnect.Order)
+	if client != nil {
+		if allOrders, oErr := client.GetOrders(); oErr == nil {
+			for _, o := range allOrders {
+				orderStatusMap[o.OrderID] = o
+			}
+		}
+	}
+
+	orders := make([]orderEntry, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		oe := orderEntry{OrderID: tc.OrderID, PlacedAt: tc.StartedAt.Format(time.RFC3339)}
+		if tc.InputParams != "" {
+			var params map[string]any
+			if json.Unmarshal([]byte(tc.InputParams), &params) == nil {
+				if v, ok := params["tradingsymbol"].(string); ok { oe.Symbol = v }
+				if v, ok := params["exchange"].(string); ok { oe.Exchange = v }
+				if v, ok := params["transaction_type"].(string); ok { oe.Side = v }
+				if v, ok := params["order_type"].(string); ok { oe.OrderType = v }
+				if v, ok := params["quantity"].(float64); ok { oe.Quantity = v }
+				if v, ok := params["price"].(float64); ok { oe.Price = v }
+			}
+		}
+		// Enrich from the single GetOrders() result.
+		if o, ok := orderStatusMap[oe.OrderID]; ok {
+			oe.Status = o.Status
+			oe.FilledQuantity = float64(o.FilledQuantity)
+			oe.AveragePrice = o.AveragePrice
+			if oe.Symbol == "" { oe.Symbol = o.TradingSymbol }
+			if oe.Exchange == "" { oe.Exchange = o.Exchange }
+			if oe.Side == "" { oe.Side = o.TransactionType }
+			if oe.Quantity == 0 { oe.Quantity = float64(o.Quantity) }
+			if oe.Price == 0 { oe.Price = o.Price }
+		}
+		orders = append(orders, oe)
+	}
+
+	var completed, pending, rejected int
+	var totalBuyVal, totalSellVal float64
+	for _, o := range orders {
+		switch o.Status {
+		case "COMPLETE":
+			completed++
+			val := o.AveragePrice * o.FilledQuantity
+			if o.Side == "BUY" { totalBuyVal += val } else { totalSellVal += val }
+		case "OPEN", "TRIGGER PENDING", "VALIDATION PENDING":
+			pending++
+		case "REJECTED", "CANCELLED":
+			rejected++
+		}
+	}
+
+	return map[string]any{
+		"orders": orders,
+		"summary": map[string]any{
+			"total": len(orders), "completed": completed,
+			"pending": pending, "rejected": rejected,
+			"total_buy_value": totalBuyVal, "total_sell_value": totalSellVal,
+		},
+	}
+}
+
+// alertsData fetches active/triggered alerts for the alerts widget.
+func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
+	if manager.AlertStore() == nil {
+		return nil
+	}
+	allAlerts := manager.AlertStore().List(email)
+	client := kiteClientForEmail(manager, email)
+
+	type alertItem struct {
+		Symbol      string  `json:"tradingsymbol"`
+		Exchange    string  `json:"exchange"`
+		Direction   string  `json:"direction"`
+		TargetPrice float64 `json:"target_price"`
+		CurrentPrice float64 `json:"current_price,omitempty"`
+		DistancePct  float64 `json:"distance_pct,omitempty"`
+		CreatedAt   string  `json:"created_at"`
+		TriggeredAt string  `json:"triggered_at,omitempty"`
+		TriggeredPrice float64 `json:"triggered_price,omitempty"`
+	}
+
+	active := make([]alertItem, 0)
+	triggered := make([]alertItem, 0)
+
+	// Batch LTP lookup for active alerts
+	ltpMap := make(map[string]float64)
+	if client != nil {
+		instruments := make([]string, 0)
+		for _, a := range allAlerts {
+			if !a.Triggered {
+				inst := a.Exchange + ":" + a.Tradingsymbol
+				instruments = append(instruments, inst)
+			}
+		}
+		if len(instruments) > 0 {
+			if ltps, err := client.GetLTP(instruments...); err == nil {
+				for k, v := range ltps {
+					ltpMap[k] = v.LastPrice
+				}
+			}
+		}
+	}
+
+	for _, a := range allAlerts {
+		item := alertItem{
+			Symbol: a.Tradingsymbol, Exchange: a.Exchange,
+			Direction: string(a.Direction), TargetPrice: a.TargetPrice,
+			CreatedAt: a.CreatedAt.Format(time.RFC3339),
+		}
+		if a.Triggered {
+			item.TriggeredAt = a.TriggeredAt.Format(time.RFC3339)
+			item.TriggeredPrice = a.TriggeredPrice
+			triggered = append(triggered, item)
+		} else {
+			inst := a.Exchange + ":" + a.Tradingsymbol
+			if ltp, ok := ltpMap[inst]; ok {
+				item.CurrentPrice = ltp
+				if ltp > 0 {
+					item.DistancePct = (a.TargetPrice - ltp) / ltp * 100
+				}
+			}
+			active = append(active, item)
+		}
+	}
+
+	return map[string]any{
+		"active":          active,
+		"triggered":       triggered,
+		"active_count":    len(active),
+		"triggered_count": len(triggered),
+	}
+}
+
+// kiteClientForEmail creates a kiteconnect.Client for the given email,
+// or nil if credentials/token are not available.
+func kiteClientForEmail(manager *kc.Manager, email string) *kiteconnect.Client {
+	credEntry, hasCreds := manager.CredentialStore().Get(email)
+	tokenEntry, hasToken := manager.TokenStore().Get(email)
+	if !hasCreds || !hasToken {
+		return nil
+	}
+	client := kiteconnect.New(credEntry.APIKey)
+	client.SetAccessToken(tokenEntry.AccessToken)
+	return client
 }

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Kite Portfolio</title>
+<style>
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.header-link { font-size: 11px; color: var(--text-2); text-decoration: none; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.header-link:hover { color: var(--accent); }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 16px; }
+.summary-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.summary-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.summary-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text-0); }
+
+/* Section */
+.section { padding: 0 16px; }
+.section-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); }
+th.r, td.r { text-align: right; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; color: var(--text-0); background: var(--bg-2); }
+td.sym { font-weight: 600; color: var(--text-0); }
+
+/* Color utilities */
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.dim-green { background: var(--green-dim); }
+.dim-red { background: var(--red-dim); }
+
+/* Donut chart */
+.alloc-wrap { display: flex; gap: 16px; align-items: center; padding: 12px 0; flex-wrap: wrap; }
+.donut-box { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+.donut { width: 130px; height: 130px; border-radius: 50%; }
+.donut-hole { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 74px; height: 74px; border-radius: 50%; background: var(--bg-0); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.donut-center-label { font-size: 9px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.donut-center-value { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); }
+.legend { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-sym { font-family: var(--mono); font-weight: 500; color: var(--text-1); flex: 1; }
+.legend-pct { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+/* Footer */
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.refresh-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 24px 16px; color: var(--text-2); font-size: 12px; }
+
+/* Badge */
+.badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .summary-value { font-size: 14px; }
+  .alloc-wrap { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Portfolio</span>
+  </div>
+  <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+</div>
+
+<div id="app"></div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge - minimal JSON-RPC over postMessage
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      // Handle incoming requests from host
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Portfolio', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+})();
+
+// --- INR formatting (Indian numbering: lakhs/crores) ---
+function fmtINR(n, decimals) {
+  if (n == null || isNaN(n)) return '--';
+  const d = decimals != null ? decimals : 2;
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  const parts = abs.toFixed(d).split('.');
+  let intPart = parts[0];
+  const decPart = parts[1];
+
+  // Indian grouping: last 3 digits, then groups of 2
+  if (intPart.length > 3) {
+    const last3 = intPart.slice(-3);
+    let rest = intPart.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest.length > 0) groups.unshift(rest);
+    intPart = groups.join(',') + ',' + last3;
+  }
+
+  return (neg ? '-' : '') + '\u20B9' + intPart + (decPart ? '.' + decPart : '');
+}
+
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '--';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+
+function pnlClass(n) {
+  if (n == null || isNaN(n) || n === 0) return '';
+  return n > 0 ? 'green' : 'red';
+}
+
+// --- Donut chart colors ---
+const DONUT_COLORS = [
+  '#22d3ee', '#34d399', '#fbbf24', '#f87171',
+  '#a78bfa', '#fb923c', '#38bdf8', '#f472b6'
+];
+
+// --- DOM helpers ---
+function el(tag, className, textContent) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (textContent != null) e.textContent = String(textContent);
+  return e;
+}
+
+function td(text, classes) {
+  const cell = el('td', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+function th(text, classes) {
+  const cell = el('th', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+// --- Rendering ---
+function renderPortfolio(data) {
+  const app = document.getElementById('app');
+  app.textContent = '';
+
+  const s = data.summary || {};
+  const holdings = (data.holdings || []).slice().sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+  const positions = data.positions || [];
+
+  // Summary cards
+  const totalPnl = s.total_pnl || 0;
+  const posPnl = s.positions_pnl || 0;
+
+  const summaryGrid = el('div', 'summary-grid');
+  const summaryItems = [
+    { label: 'Holdings', value: s.holdings_count != null ? String(s.holdings_count) : '--', cls: '' },
+    { label: 'Total P&L', value: fmtINR(totalPnl), cls: pnlClass(totalPnl) },
+    { label: 'Positions P&L', value: fmtINR(posPnl), cls: pnlClass(posPnl) },
+    { label: 'Invested', value: fmtINR(s.total_invested, 0), cls: '' },
+  ];
+  for (const item of summaryItems) {
+    const card = el('div', 'summary-card');
+    card.appendChild(el('div', 'summary-label', item.label));
+    const valDiv = el('div', 'summary-value' + (item.cls ? ' ' + item.cls : ''), item.value);
+    card.appendChild(valDiv);
+    summaryGrid.appendChild(card);
+  }
+  app.appendChild(summaryGrid);
+
+  // Holdings table
+  const holdingsSection = el('div', 'section');
+  holdingsSection.appendChild(el('div', 'section-header', 'Holdings'));
+  if (holdings.length > 0) {
+    let totalHPnl = 0;
+    const wrap = el('div', 'tbl-wrap');
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    const hCols = [['Symbol',''], ['Qty','r'], ['Avg','r'], ['LTP','r'], ['P&L','r'], ['Day %','r']];
+    for (const [text, cls] of hCols) headRow.appendChild(th(text, cls));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    for (const h of holdings) {
+      const pnl = h.pnl || 0;
+      totalHPnl += pnl;
+      const dayPct = h.day_change_percentage;
+      const row = document.createElement('tr');
+      row.appendChild(td(h.tradingsymbol, 'sym'));
+      row.appendChild(td(h.quantity, 'r'));
+      row.appendChild(td(fmtINR(h.average_price), 'r'));
+      row.appendChild(td(fmtINR(h.last_price), 'r'));
+      const pnlTd = td(fmtINR(pnl), 'r ' + pnlClass(pnl));
+      row.appendChild(pnlTd);
+      row.appendChild(td(fmtPct(dayPct), 'r ' + pnlClass(dayPct)));
+      tbody.appendChild(row);
+    }
+    // Total row
+    const totalRow = document.createElement('tr');
+    totalRow.className = 'total-row';
+    totalRow.appendChild(td('Total', 'sym'));
+    totalRow.appendChild(td(''));
+    totalRow.appendChild(td(''));
+    totalRow.appendChild(td(''));
+    totalRow.appendChild(td(fmtINR(totalHPnl), 'r ' + pnlClass(totalHPnl)));
+    totalRow.appendChild(td(''));
+    tbody.appendChild(totalRow);
+
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    holdingsSection.appendChild(wrap);
+  } else {
+    holdingsSection.appendChild(el('div', 'empty-state', 'No holdings found'));
+  }
+  app.appendChild(holdingsSection);
+
+  // Allocation donut (top 8 by current value)
+  if (holdings.length > 0) {
+    const valued = holdings.map(h => ({
+      sym: h.tradingsymbol,
+      val: (h.last_price || h.average_price || 0) * (h.quantity || 0)
+    })).filter(h => h.val > 0).sort((a, b) => b.val - a.val);
+
+    const top = valued.slice(0, 8);
+    const rest = valued.slice(8).reduce((s, h) => s + h.val, 0);
+    if (rest > 0) top.push({ sym: 'Others', val: rest });
+
+    const total = top.reduce((s, h) => s + h.val, 0);
+    if (total > 0) {
+      let angle = 0;
+      const stops = [];
+
+      const donutSection = el('div', 'section');
+      donutSection.appendChild(el('div', 'section-header', 'Allocation'));
+      const allocWrap = el('div', 'alloc-wrap');
+
+      const donutBox = el('div', 'donut-box');
+      const donut = el('div', 'donut');
+      const legend = el('div', 'legend');
+
+      for (let i = 0; i < top.length; i++) {
+        const pct = (top[i].val / total) * 100;
+        const color = DONUT_COLORS[i % DONUT_COLORS.length];
+        stops.push(color + ' ' + angle.toFixed(2) + '% ' + (angle + pct).toFixed(2) + '%');
+
+        const legendItem = el('div', 'legend-item');
+        const dot = el('span', 'legend-dot');
+        dot.style.background = color;
+        legendItem.appendChild(dot);
+        legendItem.appendChild(el('span', 'legend-sym', top[i].sym));
+        legendItem.appendChild(el('span', 'legend-pct', pct.toFixed(1) + '%'));
+        legend.appendChild(legendItem);
+        angle += pct;
+      }
+
+      donut.style.background = 'conic-gradient(' + stops.join(', ') + ')';
+      donutBox.appendChild(donut);
+      const hole = el('div', 'donut-hole');
+      hole.appendChild(el('span', 'donut-center-label', 'Total'));
+      hole.appendChild(el('span', 'donut-center-value', fmtINR(total, 0)));
+      donutBox.appendChild(hole);
+
+      allocWrap.appendChild(donutBox);
+      allocWrap.appendChild(legend);
+      donutSection.appendChild(allocWrap);
+      app.appendChild(donutSection);
+    }
+  }
+
+  // Positions table
+  if (positions.length > 0) {
+    let totalPosPnl = 0;
+    const posSection = el('div', 'section');
+    posSection.appendChild(el('div', 'section-header', 'Positions'));
+    const posWrap = el('div', 'tbl-wrap');
+    const posTable = document.createElement('table');
+    const posThead = document.createElement('thead');
+    const posHeadRow = document.createElement('tr');
+    const pCols = [['Symbol',''], ['Product',''], ['Qty','r'], ['Avg','r'], ['LTP','r'], ['P&L','r']];
+    for (const [text, cls] of pCols) posHeadRow.appendChild(th(text, cls));
+    posThead.appendChild(posHeadRow);
+    posTable.appendChild(posThead);
+
+    const posTbody = document.createElement('tbody');
+    for (const p of positions) {
+      const pnl = p.pnl || 0;
+      totalPosPnl += pnl;
+      const row = document.createElement('tr');
+      row.appendChild(td(p.tradingsymbol, 'sym'));
+      const prodTd = document.createElement('td');
+      const badge = el('span', 'badge ' + (p.product === 'MIS' ? 'dim-red' : 'dim-green'), p.product || '--');
+      badge.style.color = p.product === 'MIS' ? 'var(--amber)' : 'var(--green)';
+      prodTd.appendChild(badge);
+      row.appendChild(prodTd);
+      row.appendChild(td(p.quantity, 'r'));
+      row.appendChild(td(fmtINR(p.average_price), 'r'));
+      row.appendChild(td(fmtINR(p.last_price), 'r'));
+      row.appendChild(td(fmtINR(pnl), 'r ' + pnlClass(pnl)));
+      posTbody.appendChild(row);
+    }
+    const posTotalRow = document.createElement('tr');
+    posTotalRow.className = 'total-row';
+    posTotalRow.appendChild(td('Total', 'sym'));
+    posTotalRow.appendChild(td(''));
+    posTotalRow.appendChild(td(''));
+    posTotalRow.appendChild(td(''));
+    posTotalRow.appendChild(td(''));
+    posTotalRow.appendChild(td(fmtINR(totalPosPnl), 'r ' + pnlClass(totalPosPnl)));
+    posTbody.appendChild(posTotalRow);
+
+    posTable.appendChild(posTbody);
+    posWrap.appendChild(posTable);
+    posSection.appendChild(posWrap);
+    app.appendChild(posSection);
+  }
+
+  // Footer
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    + ' ' + now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const footer = el('div', 'footer');
+  const tsSpan = el('span', 'footer-ts', 'Last updated ' + ts);
+  tsSpan.id = 'lastTs';
+  footer.appendChild(tsSpan);
+  const refreshBtn = el('button', 'refresh-btn', 'Refresh');
+  refreshBtn.id = 'refreshBtn';
+  refreshBtn.addEventListener('click', refreshData);
+  footer.appendChild(refreshBtn);
+  app.appendChild(footer);
+}
+
+function showEmpty(msg) {
+  const app = document.getElementById('app');
+  app.textContent = '';
+  app.appendChild(el('div', 'empty-state', msg));
+}
+
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// --- Refresh via AppBridge ---
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+
+  try {
+    const [holdingsRes, positionsRes] = await Promise.all([
+      AppBridge.callServerTool('get_holdings'),
+      AppBridge.callServerTool('get_positions')
+    ]);
+
+    // Rebuild data from tool responses
+    const holdings = Array.isArray(holdingsRes) ? holdingsRes : (holdingsRes && holdingsRes.holdings) || [];
+    const positions = Array.isArray(positionsRes) ? positionsRes
+      : (positionsRes && positionsRes.net) || (positionsRes && positionsRes.positions) || [];
+
+    let totalInvested = 0, totalCurrent = 0, totalPnl = 0, posPnl = 0;
+    for (const h of holdings) {
+      const inv = (h.average_price || 0) * (h.quantity || 0);
+      const cur = (h.last_price || 0) * (h.quantity || 0);
+      totalInvested += inv;
+      totalCurrent += cur;
+      totalPnl += (h.pnl || cur - inv);
+    }
+    for (const p of positions) {
+      posPnl += (p.pnl || 0);
+    }
+
+    const data = {
+      holdings: holdings,
+      positions: positions,
+      summary: {
+        holdings_count: holdings.length,
+        total_invested: totalInvested,
+        total_current: totalCurrent,
+        total_pnl: totalPnl,
+        positions_count: positions.length,
+        positions_pnl: posPnl
+      }
+    };
+
+    renderPortfolio(data);
+    requestAnimationFrame(() => AppBridge.notifySize());
+  } catch (e) {
+    const tsEl = document.getElementById('lastTs');
+    if (tsEl) tsEl.textContent = 'Refresh failed: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+  }
+}
+
+// --- Dashboard link ---
+document.getElementById('dashLink').addEventListener('click', function(e) {
+  e.preventDefault();
+  const baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
+  AppBridge.openLink(baseUrl + '/dashboard');
+});
+
+// --- Init ---
+(async function() {
+  AppBridge.init().catch(() => {});
+
+  const data = window.__DATA__;
+  if (data && data.error) showEmpty(data.error);
+  else if (data) renderPortfolio(data);
+  else if (data === null) showEmpty('Not authenticated \u2014 please log in via your MCP client');
+  else showEmpty('No portfolio data available');
+
+  requestAnimationFrame(() => AppBridge.notifySize());
+
+  // Observe body resizes and notify host
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => AppBridge.notifySize(), 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>

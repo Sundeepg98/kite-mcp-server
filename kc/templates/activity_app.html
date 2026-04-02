@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Activity · Kite MCP</title>
+<style>
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
+  --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+  --accent-dim: rgba(34,211,238,0.08); --green-dim: rgba(52,211,153,0.08);
+  --red-dim: rgba(248,113,113,0.06); --amber-dim: rgba(251,191,36,0.06);
+  --purple-dim: rgba(167,139,250,0.08);
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); -webkit-font-smoothing: antialiased; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-1); }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.sep { width: 1px; height: 16px; background: var(--border); }
+.title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.dash-link { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.8; }
+.dash-link:hover { opacity: 1; }
+
+.content { padding: 16px 20px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.stat-value { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.red { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+
+.section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+/* Bar chart */
+.bar-chart { margin-bottom: 20px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-label { font-family: var(--mono); font-size: 11px; color: var(--text-1); width: 140px; flex-shrink: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 20px; background: var(--bg-2); border-radius: 3px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; min-width: 2px; }
+.bar-count { font-family: var(--mono); font-size: 11px; color: var(--text-2); width: 36px; flex-shrink: 0; }
+
+/* Timeline */
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.tl-entry { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tl-entry.error { border-color: var(--red); border-left: 3px solid var(--red); }
+.tl-tool { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text-0); min-width: 120px; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-family: var(--mono); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge-query { background: var(--accent-dim); color: var(--accent); }
+.badge-action { background: var(--green-dim); color: var(--green); }
+.badge-mutation { background: var(--amber-dim); color: var(--amber); }
+.badge-auth { background: var(--purple-dim); color: var(--purple); }
+.badge-error { background: var(--red-dim); color: var(--red); }
+.tl-summary { font-size: 12px; color: var(--text-1); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); display: flex; gap: 10px; flex-shrink: 0; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-2); font-size: 13px; }
+
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.refresh-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-error { text-align: center; padding: 40px 16px; color: var(--text-2); font-size: 13px; }
+.auth-error strong { color: var(--red); }
+
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: 1fr; }
+  .bar-label { width: 100px; font-size: 10px; }
+  .tl-entry { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .tl-meta { margin-top: 2px; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span><span class="sep"></span><span class="title">Activity</span>
+  </div>
+  <a href="#" class="dash-link" onclick="AppBridge.openLink('https://kite-mcp-server.fly.dev/dashboard/activity'); return false;">&#8599; Full Dashboard</a>
+</div>
+
+<div class="content">
+  <div class="stats-row" id="statsRow"></div>
+  <div class="section-title">Tool Usage</div>
+  <div class="bar-chart" id="barChart"></div>
+  <div class="section-title">Recent Activity</div>
+  <div class="timeline" id="timeline"></div>
+</div>
+<div class="footer" id="footerBar">
+  <span class="footer-ts" id="footerTs"></span>
+  <span class="footer-ts" style="font-style:italic">Data loaded at page render</span>
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch(e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      // Handle incoming requests from host
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); } }, 30000);
+    });
+  }
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {} return result.content[0].text;
+    }
+    return result;
+  }
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => { window.open(url, '_blank'); });
+  }
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }}, '*');
+  }
+
+  // ResizeObserver for automatic size notifications
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+})();
+
+function formatINR(n) {
+  if (n == null || isNaN(n)) return '--';
+  const neg = n < 0; const abs = Math.abs(n);
+  const [int, dec] = abs.toFixed(2).split('.');
+  let r = '';
+  if (int.length <= 3) { r = int; }
+  else { r = int.slice(-3); let rem = int.slice(0,-3);
+    while (rem.length > 2) { r = rem.slice(-2)+','+r; rem = rem.slice(0,-2); }
+    if (rem.length) r = rem+','+r;
+  }
+  return (neg?'-':'')+'₹'+r+'.'+dec;
+}
+
+const BAR_COLORS = ['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--red)','var(--text-1)','var(--accent)','var(--green)'];
+
+function badgeClass(cat) {
+  if (cat === 'query') return 'badge-query';
+  if (cat === 'action') return 'badge-action';
+  if (cat === 'mutation') return 'badge-mutation';
+  if (cat === 'auth') return 'badge-auth';
+  return 'badge-query';
+}
+
+function fmtDuration(ms) {
+  if (ms == null) return '--';
+  if (ms < 1000) return ms + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return hh + ':' + mm + ':' + ss;
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = String(text);
+  return e;
+}
+
+function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function makeStat(label, value, cls) {
+  const card = el('div', 'stat');
+  card.appendChild(el('div', 'stat-label', label));
+  card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), value));
+  return card;
+}
+
+function isDataEmpty(d) {
+  if (!d || typeof d !== 'object') return true;
+  return Object.keys(d).length === 0;
+}
+
+function updateFooterTs() {
+  const ts = document.getElementById('footerTs');
+  if (ts) {
+    const now = new Date();
+    ts.textContent = 'Last updated: ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
+}
+
+function render() {
+  const data = window.__DATA__;
+
+  if (isDataEmpty(data)) {
+    document.getElementById('statsRow').innerHTML = '';
+    document.getElementById('barChart').innerHTML = '';
+    document.getElementById('timeline').innerHTML = '<div class="auth-error"><strong>Not authenticated</strong><br>Please log in via your MCP client</div>';
+    AppBridge.notifySize();
+    return;
+  }
+
+  const stats = data.stats || {};
+  const toolCounts = data.tool_counts || {};
+  const entries = data.entries || [];
+
+  // Stats row
+  const statsRow = document.getElementById('statsRow');
+  clearEl(statsRow);
+  statsRow.appendChild(makeStat('Total Calls', stats.total_calls != null ? stats.total_calls : '--', 'accent'));
+  statsRow.appendChild(makeStat('Errors', stats.error_count != null ? stats.error_count : '--', 'red'));
+  statsRow.appendChild(makeStat('Avg Duration', stats.avg_latency_ms != null ? fmtDuration(stats.avg_latency_ms) : '--', 'amber'));
+
+  // Bar chart - top 8 tools
+  const barChart = document.getElementById('barChart');
+  clearEl(barChart);
+  const sorted = Object.entries(toolCounts).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
+  const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
+
+  if (sorted.length === 0) {
+    barChart.appendChild(el('div', 'empty-state', 'No tool usage data'));
+  } else {
+    sorted.forEach(function(item, i) {
+      const name = item[0];
+      const count = item[1];
+      const pct = Math.max((count / maxCount) * 100, 2);
+      const color = BAR_COLORS[i % BAR_COLORS.length];
+
+      const row = el('div', 'bar-row');
+      const lbl = el('span', 'bar-label', name);
+      lbl.title = name;
+      row.appendChild(lbl);
+
+      const track = el('div', 'bar-track');
+      const fill = el('div', 'bar-fill');
+      fill.style.width = pct + '%';
+      fill.style.background = color;
+      track.appendChild(fill);
+      row.appendChild(track);
+
+      row.appendChild(el('span', 'bar-count', String(count)));
+      barChart.appendChild(row);
+    });
+  }
+
+  // Timeline - last 20
+  const timeline = document.getElementById('timeline');
+  clearEl(timeline);
+  const recent = entries.slice(0, 20);
+
+  if (recent.length === 0) {
+    timeline.appendChild(el('div', 'empty-state', 'No recent activity'));
+  } else {
+    recent.forEach(function(e) {
+      const cat = e.is_error ? 'error' : (e.tool_category || 'query');
+      const entry = el('div', 'tl-entry' + (e.is_error ? ' error' : ''));
+
+      entry.appendChild(el('span', 'tl-tool', e.tool_name || '--'));
+      entry.appendChild(el('span', 'badge ' + badgeClass(cat), cat));
+
+      const summary = el('span', 'tl-summary', e.output_summary || '--');
+      summary.title = e.output_summary || '';
+      entry.appendChild(summary);
+
+      const meta = el('span', 'tl-meta');
+      meta.appendChild(el('span', '', fmtDuration(e.duration_ms)));
+      meta.appendChild(el('span', '', fmtTime(e.started_at)));
+      entry.appendChild(meta);
+
+      timeline.appendChild(entry);
+    });
+  }
+
+  updateFooterTs();
+  AppBridge.notifySize();
+}
+
+AppBridge.init().then(function() { render(); }).catch(function() { render(); });
+</script>
+</body>
+</html>
