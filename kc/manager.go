@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -169,6 +170,20 @@ func New(cfg Config) (*Manager, error) {
 			}
 		}
 	}
+
+	// Initialize user store (RBAC, lifecycle)
+	m.userStore = users.NewStore()
+	m.userStore.SetLogger(cfg.Logger)
+	if m.alertDB != nil {
+		m.userStore.SetDB(m.alertDB)
+		if err := m.userStore.InitTable(); err != nil {
+			cfg.Logger.Error("Failed to create users table", "error", err)
+		} else if err := m.userStore.LoadFromDB(); err != nil {
+			cfg.Logger.Error("Failed to load users from DB", "error", err)
+		} else {
+			cfg.Logger.Info("Users loaded from database", "count", m.userStore.Count())
+		}
+	}
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
 		apiKey := m.GetAPIKeyForEmail(email)
@@ -313,6 +328,7 @@ type Manager struct {
 	trailingStopMgr    *alerts.TrailingStopManager    // trailing stop-loss manager
 	pnlService         *alerts.PnLSnapshotService     // daily P&L snapshots
 	watchlistStore     *watchlist.Store               // per-user watchlists
+	userStore          *users.Store                   // registered users (RBAC, lifecycle)
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	appMode            string
@@ -506,6 +522,11 @@ func (m *Manager) APIKey() string {
 // CredentialStore returns the per-email Kite credential store.
 func (m *Manager) CredentialStore() *KiteCredentialStore {
 	return m.credentialStore
+}
+
+// UserStore returns the user identity store (RBAC, lifecycle).
+func (m *Manager) UserStore() *users.Store {
+	return m.userStore
 }
 
 // AlertDB returns the optional SQLite database used for persistence.

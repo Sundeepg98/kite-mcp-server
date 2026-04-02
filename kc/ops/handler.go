@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -23,34 +24,30 @@ type Handler struct {
 	logger      *slog.Logger
 	startTime   time.Time
 	version     string
-	adminEmails map[string]bool
+	userStore   *users.Store
 	auditStore  *audit.Store
 }
 
 // New creates a new ops Handler.
-func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, adminEmails string, auditStore *audit.Store) *Handler {
-	admins := make(map[string]bool)
-	for _, email := range strings.Split(adminEmails, ",") {
-		email = strings.TrimSpace(strings.ToLower(email))
-		if email != "" {
-			admins[email] = true
-		}
-	}
+func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, userStore *users.Store, auditStore *audit.Store) *Handler {
 	return &Handler{
-		manager:     manager,
-		metrics:     metrics,
-		logBuffer:   logBuffer,
-		logger:      logger,
-		startTime:   startTime,
-		version:     version,
-		adminEmails: admins,
-		auditStore:  auditStore,
+		manager:    manager,
+		metrics:    metrics,
+		logBuffer:  logBuffer,
+		logger:     logger,
+		startTime:  startTime,
+		version:    version,
+		userStore:  userStore,
+		auditStore: auditStore,
 	}
 }
 
-// isAdmin returns true if the given email is in the admin email set.
+// isAdmin returns true if the given email belongs to an active admin user.
 func (h *Handler) isAdmin(email string) bool {
-	return h.adminEmails[strings.ToLower(email)]
+	if h.userStore == nil {
+		return false
+	}
+	return h.userStore.IsAdmin(email)
 }
 
 // RegisterRoutes mounts all ops routes under /admin/ops, protected by the provided auth middleware.
@@ -65,6 +62,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/credentials", wrap(h.credentials))
 	mux.Handle("/admin/ops/api/force-reauth", wrap(h.forceReauth))
 	mux.Handle("/admin/ops/api/verify-chain", wrap(h.verifyChain))
+	// User management (admin only)
+	mux.Handle("/admin/ops/api/users", wrap(h.listUsers))
+	mux.Handle("/admin/ops/api/users/suspend", wrap(h.suspendUser))
+	mux.Handle("/admin/ops/api/users/activate", wrap(h.activateUser))
+	mux.Handle("/admin/ops/api/users/offboard", wrap(h.offboardUser))
+	mux.Handle("/admin/ops/api/users/role", wrap(h.changeRole))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
@@ -272,6 +275,182 @@ func (h *Handler) verifyChain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeJSON(w, result)
+}
+
+// --- User management endpoints (admin only) ---
+
+// listUsers returns all registered users. Admin only.
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.userStore == nil {
+		h.writeJSON(w, []interface{}{})
+		return
+	}
+	h.writeJSON(w, h.userStore.List())
+}
+
+// suspendUser sets a user's status to suspended. Admin only.
+// Expects query param: email
+func (h *Handler) suspendUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+	if h.userStore == nil {
+		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		return
+	}
+	if err := h.userStore.UpdateStatus(targetEmail, users.StatusSuspended); err != nil {
+		h.writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	h.logger.Info("Admin suspended user", "admin", adminEmail, "target", targetEmail)
+	h.logAdminAction(adminEmail, "suspend_user", targetEmail)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "User suspended"})
+}
+
+// activateUser sets a user's status to active. Admin only.
+// Expects query param: email
+func (h *Handler) activateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+	if h.userStore == nil {
+		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		return
+	}
+	if err := h.userStore.UpdateStatus(targetEmail, users.StatusActive); err != nil {
+		h.writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	h.logger.Info("Admin activated user", "admin", adminEmail, "target", targetEmail)
+	h.logAdminAction(adminEmail, "activate_user", targetEmail)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "User activated"})
+}
+
+// offboardUser removes all user data (credentials, tokens, sessions) and sets status to offboarded. Admin only.
+// Expects query param: email
+func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+	if h.userStore == nil {
+		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		return
+	}
+
+	// Delete credentials, tokens, and sessions
+	h.manager.CredentialStore().Delete(targetEmail)
+	h.manager.TokenStore().Delete(targetEmail)
+	h.manager.SessionManager().TerminateByEmail(targetEmail)
+
+	if err := h.userStore.UpdateStatus(targetEmail, users.StatusOffboarded); err != nil {
+		h.writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	h.logger.Info("Admin offboarded user", "admin", adminEmail, "target", targetEmail)
+	h.logAdminAction(adminEmail, "offboard_user", targetEmail)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "User offboarded, all data removed"})
+}
+
+// changeRole changes a user's role. Admin only.
+// Expects query param: email, JSON body: {"role": "viewer"}
+func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+	if h.userStore == nil {
+		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeJSON(w, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if err := h.userStore.UpdateRole(targetEmail, req.Role); err != nil {
+		h.writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	h.logger.Info("Admin changed user role", "admin", adminEmail, "target", targetEmail, "role", req.Role)
+	h.logAdminAction(adminEmail, "change_role", targetEmail+" -> "+req.Role)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Role updated to " + req.Role})
+}
+
+// logAdminAction records an admin action in the audit trail.
+func (h *Handler) logAdminAction(adminEmail, action, target string) {
+	if h.auditStore == nil {
+		return
+	}
+	now := time.Now()
+	entry := &audit.ToolCall{
+		CallID:        fmt.Sprintf("admin-%d", now.UnixNano()),
+		Email:         adminEmail,
+		ToolName:      action,
+		ToolCategory:  "admin",
+		InputSummary:  target,
+		OutputSummary: "ok",
+		StartedAt:     now,
+		CompletedAt:   now,
+	}
+	if err := h.auditStore.Record(entry); err != nil {
+		h.logger.Error("Failed to record admin action", "action", action, "error", err)
+	}
 }
 
 // logStream serves an SSE stream of structured log entries.

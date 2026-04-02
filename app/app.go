@@ -26,6 +26,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
@@ -189,6 +190,7 @@ func (app *App) RunServer() error {
 			apiSecret:       app.Config.KiteAPISecret,
 			tokenStore:      kcManager.TokenStore(),
 			credentialStore: kcManager.CredentialStore(),
+			userStore:       kcManager.UserStore(),
 			logger:          app.logger,
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
@@ -202,9 +204,17 @@ func (app *App) RunServer() error {
 		//   3. No credentials at all → pass through (first-time user, tool handler prompts)
 		tokenStore := kcManager.TokenStore()
 		credStore := kcManager.CredentialStore()
+		uStore := kcManager.UserStore()
 		app.oauthHandler.SetKiteTokenChecker(func(email string) bool {
 			if email == "" {
 				return true
+			}
+			// Reject suspended or offboarded users
+			if uStore != nil {
+				status := uStore.GetStatus(email)
+				if status == users.StatusSuspended || status == users.StatusOffboarded {
+					return false
+				}
 			}
 			// Check if a valid (non-expired) Kite token exists
 			entry, hasToken := tokenStore.Get(email)
@@ -553,7 +563,19 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.HandleFunc("/admin/", app.metrics.AdminHTTPHandler())
 	}
 	// Ops dashboard: protected by OAuth if available, otherwise by secret path
-	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, app.Config.AdminEmails, app.auditStore)
+	// Seed admin users from ADMIN_EMAILS env var into the user store.
+	userStore := kcManager.UserStore()
+	if userStore != nil && app.Config.AdminEmails != "" {
+		for _, email := range strings.Split(app.Config.AdminEmails, ",") {
+			email = strings.TrimSpace(email)
+			if email != "" {
+				userStore.EnsureAdmin(email)
+			}
+		}
+		app.logger.Info("Admin users seeded from ADMIN_EMAILS", "count", len(strings.Split(app.Config.AdminEmails, ",")))
+	}
+
+	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
 	if app.oauthHandler != nil {
 		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
 	} else if app.Config.AdminSecretPath != "" {
@@ -856,7 +878,36 @@ type kiteExchangerAdapter struct {
 	apiSecret       string
 	tokenStore      *kc.KiteTokenStore
 	credentialStore *kc.KiteCredentialStore
+	userStore       *users.Store
 	logger          *slog.Logger
+}
+
+// provisionUser auto-provisions a user on first OAuth login and checks status.
+// Returns an error if the user is suspended or offboarded.
+func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string) error {
+	if a.userStore == nil {
+		return nil
+	}
+	email = strings.ToLower(email)
+
+	// Check if user exists and their status
+	status := a.userStore.GetStatus(email)
+	if status == users.StatusSuspended {
+		return fmt.Errorf("user account is suspended: %s", email)
+	}
+	if status == users.StatusOffboarded {
+		return fmt.Errorf("user account has been offboarded: %s", email)
+	}
+
+	// Auto-provision new users as traders
+	u := a.userStore.EnsureUser(email, kiteUID, displayName, "self")
+	if u != nil {
+		a.userStore.UpdateLastLogin(email)
+		if kiteUID != "" && u.KiteUID == "" {
+			a.userStore.UpdateKiteUID(email, kiteUID)
+		}
+	}
+	return nil
 }
 
 func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string, error) {
@@ -870,6 +921,11 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 	email := userSess.Email
 	if email == "" {
 		email = userSess.UserID
+	}
+
+	// Auto-provision user and check status
+	if err := a.provisionUser(email, userSess.UserID, userSess.UserName); err != nil {
+		return "", err
 	}
 
 	a.logger.Debug("Kite token exchange successful", "email", email, "user_id", userSess.UserID)
@@ -894,6 +950,11 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 	email := userSess.Email
 	if email == "" {
 		email = userSess.UserID
+	}
+
+	// Auto-provision user and check status
+	if err := a.provisionUser(email, userSess.UserID, userSess.UserName); err != nil {
+		return "", err
 	}
 
 	a.logger.Debug("Kite token exchange (per-user credentials) successful", "email", email, "user_id", userSess.UserID)

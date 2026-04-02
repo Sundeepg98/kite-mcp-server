@@ -283,6 +283,31 @@ func (sm *SessionRegistry) Terminate(sessionID string) (isNotAllowed bool, err e
 	return false, nil
 }
 
+// TerminateByEmail terminates all active sessions belonging to the given email.
+// Used when offboarding a user to revoke all their sessions.
+func (sm *SessionRegistry) TerminateByEmail(email string) int {
+	email = strings.ToLower(email)
+	sm.mu.Lock()
+	var toTerminate []string
+	for id, s := range sm.sessions {
+		if s.Terminated {
+			continue
+		}
+		if kd, ok := s.Data.(*KiteSessionData); ok && kd != nil && strings.ToLower(kd.Email) == email {
+			toTerminate = append(toTerminate, id)
+		}
+	}
+	sm.mu.Unlock()
+
+	count := 0
+	for _, id := range toTerminate {
+		if _, err := sm.Terminate(id); err == nil {
+			count++
+		}
+	}
+	return count
+}
+
 // GetSession retrieves a MCP session by ID (helper method)
 func (sm *SessionRegistry) GetSession(sessionID string) (*MCPSession, error) {
 	sm.mu.RLock()
