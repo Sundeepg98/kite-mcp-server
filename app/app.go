@@ -18,6 +18,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
+	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
@@ -343,6 +344,19 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
+
+	// Declare the MCP Apps UI extension so that MCP App hosts (Cowork,
+	// claude.ai) know this server supports inline rendering of ui:// resources.
+	// mcp-go doesn't have a WithExtensions option yet, so we inject it via an
+	// OnAfterInitialize hook that modifies the InitializeResult.
+	uiHooks := &server.Hooks{}
+	uiHooks.AddAfterInitialize(func(_ context.Context, _ any, _ *gomcp.InitializeRequest, result *gomcp.InitializeResult) {
+		if result.Capabilities.Extensions == nil {
+			result.Capabilities.Extensions = make(map[string]any)
+		}
+		result.Capabilities.Extensions["io.modelcontextprotocol/ui"] = map[string]any{}
+	})
+	serverOpts = append(serverOpts, server.WithHooks(uiHooks))
 
 	mcpServer := server.NewMCPServer(
 		"Kite MCP Server",
