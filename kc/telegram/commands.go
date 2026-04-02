@@ -91,7 +91,7 @@ func (h *BotHandler) handlePrice(_ int64, email string, args string) string {
 		q.OHLC.Low,
 		q.OHLC.Open,
 		q.OHLC.Close,
-		formatVolume(uint64(q.Volume)),
+		formatVolume(uint64(q.Volume)), // #nosec G115 -- Volume is always non-negative from Kite API
 	)
 }
 

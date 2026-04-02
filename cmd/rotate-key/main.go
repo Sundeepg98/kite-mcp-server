@@ -89,7 +89,7 @@ func rotateTable(db *sql.DB, oldKey, newKey []byte, table, pkCol string, columns
 	for _, col := range columns {
 		selectCols += ", " + col
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s", selectCols, table)
+	query := fmt.Sprintf("SELECT %s FROM %s", selectCols, table) // #nosec G201 -- table/column names are hardcoded constants, not user input
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -146,7 +146,7 @@ func rotateTable(db *sql.DB, oldKey, newKey []byte, table, pkCol string, columns
 			args = append(args, newValues[i])
 		}
 		args = append(args, r.pk)
-		updateQuery := fmt.Sprintf("UPDATE %s SET %s WHERE %s = ?", table, setClauses, pkCol)
+		updateQuery := fmt.Sprintf("UPDATE %s SET %s WHERE %s = ?", table, setClauses, pkCol) // #nosec G201 -- table/column names are hardcoded constants, not user input
 
 		if _, err := db.Exec(updateQuery, args...); err != nil {
 			return count, fmt.Errorf("update %s pk=%s: %w", table, r.pk, err)

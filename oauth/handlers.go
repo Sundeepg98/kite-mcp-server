@@ -770,7 +770,7 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		r.ParseForm()
+		_ = r.ParseForm() // #nosec G104 -- form parse error is non-fatal; FormValue returns empty string
 		email := r.FormValue("email")
 		redirect = r.FormValue("redirect")
 		if redirect == "" {
@@ -1022,7 +1022,7 @@ func (h *Handler) HandleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		r.ParseForm()
+		_ = r.ParseForm() // #nosec G104 -- form parse error is non-fatal; FormValue returns empty string
 		email := strings.TrimSpace(strings.ToLower(r.FormValue("email")))
 		password := r.FormValue("password")
 		redirect = r.FormValue("redirect")
