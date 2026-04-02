@@ -446,3 +446,119 @@ func TestClientSecretEncryptionMigration(t *testing.T) {
 	require.Len(t, clients, 1)
 	assert.Equal(t, "plaintext-secret", clients[0].ClientSecret)
 }
+
+func TestSessionHashedID(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+	sessionID := "kitemcp-abc-123-hashed"
+
+	// Save
+	err = db.SaveSession(sessionID, "user@example.com", now, expires, false)
+	require.NoError(t, err)
+
+	// Verify the PK in DB is NOT the original session ID (it's an HMAC hash)
+	var rawPK string
+	row := db.db.QueryRow(`SELECT session_id FROM mcp_sessions LIMIT 1`)
+	require.NoError(t, row.Scan(&rawPK))
+	assert.NotEqual(t, sessionID, rawPK, "session_id PK should be HMAC-hashed, not plaintext")
+	assert.Len(t, rawPK, 64, "HMAC-SHA256 hex output should be 64 chars")
+
+	// Verify session_id_enc is populated and NOT the original
+	var rawEnc string
+	row = db.db.QueryRow(`SELECT session_id_enc FROM mcp_sessions LIMIT 1`)
+	require.NoError(t, row.Scan(&rawEnc))
+	assert.NotEqual(t, sessionID, rawEnc, "session_id_enc should be encrypted, not plaintext")
+	assert.NotEmpty(t, rawEnc)
+
+	// Load should recover the original session ID
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, sessionID, sessions[0].SessionID, "LoadSessions should decrypt and return original session ID")
+	assert.Equal(t, "user@example.com", sessions[0].Email)
+
+	// Delete by original session ID should work (hashes internally)
+	err = db.DeleteSession(sessionID)
+	require.NoError(t, err)
+	sessions, err = db.LoadSessions()
+	require.NoError(t, err)
+	assert.Empty(t, sessions)
+}
+
+func TestSessionHashedID_Deterministic(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	// hashSessionID should be deterministic for the same input
+	h1 := db.hashSessionID("kitemcp-test-123")
+	h2 := db.hashSessionID("kitemcp-test-123")
+	assert.Equal(t, h1, h2, "HMAC hash should be deterministic")
+
+	// Different inputs should produce different hashes
+	h3 := db.hashSessionID("kitemcp-test-456")
+	assert.NotEqual(t, h1, h3, "Different session IDs should hash differently")
+}
+
+func TestSessionHashedID_NoEncryptionKey(t *testing.T) {
+	db := openTestDB(t)
+	// No encryption key set — should fall back to storing session ID as-is
+
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+	sessionID := "kitemcp-plain-fallback"
+
+	err := db.SaveSession(sessionID, "user@example.com", now, expires, false)
+	require.NoError(t, err)
+
+	// PK should be the original session ID (no hashing)
+	var rawPK string
+	row := db.db.QueryRow(`SELECT session_id FROM mcp_sessions LIMIT 1`)
+	require.NoError(t, row.Scan(&rawPK))
+	assert.Equal(t, sessionID, rawPK, "without encryption key, session_id should be stored as-is")
+
+	// Load should work normally
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, sessionID, sessions[0].SessionID)
+
+	// Delete should work
+	err = db.DeleteSession(sessionID)
+	require.NoError(t, err)
+	sessions, err = db.LoadSessions()
+	require.NoError(t, err)
+	assert.Empty(t, sessions)
+}
+
+func TestSessionHashedID_UpsertSameSession(t *testing.T) {
+	db := openTestDB(t)
+	key, err := DeriveEncryptionKey("test-secret")
+	require.NoError(t, err)
+	db.SetEncryptionKey(key)
+
+	now := time.Now().Truncate(time.Second)
+	expires := now.Add(12 * time.Hour)
+	sessionID := "kitemcp-upsert-test"
+
+	// Save initial
+	err = db.SaveSession(sessionID, "user@example.com", now, expires, false)
+	require.NoError(t, err)
+
+	// Upsert with terminated=true
+	err = db.SaveSession(sessionID, "user@example.com", now, expires, true)
+	require.NoError(t, err)
+
+	// Should have exactly one row (upsert, not duplicate)
+	sessions, err := db.LoadSessions()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.True(t, sessions[0].Terminated)
+	assert.Equal(t, sessionID, sessions[0].SessionID)
+}

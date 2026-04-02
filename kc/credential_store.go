@@ -20,10 +20,11 @@ type KiteCredentialEntry struct {
 // KiteCredentialStore is a thread-safe in-memory map of email -> Kite developer credentials.
 // Optionally backed by SQLite for persistence via SetDB.
 type KiteCredentialStore struct {
-	mu     sync.RWMutex
-	creds  map[string]*KiteCredentialEntry
-	db     *alerts.DB
-	logger *slog.Logger
+	mu                 sync.RWMutex
+	creds              map[string]*KiteCredentialEntry
+	db                 *alerts.DB
+	logger             *slog.Logger
+	onTokenInvalidate  func(email string) // called when API key changes to invalidate cached token
 }
 
 // NewKiteCredentialStore creates a new credential store.
@@ -41,6 +42,12 @@ func (s *KiteCredentialStore) SetDB(db *alerts.DB) {
 // SetLogger sets the logger for DB error reporting.
 func (s *KiteCredentialStore) SetLogger(logger *slog.Logger) {
 	s.logger = logger
+}
+
+// OnTokenInvalidate registers a callback that is invoked when a user's API key
+// changes, so the stale cached Kite token (issued for the old app) can be deleted.
+func (s *KiteCredentialStore) OnTokenInvalidate(fn func(email string)) {
+	s.onTokenInvalidate = fn
 }
 
 // LoadFromDB populates the in-memory store from the database.
@@ -84,7 +91,9 @@ func (s *KiteCredentialStore) Set(email string, entry *KiteCredentialEntry) {
 	stored := *entry // copy to prevent caller mutation
 	stored.StoredAt = time.Now()
 	key := strings.ToLower(strings.TrimSpace(email))
+	apiKeyChanged := false
 	if existing, ok := s.creds[key]; ok && existing.APIKey != stored.APIKey {
+		apiKeyChanged = true
 		if s.logger != nil {
 			s.logger.Warn("Overwriting credentials with different API key",
 				"email", key, "old_key", existing.APIKey[:8]+"...", "new_key", stored.APIKey[:8]+"...")
@@ -92,18 +101,27 @@ func (s *KiteCredentialStore) Set(email string, entry *KiteCredentialEntry) {
 	}
 	stored.AppID = stored.APIKey // AppID = API key for Kite developer apps
 	s.creds[key] = &stored
-	// Capture values for DB persist before releasing lock.
+	// Capture values for DB persist and callback before releasing lock.
 	// After unlock, &stored is reachable via the map and could be read
 	// concurrently; using locals avoids any data-race concern.
 	apiKey := stored.APIKey
 	apiSecret := stored.APISecret
 	appID := stored.AppID
 	storedAt := stored.StoredAt
+	invalidateFn := s.onTokenInvalidate
 	s.mu.Unlock()
 
 	if s.db != nil {
 		if err := s.db.SaveCredential(key, apiKey, apiSecret, appID, storedAt); err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist credential", "email", key, "error", err)
+		}
+	}
+
+	// Invalidate cached token when API key changes — the old token was issued for a different app.
+	if apiKeyChanged && invalidateFn != nil {
+		invalidateFn(key)
+		if s.logger != nil {
+			s.logger.Info("Invalidated cached token due to API key change", "email", key)
 		}
 	}
 }

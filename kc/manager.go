@@ -127,6 +127,12 @@ func New(cfg Config) (*Manager, error) {
 		}
 	}
 
+	// Wire credential → token invalidation: when a user's API key changes,
+	// delete the cached Kite token (it was issued for the old app).
+	m.credentialStore.OnTokenInvalidate(func(email string) {
+		m.tokenStore.Delete(email)
+	})
+
 	if cfg.TelegramBotToken != "" {
 		notifier, tgErr := alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
 		if tgErr != nil {

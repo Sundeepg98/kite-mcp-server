@@ -1,7 +1,10 @@
 package alerts
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -84,11 +87,12 @@ CREATE TABLE IF NOT EXISTS oauth_clients (
 );
 
 CREATE TABLE IF NOT EXISTS mcp_sessions (
-    session_id  TEXT PRIMARY KEY,
-    email       TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL,
-    expires_at  TEXT NOT NULL,
-    terminated  INTEGER NOT NULL DEFAULT 0
+    session_id      TEXT PRIMARY KEY,
+    email           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    expires_at      TEXT NOT NULL,
+    terminated      INTEGER NOT NULL DEFAULT 0,
+    session_id_enc  TEXT NOT NULL DEFAULT ''
 );`
 	if _, err := db.Exec(ddl); err != nil {
 		return nil, fmt.Errorf("create tables: %w", err)
@@ -101,6 +105,16 @@ CREATE TABLE IF NOT EXISTS mcp_sessions (
 
 	// Migrate kite_credentials: add app_id column if missing.
 	db.Exec(`ALTER TABLE kite_credentials ADD COLUMN app_id TEXT DEFAULT ''`) //nolint:errcheck
+
+	// Migrate mcp_sessions: add session_id_enc column for encrypted session ID recovery.
+	// If the column doesn't exist, add it and clear existing rows (they stored plaintext IDs).
+	var hasEncCol int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('mcp_sessions') WHERE name = 'session_id_enc'`).Scan(&hasEncCol); err == nil && hasEncCol == 0 {
+		db.Exec(`ALTER TABLE mcp_sessions ADD COLUMN session_id_enc TEXT DEFAULT ''`) //nolint:errcheck
+		// Clear existing sessions — they have plaintext session IDs as PKs, which are
+		// incompatible with the new HMAC-hashed PK scheme. 12h expiry makes this acceptable.
+		db.Exec(`DELETE FROM mcp_sessions`)                                           //nolint:errcheck
+	}
 
 	return &DB{db: db}, nil
 }
@@ -489,6 +503,17 @@ func (d *DB) DeleteClient(clientID string) error {
 	return nil
 }
 
+// hashSessionID returns HMAC-SHA256(encryptionKey, sessionID) as a hex string.
+// If no encryption key is configured, the session ID is returned as-is (fallback).
+func (d *DB) hashSessionID(sessionID string) string {
+	if d.encryptionKey == nil {
+		return sessionID
+	}
+	mac := hmac.New(sha256.New, d.encryptionKey)
+	mac.Write([]byte(sessionID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // SessionDBEntry represents an MCP session stored in the database.
 type SessionDBEntry struct {
 	SessionID  string
@@ -499,8 +524,11 @@ type SessionDBEntry struct {
 }
 
 // LoadSessions reads all MCP sessions from the database.
+// When encryption is enabled, session_id (PK) is an HMAC hash and the original
+// session ID is recovered by decrypting session_id_enc. Rows without a valid
+// encrypted ID are skipped (stale pre-migration data).
 func (d *DB) LoadSessions() ([]*SessionDBEntry, error) {
-	rows, err := d.db.Query(`SELECT session_id, email, created_at, expires_at, terminated FROM mcp_sessions`)
+	rows, err := d.db.Query(`SELECT session_id, email, created_at, expires_at, terminated, COALESCE(session_id_enc, '') FROM mcp_sessions`)
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}
@@ -509,11 +537,23 @@ func (d *DB) LoadSessions() ([]*SessionDBEntry, error) {
 	var out []*SessionDBEntry
 	for rows.Next() {
 		var s SessionDBEntry
-		var createdAtS, expiresAtS string
+		var createdAtS, expiresAtS, sessionIDEnc string
 		var terminatedI int
-		if err := rows.Scan(&s.SessionID, &s.Email, &createdAtS, &expiresAtS, &terminatedI); err != nil {
+		if err := rows.Scan(&s.SessionID, &s.Email, &createdAtS, &expiresAtS, &terminatedI, &sessionIDEnc); err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
 		}
+
+		// If encryption is enabled, the PK is a hash — recover original ID from encrypted column.
+		if d.encryptionKey != nil && sessionIDEnc != "" {
+			decrypted := decrypt(d.encryptionKey, sessionIDEnc)
+			if decrypted != "" {
+				s.SessionID = decrypted
+			} else {
+				// Decryption failed — skip this row (stale/corrupt data)
+				continue
+			}
+		}
+
 		createdAt, err := time.Parse(time.RFC3339, createdAtS)
 		if err != nil {
 			return nil, fmt.Errorf("parse session created_at: %w", err)
@@ -531,13 +571,25 @@ func (d *DB) LoadSessions() ([]*SessionDBEntry, error) {
 }
 
 // SaveSession stores or updates an MCP session in the database.
+// The session_id PK is stored as HMAC-SHA256(key, sessionID) so the original
+// session ID never appears in plaintext in the database. The original ID is
+// stored encrypted in session_id_enc for recovery on restart.
 func (d *DB) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
 	terminatedI := 0
 	if terminated {
 		terminatedI = 1
 	}
-	_, err := d.db.Exec(`INSERT OR REPLACE INTO mcp_sessions (session_id, email, created_at, expires_at, terminated) VALUES (?,?,?,?,?)`,
-		sessionID, email, createdAt.Format(time.RFC3339), expiresAt.Format(time.RFC3339), terminatedI)
+	hashedID := d.hashSessionID(sessionID)
+	var sessionIDEnc string
+	if d.encryptionKey != nil {
+		var err error
+		sessionIDEnc, err = encrypt(d.encryptionKey, sessionID)
+		if err != nil {
+			return fmt.Errorf("encrypt session_id: %w", err)
+		}
+	}
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO mcp_sessions (session_id, email, created_at, expires_at, terminated, session_id_enc) VALUES (?,?,?,?,?,?)`,
+		hashedID, email, createdAt.Format(time.RFC3339), expiresAt.Format(time.RFC3339), terminatedI, sessionIDEnc)
 	if err != nil {
 		return fmt.Errorf("save session: %w", err)
 	}
@@ -545,8 +597,10 @@ func (d *DB) SaveSession(sessionID, email string, createdAt, expiresAt time.Time
 }
 
 // DeleteSession removes an MCP session by ID.
+// The session_id is hashed before lookup to match the HMAC-hashed PK in the database.
 func (d *DB) DeleteSession(sessionID string) error {
-	_, err := d.db.Exec(`DELETE FROM mcp_sessions WHERE session_id = ?`, sessionID)
+	hashedID := d.hashSessionID(sessionID)
+	_, err := d.db.Exec(`DELETE FROM mcp_sessions WHERE session_id = ?`, hashedID)
 	if err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}

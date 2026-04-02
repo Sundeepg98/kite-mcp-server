@@ -700,3 +700,63 @@ func TestKiteCredentialStore_DBPersistence(t *testing.T) {
 		t.Errorf("Count after overwrite: got %d, want 1", c)
 	}
 }
+
+func TestKiteCredentialStore_OnTokenInvalidate_APIKeyChange(t *testing.T) {
+	t.Parallel()
+	store := NewKiteCredentialStore()
+
+	var invalidatedEmail string
+	var invalidateCount int
+	store.OnTokenInvalidate(func(email string) {
+		invalidatedEmail = email
+		invalidateCount++
+	})
+
+	// Set initial credentials.
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "old_key_1234",
+		APISecret: "secret_a",
+	})
+
+	// First Set should NOT trigger invalidation (no existing entry to compare).
+	if invalidateCount != 0 {
+		t.Errorf("invalidate count after first Set: got %d, want 0", invalidateCount)
+	}
+
+	// Set same API key again — should NOT trigger invalidation.
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "old_key_1234",
+		APISecret: "secret_b", // different secret, same key
+	})
+	if invalidateCount != 0 {
+		t.Errorf("invalidate count after same-key Set: got %d, want 0", invalidateCount)
+	}
+
+	// Set DIFFERENT API key — SHOULD trigger invalidation.
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "new_key_5678",
+		APISecret: "secret_c",
+	})
+	if invalidateCount != 1 {
+		t.Errorf("invalidate count after key change: got %d, want 1", invalidateCount)
+	}
+	if invalidatedEmail != "user@example.com" {
+		t.Errorf("invalidated email: got %q, want %q", invalidatedEmail, "user@example.com")
+	}
+}
+
+func TestKiteCredentialStore_OnTokenInvalidate_NoCallback(t *testing.T) {
+	t.Parallel()
+	store := NewKiteCredentialStore()
+
+	// No callback registered — changing API key should not panic.
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "old_key_1234",
+		APISecret: "secret_a",
+	})
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "new_key_5678",
+		APISecret: "secret_b",
+	})
+	// If we get here without panic, test passes.
+}
