@@ -112,7 +112,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			TriggerPrice:      SafeAssertFloat64(args["trigger_price"], 0.0),
 			IcebergLegs:       SafeAssertInt(args["iceberg_legs"], 0),
 			IcebergQty:        SafeAssertInt(args["iceberg_quantity"], 0),
-			Tag:               SafeAssertString(args["tag"], ""),
+			Tag:               SafeAssertString(args["tag"], "mcp"),
 			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
 		}
 
