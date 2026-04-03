@@ -26,13 +26,14 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 
 			args := request.GetArguments()
 			req := OrderCheckRequest{
-				Email:         email,
-				ToolName:      toolName,
-				Exchange:      safeString(args["exchange"]),
-				Tradingsymbol: safeString(args["tradingsymbol"]),
-				Quantity:      safeInt(args["quantity"]),
-				Price:         safeFloat(args["price"]),
-				OrderType:     safeString(args["order_type"]),
+				Email:           email,
+				ToolName:        toolName,
+				Exchange:        safeString(args["exchange"]),
+				Tradingsymbol:   safeString(args["tradingsymbol"]),
+				TransactionType: safeString(args["transaction_type"]),
+				Quantity:        safeInt(args["quantity"]),
+				Price:           safeFloat(args["price"]),
+				OrderType:       safeString(args["order_type"]),
 			}
 
 			// For SL/SL-M, use trigger_price if price is 0
@@ -54,9 +55,9 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 			// Execute the tool
 			response, err := next(ctx, request)
 
-			// Record successful order for daily count tracking
+			// Record successful order for all tracking (daily count, rate, duplicates, value)
 			if err == nil && response != nil && !response.IsError {
-				guard.RecordOrder(email)
+				guard.RecordOrder(email, req)
 			}
 
 			return response, err

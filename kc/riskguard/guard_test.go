@@ -178,6 +178,164 @@ func TestGetEffectiveLimits(t *testing.T) {
 	})
 }
 
+func TestCheckRateLimit(t *testing.T) {
+	g := newTestGuard()
+	email := "rate@test.com"
+
+	// Set a low per-minute limit for testing
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{MaxOrdersPerMinute: 3}
+	g.mu.Unlock()
+
+	t.Run("under limit passes", func(t *testing.T) {
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("at limit blocked", func(t *testing.T) {
+		// Record 3 orders in the last minute
+		g.mu.Lock()
+		now := time.Now()
+		tracker := g.getOrCreateTracker(email)
+		tracker.RecentOrders = []time.Time{
+			now.Add(-30 * time.Second),
+			now.Add(-20 * time.Second),
+			now.Add(-10 * time.Second),
+		}
+		g.mu.Unlock()
+
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonRateLimit, r.Reason)
+		assert.Contains(t, r.Message, "limit: 3")
+	})
+
+	t.Run("old orders pruned — passes again", func(t *testing.T) {
+		g.mu.Lock()
+		tracker := g.getOrCreateTracker(email)
+		tracker.RecentOrders = []time.Time{
+			time.Now().Add(-90 * time.Second), // older than 60s
+			time.Now().Add(-80 * time.Second),
+			time.Now().Add(-70 * time.Second),
+		}
+		g.mu.Unlock()
+
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		assert.True(t, r.Allowed)
+	})
+}
+
+func TestCheckDuplicate(t *testing.T) {
+	g := newTestGuard()
+	email := "dup@test.com"
+
+	baseReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY", Quantity: 10,
+		Price: 2500, OrderType: "LIMIT",
+	}
+
+	t.Run("first order passes", func(t *testing.T) {
+		r := g.CheckOrder(baseReq)
+		assert.True(t, r.Allowed)
+		// Record it
+		g.RecordOrder(email, baseReq)
+	})
+
+	t.Run("same order within window blocked", func(t *testing.T) {
+		r := g.CheckOrder(baseReq)
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonDuplicateOrder, r.Reason)
+		assert.Contains(t, r.Message, "BUY NSE RELIANCE qty 10")
+	})
+
+	t.Run("different quantity passes", func(t *testing.T) {
+		diffReq := baseReq
+		diffReq.Quantity = 20
+		r := g.CheckOrder(diffReq)
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("different transaction type passes", func(t *testing.T) {
+		diffReq := baseReq
+		diffReq.TransactionType = "SELL"
+		r := g.CheckOrder(diffReq)
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("after window expires passes", func(t *testing.T) {
+		// Move all recorded orders back beyond the 30s window
+		g.mu.Lock()
+		tracker := g.getOrCreateTracker(email)
+		for i := range tracker.RecentParams {
+			tracker.RecentParams[i].PlacedAt = time.Now().Add(-60 * time.Second)
+		}
+		g.mu.Unlock()
+
+		r := g.CheckOrder(baseReq)
+		assert.True(t, r.Allowed)
+	})
+}
+
+func TestCheckDailyValue(t *testing.T) {
+	g := newTestGuard()
+	email := "value@test.com"
+
+	// Set a low daily value limit for testing
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{MaxDailyValueINR: 100000} // Rs 1,00,000
+	g.mu.Unlock()
+
+	t.Run("under limit passes", func(t *testing.T) {
+		r := g.CheckOrder(OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+		})
+		assert.True(t, r.Allowed) // 10*1000 = 10000 < 100000
+	})
+
+	t.Run("cumulative over limit blocked", func(t *testing.T) {
+		// Record orders worth Rs 90,000
+		g.mu.Lock()
+		tracker := g.getOrCreateTracker(email)
+		tracker.DailyPlacedValue = 90000
+		tracker.DayResetAt = time.Now()
+		g.mu.Unlock()
+
+		r := g.CheckOrder(OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Quantity: 10, Price: 1500, OrderType: "LIMIT", // 15000, total would be 105000
+		})
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonDailyValueLimit, r.Reason)
+		assert.Contains(t, r.Message, "exceeds daily limit")
+	})
+
+	t.Run("MARKET order skipped (price 0)", func(t *testing.T) {
+		r := g.CheckOrder(OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Quantity: 10000, Price: 0, OrderType: "MARKET",
+		})
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("reset at 9:15 clears daily value", func(t *testing.T) {
+		g.mu.Lock()
+		tracker := g.getOrCreateTracker(email)
+		// Set the last reset to well before today's 9:15 AM
+		ist, _ := time.LoadLocation("Asia/Kolkata")
+		tracker.DayResetAt = time.Now().In(ist).AddDate(0, 0, -1)
+		tracker.DailyPlacedValue = 99999
+		g.mu.Unlock()
+
+		r := g.CheckOrder(OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+		})
+		assert.True(t, r.Allowed) // daily value was reset
+	})
+}
+
 func TestFreezeUnfreeze(t *testing.T) {
 	g := newTestGuard()
 
