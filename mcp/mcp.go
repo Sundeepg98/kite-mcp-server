@@ -96,6 +96,11 @@ func GetAllTools() []Tool {
 		// Tax analysis
 		&TaxHarvestTool{},
 
+		// Paper trading management
+		&PaperTradingToggleTool{},
+		&PaperTradingStatusTool{},
+		&PaperTradingResetTool{},
+
 		// Pre-trade composite check (replaces 5 separate tool calls)
 		&PreTradeCheckTool{},
 

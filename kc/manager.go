@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
@@ -385,6 +386,7 @@ type Manager struct {
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	auditStore         *audit.Store                   // optional: audit trail for synthetic events
 	riskGuard          *riskguard.Guard               // optional: financial safety controls
+	paperEngine        *papertrading.PaperEngine      // optional: virtual trading engine
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
@@ -698,6 +700,16 @@ func (m *Manager) SetRiskGuard(guard *riskguard.Guard) {
 // RiskGuard returns the riskguard instance, or nil if not configured.
 func (m *Manager) RiskGuard() *riskguard.Guard {
 	return m.riskGuard
+}
+
+// SetPaperEngine sets the paper trading engine.
+func (m *Manager) SetPaperEngine(e *papertrading.PaperEngine) {
+	m.paperEngine = e
+}
+
+// PaperEngine returns the paper trading engine, or nil if not configured.
+func (m *Manager) PaperEngine() *papertrading.PaperEngine {
+	return m.paperEngine
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.

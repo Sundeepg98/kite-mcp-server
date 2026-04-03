@@ -27,6 +27,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
@@ -354,6 +355,17 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 	kcManager.SetRiskGuard(riskGuard)
 
+	// Initialize paper trading engine.
+	var paperEngine *papertrading.PaperEngine
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		paperStore := papertrading.NewStore(alertDB, app.logger)
+		if err := paperStore.InitTables(); err != nil {
+			app.logger.Error("Failed to initialize paper trading tables", "error", err)
+		}
+		paperEngine = papertrading.NewEngine(paperStore, app.logger)
+		kcManager.SetPaperEngine(paperEngine)
+	}
+
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
 	var serverOpts []server.ServerOption
@@ -362,6 +374,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 	// Riskguard middleware blocks orders exceeding safety limits.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
+	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
+	if paperEngine != nil {
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(papertrading.Middleware(paperEngine)))
+	}
 	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
@@ -393,6 +409,14 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	// Wire MCPServer into Manager so tool handlers can call RequestElicitation.
 	kcManager.SetMCPServer(mcpServer)
+
+	// Wire paper trading LTP provider and start the background monitor.
+	if paperEngine != nil {
+		paperEngine.SetLTPProvider(&paperLTPAdapter{manager: kcManager})
+		paperMonitor := papertrading.NewMonitor(paperEngine, 5*time.Second, app.logger)
+		paperMonitor.Start()
+		app.logger.Info("Paper trading engine and monitor initialized")
+	}
 
 	// Register tools that will interact with MCP sessions and Kite API
 	app.logger.Info("Registering MCP tools...")
@@ -515,6 +539,35 @@ type briefingCredAdapter struct {
 
 func (a *briefingCredAdapter) GetAPIKey(email string) string {
 	return a.manager.GetAPIKeyForEmail(email)
+}
+
+// paperLTPAdapter bridges kc.Manager to papertrading.LTPProvider by using
+// any active session's Kite client for read-only LTP lookups.
+type paperLTPAdapter struct {
+	manager *kc.Manager
+}
+
+func (a *paperLTPAdapter) GetLTP(instruments ...string) (map[string]float64, error) {
+	sessions := a.manager.SessionManager().ListActiveSessions()
+	if len(sessions) == 0 {
+		return nil, fmt.Errorf("no active Kite sessions for LTP lookup")
+	}
+	for _, sess := range sessions {
+		data, ok := sess.Data.(*kc.KiteSessionData)
+		if !ok || data == nil || data.Kite == nil || data.Kite.Client == nil {
+			continue
+		}
+		ltps, err := data.Kite.Client.GetLTP(instruments...)
+		if err != nil {
+			continue
+		}
+		result := make(map[string]float64, len(ltps))
+		for k, v := range ltps {
+			result[k] = v.LastPrice
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("no Kite client available for LTP")
 }
 
 // instrumentsFreezeAdapter wraps instruments.Manager to implement riskguard.FreezeQuantityLookup.
