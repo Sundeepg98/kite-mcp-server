@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sundeepg98/kite-trading",
+  "title": "Kite Trading MCP Server",
+  "description": "Indian stock market trading via Zerodha Kite Connect. 78 tools: order execution, portfolio analytics, options Greeks, paper trading, backtesting, technical indicators, price alerts with Telegram, watchlists, tax harvesting, SEBI compliance. 8 dashboard pages, 7 interactive widgets. Multi-user OAuth.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/Sundeepg98/kite-mcp-server",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://kite-mcp-server.fly.dev/mcp"
+    }
+  ]
+}

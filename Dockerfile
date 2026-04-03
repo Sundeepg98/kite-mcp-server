@@ -21,6 +21,7 @@ COPY --from=builder /usr/local/bin/litestream /usr/local/bin/litestream
 COPY etc/litestream.yml /etc/litestream.yml
 COPY scripts/run.sh /scripts/run.sh
 RUN chmod +x /scripts/run.sh
+LABEL io.modelcontextprotocol.server.name="io.github.sundeepg98/kite-trading"
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8080/ || exit 1
 USER appuser
 CMD ["/scripts/run.sh"]

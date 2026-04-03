@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -755,6 +756,42 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux.HandleFunc("/.well-known/security.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("Contact: mailto:sundeepg8@gmail.com\nExpires: 2027-04-02T00:00:00.000Z\nPreferred-Languages: en\n"))
+	})
+
+	// MCP Server Card for auto-discovery (SEP-1649)
+	mux.HandleFunc("/.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"$schema":         "https://modelcontextprotocol.io/schemas/server-card/v1.0",
+			"version":         "1.0",
+			"protocolVersion": "2025-06-18",
+			"serverInfo": map[string]any{
+				"name":        "Kite Trading MCP Server",
+				"version":     app.Version,
+				"description": "Indian stock market trading via Zerodha Kite Connect. 78 tools for order execution, portfolio analytics, options Greeks, paper trading, backtesting, technical indicators, price alerts with Telegram, watchlists, tax harvesting, and SEBI compliance.",
+				"homepage":    "https://github.com/Sundeepg98/kite-mcp-server",
+			},
+			"transport": map[string]any{
+				"type": "streamable-http",
+				"url":  "/mcp",
+			},
+			"capabilities": map[string]any{
+				"tools":     true,
+				"resources": true,
+				"prompts":   true,
+			},
+			"authentication": map[string]any{
+				"required": true,
+				"schemes":  []string{"oauth2"},
+			},
+		})
 	})
 
 	// Register OAuth 2.1 endpoints if enabled (with per-IP rate limiting)
