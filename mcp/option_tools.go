@@ -18,7 +18,10 @@ type OptionChainTool struct{}
 func (*OptionChainTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_option_chain",
 		mcp.WithDescription("Get option chain for an underlying — all strikes with LTP, OI, volume for the nearest expiry. Useful for options analysis, OI-based directional view, and hedging decisions."),
+		mcp.WithTitleAnnotation("Get Option Chain"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("underlying",
 			mcp.Description("Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)"),
 			mcp.Required(),

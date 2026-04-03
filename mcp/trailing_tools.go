@@ -25,7 +25,10 @@ func (*SetTrailingStopTool) Tool() mcp.Tool {
 			"For a short position: the stop trails downward as price falls. "+
 			"Requires: 1) An existing SL/SL-M order (place one first), 2) The ticker running with the instrument subscribed. "+
 			"The order is modified at most once every 30 seconds to avoid API rate limits."),
-		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithTitleAnnotation("Set Trailing Stop"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("instrument",
 			mcp.Description("Instrument in exchange:tradingsymbol format (e.g. 'NSE:INFY')"),
 			mcp.Required(),
@@ -220,7 +223,10 @@ type ListTrailingStopsTool struct{}
 func (*ListTrailingStopsTool) Tool() mcp.Tool {
 	return mcp.NewTool("list_trailing_stops",
 		mcp.WithDescription("List all trailing stop-losses for the current user, including active and deactivated."),
+		mcp.WithTitleAnnotation("List Trailing Stops"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	)
 }
 
@@ -254,7 +260,10 @@ type CancelTrailingStopTool struct{}
 func (*CancelTrailingStopTool) Tool() mcp.Tool {
 	return mcp.NewTool("cancel_trailing_stop",
 		mcp.WithDescription("Cancel (deactivate) a trailing stop-loss. The underlying SL order remains unchanged."),
+		mcp.WithTitleAnnotation("Cancel Trailing Stop"),
 		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("trailing_stop_id",
 			mcp.Description("The trailing stop ID to cancel (from list_trailing_stops)"),
 			mcp.Required(),

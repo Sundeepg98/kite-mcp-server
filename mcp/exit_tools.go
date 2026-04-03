@@ -18,7 +18,10 @@ type ClosePositionTool struct{}
 func (*ClosePositionTool) Tool() mcp.Tool {
 	return mcp.NewTool("close_position",
 		mcp.WithDescription("Close a single open position by placing an opposite MARKET order. Specify the instrument in exchange:tradingsymbol format."),
+		mcp.WithTitleAnnotation("Close Position"),
 		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("instrument",
 			mcp.Description("Instrument in exchange:tradingsymbol format (e.g. 'NSE:INFY')"),
 			mcp.Required(),
@@ -126,7 +129,10 @@ type CloseAllPositionsTool struct{}
 func (*CloseAllPositionsTool) Tool() mcp.Tool {
 	return mcp.NewTool("close_all_positions",
 		mcp.WithDescription("Exit ALL open positions by placing MARKET orders in the opposite direction. Use in emergencies or end-of-day cleanup. Optionally filter by product type."),
+		mcp.WithTitleAnnotation("Close All Positions"),
 		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("product", mcp.Description("Filter by product type: MIS, CNC, NRML, or ALL"), mcp.DefaultString("ALL")),
 		mcp.WithBoolean("confirm", mcp.Description("Must be true to execute. Safety check."), mcp.Required()),
 	)

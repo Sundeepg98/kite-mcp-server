@@ -19,7 +19,10 @@ func (*GetPnLJournalTool) Tool() mcp.Tool {
 		mcp.WithDescription("Get your daily P&L journal with cumulative returns, best/worst days, and streak analysis. "+
 			"Data is captured automatically at 3:40 PM IST each trading day. "+
 			"Use 'period' for quick ranges or 'from'/'to' for custom dates."),
+		mcp.WithTitleAnnotation("Get P&L Journal"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("period",
 			mcp.Description("Quick date range: 'week' (last 7 days), 'month' (last 30 days), 'quarter' (last 90 days), 'year' (last 365 days), or 'all' (all time). Ignored if 'from' is provided."),
 			mcp.Enum("week", "month", "quarter", "year", "all"),

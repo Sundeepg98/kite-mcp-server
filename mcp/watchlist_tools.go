@@ -19,7 +19,10 @@ type CreateWatchlistTool struct{}
 func (*CreateWatchlistTool) Tool() mcp.Tool {
 	return mcp.NewTool("create_watchlist",
 		mcp.WithDescription("Create a new named watchlist for tracking instruments. Max 10 watchlists per user."),
-		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithTitleAnnotation("Create Watchlist"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name",
 			mcp.Description("Name for the watchlist (e.g. 'Tech Stocks', 'Swing Trades')"),
 			mcp.Required(),
@@ -68,7 +71,10 @@ type DeleteWatchlistTool struct{}
 func (*DeleteWatchlistTool) Tool() mcp.Tool {
 	return mcp.NewTool("delete_watchlist",
 		mcp.WithDescription("Delete a watchlist and all its items."),
+		mcp.WithTitleAnnotation("Delete Watchlist"),
 		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("watchlist",
 			mcp.Description("Watchlist ID or name"),
 			mcp.Required(),
@@ -113,7 +119,10 @@ type AddToWatchlistTool struct{}
 func (*AddToWatchlistTool) Tool() mcp.Tool {
 	return mcp.NewTool("add_to_watchlist",
 		mcp.WithDescription("Add instruments to a watchlist. Max 50 items per watchlist. Optionally set notes and price targets."),
-		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithTitleAnnotation("Add to Watchlist"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("watchlist",
 			mcp.Description("Watchlist ID or name"),
 			mcp.Required(),
@@ -225,7 +234,10 @@ type RemoveFromWatchlistTool struct{}
 func (*RemoveFromWatchlistTool) Tool() mcp.Tool {
 	return mcp.NewTool("remove_from_watchlist",
 		mcp.WithDescription("Remove instruments from a watchlist by item ID or exchange:symbol."),
+		mcp.WithTitleAnnotation("Remove from Watchlist"),
 		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("watchlist",
 			mcp.Description("Watchlist ID or name"),
 			mcp.Required(),
@@ -315,7 +327,10 @@ type GetWatchlistTool struct{}
 func (*GetWatchlistTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_watchlist",
 		mcp.WithDescription("Get all instruments in a watchlist with current prices (LTP). Shows distance to target entry/exit."),
+		mcp.WithTitleAnnotation("Get Watchlist"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("watchlist",
 			mcp.Description("Watchlist ID or name"),
 			mcp.Required(),
@@ -465,7 +480,10 @@ type ListWatchlistsTool struct{}
 func (*ListWatchlistsTool) Tool() mcp.Tool {
 	return mcp.NewTool("list_watchlists",
 		mcp.WithDescription("List all watchlists for the current user with item counts."),
+		mcp.WithTitleAnnotation("List Watchlists"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	)
 }
 

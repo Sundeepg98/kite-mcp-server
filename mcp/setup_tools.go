@@ -159,6 +159,10 @@ type LoginTool struct{}
 func (*LoginTool) Tool() mcp.Tool {
 	return mcp.NewTool("login",
 		mcp.WithDescription("Login to Kite API. This tool helps you log in to the Kite API. If you are starting off a new conversation call this tool before hand. Call this if you get a session error. Returns a link that the user should click to authorize access, present as markdown if your client supports so that they can click it easily when rendered. Optionally provide your own Kite developer app credentials (api_key + api_secret) for per-user isolation — get them from https://developers.kite.trade/apps"),
+		mcp.WithTitleAnnotation("Login to Kite"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("api_key",
 			mcp.Description("Optional: Your Kite developer app API key from https://developers.kite.trade/apps"),
 		),
@@ -336,6 +340,10 @@ type OpenDashboardTool struct{}
 func (*OpenDashboardTool) Tool() mcp.Tool {
 	return mcp.NewTool("open_dashboard",
 		mcp.WithDescription("Open a specific dashboard page in the user's browser. Use this when the user asks to see their portfolio, orders, alerts, or activity visually. Supports deep-linking with filters. In local mode, auto-opens the browser. In remote mode, returns a clickable link. Pages: portfolio (default), orders, alerts, activity, ops."),
+		mcp.WithTitleAnnotation("Open Dashboard"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("page",
 			mcp.Description("Dashboard page to open: portfolio, activity, orders, alerts, ops"),
 			mcp.DefaultString("portfolio"),

@@ -22,7 +22,10 @@ type PreTradeCheckTool struct{}
 func (*PreTradeCheckTool) Tool() mcp.Tool {
 	return mcp.NewTool("pre_trade_check",
 		mcp.WithDescription("Pre-trade validation -- checks margin, concentration, existing positions, and current price in ONE call. Use before placing any order. Much faster than calling get_ltp + get_order_margins + get_margins + get_positions + portfolio_concentration separately."),
+		mcp.WithTitleAnnotation("Pre-Trade Check"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("exchange",
 			mcp.Description("Exchange"),
 			mcp.Required(),

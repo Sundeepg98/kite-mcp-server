@@ -17,6 +17,10 @@ type StartTickerTool struct{}
 func (*StartTickerTool) Tool() mcp.Tool {
 	return mcp.NewTool("start_ticker",
 		mcp.WithDescription("Start a WebSocket stream for live market data. Requires an active Kite session (call login first). Once started, use subscribe_instruments to add instruments. Only one ticker per user is allowed."),
+		mcp.WithTitleAnnotation("Start Ticker"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 	)
 }
 
@@ -58,6 +62,10 @@ type StopTickerTool struct{}
 func (*StopTickerTool) Tool() mcp.Tool {
 	return mcp.NewTool("stop_ticker",
 		mcp.WithDescription("Stop the WebSocket stream for live market data."),
+		mcp.WithTitleAnnotation("Stop Ticker"),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 	)
 }
 
@@ -91,7 +99,10 @@ type TickerStatusTool struct{}
 func (*TickerStatusTool) Tool() mcp.Tool {
 	return mcp.NewTool("ticker_status",
 		mcp.WithDescription("Show the current WebSocket ticker connection status and subscribed instruments."),
+		mcp.WithTitleAnnotation("Ticker Status"),
 		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	)
 }
 
@@ -126,6 +137,10 @@ type SubscribeInstrumentsTool struct{}
 func (*SubscribeInstrumentsTool) Tool() mcp.Tool {
 	return mcp.NewTool("subscribe_instruments",
 		mcp.WithDescription("Subscribe to instruments for live WebSocket tick data. The ticker must be started first with start_ticker. Instruments are specified as exchange:tradingsymbol (e.g. 'NSE:INFY')."),
+		mcp.WithTitleAnnotation("Subscribe Instruments"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithArray("instruments",
 			mcp.Description("List of instruments to subscribe. Eg. ['NSE:INFY', 'NSE:SBIN']"),
 			mcp.Required(),
@@ -193,6 +208,10 @@ type UnsubscribeInstrumentsTool struct{}
 func (*UnsubscribeInstrumentsTool) Tool() mcp.Tool {
 	return mcp.NewTool("unsubscribe_instruments",
 		mcp.WithDescription("Unsubscribe from instruments to stop receiving live tick data."),
+		mcp.WithTitleAnnotation("Unsubscribe Instruments"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithArray("instruments",
 			mcp.Description("List of instruments to unsubscribe. Eg. ['NSE:INFY', 'NSE:SBIN']"),
 			mcp.Required(),
