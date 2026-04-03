@@ -7,13 +7,18 @@
 <title>Safety · Kite MCP</title>
 <style>
 :root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
-  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
-  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
-  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
   --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -77,7 +82,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     <span class="sep"></span>
     <span class="title">Safety</span>
   </div>
-  <a class="dash-link" id="dashLink" href="/dashboard/safety" target="_blank">Open Dashboard</a>
+  <a class="dash-link" id="dashLink" href="#" onclick="AppBridge.openLink('https://kite-mcp-server.fly.dev/dashboard/safety'); return false;">Open Dashboard</a>
 </div>
 
 <div class="content">
@@ -88,10 +93,130 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <div class="sebi-row" id="sebiRow"></div>
 </div>
 
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch(e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); } }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Safety', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => { window.open(url, '_blank'); });
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }}, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+</script>
 <script>
 (function() {
   'use strict';
-  var DATA = "__INJECTED_DATA__";
+  var DATA = window.__DATA__;
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -179,6 +304,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     }
   }
 
+  AppBridge.init().catch(function() {});
+
   if (DATA && typeof DATA === 'object') {
     render(DATA);
   } else {
@@ -186,6 +313,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     clearChildren(bar);
     bar.appendChild(el('span', 'loading', 'No data'));
   }
+
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
 })();
 </script>
 </body>

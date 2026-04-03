@@ -7,10 +7,18 @@
 <title>Alerts · Kite MCP</title>
 <style>
 :root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee);
+  --green: var(--mcp-ui-success-color, #34d399);
+  --red: var(--mcp-ui-error-color, #f87171);
+  --amber: var(--mcp-ui-warning-color, #fbbf24);
   --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
   --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
   --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
@@ -63,6 +71,8 @@ tr:last-child td { border-bottom: none; } tr:hover td { background: var(--bg-2);
 .trig-exch { color: var(--text-2); font-size: 10px; margin-left: 4px; font-weight: 400; }
 .trig-detail { font-family: var(--mono); font-size: 11px; color: var(--text-1); flex: 1; }
 .trig-time { font-family: var(--mono); font-size: 10px; color: var(--text-2); flex-shrink: 0; }
+.del-btn { background: none; border: 1px solid var(--border); border-radius: 3px; color: var(--text-2); font-size: 12px; cursor: pointer; padding: 2px 6px; line-height: 1; transition: all 0.12s; }
+.del-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
 .empty-state { text-align: center; padding: 32px 16px; color: var(--text-2); font-size: 13px; }
 
 .footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; margin-top: 12px; border-top: 1px solid var(--border); }
@@ -187,7 +197,30 @@ const AppBridge = (() => {
     }).observe(document.body);
   }
 
-  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
 })();
 
 function formatINR(n) {
@@ -257,6 +290,17 @@ function updateFooterTs() {
   }
 }
 
+async function deleteAlert(symbol, exchange, direction, row) {
+  try {
+    await AppBridge.callServerTool('delete_alert', { tradingsymbol: symbol, exchange: exchange, direction: direction });
+    AppBridge.sendMessage('Deleted ' + symbol + ' ' + direction + ' alert');
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+  } catch (e) {
+    // Show error inline
+    if (row) row.style.opacity = '0.5';
+  }
+}
+
 function render() {
   const data = window.__DATA__;
 
@@ -318,7 +362,7 @@ function render() {
     const tbl = document.createElement('table');
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
-    ['Symbol', 'Direction', 'Target', 'Current', 'Distance', 'Created'].forEach(function(h, i) {
+    ['Symbol', 'Direction', 'Target', 'Current', 'Distance', 'Created', ''].forEach(function(h, i) {
       const th = el('th', i >= 2 && i <= 4 ? 'right' : '', h);
       headRow.appendChild(th);
     });
@@ -366,6 +410,18 @@ function render() {
 
       // Created
       tr.appendChild(el('td', '', fmtDate(a.created_at)));
+
+      // Delete button
+      const tdDel = document.createElement('td');
+      const delBtn = el('button', 'del-btn', '\u2715');
+      delBtn.title = 'Delete alert';
+      (function(symbol, exchange, direction, row) {
+        delBtn.addEventListener('click', function() {
+          deleteAlert(symbol, exchange, direction, row);
+        });
+      })(a.tradingsymbol, a.exchange, a.direction, tr);
+      tdDel.appendChild(delBtn);
+      tr.appendChild(tdDel);
 
       tbody.appendChild(tr);
     });

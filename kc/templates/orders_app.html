@@ -7,10 +7,18 @@
 <title>Orders · Kite MCP</title>
 <style>
 :root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee);
+  --green: var(--mcp-ui-success-color, #34d399);
+  --red: var(--mcp-ui-error-color, #f87171);
+  --amber: var(--mcp-ui-warning-color, #fbbf24);
   --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
   --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
   --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
@@ -93,7 +101,10 @@ tr:hover td { background: var(--bg-2); }
 </div>
 <div class="footer" id="footerBar">
   <span class="footer-ts" id="footerTs"></span>
-  <span class="footer-ts" style="font-style:italic">Data loaded at page render</span>
+  <div style="display:flex;gap:6px">
+    <button class="refresh-btn" id="exportBtn" onclick="exportOrdersCSV()">Export CSV</button>
+    <span class="footer-ts" style="font-style:italic;align-self:center">Data loaded at page render</span>
+  </div>
 </div>
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
@@ -187,7 +198,30 @@ const AppBridge = (() => {
     }).observe(document.body);
   }
 
-  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
 })();
 
 function formatINR(n) {
@@ -247,6 +281,29 @@ function updateFooterTs() {
     const now = new Date();
     ts.textContent = 'Last updated: ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
   }
+}
+
+function exportOrdersCSV() {
+  const data = window.__DATA__;
+  const orders = (data && data.orders) || [];
+  if (orders.length === 0) return;
+  const rows = [['Symbol','Exchange','Type','Order Type','Qty','Filled','Price','Avg Price','Status','Time']];
+  orders.forEach(function(o) {
+    rows.push([
+      o.tradingsymbol || '',
+      o.exchange || '',
+      o.transaction_type || '',
+      o.order_type || '',
+      o.quantity != null ? String(o.quantity) : '',
+      o.filled_quantity != null ? String(o.filled_quantity) : '',
+      o.price != null ? o.price.toFixed(2) : '',
+      o.average_price != null ? o.average_price.toFixed(2) : '',
+      o.status || '',
+      o.placed_at || ''
+    ]);
+  });
+  const csv = rows.map(function(r) { return r.join(','); }).join('\n');
+  AppBridge.downloadFile('orders-' + new Date().toISOString().slice(0,10) + '.csv', 'text/csv', csv);
 }
 
 function render() {

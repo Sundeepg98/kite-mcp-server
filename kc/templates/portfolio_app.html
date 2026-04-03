@@ -7,13 +7,18 @@
 <title>Kite Portfolio</title>
 <style>
 :root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
-  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
-  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
-  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
   --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -87,6 +92,18 @@ td.sym { font-weight: 600; color: var(--text-0); }
 /* Badge */
 .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
 
+/* Header buttons */
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 13px; cursor: pointer; transition: all 0.12s; line-height: 1; }
+.icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Fullscreen mode */
+html.fullscreen body { font-size: 14px; }
+html.fullscreen .summary-value { font-size: 20px; }
+html.fullscreen table { font-size: 14px; }
+html.fullscreen td { font-size: 13px; padding: 7px 12px; }
+html.fullscreen th { font-size: 11px; padding: 8px 12px; }
+
 /* Responsive */
 @media (max-width: 480px) {
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
@@ -103,7 +120,10 @@ td.sym { font-weight: 600; color: var(--text-0); }
     <span class="header-sep"></span>
     <span class="header-title">Portfolio</span>
   </div>
-  <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+  <div class="header-actions">
+    <button class="icon-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
+    <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+  </div>
 </div>
 
 <div id="app"></div>
@@ -206,7 +226,30 @@ const AppBridge = (() => {
     }, '*');
   }
 
-  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
 })();
 
 // --- INR formatting (Indian numbering: lakhs/crores) ---
@@ -448,6 +491,9 @@ function renderPortfolio(data) {
     app.appendChild(posSection);
   }
 
+  // Store holdings for CSV export
+  window.__lastHoldings = holdings;
+
   // Footer
   const now = new Date();
   const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -457,10 +503,16 @@ function renderPortfolio(data) {
   const tsSpan = el('span', 'footer-ts', 'Last updated ' + ts);
   tsSpan.id = 'lastTs';
   footer.appendChild(tsSpan);
+  const btnGroup = el('div', '');
+  btnGroup.style.cssText = 'display:flex;gap:6px';
+  const exportBtn = el('button', 'refresh-btn', 'Export CSV');
+  exportBtn.addEventListener('click', exportPortfolioCSV);
+  btnGroup.appendChild(exportBtn);
   const refreshBtn = el('button', 'refresh-btn', 'Refresh');
   refreshBtn.id = 'refreshBtn';
   refreshBtn.addEventListener('click', refreshData);
-  footer.appendChild(refreshBtn);
+  btnGroup.appendChild(refreshBtn);
+  footer.appendChild(btnGroup);
   app.appendChild(footer);
 }
 
@@ -475,6 +527,35 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = String(s);
   return d.innerHTML;
+}
+
+// --- CSV Export ---
+function exportPortfolioCSV() {
+  const holdings = window.__lastHoldings || [];
+  if (holdings.length === 0) return;
+  const rows = [['Symbol','Exchange','Qty','Avg Price','LTP','P&L','Day %']];
+  for (const h of holdings) {
+    rows.push([
+      h.tradingsymbol || '',
+      h.exchange || '',
+      h.quantity != null ? String(h.quantity) : '',
+      h.average_price != null ? h.average_price.toFixed(2) : '',
+      h.last_price != null ? h.last_price.toFixed(2) : '',
+      h.pnl != null ? h.pnl.toFixed(2) : '',
+      h.day_change_percentage != null ? h.day_change_percentage.toFixed(2) : ''
+    ]);
+  }
+  const csv = rows.map(function(r) { return r.join(','); }).join('\n');
+  AppBridge.downloadFile('portfolio-' + new Date().toISOString().slice(0,10) + '.csv', 'text/csv', csv);
+}
+
+// --- Fullscreen toggle ---
+async function toggleFullscreen() {
+  const current = document.documentElement.classList.contains('fullscreen');
+  const result = await AppBridge.requestDisplayMode(current ? 'inline' : 'fullscreen');
+  if (result && result.granted !== false) {
+    document.documentElement.classList.toggle('fullscreen');
+  }
 }
 
 // --- Refresh via AppBridge ---
@@ -533,6 +614,9 @@ document.getElementById('dashLink').addEventListener('click', function(e) {
   const baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
   AppBridge.openLink(baseUrl + '/dashboard');
 });
+
+// --- Fullscreen button ---
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 
 // --- Init ---
 (async function() {

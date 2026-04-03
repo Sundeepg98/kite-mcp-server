@@ -7,10 +7,18 @@
 <title>Activity · Kite MCP</title>
 <style>
 :root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --green: #34d399; --red: #f87171; --amber: #fbbf24;
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee);
+  --green: var(--mcp-ui-success-color, #34d399);
+  --red: var(--mcp-ui-error-color, #f87171);
+  --amber: var(--mcp-ui-warning-color, #fbbf24);
   --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
   --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
   --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
@@ -198,7 +206,30 @@ const AppBridge = (() => {
     }).observe(document.body);
   }
 
-  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
 })();
 
 function formatINR(n) {
