@@ -56,11 +56,18 @@ func GetAllTools() []Tool {
 		&SubscribeInstrumentsTool{},
 		&UnsubscribeInstrumentsTool{},
 
-		// Tools for price alerts
+		// Tools for price alerts (custom, MCP server-side)
 		&SetupTelegramTool{},
 		&SetAlertTool{},
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
+
+		// Native alerts (Zerodha server-side, survive MCP server restarts)
+		&PlaceNativeAlertTool{},
+		&ListNativeAlertsTool{},
+		&ModifyNativeAlertTool{},
+		&DeleteNativeAlertTool{},
+		&GetNativeAlertHistoryTool{},
 
 		// Trailing stop-loss tools
 		&SetTrailingStopTool{},
@@ -85,6 +92,9 @@ func GetAllTools() []Tool {
 		&PortfolioSummaryTool{},
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},
+
+		// Tax analysis
+		&TaxHarvestTool{},
 
 		// Pre-trade composite check (replaces 5 separate tool calls)
 		&PreTradeCheckTool{},
