@@ -46,7 +46,8 @@ type App struct {
 	startTime      time.Time
 	kcManager      *kc.Manager
 	oauthHandler   *oauth.Handler
-	statusTemplate *template.Template
+	statusTemplate  *template.Template
+	landingTemplate *template.Template
 	logger         *slog.Logger
 	metrics        *metrics.Manager
 	logBuffer      *ops.LogBuffer
@@ -980,14 +981,20 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	app.configureAndStartServer(srv, mux)
 }
 
-// initStatusPageTemplate initializes the status template
+// initStatusPageTemplate initializes the status and landing templates
 func (app *App) initStatusPageTemplate() error {
 	tmpl, err := template.ParseFS(templates.FS, "base.html", "status.html")
 	if err != nil {
 		return fmt.Errorf("failed to parse status template: %w", err)
 	}
 	app.statusTemplate = tmpl
-	app.logger.Info("Status template initialized successfully")
+
+	landing, err := template.ParseFS(templates.FS, "landing.html")
+	if err != nil {
+		return fmt.Errorf("failed to parse landing template: %w", err)
+	}
+	app.landingTemplate = landing
+	app.logger.Info("Status and landing templates initialized successfully")
 	return nil
 }
 
@@ -1026,20 +1033,26 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 			}
 		}
 
-		// Serve status page with template data
-		if app.statusTemplate == nil {
-			// Fallback to simple text if template failed to load
+		// Serve landing page for unauthenticated users
+		data := app.getStatusData()
+		data.OAuthEnabled = app.oauthHandler != nil
+
+		// Use landing template if available, fall back to status template
+		tmpl := app.landingTemplate
+		if tmpl == nil {
+			tmpl = app.statusTemplate
+		}
+		if tmpl == nil {
+			// Fallback to simple text if no template loaded
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("Kite MCP Server - Status template not available"))
 			return
 		}
 
-		data := app.getStatusData()
-		data.OAuthEnabled = app.oauthHandler != nil
 		var buf bytes.Buffer
-		if err := app.statusTemplate.ExecuteTemplate(&buf, "base", data); err != nil {
-			app.logger.Error("Failed to execute status template", "error", err)
+		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+			app.logger.Error("Failed to execute landing template", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
