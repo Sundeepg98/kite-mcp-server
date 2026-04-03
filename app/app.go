@@ -25,8 +25,10 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
@@ -335,12 +337,31 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		}
 	}
 
+	// Initialize riskguard for financial safety controls.
+	riskGuard := riskguard.NewGuard(app.logger)
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		riskGuard.SetDB(alertDB)
+		if err := riskGuard.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize risk_limits table", "error", err)
+		}
+		if err := riskGuard.LoadLimits(); err != nil {
+			app.logger.Error("Failed to load risk limits", "error", err)
+		}
+	}
+	if kcManager.InstrumentsManager() != nil {
+		// Wrap instruments manager as FreezeQuantityLookup
+		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManager()})
+	}
+	kcManager.SetRiskGuard(riskGuard)
+
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
 	var serverOpts []server.ServerOption
 	if auditMiddleware != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
 	}
+	// Riskguard middleware blocks orders exceeding safety limits.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
 	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
@@ -494,6 +515,18 @@ type briefingCredAdapter struct {
 
 func (a *briefingCredAdapter) GetAPIKey(email string) string {
 	return a.manager.GetAPIKeyForEmail(email)
+}
+
+// instrumentsFreezeAdapter wraps instruments.Manager to implement riskguard.FreezeQuantityLookup.
+// TODO: Add actual freeze quantity lookup once instruments.Manager exposes a public method for it.
+type instrumentsFreezeAdapter struct {
+	mgr *instruments.Manager
+}
+
+func (a *instrumentsFreezeAdapter) GetFreezeQuantity(exchange, symbol string) (uint32, bool) {
+	// instruments.Manager doesn't yet expose a public lookup by exchange:symbol.
+	// Fail open until the lookup is added in a follow-up.
+	return 0, false
 }
 
 // createHTTPServer creates and configures the HTTP server

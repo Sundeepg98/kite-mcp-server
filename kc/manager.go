@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -383,6 +384,7 @@ type Manager struct {
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	auditStore         *audit.Store                   // optional: audit trail for synthetic events
+	riskGuard          *riskguard.Guard               // optional: financial safety controls
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
@@ -686,6 +688,16 @@ func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
 // modification callbacks so that these events appear in the SSE activity stream.
 func (m *Manager) SetAuditStore(store *audit.Store) {
 	m.auditStore = store
+}
+
+// SetRiskGuard sets the riskguard for financial safety controls.
+func (m *Manager) SetRiskGuard(guard *riskguard.Guard) {
+	m.riskGuard = guard
+}
+
+// RiskGuard returns the riskguard instance, or nil if not configured.
+func (m *Manager) RiskGuard() *riskguard.Guard {
+	return m.riskGuard
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.

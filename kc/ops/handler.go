@@ -71,6 +71,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/users/activate", wrap(h.activateUser))
 	mux.Handle("/admin/ops/api/users/offboard", wrap(h.offboardUser))
 	mux.Handle("/admin/ops/api/users/role", wrap(h.changeRole))
+	// Risk management (admin only)
+	mux.Handle("/admin/ops/api/risk/freeze", wrap(h.freezeTrading))
+	mux.Handle("/admin/ops/api/risk/unfreeze", wrap(h.unfreezeTrading))
 	// Key registry (admin only)
 	mux.Handle("/admin/ops/api/registry", wrap(h.registryHandler))
 	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
@@ -456,6 +459,65 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Admin changed user role", "admin", adminEmail, "target", targetEmail, "role", req.Role)
 	h.logAdminAction(adminEmail, "change_role", targetEmail+" -> "+req.Role)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Role updated to " + req.Role})
+}
+
+// freezeTrading freezes trading for a user. Admin only.
+func (h *Handler) freezeTrading(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Email  string `json:"email"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
+		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+	guard := h.manager.RiskGuard()
+	if guard == nil {
+		http.Error(w, "riskguard not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	guard.Freeze(body.Email, adminEmail, body.Reason)
+	h.logger.Info("Admin froze trading", "admin", adminEmail, "target", body.Email, "reason", body.Reason)
+	h.logAdminAction(adminEmail, "freeze_trading", body.Email)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Trading frozen for " + body.Email})
+}
+
+// unfreezeTrading unfreezes trading for a user. Admin only.
+func (h *Handler) unfreezeTrading(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
+		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+	guard := h.manager.RiskGuard()
+	if guard == nil {
+		http.Error(w, "riskguard not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	guard.Unfreeze(body.Email)
+	h.logger.Info("Admin unfroze trading", "admin", adminEmail, "target", body.Email)
+	h.logAdminAction(adminEmail, "unfreeze_trading", body.Email)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Trading unfrozen for " + body.Email})
 }
 
 // logAdminAction records an admin action in the audit trail.
