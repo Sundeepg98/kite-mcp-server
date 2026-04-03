@@ -118,6 +118,11 @@ var toolDashboardPage = map[string]string{
 
 	// Activity page
 	"get_option_chain":         "/dashboard/activity",
+
+	// Paper trading page
+	"paper_trading_toggle":     "/dashboard/paper",
+	"paper_trading_status":     "/dashboard/paper",
+	"paper_trading_reset":      "/dashboard/paper",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,

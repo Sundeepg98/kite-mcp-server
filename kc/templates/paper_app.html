@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Kite Paper Trading</title>
+<style>
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.header-link { font-size: 11px; color: var(--text-2); text-decoration: none; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.header-link:hover { color: var(--accent); }
+
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 16px; }
+.summary-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.summary-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.summary-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text-0); }
+
+.section { padding: 0 16px; }
+.section-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); }
+th.r, td.r { text-align: right; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+td.sym { font-weight: 600; color: var(--text-0); }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.badge-purple { background: var(--purple-dim); color: var(--purple); }
+.badge-green { background: var(--green-dim); color: var(--green); }
+.badge-off { background: var(--red-dim); color: var(--red); }
+
+.status-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--purple-dim); border-bottom: 1px solid rgba(167,139,250,0.2); }
+.status-bar.off { background: var(--red-dim); border-bottom-color: rgba(248,113,113,0.2); }
+
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.refresh-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.empty-state { text-align: center; padding: 24px 16px; color: var(--text-2); font-size: 12px; }
+
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .summary-value { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Paper Trading</span>
+  </div>
+  <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+</div>
+
+<div id="app"></div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Paper Trading', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  return { init, callServerTool, openLink, notifySize, get isIframe() { return isIframe; } };
+})();
+
+function fmtINR(n, decimals) {
+  if (n == null || isNaN(n)) return '--';
+  const d = decimals != null ? decimals : 2;
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  const parts = abs.toFixed(d).split('.');
+  let intPart = parts[0];
+  const decPart = parts[1];
+  if (intPart.length > 3) {
+    const last3 = intPart.slice(-3);
+    let rest = intPart.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) { groups.unshift(rest.slice(-2)); rest = rest.slice(0, -2); }
+    if (rest.length > 0) groups.unshift(rest);
+    intPart = groups.join(',') + ',' + last3;
+  }
+  return (neg ? '-' : '') + '\u20B9' + intPart + (decPart ? '.' + decPart : '');
+}
+
+function pnlClass(n) {
+  if (n == null || isNaN(n) || n === 0) return '';
+  return n > 0 ? 'green' : 'red';
+}
+
+function el(tag, className, textContent) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (textContent != null) e.textContent = String(textContent);
+  return e;
+}
+
+function td(text, classes) {
+  const cell = el('td', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+function th(text, classes) {
+  const cell = el('th', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+function renderPaper(data) {
+  const app = document.getElementById('app');
+  app.textContent = '';
+
+  if (!data || !data.status || !data.status.enabled) {
+    app.appendChild(el('div', 'empty-state', 'Paper trading is not enabled. Use paper_trading_toggle to start.'));
+    return;
+  }
+
+  const status = data.status;
+  const holdings = data.holdings || [];
+  const positions = data.positions || [];
+
+  // Status bar
+  const statusBar = el('div', 'status-bar');
+  statusBar.appendChild(el('span', 'badge badge-purple', 'PAPER MODE'));
+  const cashInfo = el('span', '', '');
+  cashInfo.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--text-1)';
+  cashInfo.textContent = 'Cash: ' + fmtINR(status.cash_balance) + ' / ' + fmtINR(status.initial_cash);
+  statusBar.appendChild(cashInfo);
+  app.appendChild(statusBar);
+
+  // Compute unrealized P&L
+  let unrealizedPnl = 0;
+  let totalHoldingsVal = 0;
+  for (const h of holdings) {
+    totalHoldingsVal += (h.last_price || h.average_price || 0) * (h.quantity || 0);
+    unrealizedPnl += (h.pnl || 0);
+  }
+  for (const p of positions) {
+    unrealizedPnl += (p.pnl || 0);
+  }
+  const portfolioVal = (status.cash_balance || 0) + totalHoldingsVal;
+
+  // Summary cards
+  const summaryGrid = el('div', 'summary-grid');
+  const summaryItems = [
+    { label: 'Portfolio', value: fmtINR(portfolioVal, 0), cls: '' },
+    { label: 'Unrealized', value: fmtINR(unrealizedPnl), cls: pnlClass(unrealizedPnl) },
+    { label: 'Cash', value: fmtINR(status.cash_balance, 0), cls: '' },
+    { label: 'Positions', value: String(positions.length), cls: '' },
+  ];
+  for (const item of summaryItems) {
+    const card = el('div', 'summary-card');
+    card.appendChild(el('div', 'summary-label', item.label));
+    card.appendChild(el('div', 'summary-value' + (item.cls ? ' ' + item.cls : ''), item.value));
+    summaryGrid.appendChild(card);
+  }
+  app.appendChild(summaryGrid);
+
+  // Top holdings (up to 5)
+  if (holdings.length > 0) {
+    const holdSection = el('div', 'section');
+    holdSection.appendChild(el('div', 'section-header', 'Top Holdings'));
+    const wrap = el('div', 'tbl-wrap');
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    for (const [text, cls] of [['Symbol',''], ['Qty','r'], ['LTP','r'], ['P&L','r']]) {
+      headRow.appendChild(th(text, cls));
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const sorted = holdings.slice().sort((a, b) => Math.abs(b.pnl || 0) - Math.abs(a.pnl || 0));
+    const tbody = document.createElement('tbody');
+    for (const h of sorted.slice(0, 5)) {
+      const pnl = h.pnl || 0;
+      const row = document.createElement('tr');
+      row.appendChild(td(h.tradingsymbol, 'sym'));
+      row.appendChild(td(h.quantity, 'r'));
+      row.appendChild(td(fmtINR(h.last_price), 'r'));
+      row.appendChild(td(fmtINR(pnl), 'r ' + pnlClass(pnl)));
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    holdSection.appendChild(wrap);
+    app.appendChild(holdSection);
+  }
+
+  // Footer
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    + ' ' + now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const footer = el('div', 'footer');
+  const tsSpan = el('span', 'footer-ts', 'Last updated ' + ts);
+  tsSpan.id = 'lastTs';
+  footer.appendChild(tsSpan);
+  const refreshBtn = el('button', 'refresh-btn', 'Refresh');
+  refreshBtn.id = 'refreshBtn';
+  refreshBtn.addEventListener('click', refreshData);
+  footer.appendChild(refreshBtn);
+  app.appendChild(footer);
+}
+
+function showEmpty(msg) {
+  const app = document.getElementById('app');
+  app.textContent = '';
+  app.appendChild(el('div', 'empty-state', msg));
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+
+  try {
+    const statusRes = await AppBridge.callServerTool('paper_trading_status');
+    if (!statusRes || !statusRes.enabled) {
+      showEmpty('Paper trading is not enabled.');
+      return;
+    }
+    const [holdingsRes, positionsRes] = await Promise.all([
+      AppBridge.callServerTool('get_holdings'),
+      AppBridge.callServerTool('get_positions')
+    ]);
+
+    const holdings = Array.isArray(holdingsRes) ? holdingsRes : (holdingsRes && holdingsRes.holdings) || [];
+    const positions = Array.isArray(positionsRes) ? positionsRes
+      : (positionsRes && positionsRes.net) || (positionsRes && positionsRes.positions) || [];
+
+    renderPaper({ status: statusRes, holdings, positions });
+    requestAnimationFrame(() => AppBridge.notifySize());
+  } catch (e) {
+    const tsEl = document.getElementById('lastTs');
+    if (tsEl) tsEl.textContent = 'Refresh failed: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+  }
+}
+
+document.getElementById('dashLink').addEventListener('click', function(e) {
+  e.preventDefault();
+  const baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
+  AppBridge.openLink(baseUrl + '/dashboard/paper');
+});
+
+(async function() {
+  AppBridge.init().catch(() => {});
+
+  const data = window.__DATA__;
+  if (data && data.error) showEmpty(data.error);
+  else if (data) renderPaper(data);
+  else if (data === null) showEmpty('Not authenticated \u2014 please log in via your MCP client');
+  else showEmpty('No paper trading data available');
+
+  requestAnimationFrame(() => AppBridge.notifySize());
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => AppBridge.notifySize(), 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>

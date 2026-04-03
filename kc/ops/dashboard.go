@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
@@ -57,6 +59,16 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/pnl-chart", wrap(d.pnlChartAPI))
 	mux.Handle("/dashboard/api/order-attribution", wrap(d.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
+	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPage))
+	mux.Handle("/dashboard/api/safety/status", wrap(d.safetyStatus))
+	mux.Handle("/dashboard/paper", wrap(d.servePaperPage))
+	mux.Handle("/dashboard/api/paper/status", wrap(d.paperStatus))
+	mux.Handle("/dashboard/api/paper/holdings", wrap(d.paperHoldings))
+	mux.Handle("/dashboard/api/paper/positions", wrap(d.paperPositions))
+	mux.Handle("/dashboard/api/paper/orders", wrap(d.paperOrders))
+	mux.Handle("/dashboard/api/paper/reset", wrap(d.paperReset))
+	mux.Handle("/dashboard/api/sector-exposure", wrap(d.sectorExposureAPI))
+	mux.Handle("/dashboard/api/tax-analysis", wrap(d.taxAnalysisAPI))
 }
 
 // writeJSON encodes data as JSON and writes it to the response writer.
@@ -1247,4 +1259,594 @@ type alertCopy struct {
 	TriggeredAt        time.Time
 	TriggeredPrice     float64
 	NotificationSentAt time.Time
+}
+
+// --- Paper Trading Dashboard Handlers ---
+
+// servePaperPage serves the embedded paper.html page.
+func (d *DashboardHandler) servePaperPage(w http.ResponseWriter, r *http.Request) {
+	data, err := templates.FS.ReadFile("paper.html")
+	if err != nil {
+		http.Error(w, "failed to load paper trading page", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(data); err != nil {
+		d.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// paperStatus returns the paper trading account status for the authenticated user.
+func (d *DashboardHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	engine := d.manager.PaperEngine()
+	if engine == nil {
+		d.writeJSONError(w, http.StatusNotFound, "not_configured", "Paper trading engine is not configured.")
+		return
+	}
+	status, err := engine.Status(email)
+	if err != nil {
+		d.logger.Error("Failed to get paper status", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper trading status.")
+		return
+	}
+	d.writeJSON(w, status)
+}
+
+// paperHoldings returns paper trading holdings for the authenticated user.
+func (d *DashboardHandler) paperHoldings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	engine := d.manager.PaperEngine()
+	if engine == nil {
+		d.writeJSONError(w, http.StatusNotFound, "not_configured", "Paper trading engine is not configured.")
+		return
+	}
+	holdings, err := engine.GetHoldings(email)
+	if err != nil {
+		d.logger.Error("Failed to get paper holdings", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper holdings.")
+		return
+	}
+	d.writeJSON(w, holdings)
+}
+
+// paperPositions returns paper trading positions for the authenticated user.
+func (d *DashboardHandler) paperPositions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	engine := d.manager.PaperEngine()
+	if engine == nil {
+		d.writeJSONError(w, http.StatusNotFound, "not_configured", "Paper trading engine is not configured.")
+		return
+	}
+	positions, err := engine.GetPositions(email)
+	if err != nil {
+		d.logger.Error("Failed to get paper positions", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper positions.")
+		return
+	}
+	d.writeJSON(w, positions)
+}
+
+// paperOrders returns paper trading orders for the authenticated user.
+func (d *DashboardHandler) paperOrders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	engine := d.manager.PaperEngine()
+	if engine == nil {
+		d.writeJSONError(w, http.StatusNotFound, "not_configured", "Paper trading engine is not configured.")
+		return
+	}
+	orders, err := engine.GetOrders(email)
+	if err != nil {
+		d.logger.Error("Failed to get paper orders", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper orders.")
+		return
+	}
+	d.writeJSON(w, orders)
+}
+
+// paperReset resets the paper trading account for the authenticated user.
+func (d *DashboardHandler) paperReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	engine := d.manager.PaperEngine()
+	if engine == nil {
+		d.writeJSONError(w, http.StatusNotFound, "not_configured", "Paper trading engine is not configured.")
+		return
+	}
+	if err := engine.Reset(email); err != nil {
+		d.logger.Error("Failed to reset paper account", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to reset paper trading account.")
+		return
+	}
+	d.writeJSON(w, map[string]string{"status": "ok", "message": "Paper trading account reset successfully."})
+}
+
+// serveSafetyPage serves the embedded safety.html page.
+func (d *DashboardHandler) serveSafetyPage(w http.ResponseWriter, r *http.Request) {
+	data, err := templates.FS.ReadFile("safety.html")
+	if err != nil {
+		http.Error(w, "failed to load safety page", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write(data); err != nil {
+		d.logger.Error("Failed to write response", "error", err)
+	}
+}
+
+// safetyStatus returns riskguard status and effective limits for the authenticated user.
+func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	guard := d.manager.RiskGuard()
+	if guard == nil {
+		d.writeJSON(w, map[string]any{
+			"enabled": false,
+			"message": "RiskGuard is not enabled on this server.",
+		})
+		return
+	}
+
+	status := guard.GetUserStatus(email)
+	limits := guard.GetEffectiveLimits(email)
+
+	// Check session and credential status for SEBI compliance summary
+	_, hasToken := d.manager.TokenStore().Get(email)
+	_, hasCreds := d.manager.CredentialStore().Get(email)
+
+	d.writeJSON(w, map[string]any{
+		"enabled": true,
+		"status":  status,
+		"limits": map[string]any{
+			"max_single_order_inr":   limits.MaxSingleOrderINR,
+			"max_orders_per_day":     limits.MaxOrdersPerDay,
+			"max_orders_per_minute":  limits.MaxOrdersPerMinute,
+			"duplicate_window_secs":  limits.DuplicateWindowSecs,
+			"max_daily_value_inr":    limits.MaxDailyValueINR,
+			"auto_freeze_on_limit":   limits.AutoFreezeOnLimitHit,
+		},
+		"sebi": map[string]any{
+			"static_egress_ip":  true,
+			"session_active":    hasToken,
+			"credentials_set":   hasCreds,
+			"order_tagging":     true,
+			"audit_trail":       d.auditStore != nil,
+		},
+	})
+}
+
+// --- Sector Exposure API ---
+
+type dashboardSectorAllocation struct {
+	Sector      string  `json:"sector"`
+	Value       float64 `json:"value"`
+	Pct         float64 `json:"pct"`
+	Holdings    int     `json:"holdings"`
+	OverExposed bool    `json:"over_exposed,omitempty"`
+}
+
+type sectorExposureAPIResponse struct {
+	TotalValue    float64                     `json:"total_value"`
+	HoldingsCount int                         `json:"holdings_count"`
+	MappedCount   int                         `json:"mapped_count"`
+	UnmappedCount int                         `json:"unmapped_count"`
+	Sectors       []dashboardSectorAllocation `json:"sectors"`
+	Warnings      []string                    `json:"warnings,omitempty"`
+}
+
+// sectorExposureAPI returns sector allocation data for the authenticated user's holdings.
+func (d *DashboardHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
+	if !hasCreds {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated",
+			"Kite credentials not found.")
+		return
+	}
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	if !hasToken {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated",
+			"Kite token expired or not found.")
+		return
+	}
+
+	client := kiteconnect.New(credEntry.APIKey)
+	client.SetAccessToken(tokenEntry.AccessToken)
+
+	holdings, err := client.GetHoldings()
+	if err != nil {
+		d.logger.Error("Failed to fetch holdings for sector exposure", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
+			"Failed to fetch holdings: "+err.Error())
+		return
+	}
+
+	if len(holdings) == 0 {
+		d.writeJSON(w, sectorExposureAPIResponse{
+			Sectors: []dashboardSectorAllocation{},
+		})
+		return
+	}
+
+	resp := d.computeDashboardSectorExposure(holdings)
+	d.writeJSON(w, resp)
+}
+
+// computeDashboardSectorExposure maps holdings to sectors and computes allocation percentages.
+func (d *DashboardHandler) computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposureAPIResponse {
+	const overExposureThresh = 30.0
+
+	var totalValue float64
+	for _, h := range holdings {
+		totalValue += h.LastPrice * float64(h.Quantity)
+	}
+
+	if totalValue == 0 {
+		return sectorExposureAPIResponse{
+			HoldingsCount: len(holdings),
+			Sectors:       []dashboardSectorAllocation{},
+		}
+	}
+
+	type sectorAccum struct {
+		value    float64
+		holdings int
+	}
+	sectorMap := make(map[string]*sectorAccum)
+	mappedCount := 0
+	unmappedCount := 0
+
+	for _, h := range holdings {
+		val := h.LastPrice * float64(h.Quantity)
+		symbol := dashboardNormalizeSymbol(h.Tradingsymbol)
+		sector, ok := dashboardStockSectors[symbol]
+		if !ok {
+			unmappedCount++
+			sector = "Other"
+		} else {
+			mappedCount++
+		}
+
+		acc, exists := sectorMap[sector]
+		if !exists {
+			acc = &sectorAccum{}
+			sectorMap[sector] = acc
+		}
+		acc.value += val
+		acc.holdings++
+	}
+
+	sectors := make([]dashboardSectorAllocation, 0, len(sectorMap))
+	var warnings []string
+	for name, acc := range sectorMap {
+		pct := math.Round(acc.value/totalValue*10000) / 100
+		overExposed := pct > overExposureThresh
+		sectors = append(sectors, dashboardSectorAllocation{
+			Sector:      name,
+			Value:       math.Round(acc.value*100) / 100,
+			Pct:         pct,
+			Holdings:    acc.holdings,
+			OverExposed: overExposed,
+		})
+		if overExposed {
+			warnings = append(warnings, fmt.Sprintf("%s is over-exposed at %.1f%% of portfolio (threshold: 30%%)", name, pct))
+		}
+	}
+
+	// Sort by allocation descending.
+	sort.Slice(sectors, func(i, j int) bool {
+		return sectors[i].Pct > sectors[j].Pct
+	})
+
+	return sectorExposureAPIResponse{
+		TotalValue:    math.Round(totalValue*100) / 100,
+		HoldingsCount: len(holdings),
+		MappedCount:   mappedCount,
+		UnmappedCount: unmappedCount,
+		Sectors:       sectors,
+		Warnings:      warnings,
+	}
+}
+
+// dashboardNormalizeSymbol strips common suffixes for sector lookup.
+func dashboardNormalizeSymbol(ts string) string {
+	s := strings.ToUpper(strings.TrimSpace(ts))
+	for _, suffix := range []string{"-BE", "-EQ", "-BZ", "-BL"} {
+		s = strings.TrimSuffix(s, suffix)
+	}
+	return s
+}
+
+// --- Tax Analysis API ---
+
+type taxHoldingEntry struct {
+	Symbol         string  `json:"symbol"`
+	Exchange       string  `json:"exchange"`
+	Quantity       int     `json:"quantity"`
+	AveragePrice   float64 `json:"average_price"`
+	LastPrice      float64 `json:"last_price"`
+	InvestedValue  float64 `json:"invested_value"`
+	CurrentValue   float64 `json:"current_value"`
+	UnrealizedPnL  float64 `json:"unrealized_pnl"`
+	Classification string  `json:"classification"` // "LTCG" or "STCG"
+	TaxRate        float64 `json:"tax_rate"`        // percentage
+	TaxIfSold      float64 `json:"tax_if_sold"`
+	Harvestable    bool    `json:"harvestable"`
+}
+
+type taxSummary struct {
+	TotalLTCGGains     float64 `json:"total_ltcg_gains"`
+	TotalSTCGGains     float64 `json:"total_stcg_gains"`
+	TotalLTCGLosses    float64 `json:"total_ltcg_losses"`
+	TotalSTCGLosses    float64 `json:"total_stcg_losses"`
+	HarvestableLoss    float64 `json:"harvestable_loss"`
+	PotentialTaxSaving float64 `json:"potential_tax_saving"`
+	HoldingsAnalyzed   int     `json:"holdings_analyzed"`
+}
+
+type taxAnalysisResponse struct {
+	Holdings []taxHoldingEntry `json:"holdings"`
+	Summary  taxSummary        `json:"summary"`
+}
+
+// taxAnalysisAPI returns tax classification and harvesting opportunities for holdings.
+func (d *DashboardHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
+	if !hasCreds {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated",
+			"Kite credentials not found.")
+		return
+	}
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	if !hasToken {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated",
+			"Kite token expired or not found.")
+		return
+	}
+
+	client := kiteconnect.New(credEntry.APIKey)
+	client.SetAccessToken(tokenEntry.AccessToken)
+
+	holdings, err := client.GetHoldings()
+	if err != nil {
+		d.logger.Error("Failed to fetch holdings for tax analysis", "email", email, "error", err)
+		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
+			"Failed to fetch holdings: "+err.Error())
+		return
+	}
+
+	if len(holdings) == 0 {
+		d.writeJSON(w, taxAnalysisResponse{
+			Holdings: []taxHoldingEntry{},
+		})
+		return
+	}
+
+	resp := d.computeTaxAnalysis(holdings)
+	d.writeJSON(w, resp)
+}
+
+// computeTaxAnalysis classifies holdings and computes tax harvesting opportunities.
+// Since Kite API does not expose purchase dates, we use a simplified heuristic:
+// equity delivery holdings are classified as STCG by default (conservative).
+// Indian tax rates (FY 2025-26): STCG on equity = 20%, LTCG on equity = 12.5% (above 1.25L exemption).
+func (d *DashboardHandler) computeTaxAnalysis(holdings kiteconnect.Holdings) taxAnalysisResponse {
+	const (
+		stcgRate = 20.0 // STCG tax rate for equity
+		ltcgRate = 12.5 // LTCG tax rate for equity
+	)
+	// Suppress unused variable warning for ltcgRate — reserved for future LTCG classification.
+	_ = ltcgRate
+
+	entries := make([]taxHoldingEntry, 0, len(holdings))
+	var summary taxSummary
+	summary.HoldingsAnalyzed = len(holdings)
+
+	for _, h := range holdings {
+		invested := h.AveragePrice * float64(h.Quantity)
+		current := h.LastPrice * float64(h.Quantity)
+		unrealizedPnL := current - invested
+
+		// Simplified classification: use STCG by default since Kite doesn't
+		// expose purchase dates. Users should verify actual holding period.
+		classification := "STCG"
+		taxRate := stcgRate
+
+		taxIfSold := 0.0
+		if unrealizedPnL > 0 {
+			taxIfSold = math.Round(unrealizedPnL*taxRate) / 100
+		}
+
+		harvestable := unrealizedPnL < 0
+
+		entry := taxHoldingEntry{
+			Symbol:         h.Tradingsymbol,
+			Exchange:       h.Exchange,
+			Quantity:       h.Quantity,
+			AveragePrice:   h.AveragePrice,
+			LastPrice:      h.LastPrice,
+			InvestedValue:  math.Round(invested*100) / 100,
+			CurrentValue:   math.Round(current*100) / 100,
+			UnrealizedPnL:  math.Round(unrealizedPnL*100) / 100,
+			Classification: classification,
+			TaxRate:        taxRate,
+			TaxIfSold:      math.Round(taxIfSold*100) / 100,
+			Harvestable:    harvestable,
+		}
+		entries = append(entries, entry)
+
+		// Aggregate summary
+		if unrealizedPnL > 0 {
+			if classification == "LTCG" {
+				summary.TotalLTCGGains += unrealizedPnL
+			} else {
+				summary.TotalSTCGGains += unrealizedPnL
+			}
+		} else if unrealizedPnL < 0 {
+			if classification == "LTCG" {
+				summary.TotalLTCGLosses += unrealizedPnL
+			} else {
+				summary.TotalSTCGLosses += unrealizedPnL
+			}
+			summary.HarvestableLoss += unrealizedPnL
+		}
+	}
+
+	// Round summary values
+	summary.TotalLTCGGains = math.Round(summary.TotalLTCGGains*100) / 100
+	summary.TotalSTCGGains = math.Round(summary.TotalSTCGGains*100) / 100
+	summary.TotalLTCGLosses = math.Round(summary.TotalLTCGLosses*100) / 100
+	summary.TotalSTCGLosses = math.Round(summary.TotalSTCGLosses*100) / 100
+	summary.HarvestableLoss = math.Round(summary.HarvestableLoss*100) / 100
+
+	// Potential tax saving = harvestable loss * blended rate (use STCG rate as conservative estimate)
+	if summary.HarvestableLoss < 0 {
+		summary.PotentialTaxSaving = math.Round(math.Abs(summary.HarvestableLoss)*stcgRate) / 100
+	}
+
+	// Sort: harvestable (losses) first, then by unrealized P&L ascending
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Harvestable != entries[j].Harvestable {
+			return entries[i].Harvestable
+		}
+		return entries[i].UnrealizedPnL < entries[j].UnrealizedPnL
+	})
+
+	return taxAnalysisResponse{
+		Holdings: entries,
+		Summary:  summary,
+	}
+}
+
+// dashboardStockSectors maps NSE/BSE trading symbols to their primary sector.
+// Duplicated from mcp/sector_tool.go to avoid cross-package import.
+var dashboardStockSectors = map[string]string{
+	// Banking
+	"HDFCBANK": "Banking", "ICICIBANK": "Banking", "SBIN": "Banking",
+	"KOTAKBANK": "Banking", "AXISBANK": "Banking", "INDUSINDBK": "Banking",
+	"BANKBARODA": "Banking", "PNB": "Banking", "IDFCFIRSTB": "Banking",
+	"FEDERALBNK": "Banking", "AUBANK": "Banking", "BANDHANBNK": "Banking",
+	"CANBK": "Banking", "UNIONBANK": "Banking", "YESBANK": "Banking",
+	// IT
+	"TCS": "IT", "INFY": "IT", "HCLTECH": "IT", "WIPRO": "IT",
+	"TECHM": "IT", "LTIM": "IT", "MPHASIS": "IT", "COFORGE": "IT",
+	"PERSISTENT": "IT", "LTTS": "IT", "TATAELXSI": "IT",
+	// FMCG
+	"HINDUNILVR": "FMCG", "ITC": "FMCG", "NESTLEIND": "FMCG",
+	"BRITANNIA": "FMCG", "DABUR": "FMCG", "TATACONSUM": "FMCG",
+	"MARICO": "FMCG", "GODREJCP": "FMCG", "COLPAL": "FMCG",
+	// Pharma / Healthcare
+	"SUNPHARMA": "Pharma", "DRREDDY": "Pharma", "CIPLA": "Pharma",
+	"DIVISLAB": "Pharma", "LUPIN": "Pharma", "AUROPHARMA": "Pharma",
+	"BIOCON": "Pharma", "APOLLOHOSP": "Healthcare", "MAXHEALTH": "Healthcare",
+	"FORTIS": "Healthcare",
+	// Auto
+	"MARUTI": "Auto", "TATAMOTORS": "Auto", "M&M": "Auto",
+	"HEROMOTOCO": "Auto", "EICHERMOT": "Auto", "BAJAJ-AUTO": "Auto",
+	"ASHOKLEY": "Auto", "TVSMOTOR": "Auto", "MOTHERSON": "Auto",
+	// Energy
+	"RELIANCE": "Energy", "NTPC": "Energy", "POWERGRID": "Energy",
+	"ONGC": "Energy", "COALINDIA": "Energy", "BPCL": "Energy",
+	"IOC": "Energy", "GAIL": "Energy", "TATAPOWER": "Energy",
+	"ADANIGREEN": "Energy", "NHPC": "Energy",
+	// Metals
+	"TATASTEEL": "Metals", "JSWSTEEL": "Metals", "HINDALCO": "Metals",
+	"VEDL": "Metals", "JINDALSTEL": "Metals", "NMDC": "Metals", "SAIL": "Metals",
+	// Infra
+	"LT": "Infra", "ADANIPORTS": "Infra", "SIEMENS": "Infra",
+	"ABB": "Infra", "HAVELLS": "Infra", "POLYCAB": "Infra",
+	"BEL": "Infra", "BHEL": "Infra",
+	// Cement
+	"ULTRACEMCO": "Cement", "GRASIM": "Cement", "SHREECEM": "Cement",
+	"AMBUJACEM": "Cement", "ACC": "Cement",
+	// NBFC / Insurance
+	"BAJFINANCE": "NBFC", "BAJAJFINSV": "NBFC", "SBILIFE": "Insurance",
+	"HDFCLIFE": "Insurance", "ICICIGI": "Insurance", "MUTHOOTFIN": "NBFC",
+	"SHRIRAMFIN": "NBFC", "CHOLAFIN": "NBFC", "PFC": "NBFC", "RECLTD": "NBFC",
+	// Telecom
+	"BHARTIARTL": "Telecom", "IDEA": "Telecom",
+	// Consumer
+	"TITAN": "Consumer", "ASIANPAINT": "Consumer", "PIDILITIND": "Consumer",
+	"TRENT": "Consumer", "DMART": "Consumer",
+	// Tech / New Economy
+	"ZOMATO": "Tech", "PAYTM": "Tech", "NYKAA": "Tech",
+	"POLICYBZR": "Tech", "INFOEDGE": "Tech",
+	// Defence
+	"HAL": "Defence", "BDL": "Defence", "MAZAGON": "Defence",
+	// Conglomerate
+	"ADANIENT": "Conglomerate",
+	// Real Estate
+	"DLF": "Real Estate", "GODREJPROP": "Real Estate", "OBEROIRLTY": "Real Estate",
+	// Chemicals
+	"PIIND": "Chemicals", "SRF": "Chemicals", "DEEPAKNTR": "Chemicals",
+	// Services
+	"IRCTC": "Services", "INDIGO": "Aviation",
 }
