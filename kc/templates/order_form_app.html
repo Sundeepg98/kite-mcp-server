@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Kite Order Form</title>
+<style>
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.paper-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 600; background: var(--amber-dim); color: var(--amber); margin-left: 6px; }
+
+/* Form layout */
+.form-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.form-row { display: flex; gap: 10px; align-items: flex-end; }
+.form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.form-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.form-input, .form-select {
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px;
+  padding: 7px 10px; font-size: 13px; color: var(--text-0); font-family: var(--sans);
+  outline: none; transition: border-color 0.12s; width: 100%;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-input.mono { font-family: var(--mono); }
+.form-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+
+/* BUY / SELL toggle */
+.txn-toggle { display: flex; gap: 6px; }
+.txn-btn { flex: 1; padding: 8px 0; border-radius: 5px; border: 1.5px solid var(--border); background: var(--bg-2); color: var(--text-2); font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.12s; text-align: center; }
+.txn-btn:hover { border-color: var(--text-1); color: var(--text-1); }
+.txn-btn.buy-active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.txn-btn.sell-active { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+/* Place Order button */
+.place-btn {
+  width: 100%; padding: 10px 0; border-radius: 5px; border: none;
+  font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s; text-align: center; margin-top: 4px;
+}
+.place-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.place-btn.buy-theme { background: var(--green); color: #0a0c10; }
+.place-btn.buy-theme:hover:not(:disabled) { filter: brightness(1.12); }
+.place-btn.sell-theme { background: var(--red); color: #0a0c10; }
+.place-btn.sell-theme:hover:not(:disabled) { filter: brightness(1.12); }
+.place-btn.confirm { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+
+/* Result area */
+.result-area { padding: 0 16px 12px; }
+.result-box { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12px; }
+.result-box.success { border-color: var(--green); background: var(--green-dim); }
+.result-box.error { border-color: var(--red); background: var(--red-dim); }
+.result-box.info { border-color: var(--accent); background: var(--accent-dim); }
+.result-title { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+.result-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.result-key { color: var(--text-2); font-size: 11px; }
+.result-val { font-family: var(--mono); font-size: 11px; color: var(--text-0); }
+.result-warnings { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.result-warn { font-size: 11px; color: var(--amber); padding: 1px 0; }
+
+/* Hidden */
+.hidden { display: none !important; }
+
+/* Responsive */
+@media (max-width: 380px) {
+  .form-row { flex-direction: column; }
+  .form-body { gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Order Form</span>
+    <span class="paper-badge hidden" id="paperBadge">PAPER</span>
+  </div>
+</div>
+
+<div class="form-body" id="form">
+  <!-- Row 1: Symbol + Exchange -->
+  <div class="form-row">
+    <div class="form-group" style="flex:2">
+      <label class="form-label" for="symbol">Symbol</label>
+      <input class="form-input" id="symbol" type="text" placeholder="e.g., RELIANCE" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="form-group" style="flex:1">
+      <label class="form-label" for="exchange">Exchange</label>
+      <select class="form-select" id="exchange">
+        <option value="NSE" selected>NSE</option>
+        <option value="BSE">BSE</option>
+        <option value="NFO">NFO</option>
+        <option value="BFO">BFO</option>
+        <option value="MCX">MCX</option>
+        <option value="CDS">CDS</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Row 2: BUY / SELL toggle -->
+  <div class="form-group">
+    <label class="form-label">Transaction</label>
+    <div class="txn-toggle">
+      <button class="txn-btn buy-active" id="btnBuy" type="button">BUY</button>
+      <button class="txn-btn" id="btnSell" type="button">SELL</button>
+    </div>
+  </div>
+
+  <!-- Row 3: Order Type + Product -->
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label" for="orderType">Order Type</label>
+      <select class="form-select" id="orderType">
+        <option value="MARKET" selected>MARKET</option>
+        <option value="LIMIT">LIMIT</option>
+        <option value="SL">SL</option>
+        <option value="SL-M">SL-M</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="product">Product</label>
+      <select class="form-select" id="product">
+        <option value="CNC" selected>CNC</option>
+        <option value="MIS">MIS</option>
+        <option value="NRML">NRML</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Row 4: Quantity + Price + Trigger Price -->
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label" for="qty">Quantity</label>
+      <input class="form-input mono" id="qty" type="number" min="1" step="1" placeholder="0">
+    </div>
+    <div class="form-group hidden" id="priceGroup">
+      <label class="form-label" for="price">Price</label>
+      <input class="form-input mono" id="price" type="number" min="0" step="0.05" placeholder="0.00">
+    </div>
+    <div class="form-group hidden" id="triggerGroup">
+      <label class="form-label" for="triggerPrice">Trigger Price</label>
+      <input class="form-input mono" id="triggerPrice" type="number" min="0" step="0.05" placeholder="0.00">
+    </div>
+  </div>
+
+  <!-- Place Order button -->
+  <button class="place-btn buy-theme" id="placeBtn" type="button" disabled>Place Order</button>
+</div>
+
+<div class="result-area hidden" id="resultArea">
+  <div class="result-box" id="resultBox"></div>
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge - minimal JSON-RPC over postMessage
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Order Form', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+// --- State ---
+let txnType = 'BUY';
+let stage = 'idle'; // idle | checking | confirm | placing | done
+let lastPreTrade = null;
+
+// --- DOM refs ---
+const $symbol = document.getElementById('symbol');
+const $exchange = document.getElementById('exchange');
+const $orderType = document.getElementById('orderType');
+const $product = document.getElementById('product');
+const $qty = document.getElementById('qty');
+const $price = document.getElementById('price');
+const $triggerPrice = document.getElementById('triggerPrice');
+const $priceGroup = document.getElementById('priceGroup');
+const $triggerGroup = document.getElementById('triggerGroup');
+const $btnBuy = document.getElementById('btnBuy');
+const $btnSell = document.getElementById('btnSell');
+const $placeBtn = document.getElementById('placeBtn');
+const $resultArea = document.getElementById('resultArea');
+const $resultBox = document.getElementById('resultBox');
+const $paperBadge = document.getElementById('paperBadge');
+
+// --- Init paper mode badge ---
+const data = window.__DATA__;
+if (data && data.paper_mode) {
+  $paperBadge.classList.remove('hidden');
+}
+
+// --- BUY / SELL toggle ---
+function setTxnType(type) {
+  txnType = type;
+  if (type === 'BUY') {
+    $btnBuy.className = 'txn-btn buy-active';
+    $btnSell.className = 'txn-btn';
+    $placeBtn.className = 'place-btn buy-theme' + (stage === 'confirm' ? ' confirm' : '');
+  } else {
+    $btnBuy.className = 'txn-btn';
+    $btnSell.className = 'txn-btn sell-active';
+    $placeBtn.className = 'place-btn sell-theme' + (stage === 'confirm' ? ' confirm' : '');
+  }
+  resetStage();
+  validateForm();
+}
+$btnBuy.addEventListener('click', function() { setTxnType('BUY'); });
+$btnSell.addEventListener('click', function() { setTxnType('SELL'); });
+
+// --- Order type: show/hide price and trigger fields ---
+function updatePriceFields() {
+  var ot = $orderType.value;
+  var showPrice = (ot === 'LIMIT' || ot === 'SL');
+  var showTrigger = (ot === 'SL' || ot === 'SL-M');
+  $priceGroup.classList.toggle('hidden', !showPrice);
+  $triggerGroup.classList.toggle('hidden', !showTrigger);
+  if (!showPrice) $price.value = '';
+  if (!showTrigger) $triggerPrice.value = '';
+  resetStage();
+  validateForm();
+}
+$orderType.addEventListener('change', updatePriceFields);
+
+// --- Form validation ---
+function isFormValid() {
+  var sym = $symbol.value.trim();
+  var qty = parseInt($qty.value, 10);
+  if (!sym || !qty || qty <= 0) return false;
+  var ot = $orderType.value;
+  if ((ot === 'LIMIT' || ot === 'SL') && (!$price.value || parseFloat($price.value) <= 0)) return false;
+  if ((ot === 'SL' || ot === 'SL-M') && (!$triggerPrice.value || parseFloat($triggerPrice.value) <= 0)) return false;
+  return true;
+}
+
+function validateForm() {
+  $placeBtn.disabled = !isFormValid() || stage === 'checking' || stage === 'placing';
+}
+
+// Listen for input changes
+[$symbol, $qty, $price, $triggerPrice, $exchange, $product].forEach(function(el) {
+  el.addEventListener('input', function() { resetStage(); validateForm(); });
+  el.addEventListener('change', function() { resetStage(); validateForm(); });
+});
+
+// --- Stage management ---
+function resetStage() {
+  if (stage === 'confirm' || stage === 'done') {
+    stage = 'idle';
+    lastPreTrade = null;
+    updateButtonLabel();
+    $resultArea.classList.add('hidden');
+  }
+}
+
+function updateButtonLabel() {
+  var prefix = txnType === 'BUY' ? 'buy-theme' : 'sell-theme';
+  switch (stage) {
+    case 'idle':
+      $placeBtn.textContent = 'Place Order';
+      $placeBtn.className = 'place-btn ' + prefix;
+      break;
+    case 'checking':
+      $placeBtn.textContent = 'Checking...';
+      $placeBtn.className = 'place-btn ' + prefix;
+      break;
+    case 'confirm':
+      $placeBtn.textContent = 'Confirm Order';
+      $placeBtn.className = 'place-btn ' + prefix + ' confirm';
+      break;
+    case 'placing':
+      $placeBtn.textContent = 'Placing...';
+      $placeBtn.className = 'place-btn ' + prefix;
+      break;
+    case 'done':
+      $placeBtn.textContent = 'Order Placed';
+      $placeBtn.className = 'place-btn ' + prefix;
+      break;
+  }
+  validateForm();
+}
+
+// --- Build order params ---
+function getOrderParams() {
+  var params = {
+    exchange: $exchange.value,
+    tradingsymbol: $symbol.value.trim().toUpperCase(),
+    transaction_type: txnType,
+    quantity: parseInt($qty.value, 10),
+    product: $product.value,
+    order_type: $orderType.value
+  };
+  var ot = $orderType.value;
+  if (ot === 'LIMIT' || ot === 'SL') {
+    params.price = parseFloat($price.value);
+  }
+  if (ot === 'SL' || ot === 'SL-M') {
+    params.trigger_price = parseFloat($triggerPrice.value);
+  }
+  return params;
+}
+
+// --- INR formatting ---
+function fmtINR(n) {
+  if (n == null || isNaN(n)) return '--';
+  var neg = n < 0;
+  var abs = Math.abs(n);
+  var parts = abs.toFixed(2).split('.');
+  var intPart = parts[0];
+  if (intPart.length > 3) {
+    var last3 = intPart.slice(-3);
+    var rest = intPart.slice(0, -3);
+    var groups = [];
+    while (rest.length > 2) { groups.unshift(rest.slice(-2)); rest = rest.slice(0, -2); }
+    if (rest.length > 0) groups.unshift(rest);
+    intPart = groups.join(',') + ',' + last3;
+  }
+  return (neg ? '-' : '') + '\u20B9' + intPart + '.' + parts[1];
+}
+
+// --- Show result (safe DOM only, no innerHTML) ---
+function clearElement(el) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+function showResult(type, title, rows, warnings) {
+  $resultBox.className = 'result-box ' + type;
+  clearElement($resultBox);
+
+  var titleEl = document.createElement('div');
+  titleEl.className = 'result-title';
+  titleEl.textContent = title;
+  $resultBox.appendChild(titleEl);
+
+  if (rows && rows.length) {
+    for (var i = 0; i < rows.length; i++) {
+      var row = document.createElement('div');
+      row.className = 'result-row';
+      var k = document.createElement('span');
+      k.className = 'result-key';
+      k.textContent = rows[i][0];
+      var v = document.createElement('span');
+      v.className = 'result-val';
+      v.textContent = rows[i][1];
+      row.appendChild(k);
+      row.appendChild(v);
+      $resultBox.appendChild(row);
+    }
+  }
+
+  if (warnings && warnings.length) {
+    var warnDiv = document.createElement('div');
+    warnDiv.className = 'result-warnings';
+    for (var j = 0; j < warnings.length; j++) {
+      var wd = document.createElement('div');
+      wd.className = 'result-warn';
+      wd.textContent = '\u26A0 ' + warnings[j];
+      warnDiv.appendChild(wd);
+    }
+    $resultBox.appendChild(warnDiv);
+  }
+
+  $resultArea.classList.remove('hidden');
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+}
+
+// --- Place Order button handler ---
+$placeBtn.addEventListener('click', async function() {
+  if (!isFormValid()) return;
+
+  if (stage === 'idle') {
+    // Step 1: Pre-trade check
+    stage = 'checking';
+    updateButtonLabel();
+    try {
+      var params = getOrderParams();
+      var result = await AppBridge.callServerTool('pre_trade_check', params);
+      lastPreTrade = result;
+
+      // Parse pre-trade response
+      var rows = [];
+      if (result.current_price) rows.push(['Current Price', fmtINR(result.current_price)]);
+      if (result.margin_required != null) rows.push(['Margin Required', fmtINR(result.margin_required)]);
+      if (result.margin_available != null) rows.push(['Margin Available', fmtINR(result.margin_available)]);
+      if (result.order_value != null) rows.push(['Order Value', fmtINR(result.order_value)]);
+      if (result.concentration_pct != null) rows.push(['Portfolio Concentration', result.concentration_pct.toFixed(1) + '%']);
+
+      var warnings = result.warnings || [];
+      var blocked = result.blocked === true;
+
+      if (blocked) {
+        stage = 'idle';
+        updateButtonLabel();
+        showResult('error', 'Pre-trade check failed', rows, warnings.length ? warnings : ['Order blocked by pre-trade check']);
+      } else {
+        stage = 'confirm';
+        updateButtonLabel();
+        showResult('info', 'Pre-trade check passed', rows, warnings);
+      }
+    } catch (e) {
+      stage = 'idle';
+      updateButtonLabel();
+      showResult('error', 'Pre-trade check error', [['Error', e.message]], null);
+    }
+    return;
+  }
+
+  if (stage === 'confirm') {
+    // Step 2: Place the actual order
+    stage = 'placing';
+    updateButtonLabel();
+    try {
+      var params2 = getOrderParams();
+      params2.variety = 'regular';
+      params2.market_protection = -1;
+      params2.tag = 'mcp-widget';
+
+      var result2 = await AppBridge.callServerTool('place_order', params2);
+      stage = 'done';
+      updateButtonLabel();
+
+      var orderID = result2.order_id || (typeof result2 === 'string' ? result2 : '--');
+      var rows2 = [['Order ID', orderID]];
+      if (result2.status) rows2.push(['Status', result2.status]);
+      showResult('success', 'Order placed successfully', rows2, null);
+
+      // Inform the LLM
+      var sym = params2.tradingsymbol;
+      var qty2 = params2.quantity;
+      var ot2 = params2.order_type;
+      var ex = params2.exchange;
+      var priceInfo = ot2 === 'MARKET' ? 'MARKET' : fmtINR(params2.price || params2.trigger_price);
+      AppBridge.sendMessage('Placed ' + txnType + ' ' + qty2 + ' x ' + ex + ':' + sym + ' @ ' + priceInfo).catch(function() {});
+
+      // Reset form after short delay
+      setTimeout(function() {
+        stage = 'idle';
+        $symbol.value = '';
+        $qty.value = '';
+        $price.value = '';
+        $triggerPrice.value = '';
+        updateButtonLabel();
+        validateForm();
+        requestAnimationFrame(function() { AppBridge.notifySize(); });
+      }, 3000);
+
+    } catch (e) {
+      stage = 'idle';
+      updateButtonLabel();
+      showResult('error', 'Order placement failed', [['Error', e.message]], null);
+    }
+  }
+});
+
+// --- Init ---
+(async function() {
+  AppBridge.init().catch(function() {});
+  updatePriceFields();
+  validateForm();
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+
+  if (typeof ResizeObserver !== 'undefined') {
+    var resizeTimer;
+    new ResizeObserver(function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() { AppBridge.notifySize(); }, 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>

@@ -68,6 +68,11 @@ var appResources = []appResource{
 		TemplateFile: "safety_app.html",
 		DataFunc:     safetyData,
 	},
+	{
+		URI: "ui://kite-mcp/order-form", Name: "Order Form Widget",
+		TemplateFile: "order_form_app.html",
+		DataFunc:     orderFormData,
+	},
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
@@ -77,7 +82,8 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/orders":   "ui://kite-mcp/orders",
 	"/dashboard/alerts":   "ui://kite-mcp/alerts",
 	"/dashboard/paper":    "ui://kite-mcp/paper",
-	"/dashboard/safety":   "ui://kite-mcp/safety",
+	"/dashboard/safety":      "ui://kite-mcp/safety",
+	"/dashboard/order-form": "ui://kite-mcp/order-form",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
@@ -537,6 +543,19 @@ func safetyData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 			"order_tagging":    true,
 			"audit_trail":      auditStore != nil,
 		},
+	}
+}
+
+// orderFormData returns paper-mode status for the order form widget.
+// Margins are fetched dynamically via callServerTool('pre_trade_check')
+// rather than pre-injected, since the form needs fresh data at submission time.
+func orderFormData(manager *kc.Manager, _ *audit.Store, email string) any {
+	paperMode := false
+	if engine := manager.PaperEngine(); engine != nil {
+		paperMode = engine.IsEnabled(email)
+	}
+	return map[string]any{
+		"paper_mode": paperMode,
 	}
 }
 
