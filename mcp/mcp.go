@@ -101,6 +101,9 @@ func GetAllTools() []Tool {
 		// Tax analysis
 		&TaxHarvestTool{},
 
+		// Dividend & corporate actions
+		&DividendCalendarTool{},
+
 		// Paper trading management
 		&PaperTradingToggleTool{},
 		&PaperTradingStatusTool{},
