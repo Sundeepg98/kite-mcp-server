@@ -49,6 +49,15 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		exchange := parts[0]
 		symbol := parts[1]
 
+		// Request user confirmation via elicitation.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("close_position", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "close_position", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+
 		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			positions, err := session.Kite.Client.GetPositions()
 			if err != nil {
@@ -143,6 +152,15 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		confirm := SafeAssertBool(args["confirm"], false)
 		if !confirm {
 			return mcp.NewToolResultError("Safety check failed: 'confirm' must be true to close all positions. This is a destructive operation."), nil
+		}
+
+		// Request user confirmation via elicitation (in addition to the confirm param).
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("close_all_positions", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "close_all_positions", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
 
 		productFilter := strings.ToUpper(SafeAssertString(args["product"], "ALL"))

@@ -130,6 +130,15 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("disclosed_quantity cannot exceed quantity"), nil
 		}
 
+		// Request user confirmation via elicitation before placing the order.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("place_order", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "place_order", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp, err := session.Kite.Client.PlaceOrder(variety, orderParams)
 			if err != nil {
@@ -228,6 +237,15 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Validity:          SafeAssertString(args["validity"], ""),
 			DisclosedQuantity: SafeAssertInt(args["disclosed_quantity"], 0),
 			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+		}
+
+		// Request user confirmation via elicitation before modifying the order.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("modify_order", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "modify_order", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
@@ -363,6 +381,15 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Validate required parameters
 		if err := ValidateRequired(args, "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Request user confirmation via elicitation before placing the GTT.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("place_gtt_order", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "place_gtt_order", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
 
 		// Set up basic GTT params
@@ -622,6 +649,15 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Validate required parameters
 		if err := ValidateRequired(args, "trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Request user confirmation via elicitation before modifying the GTT.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("modify_gtt_order", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "modify_gtt_order", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
 
 		// Get the trigger ID to modify

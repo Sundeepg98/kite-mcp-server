@@ -141,6 +141,15 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		// Request user confirmation via elicitation before placing the MF order.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("place_mf_order", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "place_mf_order", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+
 		txnType := SafeAssertString(args["transaction_type"], "")
 		amount := SafeAssertFloat64(args["amount"], 0)
 		quantity := SafeAssertFloat64(args["quantity"], 0)
@@ -252,6 +261,15 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		if err := ValidateRequired(args, "tradingsymbol", "amount", "frequency", "instalments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Request user confirmation via elicitation before placing the SIP.
+		if srv := manager.MCPServer(); srv != nil {
+			msg := buildOrderConfirmMessage("place_mf_sip", args)
+			if err := requestConfirmation(ctx, srv, msg); err != nil {
+				handler.trackToolError(ctx, "place_mf_sip", "user_declined")
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 		}
 
 		amount := SafeAssertFloat64(args["amount"], 0)
