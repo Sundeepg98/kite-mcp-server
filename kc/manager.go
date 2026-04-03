@@ -686,6 +686,11 @@ func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
 	m.pnlService = svc
 }
 
+// AuditStore returns the audit trail store, or nil if not configured.
+func (m *Manager) AuditStore() *audit.Store {
+	return m.auditStore
+}
+
 // SetAuditStore wires the audit store into alert trigger and trailing stop
 // modification callbacks so that these events appear in the SSE activity stream.
 func (m *Manager) SetAuditStore(store *audit.Store) {

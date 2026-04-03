@@ -50,6 +50,7 @@ func GetAllTools() []Tool {
 		&OptionsGreeksTool{},
 		&OptionsStrategyTool{},
 		&TechnicalIndicatorsTool{},
+		&BacktestStrategyTool{},
 
 		// Tools for real-time market data (WebSocket ticker)
 		&StartTickerTool{},
@@ -131,6 +132,9 @@ func GetAllTools() []Tool {
 		&PlaceGTTOrderTool{},
 		&ModifyGTTOrderTool{},
 		&DeleteGTTOrderTool{},
+
+		// Server observability (admin-only)
+		&ServerMetricsTool{},
 	}
 }
 

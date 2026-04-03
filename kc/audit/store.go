@@ -655,6 +655,83 @@ func (s *Store) GetToolCounts(email string, since time.Time) (map[string]int, er
 	return result, nil
 }
 
+// ToolMetric holds per-tool aggregate metrics for observability.
+type ToolMetric struct {
+	ToolName   string  `json:"tool_name"`
+	CallCount  int     `json:"call_count"`
+	AvgMs      float64 `json:"avg_ms"`
+	MaxMs      int64   `json:"max_ms"`
+	ErrorCount int     `json:"error_count"`
+}
+
+// GetToolMetrics returns per-tool aggregate metrics (call count, avg/max latency,
+// error count) for all tool calls since the given time. Results are ordered by
+// call count descending, limited to the top 50 tools.
+func (s *Store) GetToolMetrics(since time.Time) ([]ToolMetric, error) {
+	query := `SELECT tool_name,
+		COUNT(*) AS calls,
+		COALESCE(AVG(duration_ms), 0) AS avg_ms,
+		COALESCE(MAX(duration_ms), 0) AS max_ms,
+		COALESCE(SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END), 0) AS errors
+		FROM tool_calls
+		WHERE started_at > ? AND tool_name != '__chain_break'
+		GROUP BY tool_name
+		ORDER BY calls DESC
+		LIMIT 50`
+
+	rows, err := s.db.RawQuery(query, since.Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, fmt.Errorf("audit: get tool metrics: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ToolMetric
+	for rows.Next() {
+		var m ToolMetric
+		if err := rows.Scan(&m.ToolName, &m.CallCount, &m.AvgMs, &m.MaxMs, &m.ErrorCount); err != nil {
+			return nil, fmt.Errorf("audit: scan tool metric: %w", err)
+		}
+		results = append(results, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: iterate tool metrics: %w", err)
+	}
+	return results, nil
+}
+
+// GetGlobalStats returns aggregate stats across all users since the given time.
+func (s *Store) GetGlobalStats(since time.Time) (*Stats, error) {
+	sinceStr := since.Format(time.RFC3339Nano)
+
+	aggQuery := "SELECT COUNT(*), COALESCE(SUM(is_error), 0), COALESCE(AVG(duration_ms), 0) FROM tool_calls WHERE started_at >= ? AND tool_name != '__chain_break'"
+	var totalCalls, errorCount int
+	var avgLatency float64
+	if err := s.db.QueryRow(aggQuery, sinceStr).Scan(&totalCalls, &errorCount, &avgLatency); err != nil {
+		return nil, fmt.Errorf("audit: global stats aggregate: %w", err)
+	}
+
+	topQuery := "SELECT tool_name, COUNT(*) AS cnt FROM tool_calls WHERE started_at >= ? AND tool_name != '__chain_break' GROUP BY tool_name ORDER BY cnt DESC LIMIT 1"
+	var topTool string
+	var topToolCount int
+	row := s.db.QueryRow(topQuery, sinceStr)
+	if err := row.Scan(&topTool, &topToolCount); err != nil {
+		if err == sql.ErrNoRows {
+			topTool = ""
+			topToolCount = 0
+		} else {
+			return nil, fmt.Errorf("audit: global stats top tool: %w", err)
+		}
+	}
+
+	return &Stats{
+		TotalCalls:   totalCalls,
+		ErrorCount:   errorCount,
+		AvgLatencyMs: avgLatency,
+		TopTool:      topTool,
+		TopToolCount: topToolCount,
+	}, nil
+}
+
 // --- SSE Listener support for real-time activity streaming ---
 
 // AddActivityListener registers a buffered channel that receives new ToolCall entries as they are recorded.
