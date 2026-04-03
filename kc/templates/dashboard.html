@@ -15,6 +15,7 @@
   --green: #34d399; --green-dim: rgba(52,211,153,0.12);
   --red: #f87171; --red-dim: rgba(248,113,113,0.1);
   --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
   --mono: 'JetBrains Mono', monospace;
   --sans: 'DM Sans', system-ui, sans-serif;
 }
@@ -181,12 +182,6 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
   <a href="/admin/ops" class="dash-nav-link">Ops</a>
 </nav>
-
-<div id="notifBanner" style="display:none; padding:8px 24px; background:var(--accent-dim); border-bottom:1px solid rgba(34,211,238,0.25); font-size:12px; color:var(--text-1);">
-  Enable browser notifications for alerts and order updates?
-  <button id="notifEnable" style="margin-left:12px; padding:3px 12px; border-radius:3px; border:1px solid var(--accent); background:transparent; color:var(--accent); font-size:11px; font-family:var(--sans); font-weight:600; cursor:pointer;">Enable</button>
-  <button id="notifDismiss" style="margin-left:6px; padding:3px 12px; border-radius:3px; border:1px solid var(--border); background:transparent; color:var(--text-2); font-size:11px; font-family:var(--sans); cursor:pointer;">Dismiss</button>
-</div>
 
 <div class="content">
 
@@ -969,18 +964,24 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     }
   });
 
-  // --- Collapsible sections ---
-  function initCollapsible(headerId, bodyId) {
+  // --- Collapsible sections with lazy-load ---
+  function initCollapsible(headerId, bodyId, fetchFn) {
     var header = document.getElementById(headerId);
     var body = document.getElementById(bodyId);
     if (!header || !body) return;
+    header.setAttribute('data-loaded', 'false');
     header.addEventListener('click', function() {
       header.classList.toggle('collapsed');
       body.classList.toggle('collapsed');
+      // Lazy-load: fetch data on first expand
+      if (header.getAttribute('data-loaded') === 'false' && !header.classList.contains('collapsed')) {
+        header.setAttribute('data-loaded', 'true');
+        if (fetchFn) fetchFn();
+      }
     });
   }
-  initCollapsible('sectorHeader', 'sectorBody');
-  initCollapsible('taxHeader', 'taxBody');
+  initCollapsible('sectorHeader', 'sectorBody', refreshSectorExposure);
+  initCollapsible('taxHeader', 'taxBody', refreshTaxAnalysis);
 
   // --- Sector Exposure ---
   var sectorColors = [
@@ -1157,31 +1158,21 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   refreshPortfolio();
   refreshAlerts();
   refreshPnlChart();
-  refreshSectorExposure();
-  refreshTaxAnalysis();
+  // Sector & tax are lazy-loaded on first expand (see initCollapsible above)
   setInterval(refreshStatus, 10000);
   setInterval(refreshPortfolio, 30000);
   setInterval(refreshAlerts, 60000);
   setInterval(refreshPnlChart, 300000); // refresh chart every 5 min
-  setInterval(refreshSectorExposure, 60000); // refresh sectors every 60s
-  setInterval(refreshTaxAnalysis, 60000); // refresh tax every 60s
+  // Sector & tax refresh only when visible (expanded)
+  setInterval(function() {
+    var sh = document.getElementById('sectorHeader');
+    if (sh && sh.getAttribute('data-loaded') === 'true' && !sh.classList.contains('collapsed')) refreshSectorExposure();
+  }, 60000);
+  setInterval(function() {
+    var th = document.getElementById('taxHeader');
+    if (th && th.getAttribute('data-loaded') === 'true' && !th.classList.contains('collapsed')) refreshTaxAnalysis();
+  }, 60000);
 
-  // --- Browser Notification permission banner ---
-  (function() {
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'default') return;
-    if (localStorage.getItem('kite_notif_dismissed') === '1') return;
-    document.getElementById('notifBanner').style.display = 'block';
-  })();
-  document.getElementById('notifEnable').addEventListener('click', function() {
-    Notification.requestPermission().then(function() {
-      document.getElementById('notifBanner').style.display = 'none';
-    });
-  });
-  document.getElementById('notifDismiss').addEventListener('click', function() {
-    document.getElementById('notifBanner').style.display = 'none';
-    localStorage.setItem('kite_notif_dismissed', '1');
-  });
 })();
 </script>
 </body>

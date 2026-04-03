@@ -70,6 +70,8 @@ var pageRoutes = map[string]string{
 	"activity":  "/dashboard/activity",
 	"orders":    "/dashboard/orders",
 	"alerts":    "/dashboard/alerts",
+	"paper":     "/dashboard/paper",
+	"safety":    "/dashboard/safety",
 	"ops":       "/admin/ops",
 }
 
@@ -118,11 +120,42 @@ var toolDashboardPage = map[string]string{
 
 	// Activity page
 	"get_option_chain":         "/dashboard/activity",
+	"technical_indicators":     "/dashboard/activity",
+	"backtest_strategy":        "/dashboard/activity",
+	"options_greeks":           "/dashboard/activity",
+	"options_strategy":         "/dashboard/activity",
 
 	// Paper trading page
 	"paper_trading_toggle":     "/dashboard/paper",
 	"paper_trading_status":     "/dashboard/paper",
 	"paper_trading_reset":      "/dashboard/paper",
+
+	// Native alerts page
+	"place_native_alert":       "/dashboard/alerts",
+	"list_native_alerts":       "/dashboard/alerts",
+	"modify_native_alert":      "/dashboard/alerts",
+	"delete_native_alert":      "/dashboard/alerts",
+	"get_native_alert_history": "/dashboard/alerts",
+
+	// Analytics (portfolio page)
+	"dividend_calendar":        "/dashboard",
+	"sector_exposure":          "/dashboard",
+
+	// Safety page
+	"sebi_compliance_status":   "/dashboard/safety",
+
+	// Observability (ops page)
+	"server_metrics":           "/admin/ops",
+
+	// Margins / orders page
+	"get_order_margins":        "/dashboard/orders",
+	"get_basket_margins":       "/dashboard/orders",
+	"get_order_charges":        "/dashboard/orders",
+	"convert_position":         "/dashboard/orders",
+
+	// Mutual funds (portfolio page)
+	"get_mf_orders":            "/dashboard",
+	"get_mf_sips":              "/dashboard",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,
@@ -346,13 +379,13 @@ type OpenDashboardTool struct{}
 
 func (*OpenDashboardTool) Tool() mcp.Tool {
 	return mcp.NewTool("open_dashboard",
-		mcp.WithDescription("Open a specific dashboard page in the user's browser. Use this when the user asks to see their portfolio, orders, alerts, or activity visually. Supports deep-linking with filters. In local mode, auto-opens the browser. In remote mode, returns a clickable link. Pages: portfolio (default), orders, alerts, activity, ops."),
+		mcp.WithDescription("Open a specific dashboard page in the user's browser. Use this when the user asks to see their portfolio, orders, alerts, or activity visually. Supports deep-linking with filters. In local mode, auto-opens the browser. In remote mode, returns a clickable link. Pages: portfolio (default), orders, alerts, activity, paper, safety, ops."),
 		mcp.WithTitleAnnotation("Open Dashboard"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("page",
-			mcp.Description("Dashboard page to open: portfolio, activity, orders, alerts, ops"),
+			mcp.Description("Dashboard page to open: portfolio, activity, orders, alerts, paper, safety, ops"),
 			mcp.DefaultString("portfolio"),
 		),
 		mcp.WithString("category",

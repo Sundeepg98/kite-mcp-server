@@ -15,6 +15,7 @@
   --green: #34d399; --green-dim: rgba(52,211,153,0.12);
   --red: #f87171; --red-dim: rgba(248,113,113,0.1);
   --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
   --mono: 'JetBrains Mono', monospace;
   --sans: 'DM Sans', system-ui, sans-serif;
 }
@@ -93,6 +94,8 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   </div>
   <div class="topbar-right">
     <span class="topbar-updated" id="lastUpdated">--</span>
+    <span style="font-family:var(--mono);font-size:12px;color:var(--text-2)" id="userEmail">--</span>
+    <div style="width:7px;height:7px;border-radius:50%;flex-shrink:0" id="tokenDot"></div>
   </div>
 </div>
 
@@ -308,17 +311,24 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       });
   }
 
-  // Check admin status for ops link visibility
-  fetch('/dashboard/api/status')
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+  // --- Status / auth gating ---
+  function refreshStatus() {
+    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
+      document.getElementById('userEmail').textContent = d.email || '--';
+      var dot = document.getElementById('tokenDot');
+      var valid = d.kite_token && d.kite_token.valid;
+      dot.style.background = valid ? 'var(--green)' : 'var(--red)';
+      dot.style.boxShadow = valid ? '0 0 6px var(--green)' : '0 0 6px var(--red)';
       if (!d.is_admin) {
         var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
         if (opsLink) opsLink.style.display = 'none';
       }
     }).catch(function() {});
+  }
 
+  refreshStatus();
   refresh();
+  setInterval(refreshStatus, 10000);
   setInterval(refresh, 10000);
 })();
 </script>
