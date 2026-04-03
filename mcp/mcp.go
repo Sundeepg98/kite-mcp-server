@@ -47,6 +47,7 @@ func GetAllTools() []Tool {
 		&LTPTool{},
 		&OHLCTool{},
 		&OptionChainTool{},
+		&TechnicalIndicatorsTool{},
 
 		// Tools for real-time market data (WebSocket ticker)
 		&StartTickerTool{},
