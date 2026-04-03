@@ -18,6 +18,8 @@ var confirmableTools = map[string]bool{
 	"close_all_positions": true,
 	"place_gtt_order":     true,
 	"modify_gtt_order":    true,
+	"place_native_alert":  true, // ATO alerts auto-place orders
+	"modify_native_alert": true, // ATO alert modifications
 	"place_mf_order":      true,
 	"place_mf_sip":        true,
 }
@@ -175,6 +177,31 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 
 		return fmt.Sprintf("Confirm SIP: ₹%.0f/%s into %s, %d instalments",
 			amount, freq, symbol, instalments)
+
+	case "place_native_alert":
+		name := SafeAssertString(args["name"], "?")
+		alertType := SafeAssertString(args["type"], "simple")
+		exchange := SafeAssertString(args["exchange"], "?")
+		symbol := SafeAssertString(args["tradingsymbol"], "?")
+		operator := SafeAssertString(args["operator"], "?")
+		rhsType := SafeAssertString(args["rhs_type"], "constant")
+		rhs := fmt.Sprintf("%.2f", SafeAssertFloat64(args["rhs_constant"], 0))
+		if rhsType == "instrument" {
+			rhs = fmt.Sprintf("%s:%s", SafeAssertString(args["rhs_exchange"], "?"), SafeAssertString(args["rhs_tradingsymbol"], "?"))
+		}
+		return fmt.Sprintf("Confirm: Create %s alert '%s' — %s:%s %s %s",
+			alertType, name, exchange, symbol, operator, rhs)
+
+	case "modify_native_alert":
+		uuid := SafeAssertString(args["uuid"], "?")
+		name := SafeAssertString(args["name"], "?")
+		alertType := SafeAssertString(args["type"], "simple")
+		exchange := SafeAssertString(args["exchange"], "?")
+		symbol := SafeAssertString(args["tradingsymbol"], "?")
+		operator := SafeAssertString(args["operator"], "?")
+
+		return fmt.Sprintf("Confirm: Modify %s alert %s ('%s') — %s:%s %s",
+			alertType, uuid, name, exchange, symbol, operator)
 
 	default:
 		return fmt.Sprintf("Confirm: Execute %s?", toolName)
