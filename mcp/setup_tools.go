@@ -91,6 +91,7 @@ var toolDashboardPage = map[string]string{
 	"get_pnl_journal":          "/dashboard",
 	"get_mf_holdings":          "/dashboard",
 	"tax_harvest_analysis":     "/dashboard",
+	"portfolio_rebalance":      "/dashboard",
 
 	// Orders page
 	"get_orders":               "/dashboard/orders",

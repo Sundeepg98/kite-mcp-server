@@ -93,6 +93,9 @@ func GetAllTools() []Tool {
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},
 
+		// Portfolio rebalancing
+		&PortfolioRebalanceTool{},
+
 		// Tax analysis
 		&TaxHarvestTool{},
 
