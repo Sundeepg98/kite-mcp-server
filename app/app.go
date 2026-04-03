@@ -345,6 +345,11 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
 
+	// Enable elicitation so tool handlers can request user confirmation before
+	// placing orders. Clients that don't support elicitation will gracefully
+	// degrade (fail open — orders proceed without confirmation).
+	serverOpts = append(serverOpts, server.WithElicitation())
+
 	// Declare the MCP Apps UI extension so that MCP App hosts (Cowork,
 	// claude.ai) know this server supports inline rendering of ui:// resources.
 	// mcp-go doesn't have a WithExtensions option yet, so we inject it via an
@@ -364,6 +369,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		serverOpts...,
 	)
 	app.logger.Debug("MCP server created successfully")
+
+	// Wire MCPServer into Manager so tool handlers can call RequestElicitation.
+	kcManager.SetMCPServer(mcpServer)
 
 	// Register tools that will interact with MCP sessions and Kite API
 	app.logger.Info("Registering MCP tools...")
