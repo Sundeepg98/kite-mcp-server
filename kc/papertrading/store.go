@@ -354,6 +354,20 @@ func (s *Store) GetHoldings(email string) ([]*Holding, error) {
 	return holdings, rows.Err()
 }
 
+// GetAllOpenOrders returns all OPEN paper orders across all users.
+func (s *Store) GetAllOpenOrders() ([]*Order, error) {
+	rows, err := s.db.RawQuery(
+		`SELECT order_id, email, exchange, tradingsymbol, transaction_type,
+		 order_type, product, variety, quantity, price, trigger_price, status,
+		 filled_quantity, average_price, placed_at, filled_at, tag
+		 FROM paper_orders WHERE status = 'OPEN' ORDER BY placed_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("get all open orders: %w", err)
+	}
+	defer rows.Close()
+	return scanOrders(rows)
+}
+
 // ResetAccount deletes all orders, positions, and holdings for the given email
 // and resets the cash balance to the initial amount.
 func (s *Store) ResetAccount(email string) error {
