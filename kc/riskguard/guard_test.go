@@ -347,3 +347,108 @@ func TestFreezeUnfreeze(t *testing.T) {
 	g.Unfreeze("user@test.com")
 	require.False(t, g.IsFrozen("user@test.com"))
 }
+
+func TestAutoFreeze(t *testing.T) {
+	g := newTestGuard()
+	email := "autofreeze@test.com"
+
+	// Set a very low single order limit to easily trigger rejections.
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxSingleOrderINR:    1000, // Rs 1,000
+		AutoFreezeOnLimitHit: true,
+	}
+	g.mu.Unlock()
+
+	overLimitReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Quantity: 10, Price: 200, OrderType: "LIMIT", // 10*200=2000 > 1000
+	}
+
+	t.Run("first two rejections do not freeze", func(t *testing.T) {
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonOrderValue, r.Reason)
+		assert.False(t, g.IsFrozen(email))
+
+		r = g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.False(t, g.IsFrozen(email))
+	})
+
+	t.Run("third rejection triggers auto-freeze", func(t *testing.T) {
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.True(t, g.IsFrozen(email))
+		assert.Contains(t, r.Message, "auto-frozen due to repeated violations")
+
+		// Verify freeze metadata
+		limits := g.GetEffectiveLimits(email)
+		assert.Equal(t, "riskguard:circuit-breaker", limits.FrozenBy)
+		assert.Equal(t, "Automatic safety freeze: repeated limit violations", limits.FrozenReason)
+	})
+
+	t.Run("subsequent orders blocked by kill switch", func(t *testing.T) {
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonTradingFrozen, r.Reason)
+	})
+
+	t.Run("unfreeze restores access", func(t *testing.T) {
+		g.Unfreeze(email)
+		assert.False(t, g.IsFrozen(email))
+
+		// An under-limit order should pass now
+		underLimitReq := OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Quantity: 1, Price: 100, OrderType: "LIMIT", // 100 < 1000
+		}
+		r := g.CheckOrder(underLimitReq)
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("old rejections outside window do not count", func(t *testing.T) {
+		// Unfreeze and clear rejections, then add old ones
+		g.Unfreeze(email)
+		g.mu.Lock()
+		tracker := g.getOrCreateTracker(email)
+		tracker.RecentRejections = []time.Time{
+			time.Now().Add(-10 * time.Minute), // well outside 5-minute window
+			time.Now().Add(-8 * time.Minute),
+		}
+		g.mu.Unlock()
+
+		// One new rejection should NOT trigger freeze (only 1 in window, 2 outside)
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.False(t, g.IsFrozen(email))
+	})
+}
+
+func TestAutoFreezeDisabled(t *testing.T) {
+	g := newTestGuard()
+	email := "noautofreeze@test.com"
+
+	// Explicitly disable auto-freeze
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxSingleOrderINR:    1000,
+		AutoFreezeOnLimitHit: false,
+	}
+	g.mu.Unlock()
+
+	overLimitReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Quantity: 10, Price: 200, OrderType: "LIMIT", // 2000 > 1000
+	}
+
+	// Trigger 5 rejections — none should cause auto-freeze
+	for i := 0; i < 5; i++ {
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.Equal(t, ReasonOrderValue, r.Reason)
+		assert.NotContains(t, r.Message, "auto-frozen")
+	}
+
+	assert.False(t, g.IsFrozen(email), "user should NOT be frozen when AutoFreezeOnLimitHit is false")
+}

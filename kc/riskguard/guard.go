@@ -12,11 +12,12 @@ import (
 
 // System defaults — overridable via env vars or per-user DB config.
 var SystemDefaults = UserLimits{
-	MaxSingleOrderINR:  500000,  // Rs 5,00,000
-	MaxOrdersPerDay:    200,
-	MaxOrdersPerMinute: 10,
-	DuplicateWindowSecs: 30,
-	MaxDailyValueINR:   1000000, // Rs 10,00,000
+	MaxSingleOrderINR:    500000,  // Rs 5,00,000
+	MaxOrdersPerDay:      200,
+	MaxOrdersPerMinute:   10,
+	DuplicateWindowSecs:  30,
+	MaxDailyValueINR:     1000000, // Rs 10,00,000
+	AutoFreezeOnLimitHit: true,
 }
 
 // orderTools lists tools that go through risk checks (same as elicitation).
@@ -41,6 +42,14 @@ const (
 	ReasonRateLimit       RejectionReason = "rate_limit"
 	ReasonDuplicateOrder  RejectionReason = "duplicate_order"
 	ReasonDailyValueLimit RejectionReason = "daily_value_limit"
+	ReasonAutoFreeze      RejectionReason = "auto_freeze"
+)
+
+const (
+	// autoFreezeThreshold is the number of rejections within the window that triggers an auto-freeze.
+	autoFreezeThreshold = 3
+	// autoFreezeWindow is the time window for counting recent rejections.
+	autoFreezeWindow = 5 * time.Minute
 )
 
 // CheckResult is returned by the guard for every order attempt.
@@ -52,15 +61,16 @@ type CheckResult struct {
 
 // UserLimits holds configurable limits for a user.
 type UserLimits struct {
-	MaxSingleOrderINR   float64
-	MaxOrdersPerDay     int
-	MaxOrdersPerMinute  int
-	DuplicateWindowSecs int
-	MaxDailyValueINR    float64
-	TradingFrozen       bool
-	FrozenBy            string
-	FrozenReason        string
-	FrozenAt            time.Time
+	MaxSingleOrderINR    float64
+	MaxOrdersPerDay      int
+	MaxOrdersPerMinute   int
+	DuplicateWindowSecs  int
+	MaxDailyValueINR     float64
+	AutoFreezeOnLimitHit bool // when true, auto-freeze after repeated rejections
+	TradingFrozen        bool
+	FrozenBy             string
+	FrozenReason         string
+	FrozenAt             time.Time
 }
 
 // recentOrder captures the signature of a placed order for duplicate detection.
@@ -74,11 +84,12 @@ type recentOrder struct {
 
 // UserTracker holds in-memory per-user trading state.
 type UserTracker struct {
-	DailyOrderCount int
-	DayResetAt      time.Time
-	RecentOrders    []time.Time    // sliding window for rate limiting
-	RecentParams    []recentOrder  // sliding window for duplicate detection
+	DailyOrderCount  int
+	DayResetAt       time.Time
+	RecentOrders     []time.Time   // sliding window for rate limiting
+	RecentParams     []recentOrder // sliding window for duplicate detection
 	DailyPlacedValue float64       // cumulative order value placed today
+	RecentRejections []time.Time   // sliding window for circuit breaker auto-freeze
 }
 
 // FreezeQuantityLookup is an interface for looking up instrument freeze quantities.
@@ -125,35 +136,61 @@ type OrderCheckRequest struct {
 }
 
 // CheckOrder runs all safety checks in sequence. Returns on first failure.
+// If a limit check fails and the circuit breaker is enabled, the rejection is recorded
+// and the user may be auto-frozen after repeated violations.
 func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 	email := strings.ToLower(req.Email)
 
-	// 1. Kill switch
+	// 1. Kill switch — not a limit violation, so no auto-freeze logic here
 	if r := g.checkKillSwitch(email); !r.Allowed {
 		return r
 	}
 	// 2. Order value
 	if r := g.checkOrderValue(req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 	// 3. Quantity limit
 	if r := g.checkQuantityLimit(req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 	// 4. Daily order count
 	if r := g.checkDailyOrderCount(email); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 	// 5. Order rate limit (per minute)
 	if r := g.checkRateLimit(email); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 	// 6. Duplicate order detection
 	if r := g.checkDuplicateOrder(email, req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 	// 7. Daily cumulative placed value
 	if r := g.checkDailyValue(email, req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
 		return r
 	}
 
@@ -393,6 +430,59 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 	return CheckResult{Allowed: true}
 }
 
+// --- Circuit Breaker ---
+
+// recordRejection appends the current time to the user's recent rejections list.
+func (g *Guard) recordRejection(email string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	t := g.getOrCreateTracker(email)
+	t.RecentRejections = append(t.RecentRejections, time.Now())
+}
+
+// checkAutoFreeze checks if the user has accumulated enough recent rejections
+// to trigger an automatic trading freeze. Returns true if the user was frozen.
+func (g *Guard) checkAutoFreeze(email string) bool {
+	limits := g.GetEffectiveLimits(email)
+	if !limits.AutoFreezeOnLimitHit {
+		return false
+	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	t := g.getOrCreateTracker(email)
+
+	// Prune rejections older than the window
+	cutoff := time.Now().Add(-autoFreezeWindow)
+	start := 0
+	for start < len(t.RecentRejections) && t.RecentRejections[start].Before(cutoff) {
+		start++
+	}
+	t.RecentRejections = t.RecentRejections[start:]
+
+	if len(t.RecentRejections) >= autoFreezeThreshold {
+		// Already frozen? Don't re-freeze.
+		if l, ok := g.limits[email]; ok && l.TradingFrozen {
+			return false
+		}
+		// Auto-freeze the user
+		l := g.getOrCreateLimits(email)
+		l.TradingFrozen = true
+		l.FrozenBy = "riskguard:circuit-breaker"
+		l.FrozenReason = "Automatic safety freeze: repeated limit violations"
+		l.FrozenAt = time.Now()
+		g.persistLimits(email, l)
+		if g.logger != nil {
+			g.logger.Warn("Circuit breaker triggered: auto-froze user",
+				"email", email,
+				"rejections_in_window", len(t.RecentRejections),
+			)
+		}
+		return true
+	}
+	return false
+}
+
 // --- Helpers ---
 
 func (g *Guard) getOrCreateTracker(email string) *UserTracker {
@@ -407,7 +497,7 @@ func (g *Guard) getOrCreateTracker(email string) *UserTracker {
 func (g *Guard) getOrCreateLimits(email string) *UserLimits {
 	l, ok := g.limits[email]
 	if !ok {
-		l = &UserLimits{}
+		l = &UserLimits{AutoFreezeOnLimitHit: SystemDefaults.AutoFreezeOnLimitHit}
 		g.limits[email] = l
 	}
 	return l
@@ -437,25 +527,30 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 	if l.TradingFrozen {
 		frozen = 1
 	}
+	autoFreeze := 0
+	if l.AutoFreezeOnLimitHit {
+		autoFreeze = 1
+	}
 	frozenAt := ""
 	if !l.FrozenAt.IsZero() {
 		frozenAt = l.FrozenAt.Format(time.RFC3339)
 	}
 	err := g.db.ExecInsert(
-		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(email) DO UPDATE SET
 		   max_single_order_inr=excluded.max_single_order_inr,
 		   max_orders_per_day=excluded.max_orders_per_day,
 		   max_orders_per_minute=excluded.max_orders_per_minute,
 		   duplicate_window_secs=excluded.duplicate_window_secs,
 		   max_daily_value_inr=excluded.max_daily_value_inr,
+		   auto_freeze_on_limit_hit=excluded.auto_freeze_on_limit_hit,
 		   trading_frozen=excluded.trading_frozen,
 		   frozen_at=excluded.frozen_at,
 		   frozen_by=excluded.frozen_by,
 		   frozen_reason=excluded.frozen_reason,
 		   updated_at=excluded.updated_at`,
-		email, l.MaxSingleOrderINR, l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
+		email, l.MaxSingleOrderINR, l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR, autoFreeze, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
 	)
 	if err != nil && g.logger != nil {
 		g.logger.Error("Failed to persist risk limits", "email", email, "error", err)
@@ -488,6 +583,7 @@ func (g *Guard) InitTable() error {
 		`ALTER TABLE risk_limits ADD COLUMN max_orders_per_minute INTEGER NOT NULL DEFAULT 10`,
 		`ALTER TABLE risk_limits ADD COLUMN duplicate_window_secs INTEGER NOT NULL DEFAULT 30`,
 		`ALTER TABLE risk_limits ADD COLUMN max_daily_value_inr REAL NOT NULL DEFAULT 1000000`,
+		`ALTER TABLE risk_limits ADD COLUMN auto_freeze_on_limit_hit INTEGER NOT NULL DEFAULT 1`,
 	}
 	for _, m := range migrations {
 		_ = g.db.ExecDDL(m) // ignore "duplicate column" errors
@@ -500,7 +596,7 @@ func (g *Guard) LoadLimits() error {
 	if g.db == nil {
 		return nil
 	}
-	rows, err := g.db.RawQuery(`SELECT email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, trading_frozen, frozen_at, frozen_by, frozen_reason FROM risk_limits`)
+	rows, err := g.db.RawQuery(`SELECT email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason FROM risk_limits`)
 	if err != nil {
 		return fmt.Errorf("load risk_limits: %w", err)
 	}
@@ -512,19 +608,20 @@ func (g *Guard) LoadLimits() error {
 	for rows.Next() {
 		var email, frozenAt, frozenBy, frozenReason string
 		var maxOrder, maxDailyValue float64
-		var maxDaily, maxPerMin, dupWindow, frozen int
-		if err := rows.Scan(&email, &maxOrder, &maxDaily, &maxPerMin, &dupWindow, &maxDailyValue, &frozen, &frozenAt, &frozenBy, &frozenReason); err != nil {
+		var maxDaily, maxPerMin, dupWindow, autoFreeze, frozen int
+		if err := rows.Scan(&email, &maxOrder, &maxDaily, &maxPerMin, &dupWindow, &maxDailyValue, &autoFreeze, &frozen, &frozenAt, &frozenBy, &frozenReason); err != nil {
 			return fmt.Errorf("scan risk_limits: %w", err)
 		}
 		l := &UserLimits{
-			MaxSingleOrderINR:   maxOrder,
-			MaxOrdersPerDay:     maxDaily,
-			MaxOrdersPerMinute:  maxPerMin,
-			DuplicateWindowSecs: dupWindow,
-			MaxDailyValueINR:    maxDailyValue,
-			TradingFrozen:       frozen != 0,
-			FrozenBy:            frozenBy,
-			FrozenReason:        frozenReason,
+			MaxSingleOrderINR:    maxOrder,
+			MaxOrdersPerDay:      maxDaily,
+			MaxOrdersPerMinute:   maxPerMin,
+			DuplicateWindowSecs:  dupWindow,
+			MaxDailyValueINR:     maxDailyValue,
+			AutoFreezeOnLimitHit: autoFreeze != 0,
+			TradingFrozen:        frozen != 0,
+			FrozenBy:             frozenBy,
+			FrozenReason:         frozenReason,
 		}
 		if frozenAt != "" {
 			l.FrozenAt, _ = time.Parse(time.RFC3339, frozenAt)
