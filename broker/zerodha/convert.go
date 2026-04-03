@@ -1,0 +1,202 @@
+package zerodha
+
+import (
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
+)
+
+// --- Profile ---
+
+func convertProfile(p kiteconnect.UserProfile) broker.Profile {
+	return broker.Profile{
+		UserID:    p.UserID,
+		UserName:  p.UserName,
+		Email:     p.Email,
+		Broker:    broker.Zerodha,
+		Exchanges: p.Exchanges,
+		Products:  p.Products,
+	}
+}
+
+// --- Margins ---
+
+func convertMargins(m kiteconnect.AllMargins) broker.Margins {
+	return broker.Margins{
+		Equity:    convertSegmentMargin(m.Equity),
+		Commodity: convertSegmentMargin(m.Commodity),
+	}
+}
+
+func convertSegmentMargin(m kiteconnect.Margins) broker.SegmentMargin {
+	avail := m.Available
+	used := m.Used
+
+	available := avail.Cash + avail.Collateral + avail.IntradayPayin + avail.OpeningBalance
+	usedTotal := used.Debits + used.Exposure + used.Span + used.OptionPremium
+	total := available + usedTotal
+
+	return broker.SegmentMargin{
+		Available: available,
+		Used:      usedTotal,
+		Total:     total,
+	}
+}
+
+// --- Holdings ---
+
+func convertHoldings(holdings kiteconnect.Holdings) []broker.Holding {
+	out := make([]broker.Holding, len(holdings))
+	for i, h := range holdings {
+		out[i] = broker.Holding{
+			Tradingsymbol: h.Tradingsymbol,
+			Exchange:      h.Exchange,
+			ISIN:          h.ISIN,
+			Quantity:      h.Quantity,
+			AveragePrice:  h.AveragePrice,
+			LastPrice:     h.LastPrice,
+			PnL:           h.PnL,
+			DayChangePct:  h.DayChangePercentage,
+			Product:       h.Product,
+		}
+	}
+	return out
+}
+
+// --- Positions ---
+
+func convertPositions(p kiteconnect.Positions) broker.Positions {
+	return broker.Positions{
+		Day: convertPositionSlice(p.Day),
+		Net: convertPositionSlice(p.Net),
+	}
+}
+
+func convertPositionSlice(positions []kiteconnect.Position) []broker.Position {
+	out := make([]broker.Position, len(positions))
+	for i, p := range positions {
+		out[i] = broker.Position{
+			Tradingsymbol: p.Tradingsymbol,
+			Exchange:      p.Exchange,
+			Product:       p.Product,
+			Quantity:      p.Quantity,
+			AveragePrice:  p.AveragePrice,
+			LastPrice:     p.LastPrice,
+			PnL:           p.PnL,
+		}
+	}
+	return out
+}
+
+// --- Orders ---
+
+func convertOrders(orders kiteconnect.Orders) []broker.Order {
+	out := make([]broker.Order, len(orders))
+	for i, o := range orders {
+		out[i] = broker.Order{
+			OrderID:         o.OrderID,
+			Exchange:        o.Exchange,
+			Tradingsymbol:   o.TradingSymbol,
+			TransactionType: o.TransactionType,
+			OrderType:       o.OrderType,
+			Product:         o.Product,
+			Quantity:        int(o.Quantity),
+			Price:           o.Price,
+			TriggerPrice:    o.TriggerPrice,
+			Status:          o.Status,
+			FilledQuantity:  int(o.FilledQuantity),
+			AveragePrice:    o.AveragePrice,
+			OrderTimestamp:  o.OrderTimestamp.Time,
+			StatusMessage:   o.StatusMessage,
+			Tag:             o.Tag,
+		}
+	}
+	return out
+}
+
+// --- Trades ---
+
+func convertTrades(trades kiteconnect.Trades) []broker.Trade {
+	out := make([]broker.Trade, len(trades))
+	for i, t := range trades {
+		out[i] = broker.Trade{
+			TradeID:         t.TradeID,
+			OrderID:         t.OrderID,
+			Exchange:        t.Exchange,
+			Tradingsymbol:   t.TradingSymbol,
+			TransactionType: t.TransactionType,
+			Quantity:        int(t.Quantity),
+			Price:           t.AveragePrice,
+			Product:         t.Product,
+		}
+	}
+	return out
+}
+
+// --- OrderParams (broker -> kite) ---
+
+func convertOrderParamsToKite(p broker.OrderParams) (string, kiteconnect.OrderParams) {
+	variety := p.Variety
+	if variety == "" {
+		variety = kiteconnect.VarietyRegular
+	}
+
+	return variety, kiteconnect.OrderParams{
+		Exchange:          p.Exchange,
+		Tradingsymbol:     p.Tradingsymbol,
+		TransactionType:   p.TransactionType,
+		OrderType:         p.OrderType,
+		Product:           p.Product,
+		Quantity:          p.Quantity,
+		Price:             p.Price,
+		TriggerPrice:      p.TriggerPrice,
+		Validity:          p.Validity,
+		Tag:               p.Tag,
+		DisclosedQuantity: p.DisclosedQty,
+		MarketProtection:  p.MarketProtection,
+	}
+}
+
+// --- LTP ---
+
+func convertLTP(q kiteconnect.QuoteLTP) map[string]broker.LTP {
+	out := make(map[string]broker.LTP, len(q))
+	for key, val := range q {
+		out[key] = broker.LTP{
+			LastPrice: val.LastPrice,
+		}
+	}
+	return out
+}
+
+// --- OHLC ---
+
+func convertOHLC(q kiteconnect.QuoteOHLC) map[string]broker.OHLC {
+	out := make(map[string]broker.OHLC, len(q))
+	for key, val := range q {
+		out[key] = broker.OHLC{
+			Open:      val.OHLC.Open,
+			High:      val.OHLC.High,
+			Low:       val.OHLC.Low,
+			Close:     val.OHLC.Close,
+			LastPrice: val.LastPrice,
+		}
+	}
+	return out
+}
+
+// --- Historical Data ---
+
+func convertHistoricalData(data []kiteconnect.HistoricalData) []broker.HistoricalCandle {
+	out := make([]broker.HistoricalCandle, len(data))
+	for i, d := range data {
+		out[i] = broker.HistoricalCandle{
+			Date:   d.Date.Time,
+			Open:   d.Open,
+			High:   d.High,
+			Low:    d.Low,
+			Close:  d.Close,
+			Volume: d.Volume,
+		}
+	}
+	return out
+}
