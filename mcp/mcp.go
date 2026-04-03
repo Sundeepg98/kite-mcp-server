@@ -94,6 +94,7 @@ func GetAllTools() []Tool {
 		&PortfolioSummaryTool{},
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},
+		&SectorExposureTool{},
 
 		// Portfolio rebalancing
 		&PortfolioRebalanceTool{},
@@ -103,6 +104,9 @@ func GetAllTools() []Tool {
 
 		// Dividend & corporate actions
 		&DividendCalendarTool{},
+
+		// SEBI compliance
+		&SEBIComplianceTool{},
 
 		// Paper trading management
 		&PaperTradingToggleTool{},

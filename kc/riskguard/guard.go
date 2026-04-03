@@ -483,6 +483,35 @@ func (g *Guard) checkAutoFreeze(email string) bool {
 	return false
 }
 
+// UserStatus holds a snapshot of a user's current risk state for read-only reporting.
+type UserStatus struct {
+	DailyOrderCount  int
+	DailyPlacedValue float64
+	IsFrozen         bool
+	FrozenBy         string
+	FrozenReason     string
+}
+
+// GetUserStatus returns a snapshot of the user's current daily order count, placed value, and freeze state.
+func (g *Guard) GetUserStatus(email string) UserStatus {
+	email = strings.ToLower(email)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	t := g.getOrCreateTracker(email)
+	g.maybeResetDay(t)
+
+	status := UserStatus{
+		DailyOrderCount:  t.DailyOrderCount,
+		DailyPlacedValue: t.DailyPlacedValue,
+	}
+	if l, ok := g.limits[email]; ok {
+		status.IsFrozen = l.TradingFrozen
+		status.FrozenBy = l.FrozenBy
+		status.FrozenReason = l.FrozenReason
+	}
+	return status
+}
+
 // --- Helpers ---
 
 func (g *Guard) getOrCreateTracker(email string) *UserTracker {
