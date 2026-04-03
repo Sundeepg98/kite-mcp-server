@@ -383,6 +383,7 @@ type Manager struct {
 	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
 	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
 	auditStore         *audit.Store                   // optional: audit trail for synthetic events
+	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
 	adminSecretPath    string
@@ -590,6 +591,16 @@ func (m *Manager) RegistryStore() *registry.Store {
 // Returns nil if no database path was configured.
 func (m *Manager) AlertDB() *alerts.DB {
 	return m.alertDB
+}
+
+// SetMCPServer stores a reference to the MCP server for elicitation support.
+func (m *Manager) SetMCPServer(srv any) {
+	m.mcpServer = srv
+}
+
+// MCPServer returns the stored MCP server reference, or nil.
+func (m *Manager) MCPServer() any {
+	return m.mcpServer
 }
 
 // truncKey safely returns the first n characters of a string, or the whole string if shorter.
