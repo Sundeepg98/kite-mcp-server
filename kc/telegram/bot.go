@@ -1,6 +1,7 @@
 // Package telegram implements a Telegram bot webhook handler that provides
 // read-only commands (/price, /portfolio, /positions, /orders, /pnl, /alerts,
-// /prices, /mywatchlist, /status, /help) for registered users.
+// /prices, /mywatchlist, /status, /help) and trading commands (/buy, /sell,
+// /quick, /setalert) with inline-keyboard confirmation for registered users.
 package telegram
 
 import (
@@ -17,6 +18,9 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -30,7 +34,29 @@ type KiteManager interface {
 	TelegramNotifier() *alerts.TelegramNotifier
 	InstrumentsManager() *instruments.Manager
 	IsTokenValid(email string) bool
+
+	// Trading support — riskguard, paper trading, ticker.
+	RiskGuard() *riskguard.Guard
+	PaperEngine() *papertrading.PaperEngine
+	TickerService() *ticker.Service
 }
+
+// pendingOrder holds an order awaiting user confirmation via inline keyboard.
+type pendingOrder struct {
+	Email           string
+	Exchange        string
+	Tradingsymbol   string
+	TransactionType string // BUY or SELL
+	Quantity        int
+	Price           float64 // 0 for MARKET
+	OrderType       string  // MARKET or LIMIT
+	Product         string  // CNC or MIS
+	CreatedAt       time.Time
+}
+
+const (
+	pendingOrderTTL = 60 * time.Second // auto-expire pending orders after 60s
+)
 
 // BotHandler handles incoming Telegram webhook updates and routes them
 // to the appropriate command handler. It enforces that only private chats
@@ -44,6 +70,10 @@ type BotHandler struct {
 	// Per-chat rate limiting: 10 commands/minute
 	rateMu     sync.Mutex
 	rateWindow map[int64][]time.Time
+
+	// Pending orders awaiting confirmation, keyed by chat ID.
+	pendingMu     sync.Mutex
+	pendingOrders map[int64]*pendingOrder
 }
 
 // NewBotHandler creates a new BotHandler.
@@ -54,6 +84,7 @@ func NewBotHandler(bot *tgbotapi.BotAPI, webhookSecret string, manager KiteManag
 		manager:       manager,
 		logger:        logger,
 		rateWindow:    make(map[int64][]time.Time),
+		pendingOrders: make(map[int64]*pendingOrder),
 	}
 }
 
@@ -81,6 +112,13 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(body, &update); err != nil {
 		h.logger.Error("Telegram webhook: failed to parse update", "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Handle callback queries (inline keyboard button presses).
+	if update.CallbackQuery != nil {
+		h.handleCallbackQuery(update.CallbackQuery)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -146,6 +184,15 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply = h.handleStatus(chatID, email)
 	case "/help", "/start":
 		reply = h.handleHelp(chatID)
+	// Trading commands
+	case "/buy":
+		h.handleBuy(chatID, email, args)
+	case "/sell":
+		h.handleSell(chatID, email, args)
+	case "/quick":
+		h.handleQuick(chatID, email, args)
+	case "/setalert":
+		reply = h.handleSetAlert(chatID, email, args)
 	default:
 		reply = fmt.Sprintf("Unknown command: <code>%s</code>\nType /help for available commands.", escapeHTML(cmd))
 	}
@@ -211,6 +258,85 @@ func (h *BotHandler) newKiteClient(email string) (*kiteconnect.Client, string) {
 	client := kiteconnect.New(apiKey)
 	client.SetAccessToken(accessToken)
 	return client, ""
+}
+
+// sendHTMLWithKeyboard sends an HTML-formatted message with an inline keyboard.
+func (h *BotHandler) sendHTMLWithKeyboard(chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.DisableWebPagePreview = true
+	msg.ReplyMarkup = keyboard
+	if _, err := h.bot.Send(msg); err != nil {
+		h.logger.Error("Telegram bot: failed to send message with keyboard",
+			"chat_id", chatID, "error", err)
+	}
+}
+
+// handleCallbackQuery processes inline keyboard button presses for order confirmation.
+func (h *BotHandler) handleCallbackQuery(cq *tgbotapi.CallbackQuery) {
+	if cq.Message == nil || cq.Message.Chat == nil {
+		return
+	}
+	chatID := cq.Message.Chat.ID
+
+	// Authenticate the callback sender.
+	store := h.manager.AlertStore()
+	email, ok := store.GetEmailByChatID(chatID)
+	if !ok {
+		h.answerCallback(cq.ID, "Not registered.")
+		return
+	}
+
+	data := cq.Data
+	switch data {
+	case "confirm_order":
+		h.executeConfirmedOrder(chatID, email, cq)
+	case "cancel_order":
+		h.cancelPendingOrder(chatID, cq)
+	default:
+		h.answerCallback(cq.ID, "Unknown action.")
+	}
+}
+
+// answerCallback acknowledges a callback query with an optional toast message.
+func (h *BotHandler) answerCallback(callbackID, text string) {
+	callback := tgbotapi.NewCallback(callbackID, text)
+	if _, err := h.bot.Request(callback); err != nil {
+		h.logger.Error("Telegram bot: failed to answer callback", "error", err)
+	}
+}
+
+// editMessage replaces the text (and removes the keyboard) of an existing message.
+func (h *BotHandler) editMessage(chatID int64, messageID int, newText string) {
+	edit := tgbotapi.NewEditMessageText(chatID, messageID, newText)
+	edit.ParseMode = tgbotapi.ModeHTML
+	if _, err := h.bot.Send(edit); err != nil {
+		h.logger.Error("Telegram bot: failed to edit message",
+			"chat_id", chatID, "message_id", messageID, "error", err)
+	}
+}
+
+// setPendingOrder stores a pending order for the given chat, replacing any previous one.
+func (h *BotHandler) setPendingOrder(chatID int64, order *pendingOrder) {
+	h.pendingMu.Lock()
+	defer h.pendingMu.Unlock()
+	h.pendingOrders[chatID] = order
+}
+
+// popPendingOrder retrieves and removes the pending order for the given chat.
+// Returns nil if no pending order exists or if it has expired.
+func (h *BotHandler) popPendingOrder(chatID int64) *pendingOrder {
+	h.pendingMu.Lock()
+	defer h.pendingMu.Unlock()
+	order, ok := h.pendingOrders[chatID]
+	if !ok {
+		return nil
+	}
+	delete(h.pendingOrders, chatID)
+	if time.Since(order.CreatedAt) > pendingOrderTTL {
+		return nil // expired
+	}
+	return order
 }
 
 // parseCommand splits "/cmd args" into (cmd, args).

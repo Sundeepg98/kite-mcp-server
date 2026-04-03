@@ -40,17 +40,29 @@ func formatPctChange(pct float64) string {
 func (h *BotHandler) handleHelp(_ int64) string {
 	return `<b>Kite Trading Bot</b>
 
-<b>Commands:</b>
+<b>Market Data:</b>
 /price SYMBOL — Check stock price
+/prices SYM1,SYM2 — Check multiple prices
 /portfolio — Holdings summary
 /positions — Open positions
 /orders — Today's orders
 /pnl — Today's P&amp;L
+/mywatchlist — View MCP watchlist with LTP
+
+<b>Trading:</b>
+/buy SYMBOL QTY [PRICE] — Buy (market or limit)
+/sell SYMBOL QTY [PRICE] — Sell (market or limit)
+/quick SYM QTY SIDE TYPE [PRICE] — Quick order
+
+<b>Alerts:</b>
 /alerts — Active price alerts
-/prices SYM1,SYM2 — Check multiple prices
-/mywatchlist — View MCP watchlist items with LTP
+/setalert SYM DIRECTION PRICE — Set alert
+
+<b>System:</b>
 /status — Token and system status
-/help — This message`
+/help — This message
+
+<i>Trading orders require confirmation before execution.</i>`
 }
 
 // handlePrice looks up a stock price via the Kite API.
