@@ -485,11 +485,12 @@ func (g *Guard) checkAutoFreeze(email string) bool {
 
 // UserStatus holds a snapshot of a user's current risk state for read-only reporting.
 type UserStatus struct {
-	DailyOrderCount  int
-	DailyPlacedValue float64
-	IsFrozen         bool
-	FrozenBy         string
-	FrozenReason     string
+	DailyOrderCount  int       `json:"daily_order_count"`
+	DailyPlacedValue float64   `json:"daily_placed_value"`
+	IsFrozen         bool      `json:"is_frozen"`
+	FrozenBy         string    `json:"frozen_by"`
+	FrozenReason     string    `json:"frozen_reason"`
+	FrozenAt         time.Time `json:"frozen_at,omitempty"`
 }
 
 // GetUserStatus returns a snapshot of the user's current daily order count, placed value, and freeze state.
@@ -508,6 +509,7 @@ func (g *Guard) GetUserStatus(email string) UserStatus {
 		status.IsFrozen = l.TradingFrozen
 		status.FrozenBy = l.FrozenBy
 		status.FrozenReason = l.FrozenReason
+		status.FrozenAt = l.FrozenAt
 	}
 	return status
 }

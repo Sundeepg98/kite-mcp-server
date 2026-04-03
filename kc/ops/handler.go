@@ -77,6 +77,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	// Key registry (admin only)
 	mux.Handle("/admin/ops/api/registry", wrap(h.registryHandler))
 	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
+	// Metrics (admin only)
+	mux.Handle("/admin/ops/api/metrics", wrap(h.metricsAPI))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
@@ -710,6 +712,59 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// metricsAPI returns global audit trail metrics for the ops dashboard.
+// Requires admin access. Accepts ?period=1h|24h|7d|30d (default 24h).
+func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.auditStore == nil {
+		h.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		return
+	}
+
+	// Parse period parameter
+	period := r.URL.Query().Get("period")
+	var since time.Time
+	switch period {
+	case "1h":
+		since = time.Now().Add(-1 * time.Hour)
+	case "7d":
+		since = time.Now().AddDate(0, 0, -7)
+	case "30d":
+		since = time.Now().AddDate(0, 0, -30)
+	default:
+		since = time.Now().Add(-24 * time.Hour)
+	}
+
+	stats, err := h.auditStore.GetGlobalStats(since)
+	if err != nil {
+		h.logger.Error("Failed to get global stats", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	toolMetrics, err := h.auditStore.GetToolMetrics(since)
+	if err != nil {
+		h.logger.Error("Failed to get tool metrics", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	uptime := time.Since(h.startTime)
+	h.writeJSON(w, map[string]any{
+		"uptime_seconds": int(uptime.Seconds()),
+		"stats":          stats,
+		"tool_metrics":   toolMetrics,
+	})
 }
 
 // truncKey safely returns the first n characters of a string, or the whole string if shorter.

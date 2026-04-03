@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Safety · Kite MCP</title>
+<style>
+:root {
+  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
+  --border: #252d3a; --border-hi: #334155;
+  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
+  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); -webkit-font-smoothing: antialiased; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.sep { width: 1px; height: 16px; background: var(--border); }
+.title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.dash-link { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.8; }
+.dash-link:hover { opacity: 1; }
+
+.content { padding: 12px 16px; }
+
+/* Freeze banner */
+.freeze-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; border: 1px solid; }
+.freeze-bar.active { background: var(--green-dim); border-color: rgba(52,211,153,0.3); }
+.freeze-bar.frozen { background: var(--red-dim); border-color: rgba(248,113,113,0.3); }
+.freeze-bar.disabled { background: var(--bg-2); border-color: var(--border); }
+.freeze-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.freeze-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.freeze-dot.frozen { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.freeze-text { font-size: 12px; font-weight: 600; }
+.freeze-text.active { color: var(--green); }
+.freeze-text.frozen { color: var(--red); }
+.freeze-reason { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-left: auto; }
+
+/* Gauges */
+.gauge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gauge { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.gauge-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.gauge-val { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); margin-bottom: 6px; }
+.gauge-bar-bg { height: 4px; background: var(--bg-0); border-radius: 2px; overflow: hidden; }
+.gauge-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.gauge-bar-fill.safe { background: var(--green); }
+.gauge-bar-fill.warn { background: var(--amber); }
+.gauge-bar-fill.danger { background: var(--red); }
+
+.sebi-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.sebi-tag { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 3px; background: var(--bg-2); border: 1px solid var(--border); font-size: 10px; font-family: var(--mono); color: var(--text-1); }
+.sebi-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.sebi-dot.ok { background: var(--green); }
+.sebi-dot.off { background: var(--red); }
+
+.loading { text-align: center; padding: 20px; color: var(--text-2); font-size: 12px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="sep"></span>
+    <span class="title">Safety</span>
+  </div>
+  <a class="dash-link" id="dashLink" href="/dashboard/safety" target="_blank">Open Dashboard</a>
+</div>
+
+<div class="content">
+  <div id="freezeBar" class="freeze-bar disabled">
+    <span class="loading">Loading...</span>
+  </div>
+  <div class="gauge-grid" id="gaugeGrid"></div>
+  <div class="sebi-row" id="sebiRow"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var DATA = "__INJECTED_DATA__";
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function clearChildren(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+  function fmtINR(v) {
+    if (v >= 100000) return '\u20B9' + (v/100000).toFixed(1) + 'L';
+    if (v >= 1000) return '\u20B9' + (v/1000).toFixed(1) + 'K';
+    return '\u20B9' + v.toFixed(0);
+  }
+  function barClass(pct) {
+    if (pct >= 90) return 'danger';
+    if (pct >= 70) return 'warn';
+    return 'safe';
+  }
+
+  function render(data) {
+    if (!data || !data.enabled) {
+      var bar = document.getElementById('freezeBar');
+      clearChildren(bar);
+      bar.className = 'freeze-bar disabled';
+      bar.appendChild(el('span', 'freeze-text', 'RiskGuard Disabled'));
+      return;
+    }
+
+    var status = data.status;
+    var limits = data.limits;
+    var sebi = data.sebi;
+
+    // Freeze bar
+    var bar = document.getElementById('freezeBar');
+    clearChildren(bar);
+    if (status.is_frozen) {
+      bar.className = 'freeze-bar frozen';
+      bar.appendChild(el('span', 'freeze-dot frozen'));
+      bar.appendChild(el('span', 'freeze-text frozen', 'FROZEN'));
+      bar.appendChild(el('span', 'freeze-reason', status.frozen_reason || 'No reason'));
+    } else {
+      bar.className = 'freeze-bar active';
+      bar.appendChild(el('span', 'freeze-dot active'));
+      bar.appendChild(el('span', 'freeze-text active', 'Active'));
+    }
+
+    // Gauges
+    var grid = document.getElementById('gaugeGrid');
+    clearChildren(grid);
+    var gauges = [
+      { label: 'Daily Orders', cur: status.daily_order_count, max: limits.max_orders_per_day, fmt: function(v){return v;} },
+      { label: 'Daily Value', cur: status.daily_placed_value, max: limits.max_daily_value_inr, fmt: fmtINR }
+    ];
+    gauges.forEach(function(g) {
+      var card = el('div', 'gauge');
+      card.appendChild(el('div', 'gauge-label', g.label));
+      card.appendChild(el('div', 'gauge-val', g.fmt(g.cur) + ' / ' + g.fmt(g.max)));
+      var pct = g.max > 0 ? Math.min(100, (g.cur / g.max) * 100) : 0;
+      var bg = el('div', 'gauge-bar-bg');
+      var fill = el('div', 'gauge-bar-fill ' + barClass(pct));
+      fill.style.width = pct + '%';
+      bg.appendChild(fill);
+      card.appendChild(bg);
+      grid.appendChild(card);
+    });
+
+    // SEBI tags
+    var row = document.getElementById('sebiRow');
+    clearChildren(row);
+    if (sebi) {
+      var checks = [
+        { label: 'IP', ok: sebi.static_egress_ip },
+        { label: 'Session', ok: sebi.session_active },
+        { label: 'Creds', ok: sebi.credentials_set },
+        { label: 'Tags', ok: sebi.order_tagging },
+        { label: 'Audit', ok: sebi.audit_trail }
+      ];
+      checks.forEach(function(c) {
+        var tag = el('span', 'sebi-tag');
+        tag.appendChild(el('span', 'sebi-dot ' + (c.ok ? 'ok' : 'off')));
+        tag.appendChild(document.createTextNode(c.label));
+        row.appendChild(tag);
+      });
+    }
+  }
+
+  if (DATA && typeof DATA === 'object') {
+    render(DATA);
+  } else {
+    var bar = document.getElementById('freezeBar');
+    clearChildren(bar);
+    bar.appendChild(el('span', 'loading', 'No data'));
+  }
+})();
+</script>
+</body>
+</html>

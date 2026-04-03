@@ -120,6 +120,41 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .tl-time { color: var(--text-1); }
 .tl-delta { color: var(--text-2); font-size: 10px; }
 .tl-arrow { color: var(--text-2); margin: 0 6px; }
+
+/* Collapsible section */
+.collapsible-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.collapsible-header::after { content: '\25BC'; font-size: 10px; color: var(--text-2); transition: transform 0.2s; }
+.collapsible-header.collapsed::after { transform: rotate(-90deg); }
+.collapsible-body { overflow: hidden; transition: max-height 0.3s ease; }
+.collapsible-body.collapsed { max-height: 0 !important; overflow: hidden; }
+
+/* Sector donut (pure CSS conic-gradient) */
+.sector-chart-wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; padding: 16px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; }
+.sector-donut { width: 180px; height: 180px; border-radius: 50%; position: relative; flex-shrink: 0; }
+.sector-donut-hole { position: absolute; top: 30px; left: 30px; width: 120px; height: 120px; border-radius: 50%; background: var(--bg-2); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text-0); text-align: center; line-height: 1.3; }
+.sector-legend { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }
+.sector-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-family: var(--mono); color: var(--text-1); }
+.sector-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.sector-legend-pct { margin-left: auto; color: var(--text-2); }
+
+/* Tax cards */
+.tax-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tax-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.tax-card-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.tax-card-value { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+
+.badge-stcg { background: var(--amber-dim); color: var(--amber); }
+.badge-ltcg { background: var(--accent-dim); color: var(--accent); }
+.badge-harvest { background: var(--green-dim); color: var(--green); }
+.badge-over { background: var(--red-dim); color: var(--red); }
+.badge-ok { background: var(--green-dim); color: var(--green); }
+
+@media (max-width: 640px) {
+  .sector-chart-wrap { flex-direction: column; }
+  .sector-donut { width: 140px; height: 140px; }
+  .sector-donut-hole { top: 22px; left: 22px; width: 96px; height: 96px; font-size: 11px; }
+  .tax-cards { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 </head>
 <body>
@@ -239,6 +274,52 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <div class="section-header">Recently Triggered</div>
   <div id="triggeredAlertsWrap" style="display:none"></div>
   <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">No recently triggered alerts</div>
+
+  <!-- Sector Exposure -->
+  <div class="section-header collapsible-header" id="sectorHeader">Sector Exposure</div>
+  <div class="collapsible-body" id="sectorBody">
+    <div id="sectorLoading" class="loading-state">Loading...</div>
+    <div id="sectorContent" style="display:none">
+      <div class="sector-chart-wrap">
+        <div class="sector-donut" id="sectorDonut"></div>
+        <div class="sector-legend" id="sectorLegend"></div>
+      </div>
+      <div id="sectorWarnings" style="display:none; margin-bottom:10px;"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Sector</th><th class="right">Value</th><th class="right">Allocation</th><th class="right">Holdings</th><th>Status</th>
+          </tr></thead>
+          <tbody id="sectorTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="empty-state" id="sectorEmpty" style="display:none">No holdings for sector analysis</div>
+  </div>
+
+  <!-- Tax Insights -->
+  <div class="section-header collapsible-header" id="taxHeader">Tax Insights</div>
+  <div class="collapsible-body" id="taxBody">
+    <div id="taxLoading" class="loading-state">Loading...</div>
+    <div id="taxContent" style="display:none">
+      <div class="tax-cards" id="taxCards">
+        <div class="tax-card"><div class="tax-card-label">STCG Gains</div><div class="tax-card-value green" id="taxSTCGGains">--</div></div>
+        <div class="tax-card"><div class="tax-card-label">LTCG Gains</div><div class="tax-card-value green" id="taxLTCGGains">--</div></div>
+        <div class="tax-card"><div class="tax-card-label">Harvestable Losses</div><div class="tax-card-value red" id="taxHarvestable">--</div></div>
+        <div class="tax-card"><div class="tax-card-label">Potential Tax Saving</div><div class="tax-card-value amber" id="taxSaving">--</div></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Symbol</th><th>Type</th><th class="right">Invested</th><th class="right">Current</th>
+            <th class="right">Unrealized P&amp;L</th><th class="right">Tax if Sold</th><th>Harvestable</th>
+          </tr></thead>
+          <tbody id="taxTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="empty-state" id="taxEmpty" style="display:none">No holdings for tax analysis</div>
+  </div>
 
   <!-- Credentials -->
   <div class="section-header">Credentials</div>
@@ -888,15 +969,202 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     }
   });
 
+  // --- Collapsible sections ---
+  function initCollapsible(headerId, bodyId) {
+    var header = document.getElementById(headerId);
+    var body = document.getElementById(bodyId);
+    if (!header || !body) return;
+    header.addEventListener('click', function() {
+      header.classList.toggle('collapsed');
+      body.classList.toggle('collapsed');
+    });
+  }
+  initCollapsible('sectorHeader', 'sectorBody');
+  initCollapsible('taxHeader', 'taxBody');
+
+  // --- Sector Exposure ---
+  var sectorColors = [
+    '#22d3ee','#34d399','#fbbf24','#f87171','#a78bfa',
+    '#818cf8','#fb923c','#e879f9','#38bdf8','#4ade80',
+    '#f472b6','#94a3b8','#c084fc','#67e8f9','#fde68a'
+  ];
+
+  function refreshSectorExposure() {
+    fetchJSON('sector-exposure').then(function(d) {
+      var loading = document.getElementById('sectorLoading');
+      var content = document.getElementById('sectorContent');
+      var empty = document.getElementById('sectorEmpty');
+      loading.style.display = 'none';
+
+      var sectors = d.sectors || [];
+      if (sectors.length === 0) {
+        content.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      content.style.display = 'block';
+
+      // Build conic-gradient for donut
+      var donut = document.getElementById('sectorDonut');
+      var legend = document.getElementById('sectorLegend');
+      clearChildren(legend);
+
+      var gradParts = [];
+      var cumPct = 0;
+      for (var si = 0; si < sectors.length; si++) {
+        var color = sectorColors[si % sectorColors.length];
+        var startPct = cumPct;
+        cumPct += sectors[si].pct;
+        gradParts.push(color + ' ' + startPct.toFixed(2) + '% ' + cumPct.toFixed(2) + '%');
+
+        // Legend item
+        var li = el('div', 'sector-legend-item');
+        var dot = el('span', 'sector-legend-dot');
+        dot.style.background = color;
+        li.appendChild(dot);
+        li.appendChild(el('span', '', sectors[si].sector));
+        li.appendChild(el('span', 'sector-legend-pct', sectors[si].pct.toFixed(1) + '%'));
+        legend.appendChild(li);
+      }
+      donut.style.background = 'conic-gradient(' + gradParts.join(', ') + ')';
+
+      // Hole
+      var existingHole = donut.querySelector('.sector-donut-hole');
+      if (!existingHole) {
+        var hole = el('div', 'sector-donut-hole');
+        hole.textContent = sectors.length + ' sectors';
+        donut.appendChild(hole);
+      } else {
+        existingHole.textContent = sectors.length + ' sectors';
+      }
+
+      // Warnings
+      var warningsWrap = document.getElementById('sectorWarnings');
+      clearChildren(warningsWrap);
+      var warnings = d.warnings || [];
+      if (warnings.length > 0) {
+        warningsWrap.style.display = 'block';
+        warnings.forEach(function(w) {
+          var wDiv = el('div', '', '');
+          wDiv.style.cssText = 'padding:6px 12px;background:var(--amber-dim);border:1px solid var(--amber);border-radius:4px;margin-bottom:6px;font-size:12px;color:var(--amber);font-family:var(--mono);';
+          wDiv.textContent = w;
+          warningsWrap.appendChild(wDiv);
+        });
+      } else {
+        warningsWrap.style.display = 'none';
+      }
+
+      // Table
+      var tbody = document.getElementById('sectorTableBody');
+      clearChildren(tbody);
+      sectors.forEach(function(s, idx) {
+        var statusTd = document.createElement('td');
+        if (s.over_exposed) {
+          statusTd.appendChild(badge('OVER-EXPOSED', 'over'));
+        } else {
+          statusTd.appendChild(badge('OK', 'ok'));
+        }
+        tbody.appendChild(trEl([
+          tdEl(s.sector), tdEl(formatINR(s.value), 'right'),
+          tdEl(s.pct.toFixed(1) + '%', 'right'), tdEl(s.holdings, 'right'),
+          statusTd
+        ]));
+      });
+    }).catch(function(e) {
+      document.getElementById('sectorLoading').style.display = 'none';
+      if (e.code !== 'not_authenticated') {
+        document.getElementById('sectorEmpty').style.display = 'block';
+      }
+    });
+  }
+
+  // --- Tax Insights ---
+  function refreshTaxAnalysis() {
+    fetchJSON('tax-analysis').then(function(d) {
+      var loading = document.getElementById('taxLoading');
+      var content = document.getElementById('taxContent');
+      var empty = document.getElementById('taxEmpty');
+      loading.style.display = 'none';
+
+      var holdings = d.holdings || [];
+      if (holdings.length === 0) {
+        content.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      content.style.display = 'block';
+
+      var summary = d.summary || {};
+      // Summary cards
+      var stcgGains = document.getElementById('taxSTCGGains');
+      stcgGains.textContent = pnlSign(summary.total_stcg_gains || 0);
+      stcgGains.className = 'tax-card-value ' + pnlClass(summary.total_stcg_gains || 0);
+
+      var ltcgGains = document.getElementById('taxLTCGGains');
+      ltcgGains.textContent = pnlSign(summary.total_ltcg_gains || 0);
+      ltcgGains.className = 'tax-card-value ' + pnlClass(summary.total_ltcg_gains || 0);
+
+      var harvestable = document.getElementById('taxHarvestable');
+      var harvLoss = summary.harvestable_loss || 0;
+      harvestable.textContent = formatINR(Math.abs(harvLoss));
+      harvestable.className = 'tax-card-value ' + (harvLoss < 0 ? 'red' : '');
+
+      var saving = document.getElementById('taxSaving');
+      saving.textContent = formatINR(summary.potential_tax_saving || 0);
+      saving.className = 'tax-card-value amber';
+
+      // Table
+      var tbody = document.getElementById('taxTableBody');
+      clearChildren(tbody);
+      holdings.forEach(function(h) {
+        var typeTd = document.createElement('td');
+        typeTd.appendChild(badge(h.classification, h.classification === 'LTCG' ? 'ltcg' : 'stcg'));
+
+        var pnlTd = tdEl(pnlSign(h.unrealized_pnl), 'right');
+        pnlTd.style.color = h.unrealized_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+        var harvestTd = document.createElement('td');
+        if (h.harvestable) {
+          harvestTd.appendChild(badge('HARVEST', 'harvest'));
+        } else {
+          harvestTd.appendChild(el('span', '', '--'));
+          harvestTd.style.color = 'var(--text-2)';
+        }
+
+        tbody.appendChild(trEl([
+          tdEl(h.symbol), typeTd,
+          tdEl(formatINR(h.invested_value), 'right'),
+          tdEl(formatINR(h.current_value), 'right'),
+          pnlTd,
+          tdEl(h.tax_if_sold > 0 ? formatINR(h.tax_if_sold) : '--', 'right'),
+          harvestTd
+        ]));
+      });
+    }).catch(function(e) {
+      document.getElementById('taxLoading').style.display = 'none';
+      if (e.code !== 'not_authenticated') {
+        document.getElementById('taxEmpty').style.display = 'block';
+      }
+    });
+  }
+
   // --- Initial load + auto-refresh ---
   refreshStatus();
   refreshPortfolio();
   refreshAlerts();
   refreshPnlChart();
+  refreshSectorExposure();
+  refreshTaxAnalysis();
   setInterval(refreshStatus, 10000);
   setInterval(refreshPortfolio, 30000);
   setInterval(refreshAlerts, 60000);
   setInterval(refreshPnlChart, 300000); // refresh chart every 5 min
+  setInterval(refreshSectorExposure, 60000); // refresh sectors every 60s
+  setInterval(refreshTaxAnalysis, 60000); // refresh tax every 60s
 
   // --- Browser Notification permission banner ---
   (function() {
