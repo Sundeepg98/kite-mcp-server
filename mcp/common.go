@@ -166,7 +166,7 @@ func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.C
 	}
 
 	h.manager.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
-	return mcp.NewToolResultText(string(v)), nil
+	return mcp.NewToolResultStructured(data, string(v)), nil
 }
 
 // HandleAPICall wraps common API call pattern with error handling and response marshalling
