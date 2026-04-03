@@ -167,6 +167,9 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	// Register widget pages as MCP App resources (ui:// scheme).
 	RegisterAppResources(srv, manager, auditStore, logger)
 
+	// Register MCP prompts for common trading workflows.
+	RegisterPrompts(srv, manager)
+
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,
 		"excluded", excludedCount,
