@@ -518,15 +518,16 @@ func (a *briefingCredAdapter) GetAPIKey(email string) string {
 }
 
 // instrumentsFreezeAdapter wraps instruments.Manager to implement riskguard.FreezeQuantityLookup.
-// TODO: Add actual freeze quantity lookup once instruments.Manager exposes a public method for it.
 type instrumentsFreezeAdapter struct {
 	mgr *instruments.Manager
 }
 
-func (a *instrumentsFreezeAdapter) GetFreezeQuantity(exchange, symbol string) (uint32, bool) {
-	// instruments.Manager doesn't yet expose a public lookup by exchange:symbol.
-	// Fail open until the lookup is added in a follow-up.
-	return 0, false
+func (a *instrumentsFreezeAdapter) GetFreezeQuantity(exchange, tradingsymbol string) (uint32, bool) {
+	inst, err := a.mgr.GetByTradingsymbol(exchange, tradingsymbol)
+	if err != nil {
+		return 0, false
+	}
+	return inst.FreezeQuantity, inst.FreezeQuantity > 0
 }
 
 // createHTTPServer creates and configures the HTTP server
