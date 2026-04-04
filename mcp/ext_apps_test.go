@@ -102,7 +102,12 @@ func TestResourceURIForTool(t *testing.T) {
 
 func TestPagePathToResourceURI(t *testing.T) {
 	t.Run("all toolDashboardPage paths have a resource URI", func(t *testing.T) {
+		// /admin/ops is admin-only and intentionally has no MCP App widget
+		skipPaths := map[string]bool{"/admin/ops": true}
 		for toolName, pagePath := range toolDashboardPage {
+			if skipPaths[pagePath] {
+				continue
+			}
 			uri, ok := pagePathToResourceURI[pagePath]
 			assert.True(t, ok,
 				"pagePath %q (from tool %s) has no entry in pagePathToResourceURI", pagePath, toolName)
