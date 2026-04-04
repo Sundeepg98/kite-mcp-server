@@ -50,6 +50,7 @@ type App struct {
 	oauthHandler   *oauth.Handler
 	statusTemplate  *template.Template
 	landingTemplate *template.Template
+	legalTemplate   *template.Template
 	logger         *slog.Logger
 	metrics        *metrics.Manager
 	logBuffer      *ops.LogBuffer
@@ -828,6 +829,7 @@ func (app *App) setupMux(kcManager *kc.Manager) (*http.ServeMux, *http.ServeMux)
 	// Register Telegram bot webhook if configured.
 	app.registerTelegramWebhook(mux, kcManager)
 
+	app.serveLegalPages(mux)
 	app.serveStatusPage(mux)
 	return mux, adminMux
 }
@@ -1071,7 +1073,13 @@ func (app *App) initStatusPageTemplate() error {
 		return fmt.Errorf("failed to parse landing template: %w", err)
 	}
 	app.landingTemplate = landing
-	app.logger.Info("Status and landing templates initialized successfully")
+
+	legal, err := template.ParseFS(templates.FS, "legal.html")
+	if err != nil {
+		return fmt.Errorf("failed to parse legal template: %w", err)
+	}
+	app.legalTemplate = legal
+	app.logger.Info("Status, landing, and legal templates initialized successfully")
 	return nil
 }
 
@@ -1082,6 +1090,40 @@ func (app *App) getStatusData() StatusPageData {
 		Version: app.Version,
 		Mode:    app.Config.AppMode,
 	}
+}
+
+// legalPageData holds template data for the legal pages (Terms, Privacy).
+type legalPageData struct {
+	Title   string
+	Content template.HTML
+}
+
+// serveLegalPages registers /terms and /privacy routes.
+func (app *App) serveLegalPages(mux *http.ServeMux) {
+	if app.legalTemplate == nil {
+		return
+	}
+
+	serve := func(title string, content template.HTML) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			var buf bytes.Buffer
+			if err := app.legalTemplate.ExecuteTemplate(&buf, "legal", legalPageData{
+				Title:   title,
+				Content: content,
+			}); err != nil {
+				app.logger.Error("Failed to execute legal template", "page", title, "error", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			_, _ = buf.WriteTo(w)
+		}
+	}
+
+	mux.HandleFunc("/terms", serve("Terms of Service", termsHTML))
+	mux.HandleFunc("/privacy", serve("Privacy Policy", privacyHTML))
+	app.logger.Info("Legal pages registered at /terms and /privacy")
 }
 
 // serveStatusPage configures the HTTP mux to serve status page using templates.
