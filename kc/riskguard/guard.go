@@ -328,7 +328,7 @@ func (g *Guard) checkQuantityLimit(req OrderCheckRequest) CheckResult {
 	if !found || freezeQty == 0 {
 		return CheckResult{Allowed: true}
 	}
-	if uint32(req.Quantity) > freezeQty {
+	if req.Quantity < 0 || req.Quantity > int(freezeQty) {
 		return CheckResult{
 			Allowed: false, Reason: ReasonQuantityLimit,
 			Message: fmt.Sprintf("Quantity %d exceeds freeze limit %d for %s:%s", req.Quantity, freezeQty, req.Exchange, req.Tradingsymbol),

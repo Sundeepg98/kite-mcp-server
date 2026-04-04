@@ -692,7 +692,7 @@ func toInt(v any) int {
 		return int(n)
 	case string:
 		var i int
-		fmt.Sscanf(n, "%d", &i)
+		_, _ = fmt.Sscanf(n, "%d", &i)
 		return i
 	default:
 		return 0
@@ -711,7 +711,7 @@ func toFloat(v any) float64 {
 		return float64(n)
 	case string:
 		var f float64
-		fmt.Sscanf(n, "%f", &f)
+		_, _ = fmt.Sscanf(n, "%f", &f)
 		return f
 	default:
 		return 0

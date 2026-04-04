@@ -833,7 +833,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"$schema":         "https://modelcontextprotocol.io/schemas/server-card/v1.0",
 			"version":         "1.0",
 			"protocolVersion": "2025-06-18",

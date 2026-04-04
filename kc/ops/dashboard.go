@@ -82,7 +82,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 		}
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		w.Write(data)
+		_, _ = w.Write(data)
 	})
 }
 
@@ -1965,12 +1965,12 @@ func (d *DashboardHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Requ
 	}
 
 	if pe := d.manager.PaperEngine(); pe != nil {
-		pe.Reset(email)
-		pe.Disable(email)
+		_ = pe.Reset(email)   // best-effort cleanup
+		_ = pe.Disable(email) // best-effort cleanup
 	}
 
 	if us := d.manager.UserStore(); us != nil {
-		us.UpdateStatus(email, "offboarded")
+		_ = us.UpdateStatus(email, "offboarded") // best-effort cleanup
 	}
 
 	// Clear auth cookie
@@ -1980,6 +1980,8 @@ func (d *DashboardHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Requ
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	})
 
 	d.logger.Info("User self-deleted account", "email", email)

@@ -453,7 +453,7 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&confirmBody); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error":   "invalid_request",
 			"message": "Invalid JSON body.",
 		})
@@ -462,7 +462,7 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	if !confirmBody.Confirm {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error":   "confirmation_required",
 			"message": "This is a destructive action. Set confirm: true to proceed.",
 		})
@@ -570,7 +570,7 @@ func (h *Handler) freezeTrading(w http.ResponseWriter, r *http.Request) {
 	if !body.Confirm {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error":   "confirmation_required",
 			"message": "This is a destructive action. Set confirm: true to proceed.",
 		})

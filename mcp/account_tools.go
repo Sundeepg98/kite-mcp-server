@@ -63,12 +63,12 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		if pe := manager.PaperEngine(); pe != nil {
-			pe.Reset(email)
-			pe.Disable(email)
+			_ = pe.Reset(email)   // best-effort cleanup
+			_ = pe.Disable(email) // best-effort cleanup
 		}
 
 		if us := manager.UserStore(); us != nil {
-			us.UpdateStatus(email, "offboarded")
+			_ = us.UpdateStatus(email, "offboarded") // best-effort cleanup
 		}
 
 		manager.Logger.Info("User self-deleted account via MCP", "email", email)
