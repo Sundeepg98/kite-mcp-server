@@ -397,6 +397,27 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
 
+	// Hide admin-only tools from non-admin users' tool list.
+	// Note: WithToolFilter is UX only (hides from list_tools). The handler-level
+	// IsAdmin() check in each admin tool is the actual security gate.
+	uStore := kcManager.UserStore()
+	serverOpts = append(serverOpts, server.WithToolFilter(
+		func(ctx context.Context, tools []gomcp.Tool) []gomcp.Tool {
+			email := oauth.EmailFromContext(ctx)
+			if uStore != nil && uStore.IsAdmin(email) {
+				return tools
+			}
+			adminTools := map[string]bool{"server_metrics": true}
+			filtered := make([]gomcp.Tool, 0, len(tools))
+			for _, t := range tools {
+				if !adminTools[t.Name] {
+					filtered = append(filtered, t)
+				}
+			}
+			return filtered
+		},
+	))
+
 	// Enable elicitation so tool handlers can request user confirmation before
 	// placing orders. Clients that don't support elicitation will gracefully
 	// degrade (fail open — orders proceed without confirmation).
