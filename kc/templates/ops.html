@@ -124,13 +124,13 @@ tr:hover td { background: var(--bg-2); }
 
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="overview">Overview</button>
+  <button class="tab" data-tab="users">Users</button>
   <button class="tab" data-tab="sessions">Sessions</button>
-  <button class="tab" data-tab="tickers">Live Feeds</button>
+  <button class="tab" data-tab="tickers">Ticker Feeds</button>
   <button class="tab" data-tab="alerts">All Alerts</button>
-  <button class="tab" data-tab="credentials">API Key Registry</button>
+  <button class="tab" data-tab="credentials">Credentials</button>
   <button class="tab" data-tab="metrics">Metrics</button>
   <button class="tab" data-tab="logs">Logs</button>
-  <button class="tab" data-tab="users">Users</button>
 </div>
 
 <div id="panel-overview" class="panel active">
@@ -162,8 +162,8 @@ tr:hover td { background: var(--bg-2); }
 </div>
 
 <div id="panel-credentials" class="panel">
-  <div class="section-header">Per-User Kite Credentials</div>
-  <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Register your own Kite developer app API key and secret. When set, your trading operations use these credentials instead of the server's global ones.</p>
+  <div class="section-header">Your Credentials</div>
+  <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Your Kite developer app API key. When set, trading operations use these instead of global credentials.</p>
   <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:20px">
     <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
       <div>
@@ -329,9 +329,9 @@ tr:hover td { background: var(--bg-2); }
       var cards = [
         {label:'Version', value:d.version},
         {label:'Sessions', value:d.active_sessions, cls: d.active_sessions > 0 ? 'green' : ''},
-        {label:'Live Feeds', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
+        {label:'Ticker Feeds', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
         {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
-        {label:'Active Logins', value:d.cached_tokens},
+        {label:'Cached Tokens', value:d.cached_tokens},
         {label:'API Keys', value:d.per_user_credentials},
         {label:'Users Today', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
       ];
