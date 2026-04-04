@@ -86,16 +86,10 @@ tr:hover td { background: var(--bg-2); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
 
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
-.dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
-.dash-nav-link:hover { color: var(--text-1); }
-.dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
-
 @media (max-width: 640px) {
   .content, .panel { padding: 14px 12px; }
   .topbar { padding: 0 12px; }
   .topbar-uptime { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-  .dash-nav-link { padding: 12px 14px; }
   .tab { padding: 12px 14px; min-height: 44px; }
   button, .log-filter { min-height: 44px; }
 }
@@ -116,16 +110,6 @@ tr:hover td { background: var(--bg-2); }
     <div class="pulse-dot" id="pulseDot"></div>
   </div>
 </div>
-
-<nav class="dash-nav">
-  <a href="/dashboard" class="dash-nav-link">Portfolio</a>
-  <a href="/dashboard/activity" class="dash-nav-link">Activity</a>
-  <a href="/dashboard/orders" class="dash-nav-link">Orders</a>
-  <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
-  <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
-  <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
-  <a href="/admin/ops" class="dash-nav-link active">Ops</a>
-</nav>
 
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="overview">Overview</button>

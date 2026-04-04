@@ -180,7 +180,6 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
-  <a href="/admin/ops" class="dash-nav-link" id="opsNavLink" style="display:none">Ops</a>
 </nav>
 
 <div class="content">
@@ -479,11 +478,6 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
       badge.textContent = d.role;
       badge.className = 'role-badge role-badge-' + d.role;
       emailEl.parentNode.insertBefore(badge, emailEl.nextSibling);
-    }
-    // Show Ops nav link for admins
-    if (d.is_admin) {
-      var opsLink = document.getElementById('opsNavLink');
-      if (opsLink) opsLink.style.display = '';
     }
   }
   function refreshStatus() {
