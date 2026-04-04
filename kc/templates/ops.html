@@ -201,7 +201,7 @@ tr:hover td { background: var(--bg-2); }
 <script>
 (function() {
   'use strict';
-  var basePath = location.pathname;
+  var basePath = location.pathname.replace(/\/$/, '');
   var logFilter = 'all';
   var logEntries = [];
   var MAX_LOG = 500;
@@ -353,7 +353,7 @@ tr:hover td { background: var(--bg-2); }
       var all = [];
       var alerts = data.alerts || {};
       Object.keys(alerts).forEach(function(email) {
-        (alerts[email] || []).forEach(function(a) { a._email = email; all.push(a); });
+        (alerts[email] || []).forEach(function(a) { all.push(a); });
       });
       if (all.length === 0) { empty.style.display = 'block'; } else {
         empty.style.display = 'none';

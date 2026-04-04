@@ -117,6 +117,15 @@ func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}) {
 	}
 }
 
+// writeJSONError writes a JSON error response with the given HTTP status code.
+func (h *Handler) writeJSONError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		h.logger.Error("Failed to encode JSON error response", "error", err)
+	}
+}
+
 // overview returns the combined overview JSON.
 // Admin sees global counts; non-admin sees only their own data.
 func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
@@ -260,9 +269,15 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
-		h.manager.CredentialStore().Delete(authEmail)
-		h.manager.TokenStore().Delete(authEmail)
-		h.logger.Info("Deleted Kite credentials", "email", authEmail)
+		targetEmail := authEmail
+		if h.isAdmin(authEmail) {
+			if qEmail := r.URL.Query().Get("email"); qEmail != "" {
+				targetEmail = strings.ToLower(qEmail)
+			}
+		}
+		h.manager.CredentialStore().Delete(targetEmail)
+		h.manager.TokenStore().Delete(targetEmail)
+		h.logger.Info("Deleted Kite credentials", "email", targetEmail, "by", authEmail)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	default:
@@ -285,7 +300,7 @@ func (h *Handler) forceReauth(w http.ResponseWriter, r *http.Request) {
 
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		h.writeJSONError(w, http.StatusBadRequest, "email parameter required")
 		return
 	}
 
@@ -308,7 +323,7 @@ func (h *Handler) verifyChain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.auditStore == nil {
-		h.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "audit trail not enabled")
 		return
 	}
 	result, err := h.auditStore.VerifyChain()
@@ -354,19 +369,19 @@ func (h *Handler) suspendUser(w http.ResponseWriter, r *http.Request) {
 	}
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		h.writeJSONError(w, http.StatusBadRequest, "email parameter required")
 		return
 	}
 	if strings.EqualFold(targetEmail, adminEmail) {
-		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		h.writeJSONError(w, http.StatusBadRequest, "Cannot perform this action on yourself")
 		return
 	}
 	if h.userStore == nil {
-		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
 	if err := h.userStore.UpdateStatus(targetEmail, users.StatusSuspended); err != nil {
-		h.writeJSON(w, map[string]string{"error": err.Error()})
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	h.logger.Info("Admin suspended user", "admin", adminEmail, "target", targetEmail)
@@ -388,19 +403,19 @@ func (h *Handler) activateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		h.writeJSONError(w, http.StatusBadRequest, "email parameter required")
 		return
 	}
 	if strings.EqualFold(targetEmail, adminEmail) {
-		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		h.writeJSONError(w, http.StatusBadRequest, "Cannot perform this action on yourself")
 		return
 	}
 	if h.userStore == nil {
-		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
 	if err := h.userStore.UpdateStatus(targetEmail, users.StatusActive); err != nil {
-		h.writeJSON(w, map[string]string{"error": err.Error()})
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	h.logger.Info("Admin activated user", "admin", adminEmail, "target", targetEmail)
@@ -422,11 +437,11 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	}
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		h.writeJSONError(w, http.StatusBadRequest, "email parameter required")
 		return
 	}
 	if strings.EqualFold(targetEmail, adminEmail) {
-		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		h.writeJSONError(w, http.StatusBadRequest, "Cannot perform this action on yourself")
 		return
 	}
 
@@ -435,7 +450,16 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	var confirmBody struct {
 		Confirm bool `json:"confirm"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&confirmBody); err != nil || !confirmBody.Confirm {
+	if err := json.NewDecoder(r.Body).Decode(&confirmBody); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":   "invalid_request",
+			"message": "Invalid JSON body.",
+		})
+		return
+	}
+	if !confirmBody.Confirm {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -446,7 +470,7 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.userStore == nil {
-		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
 
@@ -456,7 +480,7 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 	h.manager.SessionManager().TerminateByEmail(targetEmail)
 
 	if err := h.userStore.UpdateStatus(targetEmail, users.StatusOffboarded); err != nil {
-		h.writeJSON(w, map[string]string{"error": err.Error()})
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	h.logger.Info("Admin offboarded user", "admin", adminEmail, "target", targetEmail)
@@ -478,11 +502,11 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 	}
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		h.writeJSONError(w, http.StatusBadRequest, "email parameter required")
 		return
 	}
 	if h.userStore == nil {
-		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
 
@@ -491,7 +515,7 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 		Role string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeJSON(w, map[string]string{"error": "invalid JSON body"})
+		h.writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -505,13 +529,13 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if admins <= 1 {
-			h.writeJSON(w, map[string]string{"error": "Cannot demote the last admin"})
+			h.writeJSONError(w, http.StatusConflict, "Cannot demote the last admin")
 			return
 		}
 	}
 
 	if err := h.userStore.UpdateRole(targetEmail, req.Role); err != nil {
-		h.writeJSON(w, map[string]string{"error": err.Error()})
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	h.logger.Info("Admin changed user role", "admin", adminEmail, "target", targetEmail, "role", req.Role)
@@ -540,7 +564,7 @@ func (h *Handler) freezeTrading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.EqualFold(body.Email, adminEmail) {
-		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		h.writeJSONError(w, http.StatusBadRequest, "Cannot perform this action on yourself")
 		return
 	}
 	if !body.Confirm {
@@ -582,7 +606,7 @@ func (h *Handler) unfreezeTrading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.EqualFold(body.Email, adminEmail) {
-		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		h.writeJSONError(w, http.StatusBadRequest, "Cannot perform this action on yourself")
 		return
 	}
 	guard := h.manager.RiskGuard()
@@ -680,7 +704,7 @@ func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.registryStore == nil {
-		h.writeJSON(w, map[string]string{"error": "registry not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "registry not initialized")
 		return
 	}
 
@@ -739,7 +763,7 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.registryStore == nil {
-		h.writeJSON(w, map[string]string{"error": "registry not initialized"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "registry not initialized")
 		return
 	}
 
@@ -801,7 +825,7 @@ func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.auditStore == nil {
-		h.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		h.writeJSONError(w, http.StatusServiceUnavailable, "audit trail not enabled")
 		return
 	}
 

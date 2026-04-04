@@ -253,7 +253,7 @@ td { padding: 9px 12px; }
       // Find nearest alert (smallest distance_pct)
       var nearest = null;
       for (var i = 0; i < active.length; i++) {
-        if (active[i].distance_pct > 0) {
+        if (active[i].distance_pct >= 0 && active[i].distance_pct != null) {
           if (!nearest || active[i].distance_pct < nearest.distance_pct) {
             nearest = active[i];
           }

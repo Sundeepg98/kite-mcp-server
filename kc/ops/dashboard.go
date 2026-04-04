@@ -144,7 +144,7 @@ func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.auditStore == nil {
-		d.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		d.writeJSONError(w, http.StatusServiceUnavailable, "not_available", "Audit trail not enabled")
 		return
 	}
 
@@ -430,12 +430,14 @@ func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request)
 
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	if !hasCreds {
-		d.writeJSON(w, map[string]any{"error": "no_credentials"})
+		d.writeJSONError(w, http.StatusUnauthorized, "no_credentials",
+			"Kite credentials not found. Please register your API credentials via your MCP client.")
 		return
 	}
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if !hasToken {
-		d.writeJSON(w, map[string]any{"error": "no_session"})
+		d.writeJSONError(w, http.StatusUnauthorized, "no_session",
+			"Kite token expired or not found. Please re-authenticate via your MCP client.")
 		return
 	}
 
@@ -444,7 +446,8 @@ func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request)
 
 	ohlcData, err := client.GetOHLC("NSE:NIFTY 50", "NSE:NIFTY BANK", "BSE:SENSEX")
 	if err != nil {
-		d.writeJSON(w, map[string]any{"error": err.Error()})
+		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
+			"Failed to fetch market indices from Kite: "+err.Error())
 		return
 	}
 
@@ -735,7 +738,7 @@ func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.auditStore == nil {
-		d.writeJSON(w, map[string]string{"error": "audit trail not enabled"})
+		d.writeJSONError(w, http.StatusServiceUnavailable, "not_available", "Audit trail not enabled")
 		return
 	}
 
@@ -1209,9 +1212,9 @@ func (d *DashboardHandler) pnlChartAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	period := intParam(r, "period", 30)
+	period := intParam(r, "period", 90)
 	if period < 1 {
-		period = 30
+		period = 90
 	}
 	if period > 365 {
 		period = 365
@@ -2034,6 +2037,8 @@ func (d *DashboardHandler) selfManageCredentials(w http.ResponseWriter, r *http.
 			APIKey:    body.APIKey,
 			APISecret: body.APISecret,
 		})
+		// Always clear cached token — credentials changed, old token is invalid
+		d.manager.TokenStore().Delete(email)
 		d.logger.Info("User updated credentials via dashboard", "email", email)
 		d.writeJSON(w, map[string]string{
 			"status":  "ok",

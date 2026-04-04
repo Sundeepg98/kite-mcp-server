@@ -41,7 +41,7 @@
 .collapsible-header { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
 .collapsible-header::after { content: '\25BC'; font-size: 10px; color: var(--text-2); transition: transform 0.2s; }
 .collapsible-header.collapsed::after { transform: rotate(-90deg); }
-.collapsible-body { overflow: hidden; transition: max-height 0.3s ease; }
+.collapsible-body { overflow: hidden; transition: max-height 0.3s ease; max-height: 2000px; }
 .collapsible-body.collapsed { max-height: 0 !important; overflow: hidden; }
 
 .sector-chart-wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; padding: 16px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; }
@@ -405,6 +405,10 @@
           var err = new Error(d.message || 'HTTP ' + r.status);
           err.code = d.error || 'unknown';
           throw err;
+        }, function() {
+          var err = new Error('HTTP ' + r.status);
+          err.code = 'server_error';
+          throw err;
         });
       }
       return r.json();
@@ -685,6 +689,10 @@
         showAuthBanner(e.message || 'Kite token expired. Please re-authenticate.');
         document.getElementById('holdingsEmpty').style.display = 'block';
         document.getElementById('positionsEmpty').style.display = 'block';
+      } else {
+        document.getElementById('holdingsLoading').textContent = 'Failed to load portfolio data.';
+        document.getElementById('holdingsLoading').style.display = '';
+        document.getElementById('holdingsLoading').style.color = 'var(--red)';
       }
     });
   }

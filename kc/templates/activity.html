@@ -402,10 +402,12 @@
   document.getElementById('prevBtn').addEventListener('click', function() {
     state.offset = Math.max(0, state.offset - PAGE_SIZE);
     fetchActivity();
+    document.querySelector('.content').scrollIntoView({behavior: 'smooth'});
   });
   document.getElementById('nextBtn').addEventListener('click', function() {
     state.offset += PAGE_SIZE;
     fetchActivity();
+    document.querySelector('.content').scrollIntoView({behavior: 'smooth'});
   });
 
   // --- Filter: category ---
@@ -468,6 +470,8 @@
       today.setHours(0, 0, 0, 0);
       url += '&since=' + encodeURIComponent(today.toISOString());
     }
+    if (state.category) url += '&category=' + encodeURIComponent(state.category);
+    if (state.errors) url += '&errors=true';
     window.location.href = url;
   });
 
@@ -554,6 +558,7 @@
           if (state.offset === 0 && !state.category && !state.errors) {
             // Add to the beginning of current entries
             state.entries.unshift(entry);
+            if (state.entries.length > PAGE_SIZE) state.entries.length = PAGE_SIZE;
             state.total++;
             // Update the timeline display
             var timeline = document.getElementById('timeline');
@@ -653,9 +658,9 @@
   function maybeBrowserNotify(entry) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (document.visibilityState === 'visible') return; // only notify when tab is in background
-    var dominated = (entry.tool_category === 'notification') ||
-                    (entry.tool_category === 'order' && !entry.is_error);
-    if (!dominated) return;
+    var shouldNotify = (entry.tool_category === 'notification') ||
+                       (entry.tool_category === 'order' && !entry.is_error);
+    if (!shouldNotify) return;
     var body = (entry.input_summary || '') + (entry.output_summary ? ': ' + entry.output_summary : '');
     new Notification('Kite MCP — ' + (entry.tool_name || '').replace(/_/g, ' '), {
       body: body,

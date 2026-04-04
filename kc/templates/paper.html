@@ -384,17 +384,20 @@
     var btn = document.getElementById('resetBtn');
     btn.disabled = true;
     btn.textContent = 'Resetting...';
+    clearInterval(refreshTimer);
     fetch('/dashboard/api/paper/reset', { method: 'POST' })
       .then(function(r) { return r.json(); })
       .then(function() {
         btn.disabled = false;
         btn.textContent = 'Reset Paper Account';
         fetchAll();
+        refreshTimer = setInterval(fetchAll, 10000);
       })
       .catch(function(err) {
         btn.disabled = false;
         btn.textContent = 'Reset Paper Account';
         alert('Reset failed: ' + err.message);
+        refreshTimer = setInterval(fetchAll, 10000);
       });
   });
 
