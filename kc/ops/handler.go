@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	htmltemplate "html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -29,11 +30,12 @@ type Handler struct {
 	userStore     *users.Store
 	auditStore    *audit.Store
 	registryStore *registry.Store
+	overviewTmpl  *htmltemplate.Template
 }
 
 // New creates a new ops Handler.
 func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, userStore *users.Store, auditStore *audit.Store) *Handler {
-	return &Handler{
+	h := &Handler{
 		manager:       manager,
 		metrics:       metrics,
 		logBuffer:     logBuffer,
@@ -44,6 +46,13 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 		auditStore:    auditStore,
 		registryStore: manager.RegistryStore(),
 	}
+	tmpl, err := overviewFragmentTemplates()
+	if err != nil {
+		logger.Error("Failed to parse overview templates", "error", err)
+	} else {
+		h.overviewTmpl = tmpl
+	}
+	return h
 }
 
 // isAdmin returns true if the given email belongs to an active admin user.
@@ -80,6 +89,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
 	// Metrics (admin only)
 	mux.Handle("/admin/ops/api/metrics", wrap(h.metricsAPI))
+	// Overview SSE stream (admin only)
+	mux.Handle("/admin/ops/api/overview-stream", wrap(h.overviewStream))
 }
 
 // servePage serves the embedded ops.html dashboard page, injecting the user's
