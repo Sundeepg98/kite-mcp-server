@@ -150,11 +150,29 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .badge-over { background: var(--red-dim); color: var(--red); }
 .badge-ok { background: var(--green-dim); color: var(--green); }
 
+/* Market indices bar */
+.market-bar { display: flex; gap: 20px; padding: 12px 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.market-item { display: flex; align-items: baseline; gap: 8px; }
+.market-label { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.market-price { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text-0); }
+.market-change { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.market-change.up { color: var(--green); }
+.market-change.down { color: var(--red); }
+
+/* Hero stat card (P&L) */
+.stat-card.hero { grid-column: span 2; padding: 20px; }
+.stat-card.hero .stat-value { font-size: 32px; }
+.stat-card.hero .stat-label { font-size: 13px; }
+.stat-card.hero .hero-sub { font-family: var(--mono); font-size: 12px; color: var(--text-2); margin-top: 4px; }
+
 @media (max-width: 640px) {
   .sector-chart-wrap { flex-direction: column; }
   .sector-donut { width: 140px; height: 140px; }
   .sector-donut-hole { top: 22px; left: 22px; width: 96px; height: 96px; font-size: 11px; }
   .tax-cards { grid-template-columns: repeat(2, 1fr); }
+  .market-bar { flex-wrap: wrap; gap: 12px; }
+  .stat-card.hero { grid-column: span 1; }
+  .stat-card.hero .stat-value { font-size: 24px; }
 }
 </style>
 </head>
@@ -184,6 +202,24 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 
 <div class="content">
 
+  <div class="market-bar" id="marketBar">
+    <div class="market-item" id="niftyItem">
+      <span class="market-label">NIFTY 50</span>
+      <span class="market-price" id="niftyPrice">--</span>
+      <span class="market-change" id="niftyChange">--</span>
+    </div>
+    <div class="market-item" id="bankniftyItem">
+      <span class="market-label">BANK NIFTY</span>
+      <span class="market-price" id="bankniftyPrice">--</span>
+      <span class="market-change" id="bankniftyChange">--</span>
+    </div>
+    <div class="market-item" id="sensexItem">
+      <span class="market-label">SENSEX</span>
+      <span class="market-price" id="sensexPrice">--</span>
+      <span class="market-change" id="sensexChange">--</span>
+    </div>
+  </div>
+
   <div class="auth-banner" id="authBanner">
     <div class="auth-banner-row">
       <span class="auth-banner-msg" id="authBannerMsg">Your Kite session has expired. Please re-authenticate.</span>
@@ -195,7 +231,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <div class="stats-grid" id="statusCards">
     <div class="stat-card"><div class="stat-label">Kite Token</div><div class="stat-value" id="cardToken">--</div></div>
     <div class="stat-card"><div class="stat-label">Holdings</div><div class="stat-value" id="cardHoldings">--</div></div>
-    <div class="stat-card"><div class="stat-label">Today's P&amp;L</div><div class="stat-value" id="cardPnl">--</div></div>
+    <div class="stat-card hero"><div class="stat-label">Today's P&amp;L</div><div class="stat-value" id="cardPnl">--</div><div class="hero-sub" id="cardPnlSub"></div></div>
     <div class="stat-card"><div class="stat-label">Active Alerts</div><div class="stat-value" id="cardAlerts">--</div></div>
     <div class="stat-card"><div class="stat-label">Ticker</div><div class="stat-value" id="cardTicker">--</div></div>
   </div>
@@ -466,6 +502,29 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     document.getElementById('authBanner').style.display = 'none';
   }
 
+  // --- Refresh Market Indices ---
+  function refreshMarketBar() {
+    fetchJSON('market-indices').then(function(d) {
+      if (d.error) return;
+      var items = [
+        {id: 'nifty', key: 'NSE:NIFTY 50'},
+        {id: 'banknifty', key: 'NSE:NIFTY BANK'},
+        {id: 'sensex', key: 'BSE:SENSEX'}
+      ];
+      items.forEach(function(item) {
+        var data = d[item.key];
+        if (data) {
+          var priceStr = formatINR(data.last_price).replace('\u20B9', '');
+          document.getElementById(item.id + 'Price').textContent = priceStr;
+          var changeEl = document.getElementById(item.id + 'Change');
+          var sign = data.change >= 0 ? '+' : '';
+          changeEl.textContent = sign + data.change.toFixed(2) + ' (' + sign + data.change_pct.toFixed(2) + '%)';
+          changeEl.className = 'market-change ' + (data.change >= 0 ? 'up' : 'down');
+        }
+      });
+    }).catch(function() {});
+  }
+
   // --- Refresh Status ---
   var roleApplied = false;
   function applyRoleUI(d) {
@@ -532,6 +591,17 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
       var totalPnl = (summary.total_pnl || 0) + (summary.positions_pnl || 0);
       pnlCard.textContent = pnlSign(totalPnl);
       pnlCard.className = 'stat-value ' + pnlClass(totalPnl);
+
+      // Hero subtitle: breakdown of holdings P&L + positions P&L
+      var pnlSub = document.getElementById('cardPnlSub');
+      var parts = [];
+      if (summary.total_pnl != null && summary.total_pnl !== 0) {
+        parts.push('Holdings ' + pnlSign(summary.total_pnl));
+      }
+      if (summary.positions_pnl != null && summary.positions_pnl !== 0) {
+        parts.push('Positions ' + pnlSign(summary.positions_pnl));
+      }
+      pnlSub.textContent = parts.length > 0 ? parts.join('  |  ') : '';
 
       // Holdings table
       var holdings = d.holdings || [];
@@ -1238,11 +1308,13 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   };
 
   // --- Initial load + auto-refresh ---
+  refreshMarketBar();
   refreshStatus();
   refreshPortfolio();
   refreshAlerts();
   refreshPnlChart();
   // Sector & tax are lazy-loaded on first expand (see initCollapsible above)
+  setInterval(refreshMarketBar, 30000);
   setInterval(refreshStatus, 10000);
   setInterval(refreshPortfolio, 30000);
   setInterval(refreshAlerts, 60000);

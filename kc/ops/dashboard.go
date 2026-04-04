@@ -59,6 +59,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/pnl-chart", wrap(d.pnlChartAPI))
 	mux.Handle("/dashboard/api/order-attribution", wrap(d.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
+	mux.Handle("/dashboard/api/market-indices", wrap(d.marketIndices))
 	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPage))
 	mux.Handle("/dashboard/api/safety/status", wrap(d.safetyStatus))
 	mux.Handle("/dashboard/paper", wrap(d.servePaperPage))
@@ -401,6 +402,59 @@ type statusResponse struct {
 }
 
 // --- Handlers ---
+
+// marketIndices returns OHLC data for NIFTY 50, BANK NIFTY, and SENSEX.
+func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+
+	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
+	if !hasCreds {
+		d.writeJSON(w, map[string]any{"error": "no_credentials"})
+		return
+	}
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	if !hasToken {
+		d.writeJSON(w, map[string]any{"error": "no_session"})
+		return
+	}
+
+	client := kiteconnect.New(credEntry.APIKey)
+	client.SetAccessToken(tokenEntry.AccessToken)
+
+	ohlcData, err := client.GetOHLC("NSE:NIFTY 50", "NSE:NIFTY BANK", "BSE:SENSEX")
+	if err != nil {
+		d.writeJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+
+	result := make(map[string]any, len(ohlcData))
+	for k, v := range ohlcData {
+		change := v.LastPrice - v.OHLC.Close
+		changePct := 0.0
+		if v.OHLC.Close > 0 {
+			changePct = (change / v.OHLC.Close) * 100
+		}
+		result[k] = map[string]any{
+			"last_price": v.LastPrice,
+			"close":      v.OHLC.Close,
+			"open":       v.OHLC.Open,
+			"high":       v.OHLC.High,
+			"low":        v.OHLC.Low,
+			"change":     math.Round(change*100) / 100,
+			"change_pct": math.Round(changePct*100) / 100,
+		}
+	}
+	d.writeJSON(w, result)
+}
 
 // portfolio fetches holdings and positions from the Kite API for the authenticated user.
 func (d *DashboardHandler) portfolio(w http.ResponseWriter, r *http.Request) {
