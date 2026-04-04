@@ -95,6 +95,10 @@ type Config struct {
 
 	// Admin emails (comma-separated list of admin emails for ops dashboard)
 	AdminEmails string
+
+	// Google SSO (opt-in: set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to enable)
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 // Server mode constants
@@ -132,6 +136,9 @@ func NewApp(logger *slog.Logger) *App {
 			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 			AlertDBPath:      os.Getenv("ALERT_DB_PATH"),
 			AdminEmails:      os.Getenv("ADMIN_EMAILS"),
+
+			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		},
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
@@ -749,6 +756,16 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		app.oauthHandler.SetUserStore(userStore)
 	}
 
+	// Wire Google SSO for admin login (opt-in via env vars)
+	if app.oauthHandler != nil && app.Config.GoogleClientID != "" && app.Config.GoogleClientSecret != "" {
+		app.oauthHandler.SetGoogleSSO(&oauth.GoogleSSOConfig{
+			ClientID:     app.Config.GoogleClientID,
+			ClientSecret: app.Config.GoogleClientSecret,
+			RedirectURL:  app.Config.ExternalURL + "/auth/google/callback",
+		})
+		app.logger.Info("Google SSO enabled for admin login")
+	}
+
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
 	// Admin auth middleware: checks kite_jwt cookie, redirects to /auth/admin-login if missing,
 	// and requires the authenticated email to be in ADMIN_EMAILS.
@@ -855,6 +872,8 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/auth/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleLoginChoice))
 		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
 		mux.Handle("/auth/admin-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleAdminLogin))
+		mux.Handle("/auth/google/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleLogin))
+		mux.Handle("/auth/google/callback", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleCallback))
 	}
 
 	// Register Telegram bot webhook if configured.

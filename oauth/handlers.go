@@ -63,6 +63,7 @@ type Handler struct {
 	kiteTokenChecker KiteTokenChecker
 	userStore        AdminUserStore
 	registry         KeyRegistry
+	googleSSO        *GoogleSSOConfig
 
 	// Cached templates (parsed once at startup)
 	loginSuccessTmpl   *template.Template
@@ -776,11 +777,13 @@ func (h *Handler) HandleLoginChoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		Title    string
-		Redirect string
+		Title            string
+		Redirect         string
+		GoogleSSOEnabled bool
 	}{
-		Title:    "Sign In",
-		Redirect: redirect,
+		Title:            "Sign In",
+		Redirect:         redirect,
+		GoogleSSOEnabled: h.GoogleSSOEnabled(),
 	}
 
 	var buf bytes.Buffer
@@ -1073,6 +1076,16 @@ func (h *Handler) SetUserStore(store AdminUserStore) {
 	h.userStore = store
 }
 
+// SetGoogleSSO enables Google SSO for admin login.
+func (h *Handler) SetGoogleSSO(cfg *GoogleSSOConfig) {
+	h.googleSSO = cfg
+}
+
+// GoogleSSOEnabled returns true if Google SSO is configured.
+func (h *Handler) GoogleSSOEnabled() bool {
+	return h.googleSSO != nil
+}
+
 // HandleAdminLogin serves and processes the admin password login form.
 // GET: renders admin_login.html with CSRF token.
 // POST: validates CSRF, checks admin role + active status + bcrypt password.
@@ -1180,15 +1193,17 @@ func (h *Handler) serveAdminLoginForm(w http.ResponseWriter, redirect string, er
 	}
 
 	data := struct {
-		Title     string
-		Redirect  string
-		Error     string
-		CSRFToken string
+		Title            string
+		Redirect         string
+		Error            string
+		CSRFToken        string
+		GoogleSSOEnabled bool
 	}{
-		Title:     "Admin Login",
-		Redirect:  redirect,
-		Error:     errorMsg,
-		CSRFToken: csrfToken,
+		Title:            "Admin Login",
+		Redirect:         redirect,
+		Error:            errorMsg,
+		CSRFToken:        csrfToken,
+		GoogleSSOEnabled: h.GoogleSSOEnabled(),
 	}
 
 	var buf bytes.Buffer
