@@ -180,6 +180,40 @@ tr:hover td { background: var(--bg-2); }
   </div>
   <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>API Key</th><th>Secret</th><th>Stored</th><th></th></tr></thead><tbody id="credBody"></tbody></table></div>
   <div class="empty-state" id="credEmpty" style="display:none">No per-user credentials registered</div>
+
+  <!-- Registry section (admin only, shown via JS) -->
+  <div id="registrySection" style="display:none">
+    <div class="section-header" style="margin-top:28px">Registered Apps</div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Pre-register Kite developer apps. Users are matched by email at login.</p>
+    <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">App ID</label>
+          <input id="regAppID" type="text" placeholder="my-app-01" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">API Key</label>
+          <input id="regAPIKey" type="text" placeholder="api_key" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">API Secret</label>
+          <input id="regAPISecret" type="password" placeholder="api_secret" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">Label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input id="regLabel" type="text" placeholder="Personal Trading" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);display:block;margin-bottom:4px">Assigned To <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input id="regAssignedTo" type="email" placeholder="user@example.com" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-1);color:var(--text-0);font-family:var(--mono);font-size:12px">
+        </div>
+        <button id="regAddBtn" style="padding:6px 16px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap">Register App</button>
+      </div>
+      <div id="regStatus" style="margin-top:8px;font-size:12px;font-family:var(--mono);display:none"></div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>App ID</th><th>API Key</th><th>Secret</th><th>Label</th><th>Assigned To</th><th>Status</th><th>Source</th><th>Registered By</th><th>Actions</th></tr></thead><tbody id="regBody"></tbody></table></div>
+    <div class="empty-state" id="regEmpty" style="display:none">No apps registered</div>
+  </div>
 </div>
 
 <div id="panel-metrics" class="panel">
@@ -515,6 +549,112 @@ tr:hover td { background: var(--bg-2); }
     });
   });
 
+  // --- Registry CRUD (admin only) ---
+  function refreshRegistry() {
+    if (!isAdmin) return;
+    fetchJSON('registry').then(function(data) {
+      var tbody = document.getElementById('regBody');
+      var empty = document.getElementById('regEmpty');
+      clearChildren(tbody);
+      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      data.forEach(function(app) {
+        var statusType = app.status === 'active' ? 'green' : (app.status === 'disabled' ? 'amber' : 'red');
+
+        var actionsCell = document.createElement('td');
+        actionsCell.style.whiteSpace = 'normal';
+
+        actionsCell.appendChild(userActionBtn('Edit', 'btn-purple', function() {
+          var newLabel = prompt('Label for "' + app.id + '":\n(current: ' + (app.label || '(none)') + ')', app.label || '');
+          if (newLabel === null) return;
+          var newAssigned = prompt('Assigned To email for "' + app.id + '":\n(current: ' + (app.assigned_to || '(none)') + ')', app.assigned_to || '');
+          if (newAssigned === null) return;
+          var newStatus = prompt('Status for "' + app.id + '":\n(current: ' + app.status + ')\n\nEnter: active, disabled, invalid, or replaced', app.status);
+          if (!newStatus) return;
+          newStatus = newStatus.trim().toLowerCase();
+          if (newStatus !== 'active' && newStatus !== 'disabled' && newStatus !== 'invalid' && newStatus !== 'replaced') {
+            alert('Invalid status. Must be active, disabled, invalid, or replaced.');
+            return;
+          }
+          fetch(basePath + '/api/registry/' + encodeURIComponent(app.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assigned_to: newAssigned.trim(), label: newLabel.trim(), status: newStatus })
+          }).then(function(r) {
+            if (r.ok) { refreshRegistry(); }
+            else { r.json().then(function(d) { alert('Update failed: ' + (d.error || 'unknown')); }); }
+          });
+        }));
+
+        actionsCell.appendChild(userActionBtn('Delete', 'btn-red', function() {
+          if (!confirm('Delete registry entry "' + app.id + '"?\n\nThis removes the app from the registry. Per-user credentials are not affected.')) return;
+          fetch(basePath + '/api/registry/' + encodeURIComponent(app.id), { method: 'DELETE' })
+            .then(function(r) {
+              if (r.ok) { refreshRegistry(); refreshOverview(); }
+              else { r.json().then(function(d) { alert('Delete failed: ' + (d.error || 'unknown')); }); }
+            });
+        }));
+
+        tbody.appendChild(tr([
+          td(app.id),
+          td(app.api_key),
+          td(app.api_secret_hint),
+          td(app.label || '\u2014'),
+          td(app.assigned_to || '\u2014'),
+          tdBadge(app.status, statusType),
+          td(app.source || '\u2014'),
+          td(app.registered_by || '\u2014'),
+          actionsCell
+        ]));
+      });
+    }).catch(function(e) { console.error('registry:', e); });
+  }
+
+  // Show registry section for admins
+  if (isAdmin) {
+    var regSection = document.getElementById('registrySection');
+    if (regSection) regSection.style.display = 'block';
+
+    document.getElementById('regAddBtn').addEventListener('click', function() {
+      var appID = document.getElementById('regAppID').value.trim();
+      var apiKey = document.getElementById('regAPIKey').value.trim();
+      var apiSecret = document.getElementById('regAPISecret').value.trim();
+      var label = document.getElementById('regLabel').value.trim();
+      var assignedTo = document.getElementById('regAssignedTo').value.trim();
+      var status = document.getElementById('regStatus');
+
+      if (!appID || !apiKey || !apiSecret) {
+        status.textContent = 'App ID, API Key, and API Secret are required';
+        status.style.color = 'var(--red,#e55)';
+        status.style.display = 'block';
+        return;
+      }
+      var payload = { id: appID, api_key: apiKey, api_secret: apiSecret };
+      if (label) payload.label = label;
+      if (assignedTo) payload.assigned_to = assignedTo;
+
+      fetch(basePath + '/api/registry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(r) {
+        if (r.ok || r.status === 201) {
+          status.textContent = 'App "' + appID + '" registered successfully.';
+          status.style.color = 'var(--green,#4a4)';
+          document.getElementById('regAppID').value = '';
+          document.getElementById('regAPIKey').value = '';
+          document.getElementById('regAPISecret').value = '';
+          document.getElementById('regLabel').value = '';
+          document.getElementById('regAssignedTo').value = '';
+          refreshRegistry(); refreshOverview();
+        } else {
+          r.json().then(function(d) { status.textContent = d.error || 'Registration failed'; status.style.color = 'var(--red,#e55)'; });
+        }
+        status.style.display = 'block';
+      });
+    });
+  }
+
   // Metrics
   var metricsPeriod = '1h';
   function refreshMetrics() {
@@ -781,7 +921,7 @@ tr:hover td { background: var(--bg-2); }
 
   function refreshAll() {
     refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials();
-    if (isAdmin) refreshUsers();
+    if (isAdmin) { refreshUsers(); refreshRegistry(); }
     updateTimestamp();
   }
   refreshAll();
