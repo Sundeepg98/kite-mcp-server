@@ -4,40 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Safety · Kite MCP</title>
+<link rel="stylesheet" href="/static/dashboard-base.css">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+.content { max-width: 1000px; }
 
-:root {
-  --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
-  --border: #252d3a; --border-hi: #334155;
-  --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
-  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
-  --red: #f87171; --red-dim: rgba(248,113,113,0.1);
-  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
-  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
-  --mono: 'JetBrains Mono', monospace;
-  --sans: 'DM Sans', system-ui, sans-serif;
-}
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
-
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
-.topbar-left { display: flex; align-items: center; gap: 12px; }
-.topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-.topbar-sep { width: 1px; height: 20px; background: var(--border); }
-.topbar-title { font-size: 14px; font-weight: 500; color: var(--text-1); }
-.topbar-right { display: flex; align-items: center; gap: 12px; }
-.topbar-updated { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
-
-.dash-nav { display: flex; gap: 0; padding: 0 24px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
-.dash-nav-link { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-2); text-decoration: none; border-bottom: 2px solid transparent; transition: all 0.15s; font-family: var(--sans); }
-.dash-nav-link:hover { color: var(--text-1); }
-.dash-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-.content { padding: 20px 24px; max-width: 1000px; }
-
-/* Freeze banner */
 .freeze-banner { border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; border: 1px solid; }
 .freeze-banner.active { background: var(--green-dim); border-color: rgba(52,211,153,0.3); }
 .freeze-banner.frozen { background: var(--red-dim); border-color: rgba(248,113,113,0.3); }
@@ -45,15 +15,13 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .freeze-icon { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
 .freeze-icon.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
 .freeze-icon.frozen { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .freeze-title { font-size: 15px; font-weight: 600; }
 .freeze-title.active { color: var(--green); }
 .freeze-title.frozen { color: var(--red); }
 .freeze-detail { font-size: 12px; font-family: var(--mono); color: var(--text-1); margin-top: 6px; }
 
-.section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 24px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.section-header { margin: 24px 0 12px; }
 
-/* Limit bars */
 .limit-grid { display: flex; flex-direction: column; gap: 14px; }
 .limit-item { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; }
 .limit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -65,7 +33,6 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .limit-bar-fill.warn { background: var(--amber); }
 .limit-bar-fill.danger { background: var(--red); }
 
-/* SEBI cards */
 .sebi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .sebi-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
 .sebi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -74,11 +41,9 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .sebi-dot.off { background: var(--red); }
 .sebi-label { font-size: 12px; font-weight: 500; color: var(--text-1); }
 
-.loading-state { text-align: center; padding: 40px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+.loading-state { padding: 40px; }
 
 @media (max-width: 640px) {
-  .content { padding: 14px 12px; }
-  .topbar { padding: 0 12px; }
   .dash-nav-link { padding: 12px 14px; }
   .sebi-grid { grid-template-columns: 1fr; }
 }

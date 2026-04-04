@@ -72,6 +72,18 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/tax-analysis", wrap(d.taxAnalysisAPI))
 	mux.Handle("/dashboard/api/account/delete", wrap(d.selfDeleteAccount))
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.selfManageCredentials))
+
+	// Static CSS — no auth required, publicly cacheable.
+	mux.HandleFunc("/static/dashboard-base.css", func(w http.ResponseWriter, r *http.Request) {
+		data, err := templates.FS.ReadFile("dashboard-base.css")
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	})
 }
 
 // writeJSON encodes data as JSON and writes it to the response writer.
