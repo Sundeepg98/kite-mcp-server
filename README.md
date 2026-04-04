@@ -1,385 +1,211 @@
-# Kite MCP Server (Self-Hosted Fork)
+# Kite Trading MCP Server
 
-> **This is a private fork** of [zerodha/kite-mcp-server](https://github.com/zerodha/kite-mcp-server) with significant additions for self-hosted multi-user deployment on Fly.io.
+> Trade on Indian stock markets via AI — Claude, ChatGPT, VS Code, or any MCP client.
 
-## Fork Additions (v1.0.0)
+78 tools · Paper trading · Backtesting · Options Greeks · 8 safety checks · Telegram alerts · SEBI compliant
 
-### 40 MCP Tools
-| Category | Tools |
-|----------|-------|
-| Orders | place_order, modify_order, cancel_order, convert_position, place/modify/delete_gtt_order |
-| Portfolio | get_profile, get_margins, get_holdings, get_positions, get_trades, get_orders, get_order_history, get_order_trades, get_gtts, get_mf_holdings |
-| Market Data | get_quotes, search_instruments, get_historical_data, get_ltp, get_ohlc |
-| Analytics | portfolio_summary, portfolio_concentration, position_analysis, trading_context |
-| Margins | get_order_margins, get_basket_margins, get_order_charges |
-| Alerts | setup_telegram, set_alert (above/below/drop_pct/rise_pct), list_alerts, delete_alert |
-| Ticker | start/stop_ticker, ticker_status, subscribe/unsubscribe_instruments |
-| Setup | login, open_dashboard |
+[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
+[![Tools](https://img.shields.io/badge/Tools-78-blue)]()
+[![Tests](https://img.shields.io/badge/Tests-487-brightgreen)]()
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-### Infrastructure
-- **Per-user OAuth 2.1 + PKCE** — each user brings their own Kite developer app
-- **Full SQLite persistence** — credentials, tokens, OAuth clients, MCP sessions (all AES-256-GCM encrypted)
-- **AI Activity Audit Trail** — every tool call logged with summaries, filterable timeline at `/dashboard/activity`
-- **Telegram daily briefings** — morning 9 AM (alerts, token status) + P&L summary 3:35 PM IST
-- **SSO** — dashboard cookie set during MCP OAuth callback (Callback Session Establishment pattern)
-- **Rate limiting** — per-IP on all endpoints (auth 2/sec, token 5/sec, MCP 20/sec)
-- **SEBI compliant** — static egress IP `209.71.68.157`, market_protection parameter, gokiteconnect v4.4.0
-- **270+ tests**, security score ~8.5/10
+## What it does
 
-### Deployment
-```bash
-# Fly.io (production)
-flyctl deploy -a kite-mcp-server
-
-# Required secrets
-flyctl secrets set OAUTH_JWT_SECRET=<random-32-bytes>
-flyctl secrets set EXTERNAL_URL=https://kite-mcp-server.fly.dev
-flyctl secrets set ADMIN_EMAILS=your@email.com
-flyctl secrets set TELEGRAM_BOT_TOKEN=<bot-token>  # optional
-flyctl secrets set ALERT_DB_PATH=/data/alerts.db
-```
-
-### Dashboards
-- `/dashboard` — user portfolio (holdings, P&L, alerts, credentials)
-- `/dashboard/activity` — AI activity audit trail with filters and export
-- `/admin/ops` — admin monitoring (all users, sessions, logs)
-
-### Trading Skill Plugin
-```bash
-# Load the plugin
-claude --plugin-dir ~/.claude/plugins/local/kite-trading
-
-# Commands
-/morning          # Morning briefing
-/trade RELIANCE 10  # Pre-flight check
-/eod              # End-of-day review
-/price RELIANCE   # Quick price check
-```
-
----
-
-*Below is the original upstream README.*
-
----
-
-# Kite MCP Server (Upstream)
-
-A Model Context Protocol (MCP) server that provides AI assistants with secure access to the Kite Connect trading API. This server enables AI agents to retrieve market data, manage portfolios, and execute trades through a standardized interface.
-
-## TL;DR for Traders
-
-Want to use AI with your Kite trading account? Just add `https://mcp.kite.trade/mcp` to your AI client configuration. No installation or API keys required - it's hosted and ready to use.
-
-## Features
-
-- **Portfolio Management**: View holdings, positions, margins, and mutual fund investments
-- **Order Management**: Place, modify, and cancel orders with full order history
-- **GTT Orders**: Good Till Triggered order management
-- **Market Data Access**: Real-time quotes, historical data, OHLC data
-- **Pagination Support**: Automatic pagination for large datasets (holdings, orders, trades)
-- **Comprehensive Coverage**: Implements most Kite Connect API endpoints
-- **Multiple Deployment Modes**: stdio, HTTP, SSE, and hybrid mode (production)
-- **Built-in Documentation**: Auto-served documentation at runtime
+Connect any AI assistant to your Zerodha Kite account. Place orders, analyze portfolio, run backtests, compute options Greeks — all through natural conversation. 8 RiskGuard safety checks prevent costly mistakes before orders hit the exchange. Paper trading mode lets you practice risk-free.
 
 ## Quick Start
 
-### Hosted Version (Recommended)
-
-The easiest way to get started is with our hosted version at `mcp.kite.trade`. Both `/mcp` and `/sse` endpoints are available - no installation or API keys required on your end.
-
-**Quick Setup:** Add the following to your MCP configuration:
-
-```
-https://mcp.kite.trade/mcp
-```
-
-**Recommended:** Use the new HTTP mode (`/mcp` endpoint) for better performance and reliability. You can use [mcp-remote](https://github.com/modelcontextprotocol/mcp-remote) to connect to the hosted server.
-
-For self-hosting with your own API keys, follow the installation steps below.
-
-### Prerequisites
-
-- **For hosted version (recommended)**: Nothing! Just use `https://mcp.kite.trade/mcp`
-- **For self-hosting**: Go 1.21 or later
-- **For self-hosting**: Valid Kite Connect API credentials
-
-### Getting started
-
-```bash
-git clone https://github.com/zerodha/kite-mcp-server
-cd kite-mcp-server
+**1. Connect** — add to your MCP client config:
+```json
+{
+  "mcpServers": {
+    "kite": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
+    }
+  }
+}
 ```
 
-### Configuration
+**2. Login** — tell your AI: *"Log me in to Kite"*. Complete the OAuth flow in your browser.
 
-Create a `.env` file with your Kite Connect credentials:
+**3. Trade** — ask anything: *"Show my portfolio"*, *"What's RELIANCE at?"*, *"Backtest SMA crossover on INFY"*.
 
-```env
-KITE_API_KEY=your_api_key
-KITE_API_SECRET=your_api_secret
-APP_MODE=http
-APP_PORT=8080
-APP_HOST=localhost
+> **New to this?** Start with paper trading: *"Enable paper trading mode"* — all orders are simulated, no real money at risk.
+
+## Features
+
+| Category | Tools | Highlights |
+|----------|------:|------------|
+| **Trading** | 11 | Place/modify/cancel orders, GTT, convert positions, close all |
+| **Portfolio** | 10 | Holdings, positions, margins, P&L, trades, order history |
+| **Market Data** | 8 | Quotes, LTP, OHLC, historical data, instrument search, market status |
+| **Analytics** | 7 | Portfolio summary, concentration, sector exposure, dividends, tax P&L |
+| **Options** | 3 | Greeks calculator, option chain, strategy analysis |
+| **Backtesting** | 1 | 4 built-in strategies: SMA crossover, RSI reversal, breakout, mean reversion |
+| **Technical** | 2 | 10+ indicators (SMA, EMA, RSI, MACD, Bollinger), pre-trade analysis |
+| **Paper Trading** | 3 | Simulated orders, paper portfolio, toggle on/off |
+| **Alerts** | 9 | Price above/below, % drop/rise, Telegram notifications, native GTT alerts |
+| **Mutual Funds** | 7 | MF holdings, place/cancel MF orders, SIP management |
+| **Watchlists** | 6 | Create, manage, and monitor instrument watchlists |
+| **Ticker** | 5 | Real-time WebSocket streaming, subscribe/unsubscribe |
+| **Rebalancing** | 1 | Portfolio rebalance suggestions against target allocation |
+| **Trailing SL** | 3 | Trailing stop-loss: start, status, cancel |
+| **Infrastructure** | 2 | Login, open dashboard |
+
+## Comparison
+
+| Feature | This Server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
+|---------|:-----------:|:-------------------------------------------:|:------:|
+| Tools | 78 | 22 | N/A |
+| Order placement | Yes | GTT only | Yes |
+| Paper trading | Yes | No | No |
+| Safety checks | 8 | 0 | 0 |
+| Backtesting | 4 strategies | No | Yes |
+| Options Greeks | Yes | No | No |
+| Telegram alerts | Yes | No | No |
+| Self-hostable | Yes | No | N/A |
+| Cost | Kite Connect app (Rs 500/mo) | Free | Free + paid |
+
+The official server is the right choice for read-only use. This server is for traders who want order placement, safety rails, and analytics.
+
+## Client Setup
+
+### Claude Code
+
+```json
+// ~/.claude.json → mcpServers
+{
+  "kite": {
+    "command": "npx",
+    "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
+  }
+}
 ```
 
-You can also use the provided `justfile` to initialize the config.
+### Claude Desktop
 
-```bash
-just init-env
-```
-
-### Running the Server
-
-```bash
-# Build and run
-go build -o kite-mcp-server
-./kite-mcp-server
-
-# Or run directly
-go run main.go
-```
-
-The server will start and serve a status page at `http://localhost:8080/`
-
-## Client Integration
-
-### Setup Guide
-
-- [Claude Desktop (Hosted Mode)](#claude-desktop-http-mode) - Recommended
-- [Claude Desktop (HTTP Mode)](#claude-desktop-http-mode) - Recommended
-- [Claude Desktop (SSE Mode)](#claude-desktop-sse-mode)
-- [Claude Desktop (stdio Mode)](#claude-desktop-stdio-mode)
-- [Other MCP Clients](#other-mcp-clients)
-
-### Claude Desktop (Hosted Mode)
-
-For the hosted version, add to your Claude Desktop configuration (`~/.config/Claude/claude_desktop_config.json`):
+Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "kite": {
       "command": "npx",
-      "args": ["mcp-remote", "https://mcp.kite.trade/mcp"]
+      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
     }
   }
 }
 ```
 
-### Claude Desktop (HTTP Mode)
+### ChatGPT Desktop
 
-Add to your Claude Desktop configuration (`~/.config/Claude/claude_desktop_config.json`):
+Settings → Tools & Integrations → MCP Servers → Add:
+```
+https://kite-mcp-server.fly.dev/mcp
+```
 
+### VS Code / Cursor
+
+Add to `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "kite": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to MCP configuration:
 ```json
 {
   "mcpServers": {
     "kite": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8080/mcp", "--allow-http"],
-      "env": {
-        "APP_MODE": "http",
-        "KITE_API_KEY": "your_api_key",
-        "KITE_API_SECRET": "your_api_secret"
-      }
+      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
     }
   }
 }
 ```
 
-### Claude Desktop (SSE Mode)
-
-Add to your Claude Desktop configuration (`~/.config/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "kite": {
-      "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8080/sse", "--allow-http"],
-      "env": {
-        "APP_MODE": "sse",
-        "KITE_API_KEY": "your_api_key",
-        "KITE_API_SECRET": "your_api_secret"
-      }
-    }
-  }
-}
-```
-
-### Claude Desktop (stdio Mode)
-
-For self-hosted installations, you must first build the binary:
+### Self-Hosted
 
 ```bash
-go build -o kite-mcp-server
+git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
+go build -o kite-mcp-server && ./kite-mcp-server
 ```
 
-Then add to your Claude Desktop configuration (`~/.config/Claude/claude_desktop_config.json`):
+Point your client to `http://localhost:8080/mcp` with `--allow-http`.
 
-```json
-{
-  "mcpServers": {
-    "kite": {
-      "command": "/full/path/to/your/kite-mcp-server",
-      "env": {
-        "APP_MODE": "stdio",
-        "KITE_API_KEY": "your_api_key",
-        "KITE_API_SECRET": "your_api_secret"
-      }
-    }
-  }
-}
+## Safety: RiskGuard
+
+Every order passes through 8 checks before reaching the exchange. Any failure blocks the order instantly.
+
+| # | Check | What it does |
+|---|-------|-------------|
+| 1 | **Kill switch** | Freeze/unfreeze trading per user — immediate halt |
+| 2 | **Order value limit** | Block orders exceeding Rs 5,00,000 (configurable) |
+| 3 | **Quantity limit** | Reject quantities above exchange freeze limits |
+| 4 | **Daily order count** | Cap at 200 orders/day (configurable) |
+| 5 | **Rate limit** | Max 10 orders/minute to prevent runaway loops |
+| 6 | **Duplicate detection** | Block identical orders within 30-second window |
+| 7 | **Daily value cap** | Cumulative placed value capped at Rs 10,00,000/day |
+| 8 | **Circuit breaker** | Auto-freeze account after 3 rejections in 5 minutes |
+
+All limits are per-user, configurable, and persisted to SQLite. Paper trading mode bypasses the exchange entirely — orders are simulated locally.
+
+## Dashboard
+
+| Page | Path | Description |
+|------|------|-------------|
+| Portfolio | `/dashboard` | Holdings, positions, P&L chart, order attribution |
+| Activity | `/dashboard/activity` | AI tool call audit trail with filters, live stream, CSV/JSON export |
+| Orders | `/dashboard/orders` | Order history with AI attribution |
+| Alerts | `/dashboard/alerts` | Active price alerts with enriched market data |
+| Safety | `/dashboard/safety` | RiskGuard status, freeze controls, limit configuration |
+| Paper Trading | `/dashboard/paper` | Paper portfolio, simulated orders, positions |
+| Admin Ops | `/admin/ops` | All users, sessions, logs, metrics (admin only) |
+
+SSO is automatic — login once via MCP OAuth, dashboard session follows.
+
+## Architecture
+
+```
+AI Client ←→ MCP Protocol ←→ Kite MCP Server ←→ Kite Connect API ←→ NSE/BSE
 ```
 
-**Important**: Use the full absolute path to your built binary. For example:
+- **Go** with [mcp-go](https://github.com/mark3labs/mcp-go) v0.46.0
+- **SQLite** for persistence (credentials, alerts, sessions, audit trail — all AES-256-GCM encrypted)
+- **OAuth 2.1 + PKCE** — each user brings their own Kite developer app
+- **Fly.io** deployment with static egress IP for SEBI compliance
+- **Litestream** continuous SQLite replication to R2
+- **Telegram** daily briefings (9 AM alerts + 3:35 PM P&L)
 
-- `/home/username/kite-mcp-server/kite-mcp-server` (Linux)
-- `/Users/username/kite-mcp-server/kite-mcp-server` (macOS)
-- `C:\Users\username\kite-mcp-server\kite-mcp-server.exe` (Windows)
+## Prerequisites
 
-### Other MCP Clients
-
-For other MCP-compatible clients, use the hosted endpoint `https://mcp.kite.trade/mcp` with [mcp-remote](https://github.com/modelcontextprotocol/mcp-remote) or configure your client to connect directly to the HTTP endpoint.
-
-## Available Tools
-
-### Setup & Authentication
-
-- `login` - Login to Kite API and generate authorization link
-
-### Market Data
-
-- `get_quotes` - Get real-time market quotes
-- `get_ltp` - Get last traded price
-- `get_ohlc` - Get OHLC data
-- `get_historical_data` - Historical price data
-- `search_instruments` - Search trading instruments
-
-### Portfolio & Account
-
-- `get_profile` - User profile information
-- `get_margins` - Account margins
-- `get_holdings` - Portfolio holdings
-- `get_positions` - Current positions
-- `get_mf_holdings` - Mutual fund holdings
-
-### Orders & Trading
-
-- `place_order` - Place new orders
-- `modify_order` - Modify existing orders
-- `cancel_order` - Cancel orders
-- `get_orders` - List all orders
-- `get_trades` - Trading history
-- `get_order_history` - Order execution history
-- `get_order_trades` - Get trades for a specific order
-
-### GTT Orders
-
-- `get_gtts` - List GTT orders
-- `place_gtt_order` - Create GTT orders
-- `modify_gtt_order` - Modify GTT orders
-- `delete_gtt_order` - Delete GTT orders
-
-## API Coverage
-
-This server implements the majority of Kite Connect API endpoints and also provides additional tools.
-
-## Development
-
-### Development Environment
-
-This project includes a Nix flake for consistent development environments:
-
-```bash
-# Enter development shell
-nix develop
-
-# Or with direnv
-direnv allow
-```
-
-### Using Just Commands
-
-Install [Just](https://github.com/casey/just) for convenient development commands:
-
-```bash
-just build      # Build the project
-just run        # Run the server
-just test       # Run tests
-just lint       # Format and lint code
-just coverage   # Generate coverage report
-```
-
-### Running Tests
-
-**Requirements:**
-
-- Go 1.23+ with `GOEXPERIMENT=synctest` (required for timing-dependent tests)
-
-```bash
-# Run all tests
-just test
-
-# With coverage
-just coverage
-
-# With race detector
-just test-race
-
-# Direct go command (if you prefer)
-CGO_ENABLED=0 GOEXPERIMENT=synctest go test -v ./...
-```
-
-#### Synctest Integration
-
-This project requires Go's `synctest` package for time-dependent tests (session expiry, clock skew tolerance). All timing tests use `synctest.Run()` for:
-
-- **Fast execution**: Time-dependent tests complete in milliseconds instead of minutes
-- **Deterministic timing**: No flaky timing-based test failures
-- **Controlled time**: Tests can advance time without actual delays
-
-The justfile automatically includes `GOEXPERIMENT=synctest` in all test commands.
-
-## Configuration Options
-
-| Environment Variable | Default     | Description                                                |
-| -------------------- | ----------- | ---------------------------------------------------------- |
-| `KITE_API_KEY`       | Required    | Your Kite Connect API key                                  |
-| `KITE_API_SECRET`    | Required    | Your Kite Connect API secret                               |
-| `APP_MODE`           | `http`      | Server mode: `stdio`, `http`, `sse`, or `hybrid`           |
-| `APP_PORT`           | `8080`      | Server port (HTTP/SSE/hybrid modes)                        |
-| `APP_HOST`           | `localhost` | Server host (HTTP/SSE/hybrid modes)                        |
-| `EXCLUDED_TOOLS`     | _(empty)_   | Comma-separated list of tools to exclude from registration |
-
-**Note:** In production, we use hybrid mode which supports both `/sse` and `/mcp` endpoints, making both HTTP and SSE protocols available for different client needs.
-
-### Tool Exclusion
-
-You can exclude specific tools by setting the `EXCLUDED_TOOLS` environment variable with a comma-separated list of tool names. This is useful for creating read-only instances.
-
-**Example:**
-
-```env
-EXCLUDED_TOOLS=place_order,modify_order,cancel_order
-```
-
-The hosted version at `mcp.kite.trade` excludes potentially destructive trading operations for security. For accessing the other operations you can generate your own API keys and run the server locally.
+- A [Kite Connect](https://kite.trade) developer app (Rs 500/month from Zerodha)
+- `npx` (Node.js 18+) for `mcp-remote` — or self-host with Go 1.25+
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run `just lint` and `just test`
-6. Submit a pull request
+Contributions welcome. Check [open issues](https://github.com/Sundeepg98/kite-mcp-server/issues) for ideas.
+
+```bash
+nix develop          # or: install Go 1.25+
+just build           # compile
+just test            # run 487 tests
+just lint            # format + lint
+```
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[MIT](LICENSE)
 
-## Support
+## Disclaimer
 
-For bugs and general suggestions, please use GitHub Discussions.
-
-For Kite Connect API documentation, visit: https://kite.trade/docs/connect/
+This software is not financial advice. Not affiliated with Zerodha. Trading involves risk — use at your own risk. SEBI-regulated operations require compliance with applicable regulations.
