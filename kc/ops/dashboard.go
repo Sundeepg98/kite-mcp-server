@@ -945,8 +945,8 @@ type enrichedActiveAlert struct {
 	Direction       string  `json:"direction"`
 	TargetPrice     float64 `json:"target_price"`
 	ReferencePrice  float64 `json:"reference_price,omitempty"`
-	CurrentPrice    float64 `json:"current_price,omitempty"`
-	DistancePct     float64 `json:"distance_pct,omitempty"`
+	CurrentPrice    float64  `json:"current_price,omitempty"`
+	DistancePct     *float64 `json:"distance_pct,omitempty"`
 	CreatedAt       string  `json:"created_at"`
 }
 
@@ -1118,7 +1118,8 @@ func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Requ
 		if cp, ok := ltpMap[key]; ok {
 			ea.CurrentPrice = cp
 			if cp > 0 {
-				ea.DistancePct = math.Round(math.Abs(cp-a.TargetPrice)/cp*10000) / 100
+				d := math.Round(math.Abs(cp-a.TargetPrice)/cp*10000) / 100
+				ea.DistancePct = &d
 			}
 		}
 		enrichedActive = append(enrichedActive, ea)

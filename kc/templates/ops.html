@@ -683,7 +683,8 @@ tr:hover td { background: var(--bg-2); }
           { label: 'Uptime', value: uptimeStr },
           { label: 'Total Calls', value: (stats.total_calls || 0).toLocaleString(), cls: stats.total_calls > 0 ? 'green' : '' },
           { label: 'Error Rate', value: errorRate + '%', cls: parseFloat(errorRate) > 5 ? 'red' : (parseFloat(errorRate) > 1 ? 'amber' : 'green') },
-          { label: 'Avg Latency', value: (stats.avg_latency_ms || 0).toFixed(0) + 'ms' }
+          { label: 'Avg Latency', value: (stats.avg_latency_ms || 0).toFixed(0) + 'ms' },
+          { label: 'Top Tool', value: stats.top_tool ? stats.top_tool.replace(/_/g, ' ') + ' (' + (stats.top_tool_count || 0) + ')' : '--' }
         ];
         var grid = document.getElementById('metricsCards');
         clearChildren(grid);
