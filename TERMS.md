@@ -130,7 +130,7 @@ The Kite MCP Server codebase is available under the MIT License. These Terms of 
 
 For questions about these terms, account issues, or to exercise your rights:
 
-- **Email:** sundeepg98@gmail.com
+- **Email:** sundeepg8@gmail.com
 - **GitHub:** [github.com/Sundeepg98/kite-mcp-server](https://github.com/Sundeepg98/kite-mcp-server)
 - **Response time:** Within 30 days for formal requests; typically faster for general inquiries.
 

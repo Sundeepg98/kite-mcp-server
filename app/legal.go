@@ -129,7 +129,7 @@ const termsHTML template.HTML = `
 <h2>14. Contact</h2>
 <p>For questions about these terms, account issues, or to exercise your rights:</p>
 <ul>
-<li><strong>Email:</strong> sundeepg98@gmail.com</li>
+<li><strong>Email:</strong> sundeepg8@gmail.com</li>
 <li><strong>GitHub:</strong> <a href="https://github.com/Sundeepg98/kite-mcp-server" target="_blank" rel="noopener">github.com/Sundeepg98/kite-mcp-server</a></li>
 <li><strong>Response time:</strong> Within 30 days for formal requests; typically faster for general inquiries.</li>
 </ul>
@@ -149,7 +149,7 @@ const privacyHTML template.HTML = `
 
 <h2>1. Who We Are (Data Fiduciary)</h2>
 <p><strong>Data Fiduciary:</strong> Sundeep Govarthinam (individual, India-based)<br>
-<strong>Contact:</strong> sundeepg98@gmail.com<br>
+<strong>Contact:</strong> sundeepg8@gmail.com<br>
 <strong>Service:</strong> Kite MCP Server &mdash; an AI-powered trading tool for Zerodha Kite</p>
 <p>Under the DPDP Act, 2023, the Operator acts as a <strong>Data Fiduciary</strong> &mdash; the person who determines the purpose and means of processing your personal data.</p>
 
@@ -248,7 +248,7 @@ const privacyHTML template.HTML = `
 <h3>7.4 Right to Grievance Redressal</h3>
 <p>If you have a complaint about how your data is handled:</p>
 <ol>
-<li><strong>Contact the Operator</strong> at sundeepg98@gmail.com with a description of your concern.</li>
+<li><strong>Contact the Operator</strong> at sundeepg8@gmail.com with a description of your concern.</li>
 <li><strong>Acknowledgment</strong> within 7 days.</li>
 <li><strong>Resolution</strong> within 30 days.</li>
 <li><strong>Escalation:</strong> If unsatisfied, you may file a complaint with the <strong>Data Protection Board of India</strong> once it is constituted and operational.</li>
@@ -293,7 +293,7 @@ const privacyHTML template.HTML = `
 <h2>13. Contact and Grievance Officer</h2>
 <p>For privacy-related questions, data requests, or complaints:</p>
 <p><strong>Sundeep Govarthinam</strong> (Grievance Officer)<br>
-<strong>Email:</strong> sundeepg98@gmail.com<br>
+<strong>Email:</strong> sundeepg8@gmail.com<br>
 <strong>Response time:</strong> Acknowledgment within 7 days, resolution within 30 days.</p>
 
 <p style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-2);"><em>By using the Kite MCP Server, you consent to the collection and processing of your personal data as described in this Privacy Policy.</em></p>

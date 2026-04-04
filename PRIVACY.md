@@ -10,7 +10,7 @@
 ## 1. Who We Are (Data Fiduciary)
 
 **Data Fiduciary:** Sundeep Govarthinam (individual, India-based)
-**Contact:** sundeepg98@gmail.com
+**Contact:** sundeepg8@gmail.com
 **Service:** Kite MCP Server — an AI-powered trading tool for Zerodha Kite
 
 Under the DPDP Act, 2023, the Operator acts as a **Data Fiduciary** — the person who determines the purpose and means of processing your personal data.
@@ -105,7 +105,7 @@ You can delete your account and all associated data via the self-service dashboa
 ### 7.4 Right to Grievance Redressal
 If you have a complaint about how your data is handled:
 
-1. **Contact the Operator** at sundeepg98@gmail.com with a description of your concern.
+1. **Contact the Operator** at sundeepg8@gmail.com with a description of your concern.
 2. **Acknowledgment** within 7 days.
 3. **Resolution** within 30 days.
 4. **Escalation:** If unsatisfied, you may file a complaint with the **Data Protection Board of India** once it is constituted and operational.
@@ -153,7 +153,7 @@ Material changes will be communicated via the Service dashboard or email at leas
 For privacy-related questions, data requests, or complaints:
 
 **Sundeep Govarthinam** (Grievance Officer)
-**Email:** sundeepg98@gmail.com
+**Email:** sundeepg8@gmail.com
 **Response time:** Acknowledgment within 7 days, resolution within 30 days.
 
 ---
