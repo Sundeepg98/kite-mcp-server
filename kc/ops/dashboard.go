@@ -84,6 +84,24 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(data)
 	})
+
+	// htmx core + SSE extension — no auth required, long cache.
+	for _, sf := range []struct{ path, file, ct string }{
+		{"/static/htmx.min.js", "static/htmx.min.js", "application/javascript; charset=utf-8"},
+		{"/static/htmx-sse.js", "static/htmx-sse.js", "application/javascript; charset=utf-8"},
+	} {
+		file, ct := sf.file, sf.ct
+		mux.HandleFunc(sf.path, func(w http.ResponseWriter, r *http.Request) {
+			data, err := templates.FS.ReadFile(file)
+			if err != nil {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", ct)
+			w.Header().Set("Cache-Control", "public, max-age=604800")
+			_, _ = w.Write(data)
+		})
+	}
 }
 
 // writeJSON encodes data as JSON and writes it to the response writer.
