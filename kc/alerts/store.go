@@ -172,6 +172,25 @@ func (s *Store) Delete(email, alertID string) error {
 	return fmt.Errorf("alert %s not found", alertID)
 }
 
+// DeleteByEmail removes all alerts for the given email.
+// Used during account deletion to clean up all user data.
+func (s *Store) DeleteByEmail(email string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.alerts, email)
+	delete(s.telegram, email)
+
+	if s.db != nil {
+		if err := s.db.DeleteAlertsByEmail(email); err != nil {
+			s.logger.Error("Failed to delete alerts from DB", "email", email, "error", err)
+		}
+		if err := s.db.DeleteTelegramChatID(email); err != nil {
+			s.logger.Error("Failed to delete telegram chat ID from DB", "email", email, "error", err)
+		}
+	}
+}
+
 // List returns all alerts for the given email.
 // Returns deep copies to prevent callers from mutating shared state.
 func (s *Store) List(email string) []*Alert {

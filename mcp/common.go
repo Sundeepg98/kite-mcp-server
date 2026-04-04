@@ -67,6 +67,8 @@ var writeTools = map[string]bool{
 	"delete_watchlist":       true,
 	"add_to_watchlist":       true,
 	"remove_from_watchlist":  true,
+	"delete_my_account":      true,
+	"update_my_credentials":  true,
 }
 
 // ToolHandler provides common functionality for all MCP tools

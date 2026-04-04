@@ -133,6 +133,10 @@ func GetAllTools() []Tool {
 		&ModifyGTTOrderTool{},
 		&DeleteGTTOrderTool{},
 
+		// Self-service account management
+		&DeleteMyAccountTool{},
+		&UpdateMyCredentialsTool{},
+
 	}
 }
 

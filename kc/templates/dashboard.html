@@ -329,6 +329,30 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
     <a class="auth-btn" id="reauthBtn" href="/auth/browser-login">Re-authenticate</a>
   </div>
 
+  <!-- Account Management -->
+  <div class="section-header collapsible-header collapsed" id="accountHeader">Account</div>
+  <div class="collapsible-body collapsed" id="accountBody" style="max-height:0;">
+    <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);">Email</span>
+          <div style="font-family:var(--mono);font-size:13px;color:var(--text-1);margin-top:4px;" id="acctEmail">--</div>
+        </div>
+        <div>
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-2);">API Key</span>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+            <span style="font-family:var(--mono);font-size:13px;color:var(--text-1);" id="acctApiKey">--</span>
+            <button id="acctUpdateCredsBtn" style="padding:4px 12px;border:1px solid var(--accent);border-radius:3px;background:var(--accent-dim);color:var(--accent);font-size:11px;font-family:var(--sans);cursor:pointer;" onclick="promptUpdateCredentials()">Update</button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+          <button id="acctDeleteBtn" style="padding:8px 20px;border:1px solid var(--red);border-radius:4px;background:var(--red-dim);color:var(--red);font-size:12px;font-weight:600;font-family:var(--sans);cursor:pointer;" onclick="confirmDeleteAccount()">Delete My Account</button>
+          <span style="font-size:11px;color:var(--text-2);margin-left:12px;">Permanently removes all your data.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
@@ -976,6 +1000,7 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   }
   initCollapsible('sectorHeader', 'sectorBody', refreshSectorExposure);
   initCollapsible('taxHeader', 'taxBody', refreshTaxAnalysis);
+  initCollapsible('accountHeader', 'accountBody', refreshAccountInfo);
 
   // --- Sector Exposure ---
   var sectorColors = [
@@ -1146,6 +1171,71 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
       }
     });
   }
+
+  // --- Account Management ---
+  function refreshAccountInfo() {
+    var emailEl = document.getElementById('acctEmail');
+    var ue = document.getElementById('userEmail');
+    if (ue) emailEl.textContent = ue.textContent;
+
+    fetch('/dashboard/api/account/credentials')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var keyEl = document.getElementById('acctApiKey');
+        if (d.has_credentials) {
+          keyEl.textContent = d.api_key;
+        } else {
+          keyEl.textContent = 'Not configured';
+        }
+      })
+      .catch(function() {
+        document.getElementById('acctApiKey').textContent = 'Error loading';
+      });
+  }
+
+  window.promptUpdateCredentials = function() {
+    var apiKey = prompt('Enter your Kite API key:');
+    if (!apiKey) return;
+    var apiSecret = prompt('Enter your Kite API secret:');
+    if (!apiSecret) return;
+
+    fetch('/dashboard/api/account/credentials', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: apiKey, api_secret: apiSecret})
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.status === 'ok') {
+          alert(d.message);
+          refreshAccountInfo();
+        } else {
+          alert('Error: ' + (d.message || 'Unknown error'));
+        }
+      })
+      .catch(function(e) { alert('Request failed: ' + e.message); });
+  };
+
+  window.confirmDeleteAccount = function() {
+    var c1 = confirm('Are you sure you want to delete your account? This permanently removes ALL your data (credentials, tokens, alerts, watchlists, paper trading).');
+    if (!c1) return;
+    var c2 = confirm('This action CANNOT be undone. Are you absolutely sure?');
+    if (!c2) return;
+
+    fetch('/dashboard/api/account/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirm: true})
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.status === 'ok') {
+          alert(d.message);
+          window.location.href = '/';
+        } else {
+          alert('Error: ' + (d.message || 'Unknown error'));
+        }
+      })
+      .catch(function(e) { alert('Request failed: ' + e.message); });
+  };
 
   // --- Initial load + auto-refresh ---
   refreshStatus();

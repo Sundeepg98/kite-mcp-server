@@ -164,6 +164,37 @@ func (s *Store) DeleteWatchlist(email, watchlistID string) error {
 	return nil
 }
 
+// DeleteByEmail removes all watchlists and their items for the given email.
+// Used during account deletion to clean up all user data.
+func (s *Store) DeleteByEmail(email string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find all watchlist IDs belonging to this user
+	var ids []string
+	for id, w := range s.watchlists {
+		if w.Email == email {
+			ids = append(ids, id)
+		}
+	}
+
+	// Delete from in-memory maps
+	for _, id := range ids {
+		delete(s.watchlists, id)
+		delete(s.items, id)
+	}
+
+	// Delete from DB
+	if s.db != nil {
+		if err := s.db.ExecInsert(`DELETE FROM watchlist_items WHERE email = ?`, email); err != nil {
+			s.logger.Error("Failed to delete watchlist items from DB", "email", email, "error", err)
+		}
+		if err := s.db.ExecInsert(`DELETE FROM watchlists WHERE email = ?`, email); err != nil {
+			s.logger.Error("Failed to delete watchlists from DB", "email", email, "error", err)
+		}
+	}
+}
+
 // ListWatchlists returns all watchlists for the given email.
 // Returns deep copies to prevent callers from mutating shared state.
 func (s *Store) ListWatchlists(email string) []*Watchlist {

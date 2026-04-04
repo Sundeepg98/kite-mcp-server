@@ -184,6 +184,26 @@ func (m *TrailingStopManager) Cancel(email, id string) error {
 	return nil
 }
 
+// CancelByEmail deactivates all trailing stops for the given email.
+// Used during account deletion to clean up all user data.
+func (m *TrailingStopManager) CancelByEmail(email string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	for id, ts := range m.stops {
+		if ts.Email == email && ts.Active {
+			ts.Active = false
+			ts.DeactivatedAt = now
+			if m.db != nil {
+				if err := m.db.DeactivateTrailingStop(id); err != nil {
+					m.logger.Error("Failed to deactivate trailing stop", "id", id, "error", err)
+				}
+			}
+		}
+	}
+}
+
 // List returns all trailing stops for the given email.
 func (m *TrailingStopManager) List(email string) []*TrailingStop {
 	m.mu.RLock()

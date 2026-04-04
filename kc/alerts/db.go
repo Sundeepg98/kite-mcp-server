@@ -366,6 +366,24 @@ func (d *DB) DeleteAlert(email, alertID string) error {
 	return nil
 }
 
+// DeleteAlertsByEmail removes all alerts for the given email.
+func (d *DB) DeleteAlertsByEmail(email string) error {
+	_, err := d.db.Exec(`DELETE FROM alerts WHERE email = ?`, email)
+	if err != nil {
+		return fmt.Errorf("delete alerts by email: %w", err)
+	}
+	return nil
+}
+
+// DeleteTelegramChatID removes the Telegram chat ID mapping for the given email.
+func (d *DB) DeleteTelegramChatID(email string) error {
+	_, err := d.db.Exec(`DELETE FROM telegram_chat_ids WHERE email = ?`, email)
+	if err != nil {
+		return fmt.Errorf("delete telegram chat id: %w", err)
+	}
+	return nil
+}
+
 // UpdateAlertNotification records when a Telegram notification was sent for an alert.
 func (d *DB) UpdateAlertNotification(alertID string, sentAt time.Time) error {
 	_, err := d.db.Exec("UPDATE alerts SET notification_sent_at = ? WHERE id = ?",
