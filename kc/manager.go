@@ -17,6 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -387,6 +388,7 @@ type Manager struct {
 	auditStore         *audit.Store                   // optional: audit trail for synthetic events
 	riskGuard          *riskguard.Guard               // optional: financial safety controls
 	paperEngine        *papertrading.PaperEngine      // optional: virtual trading engine
+	billingStore       *billing.Store                 // optional: billing tier enforcement
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
@@ -715,6 +717,16 @@ func (m *Manager) SetPaperEngine(e *papertrading.PaperEngine) {
 // PaperEngine returns the paper trading engine, or nil if not configured.
 func (m *Manager) PaperEngine() *papertrading.PaperEngine {
 	return m.paperEngine
+}
+
+// SetBillingStore sets the billing store for tier enforcement.
+func (m *Manager) SetBillingStore(store *billing.Store) {
+	m.billingStore = store
+}
+
+// BillingStore returns the billing store, or nil if not configured.
+func (m *Manager) BillingStore() *billing.Store {
+	return m.billingStore
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.

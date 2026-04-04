@@ -26,6 +26,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -376,6 +377,18 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 	// Riskguard middleware blocks orders exceeding safety limits.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
+	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
+	if os.Getenv("STRIPE_SECRET_KEY") != "" {
+		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
+		if err := billingStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize billing table", "error", err)
+		} else if err := billingStore.LoadFromDB(); err != nil {
+			app.logger.Error("Failed to load billing data from DB", "error", err)
+		}
+		kcManager.SetBillingStore(billingStore)
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore)))
+		app.logger.Info("Billing tier enforcement enabled")
+	}
 	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
 	if paperEngine != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(papertrading.Middleware(paperEngine)))
