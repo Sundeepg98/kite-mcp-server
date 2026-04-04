@@ -1965,12 +1965,18 @@ func (d *DashboardHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Requ
 	}
 
 	if pe := d.manager.PaperEngine(); pe != nil {
-		_ = pe.Reset(email)   // best-effort cleanup
-		_ = pe.Disable(email) // best-effort cleanup
+		if err := pe.Reset(email); err != nil {
+			d.logger.Error("Failed to reset paper trading during self-delete", "email", email, "error", err)
+		}
+		if err := pe.Disable(email); err != nil {
+			d.logger.Error("Failed to disable paper trading during self-delete", "email", email, "error", err)
+		}
 	}
 
 	if us := d.manager.UserStore(); us != nil {
-		_ = us.UpdateStatus(email, "offboarded") // best-effort cleanup
+		if err := us.UpdateStatus(email, "offboarded"); err != nil {
+			d.logger.Error("Failed to update user status during self-delete", "email", email, "error", err)
+		}
 	}
 
 	// Clear auth cookie

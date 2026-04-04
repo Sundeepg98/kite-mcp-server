@@ -63,12 +63,18 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		if pe := manager.PaperEngine(); pe != nil {
-			_ = pe.Reset(email)   // best-effort cleanup
-			_ = pe.Disable(email) // best-effort cleanup
+			if err := pe.Reset(email); err != nil {
+				manager.Logger.Error("Failed to reset paper trading during account delete", "email", email, "error", err)
+			}
+			if err := pe.Disable(email); err != nil {
+				manager.Logger.Error("Failed to disable paper trading during account delete", "email", email, "error", err)
+			}
 		}
 
 		if us := manager.UserStore(); us != nil {
-			_ = us.UpdateStatus(email, "offboarded") // best-effort cleanup
+			if err := us.UpdateStatus(email, "offboarded"); err != nil {
+				manager.Logger.Error("Failed to update user status during account delete", "email", email, "error", err)
+			}
 		}
 
 		manager.Logger.Info("User self-deleted account via MCP", "email", email)
