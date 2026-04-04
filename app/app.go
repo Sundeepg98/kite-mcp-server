@@ -840,7 +840,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			"serverInfo": map[string]any{
 				"name":        "Kite Trading MCP Server",
 				"version":     app.Version,
-				"description": "Indian stock market trading via Zerodha Kite Connect. 78 tools for order execution, portfolio analytics, options Greeks, paper trading, backtesting, technical indicators, price alerts with Telegram, watchlists, tax harvesting, and SEBI compliance.",
+				"description": fmt.Sprintf("Indian stock market trading via Zerodha Kite Connect. %d tools for order execution, portfolio analytics, options Greeks, paper trading, backtesting, technical indicators, price alerts with Telegram, watchlists, tax harvesting, and SEBI compliance.", len(mcp.GetAllTools())),
 				"homepage":    "https://github.com/Sundeepg98/kite-mcp-server",
 			},
 			"transport": map[string]any{

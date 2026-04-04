@@ -3,7 +3,7 @@
   "name": "io.github.Sundeepg98/kite-trading",
   "title": "Kite Trading MCP Server",
   "description": "Indian stock market trading via Zerodha Kite Connect. 79 tools for orders, portfolio, options.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "repository": {
     "url": "https://github.com/Sundeepg98/kite-mcp-server",
     "source": "github"
