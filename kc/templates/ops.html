@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ops · Kite MCP</title>
+<title>Admin Console · Kite MCP</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
 
@@ -101,7 +101,7 @@ tr:hover td { background: var(--bg-2); }
   <div class="topbar-left">
     <span class="topbar-logo">Kite MCP</span>
     <span class="topbar-sep"></span>
-    <span class="topbar-title">Ops Dashboard</span>
+    <span class="topbar-title">Admin Console</span>
   </div>
   <div class="topbar-right">
     <span class="topbar-updated" id="lastUpdated">--</span>
@@ -114,7 +114,7 @@ tr:hover td { background: var(--bg-2); }
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="overview">Overview</button>
   <button class="tab" data-tab="sessions">Sessions</button>
-  <button class="tab" data-tab="tickers">Tickers</button>
+  <button class="tab" data-tab="tickers">Live Feeds</button>
   <button class="tab" data-tab="alerts">Alerts</button>
   <button class="tab" data-tab="credentials">Credentials</button>
   <button class="tab" data-tab="metrics">Metrics</button>
@@ -134,7 +134,7 @@ tr:hover td { background: var(--bg-2); }
 
 <div id="panel-tickers" class="panel">
   <div class="tbl-wrap"><table id="tickersTable"><thead><tr><th>Email</th><th>Status</th><th>Started</th><th>Subscriptions</th></tr></thead><tbody id="tickersBody"></tbody></table></div>
-  <div class="empty-state" id="tickersEmpty" style="display:none">No active tickers</div>
+  <div class="empty-state" id="tickersEmpty" style="display:none">No active live feeds</div>
 </div>
 
 <div id="panel-alerts" class="panel">
@@ -270,11 +270,11 @@ tr:hover td { background: var(--bg-2); }
       var cards = [
         {label:'Version', value:d.version},
         {label:'Sessions', value:d.active_sessions, cls: d.active_sessions > 0 ? 'green' : ''},
-        {label:'Tickers', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
+        {label:'Live Feeds', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
         {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
-        {label:'Cached Tokens', value:d.cached_tokens},
-        {label:'Credentials', value:d.per_user_credentials},
-        {label:'Daily Users', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
+        {label:'Active Logins', value:d.cached_tokens},
+        {label:'API Keys', value:d.per_user_credentials},
+        {label:'Users Today', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
       ];
       var grid = document.getElementById('statsGrid');
       clearChildren(grid);
