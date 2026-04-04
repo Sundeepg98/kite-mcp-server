@@ -8,10 +8,6 @@ const termsHTML template.HTML = `
 <h1>Terms of Service</h1>
 <p class="meta">Effective: 3 April 2026 &middot; Last updated: 3 April 2026</p>
 
-<div class="callout">
-<strong>LAWYER REVIEW NEEDED:</strong> This document is a good-faith draft by the operator, not reviewed by a licensed attorney. Before commercial launch, have an Indian technology/fintech lawyer review Sections 3, 6, 7, 8, and 11 in particular.
-</div>
-
 <h2>1. What This Service Is</h2>
 <p>Kite MCP Server ("the Service") is a software tool that connects AI assistants (Claude, ChatGPT, VS Code Copilot, or any MCP-compatible client) to your Zerodha Kite brokerage account via the Kite Connect API.</p>
 <p>The Service is operated by <strong>Sundeep Govarthinam</strong> ("the Operator"), an individual based in India.</p>
@@ -142,10 +138,6 @@ const termsHTML template.HTML = `
 const privacyHTML template.HTML = `
 <h1>Privacy Policy</h1>
 <p class="meta">Effective: 3 April 2026 &middot; Last updated: 3 April 2026</p>
-
-<div class="callout">
-<strong>LAWYER REVIEW NEEDED:</strong> This policy is drafted in good faith to comply with India's Digital Personal Data Protection Act, 2023 (DPDP Act) and DPDP Rules, 2025. It has not been reviewed by a licensed attorney. Before commercial launch, have an Indian data privacy lawyer review this document.
-</div>
 
 <h2>1. Who We Are (Data Fiduciary)</h2>
 <p><strong>Data Fiduciary:</strong> Sundeep Govarthinam (individual, India-based)<br>

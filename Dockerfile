@@ -1,4 +1,4 @@
-ARG VERSION=v0.0.0
+ARG VERSION=v1.1.0
 FROM golang:1.25.8-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
