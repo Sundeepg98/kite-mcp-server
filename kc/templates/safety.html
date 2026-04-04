@@ -106,6 +106,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link active">Safety</a>
+  <a href="/admin/ops" class="dash-nav-link" id="opsNavLink" style="display:none">Ops</a>
 </nav>
 
 <div class="content">
@@ -318,6 +319,10 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
       var valid = d.kite_token && d.kite_token.valid;
       dot.style.background = valid ? 'var(--green)' : 'var(--red)';
       dot.style.boxShadow = valid ? '0 0 6px var(--green)' : '0 0 6px var(--red)';
+      if (d.is_admin) {
+        var opsLink = document.getElementById('opsNavLink');
+        if (opsLink) opsLink.style.display = '';
+      }
     }).catch(function() {});
   }
 
