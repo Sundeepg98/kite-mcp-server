@@ -56,6 +56,9 @@
 .tax-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
 .tax-card-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
 .tax-card-value { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+.tax-card-value.green { color: var(--green); }
+.tax-card-value.red { color: var(--red); }
+.tax-card-value.amber { color: var(--amber); }
 
 .badge-stcg { background: var(--amber-dim); color: var(--amber); }
 .badge-ltcg { background: var(--accent-dim); color: var(--accent); }
@@ -223,8 +226,8 @@
   <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">No recently triggered alerts</div>
 
   <!-- Sector Exposure -->
-  <div class="section-header collapsible-header" id="sectorHeader">Sector Exposure</div>
-  <div class="collapsible-body" id="sectorBody">
+  <div class="section-header collapsible-header collapsed" id="sectorHeader">Sector Exposure</div>
+  <div class="collapsible-body collapsed" id="sectorBody" style="max-height:0;">
     <div id="sectorLoading" class="loading-state">Loading...</div>
     <div id="sectorContent" style="display:none">
       <div class="sector-chart-wrap">
@@ -245,8 +248,8 @@
   </div>
 
   <!-- Tax Insights -->
-  <div class="section-header collapsible-header" id="taxHeader">Tax Insights</div>
-  <div class="collapsible-body" id="taxBody">
+  <div class="section-header collapsible-header collapsed" id="taxHeader">Tax Insights</div>
+  <div class="collapsible-body collapsed" id="taxBody" style="max-height:0;">
     <div id="taxLoading" class="loading-state">Loading...</div>
     <div id="taxContent" style="display:none">
       <div class="tax-cards" id="taxCards">

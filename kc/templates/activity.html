@@ -8,6 +8,7 @@
 <style>
 .stats-grid { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
 .loading-state, .empty-state { padding: 48px 20px; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 .timeline { display: flex; flex-direction: column; gap: 8px; }
 .entry { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; cursor: pointer; transition: border-color 0.12s; border-left: 3px solid var(--border); }

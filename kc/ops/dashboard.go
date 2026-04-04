@@ -1506,7 +1506,8 @@ func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) 
 	limits := guard.GetEffectiveLimits(email)
 
 	// Check session and credential status for SEBI compliance summary
-	_, hasToken := d.manager.TokenStore().Get(email)
+	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
+	sessionActive := hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt)
 	_, hasCreds := d.manager.CredentialStore().Get(email)
 
 	d.writeJSON(w, map[string]any{
@@ -1522,7 +1523,7 @@ func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) 
 		},
 		"sebi": map[string]any{
 			"static_egress_ip":  true,
-			"session_active":    hasToken,
+			"session_active":    sessionActive,
 			"credentials_set":   hasCreds,
 			"order_tagging":     true,
 			"audit_trail":       d.auditStore != nil,

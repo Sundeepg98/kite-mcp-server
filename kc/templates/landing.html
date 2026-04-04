@@ -231,7 +231,7 @@ claude mcp add kite-fly --transport streamable-http \
     </div>
     <div class="status-item">
       <span class="status-label">Tools</span>
-      <span class="status-value">77</span>
+      <span class="status-value">79</span>
     </div>
     <div class="status-item">
       <span class="status-label">Version</span>
@@ -242,8 +242,8 @@ claude mcp add kite-fly --transport streamable-http \
       <span class="status-value">{{.Mode}}</span>
     </div>
     <div class="status-item">
-      <span class="status-label">Uptime</span>
-      <span class="status-value" id="uptime">--</span>
+      <span class="status-label">Status</span>
+      <span class="status-value" style="color:#34d399">Online</span>
     </div>
   </div>
 
@@ -287,24 +287,7 @@ claude mcp add kite-fly --transport streamable-http \
     }
   };
 
-  // Uptime counter (time since page loaded as proxy)
-  var start = Date.now();
-  function updateUptime() {
-    var el = document.getElementById('uptime');
-    if (!el) return;
-    var s = Math.floor((Date.now() - start) / 1000);
-    var d = Math.floor(s / 86400); s %= 86400;
-    var h = Math.floor(s / 3600); s %= 3600;
-    var m = Math.floor(s / 60); s %= 60;
-    var parts = [];
-    if (d > 0) parts.push(d + 'd');
-    parts.push(h + 'h');
-    parts.push(m + 'm');
-    parts.push(s + 's');
-    el.textContent = parts.join(' ');
-  }
-  updateUptime();
-  setInterval(updateUptime, 1000);
+  // Status is static "Online" — server uptime requires auth.
 })();
 </script>
 

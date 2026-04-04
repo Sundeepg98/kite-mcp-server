@@ -3,6 +3,7 @@ package ops
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -98,7 +99,7 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 	if admin {
 		adminVal = "true"
 	}
-	bodyAttrs := fmt.Sprintf(`<body data-email="%s" data-admin="%s">`, email, adminVal)
+	bodyAttrs := fmt.Sprintf(`<body data-email="%s" data-admin="%s">`, html.EscapeString(email), adminVal)
 	html := strings.Replace(string(data), "<body>", bodyAttrs, 1)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -199,9 +200,20 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		// Only return the authenticated user's own credentials
 		entry, ok := h.manager.CredentialStore().Get(authEmail)
 		if ok {
-			h.writeJSON(w, []map[string]string{{"email": authEmail, "api_key": entry.APIKey}})
+			secretHint := ""
+			if len(entry.APISecret) > 7 {
+				secretHint = entry.APISecret[:4] + "****" + entry.APISecret[len(entry.APISecret)-3:]
+			} else if entry.APISecret != "" {
+				secretHint = "****"
+			}
+			h.writeJSON(w, []map[string]any{{
+				"email":           authEmail,
+				"api_key":         entry.APIKey,
+				"api_secret_hint": secretHint,
+				"stored_at":       entry.StoredAt,
+			}})
 		} else {
-			h.writeJSON(w, []map[string]string{})
+			h.writeJSON(w, []map[string]any{})
 		}
 
 	case http.MethodPost:
