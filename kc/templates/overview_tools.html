@@ -1,0 +1,9 @@
+{{define "overview_tools"}}
+<div class="tbl-wrap"><table id="toolTable"><thead><tr><th>Counter</th><th>Value</th></tr></thead><tbody>
+{{range .Tools}}
+<tr><td>{{.Name}}</td><td>{{.Count}}</td></tr>
+{{else}}
+<tr><td colspan="2" style="text-align:center;color:var(--text-2)">No tool usage recorded</td></tr>
+{{end}}
+</tbody></table></div>
+{{end}}
