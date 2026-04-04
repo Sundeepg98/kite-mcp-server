@@ -15,6 +15,8 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
+	"github.com/zerodha/kite-mcp-server/broker"
+	zerodha "github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
@@ -357,8 +359,9 @@ var (
 )
 
 type KiteSessionData struct {
-	Kite  *KiteConnect
-	Email string // Google-authenticated email (empty for local dev)
+	Kite   *KiteConnect
+	Broker broker.Client // broker-agnostic interface (wraps Kite.Client via zerodha adapter)
+	Email  string        // Google-authenticated email (empty for local dev)
 }
 
 type Manager struct {
@@ -511,9 +514,11 @@ func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionDat
 
 	apiKey := m.GetAPIKeyForEmail(email)
 
+	kc := NewKiteConnect(apiKey)
 	kd := &KiteSessionData{
-		Kite:  NewKiteConnect(apiKey),
-		Email: email,
+		Kite:   kc,
+		Broker: zerodha.New(kc.Client),
+		Email:  email,
 	}
 
 	// Priority 1: Per-email cached token (Fly.io multi-user)
@@ -816,6 +821,7 @@ func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*Kite
 		}
 		m.Logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
 		kiteData.Kite = NewKiteConnect(m.GetAPIKeyForEmail(resolvedEmail))
+		kiteData.Broker = zerodha.New(kiteData.Kite.Client)
 		// Apply cached token if available
 		if resolvedEmail != "" {
 			if entry, ok := m.tokenStore.Get(resolvedEmail); ok {

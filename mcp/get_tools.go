@@ -23,7 +23,7 @@ func (*ProfileTool) Tool() mcp.Tool {
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (interface{}, error) {
-		return session.Kite.Client.GetUserProfile()
+		return session.Broker.GetProfile()
 	})
 }
 
@@ -41,7 +41,7 @@ func (*MarginsTool) Tool() mcp.Tool {
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (interface{}, error) {
-		return session.Kite.Client.GetUserMargins()
+		return session.Broker.GetMargins()
 	})
 }
 
@@ -65,7 +65,7 @@ func (*HoldingsTool) Tool() mcp.Tool {
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		holdings, err := session.Kite.Client.GetHoldings()
+		holdings, err := session.Broker.GetHoldings()
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func (*PositionsTool) Tool() mcp.Tool {
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_positions", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		positions, err := session.Kite.Client.GetPositions()
+		positions, err := session.Broker.GetPositions()
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +173,7 @@ func (*OrdersTool) Tool() mcp.Tool {
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		orders, err := session.Kite.Client.GetOrders()
+		orders, err := session.Broker.GetOrders()
 		if err != nil {
 			return nil, err
 		}
