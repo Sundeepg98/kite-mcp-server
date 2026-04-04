@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -199,7 +200,7 @@ func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandl
 		handler.trackToolCall(ctx, "portfolio_concentration")
 
 		return handler.WithSession(ctx, "portfolio_concentration", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_concentration", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -218,7 +219,7 @@ func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandl
 	}
 }
 
-func computePortfolioConcentration(holdings kiteconnect.Holdings) *portfolioConcentrationResponse {
+func computePortfolioConcentration(holdings []broker.Holding) *portfolioConcentrationResponse {
 	// Compute total value and per-holding values
 	type holdingValue struct {
 		symbol string

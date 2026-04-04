@@ -72,7 +72,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 			// Check session validity by calling a lightweight Kite endpoint.
 			tokenStatus := "VALID"
-			if _, err := session.Kite.Client.GetUserProfile(); err != nil {
+			if _, err := session.Broker.GetProfile(); err != nil {
 				tokenStatus = "EXPIRED"
 			}
 

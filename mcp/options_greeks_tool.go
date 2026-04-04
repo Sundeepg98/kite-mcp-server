@@ -273,7 +273,7 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "options_greeks", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 			// Fetch option LTP
 			optionKey := exchange + ":" + tradingsymbol
-			ltpResp, err := session.Kite.Client.GetLTP(optionKey)
+			ltpResp, err := session.Broker.GetLTP(optionKey)
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option LTP for %s: %s", optionKey, err.Error())), nil
 			}
@@ -293,7 +293,7 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					"NSE:" + underlying,
 					"NSE:" + underlying + "-EQ",
 				}
-				spotResp, err := session.Kite.Client.GetLTP(spotKeys...)
+				spotResp, err := session.Broker.GetLTP(spotKeys...)
 				if err == nil {
 					for _, key := range spotKeys {
 						if q, ok := spotResp[key]; ok && q.LastPrice > 0 {
@@ -597,7 +597,7 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			if len(instrumentKeys) > 500 {
 				instrumentKeys = instrumentKeys[:500]
 			}
-			ltpResp, err := session.Kite.Client.GetLTP(instrumentKeys...)
+			ltpResp, err := session.Broker.GetLTP(instrumentKeys...)
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option premiums: %s", err.Error())), nil
 			}

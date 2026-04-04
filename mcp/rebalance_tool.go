@@ -124,7 +124,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 
 		return handler.WithSession(ctx, "portfolio_rebalance", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Fetch current holdings
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_rebalance", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -161,7 +161,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			// Fetch LTP for symbols not in holdings
 			ltpMap := make(map[string]float64) // symbol -> lastPrice
 			if len(ltpNeeded) > 0 {
-				ltpResp, ltpErr := session.Kite.Client.GetLTP(ltpNeeded...)
+				ltpResp, ltpErr := session.Broker.GetLTP(ltpNeeded...)
 				if ltpErr != nil {
 					handler.trackToolError(ctx, "portfolio_rebalance", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil

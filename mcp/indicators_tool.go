@@ -64,7 +64,7 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			// Fetch historical data
 			now := time.Now()
 			from := now.AddDate(0, 0, -days)
-			candles, err := session.Kite.Client.GetHistoricalData(token, interval, from, now, false, false)
+			candles, err := session.Broker.GetHistoricalData(token, interval, from, now)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch historical data: %s", err.Error())), nil
 			}

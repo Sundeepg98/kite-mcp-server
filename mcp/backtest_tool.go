@@ -8,7 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -152,7 +152,7 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			// Fetch daily historical data
 			now := time.Now()
 			from := now.AddDate(0, 0, -days)
-			candles, err := session.Kite.Client.GetHistoricalData(token, "day", from, now, false, false)
+			candles, err := session.Broker.GetHistoricalData(token, "day", from, now)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch historical data: %s", err.Error())), nil
 			}
@@ -188,7 +188,7 @@ func backtestDefaults(strategy string, args map[string]interface{}) (float64, fl
 }
 
 // runBacktest executes the strategy and returns results.
-func runBacktest(candles []kiteconnect.HistoricalData, strategy, exchange, symbol string, initialCapital, positionSizePct, param1, param2 float64) *BacktestResult {
+func runBacktest(candles []broker.HistoricalCandle, strategy, exchange, symbol string, initialCapital, positionSizePct, param1, param2 float64) *BacktestResult {
 	closes := make([]float64, len(candles))
 	highs := make([]float64, len(candles))
 	lows := make([]float64, len(candles))
@@ -245,8 +245,8 @@ func runBacktest(candles []kiteconnect.HistoricalData, strategy, exchange, symbo
 	sharpe := computeSharpeRatio(trades, initialCapital)
 
 	period := fmt.Sprintf("%s to %s",
-		candles[0].Date.Time.Format("2006-01-02"),
-		candles[len(candles)-1].Date.Time.Format("2006-01-02"),
+		candles[0].Date.Format("2006-01-02"),
+		candles[len(candles)-1].Date.Format("2006-01-02"),
 	)
 
 	// Limit trade log to 50 entries to keep response manageable
@@ -435,7 +435,7 @@ func signalsMeanReversion(closes []float64, period int, stdDevMult float64) []*b
 }
 
 // simulateTrades walks through signals and produces round-trip trades.
-func simulateTrades(candles []kiteconnect.HistoricalData, signals []*backtestSignal, initialCapital, positionSizePct float64) []BacktestTrade {
+func simulateTrades(candles []broker.HistoricalCandle, signals []*backtestSignal, initialCapital, positionSizePct float64) []BacktestTrade {
 	var trades []BacktestTrade
 	capital := initialCapital
 	inPosition := false
@@ -450,7 +450,7 @@ func simulateTrades(candles []kiteconnect.HistoricalData, signals []*backtestSig
 		}
 
 		price := candles[i].Close
-		dateStr := candles[i].Date.Time.Format("2006-01-02")
+		dateStr := candles[i].Date.Format("2006-01-02")
 
 		if sig.action == "BUY" && !inPosition {
 			// Enter position
@@ -494,7 +494,7 @@ func simulateTrades(candles []kiteconnect.HistoricalData, signals []*backtestSig
 		trades = append(trades, BacktestTrade{
 			EntryDate:  entryDate,
 			EntryPrice: round2(entryPrice),
-			ExitDate:   last.Date.Time.Format("2006-01-02"),
+			ExitDate:   last.Date.Format("2006-01-02"),
 			ExitPrice:  round2(price),
 			Side:       "BUY",
 			Quantity:   qty,

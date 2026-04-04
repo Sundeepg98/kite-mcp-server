@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -101,23 +102,25 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		variety := SafeAssertString(args["variety"], "regular")
-		orderParams := kiteconnect.OrderParams{
-			Exchange:          SafeAssertString(args["exchange"], "NSE"),
-			Tradingsymbol:     SafeAssertString(args["tradingsymbol"], ""),
-			Validity:          SafeAssertString(args["validity"], ""),
-			ValidityTTL:       SafeAssertInt(args["validity_ttl"], 0),
-			Product:           SafeAssertString(args["product"], ""),
-			OrderType:         SafeAssertString(args["order_type"], ""),
-			TransactionType:   SafeAssertString(args["transaction_type"], ""),
-			Quantity:          SafeAssertInt(args["quantity"], 1),
-			DisclosedQuantity: SafeAssertInt(args["disclosed_quantity"], 0),
-			Price:             SafeAssertFloat64(args["price"], 0.0),
-			TriggerPrice:      SafeAssertFloat64(args["trigger_price"], 0.0),
-			IcebergLegs:       SafeAssertInt(args["iceberg_legs"], 0),
-			IcebergQty:        SafeAssertInt(args["iceberg_quantity"], 0),
-			Tag:               SafeAssertString(args["tag"], "mcp"),
-			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+		orderParams := broker.OrderParams{
+			Exchange:         SafeAssertString(args["exchange"], "NSE"),
+			Tradingsymbol:    SafeAssertString(args["tradingsymbol"], ""),
+			Validity:         SafeAssertString(args["validity"], ""),
+			Product:          SafeAssertString(args["product"], ""),
+			OrderType:        SafeAssertString(args["order_type"], ""),
+			TransactionType:  SafeAssertString(args["transaction_type"], ""),
+			Quantity:         SafeAssertInt(args["quantity"], 1),
+			DisclosedQty:     SafeAssertInt(args["disclosed_quantity"], 0),
+			Price:            SafeAssertFloat64(args["price"], 0.0),
+			TriggerPrice:     SafeAssertFloat64(args["trigger_price"], 0.0),
+			Tag:              SafeAssertString(args["tag"], "mcp"),
+			MarketProtection: SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+			Variety:          variety,
 		}
+
+		// Iceberg params — validated here, passed through via Variety (adapter handles Kite-specific fields)
+		icebergLegs := SafeAssertInt(args["iceberg_legs"], 0)
+		icebergQty := SafeAssertInt(args["iceberg_quantity"], 0)
 
 		// Validate order parameters
 		if orderParams.OrderType == "LIMIT" && orderParams.Price <= 0 {
@@ -126,10 +129,10 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if (orderParams.OrderType == "SL" || orderParams.OrderType == "SL-M") && orderParams.TriggerPrice <= 0 {
 			return mcp.NewToolResultError("trigger_price must be greater than 0 for SL/SL-M orders"), nil
 		}
-		if variety == "iceberg" && (orderParams.IcebergLegs <= 0 || orderParams.IcebergQty <= 0) {
+		if variety == "iceberg" && (icebergLegs <= 0 || icebergQty <= 0) {
 			return mcp.NewToolResultError("iceberg_legs and iceberg_quantity must be greater than 0 for iceberg orders"), nil
 		}
-		if orderParams.DisclosedQuantity > 0 && orderParams.DisclosedQuantity > orderParams.Quantity {
+		if orderParams.DisclosedQty > 0 && orderParams.DisclosedQty > orderParams.Quantity {
 			return mcp.NewToolResultError("disclosed_quantity cannot exceed quantity"), nil
 		}
 
@@ -143,7 +146,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Kite.Client.PlaceOrder(variety, orderParams)
+			resp, err := session.Broker.PlaceOrder(orderParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
@@ -153,7 +156,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			orderID := resp.OrderID
 			if orderID != "" {
 				time.Sleep(1500 * time.Millisecond)
-				history, histErr := session.Kite.Client.GetOrderHistory(orderID)
+				history, histErr := session.Broker.GetOrderHistory(orderID)
 				if histErr == nil && len(history) > 0 {
 					latest := history[len(history)-1]
 					enriched := map[string]any{
@@ -161,7 +164,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 						"status":           latest.Status,
 						"filled_quantity":   latest.FilledQuantity,
 						"average_price":     latest.AveragePrice,
-						"pending_quantity":  latest.PendingQuantity,
+						"pending_quantity":  latest.Quantity - latest.FilledQuantity,
 						"status_message":    latest.StatusMessage,
 					}
 					return handler.MarshalResponse(enriched, "place_order")
@@ -235,14 +238,15 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		variety := SafeAssertString(args["variety"], "regular")
 		orderID := SafeAssertString(args["order_id"], "")
 
-		orderParams := kiteconnect.OrderParams{
-			Quantity:          SafeAssertInt(args["quantity"], 1),
-			Price:             SafeAssertFloat64(args["price"], 0.0),
-			OrderType:         SafeAssertString(args["order_type"], ""),
-			TriggerPrice:      SafeAssertFloat64(args["trigger_price"], 0.0),
-			Validity:          SafeAssertString(args["validity"], ""),
-			DisclosedQuantity: SafeAssertInt(args["disclosed_quantity"], 0),
-			MarketProtection:  SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+		orderParams := broker.OrderParams{
+			Quantity:         SafeAssertInt(args["quantity"], 1),
+			Price:            SafeAssertFloat64(args["price"], 0.0),
+			OrderType:        SafeAssertString(args["order_type"], ""),
+			TriggerPrice:     SafeAssertFloat64(args["trigger_price"], 0.0),
+			Validity:         SafeAssertString(args["validity"], ""),
+			DisclosedQty:     SafeAssertInt(args["disclosed_quantity"], 0),
+			MarketProtection: SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+			Variety:          variety,
 		}
 
 		// Request user confirmation via elicitation before modifying the order.
@@ -255,7 +259,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Kite.Client.ModifyOrder(variety, orderID, orderParams)
+			resp, err := session.Broker.ModifyOrder(orderID, orderParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify order: %s", err.Error())), nil
@@ -299,11 +303,13 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		variety := SafeAssertString(args["variety"], "regular")
+		// variety is accepted by the tool schema but broker.CancelOrder
+		// defaults to "regular" internally.
+		_ = SafeAssertString(args["variety"], "regular")
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Kite.Client.CancelOrder(variety, orderID, nil)
+			resp, err := session.Broker.CancelOrder(orderID)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel order: %s", err.Error())), nil

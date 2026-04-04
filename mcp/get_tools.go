@@ -139,7 +139,7 @@ func (*TradesTool) Tool() mcp.Tool {
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		trades, err := session.Kite.Client.GetTrades()
+		trades, err := session.Broker.GetTrades()
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +291,7 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			orderHistory, err := session.Kite.Client.GetOrderHistory(orderID)
+			orderHistory, err := session.Broker.GetOrderHistory(orderID)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order history: %s", err.Error())), nil
 			}

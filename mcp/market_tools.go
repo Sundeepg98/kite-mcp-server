@@ -242,18 +242,17 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Get other parameters
 		interval := SafeAssertString(args["interval"], "")
-		continuous := SafeAssertBool(args["continuous"], false)
-		oi := SafeAssertBool(args["oi"], false)
+		// Note: continuous and oi params are accepted by the tool schema
+		// but are Zerodha-specific; the broker.Client interface does not
+		// expose them. They are silently ignored for now.
 
 		return handler.WithSession(ctx, "get_historical_data", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Get historical data
-			historicalData, err := session.Kite.Client.GetHistoricalData(
+			historicalData, err := session.Broker.GetHistoricalData(
 				instrumentToken,
 				interval,
 				fromDate,
 				toDate,
-				continuous,
-				oi,
 			)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get historical data: %s", err.Error())), nil
@@ -303,7 +302,7 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ltp", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ltp, err := session.Kite.Client.GetLTP(instruments...)
+			ltp, err := session.Broker.GetLTP(instruments...)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest trading prices: %s", err.Error())), nil
 			}
@@ -352,7 +351,7 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ohlc", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ohlc, err := session.Kite.Client.GetOHLC(instruments...)
+			ohlc, err := session.Broker.GetOHLC(instruments...)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get OHLC data: %s", err.Error())), nil
 			}

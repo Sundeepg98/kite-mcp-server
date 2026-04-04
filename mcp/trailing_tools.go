@@ -112,7 +112,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		if currentStop <= 0 || referencePrice <= 0 {
 			return handler.WithSession(ctx, "set_trailing_stop", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 				if currentStop <= 0 {
-					history, histErr := session.Kite.Client.GetOrderHistory(orderID)
+					history, histErr := session.Broker.GetOrderHistory(orderID)
 					if histErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch order history for %s: %s. Please provide current_stop manually.", orderID, histErr)), nil
 					}
@@ -126,7 +126,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				}
 
 				if referencePrice <= 0 {
-					ltpResp, ltpErr := session.Kite.Client.GetLTP(instrumentID)
+					ltpResp, ltpErr := session.Broker.GetLTP(instrumentID)
 					if ltpErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch LTP: %s. Please provide reference_price manually.", ltpErr)), nil
 					}

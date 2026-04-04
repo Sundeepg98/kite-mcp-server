@@ -164,7 +164,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// For indices like NIFTY, BANKNIFTY the spot is on NSE as an index
-			ltpResp, err := session.Kite.Client.GetLTP(spotKeys...)
+			ltpResp, err := session.Broker.GetLTP(spotKeys...)
 			if err == nil {
 				for _, key := range spotKeys {
 					if q, ok := ltpResp[key]; ok && q.LastPrice > 0 {

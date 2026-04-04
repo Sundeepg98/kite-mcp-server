@@ -8,7 +8,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -60,7 +60,7 @@ func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "sector_exposure")
 
 		return handler.WithSession(ctx, "sector_exposure", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "sector_exposure", "api_error")
 				return gomcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -83,7 +83,7 @@ func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 const overExposureThreshold = 30.0
 
 // computeSectorExposure maps holdings to sectors and computes allocation.
-func computeSectorExposure(holdings kiteconnect.Holdings) *sectorExposureResponse {
+func computeSectorExposure(holdings []broker.Holding) *sectorExposureResponse {
 	var totalValue float64
 	for _, h := range holdings {
 		totalValue += h.LastPrice * float64(h.Quantity)

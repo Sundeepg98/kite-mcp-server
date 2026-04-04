@@ -8,7 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -134,7 +134,7 @@ func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		return handler.WithSession(ctx, "dividend_calendar", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "dividend_calendar", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -200,12 +200,12 @@ type dividendCalendarResponse struct {
 }
 
 // computeDividendCalendar performs the dividend yield and corporate actions analysis.
-func computeDividendCalendar(holdings kiteconnect.Holdings, lookAheadDays int) *dividendCalendarResponse {
+func computeDividendCalendar(holdings []broker.Holding, lookAheadDays int) *dividendCalendarResponse {
 	now := time.Now()
 	cutoff := now.AddDate(0, 0, lookAheadDays)
 
 	// Build a set of held symbols for quick lookup.
-	holdingMap := make(map[string]kiteconnect.Holding, len(holdings))
+	holdingMap := make(map[string]broker.Holding, len(holdings))
 	for _, h := range holdings {
 		holdingMap[h.Tradingsymbol] = h
 	}

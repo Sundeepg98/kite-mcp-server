@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -62,13 +63,13 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Kite.Client.GetPositions()
+			positions, err := session.Broker.GetPositions()
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch positions: %s", err.Error())), nil
 			}
 
 			// Find the matching position
-			var matched *kiteconnect.Position
+			var matched *broker.Position
 			for i, p := range positions.Net {
 				if p.Quantity == 0 {
 					continue
@@ -95,7 +96,7 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				txnType = "BUY"
 			}
 
-			orderParams := kiteconnect.OrderParams{
+			orderParams := broker.OrderParams{
 				Exchange:         matched.Exchange,
 				Tradingsymbol:    matched.Tradingsymbol,
 				TransactionType:  txnType,
@@ -104,9 +105,10 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				OrderType:        "MARKET",
 				Validity:         "DAY",
 				MarketProtection: kiteconnect.MarketProtectionAuto,
+				Variety:          "regular",
 			}
 
-			resp, placeErr := session.Kite.Client.PlaceOrder("regular", orderParams)
+			resp, placeErr := session.Broker.PlaceOrder(orderParams)
 			if placeErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to close position %s: %s", instrumentID, placeErr.Error())), nil
 			}
@@ -172,14 +174,14 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		productFilter := strings.ToUpper(SafeAssertString(args["product"], "ALL"))
 
 		return handler.WithSession(ctx, "close_all_positions", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Kite.Client.GetPositions()
+			positions, err := session.Broker.GetPositions()
 			if err != nil {
 				handler.manager.Logger.Error("Failed to fetch positions", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: failed to fetch positions: %s", err.Error())), nil
 			}
 
 			// Filter to positions with non-zero Quantity (net positions)
-			var toClose []kiteconnect.Position
+			var toClose []broker.Position
 			for _, p := range positions.Net {
 				if p.Quantity == 0 {
 					continue
@@ -211,7 +213,7 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 					txnType = "BUY"
 				}
 
-				orderParams := kiteconnect.OrderParams{
+				orderParams := broker.OrderParams{
 					Exchange:         p.Exchange,
 					Tradingsymbol:    p.Tradingsymbol,
 					TransactionType:  txnType,
@@ -220,9 +222,10 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 					OrderType:        "MARKET",
 					Validity:         "DAY",
 					MarketProtection: kiteconnect.MarketProtectionAuto,
+					Variety:          "regular",
 				}
 
-				resp, placeErr := session.Kite.Client.PlaceOrder("regular", orderParams)
+				resp, placeErr := session.Broker.PlaceOrder(orderParams)
 				r := closeResult{
 					Tradingsymbol: p.Tradingsymbol,
 					Exchange:      p.Exchange,
