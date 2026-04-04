@@ -17,12 +17,14 @@
            onmouseout="this.style.opacity='1'">
             Sign in with Kite
         </a>
+        {{if .ShowAdminLogin}}
         <a href="/auth/admin-login?redirect={{.Redirect}}"
            style="display: block; padding: 10px 20px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 4px; text-decoration: none; font-weight: 500; font-size: 0.8rem; text-align: center; transition: border-color 0.2s;"
            onmouseover="this.style.borderColor='var(--primary)'"
            onmouseout="this.style.borderColor='var(--border)'">
             Admin Login (password)
         </a>
+        {{end}}
         {{if .GoogleSSOEnabled}}
         <a href="/auth/google/login?redirect={{.Redirect}}"
            style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 10px 20px; background: #fff; color: #333; border: 1px solid #dadce0; border-radius: 4px; text-decoration: none; font-weight: 500; font-size: 0.8rem; text-align: center; transition: background 0.2s;"

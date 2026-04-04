@@ -11,7 +11,7 @@
   --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
   --border: #252d3a; --border-hi: #334155;
   --text-0: #e2e8f0; --text-1: #94a3b8; --text-2: #64748b;
-  --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.12);
+  --accent: #fbbf24; --accent-dim: rgba(251,191,36,0.12);
   --green: #34d399; --green-dim: rgba(52,211,153,0.12);
   --red: #f87171; --red-dim: rgba(248,113,113,0.1);
   --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
@@ -22,7 +22,9 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; }
 
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; background: var(--bg-1); border-bottom: 2px solid var(--accent); position: sticky; top: 0; z-index: 100; }
+.admin-badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(251,191,36,0.3); }
+.server-status { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11px; color: var(--text-2); }
 .topbar-left { display: flex; align-items: center; gap: 12px; }
 .topbar-logo { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .topbar-sep { width: 1px; height: 20px; background: var(--border); }
@@ -102,12 +104,13 @@ tr:hover td { background: var(--bg-2); }
     <span class="topbar-logo">Kite MCP</span>
     <span class="topbar-sep"></span>
     <span class="topbar-title">Admin Console</span>
+    <span class="admin-badge">Admin</span>
   </div>
   <div class="topbar-right">
     <span class="topbar-updated" id="lastUpdated">--</span>
     <span class="topbar-uptime" id="userDisplay" style="color:var(--text-1)"></span>
     <span class="topbar-uptime" id="uptimeDisplay">--</span>
-    <div class="pulse-dot" id="pulseDot"></div>
+    <div class="server-status"><span id="serverStatusDot" style="width:7px;height:7px;border-radius:50%;background:var(--green);"></span> <span id="serverStatusText">Online</span></div>
   </div>
 </div>
 
@@ -115,8 +118,8 @@ tr:hover td { background: var(--bg-2); }
   <button class="tab active" data-tab="overview">Overview</button>
   <button class="tab" data-tab="sessions">Sessions</button>
   <button class="tab" data-tab="tickers">Live Feeds</button>
-  <button class="tab" data-tab="alerts">Alerts</button>
-  <button class="tab" data-tab="credentials">Credentials</button>
+  <button class="tab" data-tab="alerts">All Alerts</button>
+  <button class="tab" data-tab="credentials">API Key Registry</button>
   <button class="tab" data-tab="metrics">Metrics</button>
   <button class="tab" data-tab="logs">Logs</button>
 </div>

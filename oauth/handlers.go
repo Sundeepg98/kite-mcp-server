@@ -780,10 +780,12 @@ func (h *Handler) HandleLoginChoice(w http.ResponseWriter, r *http.Request) {
 		Title            string
 		Redirect         string
 		GoogleSSOEnabled bool
+		ShowAdminLogin   bool
 	}{
 		Title:            "Sign In",
 		Redirect:         redirect,
 		GoogleSSOEnabled: h.GoogleSSOEnabled(),
+		ShowAdminLogin:   r.URL.Query().Get("admin") == "1",
 	}
 
 	var buf bytes.Buffer
