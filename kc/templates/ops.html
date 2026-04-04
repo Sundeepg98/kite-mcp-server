@@ -83,6 +83,14 @@ tr:hover td { background: var(--bg-2); }
 .log-attrs { color: var(--text-2); }
 .empty-state { text-align: center; padding: 48px 20px; color: var(--text-2); font-size: 13px; }
 
+.btn-action { padding: 2px 10px; border-radius: 3px; background: transparent; font-size: 11px; cursor: pointer; font-family: var(--mono); border-width: 1px; border-style: solid; margin-right: 4px; margin-bottom: 2px; white-space: nowrap; }
+.btn-action:hover { opacity: 0.85; }
+.btn-green { border-color: var(--green); color: var(--green); }
+.btn-red { border-color: var(--red); color: var(--red); }
+.btn-amber { border-color: var(--amber); color: var(--amber); }
+.btn-purple { border-color: var(--purple); color: var(--purple); }
+.badge-purple { background: var(--purple-dim); color: var(--purple); }
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -122,11 +130,16 @@ tr:hover td { background: var(--bg-2); }
   <button class="tab" data-tab="credentials">API Key Registry</button>
   <button class="tab" data-tab="metrics">Metrics</button>
   <button class="tab" data-tab="logs">Logs</button>
+  <button class="tab" data-tab="users">Users</button>
 </div>
 
 <div id="panel-overview" class="panel active">
   <div class="stats-grid" id="statsGrid"></div>
-  <div class="section-header">Tool Usage</div>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div class="section-header" style="margin:0;border:none;padding:0">Tool Usage</div>
+    <button id="verifyChainBtn" style="padding:4px 14px;border:1px solid var(--purple);border-radius:4px;background:var(--purple-dim);color:var(--purple);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--mono);display:none">Verify Audit Chain</button>
+  </div>
+  <div id="chainResult" style="margin:8px 0;padding:10px 14px;border-radius:6px;font-family:var(--mono);font-size:12px;display:none"></div>
   <div class="tbl-wrap"><table id="toolTable"><thead><tr><th>Counter</th><th>Value</th></tr></thead><tbody id="toolBody"></tbody></table></div>
 </div>
 
@@ -186,6 +199,12 @@ tr:hover td { background: var(--bg-2); }
   <div class="empty-state" id="metricsEmpty" style="display:none">No metrics data for this period</div>
 </div>
 
+<div id="panel-users" class="panel">
+  <div class="section-header">Registered Users</div>
+  <div class="tbl-wrap"><table id="usersTable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+  <div class="empty-state" id="usersEmpty" style="display:none">No registered users</div>
+</div>
+
 <div id="panel-logs" class="panel">
   <div class="log-controls">
     <button class="log-filter active" data-level="all">All</button>
@@ -209,10 +228,12 @@ tr:hover td { background: var(--bg-2); }
   var isAdmin = document.body.dataset.admin === 'true';
   var userEmail = document.body.dataset.email || '';
 
-  // Hide Logs tab for non-admin users
+  // Hide Logs and Users tabs for non-admin users
   if (!isAdmin) {
     var logsTab = document.querySelector('[data-tab="logs"]');
     if (logsTab) logsTab.style.display = 'none';
+    var usersTab = document.querySelector('[data-tab="users"]');
+    if (usersTab) usersTab.style.display = 'none';
   }
 
   // Show logged-in user email in topbar
@@ -258,6 +279,7 @@ tr:hover td { background: var(--bg-2); }
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'logs') startLogStream();
       if (btn.dataset.tab === 'metrics') refreshMetrics();
+      if (btn.dataset.tab === 'users') refreshUsers();
     });
   });
 
@@ -618,12 +640,148 @@ tr:hover td { background: var(--bg-2); }
     activeMetricsBtn.style.background = 'var(--accent-dim)';
   }
 
+  // --- Users management (admin only) ---
+  function postAPI(endpoint, body) {
+    var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    return fetch(basePath + '/api/' + endpoint, opts).then(function(r) {
+      return r.json().then(function(data) {
+        if (!r.ok) throw new Error(data.error || data.message || 'Request failed');
+        return data;
+      });
+    });
+  }
+
+  function userActionBtn(label, cls, handler) {
+    var btn = el('button', 'btn-action ' + cls, label);
+    btn.addEventListener('click', handler);
+    return btn;
+  }
+
+  function refreshUsers() {
+    if (!isAdmin) return;
+    fetchJSON('users').then(function(data) {
+      var tbody = document.getElementById('usersBody');
+      var empty = document.getElementById('usersEmpty');
+      clearChildren(tbody);
+      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      data.forEach(function(u) {
+        var statusType = u.status === 'active' ? 'green' : (u.status === 'suspended' ? 'red' : 'amber');
+        var roleType = u.role === 'admin' ? 'purple' : 'green';
+
+        var actionsCell = document.createElement('td');
+        actionsCell.style.whiteSpace = 'normal';
+
+        // Only show actions for other users (backend blocks self-actions anyway)
+        if (u.email !== userEmail) {
+          if (u.status === 'active') {
+            actionsCell.appendChild(userActionBtn('Suspend', 'btn-amber', function() {
+              if (!confirm('Suspend user ' + u.email + '? They will be unable to use the service.')) return;
+              postAPI('users/suspend?email=' + encodeURIComponent(u.email))
+                .then(function() { refreshUsers(); refreshOverview(); })
+                .catch(function(e) { alert('Suspend failed: ' + e.message); });
+            }));
+          }
+          if (u.status === 'suspended' || u.status === 'offboarded') {
+            actionsCell.appendChild(userActionBtn('Activate', 'btn-green', function() {
+              if (!confirm('Activate user ' + u.email + '?')) return;
+              postAPI('users/activate?email=' + encodeURIComponent(u.email))
+                .then(function() { refreshUsers(); refreshOverview(); })
+                .catch(function(e) { alert('Activate failed: ' + e.message); });
+            }));
+          }
+          actionsCell.appendChild(userActionBtn('Re-auth', 'btn-purple', function() {
+            if (!confirm('Force re-authentication for ' + u.email + '? Their cached token will be deleted.')) return;
+            postAPI('force-reauth?email=' + encodeURIComponent(u.email))
+              .then(function() { refreshUsers(); })
+              .catch(function(e) { alert('Force re-auth failed: ' + e.message); });
+          }));
+          actionsCell.appendChild(userActionBtn('Role', 'btn-purple', function() {
+            var newRole = prompt('Change role for ' + u.email + '.\nCurrent role: ' + u.role + '\n\nEnter new role (admin, trader, viewer):');
+            if (!newRole) return;
+            newRole = newRole.trim().toLowerCase();
+            if (newRole !== 'admin' && newRole !== 'trader' && newRole !== 'viewer') {
+              alert('Invalid role. Must be admin, trader, or viewer.');
+              return;
+            }
+            if (newRole === u.role) return;
+            if (!confirm('Change role for ' + u.email + ' from "' + u.role + '" to "' + newRole + '"?')) return;
+            postAPI('users/role?email=' + encodeURIComponent(u.email), { role: newRole })
+              .then(function() { refreshUsers(); refreshOverview(); })
+              .catch(function(e) { alert('Role change failed: ' + e.message); });
+          }));
+          actionsCell.appendChild(userActionBtn('Offboard', 'btn-red', function() {
+            if (!confirm('Offboard user ' + u.email + '?\n\nThis will permanently delete ALL their data:\n- Kite credentials\n- Cached tokens\n- Active sessions')) return;
+            if (!confirm('FINAL CONFIRMATION: Permanently delete all data for ' + u.email + '? This cannot be undone.')) return;
+            postAPI('users/offboard?email=' + encodeURIComponent(u.email), { confirm: true })
+              .then(function() { refreshUsers(); refreshOverview(); })
+              .catch(function(e) { alert('Offboard failed: ' + e.message); });
+          }));
+        } else {
+          actionsCell.appendChild(el('span', null, '(you)'));
+          actionsCell.style.color = 'var(--text-2)';
+        }
+
+        tbody.appendChild(tr([
+          td(u.email),
+          tdBadge(u.role, roleType),
+          tdBadge(u.status, statusType),
+          td(fmtTime(u.last_login)),
+          td(fmtTime(u.created_at)),
+          actionsCell
+        ]));
+      });
+    }).catch(function(e) { console.error('users:', e); });
+  }
+
+  // --- Verify Audit Chain (admin only) ---
+  if (isAdmin) {
+    var chainBtn = document.getElementById('verifyChainBtn');
+    chainBtn.style.display = 'inline-block';
+    chainBtn.addEventListener('click', function() {
+      chainBtn.disabled = true;
+      chainBtn.textContent = 'Verifying\u2026';
+      var resultDiv = document.getElementById('chainResult');
+      resultDiv.style.display = 'none';
+      fetch(basePath + '/api/verify-chain').then(function(r) { return r.json(); }).then(function(data) {
+        resultDiv.style.display = 'block';
+        if (data.error) {
+          resultDiv.style.background = 'var(--red-dim)';
+          resultDiv.style.border = '1px solid var(--red)';
+          resultDiv.style.color = 'var(--red)';
+          resultDiv.textContent = 'Error: ' + data.error;
+        } else if (data.valid) {
+          resultDiv.style.background = 'var(--green-dim)';
+          resultDiv.style.border = '1px solid var(--green)';
+          resultDiv.style.color = 'var(--green)';
+          resultDiv.textContent = 'Audit chain valid (' + (data.entries_checked || 0) + ' entries verified)';
+        } else {
+          resultDiv.style.background = 'var(--red-dim)';
+          resultDiv.style.border = '1px solid var(--red)';
+          resultDiv.style.color = 'var(--red)';
+          resultDiv.textContent = 'Chain INVALID at entry ' + (data.broken_at || '?') + ': ' + (data.reason || 'unknown');
+        }
+      }).catch(function(e) {
+        resultDiv.style.display = 'block';
+        resultDiv.style.background = 'var(--red-dim)';
+        resultDiv.style.border = '1px solid var(--red)';
+        resultDiv.style.color = 'var(--red)';
+        resultDiv.textContent = 'Request failed: ' + e.message;
+      }).finally(function() {
+        chainBtn.disabled = false;
+        chainBtn.textContent = 'Verify Audit Chain';
+      });
+    });
+  }
+
   function updateTimestamp() {
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
   }
 
   function refreshAll() {
     refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials();
+    if (isAdmin) refreshUsers();
     updateTimestamp();
   }
   refreshAll();

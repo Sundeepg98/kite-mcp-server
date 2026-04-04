@@ -163,7 +163,7 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   <div class="features">
     <div class="feature-card">
       <span class="feature-icon" aria-hidden="true">&#9881;</span>
-      <h3>79 Tools</h3>
+      <h3>{{.ToolCount}} Tools</h3>
       <p>Orders, portfolio, alerts, options chains, analytics, and inline widgets &mdash; all exposed as MCP tools.</p>
     </div>
     <div class="feature-card">
@@ -231,7 +231,7 @@ claude mcp add kite-fly --transport streamable-http \
     </div>
     <div class="status-item">
       <span class="status-label">Tools</span>
-      <span class="status-value">79</span>
+      <span class="status-value">{{.ToolCount}}</span>
     </div>
     <div class="status-item">
       <span class="status-label">Version</span>

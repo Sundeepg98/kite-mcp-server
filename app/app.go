@@ -66,6 +66,7 @@ type StatusPageData struct {
 	Version      string
 	Mode         string
 	OAuthEnabled bool
+	ToolCount    int
 }
 
 // cookieName must match the JWT cookie name used by oauth.RequireAuthBrowser.
@@ -1112,9 +1113,10 @@ func (app *App) initStatusPageTemplate() error {
 // getStatusData returns template data for the status page
 func (app *App) getStatusData() StatusPageData {
 	return StatusPageData{
-		Title:   "Status",
-		Version: app.Version,
-		Mode:    app.Config.AppMode,
+		Title:     "Status",
+		Version:   app.Version,
+		Mode:      app.Config.AppMode,
+		ToolCount: len(mcp.GetAllTools()),
 	}
 }
 

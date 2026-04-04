@@ -695,6 +695,26 @@ func (h *Handler) logStream(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Key Registry endpoints (admin only) ---
+//
+// API contract for the "API Key Registry" tab in ops.html:
+//
+//   GET  /admin/ops/api/registry
+//     Response: []registry.AppRegistrationSummary (JSON array)
+//       Fields: id, api_key (masked), api_secret_hint (masked), assigned_to,
+//               label, status, registered_by, source, last_used_at, created_at, updated_at
+//
+//   POST /admin/ops/api/registry
+//     Request:  {"id": string, "api_key": string, "api_secret": string, "assigned_to": string, "label": string}
+//       Required: id, api_key, api_secret
+//     Response: {"status": "ok", "id": "<id>"} (201) | {"error": "..."} (400/409)
+//
+//   PUT  /admin/ops/api/registry/{id}
+//     Request:  {"assigned_to": string, "label": string, "status": string}
+//       Status values: "active", "disabled", "invalid", "replaced"
+//     Response: {"status": "ok"} (200) | {"error": "..."} (404)
+//
+//   DELETE /admin/ops/api/registry/{id}
+//     Response: {"status": "ok"} (200) | {"error": "..."} (404)
 
 // registryHandler handles GET (list) and POST (create) for /admin/ops/api/registry.
 func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
