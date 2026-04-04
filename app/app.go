@@ -397,27 +397,6 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// responses that have a relevant dashboard page.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
 
-	// Hide admin-only tools from non-admin users' tool list.
-	// Note: WithToolFilter is UX only (hides from list_tools). The handler-level
-	// IsAdmin() check in each admin tool is the actual security gate.
-	uStore := kcManager.UserStore()
-	serverOpts = append(serverOpts, server.WithToolFilter(
-		func(ctx context.Context, tools []gomcp.Tool) []gomcp.Tool {
-			email := oauth.EmailFromContext(ctx)
-			if uStore != nil && uStore.IsAdmin(email) {
-				return tools
-			}
-			adminTools := map[string]bool{"server_metrics": true}
-			filtered := make([]gomcp.Tool, 0, len(tools))
-			for _, t := range tools {
-				if !adminTools[t.Name] {
-					filtered = append(filtered, t)
-				}
-			}
-			return filtered
-		},
-	))
-
 	// Enable elicitation so tool handlers can request user confirmation before
 	// placing orders. Clients that don't support elicitation will gracefully
 	// degrade (fail open — orders proceed without confirmation).
@@ -692,9 +671,11 @@ func (app *App) startServer(srv *http.Server, kcManager *kc.Manager, mcpServer *
 	return nil
 }
 
-// setupMux creates and configures a new HTTP mux with common handlers
-func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
+// setupMux creates and configures a new HTTP mux with common handlers.
+// Returns the main mux (port 8080) and an admin mux (port 8081).
+func (app *App) setupMux(kcManager *kc.Manager) (*http.ServeMux, *http.ServeMux) {
 	mux := http.NewServeMux()
+	adminMux := http.NewServeMux()
 
 	// Initialize per-IP rate limiters (cleanup goroutine runs in background)
 	app.rateLimiters = newRateLimiters()
@@ -770,10 +751,10 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
 	if app.oauthHandler != nil {
-		opsHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)
+		opsHandler.RegisterRoutes(adminMux, app.oauthHandler.RequireAuthBrowser)
 	} else if app.Config.AdminSecretPath != "" {
 		// Fallback for local dev: use identity middleware (no auth)
-		opsHandler.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
+		opsHandler.RegisterRoutes(adminMux, func(next http.Handler) http.Handler { return next })
 	}
 	// User dashboard: protected by OAuth if available, otherwise identity middleware
 	dashHandler := ops.NewDashboardHandler(kcManager, app.logger, app.auditStore)
@@ -848,7 +829,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	app.registerTelegramWebhook(mux, kcManager)
 
 	app.serveStatusPage(mux)
-	return mux
+	return mux, adminMux
 }
 
 // registerTelegramWebhook registers the Telegram bot webhook endpoint and
@@ -972,6 +953,27 @@ func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
 	app.serveHTTPServer(srv)
 }
 
+// startAdminServer starts the admin-only HTTP server on a separate port.
+// Port 8081 is NOT exposed in fly.toml — it's only reachable via `flyctl proxy`.
+func (app *App) startAdminServer(adminMux *http.ServeMux) {
+	adminPort := os.Getenv("ADMIN_PORT")
+	if adminPort == "" {
+		adminPort = "8081"
+	}
+	go func() {
+		adminServer := &http.Server{
+			Addr:              ":" + adminPort,
+			Handler:           securityHeaders(adminMux),
+			ReadHeaderTimeout: 30 * time.Second,
+			WriteTimeout:      120 * time.Second,
+		}
+		app.logger.Info("Admin server starting", "port", adminPort)
+		if err := adminServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			app.logger.Error("Admin server failed", "error", err)
+		}
+	}()
+}
+
 // startHybridServer starts a server with both SSE and MCP endpoints
 func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, url string) {
 	app.logger.Info("Starting Hybrid MCP server with both SSE and MCP endpoints", "url", "http://"+url)
@@ -981,7 +983,7 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	streamable := app.createStreamableHTTPServer(mcpServer, kcManager)
 
 	// Setup mux with common handlers
-	mux := app.setupMux(kcManager)
+	mux, adminMux := app.setupMux(kcManager)
 
 	// Register endpoints
 	app.registerSSEEndpoints(mux, sse)
@@ -996,6 +998,7 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	app.logger.Info("SSE endpoints available", "url", fmt.Sprintf("http://%s/sse and http://%s/message", url, url))
 	app.logger.Info("MCP endpoint available", "url", fmt.Sprintf("http://%s/mcp", url))
 
+	app.startAdminServer(adminMux)
 	app.configureAndStartServer(srv, mux)
 }
 
@@ -1005,8 +1008,9 @@ func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpSer
 	stdio := server.NewStdioServer(mcpServer)
 
 	// Setup mux with common handlers
-	mux := app.setupMux(kcManager)
+	mux, adminMux := app.setupMux(kcManager)
 
+	app.startAdminServer(adminMux)
 	go app.configureAndStartServer(srv, mux)
 
 	ctx := context.Background()
@@ -1021,10 +1025,11 @@ func (app *App) startSSEServer(srv *http.Server, kcManager *kc.Manager, mcpServe
 	sse := app.createSSEServer(mcpServer, url)
 
 	// Setup mux with common handlers
-	mux := app.setupMux(kcManager)
+	mux, adminMux := app.setupMux(kcManager)
 	app.registerSSEEndpoints(mux, sse)
 
 	app.logger.Info("Active MCP and Kite sessions will be monitored and cleaned up automatically")
+	app.startAdminServer(adminMux)
 	app.configureAndStartServer(srv, mux)
 }
 
@@ -1034,7 +1039,7 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	streamable := app.createStreamableHTTPServer(mcpServer, kcManager)
 
 	// Setup mux with common handlers
-	mux := app.setupMux(kcManager)
+	mux, adminMux := app.setupMux(kcManager)
 
 	// Register /mcp with optional OAuth middleware (rate limited)
 	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
@@ -1049,6 +1054,7 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	app.logger.Info("MCP Session manager configured", "session_expiry", kc.DefaultSessionDuration)
 	app.logger.Info("Serving documentation at root URL")
 
+	app.startAdminServer(adminMux)
 	app.configureAndStartServer(srv, mux)
 }
 

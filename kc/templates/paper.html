@@ -111,7 +111,6 @@ tr:hover td { background: var(--bg-2); }
   <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link active">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
-  <a href="/admin/ops" class="dash-nav-link">Ops</a>
 </nav>
 
 <div class="content">
@@ -458,10 +457,6 @@ tr:hover td { background: var(--bg-2); }
       var valid = d.kite_token && d.kite_token.valid;
       dot.style.background = valid ? 'var(--green)' : 'var(--red)';
       dot.style.boxShadow = valid ? '0 0 6px var(--green)' : '0 0 6px var(--red)';
-      if (!d.is_admin) {
-        var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
-        if (opsLink) opsLink.style.display = 'none';
-      }
     }).catch(function() {});
   }
 

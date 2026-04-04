@@ -52,7 +52,6 @@ var toolTiers = map[string]Tier{
 	"options_strategy": TierPremium, "technical_indicators": TierPremium,
 	"portfolio_rebalance": TierPremium, "dividend_calendar": TierPremium,
 	"tax_harvest_analysis": TierPremium, "sebi_compliance_status": TierPremium,
-	"server_metrics": TierPremium,
 }
 
 // RequiredTier returns the minimum billing tier needed to invoke the named tool.

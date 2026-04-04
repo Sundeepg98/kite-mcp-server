@@ -137,7 +137,6 @@ tr:hover td { background: var(--bg-2); }
   <a href="/dashboard/alerts" class="dash-nav-link active">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
-  <a href="/admin/ops" class="dash-nav-link">Ops</a>
 </nav>
 
 <div class="content">
@@ -270,10 +269,6 @@ tr:hover td { background: var(--bg-2); }
       dot.className = 'status-dot ' + (valid ? 'valid' : 'expired');
       if (!roleApplied) {
         roleApplied = true;
-        if (!d.is_admin) {
-          var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
-          if (opsLink) opsLink.style.display = 'none';
-        }
         if (d.role) {
           var emailEl = document.getElementById('userEmail');
           var badge = document.createElement('span');

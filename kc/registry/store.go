@@ -206,7 +206,7 @@ func (s *Store) List() []AppRegistrationSummary {
 	for _, e := range s.entries {
 		out = append(out, AppRegistrationSummary{
 			ID:            e.ID,
-			APIKey:        e.APIKey,
+			APIKey:        maskKey(e.APIKey),
 			APISecretHint: maskSecret(e.APISecret),
 			AssignedTo:    e.AssignedTo,
 			Label:         e.Label,
@@ -361,6 +361,14 @@ func maskSecret(s string) string {
 		return "****"
 	}
 	return s[:4] + "****" + s[len(s)-3:]
+}
+
+// maskKey returns a redacted version of an API key: first 4 + "****" + last 4 chars.
+func maskKey(s string) string {
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
 }
 
 // toDBEntry converts an AppRegistration to the DB entry type for persistence.

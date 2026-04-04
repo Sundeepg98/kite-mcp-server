@@ -72,7 +72,6 @@ var pageRoutes = map[string]string{
 	"alerts":    "/dashboard/alerts",
 	"paper":     "/dashboard/paper",
 	"safety":    "/dashboard/safety",
-	"ops":       "/admin/ops",
 }
 
 // toolDashboardPage maps tool names to the dashboard page path that is most
@@ -143,9 +142,6 @@ var toolDashboardPage = map[string]string{
 
 	// Safety page
 	"sebi_compliance_status":   "/dashboard/safety",
-
-	// Observability (ops page)
-	"server_metrics":           "/admin/ops",
 
 	// Margins / orders page
 	"get_order_margins":        "/dashboard/orders",

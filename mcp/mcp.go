@@ -133,8 +133,6 @@ func GetAllTools() []Tool {
 		&ModifyGTTOrderTool{},
 		&DeleteGTTOrderTool{},
 
-		// Server observability (admin-only)
-		&ServerMetricsTool{},
 	}
 }
 

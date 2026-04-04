@@ -180,7 +180,6 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
-  <a href="/admin/ops" class="dash-nav-link">Ops</a>
 </nav>
 
 <div class="content">
@@ -448,11 +447,6 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   function applyRoleUI(d) {
     if (roleApplied) return;
     roleApplied = true;
-    // Hide Ops nav for non-admins
-    if (!d.is_admin) {
-      var opsLink = document.querySelector('a.dash-nav-link[href="/admin/ops"]');
-      if (opsLink) opsLink.style.display = 'none';
-    }
     // Add role badge next to email
     if (d.role) {
       var emailEl = document.getElementById('userEmail');

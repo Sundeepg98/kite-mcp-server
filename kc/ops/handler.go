@@ -345,6 +345,10 @@ func (h *Handler) suspendUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, map[string]string{"error": "email parameter required"})
 		return
 	}
+	if strings.EqualFold(targetEmail, adminEmail) {
+		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		return
+	}
 	if h.userStore == nil {
 		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
 		return
@@ -373,6 +377,10 @@ func (h *Handler) activateUser(w http.ResponseWriter, r *http.Request) {
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
 		h.writeJSON(w, map[string]string{"error": "email parameter required"})
+		return
+	}
+	if strings.EqualFold(targetEmail, adminEmail) {
+		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
 		return
 	}
 	if h.userStore == nil {
@@ -405,6 +413,26 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, map[string]string{"error": "email parameter required"})
 		return
 	}
+	if strings.EqualFold(targetEmail, adminEmail) {
+		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		return
+	}
+
+	// Parse request body for confirmation
+	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
+	var confirmBody struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&confirmBody); err != nil || !confirmBody.Confirm {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":   "confirmation_required",
+			"message": "This is a destructive action. Set confirm: true to proceed.",
+		})
+		return
+	}
+
 	if h.userStore == nil {
 		h.writeJSON(w, map[string]string{"error": "user store not initialized"})
 		return
@@ -454,6 +482,22 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, map[string]string{"error": "invalid JSON body"})
 		return
 	}
+
+	// Last-admin guard: prevent demoting the only active admin
+	target, ok := h.userStore.Get(targetEmail)
+	if ok && target.Role == "admin" && req.Role != "admin" {
+		admins := 0
+		for _, u := range h.userStore.List() {
+			if u.Role == "admin" && u.Status == "active" {
+				admins++
+			}
+		}
+		if admins <= 1 {
+			h.writeJSON(w, map[string]string{"error": "Cannot demote the last admin"})
+			return
+		}
+	}
+
 	if err := h.userStore.UpdateRole(targetEmail, req.Role); err != nil {
 		h.writeJSON(w, map[string]string{"error": err.Error()})
 		return
@@ -475,11 +519,25 @@ func (h *Handler) freezeTrading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Email  string `json:"email"`
-		Reason string `json:"reason"`
+		Email   string `json:"email"`
+		Reason  string `json:"reason"`
+		Confirm bool   `json:"confirm"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
 		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+	if strings.EqualFold(body.Email, adminEmail) {
+		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
+		return
+	}
+	if !body.Confirm {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":   "confirmation_required",
+			"message": "This is a destructive action. Set confirm: true to proceed.",
+		})
 		return
 	}
 	guard := h.manager.RiskGuard()
@@ -509,6 +567,10 @@ func (h *Handler) unfreezeTrading(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
 		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+	if strings.EqualFold(body.Email, adminEmail) {
+		h.writeJSON(w, map[string]string{"error": "Cannot perform this action on yourself"})
 		return
 	}
 	guard := h.manager.RiskGuard()
