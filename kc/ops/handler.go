@@ -3,7 +3,6 @@ package ops
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	htmltemplate "html/template"
 	"log/slog"
 	"net/http"
@@ -31,6 +30,7 @@ type Handler struct {
 	auditStore    *audit.Store
 	registryStore *registry.Store
 	overviewTmpl  *htmltemplate.Template
+	opsTmpl       *htmltemplate.Template
 }
 
 // New creates a new ops Handler.
@@ -52,6 +52,14 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 	} else {
 		h.overviewTmpl = tmpl
 	}
+
+	opsTmpl, err := htmltemplate.ParseFS(templates.FS, "ops.html", "overview_stats.html", "overview_tools.html")
+	if err != nil {
+		logger.Error("Failed to parse ops template", "error", err)
+	} else {
+		h.opsTmpl = opsTmpl
+	}
+
 	return h
 }
 
@@ -93,11 +101,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/overview-stream", wrap(h.overviewStream))
 }
 
-// servePage serves the embedded ops.html dashboard page, injecting the user's
-// email and admin status as data attributes on the body element.
+// OpsPageData is the template data for the ops.html admin page.
+type OpsPageData struct {
+	Email    string
+	IsAdmin  string
+	Overview OverviewTemplateData
+}
+
+// servePage serves the embedded ops.html dashboard page via Go template execution,
+// injecting user context and pre-rendered overview data.
 func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("ops.html")
-	if err != nil {
+	if h.opsTmpl == nil {
 		http.Error(w, "failed to load ops page", http.StatusInternalServerError)
 		return
 	}
@@ -105,17 +119,22 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 	email := oauth.EmailFromContext(r.Context())
 	admin := h.isAdmin(email)
 
-	// Inject data attributes into <body> tag
 	adminVal := "false"
 	if admin {
 		adminVal = "true"
 	}
-	bodyAttrs := fmt.Sprintf(`<body data-email="%s" data-admin="%s">`, html.EscapeString(email), adminVal)
-	html := strings.Replace(string(data), "<body>", bodyAttrs, 1)
+
+	overview := h.buildOverview()
+
+	data := OpsPageData{
+		Email:    email,
+		IsAdmin:  adminVal,
+		Overview: overviewToTemplateData(overview),
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write([]byte(html)); err != nil {
-		h.logger.Error("Failed to write response", "error", err)
+	if err := h.opsTmpl.Execute(w, data); err != nil {
+		h.logger.Error("Failed to render ops page", "error", err)
 	}
 }
 

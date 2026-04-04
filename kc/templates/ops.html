@@ -104,8 +104,10 @@ tr:hover td { background: var(--bg-2); }
   button, .log-filter { min-height: 44px; }
 }
 </style>
+<script src="/static/htmx.min.js"></script>
+<script src="/static/htmx-sse.js"></script>
 </head>
-<body>
+<body data-email="{{.Email}}" data-admin="{{.IsAdmin}}" hx-ext="sse" sse-connect="{{if eq .IsAdmin "true"}}/admin/ops/api/overview-stream{{end}}">
 
 <div class="topbar">
   <div class="topbar-left">
@@ -117,7 +119,7 @@ tr:hover td { background: var(--bg-2); }
   <div class="topbar-right">
     <span class="topbar-updated" id="lastUpdated">--</span>
     <span class="topbar-uptime" id="userDisplay" style="color:var(--text-1)"></span>
-    <span class="topbar-uptime" id="uptimeDisplay">--</span>
+    <span class="topbar-uptime" id="uptimeDisplay" sse-swap="overview-uptime">--</span>
     <div class="server-status"><span id="serverStatusDot" style="width:7px;height:7px;border-radius:50%;background:var(--green);"></span> <span id="serverStatusText">Online</span></div>
   </div>
 </div>
@@ -134,13 +136,17 @@ tr:hover td { background: var(--bg-2); }
 </div>
 
 <div id="panel-overview" class="panel active">
-  <div class="stats-grid" id="statsGrid"></div>
+  <div id="statsGrid" class="stats-grid" sse-swap="overview-stats">
+    {{template "overview_stats" .Overview}}
+  </div>
   <div style="display:flex;align-items:center;justify-content:space-between">
     <div class="section-header" style="margin:0;border:none;padding:0">Tool Usage</div>
     <button id="verifyChainBtn" style="padding:4px 14px;border:1px solid var(--purple);border-radius:4px;background:var(--purple-dim);color:var(--purple);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--mono);display:none">Verify Audit Chain</button>
   </div>
   <div id="chainResult" style="margin:8px 0;padding:10px 14px;border-radius:6px;font-family:var(--mono);font-size:12px;display:none"></div>
-  <div class="tbl-wrap"><table id="toolTable"><thead><tr><th>Counter</th><th>Value</th></tr></thead><tbody id="toolBody"></tbody></table></div>
+  <div id="toolUsage" sse-swap="overview-tools">
+    {{template "overview_tools" .Overview}}
+  </div>
 </div>
 
 <div id="panel-sessions" class="panel">
@@ -275,6 +281,16 @@ tr:hover td { background: var(--bg-2); }
     document.getElementById('userDisplay').textContent = userEmail + (isAdmin ? ' (admin)' : '');
   }
 
+  // SSE connection status
+  document.body.addEventListener('htmx:sseOpen', function() {
+    document.getElementById('serverStatusDot').style.background = 'var(--green)';
+    document.getElementById('serverStatusText').textContent = 'Online';
+  });
+  document.body.addEventListener('htmx:sseError', function() {
+    document.getElementById('serverStatusDot').style.background = 'var(--amber)';
+    document.getElementById('serverStatusText').textContent = 'Reconnecting...';
+  });
+
   // Safe DOM helpers — never use innerHTML with data
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -320,45 +336,6 @@ tr:hover td { background: var(--bg-2); }
   // Fetch
   function fetchJSON(endpoint) {
     return fetch(basePath + '/api/' + endpoint).then(function(r) { return r.json(); });
-  }
-
-  // Overview
-  function refreshOverview() {
-    fetchJSON('overview').then(function(d) {
-      document.getElementById('uptimeDisplay').textContent = 'up ' + d.uptime;
-      var cards = [
-        {label:'Version', value:d.version},
-        {label:'Sessions', value:d.active_sessions, cls: d.active_sessions > 0 ? 'green' : ''},
-        {label:'Ticker Feeds', value:d.active_tickers, cls: d.active_tickers > 0 ? 'green' : ''},
-        {label:'Active Alerts', value:d.active_alerts + ' / ' + d.total_alerts},
-        {label:'Cached Tokens', value:d.cached_tokens},
-        {label:'API Keys', value:d.per_user_credentials},
-        {label:'Users Today', value:d.daily_users, cls: d.daily_users > 0 ? 'amber' : ''}
-      ];
-      var grid = document.getElementById('statsGrid');
-      clearChildren(grid);
-      cards.forEach(function(c) {
-        var card = el('div', 'stat-card');
-        card.appendChild(el('div', 'stat-label', c.label));
-        card.appendChild(el('div', 'stat-value' + (c.cls ? ' ' + c.cls : ''), c.value));
-        grid.appendChild(card);
-      });
-      // Tool usage
-      var tbody = document.getElementById('toolBody');
-      clearChildren(tbody);
-      var usage = d.tool_usage || {};
-      var sorted = Object.entries(usage).sort(function(a, b) { return b[1] - a[1]; });
-      if (sorted.length === 0) {
-        var r = document.createElement('tr');
-        var c = el('td', null, 'No tool usage recorded');
-        c.colSpan = 2; c.style.textAlign = 'center'; c.style.color = 'var(--text-2)';
-        r.appendChild(c); tbody.appendChild(r);
-      } else {
-        sorted.forEach(function(pair) {
-          tbody.appendChild(tr([td(pair[0]), td(pair[1].toLocaleString())]));
-        });
-      }
-    }).catch(function(e) { console.error('overview:', e); });
   }
 
   // Sessions
@@ -514,7 +491,7 @@ tr:hover td { background: var(--bg-2); }
         btn.addEventListener('click', function() {
           if (!confirm('Delete credentials for ' + c.email + '? This will also clear their cached Kite token.')) return;
           fetch(basePath + '/api/credentials?email=' + encodeURIComponent(c.email), {method:'DELETE'})
-            .then(function() { refreshCredentials(); refreshOverview(); });
+            .then(function() { refreshCredentials(); });
         });
         cell.appendChild(btn);
         row.appendChild(cell);
@@ -541,7 +518,7 @@ tr:hover td { background: var(--bg-2); }
         status.style.color = 'var(--green,#4a4)';
         document.getElementById('credAPIKey').value = '';
         document.getElementById('credAPISecret').value = '';
-        refreshCredentials(); refreshOverview();
+        refreshCredentials();
       } else {
         r.json().then(function(d) { status.textContent = d.error || 'Failed'; status.style.color = 'var(--red,#e55)'; });
       }
@@ -590,7 +567,7 @@ tr:hover td { background: var(--bg-2); }
           if (!confirm('Delete registry entry "' + app.id + '"?\n\nThis removes the app from the registry. Per-user credentials are not affected.')) return;
           fetch(basePath + '/api/registry/' + encodeURIComponent(app.id), { method: 'DELETE' })
             .then(function(r) {
-              if (r.ok) { refreshRegistry(); refreshOverview(); }
+              if (r.ok) { refreshRegistry(); }
               else { r.json().then(function(d) { alert('Delete failed: ' + (d.error || 'unknown')); }); }
             });
         }));
@@ -646,7 +623,7 @@ tr:hover td { background: var(--bg-2); }
           document.getElementById('regAPISecret').value = '';
           document.getElementById('regLabel').value = '';
           document.getElementById('regAssignedTo').value = '';
-          refreshRegistry(); refreshOverview();
+          refreshRegistry();
         } else {
           r.json().then(function(d) { status.textContent = d.error || 'Registration failed'; status.style.color = 'var(--red,#e55)'; });
         }
@@ -820,7 +797,7 @@ tr:hover td { background: var(--bg-2); }
             actionsCell.appendChild(userActionBtn('Suspend', 'btn-amber', function() {
               if (!confirm('Suspend user ' + u.email + '? They will be unable to use the service.')) return;
               postAPI('users/suspend?email=' + encodeURIComponent(u.email))
-                .then(function() { refreshUsers(); refreshOverview(); })
+                .then(function() { refreshUsers(); })
                 .catch(function(e) { alert('Suspend failed: ' + e.message); });
             }));
           }
@@ -828,7 +805,7 @@ tr:hover td { background: var(--bg-2); }
             actionsCell.appendChild(userActionBtn('Activate', 'btn-green', function() {
               if (!confirm('Activate user ' + u.email + '?')) return;
               postAPI('users/activate?email=' + encodeURIComponent(u.email))
-                .then(function() { refreshUsers(); refreshOverview(); })
+                .then(function() { refreshUsers(); })
                 .catch(function(e) { alert('Activate failed: ' + e.message); });
             }));
           }
@@ -849,14 +826,14 @@ tr:hover td { background: var(--bg-2); }
             if (newRole === u.role) return;
             if (!confirm('Change role for ' + u.email + ' from "' + u.role + '" to "' + newRole + '"?')) return;
             postAPI('users/role?email=' + encodeURIComponent(u.email), { role: newRole })
-              .then(function() { refreshUsers(); refreshOverview(); })
+              .then(function() { refreshUsers(); })
               .catch(function(e) { alert('Role change failed: ' + e.message); });
           }));
           actionsCell.appendChild(userActionBtn('Offboard', 'btn-red', function() {
             if (!confirm('Offboard user ' + u.email + '?\n\nThis will permanently delete ALL their data:\n- Kite credentials\n- Cached tokens\n- Active sessions')) return;
             if (!confirm('FINAL CONFIRMATION: Permanently delete all data for ' + u.email + '? This cannot be undone.')) return;
             postAPI('users/offboard?email=' + encodeURIComponent(u.email), { confirm: true })
-              .then(function() { refreshUsers(); refreshOverview(); })
+              .then(function() { refreshUsers(); })
               .catch(function(e) { alert('Offboard failed: ' + e.message); });
           }));
         } else {
@@ -921,7 +898,7 @@ tr:hover td { background: var(--bg-2); }
   }
 
   function refreshAll() {
-    refreshOverview(); refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials();
+    refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials();
     if (isAdmin) { refreshUsers(); refreshRegistry(); }
     updateTimestamp();
   }
