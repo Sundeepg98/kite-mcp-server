@@ -2,10 +2,10 @@
 
 > Trade on Indian stock markets via AI — Claude, ChatGPT, VS Code, or any MCP client.
 
-79 tools · Paper trading · Backtesting · Options Greeks · 8 safety checks · Telegram alerts · SEBI compliant
+80 tools · Paper trading · Backtesting · Options Greeks · 8 safety checks · Telegram alerts · SEBI compliant
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
-[![Tools](https://img.shields.io/badge/Tools-79-blue)]()
+[![Tools](https://img.shields.io/badge/Tools-80-blue)]()
 [![Tests](https://img.shields.io/badge/Tests-487-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 

@@ -634,17 +634,17 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.scheduler.Stop()
 		}
 
-		// Drain audit buffer first so in-flight records are persisted.
-		if app.auditStore != nil {
-			app.auditStore.Stop()
-		}
-
-		// Shutdown HTTP server first (stop accepting new requests)
+		// Shutdown HTTP server first (stop accepting new requests, drain in-flight)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			app.logger.Error("Server shutdown error", "error", err)
+		}
+
+		// Then drain audit buffer (all in-flight requests have completed)
+		if app.auditStore != nil {
+			app.auditStore.Stop()
 		}
 
 		// Then shutdown Kite manager (session cleanup and instruments scheduler)
@@ -917,7 +917,7 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 		return
 	}
 	wh.MaxConnections = 10
-	wh.AllowedUpdates = []string{"message"}
+	wh.AllowedUpdates = []string{"message", "callback_query"}
 	if _, err := notifier.Bot().Request(wh); err != nil {
 		app.logger.Error("Telegram webhook: failed to register with Telegram", "error", err)
 		return

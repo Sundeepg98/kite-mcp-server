@@ -137,6 +137,8 @@ func GetAllTools() []Tool {
 		&DeleteMyAccountTool{},
 		&UpdateMyCredentialsTool{},
 
+		// Server observability
+		&ServerMetricsTool{},
 	}
 }
 
