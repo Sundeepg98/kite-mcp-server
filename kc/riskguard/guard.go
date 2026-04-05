@@ -35,6 +35,7 @@ func IsOrderTool(name string) bool { return orderTools[name] }
 type RejectionReason string
 
 const (
+	ReasonGlobalFreeze    RejectionReason = "global_freeze"
 	ReasonTradingFrozen   RejectionReason = "trading_frozen"
 	ReasonOrderValue      RejectionReason = "order_value_limit"
 	ReasonQuantityLimit   RejectionReason = "quantity_limit"
@@ -111,6 +112,10 @@ type Guard struct {
 	db                  *alerts.DB
 	logger              *slog.Logger
 	autoFreezeNotifier  AutoFreezeNotifier
+	// Global trading freeze — blocks ALL users from placing orders.
+	globalFrozen   bool
+	globalFrozenBy string
+	globalFrozenAt time.Time
 }
 
 // NewGuard creates a new Guard with system defaults.
@@ -132,6 +137,37 @@ func (g *Guard) SetFreezeQuantityLookup(lookup FreezeQuantityLookup) { g.freezeL
 // auto-freezes a user. The callback receives the user email and the freeze reason.
 func (g *Guard) SetAutoFreezeNotifier(fn AutoFreezeNotifier) { g.autoFreezeNotifier = fn }
 
+// FreezeGlobal activates a server-wide trading freeze that blocks ALL users.
+func (g *Guard) FreezeGlobal(frozenBy, reason string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.globalFrozen = true
+	g.globalFrozenBy = frozenBy
+	g.globalFrozenAt = time.Now()
+	if g.logger != nil {
+		g.logger.Warn("GLOBAL TRADING FREEZE ACTIVATED", "by", frozenBy, "reason", reason)
+	}
+}
+
+// UnfreezeGlobal lifts the server-wide trading freeze.
+func (g *Guard) UnfreezeGlobal() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.globalFrozen = false
+	g.globalFrozenBy = ""
+	g.globalFrozenAt = time.Time{}
+	if g.logger != nil {
+		g.logger.Info("Global trading freeze lifted")
+	}
+}
+
+// IsGloballyFrozen returns true if the server-wide trading freeze is active.
+func (g *Guard) IsGloballyFrozen() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.globalFrozen
+}
+
 // OrderCheckRequest contains the data needed to evaluate an order.
 type OrderCheckRequest struct {
 	Email           string
@@ -148,6 +184,15 @@ type OrderCheckRequest struct {
 // If a limit check fails and the circuit breaker is enabled, the rejection is recorded
 // and the user may be auto-frozen after repeated violations.
 func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
+	// 0. Global freeze — blocks ALL users before any per-user checks.
+	if g.IsGloballyFrozen() {
+		return CheckResult{
+			Allowed: false,
+			Reason:  ReasonGlobalFreeze,
+			Message: "Trading is globally suspended. Contact the server administrator.",
+		}
+	}
+
 	email := strings.ToLower(req.Email)
 
 	// 1. Kill switch — not a limit violation, so no auto-freeze logic here

@@ -25,8 +25,9 @@ type ToolUsageRow struct {
 
 // OverviewTemplateData is passed to the overview template partials.
 type OverviewTemplateData struct {
-	Cards []StatCard
-	Tools []ToolUsageRow
+	Cards        []StatCard
+	Tools        []ToolUsageRow
+	GlobalFrozen bool
 }
 
 // overviewToTemplateData converts OverviewData into template-ready data.
@@ -44,6 +45,10 @@ func overviewToTemplateData(d OverviewData) OverviewTemplateData {
 		{Label: "GC Pause (ms)", Value: fmt.Sprintf("%.2f", d.GCPauseMs)},
 		{Label: "DB Size (MB)", Value: fmt.Sprintf("%.2f", d.DBSizeMB)},
 	}
+	// Show a red "Global Freeze" card when trading is globally suspended.
+	if d.GlobalFrozen {
+		cards = append([]StatCard{{Label: "Global Freeze", Value: "ACTIVE", Class: "red"}}, cards...)
+	}
 
 	type kv struct {
 		k string
@@ -60,7 +65,7 @@ func overviewToTemplateData(d OverviewData) OverviewTemplateData {
 		tools[i] = ToolUsageRow{Name: s.k, Count: fmt.Sprintf("%d", s.v)}
 	}
 
-	return OverviewTemplateData{Cards: cards, Tools: tools}
+	return OverviewTemplateData{Cards: cards, Tools: tools, GlobalFrozen: d.GlobalFrozen}
 }
 
 func boolClass(cond bool, cls string) string {

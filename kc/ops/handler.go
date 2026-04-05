@@ -107,6 +107,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	// Risk management (admin only)
 	mux.Handle("/admin/ops/api/risk/freeze", wrap(h.freezeTrading))
 	mux.Handle("/admin/ops/api/risk/unfreeze", wrap(h.unfreezeTrading))
+	mux.Handle("/admin/ops/api/risk/freeze-global", wrap(h.freezeTradingGlobal))
+	mux.Handle("/admin/ops/api/risk/unfreeze-global", wrap(h.unfreezeTradingGlobal))
 	// Key registry (admin only)
 	mux.Handle("/admin/ops/api/registry", wrap(h.registryHandler))
 	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
@@ -689,6 +691,66 @@ func (h *Handler) unfreezeTrading(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Admin unfroze trading", "admin", adminEmail, "target", body.Email)
 	h.logAdminAction(adminEmail, "unfreeze_trading", body.Email)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Trading unfrozen for " + body.Email})
+}
+
+// freezeTradingGlobal activates a server-wide trading freeze. Admin only.
+func (h *Handler) freezeTradingGlobal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Reason  string `json:"reason"`
+		Confirm bool   `json:"confirm"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if !body.Confirm {
+		h.writeJSONError(w, http.StatusBadRequest, "This is a destructive action. Set confirm: true to proceed.")
+		return
+	}
+	guard := h.manager.RiskGuard()
+	if guard == nil {
+		http.Error(w, "riskguard not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	reason := body.Reason
+	if reason == "" {
+		reason = "Admin emergency freeze"
+	}
+	guard.FreezeGlobal(adminEmail, reason)
+	h.logger.Warn("Admin activated GLOBAL trading freeze", "admin", adminEmail, "reason", reason)
+	h.logAdminAction(adminEmail, "freeze_global", reason)
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Global trading freeze activated"})
+}
+
+// unfreezeTradingGlobal lifts the server-wide trading freeze. Admin only.
+func (h *Handler) unfreezeTradingGlobal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	adminEmail := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(adminEmail) {
+		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+	guard := h.manager.RiskGuard()
+	if guard == nil {
+		http.Error(w, "riskguard not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	guard.UnfreezeGlobal()
+	h.logger.Info("Admin lifted global trading freeze", "admin", adminEmail)
+	h.logAdminAction(adminEmail, "unfreeze_global", "")
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Global trading freeze lifted"})
 }
 
 // logAdminAction records an admin action in the audit trail.

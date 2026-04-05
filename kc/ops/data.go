@@ -22,6 +22,7 @@ type OverviewData struct {
 	PerUserCredentials int              `json:"per_user_credentials"`
 	ToolUsage          map[string]int64 `json:"tool_usage"`
 	DailyUsers         int64            `json:"daily_users"`
+	GlobalFrozen       bool             `json:"global_frozen"`
 	// Runtime / observability
 	HeapAllocMB float64 `json:"heap_alloc_mb"`
 	Goroutines  int     `json:"goroutines"`
@@ -81,6 +82,12 @@ func (h *Handler) buildOverview() OverviewData {
 		}
 	}
 
+	// Check global trading freeze state from riskguard.
+	var globalFrozen bool
+	if guard := h.manager.RiskGuard(); guard != nil {
+		globalFrozen = guard.IsGloballyFrozen()
+	}
+
 	return OverviewData{
 		Version:            h.version,
 		Uptime:             time.Since(h.startTime).Truncate(time.Second).String(),
@@ -92,6 +99,7 @@ func (h *Handler) buildOverview() OverviewData {
 		PerUserCredentials: h.manager.CredentialStore().Count(),
 		ToolUsage:          toolUsage,
 		DailyUsers:         dailyUsers,
+		GlobalFrozen:       globalFrozen,
 		HeapAllocMB:        heapAllocMB,
 		Goroutines:         goroutines,
 		GCPauseMs:          gcPauseMs,
