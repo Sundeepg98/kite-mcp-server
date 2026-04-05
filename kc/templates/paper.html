@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Paper Trading · Kite MCP</title>
 <link rel="stylesheet" href="/static/dashboard-base.css">
+<script src="/static/htmx.min.js"></script>
 <style>
 .paper-banner { background: var(--purple-dim); border: 1px solid var(--purple); border-radius: 6px; padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .paper-banner-left { display: flex; align-items: center; gap: 10px; }
@@ -39,9 +40,9 @@
     <span class="topbar-title">Paper Trading</span>
   </div>
   <div class="topbar-right">
-    <span class="topbar-updated" id="lastUpdated">--</span>
-    <span class="topbar-email" id="userEmail">--</span>
-    <div class="status-dot" id="tokenDot"></div>
+    <span class="topbar-updated" id="lastUpdated">{{.UpdatedAt}}</span>
+    <span class="topbar-email" id="userEmail">{{.Email}}</span>
+    <div class="status-dot{{if .TokenValid}} valid{{else}} expired{{end}}" id="tokenDot"></div>
   </div>
 </div>
 
@@ -55,368 +56,62 @@
 </nav>
 
 <div class="content">
-  <div id="paperBanner" class="paper-banner" style="display:none"></div>
-  <div class="stats-grid" id="statsGrid"></div>
-  <div id="holdingsSection"></div>
-  <div id="positionsSection"></div>
-  <div id="ordersSection"></div>
-  <div id="resetSection" style="margin-top:24px;display:none">
+  <div id="paperContent"
+       hx-get="/dashboard/api/paper-fragment"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+
+    {{if .Enabled}}
+      {{template "user_paper_banner" .Banner}}
+
+      <div class="stats-grid" id="statsGrid">
+        {{template "user_paper_stats" .Stats}}
+      </div>
+
+      {{template "user_paper_tables" .Tables}}
+    {{else}}
+      {{template "user_paper_banner" .Banner}}
+      <div class="empty-state" id="disabledState">
+        Paper trading is not enabled. Use the <code>paper_trading_toggle</code> tool to enable it.
+      </div>
+    {{end}}
+
+  </div>
+
+  {{if .Enabled}}
+  <div id="resetSection" style="margin-top:24px;">
     <button class="reset-btn" id="resetBtn">Reset Paper Account</button>
   </div>
-  <div id="loadingState" class="loading-state">Loading paper trading data...</div>
-  <div id="disabledState" class="empty-state" style="display:none">
-    Paper trading is not enabled. Use the <code>paper_trading_toggle</code> tool to enable it.
-  </div>
+  {{end}}
 </div>
 
 <script>
 (function() {
   'use strict';
-
-  // --- Safe DOM helpers ---
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = String(text);
-    return e;
-  }
-  function tdEl(text, cls) {
-    var c = document.createElement('td');
-    if (cls) c.className = cls;
-    if (text != null) c.textContent = String(text);
-    return c;
-  }
-  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
-
-  function fmtINR(n) {
-    if (n == null || isNaN(n)) return '--';
-    var neg = n < 0;
-    var abs = Math.abs(n);
-    var parts = abs.toFixed(2).split('.');
-    var intPart = parts[0];
-    var decPart = parts[1];
-    if (intPart.length > 3) {
-      var last3 = intPart.slice(-3);
-      var rest = intPart.slice(0, -3);
-      var groups = [];
-      while (rest.length > 2) { groups.unshift(rest.slice(-2)); rest = rest.slice(0, -2); }
-      if (rest.length > 0) groups.unshift(rest);
-      intPart = groups.join(',') + ',' + last3;
-    }
-    return (neg ? '-' : '') + '\u20B9' + intPart + '.' + decPart;
-  }
-
-  function pnlCls(n) { return n > 0 ? 'green' : n < 0 ? 'red' : ''; }
-
-  function fmtTime(iso) {
-    if (!iso) return '--';
-    var d = new Date(iso);
-    return d.toLocaleTimeString('en-GB', {hour12: false}) + ' ' + d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
-  }
-
-  var refreshTimer = null;
-
-  // --- Fetch all data ---
-  function fetchAll() {
-    Promise.all([
-      fetch('/dashboard/api/paper/status').then(function(r) { return r.ok ? r.json() : {error: 'http_' + r.status, enabled: false}; }),
-      fetch('/dashboard/api/paper/holdings').then(function(r) { return r.ok ? r.json() : []; }),
-      fetch('/dashboard/api/paper/positions').then(function(r) { return r.ok ? r.json() : {net:[], day:[]}; }),
-      fetch('/dashboard/api/paper/orders').then(function(r) { return r.ok ? r.json() : []; })
-    ]).then(function(results) {
-      var status = results[0];
-      var holdings = results[1];
-      var positions = results[2];
-      var orders = results[3];
-      render(status, holdings, positions, orders);
-    }).catch(function(err) {
-      document.getElementById('loadingState').textContent = 'Failed to load: ' + err.message;
+  // Reset handler - kept as interactive JS
+  var resetBtn = document.getElementById('resetBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function() {
+      if (!confirm('Reset paper trading account? This clears all orders, positions, and holdings. Cash will be restored to the initial amount.')) return;
+      resetBtn.disabled = true;
+      resetBtn.textContent = 'Resetting...';
+      fetch('/dashboard/api/paper/reset', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+          resetBtn.disabled = false;
+          resetBtn.textContent = 'Reset Paper Account';
+          // Trigger htmx refresh
+          htmx.trigger('#paperContent', 'htmx:load');
+          document.getElementById('paperContent').dispatchEvent(new Event('refresh'));
+          location.reload();
+        })
+        .catch(function(err) {
+          resetBtn.disabled = false;
+          resetBtn.textContent = 'Reset Paper Account';
+          alert('Reset failed: ' + err.message);
+        });
     });
   }
-
-  function render(status, holdingsData, positionsData, ordersData) {
-    document.getElementById('loadingState').style.display = 'none';
-
-    if (status.error === 'http_401' || status.error === 'not_authenticated') {
-      document.getElementById('disabledState').style.display = '';
-      document.getElementById('disabledState').textContent = 'Authentication required. Please log in via your MCP client first.';
-      document.getElementById('paperBanner').style.display = 'none';
-      document.getElementById('resetSection').style.display = 'none';
-      clearChildren(document.getElementById('statsGrid'));
-      return;
-    }
-    if (!status.enabled) {
-      document.getElementById('disabledState').style.display = '';
-      document.getElementById('paperBanner').style.display = 'none';
-      document.getElementById('resetSection').style.display = 'none';
-      clearChildren(document.getElementById('statsGrid'));
-      clearChildren(document.getElementById('holdingsSection'));
-      clearChildren(document.getElementById('positionsSection'));
-      clearChildren(document.getElementById('ordersSection'));
-      return;
-    }
-
-    document.getElementById('disabledState').style.display = 'none';
-
-    // Banner
-    var banner = document.getElementById('paperBanner');
-    clearChildren(banner);
-    banner.style.display = '';
-    var bannerLeft = el('div', 'paper-banner-left');
-    bannerLeft.appendChild(el('span', 'paper-badge paper-badge-on', 'PAPER ON'));
-    var info = el('span', 'paper-banner-info');
-    info.appendChild(document.createTextNode('Initial: '));
-    info.appendChild(el('span', '', fmtINR(status.initial_cash)));
-    info.appendChild(document.createTextNode(' | Created: '));
-    info.appendChild(el('span', '', fmtTime(status.created_at)));
-    bannerLeft.appendChild(info);
-    banner.appendChild(bannerLeft);
-
-    // Stats cards
-    var holdingsArr = Array.isArray(holdingsData) ? holdingsData : [];
-    var posObj = positionsData || {};
-    var posArr = Array.isArray(posObj.net) ? posObj.net : (Array.isArray(posObj.day) ? posObj.day : []);
-
-    var totalHoldingsVal = 0;
-    var unrealizedPnl = 0;
-    for (var i = 0; i < holdingsArr.length; i++) {
-      var h = holdingsArr[i];
-      totalHoldingsVal += (h.last_price || h.average_price || 0) * (h.quantity || 0);
-      unrealizedPnl += (h.pnl || 0);
-    }
-    for (var j = 0; j < posArr.length; j++) {
-      unrealizedPnl += (posArr[j].pnl || 0);
-    }
-    var portfolioVal = (status.cash_balance || 0) + totalHoldingsVal;
-
-    var grid = document.getElementById('statsGrid');
-    clearChildren(grid);
-    var cards = [
-      {label: 'Portfolio Value', value: fmtINR(portfolioVal), cls: ''},
-      {label: 'Unrealized P&L', value: fmtINR(unrealizedPnl), cls: pnlCls(unrealizedPnl)},
-      {label: 'Cash Balance', value: fmtINR(status.cash_balance), cls: ''},
-      {label: 'Positions', value: String(status.positions || 0), cls: ''}
-    ];
-    for (var c = 0; c < cards.length; c++) {
-      var card = el('div', 'stat-card');
-      card.appendChild(el('div', 'stat-label', cards[c].label));
-      card.appendChild(el('div', 'stat-value ' + cards[c].cls, cards[c].value));
-      grid.appendChild(card);
-    }
-
-    // Holdings table
-    renderHoldings(holdingsArr);
-    renderPositions(posArr);
-    renderOrders(ordersData);
-
-    // Reset section
-    document.getElementById('resetSection').style.display = '';
-
-    // Update timestamp
-    var now = new Date();
-    document.getElementById('lastUpdated').textContent =
-      now.toLocaleTimeString('en-GB', {hour12: false}) + ' ' + now.toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
-  }
-
-  function renderHoldings(holdings) {
-    var section = document.getElementById('holdingsSection');
-    clearChildren(section);
-    section.appendChild(el('div', 'section-header', 'Holdings'));
-
-    if (!holdings || holdings.length === 0) {
-      section.appendChild(el('div', 'empty-state', 'No paper holdings'));
-      return;
-    }
-    var wrap = el('div', 'tbl-wrap');
-    var table = document.createElement('table');
-    var thead = document.createElement('thead');
-    var hr = document.createElement('tr');
-    var cols = ['Symbol', 'Exchange', 'Qty', 'Avg Price', 'LTP', 'P&L'];
-    var rightCols = {2:true, 3:true, 4:true, 5:true};
-    for (var i = 0; i < cols.length; i++) {
-      var th = document.createElement('th');
-      th.textContent = cols[i];
-      if (rightCols[i]) th.className = 'right';
-      hr.appendChild(th);
-    }
-    thead.appendChild(hr);
-    table.appendChild(thead);
-
-    var tbody = document.createElement('tbody');
-    for (var j = 0; j < holdings.length; j++) {
-      var h = holdings[j];
-      var pnl = h.pnl || 0;
-      var tr = document.createElement('tr');
-      var symTd = tdEl(h.tradingsymbol);
-      symTd.style.fontWeight = '600';
-      symTd.style.color = 'var(--text-0)';
-      var badgeEl = el('span', 'badge badge-purple', 'PAPER');
-      badgeEl.style.marginLeft = '6px';
-      badgeEl.style.fontSize = '9px';
-      symTd.appendChild(badgeEl);
-      tr.appendChild(symTd);
-      tr.appendChild(tdEl(h.exchange));
-      tr.appendChild(tdEl(h.quantity, 'right'));
-      tr.appendChild(tdEl(fmtINR(h.average_price), 'right'));
-      tr.appendChild(tdEl(fmtINR(h.last_price), 'right'));
-      var pnlTd = tdEl(fmtINR(pnl), 'right');
-      if (pnl > 0) pnlTd.style.color = 'var(--green)';
-      else if (pnl < 0) pnlTd.style.color = 'var(--red)';
-      tr.appendChild(pnlTd);
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    section.appendChild(wrap);
-  }
-
-  function renderPositions(positions) {
-    var section = document.getElementById('positionsSection');
-    clearChildren(section);
-    section.appendChild(el('div', 'section-header', 'Positions'));
-
-    if (!positions || positions.length === 0) {
-      section.appendChild(el('div', 'empty-state', 'No open paper positions'));
-      return;
-    }
-    var wrap = el('div', 'tbl-wrap');
-    var table = document.createElement('table');
-    var thead = document.createElement('thead');
-    var hr = document.createElement('tr');
-    var cols = ['Symbol', 'Product', 'Qty', 'Avg Price', 'LTP', 'P&L'];
-    var rightCols = {2:true, 3:true, 4:true, 5:true};
-    for (var i = 0; i < cols.length; i++) {
-      var th = document.createElement('th');
-      th.textContent = cols[i];
-      if (rightCols[i]) th.className = 'right';
-      hr.appendChild(th);
-    }
-    thead.appendChild(hr);
-    table.appendChild(thead);
-
-    var tbody = document.createElement('tbody');
-    for (var j = 0; j < positions.length; j++) {
-      var p = positions[j];
-      var pnl = p.pnl || 0;
-      var tr = document.createElement('tr');
-      var symTd = tdEl(p.tradingsymbol);
-      symTd.style.fontWeight = '600';
-      symTd.style.color = 'var(--text-0)';
-      tr.appendChild(symTd);
-      var prodTd = document.createElement('td');
-      prodTd.appendChild(el('span', 'badge badge-amber', p.product || '--'));
-      tr.appendChild(prodTd);
-      tr.appendChild(tdEl(p.quantity, 'right'));
-      tr.appendChild(tdEl(fmtINR(p.average_price), 'right'));
-      tr.appendChild(tdEl(fmtINR(p.last_price), 'right'));
-      var pnlTd = tdEl(fmtINR(pnl), 'right');
-      if (pnl > 0) pnlTd.style.color = 'var(--green)';
-      else if (pnl < 0) pnlTd.style.color = 'var(--red)';
-      tr.appendChild(pnlTd);
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    section.appendChild(wrap);
-  }
-
-  function renderOrders(ordersData) {
-    var section = document.getElementById('ordersSection');
-    clearChildren(section);
-    section.appendChild(el('div', 'section-header', 'Orders'));
-
-    var orders = Array.isArray(ordersData) ? ordersData : [];
-    if (orders.length === 0) {
-      section.appendChild(el('div', 'empty-state', 'No paper orders'));
-      return;
-    }
-    var wrap = el('div', 'tbl-wrap');
-    var table = document.createElement('table');
-    var thead = document.createElement('thead');
-    var hr = document.createElement('tr');
-    var cols = ['Order ID', 'Symbol', 'Side', 'Type', 'Qty', 'Price', 'Status', 'Time'];
-    var rightCols = {4:true, 5:true};
-    for (var i = 0; i < cols.length; i++) {
-      var th = document.createElement('th');
-      th.textContent = cols[i];
-      if (rightCols[i]) th.className = 'right';
-      hr.appendChild(th);
-    }
-    thead.appendChild(hr);
-    table.appendChild(thead);
-
-    var tbody = document.createElement('tbody');
-    for (var j = 0; j < orders.length; j++) {
-      var o = orders[j];
-      var tr = document.createElement('tr');
-      var idTd = tdEl((o.order_id || '').replace('PAPER_', 'P'));
-      idTd.style.fontSize = '10px';
-      tr.appendChild(idTd);
-      var symTd = tdEl(o.tradingsymbol || '--');
-      symTd.style.fontWeight = '600';
-      symTd.style.color = 'var(--text-0)';
-      tr.appendChild(symTd);
-      var sideTd = document.createElement('td');
-      var sideClass = o.transaction_type === 'BUY' ? 'badge-green' : 'badge-red';
-      sideTd.appendChild(el('span', 'badge ' + sideClass, o.transaction_type || '--'));
-      tr.appendChild(sideTd);
-      tr.appendChild(tdEl(o.order_type || '--'));
-      tr.appendChild(tdEl(o.quantity, 'right'));
-      var priceVal = o.status === 'COMPLETE' ? o.average_price : o.price;
-      tr.appendChild(tdEl(fmtINR(priceVal), 'right'));
-      var statusTd = document.createElement('td');
-      var stClass = 'badge-amber';
-      if (o.status === 'COMPLETE') stClass = 'badge-green';
-      else if (o.status === 'REJECTED' || o.status === 'CANCELLED') stClass = 'badge-red';
-      statusTd.appendChild(el('span', 'badge ' + stClass, o.status || '--'));
-      tr.appendChild(statusTd);
-      tr.appendChild(tdEl(fmtTime(o.placed_at)));
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    section.appendChild(wrap);
-  }
-
-  // Reset handler
-  document.getElementById('resetBtn').addEventListener('click', function() {
-    if (!confirm('Reset paper trading account? This clears all orders, positions, and holdings. Cash will be restored to the initial amount.')) return;
-    var btn = document.getElementById('resetBtn');
-    btn.disabled = true;
-    btn.textContent = 'Resetting...';
-    clearInterval(refreshTimer);
-    fetch('/dashboard/api/paper/reset', { method: 'POST' })
-      .then(function(r) { return r.json(); })
-      .then(function() {
-        btn.disabled = false;
-        btn.textContent = 'Reset Paper Account';
-        fetchAll();
-        refreshTimer = setInterval(fetchAll, 10000);
-      })
-      .catch(function(err) {
-        btn.disabled = false;
-        btn.textContent = 'Reset Paper Account';
-        alert('Reset failed: ' + err.message);
-        refreshTimer = setInterval(fetchAll, 10000);
-      });
-  });
-
-  // --- Status / auth gating ---
-  function refreshStatus() {
-    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
-      document.getElementById('userEmail').textContent = d.email || '--';
-      var dot = document.getElementById('tokenDot');
-      var valid = d.kite_token && d.kite_token.valid;
-      dot.style.background = valid ? 'var(--green)' : 'var(--red)';
-      dot.style.boxShadow = valid ? '0 0 6px var(--green)' : '0 0 6px var(--red)';
-    }).catch(function() {});
-  }
-
-  // Init + auto-refresh
-  fetchAll();
-  refreshStatus();
-  refreshTimer = setInterval(fetchAll, 10000);
-  setInterval(refreshStatus, 10000);
 })();
 </script>
 </body>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orders P&amp;L · Kite MCP</title>
 <link rel="stylesheet" href="/static/dashboard-base.css">
+<script src="/static/htmx.min.js"></script>
 <style>
 .stats-grid { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
 .loading-state, .empty-state { padding: 48px 20px; }
@@ -92,9 +93,9 @@
     <span class="topbar-title">Orders P&amp;L</span>
   </div>
   <div class="topbar-right">
-    <span class="topbar-updated" id="lastUpdated">--</span>
-    <span class="topbar-email" id="userEmail">--</span>
-    <div class="status-dot" id="tokenDot"></div>
+    <span class="topbar-updated" id="lastUpdated">{{.UpdatedAt}}</span>
+    <span class="topbar-email" id="userEmail">{{.Email}}</span>
+    <div class="status-dot{{if .TokenValid}} valid{{else}} expired{{end}}" id="tokenDot"></div>
   </div>
 </div>
 
@@ -119,32 +120,14 @@
     </div>
   </div>
 
-  <div class="stats-grid">
-    <div class="stat-card"><div class="stat-label">Total Orders</div><div class="stat-value" id="statTotal">--</div></div>
-    <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value" id="statCompleted">--</div></div>
-    <div class="stat-card"><div class="stat-label">Total P&amp;L</div><div class="stat-value" id="statPnL">--</div></div>
-    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="statWinRate">--</div><div class="stat-sub" id="statWinRateSub"></div></div>
+  <!-- Stats (server-rendered) -->
+  <div class="stats-grid" id="statsGrid">
+    {{template "user_orders_stats" .Stats}}
   </div>
 
-  <div id="loadingState" class="loading-state">Loading orders...</div>
-  <div id="emptyState" class="empty-state" style="display:none">No AI-assisted orders found in this period.</div>
-  <div class="table-wrap" id="tableWrap" style="display:none">
-    <table class="orders-table">
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Side</th>
-          <th>Qty</th>
-          <th>Fill Price</th>
-          <th>Current Price</th>
-          <th>P&amp;L</th>
-          <th>P&amp;L %</th>
-          <th>Status</th>
-          <th>Time</th>
-        </tr>
-      </thead>
-      <tbody id="ordersBody"></tbody>
-    </table>
+  <!-- Orders table (server-rendered initial state) -->
+  <div id="ordersContent">
+    {{template "user_orders_table" .Orders}}
   </div>
 </div>
 
@@ -156,7 +139,7 @@
   var state = { days: 0 };
   var refreshTimer = null;
 
-  // Seed state from URL parameters for deep-link support
+  // Seed state from URL parameters
   (function() {
     var params = new URLSearchParams(window.location.search);
     if (params.get('days')) {
@@ -177,19 +160,16 @@
     if (v == null) return '--';
     return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-
   function fmtPnL(v) {
     if (v == null) return '--';
     var prefix = v > 0 ? '+' : '';
     return prefix + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-
   function fmtPct(v) {
     if (v == null) return '--';
     var prefix = v > 0 ? '+' : '';
     return prefix + v.toFixed(2) + '%';
   }
-
   function fmtTime(isoStr) {
     if (!isoStr) return '--';
     var d = new Date(isoStr);
@@ -199,7 +179,6 @@
     var m = String(d.getMinutes()).padStart(2, '0');
     return day + ' ' + mon + ' ' + h + ':' + m;
   }
-
   function statusClass(s) {
     if (!s) return 'status-pending';
     var sl = s.toUpperCase();
@@ -209,114 +188,20 @@
     if (sl === 'OPEN' || sl === 'TRIGGER PENDING') return 'status-open';
     return 'status-pending';
   }
-
   function pnlClass(v) {
     if (v == null || v === 0) return 'pnl-zero';
     return v > 0 ? 'pnl-pos' : 'pnl-neg';
   }
 
-  function updateTimestamp() {
-    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
-  }
-
-  var roleApplied = false;
-  function fetchEmail() {
-    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
-      if (d.email) document.getElementById('userEmail').textContent = d.email;
-      var dot = document.getElementById('tokenDot');
-      var valid = d.kite_token && d.kite_token.valid;
-      dot.className = 'status-dot ' + (valid ? 'valid' : 'expired');
-      if (!roleApplied) {
-        roleApplied = true;
-        if (d.role) {
-          var emailEl = document.getElementById('userEmail');
-          var badge = document.createElement('span');
-          badge.textContent = d.role;
-          badge.className = 'role-badge role-badge-' + d.role;
-          emailEl.parentNode.insertBefore(badge, emailEl.nextSibling);
-        }
-      }
-    }).catch(function() {});
-  }
-
   function buildURL() {
     var since = new Date();
-    if (state.days > 0) {
-      since.setDate(since.getDate() - state.days);
-    }
+    if (state.days > 0) since.setDate(since.getDate() - state.days);
     since.setHours(0, 0, 0, 0);
     return '/dashboard/api/orders?since=' + encodeURIComponent(since.toISOString());
   }
 
-  function fetchOrders() {
-    var loading = document.getElementById('loadingState');
-    var empty = document.getElementById('emptyState');
-    var tableWrap = document.getElementById('tableWrap');
-    var errorBanner = document.getElementById('errorBanner');
-
-    loading.style.display = 'block';
-    empty.style.display = 'none';
-    tableWrap.style.display = 'none';
-    errorBanner.style.display = 'none';
-
-    fetch(buildURL()).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function(data) {
-      loading.style.display = 'none';
-
-      var orders = data.orders || [];
-      var summary = data.summary || {};
-
-      updateStats(summary, orders.length);
-
-      if (orders.length === 0) {
-        empty.style.display = 'block';
-        updateTimestamp();
-        return;
-      }
-
-      tableWrap.style.display = 'block';
-      renderTable(orders);
-      updateTimestamp();
-    }).catch(function(err) {
-      loading.style.display = 'none';
-      errorBanner.textContent = 'Failed to load orders: ' + err.message;
-      errorBanner.style.display = 'block';
-    });
-  }
-
-  function updateStats(summary, count) {
-    document.getElementById('statTotal').textContent = summary.total_orders != null ? summary.total_orders : count;
-    document.getElementById('statCompleted').textContent = summary.completed != null ? summary.completed : '--';
-
-    var pnlEl = document.getElementById('statPnL');
-    if (summary.total_pnl != null) {
-      pnlEl.textContent = fmtPnL(summary.total_pnl);
-      pnlEl.className = 'stat-value ' + (summary.total_pnl > 0 ? 'green' : (summary.total_pnl < 0 ? 'red' : ''));
-    } else {
-      pnlEl.textContent = '--';
-      pnlEl.className = 'stat-value';
-    }
-
-    var winEl = document.getElementById('statWinRate');
-    var winSub = document.getElementById('statWinRateSub');
-    var total = (summary.winning_trades || 0) + (summary.losing_trades || 0);
-    if (total > 0) {
-      var rate = ((summary.winning_trades || 0) / total * 100).toFixed(0);
-      winEl.textContent = rate + '%';
-      winEl.className = 'stat-value ' + (parseInt(rate) >= 50 ? 'green' : 'red');
-      winSub.textContent = (summary.winning_trades || 0) + 'W / ' + (summary.losing_trades || 0) + 'L';
-    } else {
-      winEl.textContent = '--';
-      winEl.className = 'stat-value';
-      winSub.textContent = '';
-    }
-  }
-
-  // Cache for attribution data per order_id
+  // Cache for attribution data
   var attrCache = {};
-  // Cache for order lifecycle data per order_id
   var orderLifecycleCache = {};
 
   function buildAttrPlaceholder() {
@@ -325,65 +210,97 @@
     return inner;
   }
 
+  function fetchOrders() {
+    var errorBanner = document.getElementById('errorBanner');
+    errorBanner.style.display = 'none';
+
+    fetch(buildURL()).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      var orders = data.orders || [];
+      var summary = data.summary || {};
+      updateStats(summary, orders.length);
+      renderTable(orders);
+      document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
+    }).catch(function(err) {
+      errorBanner.textContent = 'Failed to load orders: ' + err.message;
+      errorBanner.style.display = 'block';
+    });
+  }
+
+  function updateStats(summary, count) {
+    // Update stat card values by finding them in the stats grid
+    var cards = document.querySelectorAll('#statsGrid .stat-card');
+    if (cards.length >= 4) {
+      cards[0].querySelector('.stat-value').textContent = summary.total_orders != null ? summary.total_orders : count;
+      cards[1].querySelector('.stat-value').textContent = summary.completed != null ? summary.completed : '--';
+      var pnlEl = cards[2].querySelector('.stat-value');
+      if (summary.total_pnl != null) {
+        pnlEl.textContent = fmtPnL(summary.total_pnl);
+        pnlEl.className = 'stat-value ' + (summary.total_pnl > 0 ? 'green' : (summary.total_pnl < 0 ? 'red' : ''));
+      } else {
+        pnlEl.textContent = '--';
+        pnlEl.className = 'stat-value';
+      }
+      var winEl = cards[3].querySelector('.stat-value');
+      var winSub = cards[3].querySelector('.stat-sub');
+      var total = (summary.winning_trades || 0) + (summary.losing_trades || 0);
+      if (total > 0) {
+        var rate = ((summary.winning_trades || 0) / total * 100).toFixed(0);
+        winEl.textContent = rate + '%';
+        if (winSub) winSub.textContent = (summary.winning_trades || 0) + 'W / ' + (summary.losing_trades || 0) + 'L';
+      }
+    }
+  }
+
   function renderTable(orders) {
-    var body = document.getElementById('ordersBody');
-    clearChildren(body);
+    var content = document.getElementById('ordersContent');
+    clearChildren(content);
+    if (orders.length === 0) {
+      content.appendChild(el('div', 'empty-state', 'No AI-assisted orders found in this period.'));
+      return;
+    }
+    var wrap = el('div', 'table-wrap', '');
+    var table = document.createElement('table');
+    table.className = 'orders-table';
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr');
+    ['Symbol','Side','Qty','Fill Price','Current Price','P&L','P&L %','Status','Time'].forEach(function(h) {
+      var th = document.createElement('th');
+      th.textContent = h;
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    var body = document.createElement('tbody');
+    body.id = 'ordersBody';
 
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
-      // Store lifecycle data for later rendering
-      if (o.lifecycle && o.lifecycle.length > 0) {
-        orderLifecycleCache[o.order_id] = o.lifecycle;
-      }
+      if (o.lifecycle && o.lifecycle.length > 0) orderLifecycleCache[o.order_id] = o.lifecycle;
       var tr = document.createElement('tr');
       tr.className = 'expandable';
       tr.setAttribute('data-order-id', o.order_id || '');
-
-      // Symbol
       var tdSym = el('td', '', null);
-      var symSpan = el('span', 'mono', o.symbol || o.order_id);
-      tdSym.appendChild(symSpan);
-      if (o.exchange) {
-        var exchSpan = el('span', 'text-muted', ' ' + o.exchange);
-        exchSpan.style.fontSize = '11px';
-        tdSym.appendChild(exchSpan);
-      }
-      if (o.error) {
-        tdSym.appendChild(el('div', 'order-error', o.error));
-      }
+      tdSym.appendChild(el('span', 'mono', o.symbol || o.order_id));
+      if (o.exchange) { var ex = el('span', 'text-muted', ' ' + o.exchange); ex.style.fontSize = '11px'; tdSym.appendChild(ex); }
+      if (o.error) tdSym.appendChild(el('div', 'order-error', o.error));
       tr.appendChild(tdSym);
-
-      // Side
       var sideClass = o.side === 'BUY' ? 'side-buy' : (o.side === 'SELL' ? 'side-sell' : 'mono');
       tr.appendChild(el('td', sideClass, o.side || '--'));
-
-      // Qty
       tr.appendChild(el('td', 'mono', o.quantity || '--'));
-
-      // Fill Price
       tr.appendChild(el('td', 'mono', fmtPrice(o.fill_price)));
-
-      // Current Price
       tr.appendChild(el('td', 'mono', fmtPrice(o.current_price)));
-
-      // P&L
       tr.appendChild(el('td', pnlClass(o.pnl), fmtPnL(o.pnl)));
-
-      // P&L %
       tr.appendChild(el('td', pnlClass(o.pnl_pct), fmtPct(o.pnl_pct)));
-
-      // Status
       var tdStatus = el('td', '', null);
-      var badge = el('span', 'status-badge ' + statusClass(o.status), o.status || 'UNKNOWN');
-      tdStatus.appendChild(badge);
+      tdStatus.appendChild(el('span', 'status-badge ' + statusClass(o.status), o.status || 'UNKNOWN'));
       tr.appendChild(tdStatus);
-
-      // Time
       tr.appendChild(el('td', 'mono text-muted', fmtTime(o.placed_at)));
-
       body.appendChild(tr);
 
-      // Attribution expandable row (hidden by default)
       var attrTr = document.createElement('tr');
       attrTr.className = 'attr-row';
       attrTr.setAttribute('data-attr-for', o.order_id || '');
@@ -393,9 +310,12 @@
       attrTr.appendChild(attrTd);
       body.appendChild(attrTr);
     }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    content.appendChild(wrap);
+    attachExpandHandlers();
   }
 
-  // --- Order Lifecycle Timeline ---
   function lifecycleDotClass(status) {
     if (!status) return 'tl-dot-amber';
     var s = status.toUpperCase();
@@ -407,44 +327,23 @@
 
   function renderOrderLifecycle(container, lifecycle) {
     if (!lifecycle || lifecycle.length === 0) return;
-
     var wrap = el('div', 'order-lifecycle', '');
     wrap.appendChild(el('div', 'order-lifecycle-label', 'Order Lifecycle'));
-
     var card = el('div', 'tl-card', '');
     var stages = el('div', 'tl-stages', '');
-
     for (var i = 0; i < lifecycle.length; i++) {
       var step = lifecycle[i];
-      if (i > 0) {
-        stages.appendChild(el('span', 'tl-arrow', '\u2192'));
-      }
+      if (i > 0) stages.appendChild(el('span', 'tl-arrow', '\u2192'));
       var stage = el('span', 'tl-stage', '');
       stage.appendChild(el('span', 'tl-dot ' + lifecycleDotClass(step.status)));
       stage.appendChild(el('span', 'tl-label', step.status));
       if (step.timestamp) {
         var ts = new Date(step.timestamp);
-        var h = String(ts.getHours()).padStart(2, '0');
-        var m = String(ts.getMinutes()).padStart(2, '0');
-        var s2 = String(ts.getSeconds()).padStart(2, '0');
-        stage.appendChild(el('span', 'tl-time', h + ':' + m + ':' + s2));
+        stage.appendChild(el('span', 'tl-time', String(ts.getHours()).padStart(2,'0') + ':' + String(ts.getMinutes()).padStart(2,'0') + ':' + String(ts.getSeconds()).padStart(2,'0')));
       }
       stages.appendChild(stage);
     }
-
     card.appendChild(stages);
-
-    // Show the last status message if present
-    var lastWithMsg = null;
-    for (var j = lifecycle.length - 1; j >= 0; j--) {
-      if (lifecycle[j].message) { lastWithMsg = lifecycle[j]; break; }
-    }
-    if (lastWithMsg && lastWithMsg.message) {
-      var msgEl = el('div', '', lastWithMsg.message);
-      msgEl.style.cssText = 'font-size:11px; color:var(--text-2); margin-top:6px; font-family:var(--mono);';
-      card.appendChild(msgEl);
-    }
-
     wrap.appendChild(card);
     container.appendChild(wrap);
   }
@@ -455,102 +354,66 @@
     var inner = attrRow.querySelector('.attr-inner');
     if (!inner) return;
     clearChildren(inner);
-
-    // Render order lifecycle first (from the order data we stored)
     var orderData = orderLifecycleCache[orderID];
-    if (orderData) {
-      renderOrderLifecycle(inner, orderData);
-    }
-
+    if (orderData) renderOrderLifecycle(inner, orderData);
     var steps = data.steps || [];
     if (steps.length === 0 && !orderData) {
       inner.appendChild(el('div', 'attr-empty', 'No AI decision trace found for this order.'));
       return;
     }
-
     if (steps.length > 0) {
-      // Label with icon
-      var label = el('div', 'attr-label', '');
-      var svgNS = 'http://www.w3.org/2000/svg';
-      var svg = document.createElementNS(svgNS, 'svg');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'none');
-      svg.setAttribute('stroke', 'currentColor');
-      svg.setAttribute('stroke-width', '2');
-      var path = document.createElementNS(svgNS, 'path');
-      path.setAttribute('d', 'M13 10V3L4 14h7v7l9-11h-7z');
-      svg.appendChild(path);
-      label.appendChild(svg);
-      label.appendChild(document.createTextNode('AI Decision Trace (' + steps.length + ' steps)'));
+      var label = el('div', 'attr-label', 'AI Decision Trace (' + steps.length + ' steps)');
       inner.appendChild(label);
-
-      // Timeline
       var timeline = el('div', 'attr-timeline', '');
       for (var j = 0; j < steps.length; j++) {
         var s = steps[j];
         var stepCls = 'attr-step';
         if (s.is_order) stepCls += ' is-order';
         if (s.is_error) stepCls += ' is-error';
-        var step = el('div', stepCls, '');
-        step.appendChild(el('span', 'attr-step-time', s.time));
-        step.appendChild(el('span', 'attr-step-tool', s.tool_name));
+        var stepEl = el('div', stepCls, '');
+        stepEl.appendChild(el('span', 'attr-step-time', s.time));
+        stepEl.appendChild(el('span', 'attr-step-tool', s.tool_name));
         var summaryText = s.input_summary || '';
-        if (s.output_summary && !s.is_error) {
-          summaryText += (summaryText ? ' \u2192 ' : '') + s.output_summary;
-        }
-        if (summaryText) {
-          step.appendChild(el('span', 'attr-step-summary', summaryText));
-        }
-        if (s.duration_ms > 0) {
-          step.appendChild(el('span', 'attr-step-dur', s.duration_ms + 'ms'));
-        }
-        timeline.appendChild(step);
+        if (s.output_summary && !s.is_error) summaryText += (summaryText ? ' \u2192 ' : '') + s.output_summary;
+        if (summaryText) stepEl.appendChild(el('span', 'attr-step-summary', summaryText));
+        if (s.duration_ms > 0) stepEl.appendChild(el('span', 'attr-step-dur', s.duration_ms + 'ms'));
+        timeline.appendChild(stepEl);
       }
       inner.appendChild(timeline);
     }
   }
 
-  // Click handler for expandable order rows
-  document.getElementById('ordersBody').addEventListener('click', function(ev) {
-    var tr = ev.target.closest('tr.expandable');
-    if (!tr) return;
-    var orderID = tr.getAttribute('data-order-id');
-    if (!orderID) return;
-
-    var attrRow = document.querySelector('tr.attr-row[data-attr-for="' + orderID + '"]');
-    if (!attrRow) return;
-
-    var isExpanded = tr.classList.contains('expanded');
-
-    // Collapse all other expanded rows
-    var allExpanded = document.querySelectorAll('tr.expandable.expanded');
-    for (var k = 0; k < allExpanded.length; k++) {
-      allExpanded[k].classList.remove('expanded');
-      var otherId = allExpanded[k].getAttribute('data-order-id');
-      var otherAttr = document.querySelector('tr.attr-row[data-attr-for="' + otherId + '"]');
-      if (otherAttr) otherAttr.classList.remove('visible');
-    }
-
-    if (isExpanded) return; // was already expanded, just collapsed
-
-    tr.classList.add('expanded');
-    attrRow.classList.add('visible');
-
-    // Fetch attribution data if not cached
-    if (attrCache[orderID]) {
-      renderAttribution(orderID, attrCache[orderID]);
-    } else {
-      fetch('/dashboard/api/order-attribution?order_id=' + encodeURIComponent(orderID))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          attrCache[orderID] = data;
-          renderAttribution(orderID, data);
-        })
-        .catch(function() {
-          renderAttribution(orderID, { steps: [] });
-        });
-    }
-  });
+  function attachExpandHandlers() {
+    var body = document.getElementById('ordersBody');
+    if (!body) return;
+    body.addEventListener('click', function(ev) {
+      var tr = ev.target.closest('tr.expandable');
+      if (!tr) return;
+      var orderID = tr.getAttribute('data-order-id');
+      if (!orderID) return;
+      var attrRow = document.querySelector('tr.attr-row[data-attr-for="' + orderID + '"]');
+      if (!attrRow) return;
+      var isExpanded = tr.classList.contains('expanded');
+      var allExpanded = document.querySelectorAll('tr.expandable.expanded');
+      for (var k = 0; k < allExpanded.length; k++) {
+        allExpanded[k].classList.remove('expanded');
+        var otherId = allExpanded[k].getAttribute('data-order-id');
+        var otherAttr = document.querySelector('tr.attr-row[data-attr-for="' + otherId + '"]');
+        if (otherAttr) otherAttr.classList.remove('visible');
+      }
+      if (isExpanded) return;
+      tr.classList.add('expanded');
+      attrRow.classList.add('visible');
+      if (attrCache[orderID]) {
+        renderAttribution(orderID, attrCache[orderID]);
+      } else {
+        fetch('/dashboard/api/order-attribution?order_id=' + encodeURIComponent(orderID))
+          .then(function(r) { return r.json(); })
+          .then(function(data) { attrCache[orderID] = data; renderAttribution(orderID, data); })
+          .catch(function() { renderAttribution(orderID, { steps: [] }); });
+      }
+    });
+  }
 
   // Date filter
   document.getElementById('dateFilters').addEventListener('click', function(ev) {
@@ -567,27 +430,21 @@
 
   function scheduleRefresh() {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-    refreshTimer = setInterval(function() { fetchOrders(); }, REFRESH_MS);
+    refreshTimer = setInterval(fetchOrders, REFRESH_MS);
   }
 
-  // Sync date filter UI with URL-seeded state
+  // Sync date filter with URL state
   (function() {
     if (state.days > 0) {
       var dayBtns = document.getElementById('dateFilters').querySelectorAll('.fbtn');
-      var matched = false;
       for (var i = 0; i < dayBtns.length; i++) {
         dayBtns[i].classList.remove('active');
-        if (parseInt(dayBtns[i].getAttribute('data-days'), 10) === state.days) {
-          dayBtns[i].classList.add('active');
-          matched = true;
-        }
+        if (parseInt(dayBtns[i].getAttribute('data-days'), 10) === state.days) dayBtns[i].classList.add('active');
       }
-      if (!matched && dayBtns.length > 0) dayBtns[0].classList.add('active');
     }
   })();
 
-  fetchEmail();
-  fetchOrders();
+  // Initial state is server-rendered, start refresh timer
   scheduleRefresh();
 })();
 </script>

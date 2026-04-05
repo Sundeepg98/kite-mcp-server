@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Safety · Kite MCP</title>
 <link rel="stylesheet" href="/static/dashboard-base.css">
+<script src="/static/htmx.min.js"></script>
 <style>
 .content { max-width: 1000px; }
 
@@ -20,7 +21,7 @@
 .freeze-title.frozen { color: var(--red); }
 .freeze-detail { font-size: 12px; font-family: var(--mono); color: var(--text-1); margin-top: 6px; }
 
-/* Only override margin — base CSS handles typography + border */
+/* Only override margin - base CSS handles typography + border */
 .section-header { margin-bottom: 12px; }
 
 .limit-grid { display: flex; flex-direction: column; gap: 14px; }
@@ -59,9 +60,9 @@
     <span class="topbar-title">Safety</span>
   </div>
   <div class="topbar-right">
-    <span class="topbar-updated" id="lastUpdated">--</span>
-    <span class="topbar-email" id="userEmail">--</span>
-    <div class="status-dot" id="tokenDot"></div>
+    <span class="topbar-updated" id="lastUpdated">{{.UpdatedAt}}</span>
+    <span class="topbar-email" id="userEmail">{{.Email}}</span>
+    <div class="status-dot{{if .TokenValid}} valid{{else}} expired{{end}}" id="tokenDot"></div>
   </div>
 </div>
 
@@ -74,236 +75,20 @@
   <a href="/dashboard/safety" class="dash-nav-link active">Safety</a>
 </nav>
 
-<div class="content">
-  <div id="freezeBanner" class="freeze-banner disabled">
-    <div class="loading-state">Loading RiskGuard status...</div>
-  </div>
+<div class="content" id="safetyContent"
+     hx-get="/dashboard/api/safety-fragment"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+
+  {{template "user_safety_freeze" .Freeze}}
 
   <div class="section-header">Limit Utilization</div>
-  <div class="limit-grid" id="limitGrid">
-    <div class="loading-state">Loading limits...</div>
-  </div>
+  {{template "user_safety_limits" .Limits}}
 
   <div class="section-header">SEBI Compliance</div>
-  <div class="sebi-grid" id="sebiGrid">
-    <div class="loading-state">Loading compliance status...</div>
-  </div>
+  {{template "user_safety_sebi" .SEBI}}
+
 </div>
 
-<script>
-(function() {
-  'use strict';
-
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = String(text);
-    return e;
-  }
-  function clearChildren(node) { while (node.firstChild) node.removeChild(node.firstChild); }
-
-  function fmtINR(val) {
-    if (val == null || isNaN(val)) return '--';
-    if (val >= 100000) return '\u20B9' + (val / 100000).toFixed(1) + 'L';
-    if (val >= 1000) return '\u20B9' + (val / 1000).toFixed(1) + 'K';
-    return '\u20B9' + val.toFixed(0);
-  }
-
-  function fmtTime(iso) {
-    if (!iso) return '';
-    var d = new Date(iso);
-    return d.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false });
-  }
-
-  function barClass(pct) {
-    if (pct >= 90) return 'danger';
-    if (pct >= 70) return 'warn';
-    return 'safe';
-  }
-
-  function renderFreezeBanner(data) {
-    var banner = document.getElementById('freezeBanner');
-    clearChildren(banner);
-
-    if (!data.enabled) {
-      banner.className = 'freeze-banner disabled';
-      var msg = el('div', null, null);
-      var icon = el('span', 'freeze-icon', null);
-      icon.style.background = 'var(--text-2)';
-      msg.appendChild(icon);
-      msg.appendChild(el('span', 'freeze-title', ' RiskGuard Disabled'));
-      banner.appendChild(msg);
-      banner.appendChild(el('div', 'freeze-detail', data.message || 'Not enabled on this server.'));
-      return;
-    }
-
-    var status = data.status;
-    if (status.is_frozen) {
-      banner.className = 'freeze-banner frozen';
-      var title = el('div', null, null);
-      var icon = el('span', 'freeze-icon frozen', null);
-      title.appendChild(icon);
-      title.appendChild(el('span', 'freeze-title frozen', 'TRADING FROZEN'));
-      banner.appendChild(title);
-
-      var detail = 'Reason: ' + (status.frozen_reason || 'Unknown');
-      if (status.frozen_by) detail += ' | By: ' + status.frozen_by;
-      if (status.frozen_at && status.frozen_at !== '0001-01-01T00:00:00Z') {
-        detail += ' | At: ' + fmtTime(status.frozen_at);
-      }
-      banner.appendChild(el('div', 'freeze-detail', detail));
-    } else {
-      banner.className = 'freeze-banner active';
-      var title = el('div', null, null);
-      var icon = el('span', 'freeze-icon active', null);
-      title.appendChild(icon);
-      title.appendChild(el('span', 'freeze-title active', 'Trading Active'));
-      banner.appendChild(title);
-      banner.appendChild(el('div', 'freeze-detail', 'All safety checks operational. No restrictions in effect.'));
-    }
-  }
-
-  function renderLimits(data) {
-    var grid = document.getElementById('limitGrid');
-    clearChildren(grid);
-
-    if (!data.enabled) {
-      grid.appendChild(el('div', 'loading-state', 'RiskGuard is not enabled.'));
-      return;
-    }
-
-    var status = data.status;
-    var limits = data.limits;
-
-    var items = [
-      {
-        name: 'Daily Orders',
-        current: status.daily_order_count,
-        max: limits.max_orders_per_day,
-        fmt: function(v) { return v; }
-      },
-      {
-        name: 'Daily Value',
-        current: status.daily_placed_value,
-        max: limits.max_daily_value_inr,
-        fmt: fmtINR
-      },
-      {
-        name: 'Single Order Cap',
-        current: 0,
-        max: limits.max_single_order_inr,
-        fmt: fmtINR,
-        static: true
-      },
-      {
-        name: 'Rate Limit',
-        current: 0,
-        max: limits.max_orders_per_minute,
-        fmt: function(v) { return v + '/min'; },
-        static: true
-      },
-      {
-        name: 'Duplicate Window',
-        current: 0,
-        max: limits.duplicate_window_secs,
-        fmt: function(v) { return v + 's'; },
-        static: true
-      }
-    ];
-
-    items.forEach(function(item) {
-      var card = el('div', 'limit-item');
-
-      var header = el('div', 'limit-header');
-      header.appendChild(el('span', 'limit-name', item.name));
-      if (item.static) {
-        header.appendChild(el('span', 'limit-value', 'Limit: ' + item.fmt(item.max)));
-      } else {
-        header.appendChild(el('span', 'limit-value', item.fmt(item.current) + ' / ' + item.fmt(item.max)));
-      }
-      card.appendChild(header);
-
-      if (!item.static) {
-        var pct = item.max > 0 ? Math.min(100, (item.current / item.max) * 100) : 0;
-        var barBg = el('div', 'limit-bar-bg');
-        var barFill = el('div', 'limit-bar-fill ' + barClass(pct));
-        barFill.style.width = pct + '%';
-        barBg.appendChild(barFill);
-        card.appendChild(barBg);
-      }
-
-      grid.appendChild(card);
-    });
-  }
-
-  function renderSEBI(data) {
-    var grid = document.getElementById('sebiGrid');
-    clearChildren(grid);
-
-    if (!data.enabled) {
-      grid.appendChild(el('div', 'loading-state', 'RiskGuard is not enabled.'));
-      return;
-    }
-
-    var sebi = data.sebi;
-    var checks = [
-      { label: 'Static Egress IP', ok: sebi.static_egress_ip },
-      { label: 'Session Active', ok: sebi.session_active },
-      { label: 'Credentials Set', ok: sebi.credentials_set },
-      { label: 'Order Tagging', ok: sebi.order_tagging },
-      { label: 'Audit Trail', ok: sebi.audit_trail }
-    ];
-
-    checks.forEach(function(check) {
-      var card = el('div', 'sebi-card');
-      card.appendChild(el('span', 'sebi-dot ' + (check.ok ? 'ok' : 'off')));
-      card.appendChild(el('span', 'sebi-label', check.label));
-      grid.appendChild(card);
-    });
-  }
-
-  function refresh() {
-    fetch('/dashboard/api/safety/status')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        renderFreezeBanner(data);
-        renderLimits(data);
-        renderSEBI(data);
-        document.getElementById('lastUpdated').textContent =
-          'Updated ' + new Date().toLocaleTimeString('en-GB', { hour12: false });
-      })
-      .catch(function(err) {
-        console.error('safety fetch error:', err);
-        var fb = document.getElementById('freezeBanner');
-        fb.textContent = '';
-        var msg = document.createElement('div');
-        msg.className = 'loading-state';
-        msg.style.color = 'var(--red)';
-        msg.textContent = 'Failed to load safety data. Please refresh.';
-        fb.appendChild(msg);
-        document.getElementById('limitGrid').firstChild.textContent = 'Failed to load limits.';
-        document.getElementById('limitGrid').firstChild.style.color = 'var(--red)';
-        document.getElementById('sebiGrid').firstChild.textContent = 'Failed to load compliance.';
-        document.getElementById('sebiGrid').firstChild.style.color = 'var(--red)';
-      });
-  }
-
-  // --- Status / auth gating ---
-  function refreshStatus() {
-    fetch('/dashboard/api/status').then(function(r) { return r.json(); }).then(function(d) {
-      document.getElementById('userEmail').textContent = d.email || '--';
-      var dot = document.getElementById('tokenDot');
-      var valid = d.kite_token && d.kite_token.valid;
-      dot.style.background = valid ? 'var(--green)' : 'var(--red)';
-      dot.style.boxShadow = valid ? '0 0 6px var(--green)' : '0 0 6px var(--red)';
-    }).catch(function() {});
-  }
-
-  refreshStatus();
-  refresh();
-  setInterval(refreshStatus, 10000);
-  setInterval(refresh, 10000);
-})();
-</script>
 </body>
 </html>

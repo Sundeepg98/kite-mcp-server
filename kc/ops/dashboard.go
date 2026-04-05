@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	htmltemplate "html/template"
 	"log/slog"
 	"math"
 	"net/http"
@@ -25,16 +26,27 @@ type DashboardHandler struct {
 	logger     *slog.Logger
 	auditStore *audit.Store
 	adminCheck func(string) bool // returns true if email is admin
+
+	// Parsed Go templates for server-side rendering of user dashboard pages.
+	portfolioTmpl *htmltemplate.Template
+	activityTmpl  *htmltemplate.Template
+	ordersTmpl    *htmltemplate.Template
+	alertsTmpl    *htmltemplate.Template
+	paperTmpl     *htmltemplate.Template
+	safetyTmpl    *htmltemplate.Template
+	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
 }
 
 // NewDashboardHandler creates a new DashboardHandler. The auditStore parameter
 // can be nil if the audit trail feature is not enabled.
 func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *audit.Store) *DashboardHandler {
-	return &DashboardHandler{
+	d := &DashboardHandler{
 		manager:    manager,
 		logger:     logger,
 		auditStore: auditStore,
 	}
+	d.InitTemplates()
+	return d
 }
 
 // SetAdminCheck registers a callback to check if an email belongs to an admin.
@@ -45,13 +57,13 @@ func (d *DashboardHandler) SetAdminCheck(fn func(string) bool) {
 // RegisterRoutes mounts all dashboard routes, protected by the provided auth middleware.
 func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler) {
 	wrap := func(f http.HandlerFunc) http.Handler { return auth(f) }
-	mux.Handle("/dashboard", wrap(d.servePage))
-	mux.Handle("/dashboard/activity", wrap(d.serveActivityPage))
+	mux.Handle("/dashboard", wrap(d.servePortfolioPage))
+	mux.Handle("/dashboard/activity", wrap(d.serveActivityPageSSR))
 	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
 	mux.Handle("/dashboard/api/activity/stream", wrap(d.activityStreamSSE))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
-	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPage))
-	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPage))
+	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPageSSR))
+	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPageSSR))
 	mux.Handle("/dashboard/api/orders", wrap(d.ordersAPI))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
@@ -60,10 +72,14 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/order-attribution", wrap(d.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
 	mux.Handle("/dashboard/api/market-indices", wrap(d.marketIndices))
-	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPage))
+	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPageSSR))
 	mux.Handle("/dashboard/api/safety/status", wrap(d.safetyStatus))
-	mux.Handle("/dashboard/paper", wrap(d.servePaperPage))
+	mux.Handle("/dashboard/paper", wrap(d.servePaperPageSSR))
 	mux.Handle("/dashboard/api/paper/status", wrap(d.paperStatus))
+	// Fragment endpoints for htmx auto-refresh
+	mux.Handle("/dashboard/api/portfolio-fragment", wrap(d.servePortfolioFragment))
+	mux.Handle("/dashboard/api/safety-fragment", wrap(d.serveSafetyFragment))
+	mux.Handle("/dashboard/api/paper-fragment", wrap(d.servePaperFragment))
 	mux.Handle("/dashboard/api/paper/holdings", wrap(d.paperHoldings))
 	mux.Handle("/dashboard/api/paper/positions", wrap(d.paperPositions))
 	mux.Handle("/dashboard/api/paper/orders", wrap(d.paperOrders))
@@ -124,31 +140,8 @@ func (d *DashboardHandler) writeJSONError(w http.ResponseWriter, status int, err
 	}
 }
 
-// servePage serves the embedded dashboard.html page.
-func (d *DashboardHandler) servePage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("dashboard.html")
-	if err != nil {
-		http.Error(w, "failed to load dashboard page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
-
-// serveActivityPage serves the embedded activity.html page.
-func (d *DashboardHandler) serveActivityPage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("activity.html")
-	if err != nil {
-		http.Error(w, "failed to load activity page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
+// NOTE: servePage and serveActivityPage have been replaced by SSR handlers
+// in dashboard_templates.go (servePortfolioPage and serveActivityPageSSR).
 
 // activityAPI returns paginated, filterable audit trail entries for the authenticated user.
 func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
@@ -730,18 +723,7 @@ type ordersResponse struct {
 	Summary ordersSummary `json:"summary"`
 }
 
-// serveOrdersPage serves the embedded orders.html page.
-func (d *DashboardHandler) serveOrdersPage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("orders.html")
-	if err != nil {
-		http.Error(w, "failed to load orders page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
+// NOTE: serveOrdersPage has been replaced by serveOrdersPageSSR in dashboard_templates.go.
 
 // ordersAPI returns order entries with P&L enrichment from the Kite API.
 func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
@@ -1021,18 +1003,7 @@ func formatDuration(d time.Duration) string {
 	return "0s"
 }
 
-// serveAlertsPage serves the embedded alerts.html page.
-func (d *DashboardHandler) serveAlertsPage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("alerts.html")
-	if err != nil {
-		http.Error(w, "failed to load alerts page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
+// NOTE: serveAlertsPage has been replaced by serveAlertsPageSSR in dashboard_templates.go.
 
 // alertsEnrichedAPI returns enriched alert data with lifecycle metrics and current prices.
 // It also supports DELETE method to remove an active alert by ID.
@@ -1353,18 +1324,7 @@ type alertCopy struct {
 
 // --- Paper Trading Dashboard Handlers ---
 
-// servePaperPage serves the embedded paper.html page.
-func (d *DashboardHandler) servePaperPage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("paper.html")
-	if err != nil {
-		http.Error(w, "failed to load paper trading page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
+// NOTE: servePaperPage has been replaced by servePaperPageSSR in dashboard_templates.go.
 
 // paperStatus returns the paper trading account status for the authenticated user.
 func (d *DashboardHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
@@ -1490,18 +1450,7 @@ func (d *DashboardHandler) paperReset(w http.ResponseWriter, r *http.Request) {
 	d.writeJSON(w, map[string]string{"status": "ok", "message": "Paper trading account reset successfully."})
 }
 
-// serveSafetyPage serves the embedded safety.html page.
-func (d *DashboardHandler) serveSafetyPage(w http.ResponseWriter, r *http.Request) {
-	data, err := templates.FS.ReadFile("safety.html")
-	if err != nil {
-		http.Error(w, "failed to load safety page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
-		d.logger.Error("Failed to write response", "error", err)
-	}
-}
+// NOTE: serveSafetyPage has been replaced by serveSafetyPageSSR in dashboard_templates.go.
 
 // safetyStatus returns riskguard status and effective limits for the authenticated user.
 func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) {

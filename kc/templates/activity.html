@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Activity Trail · Kite MCP</title>
 <link rel="stylesheet" href="/static/dashboard-base.css">
+<script src="/static/htmx.min.js"></script>
 <style>
 .stats-grid { grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; }
 .loading-state, .empty-state { padding: 48px 20px; }
@@ -60,9 +61,9 @@
     <span class="topbar-title">Activity Trail</span>
   </div>
   <div class="topbar-right">
-    <span class="topbar-updated" id="lastUpdated">--</span>
-    <span class="topbar-email" id="userEmail">--</span>
-    <div class="status-dot" id="tokenDot"></div>
+    <span class="topbar-updated" id="lastUpdated">{{.UpdatedAt}}</span>
+    <span class="topbar-email" id="userEmail">{{.Email}}</span>
+    <div class="status-dot{{if .TokenValid}} valid{{else}} expired{{end}}" id="tokenDot"></div>
   </div>
 </div>
 
@@ -108,10 +109,7 @@
   </div>
 
   <div class="stats-grid">
-    <div class="stat-card"><div class="stat-label">Total Calls</div><div class="stat-value" id="statTotal">--</div></div>
-    <div class="stat-card"><div class="stat-label">Errors</div><div class="stat-value" id="statErrors">--</div></div>
-    <div class="stat-card"><div class="stat-label">Avg Latency</div><div class="stat-value" id="statLatency">--</div><div class="stat-sub" id="statLatencySub"></div></div>
-    <div class="stat-card"><div class="stat-label">Top Tool</div><div class="stat-value" id="statTopTool">--</div><div class="stat-sub" id="statTopToolSub"></div></div>
+    {{template "user_activity_stats" .Stats}}
   </div>
 
   <!-- Tool Usage Bar Chart -->
@@ -120,8 +118,12 @@
     <canvas id="toolBarChart" height="200"></canvas>
   </div>
 
-  <div id="loadingState" class="loading-state">Loading activity...</div>
+  <div id="loadingState" class="loading-state" style="display:none">Loading activity...</div>
   <div id="emptyState" class="empty-state" style="display:none">No activity recorded yet. Use MCP tools to see them here.</div>
+  <!-- Server-rendered initial timeline -->
+  <div id="initialTimeline">
+    {{template "user_activity_timeline" .Timeline}}
+  </div>
   <div class="timeline" id="timeline" style="display:none"></div>
   <div class="pagination" id="pagination" style="display:none">
     <button class="page-btn" id="prevBtn" disabled>&lt; Prev</button>
@@ -696,8 +698,21 @@
   })();
 
   // --- Init ---
-  fetchEmail();
-  fetchActivity();
+  // Initial data is server-rendered. Start refresh and SSE only.
+  // Hide the initial server-rendered timeline on first JS-driven fetch.
+  var initialFetchDone = false;
+  var origFetchActivity = fetchActivity;
+  fetchActivity = function() {
+    if (!initialFetchDone) {
+      initialFetchDone = true;
+      // Hide server-rendered initial content before first JS fetch
+      var initialEl = document.getElementById('initialTimeline');
+      if (initialEl) initialEl.style.display = 'none';
+    }
+    origFetchActivity();
+  };
+  // Don't fetch on init — use server-rendered data.
+  // But schedule refresh so subsequent ticks work.
   scheduleRefresh();
   connectSSE();
   initNotifBanner();
