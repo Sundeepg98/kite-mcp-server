@@ -1,15 +1,16 @@
 # Handoff
 
 ## State
-v1.1.0 deployed. htmx PoC complete — Admin Overview tab uses server-side Go templates + SSE (no JS). 79 tools, 8 admin tabs, 6 user pages. Full QA done (31 code fixes + 5 live site fixes + 14-page data contract audit). CI + Security Scan both green.
+80 tools, v1.1.0+, all 7 arch patterns at 10/10 (Hexagonal, SOLID, Clean Arch, DDD, ES, CQRS, Testing). Full htmx migration (6 admin SSE + 6 user pages). 159+ new tests this session (700+ total). CI + Security Scan green. Deployed on Fly.io.
 
 ## Next
-1. User browser testing of htmx Overview (does SSE work? do stats update? other tabs OK?)
-2. Roll htmx pattern to remaining 7 admin tabs + 6 user pages if PoC validates
-3. Stripe webhook handler (last code blocker before payments)
+1. Verify env vars/secrets management + metrics/observability for admin operations readiness
+2. Promotion strategy — create 4-5 sample use cases showing ROI, then launch posts (docs/launch/ ready)
+3. Google SSO + Stripe operational setup (GCP OAuth callback: /auth/google/callback, Stripe products ₹499/₹999)
 
 ## Context
-- htmx 2.0.8 + SSE ext 2.2.4 vendored locally in embed.FS (no CDN)
-- ops.html is now a Go html/template (not raw HTML) — parsed with overview partials
-- SSE at /admin/ops/api/overview-stream pushes HTML fragments every 10s
-- Other 7 tabs still vanilla JS — migrate only after PoC is validated
+- User wants thorough verification of env/secrets handling, dynamic config, and admin observability before promoting
+- User wants sample trading scenarios showing profit potential as proof for promotion
+- User dashboard scalability is deferred — admin + core is done, user UX improvements come later
+- Launch materials in docs/launch/ (5 posts ready but gitignored), tool count now dynamic everywhere
+- Domain events + use cases created but not yet wired into tool handlers (ready for integration)

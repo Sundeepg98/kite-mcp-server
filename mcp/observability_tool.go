@@ -152,7 +152,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// SQLite DB file size.
 		var dbSizeMB float64
 		if dbPath := os.Getenv("ALERT_DB_PATH"); dbPath != "" {
-			if info, err := os.Stat(dbPath); err == nil {
+			if info, err := os.Stat(dbPath); err == nil { // #nosec G703 — server-side config, not user input
 				dbSizeMB = float64(info.Size()) / 1024 / 1024
 			}
 		}
