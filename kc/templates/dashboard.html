@@ -504,46 +504,9 @@
       }
       pnlSub.textContent = parts.length > 0 ? parts.join('  |  ') : '';
 
-      // Holdings table
+      // Holdings/positions tables are server-rendered via Go templates.
+      // Only update the donut chart from the JSON data.
       var holdings = d.holdings || [];
-      var holdingsBody = document.getElementById('holdingsBody');
-      var holdingsWrap = document.getElementById('holdingsWrap');
-      var holdingsEmpty = document.getElementById('holdingsEmpty');
-      var holdingsLoading = document.getElementById('holdingsLoading');
-      holdingsLoading.style.display = 'none';
-      clearChildren(holdingsBody);
-
-      if (holdings.length === 0) {
-        holdingsWrap.style.display = 'none';
-        holdingsEmpty.style.display = 'block';
-      } else {
-        holdingsEmpty.style.display = 'none';
-        holdingsWrap.style.display = 'block';
-        // Sort by P&L descending (largest loss at bottom)
-        holdings.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); });
-        var totalHoldingsPnl = 0;
-        holdings.forEach(function(h) {
-          totalHoldingsPnl += (h.pnl || 0);
-          var pnlTd = tdEl(pnlSign(h.pnl), 'right');
-          pnlTd.style.color = h.pnl >= 0 ? 'var(--green)' : 'var(--red)';
-          var dayTd = tdEl(pctStr(h.day_change_percentage), 'right');
-          dayTd.style.color = (h.day_change_percentage || 0) >= 0 ? 'var(--green)' : 'var(--red)';
-          holdingsBody.appendChild(trEl([
-            tdEl(h.tradingsymbol), tdEl(h.exchange),
-            tdEl(h.quantity, 'right'), tdEl(formatINR(h.average_price), 'right'),
-            tdEl(formatINR(h.last_price), 'right'), pnlTd, dayTd
-          ]));
-        });
-        // Total row
-        var totalPnlTd = tdEl(pnlSign(totalHoldingsPnl), 'right');
-        totalPnlTd.style.color = totalHoldingsPnl >= 0 ? 'var(--green)' : 'var(--red)';
-        var totalRow = trEl([
-          tdEl('TOTAL'), tdEl(''), tdEl('', 'right'), tdEl('', 'right'),
-          tdEl('', 'right'), totalPnlTd, tdEl('', 'right')
-        ]);
-        totalRow.className = 'total-row';
-        holdingsBody.appendChild(totalRow);
-      }
 
       // Holdings Donut Chart
       var chartWrap = document.getElementById('holdingsChartWrap');
@@ -622,54 +585,30 @@
         chartWrap.style.display = 'none';
       }
 
-      // Positions table
-      var positions = d.positions || [];
-      var positionsBody = document.getElementById('positionsBody');
-      var positionsWrap = document.getElementById('positionsWrap');
-      var positionsEmpty = document.getElementById('positionsEmpty');
-      var positionsLoading = document.getElementById('positionsLoading');
-      positionsLoading.style.display = 'none';
-      clearChildren(positionsBody);
-
-      if (positions.length === 0) {
-        positionsWrap.style.display = 'none';
-        positionsEmpty.style.display = 'block';
-      } else {
-        positionsEmpty.style.display = 'none';
-        positionsWrap.style.display = 'block';
-        positions.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); });
-        var totalPosPnl = 0;
-        positions.forEach(function(p) {
-          totalPosPnl += (p.pnl || 0);
-          var pnlTd = tdEl(pnlSign(p.pnl), 'right');
-          pnlTd.style.color = p.pnl >= 0 ? 'var(--green)' : 'var(--red)';
-          positionsBody.appendChild(trEl([
-            tdEl(p.tradingsymbol), tdEl(p.exchange), tdEl(p.product),
-            tdEl(p.quantity, 'right'), tdEl(formatINR(p.average_price), 'right'),
-            tdEl(formatINR(p.last_price), 'right'), pnlTd
-          ]));
-        });
-        var totalPosTd = tdEl(pnlSign(totalPosPnl), 'right');
-        totalPosTd.style.color = totalPosPnl >= 0 ? 'var(--green)' : 'var(--red)';
-        var posTotalRow = trEl([
-          tdEl('TOTAL'), tdEl(''), tdEl(''), tdEl('', 'right'),
-          tdEl('', 'right'), tdEl('', 'right'), totalPosTd
-        ]);
-        posTotalRow.className = 'total-row';
-        positionsBody.appendChild(posTotalRow);
-      }
+      // Positions table is server-rendered via Go template — no JS rebuild needed.
       updateTimestamp();
     }).catch(function(e) {
-      document.getElementById('holdingsLoading').style.display = 'none';
-      document.getElementById('positionsLoading').style.display = 'none';
       if (e.code === 'not_authenticated') {
         showAuthBanner(e.message || 'Kite token expired. Please re-authenticate.');
-        document.getElementById('holdingsEmpty').style.display = 'block';
-        document.getElementById('positionsEmpty').style.display = 'block';
-      } else {
-        document.getElementById('holdingsLoading').textContent = 'Failed to load portfolio data.';
-        document.getElementById('holdingsLoading').style.display = '';
-        document.getElementById('holdingsLoading').style.color = 'var(--red)';
+      }
+      // Holdings/positions are server-rendered — show error in the sections
+      var hs = document.getElementById('holdingsSection');
+      var ps = document.getElementById('positionsSection');
+      if (hs && !hs.querySelector('.empty-state')) {
+        var msg = document.createElement('div');
+        msg.className = 'empty-state';
+        msg.style.color = 'var(--red)';
+        msg.textContent = e.code === 'not_authenticated' ? 'Please re-authenticate to see holdings.' : 'Failed to load portfolio data.';
+        hs.textContent = '';
+        hs.appendChild(msg);
+      }
+      if (ps && !ps.querySelector('.empty-state')) {
+        var msg2 = document.createElement('div');
+        msg2.className = 'empty-state';
+        msg2.style.color = 'var(--red)';
+        msg2.textContent = e.code === 'not_authenticated' ? 'Please re-authenticate to see positions.' : 'Failed to load positions.';
+        ps.textContent = '';
+        ps.appendChild(msg2);
       }
     });
   }
