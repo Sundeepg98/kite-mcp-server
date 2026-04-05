@@ -692,6 +692,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.oauthHandler.Close()
 		}
 
+		// Stop rate limiter cleanup goroutine
+		if app.rateLimiters != nil {
+			app.rateLimiters.Stop()
+		}
+
 		app.logger.Info("Server shutdown complete")
 	}()
 }

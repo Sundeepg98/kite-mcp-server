@@ -50,14 +50,14 @@ oauth/                → OAuth 2.1 + PKCE provider
 - **Tests** use `GOEXPERIMENT=synctest` for deterministic time control.
 - **Error handling**: wrap errors with context (`fmt.Errorf("action: %w", err)`).
 - **Imports**: stdlib, blank line, third-party, blank line, internal packages.
-- **Tool handlers** live in `mcp/` — one file per tool group, each tool gets an annotation in `mcp/annotations.go`.
+- **Tool handlers** live in `mcp/` — one file per tool group. Annotations are declared inline in each tool's `.Tool()` method within the corresponding file in `mcp/`.
 
 ## PR Checklist
 
 - [ ] `go build ./...` compiles cleanly
 - [ ] `go vet ./...` passes
 - [ ] `just test` passes (or `CGO_ENABLED=0 GOEXPERIMENT=synctest go test ./...`)
-- [ ] New tools have an entry in `mcp/annotations.go` with correct hints
+- [ ] New tools have annotations declared inline in their `.Tool()` method with correct hints
 - [ ] New tools have a tier entry in `kc/billing/tiers.go` (even if `TierFree`)
 - [ ] Sensitive operations go through RiskGuard (`kc/riskguard/`)
 - [ ] No secrets or credentials committed

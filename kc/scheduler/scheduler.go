@@ -89,24 +89,19 @@ func (s *Scheduler) loop() {
 // Add 2027 holidays when NSE announces them.
 var nseHolidays = map[string]bool{
 	"2026-01-26": true, // Republic Day
-	"2026-02-26": true, // Maha Shivaratri
-	"2026-03-10": true, // Holi
-	"2026-03-30": true, // Id-Ul-Fitr
-	"2026-04-01": true, // Annual Bank Closing / Ram Navami
-	"2026-04-02": true, // Mahavir Jayanti
-	"2026-04-06": true, // Dr. Ambedkar Jayanti (observed)
-	"2026-04-14": true, // Good Friday
-	"2026-05-01": true, // May Day
-	"2026-06-06": true, // Id-Ul-Adha (Bakri Id)
-	"2026-07-06": true, // Muharram
-	"2026-08-15": true, // Independence Day
-	"2026-08-16": true, // Parsi New Year
-	"2026-09-04": true, // Milad-un-Nabi
+	"2026-03-03": true, // Holi
+	"2026-03-26": true, // Ram Navami
+	"2026-03-31": true, // Mahavir Jayanti
+	"2026-04-03": true, // Good Friday
+	"2026-04-14": true, // Dr. Ambedkar Jayanti
+	"2026-05-01": true, // Maharashtra Day
+	"2026-05-28": true, // Bakri Eid
+	"2026-06-26": true, // Muharram
+	"2026-09-14": true, // Ganesh Chaturthi
 	"2026-10-02": true, // Mahatma Gandhi Jayanti
 	"2026-10-20": true, // Dussehra
-	"2026-11-09": true, // Diwali (Laxmi Pujan)
-	"2026-11-10": true, // Diwali Balipratipada
-	"2026-11-19": true, // Guru Nanak Jayanti
+	"2026-11-10": true, // Diwali-Balipratipada
+	"2026-11-24": true, // Guru Nanak Jayanti
 	"2026-12-25": true, // Christmas
 }
 

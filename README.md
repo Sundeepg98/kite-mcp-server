@@ -6,7 +6,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
 [![Tools](https://img.shields.io/badge/Tools-80-blue)]()
-[![Tests](https://img.shields.io/badge/Tests-483-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-694-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## What it does
@@ -230,7 +230,7 @@ Contributions welcome. Check [open issues](https://github.com/Sundeepg98/kite-mc
 ```bash
 nix develop          # or: install Go 1.25+
 just build           # compile
-just test            # run 483 tests
+just test            # run 694 tests
 just lint            # format + lint
 ```
 

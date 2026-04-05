@@ -128,10 +128,10 @@ func TestIsMarketHoliday(t *testing.T) {
 		t.Error("2026-01-26 (Republic Day) should be a market holiday")
 	}
 
-	// Diwali 2026
-	diwali := time.Date(2026, 11, 9, 10, 0, 0, 0, kolkataLoc)
+	// Diwali-Balipratipada 2026
+	diwali := time.Date(2026, 11, 10, 10, 0, 0, 0, kolkataLoc)
 	if !IsMarketHoliday(diwali) {
-		t.Error("2026-11-09 (Diwali) should be a market holiday")
+		t.Error("2026-11-10 (Diwali-Balipratipada) should be a market holiday")
 	}
 
 	// A normal trading day (2026-01-27 is a Tuesday, no holiday).
@@ -148,10 +148,10 @@ func TestIsTradingDay(t *testing.T) {
 		t.Error("Saturday should not be a trading day")
 	}
 
-	// Holiday is not a trading day (Mahavir Jayanti, 2026-04-02 is a Thursday)
-	holiday := time.Date(2026, 4, 2, 10, 0, 0, 0, kolkataLoc)
+	// Holiday is not a trading day (Good Friday, 2026-04-03 is a Friday)
+	holiday := time.Date(2026, 4, 3, 10, 0, 0, 0, kolkataLoc)
 	if IsTradingDay(holiday) {
-		t.Error("2026-04-02 (Mahavir Jayanti) should not be a trading day")
+		t.Error("2026-04-03 (Good Friday) should not be a trading day")
 	}
 
 	// Normal weekday that's not a holiday

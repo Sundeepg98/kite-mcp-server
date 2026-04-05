@@ -55,6 +55,7 @@ type rateLimiters struct {
 	auth  *ipRateLimiter // /oauth/register, /oauth/authorize, /auth/browser-login
 	token *ipRateLimiter // /oauth/token
 	mcp   *ipRateLimiter // /mcp, /sse, /message
+	done  chan struct{}   // closed during shutdown to stop the cleanup goroutine
 }
 
 // newRateLimiters creates rate limiters for each endpoint group and starts
@@ -64,17 +65,28 @@ func newRateLimiters() *rateLimiters {
 		auth:  newIPRateLimiter(rate.Limit(2), 5),   // 2/sec, burst 5
 		token: newIPRateLimiter(rate.Limit(5), 10),   // 5/sec, burst 10
 		mcp:   newIPRateLimiter(rate.Limit(20), 40),  // 20/sec, burst 40
+		done:  make(chan struct{}),
 	}
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			rl.auth.cleanup()
-			rl.token.cleanup()
-			rl.mcp.cleanup()
+		for {
+			select {
+			case <-ticker.C:
+				rl.auth.cleanup()
+				rl.token.cleanup()
+				rl.mcp.cleanup()
+			case <-rl.done:
+				return
+			}
 		}
 	}()
 	return rl
+}
+
+// Stop signals the cleanup goroutine to exit.
+func (rl *rateLimiters) Stop() {
+	close(rl.done)
 }
 
 // rateLimit returns middleware that limits requests per client IP.
