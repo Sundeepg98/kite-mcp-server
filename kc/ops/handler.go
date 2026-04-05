@@ -45,7 +45,7 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 		version:       version,
 		userStore:     userStore,
 		auditStore:    auditStore,
-		registryStore: manager.RegistryStore(),
+		registryStore: manager.RegistryStoreConcrete(),
 	}
 	tmpl, err := overviewFragmentTemplates()
 	if err != nil {

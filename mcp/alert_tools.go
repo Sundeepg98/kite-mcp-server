@@ -55,7 +55,7 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
-		manager.AlertStore().SetTelegramChatID(email, chatID)
+		manager.TelegramStore().SetTelegramChatID(email, chatID)
 		manager.Logger.Debug("Telegram chat ID registered", "email", email, "chat_id", chatID)
 
 		return mcp.NewToolResultText(fmt.Sprintf("Telegram notifications configured for %s. You'll receive alerts at chat ID %d.", email, chatID)), nil
@@ -198,7 +198,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check if Telegram is configured
-		if _, ok := manager.AlertStore().GetTelegramChatID(email); !ok {
+		if _, ok := manager.TelegramStore().GetTelegramChatID(email); !ok {
 			result += "\n\nNote: Telegram not configured. Use setup_telegram to receive notifications."
 		}
 

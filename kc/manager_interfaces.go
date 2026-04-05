@@ -2,15 +2,7 @@ package kc
 
 import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/billing"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/users"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,41 +69,45 @@ type CredentialResolver interface {
 }
 
 // StoreAccessor provides access to all data stores managed by the Manager.
-// Consumers should prefer the focused interfaces (e.g., AlertStoreInterface)
-// when they only need specific store capabilities.
+// Returns interface types to decouple consumers from concrete implementations
+// (Dependency Inversion Principle). Consumers should prefer the focused
+// interfaces (e.g., AlertStoreInterface) when they only need specific capabilities.
 type StoreAccessor interface {
 	// TokenStore returns the per-email token store.
-	TokenStore() *KiteTokenStore
+	TokenStore() TokenStoreInterface
 
 	// CredentialStore returns the per-email Kite credential store.
-	CredentialStore() *KiteCredentialStore
+	CredentialStore() CredentialStoreInterface
 
-	// AlertStore returns the per-user alert store.
-	AlertStore() *alerts.Store
+	// AlertStore returns the per-user alert store (alert CRUD).
+	AlertStore() AlertStoreInterface
+
+	// TelegramStore returns the per-user Telegram chat ID store.
+	TelegramStore() TelegramStoreInterface
 
 	// WatchlistStore returns the per-user watchlist store.
-	WatchlistStore() *watchlist.Store
+	WatchlistStore() WatchlistStoreInterface
 
 	// UserStore returns the user identity store.
-	UserStore() *users.Store
+	UserStore() UserStoreInterface
 
 	// RegistryStore returns the key registry store.
-	RegistryStore() *registry.Store
+	RegistryStore() RegistryStoreInterface
 
 	// AuditStore returns the audit trail store, or nil.
-	AuditStore() *audit.Store
+	AuditStore() AuditStoreInterface
 
 	// BillingStore returns the billing store, or nil.
-	BillingStore() *billing.Store
+	BillingStore() BillingStoreInterface
 
 	// TickerService returns the per-user WebSocket ticker service.
-	TickerService() *ticker.Service
+	TickerService() TickerServiceInterface
 
 	// PaperEngine returns the paper trading engine, or nil.
-	PaperEngine() *papertrading.PaperEngine
+	PaperEngine() PaperEngineInterface
 
 	// InstrumentsManager returns the instruments manager.
-	InstrumentsManager() *instruments.Manager
+	InstrumentsManager() InstrumentManagerInterface
 
 	// AlertDB returns the optional SQLite database.
 	AlertDB() *alerts.DB

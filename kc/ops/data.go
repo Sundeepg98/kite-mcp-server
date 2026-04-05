@@ -99,7 +99,7 @@ func (h *Handler) buildTickers() TickerData {
 }
 
 func (h *Handler) buildAlerts() AlertData {
-	return AlertData{Alerts: h.manager.AlertStore().ListAll(), Telegram: h.manager.AlertStore().ListAllTelegram()}
+	return AlertData{Alerts: h.manager.AlertStore().ListAll(), Telegram: h.manager.TelegramStore().ListAllTelegram()}
 }
 
 // --- Per-user filtered data builders (for non-admin users) ---
@@ -181,7 +181,7 @@ func (h *Handler) buildAlertsForUser(email string) AlertData {
 		alertMap[emailLower] = userAlerts
 	}
 	telegramMap := map[string]int64{}
-	if chatID, ok := h.manager.AlertStore().GetTelegramChatID(emailLower); ok {
+	if chatID, ok := h.manager.TelegramStore().GetTelegramChatID(emailLower); ok {
 		telegramMap[emailLower] = chatID
 	}
 	return AlertData{Alerts: alertMap, Telegram: telegramMap}

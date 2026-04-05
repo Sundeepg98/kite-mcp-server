@@ -9,22 +9,22 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	zerodha "github.com/zerodha/kite-mcp-server/broker/zerodha"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/audit"
 )
 
 // SessionService owns MCP session lifecycle: creation, retrieval, validation,
 // login URL generation, and session completion. Extracted from Manager as part
 // of Clean Architecture / SOLID refactoring.
+//
+// Dependencies use interface types (Dependency Inversion Principle), enabling
+// mock injection for testing.
 type SessionService struct {
 	credentialSvc  *CredentialService
-	tokenStore     *KiteTokenStore
+	tokenStore     TokenStoreInterface
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
-	alertStore     *alerts.Store   // for audit trail on completion
-	auditStore     *audit.Store    // optional: for synthetic events
+	auditStore     AuditStoreInterface  // optional: for synthetic events
 	logger         *slog.Logger
-	metrics        metricsTracker  // thin interface to avoid importing metrics package
+	metrics        metricsTracker       // thin interface to avoid importing metrics package
 }
 
 // metricsTracker is a minimal interface for metrics tracking within session service.
@@ -36,10 +36,9 @@ type metricsTracker interface {
 // SessionServiceConfig holds dependencies for creating a SessionService.
 type SessionServiceConfig struct {
 	CredentialSvc *CredentialService
-	TokenStore    *KiteTokenStore
+	TokenStore    TokenStoreInterface
 	SessionSigner *SessionSigner
-	AlertStore    *alerts.Store
-	AuditStore    *audit.Store
+	AuditStore    AuditStoreInterface
 	Logger        *slog.Logger
 	Metrics       metricsTracker
 }
@@ -51,7 +50,6 @@ func NewSessionService(cfg SessionServiceConfig) *SessionService {
 		credentialSvc: cfg.CredentialSvc,
 		tokenStore:    cfg.TokenStore,
 		sessionSigner: cfg.SessionSigner,
-		alertStore:    cfg.AlertStore,
 		auditStore:    cfg.AuditStore,
 		logger:        cfg.Logger,
 		metrics:       cfg.Metrics,
@@ -78,7 +76,7 @@ func (ss *SessionService) SetSessionManager(sm *SessionRegistry) {
 }
 
 // SetAuditStore wires the audit store for synthetic session events.
-func (ss *SessionService) SetAuditStore(store *audit.Store) {
+func (ss *SessionService) SetAuditStore(store AuditStoreInterface) {
 	ss.auditStore = store
 }
 

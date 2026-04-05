@@ -22,11 +22,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// AlertStoreInterface — price alert management
+// AlertStoreInterface — price alert management (SRP: alerts only)
 // ---------------------------------------------------------------------------
 
-// AlertStoreInterface defines operations for managing per-user price alerts
-// and Telegram chat ID mappings.
+// AlertStoreInterface defines operations for managing per-user price alerts.
+// Telegram chat ID operations are separated into TelegramStoreInterface.
 type AlertStoreInterface interface {
 	// Add creates a new alert and returns its ID.
 	Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction) (string, error)
@@ -52,6 +52,20 @@ type AlertStoreInterface interface {
 	// MarkNotificationSent records when a Telegram notification was sent.
 	MarkNotificationSent(alertID string, sentAt time.Time)
 
+	// ListAll returns all alerts grouped by email.
+	ListAll() map[string][]*alerts.Alert
+
+	// ActiveCount returns the number of active alerts for a user.
+	ActiveCount(email string) int
+}
+
+// ---------------------------------------------------------------------------
+// TelegramStoreInterface — Telegram chat ID mappings (SRP: telegram only)
+// ---------------------------------------------------------------------------
+
+// TelegramStoreInterface defines operations for managing per-user Telegram
+// chat ID mappings. Separated from AlertStoreInterface per Single Responsibility.
+type TelegramStoreInterface interface {
 	// SetTelegramChatID sets the Telegram chat ID for a user.
 	SetTelegramChatID(email string, chatID int64)
 
@@ -61,14 +75,8 @@ type AlertStoreInterface interface {
 	// GetEmailByChatID performs a reverse lookup from chat ID to email.
 	GetEmailByChatID(chatID int64) (string, bool)
 
-	// ListAll returns all alerts grouped by email.
-	ListAll() map[string][]*alerts.Alert
-
 	// ListAllTelegram returns all Telegram chat ID mappings.
 	ListAllTelegram() map[string]int64
-
-	// ActiveCount returns the number of active alerts for a user.
-	ActiveCount(email string) int
 }
 
 // ---------------------------------------------------------------------------
@@ -477,15 +485,16 @@ type InstrumentManagerInterface interface {
 // ---------------------------------------------------------------------------
 
 var (
-	_ AlertStoreInterface       = (*alerts.Store)(nil)
-	_ AuditStoreInterface       = (*audit.Store)(nil)
-	_ BillingStoreInterface     = (*billing.Store)(nil)
-	_ UserStoreInterface        = (*users.Store)(nil)
-	_ RegistryStoreInterface    = (*registry.Store)(nil)
-	_ CredentialStoreInterface  = (*KiteCredentialStore)(nil)
-	_ TokenStoreInterface       = (*KiteTokenStore)(nil)
-	_ WatchlistStoreInterface   = (*watchlist.Store)(nil)
-	_ TickerServiceInterface    = (*ticker.Service)(nil)
-	_ PaperEngineInterface      = (*papertrading.PaperEngine)(nil)
+	_ AlertStoreInterface        = (*alerts.Store)(nil)
+	_ TelegramStoreInterface     = (*alerts.Store)(nil)
+	_ AuditStoreInterface        = (*audit.Store)(nil)
+	_ BillingStoreInterface      = (*billing.Store)(nil)
+	_ UserStoreInterface         = (*users.Store)(nil)
+	_ RegistryStoreInterface     = (*registry.Store)(nil)
+	_ CredentialStoreInterface   = (*KiteCredentialStore)(nil)
+	_ TokenStoreInterface        = (*KiteTokenStore)(nil)
+	_ WatchlistStoreInterface    = (*watchlist.Store)(nil)
+	_ TickerServiceInterface     = (*ticker.Service)(nil)
+	_ PaperEngineInterface       = (*papertrading.PaperEngine)(nil)
 	_ InstrumentManagerInterface = (*instruments.Manager)(nil)
 )

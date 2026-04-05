@@ -83,24 +83,56 @@ func (h *ToolHandler) trackToolError(ctx context.Context, toolName, errorType st
 	}
 }
 
+// WithViewerBlock enforces the viewer role: blocks write tools for read-only users.
+// Returns a non-nil result if the user is blocked, nil otherwise.
+func (h *ToolHandler) WithViewerBlock(ctx context.Context, toolName string) *mcp.CallToolResult {
+	email := oauth.EmailFromContext(ctx)
+	if email == "" || !writeTools[toolName] {
+		return nil
+	}
+	if uStore := h.manager.UserStore(); uStore != nil {
+		if uStore.GetRole(email) == users.RoleViewer {
+			return mcp.NewToolResultError("Read-only access: your account has viewer role. Contact admin for trader access.")
+		}
+	}
+	return nil
+}
+
+// WithTokenRefresh checks if a Kite token has likely expired (~6 AM IST daily)
+// and verifies it with the Kite API. Returns a non-nil result if expired, nil otherwise.
+func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, session *kc.KiteSessionData, sessionID, email string) *mcp.CallToolResult {
+	if email == "" {
+		return nil
+	}
+	entry, ok := h.manager.TokenStore().Get(email)
+	if !ok || !kc.IsKiteTokenExpired(entry.StoredAt) {
+		return nil
+	}
+	if _, err := session.Kite.Client.GetUserProfile(); err != nil {
+		h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
+		h.manager.TokenStore().Delete(email)
+		h.trackToolError(ctx, toolName, "token_expired")
+		return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error()))
+	}
+	return nil
+}
+
 // WithSession validates session and executes the provided function with a valid Kite session.
+// Composes WithViewerBlock (RBAC) and WithTokenRefresh (expiry detection) as middleware steps.
 // Extracts email from OAuth context (if available) to enable per-user token caching.
 func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (*mcp.CallToolResult, error) {
+	// Step 1: RBAC — block viewer role from write tools.
+	if block := h.WithViewerBlock(ctx, toolName); block != nil {
+		return block, nil
+	}
+
 	sess := server.ClientSessionFromContext(ctx)
 	sessionID := sess.SessionID()
 	email := oauth.EmailFromContext(ctx)
 
-	// Enforce viewer role: block write tools for read-only users.
-	if email != "" && writeTools[toolName] {
-		if uStore := h.manager.UserStore(); uStore != nil {
-			if uStore.GetRole(email) == users.RoleViewer {
-				return mcp.NewToolResultError("Read-only access: your account has viewer role. Contact admin for trader access."), nil
-			}
-		}
-	}
-
 	h.manager.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
 
+	// Step 2: Session lookup/creation.
 	kiteSession, isNew, err := h.manager.GetOrCreateSessionWithEmail(sessionID, email)
 	if err != nil {
 		h.manager.Logger.Error("Failed to establish session", "tool", toolName, "session_id", sessionID, "error", err)
@@ -130,15 +162,10 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		}
 	}
 
-	// For existing sessions, check if token likely expired (Kite tokens expire daily ~6 AM IST)
-	if !isNew && email != "" {
-		if entry, ok := h.manager.TokenStore().Get(email); ok && kc.IsKiteTokenExpired(entry.StoredAt) {
-			if _, err := kiteSession.Kite.Client.GetUserProfile(); err != nil {
-				h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
-				h.manager.TokenStore().Delete(email)
-				h.trackToolError(ctx, toolName, "token_expired")
-				return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error())), nil
-			}
+	// Step 3: Token refresh — check if existing session's token expired.
+	if !isNew {
+		if block := h.WithTokenRefresh(ctx, toolName, kiteSession, sessionID, email); block != nil {
+			return block, nil
 		}
 	}
 

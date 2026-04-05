@@ -321,7 +321,6 @@ func New(cfg Config) (*Manager, error) {
 		CredentialSvc: m.credentialSvc,
 		TokenStore:    m.tokenStore,
 		SessionSigner: m.sessionSigner,
-		AlertStore:    m.alertStore,
 		Logger:        cfg.Logger,
 		Metrics:       metricsImpl,
 	})
@@ -571,8 +570,19 @@ func (m *Manager) HasCachedToken(email string) bool {
 }
 
 // TokenStore returns the per-email token store.
-func (m *Manager) TokenStore() *KiteTokenStore {
+func (m *Manager) TokenStore() TokenStoreInterface {
 	return m.tokenStore
+}
+
+// TokenStoreConcrete returns the concrete token store (for internal wiring).
+func (m *Manager) TokenStoreConcrete() *KiteTokenStore {
+	return m.tokenStore
+}
+
+// TelegramStore returns the per-user Telegram chat ID store.
+// The underlying alerts.Store satisfies both AlertStoreInterface and TelegramStoreInterface.
+func (m *Manager) TelegramStore() TelegramStoreInterface {
+	return m.alertStore
 }
 
 
@@ -583,17 +593,32 @@ func (m *Manager) HasGlobalCredentials() bool {
 }
 
 // TickerService returns the per-user WebSocket ticker service.
-func (m *Manager) TickerService() *ticker.Service {
+func (m *Manager) TickerService() TickerServiceInterface {
 	return m.tickerService
 }
 
-// AlertStore returns the per-user alert store.
-func (m *Manager) AlertStore() *alerts.Store {
+// TickerServiceConcrete returns the concrete ticker service (for internal wiring).
+func (m *Manager) TickerServiceConcrete() *ticker.Service {
+	return m.tickerService
+}
+
+// AlertStore returns the per-user alert store (alert CRUD).
+func (m *Manager) AlertStore() AlertStoreInterface {
+	return m.alertStore
+}
+
+// AlertStoreConcrete returns the concrete alert store (for internal wiring).
+func (m *Manager) AlertStoreConcrete() *alerts.Store {
 	return m.alertStore
 }
 
 // WatchlistStore returns the per-user watchlist store.
-func (m *Manager) WatchlistStore() *watchlist.Store {
+func (m *Manager) WatchlistStore() WatchlistStoreInterface {
+	return m.watchlistStore
+}
+
+// WatchlistStoreConcrete returns the concrete watchlist store (for internal wiring).
+func (m *Manager) WatchlistStoreConcrete() *watchlist.Store {
 	return m.watchlistStore
 }
 
@@ -603,17 +628,32 @@ func (m *Manager) APIKey() string {
 }
 
 // CredentialStore returns the per-email Kite credential store.
-func (m *Manager) CredentialStore() *KiteCredentialStore {
+func (m *Manager) CredentialStore() CredentialStoreInterface {
+	return m.credentialStore
+}
+
+// CredentialStoreConcrete returns the concrete credential store (for internal wiring).
+func (m *Manager) CredentialStoreConcrete() *KiteCredentialStore {
 	return m.credentialStore
 }
 
 // UserStore returns the user identity store (RBAC, lifecycle).
-func (m *Manager) UserStore() *users.Store {
+func (m *Manager) UserStore() UserStoreInterface {
+	return m.userStore
+}
+
+// UserStoreConcrete returns the concrete user store (for internal wiring).
+func (m *Manager) UserStoreConcrete() *users.Store {
 	return m.userStore
 }
 
 // RegistryStore returns the key registry store for zero-config onboarding.
-func (m *Manager) RegistryStore() *registry.Store {
+func (m *Manager) RegistryStore() RegistryStoreInterface {
+	return m.registryStore
+}
+
+// RegistryStoreConcrete returns the concrete registry store (for internal wiring).
+func (m *Manager) RegistryStoreConcrete() *registry.Store {
 	return m.registryStore
 }
 
@@ -648,7 +688,12 @@ func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
 }
 
 // InstrumentsManager returns the instruments manager.
-func (m *Manager) InstrumentsManager() *instruments.Manager {
+func (m *Manager) InstrumentsManager() InstrumentManagerInterface {
+	return m.Instruments
+}
+
+// InstrumentsManagerConcrete returns the concrete instruments manager (for internal wiring).
+func (m *Manager) InstrumentsManagerConcrete() *instruments.Manager {
 	return m.Instruments
 }
 
@@ -674,7 +719,15 @@ func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
 }
 
 // AuditStore returns the audit trail store, or nil if not configured.
-func (m *Manager) AuditStore() *audit.Store {
+func (m *Manager) AuditStore() AuditStoreInterface {
+	if m.auditStore == nil {
+		return nil
+	}
+	return m.auditStore
+}
+
+// AuditStoreConcrete returns the concrete audit store (for internal wiring).
+func (m *Manager) AuditStoreConcrete() *audit.Store {
 	return m.auditStore
 }
 
@@ -700,7 +753,15 @@ func (m *Manager) SetPaperEngine(e *papertrading.PaperEngine) {
 }
 
 // PaperEngine returns the paper trading engine, or nil if not configured.
-func (m *Manager) PaperEngine() *papertrading.PaperEngine {
+func (m *Manager) PaperEngine() PaperEngineInterface {
+	if m.paperEngine == nil {
+		return nil
+	}
+	return m.paperEngine
+}
+
+// PaperEngineConcrete returns the concrete paper engine (for internal wiring).
+func (m *Manager) PaperEngineConcrete() *papertrading.PaperEngine {
 	return m.paperEngine
 }
 
@@ -710,7 +771,15 @@ func (m *Manager) SetBillingStore(store *billing.Store) {
 }
 
 // BillingStore returns the billing store, or nil if not configured.
-func (m *Manager) BillingStore() *billing.Store {
+func (m *Manager) BillingStore() BillingStoreInterface {
+	if m.billingStore == nil {
+		return nil
+	}
+	return m.billingStore
+}
+
+// BillingStoreConcrete returns the concrete billing store (for internal wiring).
+func (m *Manager) BillingStoreConcrete() *billing.Store {
 	return m.billingStore
 }
 

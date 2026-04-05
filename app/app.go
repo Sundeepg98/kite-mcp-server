@@ -37,6 +37,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"golang.org/x/crypto/bcrypt"
@@ -212,10 +214,10 @@ func (app *App) RunServer() error {
 		exchanger := &kiteExchangerAdapter{
 			apiKey:          app.Config.KiteAPIKey,
 			apiSecret:       app.Config.KiteAPISecret,
-			tokenStore:      kcManager.TokenStore(),
-			credentialStore: kcManager.CredentialStore(),
-			registryStore:   kcManager.RegistryStore(),
-			userStore:       kcManager.UserStore(),
+			tokenStore:      kcManager.TokenStoreConcrete(),
+			credentialStore: kcManager.CredentialStoreConcrete(),
+			registryStore:   kcManager.RegistryStoreConcrete(),
+			userStore:       kcManager.UserStoreConcrete(),
 			logger:          app.logger,
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
@@ -266,7 +268,7 @@ func (app *App) RunServer() error {
 		}
 
 		// Wire key registry for zero-config onboarding
-		if regStore := kcManager.RegistryStore(); regStore != nil {
+		if regStore := kcManager.RegistryStoreConcrete(); regStore != nil {
 			app.oauthHandler.SetRegistry(&registryAdapter{store: regStore})
 			app.logger.Info("Key registry wired into OAuth handler", "entries", regStore.Count())
 		}
@@ -363,9 +365,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Error("Failed to load risk limits", "error", err)
 		}
 	}
-	if kcManager.InstrumentsManager() != nil {
+	if kcManager.InstrumentsManagerConcrete() != nil {
 		// Wrap instruments manager as FreezeQuantityLookup
-		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManager()})
+		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
 	}
 	kcManager.SetRiskGuard(riskGuard)
 
@@ -467,9 +469,9 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 	// --- Telegram briefings (opt-in: requires TELEGRAM_BOT_TOKEN) ---
 	notifier := kcManager.TelegramNotifier()
 	if notifier != nil {
-		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
-		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStore(), tokenAdapter, credAdapter, app.logger)
+		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
 		if briefingSvc != nil {
 			sched.Add(scheduler.Task{
 				Name:   "morning_briefing",
@@ -517,7 +519,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 
 	// --- Daily P&L snapshot — 3:40 PM IST (after market close, after Telegram summary) ---
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
 		pnlService := alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
 		if pnlService != nil {
@@ -729,7 +731,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	// Seed admin users from ADMIN_EMAILS env var into the user store.
 	// Only seed on fresh database (no existing users) so that runtime
 	// role changes (e.g. demotions via admin console) are not overridden.
-	userStore := kcManager.UserStore()
+	userStore := kcManager.UserStoreConcrete()
 	if userStore != nil && app.Config.AdminEmails != "" {
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
 		if userStore.Count() == 0 {
@@ -904,7 +906,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 
 	// Register Stripe webhook endpoint (no auth — Stripe calls this with a signed payload).
 	if webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET"); webhookSecret != "" {
-		if bs := kcManager.BillingStore(); bs != nil {
+		if bs := kcManager.BillingStoreConcrete(); bs != nil {
 			if err := bs.InitEventLogTable(); err != nil {
 				app.logger.Error("Failed to initialize webhook_events table", "error", err)
 			}
@@ -940,8 +942,9 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 	hash := sha256.Sum256([]byte(app.Config.OAuthJWTSecret + "telegram-webhook"))
 	webhookSecret := hex.EncodeToString(hash[:])[:32]
 
-	// Create bot command handler.
-	botHandler := tgbot.NewBotHandler(notifier.Bot(), webhookSecret, kcManager, app.logger)
+	// Create bot command handler. The telegramManagerAdapter bridges *kc.Manager
+	// to telegram.KiteManager, adapting interface return types.
+	botHandler := tgbot.NewBotHandler(notifier.Bot(), webhookSecret, &telegramManagerAdapter{m: kcManager}, app.logger)
 	app.telegramBot = botHandler
 
 	// Register the webhook endpoint (the secret in the path prevents spoofing).
@@ -1495,4 +1498,44 @@ func (a *registryAdapter) GetSecretByAPIKey(apiKey string) (apiSecret string, ok
 		return "", false
 	}
 	return reg.APISecret, true
+}
+
+// telegramManagerAdapter bridges *kc.Manager to telegram.KiteManager.
+// It adapts interface return types so *kc.Manager satisfies the telegram-local interface.
+type telegramManagerAdapter struct {
+	m *kc.Manager
+}
+
+func (a *telegramManagerAdapter) TelegramStore() tgbot.TelegramLookup {
+	return a.m.TelegramStore()
+}
+func (a *telegramManagerAdapter) AlertStoreConcrete() *alerts.Store {
+	return a.m.AlertStoreConcrete()
+}
+func (a *telegramManagerAdapter) WatchlistStoreConcrete() *watchlist.Store {
+	return a.m.WatchlistStoreConcrete()
+}
+func (a *telegramManagerAdapter) GetAPIKeyForEmail(email string) string {
+	return a.m.GetAPIKeyForEmail(email)
+}
+func (a *telegramManagerAdapter) GetAccessTokenForEmail(email string) string {
+	return a.m.GetAccessTokenForEmail(email)
+}
+func (a *telegramManagerAdapter) TelegramNotifier() *alerts.TelegramNotifier {
+	return a.m.TelegramNotifier()
+}
+func (a *telegramManagerAdapter) InstrumentsManagerConcrete() *instruments.Manager {
+	return a.m.InstrumentsManagerConcrete()
+}
+func (a *telegramManagerAdapter) IsTokenValid(email string) bool {
+	return a.m.IsTokenValid(email)
+}
+func (a *telegramManagerAdapter) RiskGuard() *riskguard.Guard {
+	return a.m.RiskGuard()
+}
+func (a *telegramManagerAdapter) PaperEngineConcrete() *papertrading.PaperEngine {
+	return a.m.PaperEngineConcrete()
+}
+func (a *telegramManagerAdapter) TickerServiceConcrete() *ticker.Service {
+	return a.m.TickerServiceConcrete()
 }

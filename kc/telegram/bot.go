@@ -25,21 +25,28 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
+// TelegramLookup abstracts the Telegram chat-ID-to-email mapping needed by the bot.
+// Separated from alerts per Single Responsibility Principle.
+type TelegramLookup interface {
+	GetEmailByChatID(chatID int64) (string, bool)
+}
+
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
 // Using an interface avoids a circular import between kc and kc/telegram.
 type KiteManager interface {
-	AlertStore() *alerts.Store
-	WatchlistStore() *watchlist.Store
+	TelegramStore() TelegramLookup
+	AlertStoreConcrete() *alerts.Store
+	WatchlistStoreConcrete() *watchlist.Store
 	GetAPIKeyForEmail(email string) string
 	GetAccessTokenForEmail(email string) string
 	TelegramNotifier() *alerts.TelegramNotifier
-	InstrumentsManager() *instruments.Manager
+	InstrumentsManagerConcrete() *instruments.Manager
 	IsTokenValid(email string) bool
 
 	// Trading support — riskguard, paper trading, ticker.
 	RiskGuard() *riskguard.Guard
-	PaperEngine() *papertrading.PaperEngine
-	TickerService() *ticker.Service
+	PaperEngineConcrete() *papertrading.PaperEngine
+	TickerServiceConcrete() *ticker.Service
 }
 
 // pendingOrder holds an order awaiting user confirmation via inline keyboard.
@@ -201,8 +208,8 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	chatID := update.Message.Chat.ID
 
 	// Authentication: only respond to registered chat IDs.
-	store := h.manager.AlertStore()
-	email, ok := store.GetEmailByChatID(chatID)
+	tgStore := h.manager.TelegramStore()
+	email, ok := tgStore.GetEmailByChatID(chatID)
 	if !ok {
 		h.sendHTML(chatID, "You are not registered. Use the <code>/setup_telegram</code> MCP tool first.")
 		w.WriteHeader(http.StatusOK)
@@ -346,8 +353,8 @@ func (h *BotHandler) handleCallbackQuery(cq *tgbotapi.CallbackQuery) {
 	chatID := cq.Message.Chat.ID
 
 	// Authenticate the callback sender.
-	store := h.manager.AlertStore()
-	email, ok := store.GetEmailByChatID(chatID)
+	tgStore := h.manager.TelegramStore()
+	email, ok := tgStore.GetEmailByChatID(chatID)
 	if !ok {
 		h.answerCallback(cq.ID, "Not registered.")
 		return

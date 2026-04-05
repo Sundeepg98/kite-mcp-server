@@ -88,7 +88,7 @@ func (h *BotHandler) handleOrderCommand(chatID int64, email, args, side string) 
 	sb.WriteString(fmt.Sprintf("Product: <b>CNC</b>\n"))
 
 	// Check paper mode.
-	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
 		sb.WriteString("\n\u26A0\uFE0F <i>Paper trading mode — order will be simulated.</i>\n")
 	}
 
@@ -162,7 +162,7 @@ func (h *BotHandler) handleQuick(chatID int64, email, args string) {
 	}
 	sb.WriteString("Product: <b>CNC</b>\n")
 
-	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
 		sb.WriteString("\n\u26A0\uFE0F <i>Paper trading mode — order will be simulated.</i>\n")
 	}
 
@@ -215,7 +215,7 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 
 	// Route to paper engine or real Kite API.
 	var resultMsg string
-	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
 		resp, err := pe.PlaceOrder(email, map[string]any{
 			"exchange":         order.Exchange,
 			"tradingsymbol":    order.Tradingsymbol,
@@ -333,7 +333,7 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 
 	// Resolve instrument to get token.
 	instrumentID := "NSE:" + symbol
-	im := h.manager.InstrumentsManager()
+	im := h.manager.InstrumentsManagerConcrete()
 	if im == nil {
 		return "Instruments data not available."
 	}
@@ -351,14 +351,14 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 	exchange := inst.Exchange
 	tradingsymbol := inst.Tradingsymbol
 
-	alertID, err := h.manager.AlertStore().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+	alertID, err := h.manager.AlertStoreConcrete().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
 	if err != nil {
 		return fmt.Sprintf("Failed to set alert: %s", escapeHTML(err.Error()))
 	}
 
 	// Auto-subscribe to ticker for real-time monitoring.
 	tickerMsg := ""
-	ts := h.manager.TickerService()
+	ts := h.manager.TickerServiceConcrete()
 	if ts != nil {
 		if ts.IsRunning(email) {
 			if subErr := ts.Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr == nil {

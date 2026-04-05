@@ -10,13 +10,16 @@ import (
 // CredentialService owns credential resolution: per-user vs global credentials,
 // API key lookup, and registry backfill. Extracted from Manager as part of
 // Clean Architecture / SOLID refactoring.
+//
+// Dependencies are interface types (Dependency Inversion Principle), enabling
+// mock injection for testing.
 type CredentialService struct {
 	apiKey          string
 	apiSecret       string
 	accessToken     string // global pre-auth token (local dev)
-	credentialStore *KiteCredentialStore
-	tokenStore      *KiteTokenStore
-	registryStore   *registry.Store
+	credentialStore CredentialStoreInterface
+	tokenStore      TokenStoreInterface
+	registryStore   RegistryStoreInterface
 	logger          *slog.Logger
 }
 
@@ -25,9 +28,9 @@ type CredentialServiceConfig struct {
 	APIKey          string
 	APISecret       string
 	AccessToken     string
-	CredentialStore *KiteCredentialStore
-	TokenStore      *KiteTokenStore
-	RegistryStore   *registry.Store
+	CredentialStore CredentialStoreInterface
+	TokenStore      TokenStoreInterface
+	RegistryStore   RegistryStoreInterface
 	Logger          *slog.Logger
 }
 
