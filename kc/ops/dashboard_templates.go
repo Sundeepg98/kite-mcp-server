@@ -1116,7 +1116,7 @@ func (d *DashboardHandler) servePaperFragment(w http.ResponseWriter, r *http.Req
 	enabled, _ := statusMap["enabled"].(bool)
 	banner := paperStatusToBanner(statusMap)
 	if fragment, err := renderUserFragment(d.fragmentTmpl, "user_paper_banner", banner); err == nil {
-		_, _ = io.WriteString(w, fragment) //nolint:G705 -- html/template auto-escapes
+		_, _ = io.WriteString(w, fragment) // #nosec G705 -- html/template auto-escapes
 	}
 
 	if enabled {
