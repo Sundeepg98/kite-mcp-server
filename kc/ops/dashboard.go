@@ -16,16 +16,18 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // DashboardHandler serves the per-user trading dashboard and its API endpoints.
 type DashboardHandler struct {
-	manager    *kc.Manager
-	logger     *slog.Logger
-	auditStore *audit.Store
-	adminCheck func(string) bool // returns true if email is admin
+	manager      *kc.Manager
+	logger       *slog.Logger
+	auditStore   *audit.Store
+	adminCheck   func(string) bool // returns true if email is admin
+	billingStore billingStoreIface // optional: billing tier lookup
 
 	// Parsed Go templates for server-side rendering of user dashboard pages.
 	portfolioTmpl *htmltemplate.Template
@@ -35,6 +37,11 @@ type DashboardHandler struct {
 	paperTmpl     *htmltemplate.Template
 	safetyTmpl    *htmltemplate.Template
 	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
+}
+
+// billingStoreIface is the subset of billing.Store used by the dashboard.
+type billingStoreIface interface {
+	GetSubscription(email string) *billing.Subscription
 }
 
 // NewDashboardHandler creates a new DashboardHandler. The auditStore parameter
@@ -52,6 +59,35 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 // SetAdminCheck registers a callback to check if an email belongs to an admin.
 func (d *DashboardHandler) SetAdminCheck(fn func(string) bool) {
 	d.adminCheck = fn
+}
+
+// SetBillingStore sets the billing store for the billing page.
+func (d *DashboardHandler) SetBillingStore(store billingStoreIface) {
+	d.billingStore = store
+}
+
+// serveBillingPage shows billing status or a free tier message.
+func (d *DashboardHandler) serveBillingPage(w http.ResponseWriter, r *http.Request) {
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	if d.billingStore == nil {
+		http.Error(w, "Billing is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	sub := d.billingStore.GetSubscription(email)
+	if sub == nil || sub.StripeCustomerID == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>Billing · Kite MCP</title></head><body style="font-family:system-ui;background:#0a0c10;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh"><div style="text-align:center;max-width:400px"><h2>Free Tier</h2><p style="color:#94a3b8">You are on the free plan. Upgrade to unlock order execution, alerts, and advanced analytics.</p><a href="/dashboard" style="color:#22d3ee">&larr; Back to Dashboard</a></div></body></html>`)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>Billing · Kite MCP</title></head><body style="font-family:system-ui;background:#0a0c10;color:#e2e8f0;display:flex;justify-content:center;align-items:center;min-height:100vh"><div style="text-align:center;max-width:400px"><h2>Your Subscription</h2><p style="color:#94a3b8">Tier: <strong>%s</strong> · Status: <strong>%s</strong></p><p style="color:#94a3b8;font-size:14px">To manage your subscription, payment methods, or cancel, please contact <a href="mailto:sundeepg8@gmail.com" style="color:#22d3ee">sundeepg8@gmail.com</a></p><a href="/dashboard" style="color:#22d3ee">&larr; Back to Dashboard</a></div></body></html>`, sub.Tier, sub.Status)
 }
 
 // RegisterRoutes mounts all dashboard routes, protected by the provided auth middleware.
@@ -88,6 +124,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/tax-analysis", wrap(d.taxAnalysisAPI))
 	mux.Handle("/dashboard/api/account/delete", wrap(d.selfDeleteAccount))
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.selfManageCredentials))
+	mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))
 
 	// Static CSS — no auth required, publicly cacheable.
 	mux.HandleFunc("/static/dashboard-base.css", func(w http.ResponseWriter, r *http.Request) {

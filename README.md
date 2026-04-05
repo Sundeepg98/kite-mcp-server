@@ -6,7 +6,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
 [![Tools](https://img.shields.io/badge/Tools-80-blue)]()
-[![Tests](https://img.shields.io/badge/Tests-487-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-483-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## What it does
@@ -57,7 +57,7 @@ Connect any AI assistant to your Zerodha Kite account. Place orders, analyze por
 
 | Feature | This Server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
 |---------|:-----------:|:-------------------------------------------:|:------:|
-| Tools | 78 | 22 | N/A |
+| Tools | 80 | 22 | N/A |
 | Order placement | Yes | GTT only | Yes |
 | Paper trading | Yes | No | No |
 | Safety checks | 8 | 0 | 0 |
@@ -142,6 +142,38 @@ go build -o kite-mcp-server && ./kite-mcp-server
 
 Point your client to `http://localhost:8080/mcp` with `--allow-http`.
 
+## Environment Variables
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `OAUTH_JWT_SECRET` | Yes (HTTP mode) | — | Signs JWT tokens for OAuth sessions |
+| `KITE_API_KEY` | No | — | Global Kite developer app API key (per-user OAuth if unset) |
+| `KITE_API_SECRET` | No | — | Global Kite developer app API secret |
+| `KITE_ACCESS_TOKEN` | No | — | Pre-authenticated Kite token (bypasses browser login, local dev only) |
+| `EXTERNAL_URL` | No | `http://localhost:8080` | Public URL for OAuth callbacks and links |
+| `APP_MODE` | No | `http` | Server mode: `http`, `sse`, or `stdio` |
+| `APP_PORT` | No | `8080` | HTTP listen port |
+| `APP_HOST` | No | `0.0.0.0` | HTTP listen host |
+| `ALERT_DB_PATH` | No | `alerts.db` | Path to SQLite database file |
+| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token for alert notifications and daily briefings |
+| `ADMIN_EMAILS` | No | — | Comma-separated list of admin email addresses |
+| `ADMIN_ENDPOINT_SECRET_PATH` | No | — | Secret URL path segment for admin endpoints |
+| `ADMIN_PASSWORD` | No | — | Password for admin login (bcrypt hashed at runtime) |
+| `EXCLUDED_TOOLS` | No | — | Comma-separated tool names to disable |
+| `LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `GOOGLE_CLIENT_ID` | No | — | Google OAuth client ID for SSO login |
+| `GOOGLE_CLIENT_SECRET` | No | — | Google OAuth client secret for SSO login |
+| `STRIPE_SECRET_KEY` | No | — | Stripe secret key to enable billing tier enforcement |
+| `STRIPE_WEBHOOK_SECRET` | No | — | Stripe webhook signing secret |
+| `STRIPE_PRICE_PRO` | No | — | Stripe Price ID for the Pro tier |
+| `STRIPE_PRICE_PREMIUM` | No | — | Stripe Price ID for the Premium tier |
+| `LITESTREAM_BUCKET` | No | — | R2/S3 bucket name for Litestream SQLite replication |
+| `LITESTREAM_R2_ACCOUNT_ID` | No | — | Cloudflare R2 account ID for Litestream |
+| `LITESTREAM_ACCESS_KEY_ID` | No | — | R2/S3 access key ID for Litestream |
+| `LITESTREAM_SECRET_ACCESS_KEY` | No | — | R2/S3 secret access key for Litestream |
+
+Only `OAUTH_JWT_SECRET` is required for multi-user HTTP deployments. All other variables are optional and enable specific features when set.
+
 ## Safety: RiskGuard
 
 Every order passes through 8 checks before reaching the exchange. Any failure blocks the order instantly.
@@ -198,7 +230,7 @@ Contributions welcome. Check [open issues](https://github.com/Sundeepg98/kite-mc
 ```bash
 nix develop          # or: install Go 1.25+
 just build           # compile
-just test            # run 487 tests
+just test            # run 483 tests
 just lint            # format + lint
 ```
 

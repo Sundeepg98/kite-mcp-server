@@ -110,6 +110,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) htt
 	mux.Handle("/admin/ops/api/registry/", wrap(h.registryItemHandler))
 	// Metrics (admin only)
 	mux.Handle("/admin/ops/api/metrics", wrap(h.metricsAPI))
+	mux.Handle("/admin/ops/api/metrics-fragment", wrap(h.metricsFragment))
 	// Overview SSE stream (admin only)
 	mux.Handle("/admin/ops/api/overview-stream", wrap(h.overviewStream))
 }
@@ -123,6 +124,7 @@ type OpsPageData struct {
 	Tickers  TickersTemplateData
 	Alerts   AlertsTemplateData
 	Users    UsersTemplateData
+	Metrics  MetricsTemplateData
 }
 
 // servePage serves the embedded ops.html dashboard page via Go template execution,
@@ -149,6 +151,15 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 		usersData = usersToTemplateData(h.userStore.List(), email)
 	}
 
+	// Build initial metrics data (default 1h period).
+	var metricsData MetricsTemplateData
+	if h.auditStore != nil {
+		since := time.Now().Add(-1 * time.Hour)
+		stats, _ := h.auditStore.GetGlobalStats(since)
+		toolMetrics, _ := h.auditStore.GetToolMetrics(since)
+		metricsData = metricsToTemplateData(stats, toolMetrics, int(time.Since(h.startTime).Seconds()))
+	}
+
 	data := OpsPageData{
 		Email:    email,
 		IsAdmin:  adminVal,
@@ -157,6 +168,7 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 		Tickers:  tickersToTemplateData(h.buildTickers()),
 		Alerts:   alertsToTemplateData(h.buildAlerts()),
 		Users:    usersData,
+		Metrics:  metricsData,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -940,6 +952,72 @@ func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
 		"stats":          stats,
 		"tool_metrics":   toolMetrics,
 	})
+}
+
+// metricsFragment returns server-rendered HTML for the metrics cards and table.
+// Used by htmx period buttons to swap the metrics content without full JS rendering.
+func (h *Handler) metricsFragment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := oauth.EmailFromContext(r.Context())
+	if !h.isAdmin(email) {
+		http.Error(w, "admin access required", http.StatusForbidden)
+		return
+	}
+	if h.auditStore == nil {
+		http.Error(w, "audit trail not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	if h.adminTmpl == nil {
+		http.Error(w, "templates not loaded", http.StatusInternalServerError)
+		return
+	}
+
+	period := r.URL.Query().Get("period")
+	var since time.Time
+	switch period {
+	case "1h":
+		since = time.Now().Add(-1 * time.Hour)
+	case "7d":
+		since = time.Now().AddDate(0, 0, -7)
+	case "30d":
+		since = time.Now().AddDate(0, 0, -30)
+	default:
+		since = time.Now().Add(-24 * time.Hour)
+	}
+
+	stats, err := h.auditStore.GetGlobalStats(since)
+	if err != nil {
+		h.logger.Error("Failed to get global stats for fragment", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	toolMetrics, err := h.auditStore.GetToolMetrics(since)
+	if err != nil {
+		h.logger.Error("Failed to get tool metrics for fragment", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	data := metricsToTemplateData(stats, toolMetrics, int(time.Since(h.startTime).Seconds()))
+
+	cardsHTML, err := renderFragment(h.adminTmpl, "admin_metrics_cards", data)
+	if err != nil {
+		h.logger.Error("Failed to render metrics cards fragment", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	tableHTML, err := renderFragment(h.adminTmpl, "admin_metrics_table", data)
+	if err != nil {
+		h.logger.Error("Failed to render metrics table fragment", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<div class="stats-grid">%s</div><div class="section-header">Tool Details</div><div class="tbl-wrap"><table><thead><tr><th>Tool</th><th>Calls</th><th>Avg (ms)</th><th>Max (ms)</th><th>Errors</th><th>Error %%</th></tr></thead><tbody>%s</tbody></table></div>`, cardsHTML, tableHTML)
 }
 
 // truncKey safely returns the first n characters of a string, or the whole string if shorter.

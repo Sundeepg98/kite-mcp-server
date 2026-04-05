@@ -218,19 +218,18 @@ tr:hover td { background: var(--bg-2); }
 
 <div id="panel-metrics" class="panel">
   <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-    <div style="display:flex;gap:4px">
-      <button class="metrics-period active" data-period="1h" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">1h</button>
-      <button class="metrics-period" data-period="24h" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">24h</button>
-      <button class="metrics-period" data-period="7d" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">7d</button>
-      <button class="metrics-period" data-period="30d" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">30d</button>
+    <div style="display:flex;gap:4px" id="metricsPeriodButtons">
+      <button class="metrics-period active" data-period="1h" hx-get="/admin/ops/api/metrics-fragment?period=1h" hx-target="#metricsContent" hx-swap="innerHTML" style="padding:3px 10px;border-radius:3px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">1h</button>
+      <button class="metrics-period" data-period="24h" hx-get="/admin/ops/api/metrics-fragment?period=24h" hx-target="#metricsContent" hx-swap="innerHTML" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">24h</button>
+      <button class="metrics-period" data-period="7d" hx-get="/admin/ops/api/metrics-fragment?period=7d" hx-target="#metricsContent" hx-swap="innerHTML" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">7d</button>
+      <button class="metrics-period" data-period="30d" hx-get="/admin/ops/api/metrics-fragment?period=30d" hx-target="#metricsContent" hx-swap="innerHTML" style="padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;font-family:var(--mono);font-weight:500;cursor:pointer">30d</button>
     </div>
   </div>
-  <div class="stats-grid" id="metricsCards"></div>
-  <div class="section-header">Top Tools</div>
-  <div id="metricsChart" style="margin-bottom:16px"></div>
-  <div class="section-header">Tool Details</div>
-  <div class="tbl-wrap"><table><thead><tr><th>Tool</th><th>Calls</th><th>Avg (ms)</th><th>Max (ms)</th><th>Errors</th><th>Error %</th></tr></thead><tbody id="metricsBody"></tbody></table></div>
-  <div class="empty-state" id="metricsEmpty" style="display:none">No metrics data for this period</div>
+  <div id="metricsContent">
+    <div class="stats-grid">{{template "admin_metrics_cards" .Metrics}}</div>
+    <div class="section-header">Tool Details</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Tool</th><th>Calls</th><th>Avg (ms)</th><th>Max (ms)</th><th>Errors</th><th>Error %</th></tr></thead><tbody>{{template "admin_metrics_table" .Metrics}}</tbody></table></div>
+  </div>
 </div>
 
 <div id="panel-users" class="panel">
@@ -321,7 +320,7 @@ tr:hover td { background: var(--bg-2); }
       btn.classList.add('active');
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'logs') startLogStream();
-      if (btn.dataset.tab === 'metrics') refreshMetrics();
+      // Metrics tab uses htmx — no JS refresh needed.
     });
   });
 
@@ -551,131 +550,21 @@ tr:hover td { background: var(--bg-2); }
     });
   }
 
-  // Metrics
-  var metricsPeriod = '1h';
-  function refreshMetrics() {
-    fetch(basePath + '/api/metrics?period=' + metricsPeriod)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.error) { document.getElementById('metricsEmpty').style.display = 'block'; return; }
-        document.getElementById('metricsEmpty').style.display = 'none';
-        var stats = data.stats || {};
-        var tools = data.tool_metrics || [];
-        var uptimeSec = data.uptime_seconds || 0;
-
-        // Uptime formatting
-        var days = Math.floor(uptimeSec / 86400);
-        var hours = Math.floor((uptimeSec % 86400) / 3600);
-        var mins = Math.floor((uptimeSec % 3600) / 60);
-        var uptimeStr = '';
-        if (days > 0) uptimeStr += days + 'd ';
-        if (hours > 0) uptimeStr += hours + 'h ';
-        uptimeStr += mins + 'm';
-
-        var errorRate = stats.total_calls > 0 ? ((stats.error_count / stats.total_calls) * 100).toFixed(1) : '0.0';
-
-        // Summary cards
-        var cards = [
-          { label: 'Uptime', value: uptimeStr },
-          { label: 'Total Calls', value: (stats.total_calls || 0).toLocaleString(), cls: stats.total_calls > 0 ? 'green' : '' },
-          { label: 'Error Rate', value: errorRate + '%', cls: parseFloat(errorRate) > 5 ? 'red' : (parseFloat(errorRate) > 1 ? 'amber' : 'green') },
-          { label: 'Avg Latency', value: (stats.avg_latency_ms || 0).toFixed(0) + 'ms' },
-          { label: 'Top Tool', value: stats.top_tool ? stats.top_tool.replace(/_/g, ' ') + ' (' + (stats.top_tool_count || 0) + ')' : '--' }
-        ];
-        var grid = document.getElementById('metricsCards');
-        clearChildren(grid);
-        cards.forEach(function(c) {
-          var card = el('div', 'stat-card');
-          card.appendChild(el('div', 'stat-label', c.label));
-          var v = el('div', 'stat-value', c.value);
-          if (c.cls) v.classList.add(c.cls);
-          card.appendChild(v);
-          grid.appendChild(card);
-        });
-
-        // Bar chart
-        var chart = document.getElementById('metricsChart');
-        clearChildren(chart);
-        var maxCalls = 0;
-        var top10 = tools.slice(0, 10);
-        top10.forEach(function(t) { if (t.call_count > maxCalls) maxCalls = t.call_count; });
-
-        top10.forEach(function(t) {
-          var row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px';
-
-          var label = el('span', null, t.tool_name);
-          label.style.cssText = 'width:160px;font-family:var(--mono);font-size:11px;color:var(--text-1);text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-          row.appendChild(label);
-
-          var barOuter = document.createElement('div');
-          barOuter.style.cssText = 'flex:1;height:16px;background:var(--bg-2);border-radius:3px;overflow:hidden';
-          var barInner = document.createElement('div');
-          var pct = maxCalls > 0 ? (t.call_count / maxCalls * 100) : 0;
-          var errPct = t.call_count > 0 ? (t.error_count / t.call_count * 100) : 0;
-          var barColor = errPct > 10 ? 'var(--red)' : (errPct > 3 ? 'var(--amber)' : 'var(--accent)');
-          barInner.style.cssText = 'height:100%;border-radius:3px;transition:width 0.3s;background:' + barColor + ';width:' + pct + '%';
-          barOuter.appendChild(barInner);
-          row.appendChild(barOuter);
-
-          var count = el('span', null, t.call_count.toLocaleString());
-          count.style.cssText = 'width:50px;font-family:var(--mono);font-size:11px;color:var(--text-2);text-align:right;flex-shrink:0';
-          row.appendChild(count);
-
-          chart.appendChild(row);
-        });
-
-        if (top10.length === 0) {
-          chart.appendChild(el('div', 'empty-state', 'No tool calls in this period'));
-        }
-
-        // Detail table
-        var tbody = document.getElementById('metricsBody');
-        clearChildren(tbody);
-        tools.forEach(function(t) {
-          var errPct = t.call_count > 0 ? ((t.error_count / t.call_count) * 100).toFixed(1) : '0.0';
-          var errCell = document.createElement('td');
-          if (t.error_count > 0) {
-            var b = el('span', 'badge badge-red', String(t.error_count));
-            errCell.appendChild(b);
-          } else {
-            errCell.textContent = '0';
-          }
-          tbody.appendChild(tr([
-            td(t.tool_name),
-            td(t.call_count.toLocaleString()),
-            td(t.avg_ms.toFixed(0)),
-            td(String(t.max_ms)),
-            errCell,
-            td(errPct + '%')
-          ]));
-        });
-      }).catch(function(e) { console.error('metrics:', e); });
-  }
-
-  document.querySelectorAll('.metrics-period').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.metrics-period').forEach(function(b) {
-        b.classList.remove('active');
-        b.style.borderColor = 'var(--border)';
-        b.style.color = 'var(--text-2)';
-        b.style.background = 'var(--bg-2)';
-      });
-      btn.classList.add('active');
-      btn.style.borderColor = 'var(--accent)';
-      btn.style.color = 'var(--accent)';
-      btn.style.background = 'var(--accent-dim)';
-      metricsPeriod = btn.dataset.period;
-      refreshMetrics();
+  // Metrics period button styling (htmx handles data fetching)
+  document.getElementById('metricsPeriodButtons').addEventListener('click', function(e) {
+    var btn = e.target.closest('.metrics-period');
+    if (!btn) return;
+    document.querySelectorAll('.metrics-period').forEach(function(b) {
+      b.classList.remove('active');
+      b.style.borderColor = 'var(--border)';
+      b.style.color = 'var(--text-2)';
+      b.style.background = 'var(--bg-2)';
     });
+    btn.classList.add('active');
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color = 'var(--accent)';
+    btn.style.background = 'var(--accent-dim)';
   });
-  // Initialize active button style
-  var activeMetricsBtn = document.querySelector('.metrics-period.active');
-  if (activeMetricsBtn) {
-    activeMetricsBtn.style.borderColor = 'var(--accent)';
-    activeMetricsBtn.style.color = 'var(--accent)';
-    activeMetricsBtn.style.background = 'var(--accent-dim)';
-  }
 
   // --- Users management (admin only) — event delegation for action buttons ---
   function postAPI(endpoint, body) {

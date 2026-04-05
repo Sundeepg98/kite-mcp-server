@@ -399,6 +399,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		kcManager.SetBillingStore(billingStore)
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore)))
 		app.logger.Info("Billing tier enforcement enabled")
+		if os.Getenv("STRIPE_PRICE_PRO") == "" || os.Getenv("STRIPE_PRICE_PREMIUM") == "" {
+			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
+		}
 	}
 	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
 	if paperEngine != nil {
@@ -829,6 +832,9 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	dashHandler := ops.NewDashboardHandler(kcManager, app.logger, app.auditStore)
 	if userStore != nil {
 		dashHandler.SetAdminCheck(userStore.IsAdmin)
+	}
+	if bs := kcManager.BillingStore(); bs != nil {
+		dashHandler.SetBillingStore(bs)
 	}
 	if app.oauthHandler != nil {
 		dashHandler.RegisterRoutes(mux, app.oauthHandler.RequireAuthBrowser)

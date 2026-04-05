@@ -27,7 +27,7 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 
 			if current < required {
 				return gomcp.NewToolResultError(fmt.Sprintf(
-					"This tool requires a %s subscription (you have: %s). Upgrade at https://kite-mcp-server.fly.dev/dashboard/billing",
+					"This tool requires a %s subscription (you have: %s). Upgrade at /dashboard/billing",
 					required, current)), nil
 			}
 
