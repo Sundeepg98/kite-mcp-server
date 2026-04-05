@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	htmltemplate "html/template"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -1114,8 +1115,8 @@ func (d *DashboardHandler) servePaperFragment(w http.ResponseWriter, r *http.Req
 
 	enabled, _ := statusMap["enabled"].(bool)
 	banner := paperStatusToBanner(statusMap)
-	if html, err := renderUserFragment(d.fragmentTmpl, "user_paper_banner", banner); err == nil {
-		fmt.Fprint(w, html)
+	if fragment, err := renderUserFragment(d.fragmentTmpl, "user_paper_banner", banner); err == nil {
+		_, _ = io.WriteString(w, fragment) //nolint:G705 -- html/template auto-escapes
 	}
 
 	if enabled {

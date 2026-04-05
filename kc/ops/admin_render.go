@@ -340,11 +340,11 @@ func formatInt(n int) string {
 	}
 	// Insert commas from the right.
 	result := make([]byte, 0, len(s)+(len(s)-1)/3)
-	for i, c := range s {
+	for i := range s {
 		if i > 0 && (len(s)-i)%3 == 0 {
 			result = append(result, ',')
 		}
-		result = append(result, byte(c))
+		result = append(result, s[i])
 	}
 	return string(result)
 }
