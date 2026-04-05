@@ -1,0 +1,662 @@
+package riskguard
+
+import (
+	"fmt"
+	"log/slog"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
+)
+
+// newIntegrationGuard creates a Guard backed by in-memory SQLite for persistence tests.
+func newIntegrationGuard(t *testing.T) *Guard {
+	t.Helper()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	g := NewGuard(logger)
+	g.SetDB(db)
+	require.NoError(t, g.InitTable())
+	return g
+}
+
+// validSmallOrder is a baseline request that should pass all 8 checks.
+func validSmallOrder(email string) OrderCheckRequest {
+	return OrderCheckRequest{
+		Email:           email,
+		ToolName:        "place_order",
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        5,
+		Price:           1500,
+		OrderType:       "LIMIT",
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Full chain: all 8 checks pass for a valid small order
+// ---------------------------------------------------------------------------
+
+func TestFullChain_AllChecksPass(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "trader@example.com"
+
+	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
+		"NSE:INFY": 1800,
+	}})
+
+	req := validSmallOrder(email)
+
+	r := g.CheckOrder(req)
+	assert.True(t, r.Allowed, "valid small order should pass all 8 checks")
+	assert.Empty(t, r.Message)
+	assert.Equal(t, RejectionReason(""), r.Reason)
+
+	// Record it and verify state tracks correctly.
+	g.RecordOrder(email, req)
+
+	status := g.GetUserStatus(email)
+	assert.Equal(t, 1, status.DailyOrderCount)
+	assert.InDelta(t, 5*1500.0, status.DailyPlacedValue, 0.01)
+	assert.False(t, status.IsFrozen)
+}
+
+// ---------------------------------------------------------------------------
+// Check 1: Kill switch blocks when user is frozen
+// ---------------------------------------------------------------------------
+
+func TestFullChain_KillSwitchBlocks(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "frozen@example.com"
+
+	// Freeze the user with a reason.
+	g.Freeze(email, "compliance@firm.com", "Suspicious activity detected")
+
+	r := g.CheckOrder(validSmallOrder(email))
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonTradingFrozen, r.Reason)
+	assert.Contains(t, r.Message, "Suspicious activity detected")
+
+	// Verify freeze persisted in DB by reloading.
+	g2 := NewGuard(slog.Default())
+	g2.SetDB(g.db)
+	require.NoError(t, g2.InitTable())
+	require.NoError(t, g2.LoadLimits())
+	assert.True(t, g2.IsFrozen(email))
+
+	// Unfreeze and verify order passes.
+	g.Unfreeze(email)
+	r = g.CheckOrder(validSmallOrder(email))
+	assert.True(t, r.Allowed)
+}
+
+// ---------------------------------------------------------------------------
+// Check 2: Order value limit blocks orders > Rs 5L
+// ---------------------------------------------------------------------------
+
+func TestFullChain_OrderValueLimit(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "bigspender@example.com"
+
+	tests := []struct {
+		name     string
+		qty      int
+		price    float64
+		allowed  bool
+		reason   RejectionReason
+	}{
+		{"exactly at limit passes (strict >)", 50, 10000, true, ""},          // 50*10000 = 500000 = limit, check is > not >=
+		{"just over limit", 51, 10000, false, ReasonOrderValue},              // 510000 > 500000
+		{"way over limit", 100, 10000, false, ReasonOrderValue},              // 1000000 > 500000
+		{"MARKET order (price 0) passes", 100000, 0, true, ""},               // price=0 skips check
+		{"small order passes", 10, 100, true, ""},                            // 1000 < 500000
+		{"single expensive share", 1, 600000, false, ReasonOrderValue},       // 600000 > 500000
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := OrderCheckRequest{
+				Email: email, ToolName: "place_order",
+				Exchange: "NSE", Tradingsymbol: "TEST",
+				TransactionType: "BUY",
+				Quantity: tc.qty, Price: tc.price,
+				OrderType: "LIMIT",
+			}
+			if tc.price == 0 {
+				req.OrderType = "MARKET"
+			}
+			r := g.CheckOrder(req)
+			assert.Equal(t, tc.allowed, r.Allowed, tc.name)
+			if !tc.allowed {
+				assert.Equal(t, tc.reason, r.Reason, tc.name)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Check 3: Quantity limit blocks orders exceeding freeze qty
+// ---------------------------------------------------------------------------
+
+func TestFullChain_QuantityLimit(t *testing.T) {
+	g := newIntegrationGuard(t)
+
+	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
+		"NSE:RELIANCE": 1800,
+		"NFO:NIFTY":    900,
+	}})
+
+	// Disable auto-freeze for this test to avoid circuit breaker interference across subtests.
+	baseEmail := "qty"
+
+	tests := []struct {
+		name      string
+		exchange  string
+		symbol    string
+		qty       int
+		price     float64
+		allowed   bool
+	}{
+		{"under freeze qty", "NSE", "RELIANCE", 100, 100, true},
+		{"at freeze qty", "NSE", "RELIANCE", 1800, 0, true},       // price=0 to skip value check
+		{"over freeze qty", "NSE", "RELIANCE", 1801, 0, false},    // price=0 to skip value check
+		{"NFO under", "NFO", "NIFTY", 900, 0, true},
+		{"NFO over", "NFO", "NIFTY", 901, 0, false},
+		{"unknown instrument (fail open)", "NSE", "UNKNOWN", 10, 100, true},
+		{"no exchange (fail open)", "", "RELIANCE", 10, 100, true},
+		{"negative qty blocked", "NSE", "RELIANCE", -1, 0, false},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Use a unique email per subtest to prevent circuit breaker interference.
+			email := fmt.Sprintf("%s%d@example.com", baseEmail, i)
+			g.mu.Lock()
+			g.limits[email] = &UserLimits{AutoFreezeOnLimitHit: false}
+			g.mu.Unlock()
+
+			orderType := "LIMIT"
+			if tc.price == 0 {
+				orderType = "MARKET"
+			}
+			req := OrderCheckRequest{
+				Email: email, ToolName: "place_order",
+				Exchange: tc.exchange, Tradingsymbol: tc.symbol,
+				TransactionType: "BUY", Quantity: tc.qty,
+				Price: tc.price, OrderType: orderType,
+			}
+			r := g.CheckOrder(req)
+			assert.Equal(t, tc.allowed, r.Allowed, tc.name)
+			if !tc.allowed {
+				assert.Equal(t, ReasonQuantityLimit, r.Reason, tc.name)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Check 4: Daily order count limit (200/day)
+// ---------------------------------------------------------------------------
+
+func TestFullChain_DailyOrderLimit(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "dailylimit@example.com"
+
+	// Use system default: 200/day.
+	// Simulate 200 orders already placed.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	tracker.DailyOrderCount = 200
+	tracker.DayResetAt = time.Now()
+	g.mu.Unlock()
+
+	r := g.CheckOrder(validSmallOrder(email))
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
+	assert.Contains(t, r.Message, "200")
+
+	// Reduce count by 1 — should pass.
+	g.mu.Lock()
+	tracker.DailyOrderCount = 199
+	g.mu.Unlock()
+
+	r = g.CheckOrder(validSmallOrder(email))
+	assert.True(t, r.Allowed)
+}
+
+func TestFullChain_DailyOrderLimit_CustomPerUser(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "lowlimit@example.com"
+
+	// Set a per-user limit of 5 orders/day. Set high rate limit and disable duplicate window.
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxOrdersPerDay:      5,
+		MaxOrdersPerMinute:   100,
+		DuplicateWindowSecs:  0, // disable duplicate detection for this test
+		AutoFreezeOnLimitHit: true,
+	}
+	g.mu.Unlock()
+
+	// Place 5 orders with varying symbols to avoid any edge cases.
+	symbols := []string{"INFY", "TCS", "RELIANCE", "SBIN", "HDFC"}
+	for i := 0; i < 5; i++ {
+		req := OrderCheckRequest{
+			Email: email, ToolName: "place_order",
+			Exchange: "NSE", Tradingsymbol: symbols[i],
+			TransactionType: "BUY", Quantity: 1,
+			Price: 100, OrderType: "LIMIT",
+		}
+		r := g.CheckOrder(req)
+		require.True(t, r.Allowed, "order %d should pass", i+1)
+		g.RecordOrder(email, req)
+	}
+
+	// 6th should be blocked.
+	r := g.CheckOrder(validSmallOrder(email))
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
+}
+
+// ---------------------------------------------------------------------------
+// Check 5: Rate limit (10/min)
+// ---------------------------------------------------------------------------
+
+func TestFullChain_RateLimit(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "ratelimit@example.com"
+
+	// Use system default: 10/min.
+	// Simulate 10 orders placed in the last 30 seconds.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	now := time.Now()
+	for i := 0; i < 10; i++ {
+		tracker.RecentOrders = append(tracker.RecentOrders, now.Add(-time.Duration(i)*time.Second))
+	}
+	tracker.DayResetAt = now
+	g.mu.Unlock()
+
+	r := g.CheckOrder(validSmallOrder(email))
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonRateLimit, r.Reason)
+	assert.Contains(t, r.Message, "limit: 10")
+}
+
+func TestFullChain_RateLimit_OldOrdersPruned(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "rateprune@example.com"
+
+	// All 10 orders are > 60 seconds old — should be pruned.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	tracker.DayResetAt = time.Now()
+	for i := 0; i < 10; i++ {
+		tracker.RecentOrders = append(tracker.RecentOrders, time.Now().Add(-2*time.Minute))
+	}
+	g.mu.Unlock()
+
+	r := g.CheckOrder(validSmallOrder(email))
+	assert.True(t, r.Allowed, "old orders should be pruned and not count toward rate limit")
+}
+
+// ---------------------------------------------------------------------------
+// Check 6: Duplicate order detection (30s window)
+// ---------------------------------------------------------------------------
+
+func TestFullChain_DuplicateOrder(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "dup@example.com"
+
+	req := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "SBIN",
+		TransactionType: "BUY", Quantity: 50,
+		Price: 800, OrderType: "LIMIT",
+	}
+
+	// First order passes.
+	r := g.CheckOrder(req)
+	assert.True(t, r.Allowed)
+	g.RecordOrder(email, req)
+
+	// Identical order within 30s blocked.
+	r = g.CheckOrder(req)
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonDuplicateOrder, r.Reason)
+	assert.Contains(t, r.Message, "BUY NSE SBIN qty 50")
+
+	// Different symbol passes.
+	diffReq := req
+	diffReq.Tradingsymbol = "HDFC"
+	r = g.CheckOrder(diffReq)
+	assert.True(t, r.Allowed)
+
+	// Same symbol, different direction passes.
+	sellReq := req
+	sellReq.TransactionType = "SELL"
+	r = g.CheckOrder(sellReq)
+	assert.True(t, r.Allowed)
+
+	// After window expires, same order passes.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	for i := range tracker.RecentParams {
+		tracker.RecentParams[i].PlacedAt = time.Now().Add(-60 * time.Second)
+	}
+	g.mu.Unlock()
+
+	r = g.CheckOrder(req)
+	assert.True(t, r.Allowed)
+}
+
+// ---------------------------------------------------------------------------
+// Check 7: Daily value limit (Rs 10L)
+// ---------------------------------------------------------------------------
+
+func TestFullChain_DailyValueLimit(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "valueday@example.com"
+
+	// System default: Rs 10,00,000 daily value.
+	// Simulate Rs 9,50,000 already placed.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	tracker.DailyPlacedValue = 950000
+	tracker.DayResetAt = time.Now()
+	g.mu.Unlock()
+
+	// An order for Rs 60,000 would push total to Rs 10,10,000 > Rs 10,00,000.
+	r := g.CheckOrder(OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "RELIANCE",
+		TransactionType: "BUY", Quantity: 20, Price: 3000,
+		OrderType: "LIMIT",
+	})
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonDailyValueLimit, r.Reason)
+	assert.Contains(t, r.Message, "exceeds daily limit")
+
+	// An order for Rs 40,000 fits: 950000 + 40000 = 990000 < 1000000.
+	r = g.CheckOrder(OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "RELIANCE",
+		TransactionType: "BUY", Quantity: 20, Price: 2000,
+		OrderType: "LIMIT",
+	})
+	assert.True(t, r.Allowed)
+}
+
+func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "marketval@example.com"
+
+	// Simulate Rs 9,99,999 already placed.
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	tracker.DailyPlacedValue = 999999
+	tracker.DayResetAt = time.Now()
+	g.mu.Unlock()
+
+	// MARKET order with price=0 should skip daily value check.
+	r := g.CheckOrder(OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "TCS",
+		TransactionType: "BUY", Quantity: 1000, Price: 0,
+		OrderType: "MARKET",
+	})
+	assert.True(t, r.Allowed, "MARKET orders (price=0) should skip daily value check")
+}
+
+// ---------------------------------------------------------------------------
+// Check 8: Auto-freeze circuit breaker
+// ---------------------------------------------------------------------------
+
+func TestFullChain_AutoFreezeCircuitBreaker(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "circuit@example.com"
+
+	// Set a low order value limit to easily trigger rejections.
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxSingleOrderINR:    1000,  // Rs 1,000
+		AutoFreezeOnLimitHit: true,
+	}
+	g.mu.Unlock()
+
+	overLimitReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "TEST",
+		TransactionType: "BUY", Quantity: 10, Price: 200,
+		OrderType: "LIMIT", // 10*200 = 2000 > 1000
+	}
+
+	// First rejection: not frozen.
+	r := g.CheckOrder(overLimitReq)
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonOrderValue, r.Reason)
+	assert.False(t, g.IsFrozen(email))
+
+	// Second rejection: still not frozen.
+	r = g.CheckOrder(overLimitReq)
+	assert.False(t, r.Allowed)
+	assert.False(t, g.IsFrozen(email))
+
+	// Third rejection: auto-freeze triggers (threshold = 3).
+	r = g.CheckOrder(overLimitReq)
+	assert.False(t, r.Allowed)
+	assert.True(t, g.IsFrozen(email), "user should be auto-frozen after 3 rejections")
+	assert.Contains(t, r.Message, "auto-frozen due to repeated violations")
+
+	// Verify freeze metadata.
+	status := g.GetUserStatus(email)
+	assert.True(t, status.IsFrozen)
+	assert.Equal(t, "riskguard:circuit-breaker", status.FrozenBy)
+
+	// Subsequent order blocked by kill switch (check 1), not value limit.
+	r = g.CheckOrder(overLimitReq)
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonTradingFrozen, r.Reason)
+
+	// Verify freeze persists in DB.
+	g2 := NewGuard(slog.Default())
+	g2.SetDB(g.db)
+	require.NoError(t, g2.InitTable())
+	require.NoError(t, g2.LoadLimits())
+	assert.True(t, g2.IsFrozen(email))
+}
+
+func TestFullChain_AutoFreezeDisabled(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "nofreeze@example.com"
+
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxSingleOrderINR:    1000,
+		AutoFreezeOnLimitHit: false, // disabled
+	}
+	g.mu.Unlock()
+
+	overLimitReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Quantity: 10, Price: 200, OrderType: "LIMIT",
+	}
+
+	// 5 rejections — none should freeze.
+	for i := 0; i < 5; i++ {
+		r := g.CheckOrder(overLimitReq)
+		assert.False(t, r.Allowed)
+		assert.NotContains(t, r.Message, "auto-frozen")
+	}
+	assert.False(t, g.IsFrozen(email))
+}
+
+func TestFullChain_AutoFreeze_OldRejectionsExpire(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "expiry@example.com"
+
+	g.mu.Lock()
+	g.limits[email] = &UserLimits{
+		MaxSingleOrderINR:    1000,
+		AutoFreezeOnLimitHit: true,
+	}
+	g.mu.Unlock()
+
+	overLimitReq := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Quantity: 10, Price: 200, OrderType: "LIMIT",
+	}
+
+	// Two rejections, then move them outside the 5-minute window.
+	g.CheckOrder(overLimitReq)
+	g.CheckOrder(overLimitReq)
+	assert.False(t, g.IsFrozen(email))
+
+	g.mu.Lock()
+	tracker := g.getOrCreateTracker(email)
+	for i := range tracker.RecentRejections {
+		tracker.RecentRejections[i] = time.Now().Add(-10 * time.Minute)
+	}
+	g.mu.Unlock()
+
+	// One more rejection — should NOT trigger freeze (only 1 in window).
+	g.CheckOrder(overLimitReq)
+	assert.False(t, g.IsFrozen(email), "old rejections outside window should not count")
+}
+
+// ---------------------------------------------------------------------------
+// Integration: check order priority (earlier check blocks before later check)
+// ---------------------------------------------------------------------------
+
+func TestFullChain_FreezeBlocksBeforeOtherChecks(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "priority@example.com"
+
+	g.Freeze(email, "admin", "compliance hold")
+
+	// Even a massive illegal order should return "frozen", not "order value".
+	r := g.CheckOrder(OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Quantity: 1000000, Price: 100000, OrderType: "LIMIT",
+	})
+	assert.False(t, r.Allowed)
+	assert.Equal(t, ReasonTradingFrozen, r.Reason, "kill switch should block before value check")
+}
+
+// ---------------------------------------------------------------------------
+// Integration: RecordOrder updates all trackers
+// ---------------------------------------------------------------------------
+
+func TestFullChain_RecordOrder_UpdatesAllTrackers(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "recorder@example.com"
+
+	req := OrderCheckRequest{
+		Email: email, ToolName: "place_order",
+		Exchange: "NSE", Tradingsymbol: "TCS",
+		TransactionType: "BUY", Quantity: 10, Price: 3500,
+		OrderType: "LIMIT",
+	}
+
+	g.RecordOrder(email, req)
+	g.RecordOrder(email, req)
+	g.RecordOrder(email, req)
+
+	g.mu.RLock()
+	tracker := g.trackers[email]
+	assert.Equal(t, 3, tracker.DailyOrderCount)
+	assert.Equal(t, 3, len(tracker.RecentOrders))
+	assert.Equal(t, 3, len(tracker.RecentParams))
+	assert.InDelta(t, 3*10*3500.0, tracker.DailyPlacedValue, 0.01)
+	g.mu.RUnlock()
+}
+
+// ---------------------------------------------------------------------------
+// Concurrency: multiple goroutines checking and recording orders
+// ---------------------------------------------------------------------------
+
+func TestFullChain_ConcurrentAccess(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "concurrent@example.com"
+
+	var wg sync.WaitGroup
+	errCount := 0
+	var mu sync.Mutex
+
+	// 50 goroutines each trying to place an order.
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			req := OrderCheckRequest{
+				Email: email, ToolName: "place_order",
+				Exchange: "NSE", Tradingsymbol: "INFY",
+				TransactionType: "BUY", Quantity: 1,
+				Price: 1500, OrderType: "LIMIT",
+			}
+			r := g.CheckOrder(req)
+			if r.Allowed {
+				g.RecordOrder(email, req)
+			} else {
+				mu.Lock()
+				errCount++
+				mu.Unlock()
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	status := g.GetUserStatus(email)
+	// All 50 should be allowed (system defaults: 200/day, 10/min window).
+	// Some might be rate-limited if they hit the 10/min window.
+	// But daily count + errCount should sum to 50.
+	assert.Equal(t, 50, status.DailyOrderCount+errCount,
+		"all goroutines should either succeed or be rate-limited")
+}
+
+// ---------------------------------------------------------------------------
+// DB persistence: freeze/unfreeze survives reload
+// ---------------------------------------------------------------------------
+
+func TestFullChain_DBPersistence(t *testing.T) {
+	g := newIntegrationGuard(t)
+	email := "persist@example.com"
+
+	// Set per-user limits, freeze, and verify persistence.
+	g.Freeze(email, "admin", "DB test")
+
+	// Create a new guard reading from the same DB.
+	g2 := NewGuard(slog.Default())
+	g2.SetDB(g.db)
+	require.NoError(t, g2.InitTable())
+	require.NoError(t, g2.LoadLimits())
+
+	assert.True(t, g2.IsFrozen(email))
+
+	limits := g2.GetEffectiveLimits(email)
+	assert.Equal(t, "admin", limits.FrozenBy)
+	assert.Equal(t, "DB test", limits.FrozenReason)
+}
+
+// ---------------------------------------------------------------------------
+// Email case insensitivity
+// ---------------------------------------------------------------------------
+
+func TestFullChain_EmailCaseInsensitive(t *testing.T) {
+	g := newIntegrationGuard(t)
+
+	g.Freeze("User@Example.COM", "admin", "case test")
+	assert.True(t, g.IsFrozen("user@example.com"))
+	assert.True(t, g.IsFrozen("USER@EXAMPLE.COM"))
+
+	g.Unfreeze("USER@EXAMPLE.COM")
+	assert.False(t, g.IsFrozen("user@example.com"))
+}
