@@ -1,0 +1,22 @@
+{{define "admin_users"}}
+{{range .Users}}
+<tr>
+  <td>{{.Email}}</td>
+  <td><span class="badge badge-{{.RoleClass}}">{{.Role}}</span></td>
+  <td><span class="badge badge-{{.StatusClass}}">{{.Status}}</span></td>
+  <td>{{.LastLogin}}</td>
+  <td>{{.CreatedAt}}</td>
+  <td>
+    {{if .IsSelf}}<span style="color:var(--text-2)">(you)</span>{{else}}
+    <button class="btn-action btn-amber" data-action="suspend" data-email="{{.Email}}">Suspend</button>
+    <button class="btn-action btn-green" data-action="activate" data-email="{{.Email}}">Activate</button>
+    <button class="btn-action btn-purple" data-action="reauth" data-email="{{.Email}}">Re-auth</button>
+    <button class="btn-action btn-purple" data-action="role" data-email="{{.Email}}" data-role="{{.Role}}">Role</button>
+    <button class="btn-action btn-red" data-action="offboard" data-email="{{.Email}}">Offboard</button>
+    {{end}}
+  </td>
+</tr>
+{{else}}
+<tr><td colspan="6" style="text-align:center;color:var(--text-2)">No registered users</td></tr>
+{{end}}
+{{end}}

@@ -1,0 +1,12 @@
+{{define "admin_sessions"}}
+{{range .Sessions}}
+<tr>
+  <td>{{.IDShort}}</td>
+  <td>{{.Email}}</td>
+  <td>{{.CreatedAt}}</td>
+  <td>{{.ExpiresAt}}</td>
+</tr>
+{{else}}
+<tr><td colspan="4" style="text-align:center;color:var(--text-2)">No active sessions</td></tr>
+{{end}}
+{{end}}

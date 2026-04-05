@@ -1,0 +1,27 @@
+{{define "admin_alerts"}}
+<div class="section-header">Price Alerts</div>
+<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Email</th><th>Symbol</th><th>Target</th><th>Dir</th><th>Status</th><th>Created</th></tr></thead><tbody>
+{{range .Alerts}}
+<tr>
+  <td>{{.ID}}</td>
+  <td>{{.Email}}</td>
+  <td>{{.Symbol}}</td>
+  <td>{{.TargetPrice}}</td>
+  <td>{{.Direction}}</td>
+  <td><span class="badge badge-{{.StatusClass}}">{{.StatusLabel}}</span></td>
+  <td>{{.CreatedAt}}</td>
+</tr>
+{{else}}
+<tr><td colspan="7" style="text-align:center;color:var(--text-2)">No alerts configured</td></tr>
+{{end}}
+</tbody></table></div>
+
+<div class="section-header" style="margin-top:28px">Telegram Mappings</div>
+<div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Chat ID</th></tr></thead><tbody>
+{{range .TelegramMappings}}
+<tr><td>{{.Email}}</td><td>{{.ChatID}}</td></tr>
+{{else}}
+<tr><td colspan="2" style="text-align:center;color:var(--text-2)">No Telegram mappings</td></tr>
+{{end}}
+</tbody></table></div>
+{{end}}

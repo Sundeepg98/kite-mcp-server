@@ -1,0 +1,12 @@
+{{define "admin_tickers"}}
+{{range .Tickers}}
+<tr>
+  <td>{{.Email}}</td>
+  <td><span class="badge badge-{{.StatusClass}}">{{.StatusLabel}}</span></td>
+  <td>{{.StartedAt}}</td>
+  <td>{{.Subscriptions}}</td>
+</tr>
+{{else}}
+<tr><td colspan="4" style="text-align:center;color:var(--text-2)">No active live feeds</td></tr>
+{{end}}
+{{end}}

@@ -6,5 +6,5 @@ import (
 	"embed"
 )
 
-//go:embed login_success.html status.html base.html browser_login.html admin_login.html ops.html dashboard.html activity.html orders.html alerts.html email_prompt.html login_choice.html portfolio_app.html activity_app.html orders_app.html alerts_app.html paper.html paper_app.html safety.html safety_app.html landing.html order_form_app.html legal.html dashboard-base.css overview_stats.html overview_tools.html static/*
+//go:embed login_success.html status.html base.html browser_login.html admin_login.html ops.html dashboard.html activity.html orders.html alerts.html email_prompt.html login_choice.html portfolio_app.html activity_app.html orders_app.html alerts_app.html paper.html paper_app.html safety.html safety_app.html landing.html order_form_app.html legal.html dashboard-base.css overview_stats.html overview_tools.html admin_sessions.html admin_tickers.html admin_alerts.html admin_users.html admin_metrics.html static/*
 var FS embed.FS

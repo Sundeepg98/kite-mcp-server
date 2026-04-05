@@ -1,0 +1,23 @@
+{{define "admin_metrics_cards"}}
+{{range .Cards}}
+<div class="stat-card">
+  <div class="stat-label">{{.Label}}</div>
+  <div class="stat-value{{if .Class}} {{.Class}}{{end}}">{{.Value}}</div>
+</div>
+{{end}}
+{{end}}
+
+{{define "admin_metrics_table"}}
+{{range .ToolMetrics}}
+<tr>
+  <td>{{.ToolName}}</td>
+  <td>{{.CallCount}}</td>
+  <td>{{.AvgMs}}</td>
+  <td>{{.MaxMs}}</td>
+  <td>{{if .HasErrors}}<span class="badge badge-red">{{.ErrorCount}}</span>{{else}}0{{end}}</td>
+  <td>{{.ErrorPct}}</td>
+</tr>
+{{else}}
+<tr><td colspan="6" style="text-align:center;color:var(--text-2)">No metrics data for this period</td></tr>
+{{end}}
+{{end}}
