@@ -128,7 +128,7 @@
     {{template "user_market_bar" .Market}}
   </div>
 
-  {{if .Expired}}
+  {{if and .Expired .HasKiteCredentials}}
   <div class="auth-banner" id="authBanner">
     <div class="auth-banner-row">
       <span class="auth-banner-msg" id="authBannerMsg">Your Kite session has expired. Please re-authenticate.</span>
@@ -141,6 +141,16 @@
       <span class="auth-banner-msg" id="authBannerMsg">Your Kite session has expired. Please re-authenticate.</span>
       <a class="auth-btn" id="authBannerBtn" href="/auth/browser-login">Re-authenticate</a>
     </div>
+  </div>
+  {{end}}
+
+  {{if not .HasKiteCredentials}}
+  <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+    <div>
+      <div style="font-size:15px;font-weight:600;color:var(--accent);margin-bottom:4px">Connect Your Kite Account</div>
+      <div style="font-size:13px;color:var(--text-1)">Link your Zerodha Kite account to see live holdings, positions, and market data.</div>
+    </div>
+    <a href="/auth/browser-login?redirect=/dashboard" style="padding:8px 20px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:var(--bg-0);font-size:13px;font-weight:600;text-decoration:none;font-family:var(--sans);white-space:nowrap">Connect Kite</a>
   </div>
   {{end}}
 

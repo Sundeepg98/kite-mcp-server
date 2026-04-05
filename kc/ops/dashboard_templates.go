@@ -32,8 +32,9 @@ type PortfolioPageData struct {
 	Holdings    PortfolioHoldingsData
 	Positions   PortfolioPositionsData
 	AlertCount  int
-	Credentials credentialStatus
-	Expired     bool // true when kite token is expired
+	Credentials        credentialStatus
+	Expired            bool // true when kite token is expired
+	HasKiteCredentials bool // true when user has stored Kite API credentials
 }
 
 // ActivityPageData is the top-level data for the activity page template.
@@ -271,6 +272,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 	if hasCreds {
 		data.Credentials = credentialStatus{Stored: true, APIKey: credEntry.APIKey}
 	}
+	data.HasKiteCredentials = hasCreds
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.portfolioTmpl.Execute(w, data); err != nil {
