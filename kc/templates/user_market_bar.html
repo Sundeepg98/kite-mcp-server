@@ -1,0 +1,11 @@
+{{define "user_market_bar"}}
+<div class="market-bar">
+  {{range .Indices}}
+  <div class="market-item">
+    <span class="market-label">{{.Label}}</span>
+    <span class="market-price">{{.PriceFmt}}</span>
+    <span class="market-change {{.ChangeClass}}">{{.ChangeFmt}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}

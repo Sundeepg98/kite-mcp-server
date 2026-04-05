@@ -1,0 +1,9 @@
+{{define "user_activity_stats"}}
+{{range .Cards}}
+<div class="stat-card">
+  <div class="stat-label">{{.Label}}</div>
+  <div class="stat-value{{if .Class}} {{.Class}}{{end}}">{{.Value}}</div>
+  {{if .Sub}}<div class="stat-sub">{{.Sub}}</div>{{end}}
+</div>
+{{end}}
+{{end}}

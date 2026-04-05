@@ -1,0 +1,32 @@
+{{define "user_alerts_active"}}
+{{if .Alerts}}
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>Symbol</th>
+      <th>Direction</th>
+      <th class="right">Target</th>
+      <th class="right">Current</th>
+      <th class="right">Distance</th>
+      <th>Created</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {{range .Alerts}}
+    <tr>
+      <td style="font-weight:600;color:var(--text-0)">{{.Tradingsymbol}}</td>
+      <td><span class="badge badge-{{.DirBadge}}">{{.Direction}}</span></td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.TargetFmt}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.CurrentFmt}}</td>
+      <td class="right {{.DistClass}}" style="font-family:var(--mono);font-size:12px">{{.DistFmt}}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text-2)">{{.CreatedFmt}}</td>
+      <td><button class="btn-delete" data-alert-id="{{.ID}}">Delete</button></td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No active alerts</div>
+{{end}}
+{{end}}

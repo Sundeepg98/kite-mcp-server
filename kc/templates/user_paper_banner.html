@@ -1,0 +1,17 @@
+{{define "user_paper_banner"}}
+{{if .Enabled}}
+<div class="paper-banner">
+  <div class="paper-banner-left">
+    <span class="paper-badge paper-badge-on">PAPER ON</span>
+    <span class="paper-banner-info">Initial: <span>{{.InitialCashFmt}}</span> | Created: <span>{{.CreatedFmt}}</span></span>
+  </div>
+</div>
+{{else}}
+<div class="paper-banner" style="background:var(--bg-2);border-color:var(--border);">
+  <div class="paper-banner-left">
+    <span class="paper-badge paper-badge-off">PAPER OFF</span>
+    <span class="paper-banner-info">Paper trading is not enabled.</span>
+  </div>
+</div>
+{{end}}
+{{end}}

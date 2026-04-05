@@ -1,0 +1,84 @@
+{{define "user_paper_tables"}}
+<!-- Holdings -->
+<div class="section-header">Holdings</div>
+{{if .Holdings}}
+<div class="tbl-wrap">
+  <table>
+    <thead><tr>
+      <th>Symbol</th><th>Exchange</th><th class="right">Qty</th>
+      <th class="right">Avg Price</th><th class="right">LTP</th><th class="right">P&amp;L</th>
+    </tr></thead>
+    <tbody>
+    {{range .Holdings}}
+    <tr>
+      <td style="font-weight:600;color:var(--text-0)">{{.Tradingsymbol}} <span class="badge badge-purple" style="font-size:9px;margin-left:6px">PAPER</span></td>
+      <td>{{.Exchange}}</td>
+      <td class="right">{{.Quantity}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.AvgPriceFmt}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.LastPriceFmt}}</td>
+      <td class="right {{.PnLClass}}" style="font-family:var(--mono);font-weight:600">{{.PnLFmt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No paper holdings</div>
+{{end}}
+
+<!-- Positions -->
+<div class="section-header">Positions</div>
+{{if .Positions}}
+<div class="tbl-wrap">
+  <table>
+    <thead><tr>
+      <th>Symbol</th><th>Product</th><th class="right">Qty</th>
+      <th class="right">Avg Price</th><th class="right">LTP</th><th class="right">P&amp;L</th>
+    </tr></thead>
+    <tbody>
+    {{range .Positions}}
+    <tr>
+      <td style="font-weight:600;color:var(--text-0)">{{.Tradingsymbol}}</td>
+      <td><span class="badge badge-amber">{{.Product}}</span></td>
+      <td class="right">{{.Quantity}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.AvgPriceFmt}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.LastPriceFmt}}</td>
+      <td class="right {{.PnLClass}}" style="font-family:var(--mono);font-weight:600">{{.PnLFmt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No open paper positions</div>
+{{end}}
+
+<!-- Orders -->
+<div class="section-header">Orders</div>
+{{if .Orders}}
+<div class="tbl-wrap">
+  <table>
+    <thead><tr>
+      <th>Order ID</th><th>Symbol</th><th>Side</th><th>Type</th>
+      <th class="right">Qty</th><th class="right">Price</th><th>Status</th><th>Time</th>
+    </tr></thead>
+    <tbody>
+    {{range .Orders}}
+    <tr>
+      <td style="font-size:10px">{{.OrderIDShort}}</td>
+      <td style="font-weight:600;color:var(--text-0)">{{.Tradingsymbol}}</td>
+      <td><span class="badge {{.SideBadge}}">{{.TransactionType}}</span></td>
+      <td>{{.OrderType}}</td>
+      <td class="right">{{.Quantity}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.PriceFmt}}</td>
+      <td><span class="badge {{.StatusBadge}}">{{.Status}}</span></td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text-2)">{{.TimeFmt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No paper orders</div>
+{{end}}
+{{end}}

@@ -1,0 +1,27 @@
+{{define "user_safety_freeze"}}
+{{if not .Enabled}}
+<div class="freeze-banner disabled">
+  <div>
+    <span class="freeze-icon" style="background:var(--text-2)"></span>
+    <span class="freeze-title">RiskGuard Disabled</span>
+  </div>
+  <div class="freeze-detail">{{.Message}}</div>
+</div>
+{{else if .IsFrozen}}
+<div class="freeze-banner frozen">
+  <div>
+    <span class="freeze-icon frozen"></span>
+    <span class="freeze-title frozen">TRADING FROZEN</span>
+  </div>
+  <div class="freeze-detail">Reason: {{.FrozenReason}}{{if .FrozenBy}} | By: {{.FrozenBy}}{{end}}{{if .FrozenAtFmt}} | At: {{.FrozenAtFmt}}{{end}}</div>
+</div>
+{{else}}
+<div class="freeze-banner active">
+  <div>
+    <span class="freeze-icon active"></span>
+    <span class="freeze-title active">Trading Active</span>
+  </div>
+  <div class="freeze-detail">All safety checks operational. No restrictions in effect.</div>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,9 @@
+{{define "user_portfolio_stats"}}
+{{range .Cards}}
+<div class="stat-card{{if .Hero}} hero{{end}}">
+  <div class="stat-label">{{.Label}}</div>
+  <div class="stat-value{{if .Class}} {{.Class}}{{end}}">{{.Value}}</div>
+  {{if .Sub}}<div class="hero-sub">{{.Sub}}</div>{{end}}
+</div>
+{{end}}
+{{end}}

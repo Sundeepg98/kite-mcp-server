@@ -1,0 +1,27 @@
+{{define "user_portfolio_holdings"}}
+{{if .Holdings}}
+<div class="tbl-wrap">
+  <table>
+    <thead><tr>
+      <th>Symbol</th><th>Exchange</th><th class="right">Qty</th><th class="right">Avg Price</th>
+      <th class="right">LTP</th><th class="right">P&amp;L</th><th class="right">Day %</th>
+    </tr></thead>
+    <tbody>
+    {{range .Holdings}}
+    <tr>
+      <td style="font-weight:600;color:var(--text-0)">{{.Tradingsymbol}}</td>
+      <td>{{.Exchange}}</td>
+      <td class="right">{{.Quantity}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.AvgPriceFmt}}</td>
+      <td class="right" style="font-family:var(--mono);font-size:12px">{{.LastPriceFmt}}</td>
+      <td class="right {{.PnLClass}}" style="font-family:var(--mono);font-weight:600">{{.PnLFmt}}</td>
+      <td class="right {{.DayChangeClass}}" style="font-family:var(--mono);font-size:12px">{{.DayChangeFmt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No holdings found</div>
+{{end}}
+{{end}}

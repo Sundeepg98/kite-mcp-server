@@ -1,0 +1,14 @@
+{{define "user_safety_sebi"}}
+{{if not .Enabled}}
+<div class="loading-state">RiskGuard is not enabled.</div>
+{{else}}
+<div class="sebi-grid">
+  {{range .Checks}}
+  <div class="sebi-card">
+    <span class="sebi-dot {{.DotClass}}"></span>
+    <span class="sebi-label">{{.Label}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}

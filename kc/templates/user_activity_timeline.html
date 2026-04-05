@@ -1,0 +1,24 @@
+{{define "user_activity_timeline"}}
+{{if .Entries}}
+<div class="timeline">
+  {{range .Entries}}
+  <div class="entry{{if .IsError}} error{{end}}">
+    <div class="entry-top">
+      <span class="entry-time">{{.TimeFmt}}</span>
+      <span class="entry-tool">{{.ToolName}}</span>
+      <span class="entry-badge" style="background:{{.CatBg}};color:{{.CatFg}}">{{.CatLabel}}</span>
+    </div>
+    {{if .InputSummary}}<div class="entry-input">{{.InputSummary}}</div>{{end}}
+    {{if .OutputSummary}}<div class="entry-output"><span class="entry-output-arrow">&rarr;</span>{{.OutputSummary}}</div>{{end}}
+    <div class="entry-footer">
+      <span class="entry-duration">{{.DurationFmt}}</span>
+      <span class="entry-status {{.StatusClass}}">{{.StatusLabel}}</span>
+    </div>
+    {{if .ErrorMessage}}<div class="entry-error-msg">{{.ErrorMessage}}</div>{{end}}
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty-state">No activity recorded yet. Use MCP tools to see them here.</div>
+{{end}}
+{{end}}

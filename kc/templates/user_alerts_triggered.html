@@ -1,0 +1,40 @@
+{{define "user_alerts_triggered"}}
+{{if .Alerts}}
+<div>
+  {{range .Alerts}}
+  <div class="tl-card">
+    <div class="tl-header">
+      <span class="tl-symbol">{{.Tradingsymbol}}</span>
+      <span class="badge badge-{{.DirBadge}}">{{.Direction}}</span>
+      <span class="tl-price">{{.TargetFmt}}</span>
+    </div>
+    <div class="tl-stages">
+      <div class="tl-stage">
+        <span class="tl-dot tl-dot-cyan"></span>
+        <span class="tl-label">Created</span>
+        <span class="tl-time">{{.CreatedFmt}}</span>
+      </div>
+      <span class="tl-arrow">&rarr;</span>
+      <div class="tl-stage">
+        <span class="tl-dot tl-dot-green"></span>
+        <span class="tl-label">Triggered</span>
+        <span class="tl-time">{{.TriggeredFmt}}</span>
+        <span class="tl-delta">{{.TimeToTrigger}}</span>
+      </div>
+      {{if .NotificationFmt}}
+      <span class="tl-arrow">&rarr;</span>
+      <div class="tl-stage">
+        <span class="tl-dot tl-dot-amber"></span>
+        <span class="tl-label">Notified</span>
+        <span class="tl-time">{{.NotificationFmt}}</span>
+        <span class="tl-delta">{{.NotificationDelay}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty-state">No triggered alerts yet</div>
+{{end}}
+{{end}}

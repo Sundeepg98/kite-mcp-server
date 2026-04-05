@@ -1,0 +1,38 @@
+{{define "user_orders_table"}}
+{{if .Orders}}
+<div class="table-wrap">
+  <table class="orders-table">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Side</th>
+        <th>Qty</th>
+        <th>Fill Price</th>
+        <th>Current Price</th>
+        <th>P&amp;L</th>
+        <th>P&amp;L %</th>
+        <th>Status</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Orders}}
+    <tr>
+      <td style="font-weight:600;color:var(--text-0)">{{.Symbol}}</td>
+      <td><span class="{{.SideClass}}">{{.Side}}</span></td>
+      <td class="mono">{{.QuantityFmt}}</td>
+      <td class="mono">{{.FillPriceFmt}}</td>
+      <td class="mono">{{.CurrentPriceFmt}}</td>
+      <td class="{{.PnLClass}}">{{.PnLFmt}}</td>
+      <td class="{{.PnLPctClass}}">{{.PnLPctFmt}}</td>
+      <td><span class="status-badge {{.StatusBadge}}">{{.Status}}</span></td>
+      <td class="mono text-muted">{{.TimeFmt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state">No AI-assisted orders found in this period.</div>
+{{end}}
+{{end}}

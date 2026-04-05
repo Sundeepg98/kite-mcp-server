@@ -1,0 +1,21 @@
+{{define "user_safety_limits"}}
+{{if not .Enabled}}
+<div class="loading-state">RiskGuard is not enabled.</div>
+{{else}}
+<div class="limit-grid">
+  {{range .Limits}}
+  <div class="limit-item">
+    <div class="limit-header">
+      <span class="limit-name">{{.Name}}</span>
+      <span class="limit-value">{{.ValueFmt}}</span>
+    </div>
+    {{if not .Static}}
+    <div class="limit-bar-bg">
+      <div class="limit-bar-fill {{.BarClass}}" style="width:{{.Pct}}%"></div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
