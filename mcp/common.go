@@ -40,35 +40,19 @@ func SessionTypeFromContext(ctx context.Context) string {
 	return SessionTypeUnknown // default fallback for undetermined sessions
 }
 
-// writeTools is the set of tools that modify state (orders, alerts, watchlists, etc.).
+// writeTools is derived from tool annotations at init time.
+// A tool is a "write tool" if ReadOnlyHint is not explicitly true.
 // Users with the "viewer" role are blocked from calling these tools.
-var writeTools = map[string]bool{
-	"place_order":            true,
-	"modify_order":           true,
-	"cancel_order":           true,
-	"close_position":         true,
-	"close_all_positions":    true,
-	"convert_position":       true,
-	"set_alert":              true,
-	"delete_alert":           true,
-	"set_trailing_stop":      true,
-	"cancel_trailing_stop":   true,
-	"place_gtt_order":        true,
-	"modify_gtt_order":       true,
-	"delete_gtt_order":       true,
-	"place_mf_order":         true,
-	"cancel_mf_order":        true,
-	"place_mf_sip":           true,
-	"cancel_mf_sip":          true,
-	"place_native_alert":     true,
-	"modify_native_alert":    true,
-	"delete_native_alert":    true,
-	"create_watchlist":       true,
-	"delete_watchlist":       true,
-	"add_to_watchlist":       true,
-	"remove_from_watchlist":  true,
-	"delete_my_account":      true,
-	"update_my_credentials":  true,
+var writeTools map[string]bool
+
+func init() {
+	writeTools = make(map[string]bool)
+	for _, t := range GetAllTools() {
+		tool := t.Tool()
+		if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
+			writeTools[tool.Name] = true
+		}
+	}
 }
 
 // ToolHandler provides common functionality for all MCP tools

@@ -718,20 +718,33 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	}
 	// Ops dashboard: protected by OAuth if available, otherwise by secret path
 	// Seed admin users from ADMIN_EMAILS env var into the user store.
+	// Only seed on fresh database (no existing users) so that runtime
+	// role changes (e.g. demotions via admin console) are not overridden.
 	userStore := kcManager.UserStore()
 	if userStore != nil && app.Config.AdminEmails != "" {
-		for _, email := range strings.Split(app.Config.AdminEmails, ",") {
-			email = strings.TrimSpace(email)
-			if email != "" {
+		adminEmails := strings.Split(app.Config.AdminEmails, ",")
+		if userStore.Count() == 0 {
+			for _, email := range adminEmails {
+				email = strings.TrimSpace(strings.ToLower(email))
+				if email == "" {
+					continue
+				}
 				userStore.EnsureAdmin(email)
+				app.logger.Info("Admin role seeded from ADMIN_EMAILS env var", "email", email)
 			}
+			app.logger.Info("Admin users seeded on fresh database", "count", len(adminEmails))
+		} else {
+			app.logger.Info("Skipping admin seeding — users table already populated", "user_count", userStore.Count())
 		}
-		app.logger.Info("Admin users seeded from ADMIN_EMAILS", "count", len(strings.Split(app.Config.AdminEmails, ",")))
 	}
 
 	// Seed admin password from ADMIN_PASSWORD env var (first boot only).
 	if adminPassword := os.Getenv("ADMIN_PASSWORD"); adminPassword != "" && userStore != nil && app.Config.AdminEmails != "" {
-		for _, email := range strings.Split(app.Config.AdminEmails, ",") {
+		adminEmails := strings.Split(app.Config.AdminEmails, ",")
+		if len(adminEmails) > 1 {
+			app.logger.Warn("ADMIN_PASSWORD is shared across all admin emails. Consider setting individual passwords via the admin console after first login.")
+		}
+		for _, email := range adminEmails {
 			email = strings.TrimSpace(email)
 			if email == "" {
 				continue
