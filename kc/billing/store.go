@@ -175,3 +175,55 @@ func (s *Store) GetSubscription(email string) *Subscription {
 	cp := *sub
 	return &cp
 }
+
+// GetEmailByCustomerID returns the email associated with a Stripe customer ID.
+// Returns "" if no mapping exists. This is populated when checkout.session.completed fires.
+func (s *Store) GetEmailByCustomerID(customerID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, sub := range s.subs {
+		if sub.StripeCustomerID == customerID {
+			return sub.Email
+		}
+	}
+	return ""
+}
+
+// InitEventLogTable creates the webhook_events idempotency table.
+func (s *Store) InitEventLogTable() error {
+	if s.db == nil {
+		return nil
+	}
+	ddl := `
+CREATE TABLE IF NOT EXISTS webhook_events (
+    event_id   TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    created_at TEXT NOT NULL
+)`
+	return s.db.ExecDDL(ddl)
+}
+
+// IsEventProcessed returns true if the event has already been handled.
+func (s *Store) IsEventProcessed(eventID string) bool {
+	if s.db == nil {
+		return false
+	}
+	var count int
+	row := s.db.QueryRow(`SELECT COUNT(*) FROM webhook_events WHERE event_id = ?`, eventID)
+	if err := row.Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
+}
+
+// MarkEventProcessed records that an event has been processed.
+func (s *Store) MarkEventProcessed(eventID, eventType string) error {
+	if s.db == nil {
+		return nil
+	}
+	return s.db.ExecInsert(
+		`INSERT OR IGNORE INTO webhook_events (event_id, event_type, created_at) VALUES (?, ?, ?)`,
+		eventID, eventType, time.Now().Format(time.RFC3339),
+	)
+}

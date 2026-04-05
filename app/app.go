@@ -896,6 +896,19 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/auth/google/callback", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleCallback))
 	}
 
+	// Register Stripe webhook endpoint (no auth — Stripe calls this with a signed payload).
+	if webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET"); webhookSecret != "" {
+		if bs := kcManager.BillingStore(); bs != nil {
+			if err := bs.InitEventLogTable(); err != nil {
+				app.logger.Error("Failed to initialize webhook_events table", "error", err)
+			}
+			mux.Handle("/webhooks/stripe", billing.WebhookHandler(bs, webhookSecret, app.logger))
+			app.logger.Info("Stripe webhook endpoint registered at /webhooks/stripe")
+		} else {
+			app.logger.Warn("STRIPE_WEBHOOK_SECRET set but billing store not initialized (need STRIPE_SECRET_KEY)")
+		}
+	}
+
 	// Register Telegram bot webhook if configured.
 	app.registerTelegramWebhook(mux, kcManager)
 
