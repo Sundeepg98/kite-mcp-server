@@ -30,6 +30,7 @@ type Handler struct {
 	auditStore    *audit.Store
 	registryStore *registry.Store
 	overviewTmpl  *htmltemplate.Template
+	adminTmpl     *htmltemplate.Template
 	opsTmpl       *htmltemplate.Template
 }
 
@@ -53,7 +54,19 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 		h.overviewTmpl = tmpl
 	}
 
-	opsTmpl, err := htmltemplate.ParseFS(templates.FS, "ops.html", "overview_stats.html", "overview_tools.html")
+	adminTmpl, err := adminFragmentTemplates()
+	if err != nil {
+		logger.Error("Failed to parse admin fragment templates", "error", err)
+	} else {
+		h.adminTmpl = adminTmpl
+	}
+
+	opsTmpl, err := htmltemplate.ParseFS(templates.FS,
+		"ops.html",
+		"overview_stats.html", "overview_tools.html",
+		"admin_sessions.html", "admin_tickers.html", "admin_alerts.html",
+		"admin_users.html", "admin_metrics.html",
+	)
 	if err != nil {
 		logger.Error("Failed to parse ops template", "error", err)
 	} else {
@@ -106,6 +119,10 @@ type OpsPageData struct {
 	Email    string
 	IsAdmin  string
 	Overview OverviewTemplateData
+	Sessions SessionsTemplateData
+	Tickers  TickersTemplateData
+	Alerts   AlertsTemplateData
+	Users    UsersTemplateData
 }
 
 // servePage serves the embedded ops.html dashboard page via Go template execution,
@@ -126,10 +143,20 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 
 	overview := h.buildOverview()
 
+	// Build users list (admin-only, empty for non-admins).
+	var usersData UsersTemplateData
+	if admin && h.userStore != nil {
+		usersData = usersToTemplateData(h.userStore.List(), email)
+	}
+
 	data := OpsPageData{
 		Email:    email,
 		IsAdmin:  adminVal,
 		Overview: overviewToTemplateData(overview),
+		Sessions: sessionsToTemplateData(h.buildSessions()),
+		Tickers:  tickersToTemplateData(h.buildTickers()),
+		Alerts:   alertsToTemplateData(h.buildAlerts()),
+		Users:    usersData,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

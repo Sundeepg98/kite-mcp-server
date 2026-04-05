@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // overviewStream sends Server-Sent Events with pre-rendered HTML fragments
-// for the Overview tab. Pushes updates every 10 seconds until the client
-// disconnects.
+// for the Overview tab and other admin tabs. Pushes updates every 10 seconds
+// until the client disconnects.
 func (h *Handler) overviewStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -23,46 +25,84 @@ func (h *Handler) overviewStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	flusher.Flush()
 
+	email := oauth.EmailFromContext(r.Context())
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	// Send initial event immediately.
-	h.sendOverviewEvents(w, flusher)
+	h.sendAllAdminEvents(w, flusher, email)
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			h.sendOverviewEvents(w, flusher)
+			h.sendAllAdminEvents(w, flusher, email)
 		}
 	}
 }
 
-// sendOverviewEvents renders and sends the overview fragments as named SSE events.
-func (h *Handler) sendOverviewEvents(w http.ResponseWriter, flusher http.Flusher) {
-	if h.overviewTmpl == nil {
-		return
+// sendAllAdminEvents renders and sends fragments for Overview and all other
+// SSE-driven admin tabs (sessions, tickers, alerts, users).
+// Metrics is excluded (expensive + has user-interactive period selector).
+func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher, currentEmail string) {
+	// --- Overview ---
+	if h.overviewTmpl != nil {
+		overview := h.buildOverview()
+		data := overviewToTemplateData(overview)
+
+		if html, err := renderFragment(h.overviewTmpl, "overview_stats", data); err == nil {
+			writeSSEEvent(w, "overview-stats", html)
+		} else {
+			h.logger.Error("Failed to render overview stats fragment", "error", err)
+		}
+
+		if html, err := renderFragment(h.overviewTmpl, "overview_tools", data); err == nil {
+			writeSSEEvent(w, "overview-tools", html)
+		} else {
+			h.logger.Error("Failed to render overview tools fragment", "error", err)
+		}
+
+		writeSSEEvent(w, "overview-uptime", "up "+overview.Uptime)
 	}
 
-	overview := h.buildOverview()
-	data := overviewToTemplateData(overview)
+	// --- Other admin tabs (require adminTmpl) ---
+	if h.adminTmpl != nil {
+		// Sessions
+		sessionsData := sessionsToTemplateData(h.buildSessions())
+		if html, err := renderFragment(h.adminTmpl, "admin_sessions", sessionsData); err == nil {
+			writeSSEEvent(w, "admin-sessions", html)
+		} else {
+			h.logger.Error("Failed to render sessions fragment", "error", err)
+		}
 
-	statsHTML, err := renderFragment(h.overviewTmpl, "overview_stats", data)
-	if err != nil {
-		h.logger.Error("Failed to render overview stats fragment", "error", err)
-		return
+		// Tickers
+		tickersData := tickersToTemplateData(h.buildTickers())
+		if html, err := renderFragment(h.adminTmpl, "admin_tickers", tickersData); err == nil {
+			writeSSEEvent(w, "admin-tickers", html)
+		} else {
+			h.logger.Error("Failed to render tickers fragment", "error", err)
+		}
+
+		// Alerts
+		alertsData := alertsToTemplateData(h.buildAlerts())
+		if html, err := renderFragment(h.adminTmpl, "admin_alerts", alertsData); err == nil {
+			writeSSEEvent(w, "admin-alerts", html)
+		} else {
+			h.logger.Error("Failed to render alerts fragment", "error", err)
+		}
+
+		// Users (needs currentEmail for IsSelf check)
+		if h.userStore != nil {
+			usersData := usersToTemplateData(h.userStore.List(), currentEmail)
+			if html, err := renderFragment(h.adminTmpl, "admin_users", usersData); err == nil {
+				writeSSEEvent(w, "admin-users", html)
+			} else {
+				h.logger.Error("Failed to render users fragment", "error", err)
+			}
+		}
 	}
-
-	toolsHTML, err := renderFragment(h.overviewTmpl, "overview_tools", data)
-	if err != nil {
-		h.logger.Error("Failed to render overview tools fragment", "error", err)
-		return
-	}
-
-	writeSSEEvent(w, "overview-stats", statsHTML)
-	writeSSEEvent(w, "overview-tools", toolsHTML)
-	writeSSEEvent(w, "overview-uptime", "up "+overview.Uptime)
 
 	flusher.Flush()
 }

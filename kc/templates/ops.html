@@ -150,21 +150,15 @@ tr:hover td { background: var(--bg-2); }
 </div>
 
 <div id="panel-sessions" class="panel">
-  <div class="tbl-wrap"><table id="sessionsTable"><thead><tr><th>Session ID</th><th>Email</th><th>Created</th><th>Expires</th></tr></thead><tbody id="sessionsBody"></tbody></table></div>
-  <div class="empty-state" id="sessionsEmpty" style="display:none">No active sessions</div>
+  <div class="tbl-wrap"><table id="sessionsTable"><thead><tr><th>Session ID</th><th>Email</th><th>Created</th><th>Expires</th></tr></thead><tbody id="sessionsBody" sse-swap="admin-sessions">{{template "admin_sessions" .Sessions}}</tbody></table></div>
 </div>
 
 <div id="panel-tickers" class="panel">
-  <div class="tbl-wrap"><table id="tickersTable"><thead><tr><th>Email</th><th>Status</th><th>Started</th><th>Subscriptions</th></tr></thead><tbody id="tickersBody"></tbody></table></div>
-  <div class="empty-state" id="tickersEmpty" style="display:none">No active live feeds</div>
+  <div class="tbl-wrap"><table id="tickersTable"><thead><tr><th>Email</th><th>Status</th><th>Started</th><th>Subscriptions</th></tr></thead><tbody id="tickersBody" sse-swap="admin-tickers">{{template "admin_tickers" .Tickers}}</tbody></table></div>
 </div>
 
 <div id="panel-alerts" class="panel">
-  <div class="section-header">Price Alerts</div>
-  <div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Email</th><th>Symbol</th><th>Target</th><th>Dir</th><th>Status</th><th>Created</th></tr></thead><tbody id="alertsBody"></tbody></table></div>
-  <div class="empty-state" id="alertsEmpty" style="display:none">No alerts configured</div>
-  <div class="section-header" style="margin-top:28px">Telegram Mappings</div>
-  <div class="tbl-wrap"><table><thead><tr><th>Email</th><th>Chat ID</th></tr></thead><tbody id="telegramBody"></tbody></table></div>
+  <div id="alertsContent" sse-swap="admin-alerts">{{template "admin_alerts" .Alerts}}</div>
 </div>
 
 <div id="panel-credentials" class="panel">
@@ -241,8 +235,7 @@ tr:hover td { background: var(--bg-2); }
 
 <div id="panel-users" class="panel">
   <div class="section-header">Registered Users</div>
-  <div class="tbl-wrap"><table id="usersTable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersBody"></tbody></table></div>
-  <div class="empty-state" id="usersEmpty" style="display:none">No registered users</div>
+  <div class="tbl-wrap"><table id="usersTable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersBody" sse-swap="admin-users">{{template "admin_users" .Users}}</tbody></table></div>
 </div>
 
 <div id="panel-logs" class="panel">
@@ -329,92 +322,12 @@ tr:hover td { background: var(--bg-2); }
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'logs') startLogStream();
       if (btn.dataset.tab === 'metrics') refreshMetrics();
-      if (btn.dataset.tab === 'users') refreshUsers();
     });
   });
 
   // Fetch
   function fetchJSON(endpoint) {
     return fetch(basePath + '/api/' + endpoint).then(function(r) { return r.json(); });
-  }
-
-  // Sessions
-  function refreshSessions() {
-    fetchJSON('sessions').then(function(data) {
-      var tbody = document.getElementById('sessionsBody');
-      var empty = document.getElementById('sessionsEmpty');
-      clearChildren(tbody);
-      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
-      empty.style.display = 'none';
-      data.forEach(function(s) {
-        tbody.appendChild(tr([
-          td(s.id ? s.id.substring(0, 12) + '\u2026' : '--'),
-          td(s.email || '\u2014'),
-          td(fmtTime(s.created_at)),
-          td(fmtTime(s.expires_at))
-        ]));
-      });
-    }).catch(function(e) { console.error('sessions:', e); });
-  }
-
-  // Tickers
-  function refreshTickers() {
-    fetchJSON('tickers').then(function(data) {
-      var tbody = document.getElementById('tickersBody');
-      var empty = document.getElementById('tickersEmpty');
-      clearChildren(tbody);
-      var tickers = (data && data.tickers) || [];
-      if (tickers.length === 0) { empty.style.display = 'block'; return; }
-      empty.style.display = 'none';
-      tickers.forEach(function(t) {
-        tbody.appendChild(tr([
-          td(t.email),
-          tdBadge(t.connected ? 'connected' : 'disconnected', t.connected ? 'green' : 'red'),
-          td(fmtTime(t.started_at)),
-          td(String(t.subscriptions))
-        ]));
-      });
-    }).catch(function(e) { console.error('tickers:', e); });
-  }
-
-  // Alerts
-  function refreshAlerts() {
-    fetchJSON('alerts').then(function(data) {
-      var tbody = document.getElementById('alertsBody');
-      var empty = document.getElementById('alertsEmpty');
-      clearChildren(tbody);
-      var all = [];
-      var alerts = data.alerts || {};
-      Object.keys(alerts).forEach(function(email) {
-        (alerts[email] || []).forEach(function(a) { all.push(a); });
-      });
-      if (all.length === 0) { empty.style.display = 'block'; } else {
-        empty.style.display = 'none';
-        all.forEach(function(a) {
-          tbody.appendChild(tr([
-            td(a.id), td(a.email),
-            td(a.tradingsymbol + ':' + a.exchange),
-            td(a.target_price.toFixed(2)),
-            td(a.direction),
-            tdBadge(a.triggered ? 'triggered' : 'active', a.triggered ? 'amber' : 'green'),
-            td(fmtTime(a.created_at))
-          ]));
-        });
-      }
-      // Telegram
-      var tBody = document.getElementById('telegramBody');
-      clearChildren(tBody);
-      var tg = data.telegram || {};
-      var tgKeys = Object.keys(tg);
-      if (tgKeys.length === 0) {
-        var r = document.createElement('tr');
-        var c = el('td', null, 'No Telegram mappings');
-        c.colSpan = 2; c.style.textAlign = 'center'; c.style.color = 'var(--text-2)';
-        r.appendChild(c); tBody.appendChild(r);
-      } else {
-        tgKeys.forEach(function(email) { tBody.appendChild(tr([td(email), td(String(tg[email]))])); });
-      }
-    }).catch(function(e) { console.error('alerts:', e); });
   }
 
   // Log Stream (SSE)
@@ -525,6 +438,12 @@ tr:hover td { background: var(--bg-2); }
       status.style.display = 'block';
     });
   });
+
+  function userActionBtn(label, cls, handler) {
+    var btn = el('button', 'btn-action ' + cls, label);
+    btn.addEventListener('click', handler);
+    return btn;
+  }
 
   // --- Registry CRUD (admin only) ---
   function refreshRegistry() {
@@ -758,7 +677,7 @@ tr:hover td { background: var(--bg-2); }
     activeMetricsBtn.style.background = 'var(--accent-dim)';
   }
 
-  // --- Users management (admin only) ---
+  // --- Users management (admin only) — event delegation for action buttons ---
   function postAPI(endpoint, body) {
     var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
     if (body !== undefined) opts.body = JSON.stringify(body);
@@ -770,88 +689,53 @@ tr:hover td { background: var(--bg-2); }
     });
   }
 
-  function userActionBtn(label, cls, handler) {
-    var btn = el('button', 'btn-action ' + cls, label);
-    btn.addEventListener('click', handler);
-    return btn;
-  }
+  // Delegated click handler for user action buttons rendered by the admin_users template.
+  // Buttons use data-action and data-email attributes; role buttons also have data-role.
+  document.getElementById('usersBody').addEventListener('click', function(ev) {
+    var btn = ev.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    var email = btn.dataset.email;
+    if (!action || !email) return;
 
-  function refreshUsers() {
-    if (!isAdmin) return;
-    fetchJSON('users').then(function(data) {
-      var tbody = document.getElementById('usersBody');
-      var empty = document.getElementById('usersEmpty');
-      clearChildren(tbody);
-      if (!data || data.length === 0) { empty.style.display = 'block'; return; }
-      empty.style.display = 'none';
-      data.forEach(function(u) {
-        var statusType = u.status === 'active' ? 'green' : (u.status === 'suspended' ? 'red' : 'amber');
-        var roleType = u.role === 'admin' ? 'purple' : 'green';
-
-        var actionsCell = document.createElement('td');
-        actionsCell.style.whiteSpace = 'normal';
-
-        // Only show actions for other users (backend blocks self-actions anyway)
-        if (u.email !== userEmail) {
-          if (u.status === 'active') {
-            actionsCell.appendChild(userActionBtn('Suspend', 'btn-amber', function() {
-              if (!confirm('Suspend user ' + u.email + '? They will be unable to use the service.')) return;
-              postAPI('users/suspend?email=' + encodeURIComponent(u.email))
-                .then(function() { refreshUsers(); })
-                .catch(function(e) { alert('Suspend failed: ' + e.message); });
-            }));
-          }
-          if (u.status === 'suspended' || u.status === 'offboarded') {
-            actionsCell.appendChild(userActionBtn('Activate', 'btn-green', function() {
-              if (!confirm('Activate user ' + u.email + '?')) return;
-              postAPI('users/activate?email=' + encodeURIComponent(u.email))
-                .then(function() { refreshUsers(); })
-                .catch(function(e) { alert('Activate failed: ' + e.message); });
-            }));
-          }
-          actionsCell.appendChild(userActionBtn('Re-auth', 'btn-purple', function() {
-            if (!confirm('Force re-authentication for ' + u.email + '? Their cached token will be deleted.')) return;
-            postAPI('force-reauth?email=' + encodeURIComponent(u.email))
-              .then(function() { refreshUsers(); })
-              .catch(function(e) { alert('Force re-auth failed: ' + e.message); });
-          }));
-          actionsCell.appendChild(userActionBtn('Role', 'btn-purple', function() {
-            var newRole = prompt('Change role for ' + u.email + '.\nCurrent role: ' + u.role + '\n\nEnter new role (admin, trader, viewer):');
-            if (!newRole) return;
-            newRole = newRole.trim().toLowerCase();
-            if (newRole !== 'admin' && newRole !== 'trader' && newRole !== 'viewer') {
-              alert('Invalid role. Must be admin, trader, or viewer.');
-              return;
-            }
-            if (newRole === u.role) return;
-            if (!confirm('Change role for ' + u.email + ' from "' + u.role + '" to "' + newRole + '"?')) return;
-            postAPI('users/role?email=' + encodeURIComponent(u.email), { role: newRole })
-              .then(function() { refreshUsers(); })
-              .catch(function(e) { alert('Role change failed: ' + e.message); });
-          }));
-          actionsCell.appendChild(userActionBtn('Offboard', 'btn-red', function() {
-            if (!confirm('Offboard user ' + u.email + '?\n\nThis will permanently delete ALL their data:\n- Kite credentials\n- Cached tokens\n- Active sessions')) return;
-            if (!confirm('FINAL CONFIRMATION: Permanently delete all data for ' + u.email + '? This cannot be undone.')) return;
-            postAPI('users/offboard?email=' + encodeURIComponent(u.email), { confirm: true })
-              .then(function() { refreshUsers(); })
-              .catch(function(e) { alert('Offboard failed: ' + e.message); });
-          }));
-        } else {
-          actionsCell.appendChild(el('span', null, '(you)'));
-          actionsCell.style.color = 'var(--text-2)';
+    switch (action) {
+      case 'suspend':
+        if (!confirm('Suspend user ' + email + '? They will be unable to use the service.')) return;
+        postAPI('users/suspend?email=' + encodeURIComponent(email))
+          .catch(function(e) { alert('Suspend failed: ' + e.message); });
+        break;
+      case 'activate':
+        if (!confirm('Activate user ' + email + '?')) return;
+        postAPI('users/activate?email=' + encodeURIComponent(email))
+          .catch(function(e) { alert('Activate failed: ' + e.message); });
+        break;
+      case 'reauth':
+        if (!confirm('Force re-authentication for ' + email + '? Their cached token will be deleted.')) return;
+        postAPI('force-reauth?email=' + encodeURIComponent(email))
+          .catch(function(e) { alert('Force re-auth failed: ' + e.message); });
+        break;
+      case 'role':
+        var currentRole = btn.dataset.role || '';
+        var newRole = prompt('Change role for ' + email + '.\nCurrent role: ' + currentRole + '\n\nEnter new role (admin, trader, viewer):');
+        if (!newRole) return;
+        newRole = newRole.trim().toLowerCase();
+        if (newRole !== 'admin' && newRole !== 'trader' && newRole !== 'viewer') {
+          alert('Invalid role. Must be admin, trader, or viewer.');
+          return;
         }
-
-        tbody.appendChild(tr([
-          td(u.email),
-          tdBadge(u.role, roleType),
-          tdBadge(u.status, statusType),
-          td(fmtTime(u.last_login)),
-          td(fmtTime(u.created_at)),
-          actionsCell
-        ]));
-      });
-    }).catch(function(e) { console.error('users:', e); });
-  }
+        if (newRole === currentRole) return;
+        if (!confirm('Change role for ' + email + ' from "' + currentRole + '" to "' + newRole + '"?')) return;
+        postAPI('users/role?email=' + encodeURIComponent(email), { role: newRole })
+          .catch(function(e) { alert('Role change failed: ' + e.message); });
+        break;
+      case 'offboard':
+        if (!confirm('Offboard user ' + email + '?\n\nThis will permanently delete ALL their data:\n- Kite credentials\n- Cached tokens\n- Active sessions')) return;
+        if (!confirm('FINAL CONFIRMATION: Permanently delete all data for ' + email + '? This cannot be undone.')) return;
+        postAPI('users/offboard?email=' + encodeURIComponent(email), { confirm: true })
+          .catch(function(e) { alert('Offboard failed: ' + e.message); });
+        break;
+    }
+  });
 
   // --- Verify Audit Chain (admin only) ---
   if (isAdmin) {
@@ -898,8 +782,8 @@ tr:hover td { background: var(--bg-2); }
   }
 
   function refreshAll() {
-    refreshSessions(); refreshTickers(); refreshAlerts(); refreshCredentials();
-    if (isAdmin) { refreshUsers(); refreshRegistry(); }
+    refreshCredentials();
+    if (isAdmin) { refreshRegistry(); }
     updateTimestamp();
   }
   refreshAll();
