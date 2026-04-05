@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -40,6 +41,12 @@ type serverMetricsResponse struct {
 	GoVersion string `json:"go_version"`
 	ToolCount int    `json:"tool_count"`
 
+	// Runtime metrics
+	HeapAllocMB float64 `json:"heap_alloc_mb"`
+	Goroutines  int     `json:"goroutines"`
+	GCPauseMs   float64 `json:"gc_pause_ms"`
+	DBSizeMB    float64 `json:"db_size_mb"`
+
 	// Session info
 	ActiveSessions int `json:"active_sessions"`
 
@@ -56,6 +63,15 @@ type serverMetricsResponse struct {
 
 	// Per-tool breakdown (top 50 by call count)
 	ToolMetrics []audit.ToolMetric `json:"tool_metrics"`
+
+	// Per-user error breakdown (top 5 users with most errors)
+	TopErrorUsers []UserErrorCount `json:"top_error_users,omitempty"`
+}
+
+// UserErrorCount holds a per-user error count for the metrics response.
+type UserErrorCount struct {
+	Email      string `json:"email"`
+	ErrorCount int    `json:"error_count"`
 }
 
 // serverStartTime is set once at package init to track uptime.
@@ -122,10 +138,40 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			errorRate = "0.0%"
 		}
 
+		// Runtime metrics: memory, goroutines, GC pause.
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		heapAllocMB := float64(memStats.HeapAlloc) / 1024 / 1024
+		goroutines := runtime.NumGoroutine()
+		var gcPauseMs float64
+		if memStats.NumGC > 0 {
+			// Last GC pause in milliseconds.
+			gcPauseMs = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
+		}
+
+		// SQLite DB file size.
+		var dbSizeMB float64
+		if dbPath := os.Getenv("ALERT_DB_PATH"); dbPath != "" {
+			if info, err := os.Stat(dbPath); err == nil {
+				dbSizeMB = float64(info.Size()) / 1024 / 1024
+			}
+		}
+
+		// Per-user error breakdown (top 5).
+		topErrorUsers, _ := auditStore.GetTopErrorUsers(since, 5)
+		var userErrors []UserErrorCount
+		for _, ue := range topErrorUsers {
+			userErrors = append(userErrors, UserErrorCount{Email: ue.Email, ErrorCount: ue.ErrorCount})
+		}
+
 		resp := &serverMetricsResponse{
 			Uptime:         time.Since(serverStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
 			ToolCount:      len(GetAllTools()),
+			HeapAllocMB:    heapAllocMB,
+			Goroutines:     goroutines,
+			GCPauseMs:      gcPauseMs,
+			DBSizeMB:       dbSizeMB,
 			ActiveSessions: manager.GetActiveSessionCount(),
 			Period:         period,
 			TotalCalls:     stats.TotalCalls,
@@ -135,6 +181,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			TopTool:        stats.TopTool,
 			TopToolCount:   stats.TopToolCount,
 			ToolMetrics:    toolMetrics,
+			TopErrorUsers:  userErrors,
 		}
 
 		return handler.MarshalResponse(resp, "server_metrics")

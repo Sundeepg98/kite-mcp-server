@@ -1,6 +1,8 @@
 package ops
 
 import (
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -20,6 +22,11 @@ type OverviewData struct {
 	PerUserCredentials int              `json:"per_user_credentials"`
 	ToolUsage          map[string]int64 `json:"tool_usage"`
 	DailyUsers         int64            `json:"daily_users"`
+	// Runtime / observability
+	HeapAllocMB float64 `json:"heap_alloc_mb"`
+	Goroutines  int     `json:"goroutines"`
+	GCPauseMs   float64 `json:"gc_pause_ms"`
+	DBSizeMB    float64 `json:"db_size_mb"`
 }
 
 type SessionInfo struct {
@@ -55,17 +62,40 @@ func (h *Handler) buildOverview() OverviewData {
 		toolUsage = h.metrics.GetAllCounters()
 		dailyUsers = h.metrics.GetTodayUserCount()
 	}
+
+	// Runtime metrics.
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	heapAllocMB := float64(memStats.HeapAlloc) / 1024 / 1024
+	goroutines := runtime.NumGoroutine()
+	var gcPauseMs float64
+	if memStats.NumGC > 0 {
+		gcPauseMs = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
+	}
+
+	// SQLite DB file size.
+	var dbSizeMB float64
+	if dbPath := os.Getenv("ALERT_DB_PATH"); dbPath != "" {
+		if info, err := os.Stat(dbPath); err == nil {
+			dbSizeMB = float64(info.Size()) / 1024 / 1024
+		}
+	}
+
 	return OverviewData{
-		Version:         h.version,
-		Uptime:          time.Since(h.startTime).Truncate(time.Second).String(),
-		ActiveSessions:  len(h.buildSessions()),
-		ActiveTickers:   len(h.manager.TickerService().ListAll()),
-		TotalAlerts:     total,
-		ActiveAlerts:    active,
+		Version:            h.version,
+		Uptime:             time.Since(h.startTime).Truncate(time.Second).String(),
+		ActiveSessions:     len(h.buildSessions()),
+		ActiveTickers:      len(h.manager.TickerService().ListAll()),
+		TotalAlerts:        total,
+		ActiveAlerts:       active,
 		CachedTokens:       len(h.manager.TokenStore().ListAll()),
 		PerUserCredentials: h.manager.CredentialStore().Count(),
 		ToolUsage:          toolUsage,
 		DailyUsers:         dailyUsers,
+		HeapAllocMB:        heapAllocMB,
+		Goroutines:         goroutines,
+		GCPauseMs:          gcPauseMs,
+		DBSizeMB:           dbSizeMB,
 	}
 }
 

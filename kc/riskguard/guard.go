@@ -98,14 +98,19 @@ type FreezeQuantityLookup interface {
 	GetFreezeQuantity(exchange, tradingsymbol string) (uint32, bool)
 }
 
+// AutoFreezeNotifier is called when the circuit breaker auto-freezes a user.
+// Implementations should be non-blocking (e.g. send async Telegram message).
+type AutoFreezeNotifier func(email, reason string)
+
 // Guard is the central risk management engine.
 type Guard struct {
-	mu           sync.RWMutex
-	trackers     map[string]*UserTracker
-	limits       map[string]*UserLimits // per-user overrides
-	freezeLookup FreezeQuantityLookup
-	db           *alerts.DB
-	logger       *slog.Logger
+	mu                  sync.RWMutex
+	trackers            map[string]*UserTracker
+	limits              map[string]*UserLimits // per-user overrides
+	freezeLookup        FreezeQuantityLookup
+	db                  *alerts.DB
+	logger              *slog.Logger
+	autoFreezeNotifier  AutoFreezeNotifier
 }
 
 // NewGuard creates a new Guard with system defaults.
@@ -122,6 +127,10 @@ func (g *Guard) SetDB(db *alerts.DB) { g.db = db }
 
 // SetFreezeQuantityLookup sets the instrument lookup for quantity checks.
 func (g *Guard) SetFreezeQuantityLookup(lookup FreezeQuantityLookup) { g.freezeLookup = lookup }
+
+// SetAutoFreezeNotifier registers a callback invoked when the circuit breaker
+// auto-freezes a user. The callback receives the user email and the freeze reason.
+func (g *Guard) SetAutoFreezeNotifier(fn AutoFreezeNotifier) { g.autoFreezeNotifier = fn }
 
 // OrderCheckRequest contains the data needed to evaluate an order.
 type OrderCheckRequest struct {
@@ -473,10 +482,15 @@ func (g *Guard) checkAutoFreeze(email string) bool {
 		l.FrozenAt = time.Now()
 		g.persistLimits(email, l)
 		if g.logger != nil {
-			g.logger.Warn("Circuit breaker triggered: auto-froze user",
+			g.logger.Warn("ADMIN ALERT: RiskGuard auto-froze user",
 				"email", email,
+				"reason", l.FrozenReason,
 				"rejections_in_window", len(t.RecentRejections),
 			)
+		}
+		// Notify admin (e.g. Telegram) asynchronously.
+		if g.autoFreezeNotifier != nil {
+			go g.autoFreezeNotifier(email, l.FrozenReason)
 		}
 		return true
 	}

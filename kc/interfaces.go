@@ -116,6 +116,9 @@ type AuditStoreInterface interface {
 	// GetGlobalStats returns aggregate stats across all users.
 	GetGlobalStats(since time.Time) (*audit.Stats, error)
 
+	// GetTopErrorUsers returns the top N users with the most errors since the given time.
+	GetTopErrorUsers(since time.Time, limit int) ([]audit.UserErrorCount, error)
+
 	// VerifyChain walks the hash chain and checks integrity.
 	VerifyChain() (*audit.ChainVerification, error)
 

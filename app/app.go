@@ -186,6 +186,11 @@ func (app *App) LoadConfig() error {
 		app.logger.Info("No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
 	}
 
+	// EXTERNAL_URL is required when OAuth is enabled (multi-user mode).
+	if app.Config.OAuthJWTSecret != "" && app.Config.ExternalURL == "" {
+		return fmt.Errorf("EXTERNAL_URL is required when OAUTH_JWT_SECRET is set")
+	}
+
 	return nil
 }
 
@@ -368,6 +373,27 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if kcManager.InstrumentsManagerConcrete() != nil {
 		// Wrap instruments manager as FreezeQuantityLookup
 		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
+	}
+	// Wire auto-freeze Telegram admin notification.
+	if notifier := kcManager.TelegramNotifier(); notifier != nil {
+		adminEmails := strings.Split(app.Config.AdminEmails, ",")
+		riskGuard.SetAutoFreezeNotifier(func(email, reason string) {
+			for _, adminEmail := range adminEmails {
+				adminEmail = strings.TrimSpace(strings.ToLower(adminEmail))
+				if adminEmail == "" {
+					continue
+				}
+				chatID, ok := kcManager.TelegramStore().GetTelegramChatID(adminEmail)
+				if !ok {
+					continue
+				}
+				msg := fmt.Sprintf("<b>RiskGuard Alert</b>\nAuto-froze trading for <b>%s</b>\nReason: %s", email, reason)
+				if err := notifier.SendHTMLMessage(chatID, msg); err != nil {
+					app.logger.Error("Failed to send auto-freeze Telegram alert to admin", "admin", adminEmail, "error", err)
+				}
+			}
+		})
+		app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
 	}
 	kcManager.SetRiskGuard(riskGuard)
 
@@ -919,6 +945,18 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 
 	// Register Telegram bot webhook if configured.
 	app.registerTelegramWebhook(mux, kcManager)
+
+	// Health check endpoint for load balancers and container orchestration.
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":  "ok",
+			"uptime":  time.Since(app.startTime).Truncate(time.Second).String(),
+			"version": app.Version,
+			"tools":   len(mcp.GetAllTools()),
+		})
+	})
 
 	app.serveLegalPages(mux)
 	app.serveStatusPage(mux)

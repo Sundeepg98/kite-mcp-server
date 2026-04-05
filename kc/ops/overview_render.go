@@ -39,6 +39,10 @@ func overviewToTemplateData(d OverviewData) OverviewTemplateData {
 		{Label: "Cached Tokens", Value: strconv.Itoa(d.CachedTokens)},
 		{Label: "API Keys", Value: strconv.Itoa(d.PerUserCredentials)},
 		{Label: "Users Today", Value: strconv.FormatInt(d.DailyUsers, 10), Class: boolClass(d.DailyUsers > 0, "amber")},
+		{Label: "Heap (MB)", Value: fmt.Sprintf("%.1f", d.HeapAllocMB)},
+		{Label: "Goroutines", Value: strconv.Itoa(d.Goroutines), Class: boolClass(d.Goroutines > 100, "amber")},
+		{Label: "GC Pause (ms)", Value: fmt.Sprintf("%.2f", d.GCPauseMs)},
+		{Label: "DB Size (MB)", Value: fmt.Sprintf("%.2f", d.DBSizeMB)},
 	}
 
 	type kv struct {

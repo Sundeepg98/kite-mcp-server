@@ -6,6 +6,8 @@ import (
 	htmltemplate "html/template"
 	"log/slog"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -946,11 +948,33 @@ func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Runtime metrics.
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	var gcPauseMs float64
+	if memStats.NumGC > 0 {
+		gcPauseMs = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
+	}
+	var dbSizeMB float64
+	if dbPath := os.Getenv("ALERT_DB_PATH"); dbPath != "" {
+		if info, err := os.Stat(dbPath); err == nil {
+			dbSizeMB = float64(info.Size()) / 1024 / 1024
+		}
+	}
+
+	// Per-user error breakdown.
+	topErrorUsers, _ := h.auditStore.GetTopErrorUsers(since, 5)
+
 	uptime := time.Since(h.startTime)
 	h.writeJSON(w, map[string]any{
-		"uptime_seconds": int(uptime.Seconds()),
-		"stats":          stats,
-		"tool_metrics":   toolMetrics,
+		"uptime_seconds":  int(uptime.Seconds()),
+		"stats":           stats,
+		"tool_metrics":    toolMetrics,
+		"heap_alloc_mb":   float64(memStats.HeapAlloc) / 1024 / 1024,
+		"goroutines":      runtime.NumGoroutine(),
+		"gc_pause_ms":     gcPauseMs,
+		"db_size_mb":      dbSizeMB,
+		"top_error_users": topErrorUsers,
 	})
 }
 

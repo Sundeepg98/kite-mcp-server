@@ -732,6 +732,57 @@ func (s *Store) GetGlobalStats(since time.Time) (*Stats, error) {
 	}, nil
 }
 
+// UserErrorCount holds a per-user error count.
+type UserErrorCount struct {
+	Email      string `json:"email"`
+	ErrorCount int    `json:"error_count"`
+}
+
+// GetTopErrorUsers returns the top N users with the most errors since the given time.
+// Email values are decrypted if an encryption key is configured.
+func (s *Store) GetTopErrorUsers(since time.Time, limit int) ([]UserErrorCount, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	sinceStr := since.Format(time.RFC3339Nano)
+
+	// Query groups by email column (which may be HMAC-hashed).
+	// We also grab email_encrypted so we can decrypt for display.
+	query := `SELECT email, COALESCE(email_encrypted, '') AS enc, COUNT(*) AS error_count
+		FROM tool_calls
+		WHERE is_error = 1 AND started_at >= ? AND tool_name != '__chain_break'
+		GROUP BY email
+		ORDER BY error_count DESC
+		LIMIT ?`
+
+	rows, err := s.db.RawQuery(query, sinceStr, limit)
+	if err != nil {
+		return nil, fmt.Errorf("audit: get top error users: %w", err)
+	}
+	defer rows.Close()
+
+	var results []UserErrorCount
+	for rows.Next() {
+		var emailRaw, emailEnc string
+		var count int
+		if err := rows.Scan(&emailRaw, &emailEnc, &count); err != nil {
+			return nil, fmt.Errorf("audit: scan top error user: %w", err)
+		}
+		// Decrypt email for display if possible.
+		displayEmail := emailRaw
+		if s.encryptionKey != nil && emailEnc != "" {
+			if decrypted := alerts.Decrypt(s.encryptionKey, emailEnc); decrypted != "" {
+				displayEmail = decrypted
+			}
+		}
+		results = append(results, UserErrorCount{Email: displayEmail, ErrorCount: count})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("audit: iterate top error users: %w", err)
+	}
+	return results, nil
+}
+
 // --- SSE Listener support for real-time activity streaming ---
 
 // AddActivityListener registers a buffered channel that receives new ToolCall entries as they are recorded.
