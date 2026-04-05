@@ -440,6 +440,12 @@ func (s *Store) EnsureUser(email, kiteUID, displayName, onboardedBy string) *Use
 	return &cp
 }
 
+// EnsureGoogleUser auto-creates a trader account on first Google SSO login.
+// Existing users are left unchanged (admins keep their admin role).
+func (s *Store) EnsureGoogleUser(email string) {
+	s.EnsureUser(email, "", "", "google_sso")
+}
+
 // GetRole returns the user's role. Returns empty string if user not found.
 func (s *Store) GetRole(email string) string {
 	s.mu.RLock()

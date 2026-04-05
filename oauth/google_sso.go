@@ -56,10 +56,10 @@ func (h *Handler) HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	// Encode the redirect URL into the state cookie so we can restore it after callback.
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" {
-		redirect = "/admin/ops"
+		redirect = "/dashboard"
 	}
 	if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/admin/ops"
+		redirect = "/dashboard"
 	}
 
 	// Store state + redirect in a short-lived cookie.
@@ -160,18 +160,20 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the user is an admin.
 	if h.userStore == nil {
 		h.logger.Error("Google SSO: user store not configured")
-		http.Error(w, "Admin login not configured", http.StatusInternalServerError)
+		http.Error(w, "Login not configured", http.StatusInternalServerError)
 		return
 	}
 
-	role := h.userStore.GetRole(email)
+	// Auto-create user on first Google login (role=trader).
+	// Existing admins keep their admin role (EnsureGoogleUser only creates if missing).
+	h.userStore.EnsureGoogleUser(email)
+
 	status := h.userStore.GetStatus(email)
-	if role != "admin" || status != "active" {
-		h.logger.Warn("Google SSO login denied: not an active admin", "email", email, "role", role, "status", status)
-		h.serveAdminLoginForm(w, redirect, "Access denied. Only active admin accounts can sign in with Google.", "")
+	if status != "active" {
+		h.logger.Warn("Google SSO login denied: account not active", "email", email, "status", status)
+		http.Error(w, "Account is suspended or inactive.", http.StatusForbidden)
 		return
 	}
 
@@ -182,9 +184,14 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("Google SSO login successful", "email", email)
+	role := h.userStore.GetRole(email)
+	h.logger.Info("Google SSO login successful", "email", email, "role", role)
 	if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
-		redirect = "/admin/ops"
+		if role == "admin" {
+			redirect = "/admin/ops"
+		} else {
+			redirect = "/dashboard"
+		}
 	}
 	http.Redirect(w, r, redirect, http.StatusFound)
 }

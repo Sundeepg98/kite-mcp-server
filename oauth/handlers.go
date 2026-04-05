@@ -35,12 +35,15 @@ type KiteExchanger interface {
 // Returns true if the token is valid (or no token cached yet), false if expired.
 type KiteTokenChecker func(email string) bool
 
-// AdminUserStore provides user lookup and password verification for admin login.
+// AdminUserStore provides user lookup, password verification, and auto-provisioning for login.
 // Implemented by users.Store to avoid direct import of the users package.
 type AdminUserStore interface {
 	GetRole(email string) string
 	GetStatus(email string) string
 	VerifyPassword(email, password string) (bool, error)
+	// EnsureGoogleUser auto-creates a trader account on first Google SSO login.
+	// Existing users are left unchanged (admins keep admin role).
+	EnsureGoogleUser(email string)
 }
 
 // KeyRegistry provides access to the pre-registered Kite app credentials.
