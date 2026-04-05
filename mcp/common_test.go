@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 )
 
 // TestSafeAssertFunctions tests all SafeAssert utility functions
@@ -326,4 +327,16 @@ func TestRaceConditions(t *testing.T) {
 		}
 		wg.Wait()
 	})
+}
+
+// TestAllToolsHaveBillingTier verifies that every tool returned by GetAllTools
+// has an explicit entry in the billing toolTiers map. This lives here (not in
+// kc/billing) to avoid an import cycle.
+func TestAllToolsHaveBillingTier(t *testing.T) {
+	allTools := GetAllTools()
+	for _, tool := range allTools {
+		name := tool.Tool().Name
+		assert.Truef(t, billing.HasExplicitTier(name),
+			"tool %q is in GetAllTools but has no explicit billing tier mapping", name)
+	}
 }

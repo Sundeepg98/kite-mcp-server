@@ -5,6 +5,7 @@
 package telegram
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,24 +75,89 @@ type BotHandler struct {
 	// Pending orders awaiting confirmation, keyed by chat ID.
 	pendingMu     sync.Mutex
 	pendingOrders map[int64]*pendingOrder
+
+	// cleanupCancel stops the background cleanup goroutine.
+	cleanupCancel context.CancelFunc
 }
 
-// NewBotHandler creates a new BotHandler.
+// NewBotHandler creates a new BotHandler and starts a background goroutine
+// that periodically prunes stale rate-limit and pending-order entries.
 func NewBotHandler(bot *tgbotapi.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger) *BotHandler {
-	return &BotHandler{
+	ctx, cancel := context.WithCancel(context.Background())
+	h := &BotHandler{
 		bot:           bot,
 		webhookSecret: webhookSecret,
 		manager:       manager,
 		logger:        logger,
 		rateWindow:    make(map[int64][]time.Time),
 		pendingOrders: make(map[int64]*pendingOrder),
+		cleanupCancel: cancel,
 	}
+	go h.runCleanup(ctx)
+	return h
 }
 
 const (
 	maxCommandsPerMinute = 10
 	maxBodyBytes         = 1 << 20 // 1 MB — Telegram updates are small
+	cleanupInterval      = 2 * time.Minute
 )
+
+// runCleanup periodically prunes stale entries from rateWindow and pendingOrders
+// to prevent unbounded memory growth from inactive chats.
+func (h *BotHandler) runCleanup(ctx context.Context) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.cleanupStaleEntries()
+		}
+	}
+}
+
+// cleanupStaleEntries removes rate-limit entries where ALL timestamps are older
+// than 2 minutes (no longer relevant for rate limiting) and pending orders that
+// have exceeded the TTL.
+func (h *BotHandler) cleanupStaleEntries() {
+	now := time.Now()
+	cutoff := now.Add(-cleanupInterval)
+
+	// Prune stale rate-limit windows.
+	h.rateMu.Lock()
+	for chatID, times := range h.rateWindow {
+		allStale := true
+		for _, t := range times {
+			if !t.Before(cutoff) {
+				allStale = false
+				break
+			}
+		}
+		if allStale {
+			delete(h.rateWindow, chatID)
+		}
+	}
+	h.rateMu.Unlock()
+
+	// Prune expired pending orders.
+	h.pendingMu.Lock()
+	for chatID, order := range h.pendingOrders {
+		if now.Sub(order.CreatedAt) > pendingOrderTTL {
+			delete(h.pendingOrders, chatID)
+		}
+	}
+	h.pendingMu.Unlock()
+}
+
+// Shutdown stops the background cleanup goroutine. It is safe to call
+// multiple times.
+func (h *BotHandler) Shutdown() {
+	if h.cleanupCancel != nil {
+		h.cleanupCancel()
+	}
+}
 
 // ServeHTTP implements http.Handler. It validates the request, parses the
 // Telegram update, and dispatches to the appropriate command handler.

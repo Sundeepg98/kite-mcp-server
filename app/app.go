@@ -58,6 +58,7 @@ type App struct {
 	rateLimiters   *rateLimiters
 	auditStore     *audit.Store
 	scheduler      *scheduler.Scheduler
+	telegramBot    *tgbot.BotHandler
 }
 
 // StatusPageData holds template data for the status page
@@ -647,6 +648,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.auditStore.Stop()
 		}
 
+		// Shutdown Telegram bot cleanup goroutine.
+		if app.telegramBot != nil {
+			app.telegramBot.Shutdown()
+		}
+
 		// Then shutdown Kite manager (session cleanup and instruments scheduler)
 		kcManager.Shutdown()
 
@@ -917,6 +923,7 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 
 	// Create bot command handler.
 	botHandler := tgbot.NewBotHandler(notifier.Bot(), webhookSecret, kcManager, app.logger)
+	app.telegramBot = botHandler
 
 	// Register the webhook endpoint (the secret in the path prevents spoofing).
 	webhookPath := "/telegram/webhook/" + webhookSecret
