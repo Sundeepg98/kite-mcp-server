@@ -16,7 +16,6 @@ import (
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/broker"
-	zerodha "github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
@@ -217,8 +216,19 @@ func New(cfg Config) (*Manager, error) {
 		}
 	}
 
+	// Initialize focused services (Clean Architecture)
+	m.credentialSvc = NewCredentialService(CredentialServiceConfig{
+		APIKey:          cfg.APIKey,
+		APISecret:       cfg.APISecret,
+		AccessToken:     cfg.AccessToken,
+		CredentialStore: m.credentialStore,
+		TokenStore:      m.tokenStore,
+		RegistryStore:   m.registryStore,
+		Logger:          cfg.Logger,
+	})
+
 	// Backfill registry from existing credentials (handles pre-registry self-provisioned keys)
-	m.backfillRegistryFromCredentials()
+	m.credentialSvc.BackfillRegistryFromCredentials()
 
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
@@ -302,6 +312,25 @@ func New(cfg Config) (*Manager, error) {
 	m.Instruments = instrumentsManager
 	m.initializeSessionManager()
 
+	// Initialize session service (uses credential service + session manager)
+	var metricsImpl metricsTracker
+	if cfg.Metrics != nil {
+		metricsImpl = cfg.Metrics
+	}
+	m.sessionSvc = NewSessionService(SessionServiceConfig{
+		CredentialSvc: m.credentialSvc,
+		TokenStore:    m.tokenStore,
+		SessionSigner: m.sessionSigner,
+		AlertStore:    m.alertStore,
+		Logger:        cfg.Logger,
+		Metrics:       metricsImpl,
+	})
+	m.sessionSvc.SetSessionManager(m.sessionManager)
+
+	// Initialize portfolio and order services
+	m.portfolioSvc = NewPortfolioService(m.sessionSvc, cfg.Logger)
+	m.orderSvc = NewOrderService(m.sessionSvc, cfg.Logger)
+
 	// Session persistence: share the same DB (if available)
 	if m.alertDB != nil {
 		m.sessionManager.SetDB(&sessionDBAdapter{db: m.alertDB})
@@ -373,6 +402,12 @@ type Manager struct {
 
 	templates map[string]*template.Template
 
+	// Focused service objects (Clean Architecture)
+	credentialSvc  *CredentialService  // credential resolution (per-user + global)
+	sessionSvc     *SessionService     // MCP session lifecycle
+	portfolioSvc   *PortfolioService   // portfolio queries (holdings, positions, margins, profile)
+	orderSvc       *OrderService       // order placement, modification, cancellation
+
 	Instruments    *instruments.Manager
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
@@ -408,6 +443,30 @@ func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error)
 		APISecret: apiSecret,
 		Logger:    logger,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Service accessors (Clean Architecture)
+// ---------------------------------------------------------------------------
+
+// CredentialSvc returns the credential resolution service.
+func (m *Manager) CredentialSvc() *CredentialService {
+	return m.credentialSvc
+}
+
+// SessionSvc returns the session lifecycle service.
+func (m *Manager) SessionSvc() *SessionService {
+	return m.sessionSvc
+}
+
+// PortfolioSvc returns the portfolio query service.
+func (m *Manager) PortfolioSvc() *PortfolioService {
+	return m.portfolioSvc
+}
+
+// OrderSvc returns the order management service.
+func (m *Manager) OrderSvc() *OrderService {
+	return m.orderSvc
 }
 
 // IsLocalMode returns true when running in STDIO mode (local process, not remote HTTP).
@@ -499,57 +558,16 @@ func (m *Manager) kiteSessionCleanupHook(session *MCPSession) {
 	}
 }
 
-// validateSessionID checks if a session ID is empty and returns appropriate error
-func (m *Manager) validateSessionID(sessionID string) error {
-	if sessionID == "" {
-		return ErrInvalidSessionID
-	}
-	return nil
-}
-
-// createKiteSessionData creates new KiteSessionData for a session.
-// If email is provided and a cached token exists, it is applied automatically.
-func (m *Manager) createKiteSessionData(sessionID, email string) *KiteSessionData {
-	m.Logger.Debug("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
-
-	apiKey := m.GetAPIKeyForEmail(email)
-
-	kc := NewKiteConnect(apiKey)
-	kd := &KiteSessionData{
-		Kite:   kc,
-		Broker: zerodha.New(kc.Client),
-		Email:  email,
-	}
-
-	// Priority 1: Per-email cached token (Fly.io multi-user)
-	if email != "" {
-		if entry, ok := m.tokenStore.Get(email); ok {
-			kd.Kite.Client.SetAccessToken(entry.AccessToken)
-			m.Logger.Debug("Applied cached Kite token for user", "session_id", sessionID, "email", email, "user", entry.UserName)
-			return kd
-		}
-	}
-
-	// Priority 2: Global pre-auth token (local dev / env var)
-	if m.accessToken != "" {
-		kd.Kite.Client.SetAccessToken(m.accessToken)
-		m.Logger.Debug("Pre-set access token for session", "session_id", sessionID)
-	}
-	return kd
-}
-
-// HasPreAuth returns true if the manager has a pre-set access token
+// HasPreAuth returns true if the manager has a pre-set access token.
+// Delegates to CredentialService.
 func (m *Manager) HasPreAuth() bool {
-	return m.accessToken != ""
+	return m.credentialSvc.HasPreAuth()
 }
 
 // HasCachedToken returns true if there's a cached Kite token for the given email.
+// Delegates to CredentialService.
 func (m *Manager) HasCachedToken(email string) bool {
-	if email == "" {
-		return false
-	}
-	_, ok := m.tokenStore.Get(email)
-	return ok
+	return m.credentialSvc.HasCachedToken(email)
 }
 
 // TokenStore returns the per-email token store.
@@ -559,8 +577,9 @@ func (m *Manager) TokenStore() *KiteTokenStore {
 
 
 // HasGlobalCredentials returns true if global API key/secret are configured (from env vars).
+// Delegates to CredentialService.
 func (m *Manager) HasGlobalCredentials() bool {
-	return m.apiKey != "" && m.apiSecret != ""
+	return m.credentialSvc.HasGlobalCredentials()
 }
 
 // TickerService returns the per-user WebSocket ticker service.
@@ -622,42 +641,6 @@ func truncKey(s string, n int) string {
 	return s[:n]
 }
 
-// backfillRegistryFromCredentials syncs existing credentials into the registry.
-// This handles pre-registry self-provisioned keys that were stored before the registry existed.
-func (m *Manager) backfillRegistryFromCredentials() {
-	if m.registryStore == nil {
-		return
-	}
-	creds := m.credentialStore.ListAllRaw()
-	if len(creds) == 0 {
-		return
-	}
-	backfilled := 0
-	for _, cred := range creds {
-		if _, found := m.registryStore.GetByAPIKeyAnyStatus(cred.APIKey); found {
-			continue // already in registry
-		}
-		regID := fmt.Sprintf("migrated-%s-%s", cred.Email, truncKey(cred.APIKey, 8))
-		if err := m.registryStore.Register(&registry.AppRegistration{
-			ID:           regID,
-			APIKey:       cred.APIKey,
-			APISecret:    cred.APISecret,
-			AssignedTo:   cred.Email,
-			Label:        "Migrated",
-			Status:       registry.StatusActive,
-			Source:       registry.SourceMigrated,
-			RegisteredBy: cred.Email,
-		}); err != nil {
-			m.Logger.Warn("Failed to backfill registry from credentials",
-				"email", cred.Email, "error", err)
-		} else {
-			backfilled++
-		}
-	}
-	if backfilled > 0 {
-		m.Logger.Info("Backfilled registry from existing credentials", "count", backfilled)
-	}
-}
 
 // TelegramNotifier returns the Telegram notifier (nil if not configured).
 func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
@@ -670,12 +653,9 @@ func (m *Manager) InstrumentsManager() *instruments.Manager {
 }
 
 // IsTokenValid returns true if the user has a cached Kite token that has not expired.
+// Delegates to CredentialService.
 func (m *Manager) IsTokenValid(email string) bool {
-	entry, ok := m.tokenStore.Get(email)
-	if !ok {
-		return false
-	}
-	return !IsKiteTokenExpired(entry.StoredAt)
+	return m.credentialSvc.IsTokenValid(email)
 }
 
 // TrailingStopManager returns the trailing stop manager (nil if not initialized).
@@ -735,327 +715,96 @@ func (m *Manager) BillingStore() *billing.Store {
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
+// Delegates to CredentialService.
 func (m *Manager) HasUserCredentials(email string) bool {
-	if email == "" {
-		return false
-	}
-	_, ok := m.credentialStore.Get(email)
-	return ok
+	return m.credentialSvc.HasUserCredentials(email)
 }
 
 // GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
+// Delegates to CredentialService.
 func (m *Manager) GetAPIKeyForEmail(email string) string {
-	if email != "" {
-		if entry, ok := m.credentialStore.Get(email); ok {
-			return entry.APIKey
-		}
-	}
-	return m.apiKey
+	return m.credentialSvc.GetAPIKeyForEmail(email)
 }
 
 // GetAPISecretForEmail returns the API secret: per-user if registered, otherwise global.
+// Delegates to CredentialService.
 func (m *Manager) GetAPISecretForEmail(email string) string {
-	if email != "" {
-		if entry, ok := m.credentialStore.Get(email); ok {
-			return entry.APISecret
-		}
-	}
-	return m.apiSecret
+	return m.credentialSvc.GetAPISecretForEmail(email)
 }
 
 // GetAccessTokenForEmail returns the cached access token for a given email.
+// Delegates to CredentialService.
 func (m *Manager) GetAccessTokenForEmail(email string) string {
-	if email != "" {
-		if entry, ok := m.tokenStore.Get(email); ok {
-			return entry.AccessToken
-		}
-	}
-	return m.accessToken // fallback to global pre-auth token
+	return m.credentialSvc.GetAccessTokenForEmail(email)
 }
 
-
-// extractKiteSessionData safely extracts KiteSessionData from interface{}
-func (m *Manager) extractKiteSessionData(data any, sessionID string) (*KiteSessionData, error) {
-	kiteData, ok := data.(*KiteSessionData)
-	if !ok || kiteData == nil {
-		m.Logger.Warn("Invalid Kite data type for MCP session ID", "session_id", sessionID)
-		return nil, ErrSessionNotFound
-	}
-	return kiteData, nil
-}
 
 // GetOrCreateSession retrieves an existing Kite session or creates a new one atomically.
-// For email-aware session creation (Fly.io with OAuth), use GetOrCreateSessionWithEmail.
+// Delegates to SessionService.
 func (m *Manager) GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error) {
-	return m.GetOrCreateSessionWithEmail(mcpSessionID, "")
+	return m.sessionSvc.GetOrCreateSession(mcpSessionID)
 }
 
 // GetOrCreateSessionWithEmail retrieves or creates a Kite session with email context.
-// If email is provided and a cached Kite token exists for that email, it is auto-applied.
+// Delegates to SessionService.
 func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*KiteSessionData, bool, error) {
-	if err := m.validateSessionID(mcpSessionID); err != nil {
-		m.Logger.Warn("GetOrCreateSession called with empty MCP session ID")
-		return nil, false, err
-	}
-
-	// Use atomic GetOrCreateSessionData to eliminate TOCTOU race condition
-	data, isNew, err := m.sessionManager.GetOrCreateSessionData(mcpSessionID, func() any {
-		return m.createKiteSessionData(mcpSessionID, email)
-	})
-
-	if err != nil {
-		m.Logger.Error("Failed to get or create session data", "error", err)
-		return nil, false, ErrSessionNotFound
-	}
-
-	kiteData, err := m.extractKiteSessionData(data, mcpSessionID)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Restore Kite client for sessions loaded from DB (Data.Kite is nil after restart)
-	if kiteData.Kite == nil {
-		resolvedEmail := email
-		if resolvedEmail == "" {
-			resolvedEmail = kiteData.Email
-		}
-		m.Logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
-		kiteData.Kite = NewKiteConnect(m.GetAPIKeyForEmail(resolvedEmail))
-		kiteData.Broker = zerodha.New(kiteData.Kite.Client)
-		// Apply cached token if available
-		if resolvedEmail != "" {
-			if entry, ok := m.tokenStore.Get(resolvedEmail); ok {
-				kiteData.Kite.Client.SetAccessToken(entry.AccessToken)
-				m.Logger.Debug("Applied cached token to restored session", "session_id", mcpSessionID, "email", resolvedEmail)
-			}
-		} else if m.accessToken != "" {
-			kiteData.Kite.Client.SetAccessToken(m.accessToken)
-		}
-		// Treat as new session so WithSession runs the auth check
-		isNew = true
-	}
-
-	// Update email on existing sessions if not already set (under registry lock to avoid data race)
-	if !isNew && email != "" && kiteData.Email == "" {
-		_ = m.sessionManager.UpdateSessionField(mcpSessionID, func(data any) {
-			if kd, ok := data.(*KiteSessionData); ok && kd != nil {
-				kd.Email = email
-			}
-		})
-	}
-
-	if isNew {
-		m.Logger.Debug("Successfully created new Kite data for MCP session ID", "session_id", mcpSessionID)
-	} else {
-		m.Logger.Debug("Successfully retrieved existing Kite data for MCP session ID", "session_id", mcpSessionID)
-	}
-
-	return kiteData, isNew, nil
+	return m.sessionSvc.GetOrCreateSessionWithEmail(mcpSessionID, email)
 }
 
+// GetSession retrieves an existing Kite session by MCP session ID.
+// Delegates to SessionService.
 func (m *Manager) GetSession(mcpSessionID string) (*KiteSessionData, error) {
-	if err := m.validateSessionID(mcpSessionID); err != nil {
-		m.Logger.Warn("GetSession called with empty MCP session ID")
-		return nil, ErrSessionNotFound
-	}
-
-	// Validate session first
-	if err := m.validateSession(mcpSessionID); err != nil {
-		m.Logger.Error("MCP session validation failed", "error", err)
-		return nil, err
-	}
-
-	m.Logger.Debug("Getting Kite data for MCP session ID", "session_id", mcpSessionID)
-	data, err := m.sessionManager.GetSessionData(mcpSessionID)
-	if err != nil {
-		m.Logger.Error("Failed to get Kite data", "error", err)
-		return nil, ErrSessionNotFound
-	}
-
-	kiteData, err := m.extractKiteSessionData(data, mcpSessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	m.Logger.Debug("Successfully retrieved Kite data for MCP session ID", "session_id", mcpSessionID)
-	return kiteData, nil
+	return m.sessionSvc.GetSession(mcpSessionID)
 }
 
-// validateSession checks if a MCP session is valid and active
-func (m *Manager) validateSession(sessionID string) error {
-	isTerminated, err := m.sessionManager.Validate(sessionID)
-	if err != nil {
-		m.Logger.Error("MCP session validation failed", "session_id", sessionID, "error", err)
-		return ErrSessionNotFound
-	}
-	if isTerminated {
-		m.Logger.Warn("MCP session is terminated", "session_id", sessionID)
-		return ErrSessionNotFound
-	}
-	return nil
-}
-
+// ClearSession terminates a session, triggering cleanup hooks.
+// Delegates to SessionService.
 func (m *Manager) ClearSession(sessionID string) {
-	if err := m.validateSessionID(sessionID); err != nil {
-		return
-	}
-
-	// Terminate the session, which will trigger cleanup hooks
-	if _, err := m.sessionManager.Terminate(sessionID); err != nil {
-		m.Logger.Error("Error terminating session", "session_id", sessionID, "error", err)
-	} else {
-		m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", sessionID)
-	}
+	m.sessionSvc.ClearSession(sessionID)
 }
 
-// ClearSessionData clears the session data without terminating the session
+// ClearSessionData clears the session data without terminating the session.
+// Delegates to SessionService.
 func (m *Manager) ClearSessionData(sessionID string) error {
-	if err := m.validateSessionID(sessionID); err != nil {
-		return err
-	}
-
-	// Get the session to perform cleanup on the data
-	session, err := m.sessionManager.GetSession(sessionID)
-	if err != nil {
-		m.Logger.Error("Failed to get session for data cleanup", "error", err)
-		return err
-	}
-
-	// Cleanup the Kite session data if it exists
-	if session.Data != nil {
-		m.kiteSessionCleanupHook(session)
-	}
-
-	// Clear the session data without terminating the session
-	if err := m.sessionManager.UpdateSessionData(sessionID, nil); err != nil {
-		m.Logger.Error("Error clearing session data", "session_id", sessionID, "error", err)
-		return err
-	}
-
-	m.Logger.Debug("Cleared session data for MCP session ID", "session_id", sessionID)
-	return nil
+	return m.sessionSvc.ClearSessionData(sessionID)
 }
 
-// GenerateSession creates a new MCP session with Kite data and returns the session ID
+// GenerateSession creates a new MCP session with Kite data and returns the session ID.
+// Delegates to SessionService.
 func (m *Manager) GenerateSession() string {
-	m.Logger.Info("Generating new MCP session with Kite data")
-
-	sessionID := m.sessionManager.GenerateWithData(m.createKiteSessionData("", ""))
-	m.Logger.Debug("Generated new MCP session with ID", "session_id", sessionID)
-
-	return sessionID
+	return m.sessionSvc.GenerateSession()
 }
 
-// No longer needed - replaced by GetOrCreateSession
-
+// SessionLoginURL returns the Kite login URL for the given session.
+// Delegates to SessionService.
 func (m *Manager) SessionLoginURL(mcpSessionID string) (string, error) {
-	if err := m.validateSessionID(mcpSessionID); err != nil {
-		m.Logger.Warn("SessionLoginURL called with empty MCP session ID")
-		return "", err
-	}
-
-	m.Logger.Debug("Retrieving or creating Kite data for MCP session ID", "session_id", mcpSessionID)
-	// Use GetOrCreateSession instead of GetSession to automatically create a session if needed
-	kiteData, isNew, err := m.GetOrCreateSession(mcpSessionID)
-	if err != nil {
-		m.Logger.Error("Failed to get or create Kite data", "error", err)
-		return "", err
-	}
-
-	if isNew {
-		m.Logger.Debug("Created new Kite session for MCP session ID", "session_id", mcpSessionID)
-	}
-
-	// Create signed redirect parameters for security
-	signedParams, err := m.sessionSigner.SignRedirectParams(mcpSessionID)
-	if err != nil {
-		m.Logger.Error("Failed to sign redirect params for session", "session_id", mcpSessionID, "error", err)
-		return "", fmt.Errorf("failed to create secure login URL: %w", err)
-	}
-
-	redirectParams := url.QueryEscape(signedParams)
-	loginURL := kiteData.Kite.Client.GetLoginURL() + "&redirect_params=" + redirectParams
-	m.Logger.Debug("Generated Kite login URL for MCP session", "session_id", mcpSessionID)
-
-	return loginURL, nil
+	return m.sessionSvc.SessionLoginURL(mcpSessionID)
 }
 
+// CompleteSession completes Kite authentication using the request token.
+// Delegates to SessionService.
 func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
-	if err := m.validateSessionID(mcpSessionID); err != nil {
-		m.Logger.Warn("CompleteSession called with empty MCP session ID")
-		return err
-	}
-
-	m.Logger.Debug("Completing Kite auth for MCP session", "session_id", mcpSessionID, "request_token", kiteRequestToken)
-
-	kiteData, err := m.GetSession(mcpSessionID)
-	if err != nil {
-		m.Logger.Error("Failed to complete session", "session_id", mcpSessionID, "error", err)
-		return ErrSessionNotFound
-	}
-
-	apiSecret := m.GetAPISecretForEmail(kiteData.Email)
-	if apiSecret == "" {
-		m.Logger.Error("No API secret configured", "session_id", mcpSessionID, "email", kiteData.Email)
-		return fmt.Errorf("no Kite API secret configured")
-	}
-
-	m.Logger.Debug("Generating Kite session with request token")
-	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, apiSecret)
-	if err != nil {
-		m.Logger.Error("Failed to generate Kite session", "error", err)
-		return fmt.Errorf("failed to generate Kite session: %w", err)
-	}
-
-	m.Logger.Debug("Setting Kite access token for MCP session", "session_id", mcpSessionID)
-	kiteData.Kite.Client.SetAccessToken(userSess.AccessToken)
-
-	// Cache the token for future sessions by this user
-	if kiteData.Email != "" {
-		m.tokenStore.Set(kiteData.Email, &KiteTokenEntry{
-			AccessToken: userSess.AccessToken,
-			UserID:      userSess.UserID,
-			UserName:    userSess.UserName,
-		})
-		m.Logger.Debug("Cached Kite token for user", "email", kiteData.Email, "user_id", userSess.UserID)
-	}
-
-	// Compliance log for successful login
-	m.Logger.Info("COMPLIANCE: User login completed successfully",
-		"event", "user_login_success",
-		"user_id", userSess.UserID,
-		"session_id", mcpSessionID,
-		"timestamp", time.Now().UTC().Format(time.RFC3339),
-		"user_name", userSess.UserName,
-		"user_type", userSess.UserType,
-	)
-
-	// Track successful login
-	if m.metrics != nil {
-		m.metrics.TrackDailyUser(userSess.UserID)
-		m.metrics.Increment("user_logins")
-	}
-
-	return nil
+	return m.sessionSvc.CompleteSession(mcpSessionID, kiteRequestToken)
 }
 
 // Session management utility methods
 
-// GetActiveSessionCount returns the number of active sessions
+// GetActiveSessionCount returns the number of active sessions.
+// Delegates to SessionService.
 func (m *Manager) GetActiveSessionCount() int {
-	return len(m.sessionManager.ListActiveSessions())
+	return m.sessionSvc.GetActiveSessionCount()
 }
 
-// Session extension has been removed to enforce fixed session durations
-
-// CleanupExpiredSessions manually triggers cleanup of expired MCP sessions
+// CleanupExpiredSessions manually triggers cleanup of expired MCP sessions.
+// Delegates to SessionService.
 func (m *Manager) CleanupExpiredSessions() int {
-	return m.sessionManager.CleanupExpiredSessions()
+	return m.sessionSvc.CleanupExpiredSessions()
 }
 
-// StopCleanupRoutine stops the background cleanup routine
+// StopCleanupRoutine stops the background cleanup routine.
+// Delegates to SessionService.
 func (m *Manager) StopCleanupRoutine() {
-	m.sessionManager.StopCleanupRoutine()
+	m.sessionSvc.StopCleanupRoutine()
 }
 
 // HasMetrics returns true if metrics manager is available
