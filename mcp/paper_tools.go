@@ -32,7 +32,7 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 		engine := manager.PaperEngine()
 		if engine == nil {
-			return gomcp.NewToolResultError("Paper trading not configured"), nil
+			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 		args := request.GetArguments()
 		enable, _ := args["enable"].(bool)
@@ -70,7 +70,7 @@ func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 		engine := manager.PaperEngine()
 		if engine == nil {
-			return gomcp.NewToolResultError("Paper trading not configured"), nil
+			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 		status, err := engine.Status(email)
 		if err != nil {
@@ -103,7 +103,7 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 		engine := manager.PaperEngine()
 		if engine == nil {
-			return gomcp.NewToolResultError("Paper trading not configured"), nil
+			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 		if err := engine.Reset(email); err != nil {
 			return gomcp.NewToolResultError("Failed to reset: " + err.Error()), nil

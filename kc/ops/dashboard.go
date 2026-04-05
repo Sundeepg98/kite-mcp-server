@@ -124,7 +124,16 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/tax-analysis", wrap(d.taxAnalysisAPI))
 	mux.Handle("/dashboard/api/account/delete", wrap(d.selfDeleteAccount))
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.selfManageCredentials))
-	mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))
+	// Only register billing page if billing store is available
+	if d.billingStore != nil {
+		mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))
+	} else {
+		// Show a friendly "Free plan" page when billing is not configured
+		mux.HandleFunc("/dashboard/billing", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprint(w, `<!DOCTYPE html><html><head><title>Billing · Kite MCP</title><link rel="stylesheet" href="/static/dashboard-base.css"></head><body><div style="display:flex;justify-content:center;align-items:center;min-height:100vh"><div style="text-align:center;max-width:400px"><h2 style="color:var(--text-0)">Free Plan</h2><p style="color:var(--text-1);margin:16px 0">All tools are currently available for free.</p><a href="/dashboard" style="color:var(--accent)">← Back to Dashboard</a></div></div></body></html>`)
+		})
+	}
 
 	// Static CSS — no auth required, publicly cacheable.
 	mux.HandleFunc("/static/dashboard-base.css", func(w http.ResponseWriter, r *http.Request) {

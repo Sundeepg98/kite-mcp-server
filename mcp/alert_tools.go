@@ -36,6 +36,10 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "setup_telegram")
 
+		if manager.TelegramNotifier() == nil {
+			return mcp.NewToolResultError("Telegram notifications are not configured on this server. Contact the server admin."), nil
+		}
+
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil

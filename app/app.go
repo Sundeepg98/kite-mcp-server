@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -49,6 +50,7 @@ import (
 // App represents the main application structure
 type App struct {
 	Config         *Config
+	DevMode        bool
 	Version        string
 	startTime      time.Time
 	kcManager      *kc.Manager
@@ -123,6 +125,7 @@ const (
 // NewApp creates a new application instance with logger
 func NewApp(logger *slog.Logger) *App {
 	adminSecretPath := os.Getenv("ADMIN_ENDPOINT_SECRET_PATH")
+	devMode := os.Getenv("DEV_MODE") == "true"
 
 	return &App{
 		Config: &Config{
@@ -146,6 +149,7 @@ func NewApp(logger *slog.Logger) *App {
 			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		},
+		DevMode:   devMode,
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
 		logger:    logger,
@@ -198,6 +202,10 @@ func (app *App) LoadConfig() error {
 
 // RunServer initializes and starts the server based on the configured mode
 func (app *App) RunServer() error {
+	if app.DevMode {
+		app.logger.Warn("DEV MODE ENABLED — billing disabled, all tools free, pprof endpoints active")
+	}
+
 	url := app.buildServerURL()
 	app.configureHTTPClient()
 
@@ -455,7 +463,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Riskguard middleware blocks orders exceeding safety limits.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
-	if os.Getenv("STRIPE_SECRET_KEY") != "" {
+	// Skipped entirely in DEV_MODE — all tools are free tier.
+	if os.Getenv("STRIPE_SECRET_KEY") != "" && !app.DevMode {
 		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
 		if err := billingStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize billing table", "error", err)
@@ -1001,6 +1010,39 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		})
 	})
 
+	// Favicon — serve SVG from embedded static files.
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		data, err := templates.FS.ReadFile("static/favicon.svg")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=604800")
+		w.Write(data)
+	})
+
+	// robots.txt — allow landing and legal pages, block everything else.
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "User-agent: *\nDisallow: /dashboard/\nDisallow: /admin/\nDisallow: /auth/\nDisallow: /oauth/\nDisallow: /mcp\nDisallow: /sse\nAllow: /\nAllow: /terms\nAllow: /privacy\n")
+	})
+
+	// DEV_MODE: expose pprof profiling endpoints for debugging.
+	if app.DevMode {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+		mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+		mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+		mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+		mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+		app.logger.Info("pprof endpoints registered at /debug/pprof/")
+	}
+
 	app.serveLegalPages(mux)
 	app.serveStatusPage(mux)
 	return mux
@@ -1277,6 +1319,13 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 	app.logger.Info("Legal pages registered at /terms and /privacy")
 }
 
+// serveErrorPage renders a styled HTML error page with the given status code, title, and message.
+func serveErrorPage(w http.ResponseWriter, status int, title, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>%s · Kite MCP</title><link rel="stylesheet" href="/static/dashboard-base.css"></head><body><div style="display:flex;justify-content:center;align-items:center;min-height:100vh"><div style="text-align:center;max-width:400px"><h2 style="color:var(--text-0)">%s</h2><p style="color:var(--text-1);margin:16px 0">%s</p><a href="/" style="color:var(--accent)">← Home</a></div></div></body></html>`, title, title, message)
+}
+
 // serveStatusPage configures the HTTP mux to serve status page using templates.
 // If OAuth is enabled and the user has a valid cookie, redirects to /dashboard.
 // Otherwise shows the status page with login links.
@@ -1286,9 +1335,7 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 
 		// Only serve status page at root path
 		if path != "/" {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte("Not Found"))
+			serveErrorPage(w, 404, "Page Not Found", "The page you're looking for doesn't exist.")
 			return
 		}
 
