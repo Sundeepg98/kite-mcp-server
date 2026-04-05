@@ -709,6 +709,7 @@
       // Triggered alerts — lifecycle timeline
       var trigWrap = document.getElementById('triggeredAlertsWrap');
       var trigEmpty = document.getElementById('triggeredAlertsEmpty');
+      if (!trigWrap || !trigEmpty) return;
       clearChildren(trigWrap);
       var triggered = d.triggered || [];
 
