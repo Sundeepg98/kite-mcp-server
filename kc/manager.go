@@ -19,6 +19,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -102,6 +104,18 @@ func New(cfg Config) (*Manager, error) {
 				OutputSummary: fmt.Sprintf("Triggered at %.2f, notified via Telegram", currentPrice),
 				StartedAt:     now,
 				CompletedAt:   now,
+			})
+		}
+		// Dispatch domain event for alert trigger.
+		if m.eventDispatcher != nil {
+			m.eventDispatcher.Dispatch(domain.AlertTriggeredEvent{
+				Email:        alert.Email,
+				AlertID:      alert.ID,
+				Instrument:   domain.NewInstrumentKey(alert.Exchange, alert.Tradingsymbol),
+				TargetPrice:  domain.NewINR(alert.TargetPrice),
+				CurrentPrice: domain.NewINR(currentPrice),
+				Direction:    string(alert.Direction),
+				Timestamp:    time.Now().UTC(),
 			})
 		}
 	})
@@ -426,6 +440,8 @@ type Manager struct {
 	riskGuard          *riskguard.Guard               // optional: financial safety controls
 	paperEngine        *papertrading.PaperEngine      // optional: virtual trading engine
 	billingStore       *billing.Store                 // optional: billing tier enforcement
+	eventDispatcher    *domain.EventDispatcher        // optional: domain event pub/sub
+	eventStore         *eventsourcing.EventStore      // optional: append-only event persistence
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
@@ -781,6 +797,26 @@ func (m *Manager) BillingStore() BillingStoreInterface {
 // BillingStoreConcrete returns the concrete billing store (for internal wiring).
 func (m *Manager) BillingStoreConcrete() *billing.Store {
 	return m.billingStore
+}
+
+// SetEventDispatcher sets the domain event dispatcher.
+func (m *Manager) SetEventDispatcher(d *domain.EventDispatcher) {
+	m.eventDispatcher = d
+}
+
+// EventDispatcher returns the domain event dispatcher, or nil if not configured.
+func (m *Manager) EventDispatcher() *domain.EventDispatcher {
+	return m.eventDispatcher
+}
+
+// SetEventStore sets the event sourcing store.
+func (m *Manager) SetEventStore(s *eventsourcing.EventStore) {
+	m.eventStore = s
+}
+
+// EventStore returns the event sourcing store, or nil if not configured.
+func (m *Manager) EventStoreConcrete() *eventsourcing.EventStore {
+	return m.eventStore
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.

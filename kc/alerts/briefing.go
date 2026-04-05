@@ -10,16 +10,11 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
-// kolkataLoc is the cached Asia/Kolkata timezone for briefing formatting.
-var kolkataLoc = func() *time.Location {
-	loc, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		panic("failed to load Asia/Kolkata timezone: " + err.Error())
-	}
-	return loc
-}()
+// kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
+var kolkataLoc = isttz.Location
 
 // TokenChecker abstracts the ability to look up a user's Kite token and check expiry.
 type TokenChecker interface {

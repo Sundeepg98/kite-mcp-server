@@ -10,6 +10,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 type PlaceOrderTool struct{}
@@ -150,6 +151,20 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
+			}
+
+			// Dispatch domain event for successful order placement.
+			if d := handler.manager.EventDispatcher(); d != nil {
+				qty, _ := domain.NewQuantity(orderParams.Quantity)
+				d.Dispatch(domain.OrderPlacedEvent{
+					Email:           session.Email,
+					OrderID:         resp.OrderID,
+					Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
+					Qty:             qty,
+					Price:           domain.NewINR(orderParams.Price),
+					TransactionType: orderParams.TransactionType,
+					Timestamp:       time.Now().UTC(),
+				})
 			}
 
 			// Brief delay then check fill status for immediate feedback

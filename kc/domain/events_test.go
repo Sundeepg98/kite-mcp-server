@@ -22,7 +22,10 @@ func TestNewINR(t *testing.T) {
 func TestMoneyAdd(t *testing.T) {
 	a := NewINR(100.50)
 	b := NewINR(200.25)
-	sum := a.Add(b)
+	sum, err := a.Add(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if sum.Amount != 300.75 {
 		t.Errorf("Add: got %f, want 300.75", sum.Amount)
 	}
@@ -31,24 +34,34 @@ func TestMoneyAdd(t *testing.T) {
 	}
 }
 
-func TestMoneyAddMismatchPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when adding different currencies")
-		}
-	}()
+func TestMoneyAddMismatchReturnsError(t *testing.T) {
 	a := NewINR(100)
 	b := Money{Amount: 50, Currency: "USD"}
-	_ = a.Add(b)
+	_, err := a.Add(b)
+	if err == nil {
+		t.Error("expected error when adding different currencies")
+	}
 }
 
 func TestMoneySub(t *testing.T) {
 	a := NewINR(500)
 	b := NewINR(123.45)
-	diff := a.Sub(b)
+	diff, err := a.Sub(b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	want := 376.55
 	if diff.Amount < want-0.001 || diff.Amount > want+0.001 {
 		t.Errorf("Sub: got %f, want %f", diff.Amount, want)
+	}
+}
+
+func TestMoneySubMismatchReturnsError(t *testing.T) {
+	a := NewINR(100)
+	b := Money{Amount: 50, Currency: "USD"}
+	_, err := a.Sub(b)
+	if err == nil {
+		t.Error("expected error when subtracting different currencies")
 	}
 }
 

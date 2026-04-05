@@ -6,16 +6,12 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
-// kolkataLoc is the cached Asia/Kolkata timezone.
-var kolkataLoc = func() *time.Location {
-	loc, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		panic("failed to load Asia/Kolkata timezone: " + err.Error())
-	}
-	return loc
-}()
+// kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
+var kolkataLoc = isttz.Location
 
 // Task describes a named function that should run once per trading day at a
 // specific IST time.

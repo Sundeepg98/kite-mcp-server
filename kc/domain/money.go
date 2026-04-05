@@ -23,21 +23,21 @@ func NewINR(amount float64) Money {
 }
 
 // Add returns a new Money that is the sum of m and other.
-// Panics if the currencies differ — mixed-currency arithmetic is a domain error.
-func (m Money) Add(other Money) Money {
+// Returns an error if the currencies differ.
+func (m Money) Add(other Money) (Money, error) {
 	if m.Currency != other.Currency {
-		panic(fmt.Sprintf("domain: cannot add %s to %s", other.Currency, m.Currency))
+		return Money{}, fmt.Errorf("domain: cannot add %s to %s", other.Currency, m.Currency)
 	}
-	return Money{Amount: m.Amount + other.Amount, Currency: m.Currency}
+	return Money{Amount: m.Amount + other.Amount, Currency: m.Currency}, nil
 }
 
 // Sub returns a new Money that is m minus other.
-// Panics if the currencies differ.
-func (m Money) Sub(other Money) Money {
+// Returns an error if the currencies differ.
+func (m Money) Sub(other Money) (Money, error) {
 	if m.Currency != other.Currency {
-		panic(fmt.Sprintf("domain: cannot subtract %s from %s", other.Currency, m.Currency))
+		return Money{}, fmt.Errorf("domain: cannot subtract %s from %s", other.Currency, m.Currency)
 	}
-	return Money{Amount: m.Amount - other.Amount, Currency: m.Currency}
+	return Money{Amount: m.Amount - other.Amount, Currency: m.Currency}, nil
 }
 
 // Multiply returns a new Money scaled by the given factor.

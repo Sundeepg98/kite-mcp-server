@@ -28,6 +28,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -374,10 +376,25 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		// Wrap instruments manager as FreezeQuantityLookup
 		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
 	}
-	// Wire auto-freeze Telegram admin notification.
-	if notifier := kcManager.TelegramNotifier(); notifier != nil {
+	// Wire auto-freeze Telegram admin notification + domain event dispatch.
+	{
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
+		notifier := kcManager.TelegramNotifier()
 		riskGuard.SetAutoFreezeNotifier(func(email, reason string) {
+			// Dispatch domain event (eventDispatcher is set on kcManager after this closure is created,
+			// but the closure captures kcManager by reference so it picks up the dispatcher once wired).
+			if d := kcManager.EventDispatcher(); d != nil {
+				d.Dispatch(domain.UserFrozenEvent{
+					Email:    email,
+					FrozenBy: "riskguard:circuit-breaker",
+					Reason:   reason,
+					Timestamp: time.Now().UTC(),
+				})
+			}
+			// Telegram admin notification.
+			if notifier == nil {
+				return
+			}
 			for _, adminEmail := range adminEmails {
 				adminEmail = strings.TrimSpace(strings.ToLower(adminEmail))
 				if adminEmail == "" {
@@ -393,9 +410,30 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				}
 			}
 		})
-		app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
+		if notifier != nil {
+			app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
+		}
 	}
 	kcManager.SetRiskGuard(riskGuard)
+
+	// Initialize domain event dispatcher and event store.
+	eventDispatcher := domain.NewEventDispatcher()
+	kcManager.SetEventDispatcher(eventDispatcher)
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		eventStore := eventsourcing.NewEventStore(alertDB)
+		if err := eventStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize domain_events table", "error", err)
+		} else {
+			kcManager.SetEventStore(eventStore)
+			// Subscribe the event store to persist all dispatched events.
+			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
+			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
+			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
+			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
+			app.logger.Info("Domain event store initialized and subscribed")
+		}
+	}
 
 	// Initialize paper trading engine.
 	var paperEngine *papertrading.PaperEngine
@@ -1581,4 +1619,51 @@ func (a *telegramManagerAdapter) PaperEngineConcrete() *papertrading.PaperEngine
 }
 func (a *telegramManagerAdapter) TickerServiceConcrete() *ticker.Service {
 	return a.m.TickerServiceConcrete()
+}
+
+// makeEventPersister returns a domain.Event handler that persists events to the EventStore.
+// Each event is stored with the given aggregateType. The aggregate ID is derived from
+// the event's fields (e.g. OrderID for orders, AlertID for alerts, Email for users).
+func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, logger *slog.Logger) func(domain.Event) {
+	return func(e domain.Event) {
+		aggregateID := deriveAggregateID(e)
+		payload, err := eventsourcing.MarshalPayload(e)
+		if err != nil {
+			logger.Error("Failed to marshal domain event payload", "event_type", e.EventType(), "error", err)
+			return
+		}
+		seq, err := store.NextSequence(aggregateID)
+		if err != nil {
+			logger.Error("Failed to get next sequence", "event_type", e.EventType(), "aggregate", aggregateID, "error", err)
+			return
+		}
+		if err := store.Append(eventsourcing.StoredEvent{
+			AggregateID:   aggregateID,
+			AggregateType: aggregateType,
+			EventType:     e.EventType(),
+			Payload:       payload,
+			OccurredAt:    e.OccurredAt(),
+			Sequence:      seq,
+		}); err != nil {
+			logger.Error("Failed to persist domain event", "event_type", e.EventType(), "error", err)
+		}
+	}
+}
+
+// deriveAggregateID extracts the most meaningful aggregate identifier from a domain event.
+func deriveAggregateID(e domain.Event) string {
+	switch ev := e.(type) {
+	case domain.OrderPlacedEvent:
+		return ev.OrderID
+	case domain.AlertTriggeredEvent:
+		return ev.AlertID
+	case domain.UserFrozenEvent:
+		return ev.Email
+	case domain.RiskLimitBreachedEvent:
+		return ev.Email
+	case domain.SessionCreatedEvent:
+		return ev.SessionID
+	default:
+		return "unknown"
+	}
 }

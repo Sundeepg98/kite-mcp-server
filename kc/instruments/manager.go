@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
 const (
@@ -33,14 +35,8 @@ var (
 	// loaded map.
 	ErrSegmentNotFound = errors.New("instrument segment not found")
 
-	// kolkataLoc is the cached Asia/Kolkata timezone, loaded once at init.
-	kolkataLoc = func() *time.Location {
-		loc, err := time.LoadLocation("Asia/Kolkata")
-		if err != nil {
-			panic("failed to load Asia/Kolkata timezone: " + err.Error())
-		}
-		return loc
-	}()
+	// kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
+	kolkataLoc = isttz.Location
 )
 
 // UpdateConfig holds configuration for instrument updates
