@@ -110,7 +110,7 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 		if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
 			redirect = "/dashboard"
 		}
-		redirectURL := h.config.ExternalURL + "/auth/login?redirect=" + url.QueryEscape(redirect)
+		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + url.QueryEscape(redirect)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
 }
