@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type emailContextKey struct{}
@@ -110,14 +111,17 @@ func (h *Handler) RequireAuthBrowser(next http.Handler) http.Handler {
 		if !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
 			redirect = "/dashboard"
 		}
-		redirectURL := h.config.ExternalURL + "/auth/browser-login?redirect=" + url.QueryEscape(redirect)
+		redirectURL := h.config.ExternalURL + "/auth/login?redirect=" + url.QueryEscape(redirect)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 	})
 }
 
+// dashboardTokenExpiry is the JWT lifetime for dashboard cookies (7 days).
+const dashboardTokenExpiry = 7 * 24 * time.Hour
+
 // SetAuthCookie sets a JWT cookie for browser-based dashboard auth.
 func (h *Handler) SetAuthCookie(w http.ResponseWriter, email string) error {
-	token, err := h.jwt.GenerateToken(email, "dashboard")
+	token, err := h.jwt.GenerateTokenWithExpiry(email, "dashboard", dashboardTokenExpiry)
 	if err != nil {
 		return err
 	}
@@ -125,7 +129,7 @@ func (h *Handler) SetAuthCookie(w http.ResponseWriter, email string) error {
 		Name:     cookieName,
 		Value:    token,
 		Path:     "/",
-		MaxAge:   14400, // 4 hours
+		MaxAge:   604800, // 7 days
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,

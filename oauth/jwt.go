@@ -42,6 +42,22 @@ func (j *JWTManager) GenerateToken(email, clientID string) (string, error) {
 	return token.SignedString(j.secret)
 }
 
+// GenerateTokenWithExpiry creates a signed JWT with a custom expiry duration.
+func (j *JWTManager) GenerateTokenWithExpiry(email, clientID string, expiry time.Duration) (string, error) {
+	now := time.Now()
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   email,
+			Audience:  jwt.ClaimStrings{clientID},
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiry)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    "kite-mcp-server",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(j.secret)
+}
+
 // ValidateToken parses and validates the JWT, returning claims if valid.
 // If audiences are provided, validates that the token's audience matches at least one.
 func (j *JWTManager) ValidateToken(tokenString string, audiences ...string) (*Claims, error) {

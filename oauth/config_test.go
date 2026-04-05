@@ -89,7 +89,7 @@ func TestConfig_Validate_DefaultExpiry(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate failed: %v", err)
 	}
-	if cfg.TokenExpiry != 4*time.Hour {
-		t.Errorf("TokenExpiry = %v, want 4h default", cfg.TokenExpiry)
+	if cfg.TokenExpiry != 24*time.Hour {
+		t.Errorf("TokenExpiry = %v, want 24h default", cfg.TokenExpiry)
 	}
 }

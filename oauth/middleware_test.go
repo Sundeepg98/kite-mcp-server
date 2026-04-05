@@ -315,8 +315,8 @@ func TestSetAuthCookie(t *testing.T) {
 	if found.Path != "/" {
 		t.Errorf("Cookie Path = %q, want /", found.Path)
 	}
-	if found.MaxAge != 14400 {
-		t.Errorf("Cookie MaxAge = %d, want 14400", found.MaxAge)
+	if found.MaxAge != 604800 {
+		t.Errorf("Cookie MaxAge = %d, want 604800", found.MaxAge)
 	}
 
 	// The cookie value should be a valid JWT with dashboard audience
