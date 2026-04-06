@@ -423,6 +423,7 @@ type Manager struct {
 	sessionSvc     *SessionService     // MCP session lifecycle
 	portfolioSvc   *PortfolioService   // portfolio queries (holdings, positions, margins, profile)
 	orderSvc       *OrderService       // order placement, modification, cancellation
+	familyService  *FamilyService      // family billing (invite, remove, list, tier resolution)
 
 	Instruments    *instruments.Manager
 	sessionManager *SessionRegistry
@@ -487,6 +488,16 @@ func (m *Manager) PortfolioSvc() *PortfolioService {
 // OrderSvc returns the order management service.
 func (m *Manager) OrderSvc() *OrderService {
 	return m.orderSvc
+}
+
+// FamilyService returns the family billing service, or nil if not configured.
+func (m *Manager) FamilyService() *FamilyService {
+	return m.familyService
+}
+
+// SetFamilyService sets the family billing service.
+func (m *Manager) SetFamilyService(fs *FamilyService) {
+	m.familyService = fs
 }
 
 // IsLocalMode returns true when running in STDIO mode (local process, not remote HTTP).

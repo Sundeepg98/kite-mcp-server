@@ -628,6 +628,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		}
 		kcManager.SetInvitationStore(invStore)
 
+		// Wire family service (extracts family billing logic from manager).
+		famSvc := kc.NewFamilyService(kcManager.UserStore(), kcManager.BillingStore(), invStore)
+		kcManager.SetFamilyService(famSvc)
+
 		// Background cleanup of expired invitations (runs every 6 hours).
 		go func() {
 			ticker := time.NewTicker(6 * time.Hour)

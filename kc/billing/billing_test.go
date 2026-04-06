@@ -2,6 +2,7 @@ package billing
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 )
 
 // newTestStore creates a billing Store backed only by the in-memory map
@@ -204,4 +206,101 @@ func TestTierOrdering(t *testing.T) {
 	assert.Less(t, TierFree, TierPro, "Free should be less than Pro")
 	assert.Less(t, TierPro, TierPremium, "Pro should be less than Premium")
 	assert.Less(t, TierFree, TierPremium, "Free should be less than Premium")
+}
+
+// ---------------------------------------------------------------------------
+// SQLite-backed integration tests
+// ---------------------------------------------------------------------------
+
+// openTestDB creates an in-memory SQLite DB for integration tests.
+func openTestDB(t *testing.T) *alerts.DB {
+	t.Helper()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func TestGetTierForUser_FamilyInheritance(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Admin has Pro subscription
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		MaxUsers:   5,
+	}))
+
+	// Family member has no direct subscription
+	// adminEmailFn simulates the user store lookup
+	adminEmailFn := func(email string) string {
+		if email == "family@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+
+	// Family member inherits Pro
+	assert.Equal(t, TierPro, s.GetTierForUser("family@example.com", adminEmailFn))
+
+	// Admin gets Pro directly
+	assert.Equal(t, TierPro, s.GetTierForUser("admin@example.com", adminEmailFn))
+
+	// Unknown user gets Free
+	assert.Equal(t, TierFree, s.GetTierForUser("nobody@example.com", adminEmailFn))
+
+	// Nil adminEmailFn works (no inheritance)
+	assert.Equal(t, TierFree, s.GetTierForUser("family@example.com", nil))
+}
+
+func TestMaxUsers_Persistence(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
+		MaxUsers:   20,
+	}))
+
+	// Reload from DB
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	sub := s2.GetSubscription("admin@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, 20, sub.MaxUsers)
+	assert.Equal(t, TierPremium, sub.Tier)
+}
+
+func TestGetTierForUser_ExpiredAdmin(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPro,
+		Status:     StatusCanceled,
+		MaxUsers:   5,
+	}))
+
+	adminEmailFn := func(email string) string {
+		if email == "family@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+
+	// Canceled admin = family gets Free
+	assert.Equal(t, TierFree, s.GetTierForUser("family@example.com", adminEmailFn))
 }

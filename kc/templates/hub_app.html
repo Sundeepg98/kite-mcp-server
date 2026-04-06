@@ -437,15 +437,35 @@ document.getElementById('dashLink').addEventListener('click', function(e) {
 // --- Fullscreen button ---
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.dropdown-open').forEach(function(el) { el.classList.remove('dropdown-open'); });
+  }
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) {
+    location.reload();
+  }
+});
+
 // --- Init ---
 (async function() {
   AppBridge.init().catch(function() {});
 
-  var data = window.__DATA__;
-  if (data && data.error) showEmpty(data.error);
-  else if (data) renderHub(data);
-  else if (data === null) showEmpty('Not authenticated \u2014 please log in via your MCP client');
-  else showEmpty('No hub data available');
+  try {
+    var data = window.__DATA__;
+    if (data && data.error) showEmpty(data.error);
+    else if (data) renderHub(data);
+    else if (data === null) showEmpty('Not authenticated \u2014 please log in via your MCP client');
+    else showEmpty('No hub data available');
+  } catch(e) {
+    var app = document.querySelector('.content') || document.getElementById('app') || document.body;
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'padding:40px;text-align:center;color:var(--red,#f87171);font-size:13px;';
+    errDiv.textContent = 'Widget error: ' + (e.message || 'Unknown error');
+    app.textContent = '';
+    app.appendChild(errDiv);
+    if (typeof AppBridge !== 'undefined') AppBridge.notifySize();
+  }
 
   requestAnimationFrame(function() { AppBridge.notifySize(); });
 

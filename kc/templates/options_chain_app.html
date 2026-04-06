@@ -740,10 +740,28 @@ document.getElementById('dashLink').addEventListener('click', function(e) {
   AppBridge.openLink(baseUrl + '/dashboard/options');
 });
 
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.dropdown-open').forEach(function(el) { el.classList.remove('dropdown-open'); });
+  }
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) {
+    location.reload();
+  }
+});
+
 // --- Init ---
 (async function() {
   AppBridge.init().catch(function() {});
-  showIdle();
+  try { showIdle(); } catch(e) {
+    var app = document.querySelector('.content') || document.getElementById('app') || document.body;
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'padding:40px;text-align:center;color:var(--red,#f87171);font-size:13px;';
+    errDiv.textContent = 'Widget error: ' + (e.message || 'Unknown error');
+    app.textContent = '';
+    app.appendChild(errDiv);
+    if (typeof AppBridge !== 'undefined') AppBridge.notifySize();
+  }
   requestAnimationFrame(function() { AppBridge.notifySize(); });
 
   if (typeof ResizeObserver !== 'undefined') {
