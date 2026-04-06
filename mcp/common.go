@@ -140,6 +140,14 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to establish a session: %s", err.Error())), nil
 	}
 
+	// DEV_MODE: mock broker session — skip all token/auth checks.
+	// Tools that access session.Kite.Client directly will panic on nil;
+	// the deferred recover translates that into a user-friendly error.
+	if kiteSession.Kite == nil {
+		h.manager.Logger.Debug("DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
+		return h.callWithNilKiteGuard(toolName, kiteSession, fn)
+	}
+
 	if isNew {
 		// Check if a cached token was applied (per-email cache hit)
 		if email != "" && h.manager.HasCachedToken(email) {
@@ -171,6 +179,20 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 
 	h.manager.Logger.Debug("Session validated successfully", "tool", toolName, "session_id", sessionID)
 	return fn(kiteSession)
+}
+
+// callWithNilKiteGuard runs the tool handler fn with a deferred recover.
+// In DEV_MODE session.Kite is nil, so any tool that dereferences session.Kite.Client
+// will panic.  The recover catches this and returns a descriptive error instead.
+func (h *ToolHandler) callWithNilKiteGuard(toolName string, session *kc.KiteSessionData, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (result *mcp.CallToolResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			h.manager.Logger.Warn("DEV_MODE: tool panicked (likely accessed session.Kite.Client)", "tool", toolName, "panic", r)
+			result = mcp.NewToolResultError(fmt.Sprintf("This tool (%s) requires a real Kite connection and is not available in DEV_MODE. Disable DEV_MODE to use it.", toolName))
+			err = nil
+		}
+	}()
+	return fn(session)
 }
 
 // MarshalResponse marshals data to JSON and returns an MCP text result

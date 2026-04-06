@@ -47,6 +47,7 @@ type Config struct {
 	ExternalURL        string                    // optional - e.g. "https://kite-mcp-server.fly.dev"
 	AdminSecretPath    string                    // optional - admin endpoint secret for ops dashboard URL
 	EncryptionSecret   string                    // optional - secret for encrypting credentials at rest (typically OAUTH_JWT_SECRET)
+	DevMode            bool                      // optional - use mock broker, no real Kite login required
 }
 
 // New creates a new kc Manager with the given configuration
@@ -83,6 +84,7 @@ func New(cfg Config) (*Manager, error) {
 		appMode:         cfg.AppMode,
 		externalURL:     cfg.ExternalURL,
 		adminSecretPath: cfg.AdminSecretPath,
+		devMode:         cfg.DevMode,
 		tokenStore:      NewKiteTokenStore(),
 		credentialStore: NewKiteCredentialStore(),
 	}
@@ -337,6 +339,7 @@ func New(cfg Config) (*Manager, error) {
 		SessionSigner: m.sessionSigner,
 		Logger:        cfg.Logger,
 		Metrics:       metricsImpl,
+		DevMode:       cfg.DevMode,
 	})
 	m.sessionSvc.SetSessionManager(m.sessionManager)
 
@@ -446,6 +449,7 @@ type Manager struct {
 	appMode            string
 	externalURL        string
 	adminSecretPath    string
+	devMode            bool
 }
 
 // NewManager creates a new manager with default configuration.
@@ -577,6 +581,11 @@ func (m *Manager) kiteSessionCleanupHook(session *MCPSession) {
 // Delegates to CredentialService.
 func (m *Manager) HasPreAuth() bool {
 	return m.credentialSvc.HasPreAuth()
+}
+
+// DevMode returns true if the server is running in development mode with mock broker.
+func (m *Manager) DevMode() bool {
+	return m.devMode
 }
 
 // HasCachedToken returns true if there's a cached Kite token for the given email.

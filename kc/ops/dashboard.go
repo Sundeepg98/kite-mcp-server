@@ -465,6 +465,7 @@ type statusResponse struct {
 	Email       string           `json:"email"`
 	Role        string           `json:"role,omitempty"`
 	IsAdmin     bool             `json:"is_admin"`
+	DevMode     bool             `json:"dev_mode,omitempty"`
 	KiteToken   tokenStatus      `json:"kite_token"`
 	Credentials credentialStatus `json:"credentials"`
 	Ticker      tickerStatus     `json:"ticker"`
@@ -682,7 +683,8 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := statusResponse{
-		Email: email,
+		Email:   email,
+		DevMode: d.manager.DevMode(),
 	}
 
 	// Determine role and admin status

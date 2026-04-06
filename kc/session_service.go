@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/broker/mock"
 	zerodha "github.com/zerodha/kite-mcp-server/broker/zerodha"
 )
 
@@ -25,6 +26,7 @@ type SessionService struct {
 	auditStore     AuditStoreInterface  // optional: for synthetic events
 	logger         *slog.Logger
 	metrics        metricsTracker       // thin interface to avoid importing metrics package
+	devMode        bool                 // when true, inject mock broker instead of real Kite client
 }
 
 // metricsTracker is a minimal interface for metrics tracking within session service.
@@ -41,6 +43,7 @@ type SessionServiceConfig struct {
 	AuditStore    AuditStoreInterface
 	Logger        *slog.Logger
 	Metrics       metricsTracker
+	DevMode       bool
 }
 
 // NewSessionService creates a new SessionService.
@@ -53,6 +56,7 @@ func NewSessionService(cfg SessionServiceConfig) *SessionService {
 		auditStore:    cfg.AuditStore,
 		logger:        cfg.Logger,
 		metrics:       cfg.Metrics,
+		devMode:       cfg.DevMode,
 	}
 	return ss
 }
@@ -82,8 +86,23 @@ func (ss *SessionService) SetAuditStore(store AuditStoreInterface) {
 
 // createKiteSessionData creates new KiteSessionData for a session.
 // If email is provided and a cached token exists, it is applied automatically.
+// In DevMode, a mock broker is injected and no real Kite client is created.
 func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSessionData {
 	ss.logger.Debug("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
+
+	// DEV_MODE: use mock broker — no real Kite login required.
+	if ss.devMode {
+		mockClient := mock.NewDemoClient()
+		if email == "" {
+			email = "demo@kitemcp.dev"
+		}
+		ss.logger.Info("DEV_MODE: created mock broker session", "session_id", sessionID, "email", email)
+		return &KiteSessionData{
+			Kite:   nil,
+			Broker: mockClient,
+			Email:  email,
+		}
+	}
 
 	apiKey := ss.credentialSvc.GetAPIKeyForEmail(email)
 
@@ -160,8 +179,9 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 		return nil, false, err
 	}
 
-	// Restore Kite client for sessions loaded from DB (Data.Kite is nil after restart)
-	if kiteData.Kite == nil {
+	// Restore Kite client for sessions loaded from DB (Data.Kite is nil after restart).
+	// In DEV_MODE, Kite is intentionally nil (mock broker) — skip restoration.
+	if kiteData.Kite == nil && !ss.devMode {
 		resolvedEmail := email
 		if resolvedEmail == "" {
 			resolvedEmail = kiteData.Email
@@ -290,7 +310,12 @@ func (ss *SessionService) ClearSessionData(sessionID string) error {
 }
 
 // SessionLoginURL returns the Kite login URL for the given session.
+// Returns an error in DEV_MODE since there is no real Kite client to generate a login URL.
 func (ss *SessionService) SessionLoginURL(mcpSessionID string) (string, error) {
+	if ss.devMode {
+		return "", fmt.Errorf("login is not required in DEV_MODE — mock broker is active")
+	}
+
 	if err := validateSessionID(mcpSessionID); err != nil {
 		ss.logger.Warn("SessionLoginURL called with empty MCP session ID")
 		return "", err

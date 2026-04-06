@@ -128,6 +128,14 @@
     {{template "user_market_bar" .Market}}
   </div>
 
+  {{if .DevMode}}
+  <div style="background:#1a1a2e;border:2px solid #e2b340;border-radius:8px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+    <span style="font-size:18px">&#9888;&#65039;</span>
+    <span style="color:#e2b340;font-weight:600;font-size:14px">Development Mode &mdash; Mock Data</span>
+    <span style="color:var(--text-2);font-size:12px;margin-left:auto">Portfolio, orders, and prices are simulated. Set <code style="background:var(--bg-2);padding:2px 6px;border-radius:3px;font-size:11px">DEV_MODE=false</code> for real data.</span>
+  </div>
+  {{end}}
+
   {{if and .Expired .HasKiteCredentials}}
   <div class="auth-banner" id="authBanner">
     <div class="auth-banner-row">

@@ -35,6 +35,7 @@ type PortfolioPageData struct {
 	Credentials        credentialStatus
 	Expired            bool // true when kite token is expired
 	HasKiteCredentials bool // true when user has stored Kite API credentials
+	DevMode            bool // true when server is running with mock broker
 }
 
 // ActivityPageData is the top-level data for the activity page template.
@@ -185,6 +186,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 		TokenValid: tokenValid,
 		UpdatedAt:  nowTimestamp(),
 		Expired:    !tokenValid,
+		DevMode:    d.manager.DevMode(),
 	}
 
 	// Fetch status for stat cards

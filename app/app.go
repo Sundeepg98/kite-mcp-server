@@ -186,10 +186,13 @@ func (app *App) LoadConfig() error {
 	}
 
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
-		if app.Config.OAuthJWTSecret == "" {
+		if app.DevMode {
+			app.logger.Info("DEV_MODE: Kite credentials not required — mock broker will be used")
+		} else if app.Config.OAuthJWTSecret == "" {
 			return fmt.Errorf("KITE_API_KEY and KITE_API_SECRET are required (or enable OAuth with OAUTH_JWT_SECRET for per-user credentials)")
+		} else {
+			app.logger.Info("No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
 		}
-		app.logger.Info("No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
 	}
 
 	// EXTERNAL_URL is required when OAuth is enabled (multi-user mode).
@@ -326,6 +329,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		ExternalURL:      app.Config.ExternalURL,
 		AdminSecretPath:  app.Config.AdminSecretPath,
 		EncryptionSecret: app.Config.OAuthJWTSecret,
+		DevMode:          app.DevMode,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -1019,7 +1023,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		}
 		w.Header().Set("Content-Type", "image/svg+xml")
 		w.Header().Set("Cache-Control", "public, max-age=604800")
-		w.Write(data)
+		_, _ = w.Write(data)
 	})
 
 	// robots.txt — allow landing and legal pages, block everything else.
