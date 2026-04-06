@@ -90,7 +90,7 @@ const pricingPageHTML = `<!DOCTYPE html>
 body{font-family:system-ui;background:#0a0c10;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 20px}
 h1{font-size:2rem;margin-bottom:8px}
 .subtitle{color:#94a3b8;margin-bottom:48px;font-size:1.1rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:960px;width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;max-width:960px;width:100%}
 .card{border:1px solid #1e293b;border-radius:12px;padding:32px 24px;text-align:center}
 .card.featured{border-color:#22d3ee;background:rgba(34,211,238,0.04)}
 .tier{font-size:1.3rem;font-weight:700;margin-bottom:8px}
@@ -117,8 +117,15 @@ li:before{content:"✓ ";color:#34d399;font-weight:700}
 <ul><li>Read-only market data</li><li>Paper trading</li><li>Watchlists</li><li>Basic portfolio view</li></ul>
 <a class="btn btn-pay" onclick="checkout('free')">Get Started</a>
 </div>
-<div class="card featured" data-plan="pro">
-<div class="tier">Pro</div>
+<div class="card featured" data-plan="solo_pro">
+<div class="tier">Solo Pro</div>
+<div class="price">₹199<span>/mo</span></div>
+<div class="period">1 user, full trading</div>
+<ul><li>Live order execution</li><li>GTT orders</li><li>Price alerts + Telegram</li><li>Trailing stops</li><li>Advanced analytics</li></ul>
+<a class="btn btn-pay" onclick="checkout('solo_pro')">Get Started</a>
+</div>
+<div class="card" data-plan="pro">
+<div class="tier">Family Pro</div>
 <div class="price">₹349<span>/mo</span></div>
 <div class="period">Up to 5 family members</div>
 <ul><li>Live order execution</li><li>GTT orders</li><li>Price alerts + Telegram</li><li>Trailing stops</li><li>Advanced analytics</li></ul>

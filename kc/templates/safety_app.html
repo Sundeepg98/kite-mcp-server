@@ -86,7 +86,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 </div>
 
 <div class="content">
-  <div id="freezeBar" class="freeze-bar disabled">
+  <div id="freezeBar" class="freeze-bar disabled" role="alert" aria-label="Trading status">
     <span class="loading">Loading...</span>
   </div>
   <div class="gauge-grid" id="gaugeGrid"></div>
@@ -284,6 +284,8 @@ const AppBridge = (() => {
     ];
     gauges.forEach(function(g) {
       var card = el('div', 'gauge');
+      card.setAttribute('role', 'status');
+      card.setAttribute('aria-label', g.label);
       card.appendChild(el('div', 'gauge-label', g.label));
       card.appendChild(el('div', 'gauge-val', g.fmt(g.cur) + ' / ' + g.fmt(g.max)));
       var pct = g.max > 0 ? Math.min(100, (g.cur / g.max) * 100) : 0;

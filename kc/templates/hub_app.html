@@ -121,7 +121,7 @@ html.fullscreen .summary-value { font-size: 20px; }
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
-// AppBridge - minimal JSON-RPC over postMessage
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -145,7 +145,6 @@ const AppBridge = (() => {
         return;
       }
 
-      // Handle incoming requests from host
       if (msg.method === 'ping' && msg.id != null) {
         window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
         return;
@@ -179,7 +178,7 @@ const AppBridge = (() => {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
       protocolVersion: '2026-01-26',
-      appInfo: { name: 'Kite Hub', version: '1.0.0' },
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
       appCapabilities: {},
     });
     hostContext = result.hostContext || null;
@@ -215,6 +214,14 @@ const AppBridge = (() => {
       method: 'ui/notifications/size-changed',
       params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
     }, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
   }
 
   async function sendMessage(text) {
@@ -297,6 +304,8 @@ function renderHub(data) {
   ];
   for (const item of statsItems) {
     const card = el('div', 'summary-card');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', item.label);
     card.appendChild(el('div', 'summary-label', item.label));
     const valDiv = el('div', 'summary-value', item.value);
     if (item.label === 'Paper Trading') {
@@ -321,6 +330,8 @@ function renderHub(data) {
   ];
   for (const action of actions) {
     const card = el('div', 'action-card');
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', action.label);
     card.appendChild(el('div', 'action-icon', action.icon));
     card.appendChild(el('div', 'action-label', action.label));
     card.addEventListener('click', () => AppBridge.sendMessage(action.message));

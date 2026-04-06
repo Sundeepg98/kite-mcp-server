@@ -94,6 +94,7 @@ td.sym { font-weight: 600; color: var(--text-0); }
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -121,10 +122,12 @@ const AppBridge = (() => {
         window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
         return;
       }
+
       if (msg.method === 'ui/resource-teardown' && msg.id != null) {
         window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
         return;
       }
+
       if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
         hostContext = Object.assign({}, hostContext, msg.params);
         applyHostTheme(hostContext);
@@ -148,7 +151,7 @@ const AppBridge = (() => {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
       protocolVersion: '2026-01-26',
-      appInfo: { name: 'Kite Paper Trading', version: '1.0.0' },
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
       appCapabilities: {},
     });
     hostContext = result.hostContext || null;
@@ -184,6 +187,14 @@ const AppBridge = (() => {
       method: 'ui/notifications/size-changed',
       params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
     }, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
   }
 
   async function sendMessage(text) {
@@ -299,6 +310,8 @@ function renderPaper(data) {
   ];
   for (const item of summaryItems) {
     const card = el('div', 'summary-card');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', item.label);
     card.appendChild(el('div', 'summary-label', item.label));
     card.appendChild(el('div', 'summary-value' + (item.cls ? ' ' + item.cls : ''), item.value));
     summaryGrid.appendChild(card);
@@ -311,6 +324,8 @@ function renderPaper(data) {
     holdSection.appendChild(el('div', 'section-header', 'Top Holdings'));
     const wrap = el('div', 'tbl-wrap');
     const table = document.createElement('table');
+    table.setAttribute('role', 'table');
+    table.setAttribute('aria-label', 'Paper positions');
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
     for (const [text, cls] of [['Symbol',''], ['Qty','r'], ['LTP','r'], ['P&L','r']]) {

@@ -130,7 +130,6 @@ html.fullscreen th { font-size: 11px; padding: 8px 12px; }
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
-// AppBridge - minimal JSON-RPC over postMessage
 // AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
@@ -344,6 +343,8 @@ function renderPortfolio(data) {
   ];
   for (const item of summaryItems) {
     const card = el('div', 'summary-card');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', item.label);
     card.appendChild(el('div', 'summary-label', item.label));
     const valDiv = el('div', 'summary-value' + (item.cls ? ' ' + item.cls : ''), item.value);
     card.appendChild(valDiv);
@@ -358,6 +359,8 @@ function renderPortfolio(data) {
     let totalHPnl = 0;
     const wrap = el('div', 'tbl-wrap');
     const table = document.createElement('table');
+    table.setAttribute('role', 'table');
+    table.setAttribute('aria-label', 'Holdings');
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
     const hCols = [['Symbol',''], ['Qty','r'], ['Avg','r'], ['LTP','r'], ['P&L','r'], ['Day %','r']];
@@ -459,6 +462,8 @@ function renderPortfolio(data) {
     posSection.appendChild(el('div', 'section-header', 'Positions'));
     const posWrap = el('div', 'tbl-wrap');
     const posTable = document.createElement('table');
+    posTable.setAttribute('role', 'table');
+    posTable.setAttribute('aria-label', 'Positions');
     const posThead = document.createElement('thead');
     const posHeadRow = document.createElement('tr');
     const pCols = [['Symbol',''], ['Product',''], ['Qty','r'], ['Avg','r'], ['LTP','r'], ['P&L','r']];

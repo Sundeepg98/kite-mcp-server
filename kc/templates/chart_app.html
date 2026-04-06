@@ -145,7 +145,7 @@ html.fullscreen th { font-size: 11px; padding: 8px 12px; }
 </div>
 
 <div class="search-bar">
-  <input class="search-input" id="symbolInput" type="text" placeholder="Symbol (e.g. RELIANCE)" spellcheck="false" autocomplete="off">
+  <input class="search-input" id="symbolInput" type="text" placeholder="Symbol (e.g. RELIANCE)" spellcheck="false" autocomplete="off" aria-label="Search instruments">
   <select class="sel" id="exchangeSel">
     <option value="NSE" selected>NSE</option>
     <option value="BSE">BSE</option>
@@ -532,6 +532,8 @@ function renderAnalysis(symbol, exchange, interval, candles, indicators) {
   for (var si = 0; si < summaryItems.length; si++) {
     var sItem = summaryItems[si];
     var card = el('div', 'summary-card');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', sItem.label);
     card.appendChild(el('div', 'summary-label', sItem.label));
     card.appendChild(el('div', 'summary-value' + (sItem.cls ? ' ' + sItem.cls : ''), sItem.value));
     summaryGrid.appendChild(card);
@@ -637,6 +639,8 @@ function renderAnalysis(symbol, exchange, interval, candles, indicators) {
 
     var wrap = el('div', 'tbl-wrap');
     var table = document.createElement('table');
+    table.setAttribute('role', 'table');
+    table.setAttribute('aria-label', 'OHLC data');
     var thead = document.createElement('thead');
     var headRow = document.createElement('tr');
     var hCols = [['Date',''], ['Open','r'], ['High','r'], ['Low','r'], ['Close','r'], ['Volume','r'], ['Chg %','r']];

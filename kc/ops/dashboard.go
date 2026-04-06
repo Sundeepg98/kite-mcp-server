@@ -269,6 +269,7 @@ func (d *DashboardHandler) serveBillingPage(w http.ResponseWriter, r *http.Reque
 	}
 	if hasStripe {
 		fmt.Fprint(w, `<a href="/stripe-portal" class="btn btn-secondary">Manage in Stripe</a>
+<p style="font-size:12px;color:var(--text-2);margin-top:8px;">View billing history, invoices, and update payment methods in the Stripe portal.</p>
 `)
 	}
 	fmt.Fprint(w, `</div>

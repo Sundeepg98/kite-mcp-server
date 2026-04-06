@@ -349,6 +349,8 @@ function render() {
 
   function makeStat(label, value, cls, sub) {
     const card = el('div', 'stat');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', label);
     card.appendChild(el('div', 'stat-label', label));
     const val = el('div', 'stat-value' + (cls ? ' ' + cls : ''), value);
     card.appendChild(val);
@@ -374,6 +376,8 @@ function render() {
   } else {
     const wrap = el('div', 'table-wrap');
     const tbl = document.createElement('table');
+    tbl.setAttribute('role', 'table');
+    tbl.setAttribute('aria-label', 'Price alerts');
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
     ['Symbol', 'Direction', 'Target', 'Current', 'Distance', 'Created', ''].forEach(function(h, i) {

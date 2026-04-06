@@ -108,7 +108,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <div class="section-title">Tool Usage</div>
   <div class="bar-chart" id="barChart"></div>
   <div class="section-title">Recent Activity</div>
-  <div class="timeline" id="timeline"></div>
+  <div class="timeline" id="timeline" role="log" aria-label="Activity log"></div>
 </div>
 <div class="footer" id="footerBar">
   <span class="footer-ts" id="footerTs"></span>
@@ -304,6 +304,8 @@ function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChil
 
 function makeStat(label, value, cls) {
   const card = el('div', 'stat');
+  card.setAttribute('role', 'status');
+  card.setAttribute('aria-label', label);
   card.appendChild(el('div', 'stat-label', label));
   card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), value));
   return card;

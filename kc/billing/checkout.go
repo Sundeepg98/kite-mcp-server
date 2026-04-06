@@ -28,14 +28,17 @@ func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
 		}
 
 		plan := r.URL.Query().Get("plan")
-		if plan != "pro" && plan != "premium" {
-			http.Error(w, "invalid plan: use ?plan=pro or ?plan=premium", http.StatusBadRequest)
+		if plan != "solo_pro" && plan != "pro" && plan != "premium" {
+			http.Error(w, "invalid plan: use ?plan=solo_pro, ?plan=pro, or ?plan=premium", http.StatusBadRequest)
 			return
 		}
 
 		var priceID string
 		var maxUsers int
 		switch plan {
+		case "solo_pro":
+			priceID = os.Getenv("STRIPE_PRICE_SOLO_PRO")
+			maxUsers = 1
 		case "pro":
 			priceID = os.Getenv("STRIPE_PRICE_PRO")
 			maxUsers = 5

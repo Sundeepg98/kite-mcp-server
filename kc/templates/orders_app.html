@@ -339,6 +339,8 @@ function render() {
 
   function makeStat(label, value, cls, sub) {
     const card = el('div', 'stat');
+    card.setAttribute('role', 'status');
+    card.setAttribute('aria-label', label);
     card.appendChild(el('div', 'stat-label', label));
     card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), String(value)));
     if (sub) card.appendChild(el('div', 'stat-sub', sub));
@@ -364,6 +366,8 @@ function render() {
   } else {
     const wrap = el('div', 'table-wrap');
     const tbl = document.createElement('table');
+    tbl.setAttribute('role', 'table');
+    tbl.setAttribute('aria-label', 'Orders');
 
     // Header
     const thead = document.createElement('thead');

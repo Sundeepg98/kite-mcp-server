@@ -112,11 +112,11 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <div class="form-row">
     <div class="form-group" style="flex:2">
       <label class="form-label" for="symbol">Symbol</label>
-      <input class="form-input" id="symbol" type="text" placeholder="e.g., RELIANCE" spellcheck="false" autocomplete="off">
+      <input class="form-input" id="symbol" type="text" placeholder="e.g., RELIANCE" spellcheck="false" autocomplete="off" aria-label="Symbol">
     </div>
     <div class="form-group" style="flex:1">
       <label class="form-label" for="exchange">Exchange</label>
-      <select class="form-select" id="exchange">
+      <select class="form-select" id="exchange" aria-label="Exchange">
         <option value="NSE" selected>NSE</option>
         <option value="BSE">BSE</option>
         <option value="NFO">NFO</option>
@@ -140,7 +140,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <div class="form-row">
     <div class="form-group">
       <label class="form-label" for="orderType">Order Type</label>
-      <select class="form-select" id="orderType">
+      <select class="form-select" id="orderType" aria-label="Order type">
         <option value="MARKET" selected>MARKET</option>
         <option value="LIMIT">LIMIT</option>
         <option value="SL">SL</option>
@@ -149,7 +149,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
     </div>
     <div class="form-group">
       <label class="form-label" for="product">Product</label>
-      <select class="form-select" id="product">
+      <select class="form-select" id="product" aria-label="Product type">
         <option value="CNC" selected>CNC</option>
         <option value="MIS">MIS</option>
         <option value="NRML">NRML</option>
@@ -161,20 +161,20 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
   <div class="form-row">
     <div class="form-group">
       <label class="form-label" for="qty">Quantity</label>
-      <input class="form-input mono" id="qty" type="number" min="1" step="1" placeholder="0">
+      <input class="form-input mono" id="qty" type="number" min="1" step="1" placeholder="0" aria-label="Quantity">
     </div>
     <div class="form-group hidden" id="priceGroup">
       <label class="form-label" for="price">Price</label>
-      <input class="form-input mono" id="price" type="number" min="0" step="0.05" placeholder="0.00">
+      <input class="form-input mono" id="price" type="number" min="0" step="0.05" placeholder="0.00" aria-label="Price">
     </div>
     <div class="form-group hidden" id="triggerGroup">
       <label class="form-label" for="triggerPrice">Trigger Price</label>
-      <input class="form-input mono" id="triggerPrice" type="number" min="0" step="0.05" placeholder="0.00">
+      <input class="form-input mono" id="triggerPrice" type="number" min="0" step="0.05" placeholder="0.00" aria-label="Trigger price">
     </div>
   </div>
 
   <!-- Place Order button -->
-  <button class="place-btn buy-theme" id="placeBtn" type="button" disabled>Place Order</button>
+  <button class="place-btn buy-theme" id="placeBtn" type="button" disabled aria-label="Place order">Place Order</button>
 </div>
 
 <div class="result-area hidden" id="resultArea">
@@ -183,7 +183,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
-// AppBridge - minimal JSON-RPC over postMessage
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -240,7 +240,7 @@ const AppBridge = (() => {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
       protocolVersion: '2026-01-26',
-      appInfo: { name: 'Kite Order Form', version: '1.0.0' },
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
       appCapabilities: {},
     });
     hostContext = result.hostContext || null;
@@ -276,6 +276,14 @@ const AppBridge = (() => {
       method: 'ui/notifications/size-changed',
       params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
     }, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
   }
 
   async function sendMessage(text) {
