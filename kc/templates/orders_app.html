@@ -109,6 +109,7 @@ tr:hover td { background: var(--bg-2); }
 
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -119,7 +120,9 @@ const AppBridge = (() => {
     window.addEventListener('message', (event) => {
       if (event.source !== window.parent) return;
       let msg;
-      try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch(e) { return; }
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
       if (!msg || msg.jsonrpc !== '2.0') return;
 
       if (msg.id != null && pending.has(msg.id)) {
@@ -130,7 +133,6 @@ const AppBridge = (() => {
         return;
       }
 
-      // Handle incoming requests from host
       if (msg.method === 'ping' && msg.id != null) {
         window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
         return;
@@ -147,15 +149,19 @@ const AppBridge = (() => {
       }
     });
   }
+
   function sendRequest(method, params) {
     if (!isIframe) return Promise.reject(new Error('Not in iframe'));
     return new Promise((resolve, reject) => {
       const id = nextId++;
       pending.set(id, {resolve, reject});
       window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
-      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); } }, 30000);
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
     });
   }
+
   async function init() {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
@@ -168,28 +174,36 @@ const AppBridge = (() => {
     window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
     return result;
   }
+
   async function callServerTool(name, args) {
     const result = await sendRequest('tools/call', { name, arguments: args || {} });
     if (result && result.content && result.content[0] && result.content[0].text) {
-      try { return JSON.parse(result.content[0].text); } catch(e) {} return result.content[0].text;
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
     }
     return result;
   }
+
   function openLink(url) {
     if (!isIframe) { window.open(url, '_blank'); return; }
-    sendRequest('ui/open-link', { url }).catch(() => { window.open(url, '_blank'); });
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
   }
+
   function applyHostTheme(ctx) {
     if (!ctx) return;
     if (ctx.theme === 'light') document.documentElement.classList.add('light');
     else document.documentElement.classList.remove('light');
   }
+
   function notifySize() {
     if (!isIframe) return;
-    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }}, '*');
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
   }
 
-  // ResizeObserver for automatic size notifications
   if (typeof ResizeObserver !== 'undefined') {
     let resizeTimer;
     new ResizeObserver(() => {

@@ -620,6 +620,19 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Error("Failed to load invitations from DB", "error", err)
 		}
 		kcManager.SetInvitationStore(invStore)
+
+		// Background cleanup of expired invitations (runs every 6 hours).
+		go func() {
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if is := kcManager.InvitationStore(); is != nil {
+					if n := is.CleanupExpired(); n > 0 {
+						app.logger.Info("Cleaned up expired invitations", "count", n)
+					}
+				}
+			}
+		}()
 	}
 
 	// Paper trading middleware intercepts order tools when the user has paper mode enabled.

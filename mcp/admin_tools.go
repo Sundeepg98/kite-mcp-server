@@ -31,6 +31,19 @@ func adminCheck(ctx context.Context, manager *kc.Manager) (string, *mcp.CallTool
 	return email, nil
 }
 
+// withAdminCheck wraps a tool handler that needs admin access. It calls
+// adminCheck and, on success, passes the admin email to the inner handler.
+// Use for new admin tools to avoid repeating the adminCheck boilerplate.
+func withAdminCheck(manager *kc.Manager, handler func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		adminEmail, errResult := adminCheck(ctx, manager)
+		if errResult != nil {
+			return errResult, nil
+		}
+		return handler(ctx, adminEmail, request)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tool 1: admin_list_users (read-only)
 // ─────────────────────────────────────────────────────────────────────────────

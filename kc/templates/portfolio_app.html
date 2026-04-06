@@ -131,6 +131,7 @@ html.fullscreen th { font-size: 11px; padding: 8px 12px; }
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
 // AppBridge - minimal JSON-RPC over postMessage
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -154,7 +155,6 @@ const AppBridge = (() => {
         return;
       }
 
-      // Handle incoming requests from host
       if (msg.method === 'ping' && msg.id != null) {
         window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
         return;
@@ -188,7 +188,7 @@ const AppBridge = (() => {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
       protocolVersion: '2026-01-26',
-      appInfo: { name: 'Kite Portfolio', version: '1.0.0' },
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
       appCapabilities: {},
     });
     hostContext = result.hostContext || null;
@@ -224,6 +224,14 @@ const AppBridge = (() => {
       method: 'ui/notifications/size-changed',
       params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
     }, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
   }
 
   async function sendMessage(text) {

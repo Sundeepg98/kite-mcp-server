@@ -11,7 +11,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // --- Server Metrics Tool ---
@@ -82,15 +81,8 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "server_metrics")
 
-		// Admin check: require authenticated email with admin role.
-		email := oauth.EmailFromContext(ctx)
-		if email == "" {
-			return mcp.NewToolResultError("Authentication required. Please log in first."), nil
-		}
-		if uStore := manager.UserStore(); uStore != nil {
-			if !uStore.IsAdmin(email) {
-				return mcp.NewToolResultError("Admin access required. This tool is restricted to server administrators."), nil
-			}
+		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+			return errResult, nil
 		}
 
 		// Parse period.

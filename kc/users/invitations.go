@@ -159,3 +159,22 @@ func (s *InvitationStore) Revoke(id string) error {
 	}
 	return nil
 }
+
+// CleanupExpired marks all pending invitations past their expiry as expired.
+// Call periodically (e.g., daily).
+func (s *InvitationStore) CleanupExpired() int {
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, inv := range s.invitations {
+		if inv.Status == "pending" && now.After(inv.ExpiresAt) {
+			inv.Status = "expired"
+			count++
+			if s.db != nil {
+				_ = s.db.ExecInsert(`UPDATE family_invitations SET status = 'expired' WHERE id = ?`, inv.ID)
+			}
+		}
+	}
+	return count
+}

@@ -158,6 +158,7 @@ html.fullscreen th { font-size: 11px; padding: 8px 10px; }
 <script>window.__DATA__ = "__INJECTED_DATA__";</script>
 <script>
 // AppBridge - minimal JSON-RPC over postMessage
+// AppBridge v1.0 — canonical source: appbridge.js
 const AppBridge = (() => {
   const isIframe = window.parent !== window;
   let nextId = 1;
@@ -214,7 +215,7 @@ const AppBridge = (() => {
     if (!isIframe) return null;
     const result = await sendRequest('ui/initialize', {
       protocolVersion: '2026-01-26',
-      appInfo: { name: 'Kite Options Chain', version: '1.0.0' },
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
       appCapabilities: {},
     });
     hostContext = result.hostContext || null;
@@ -252,11 +253,37 @@ const AppBridge = (() => {
     }, '*');
   }
 
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
   async function requestDisplayMode(mode) {
     return sendRequest('ui/request-display-mode', { mode });
   }
 
-  return { init, callServerTool, openLink, notifySize, requestDisplayMode,
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
     get isIframe() { return isIframe; } };
 })();
 
