@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Kite Hub</title>
+<style>
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.header-link { font-size: 11px; color: var(--text-2); text-decoration: none; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.header-link:hover { color: var(--accent); }
+
+/* Header buttons */
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 13px; cursor: pointer; transition: all 0.12s; line-height: 1; }
+.icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Account card */
+.account-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.account-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--accent); flex-shrink: 0; }
+.account-info { flex: 1; min-width: 0; }
+.account-email { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-status { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.connected { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.status-dot.disconnected { background: var(--red); box-shadow: 0 0 4px var(--red); }
+.status-label { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px; }
+.summary-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.summary-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.summary-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text-0); }
+
+/* Section */
+.section { padding: 0 16px; }
+.section-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+
+/* Quick actions grid */
+.actions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 16px 12px; }
+.action-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; cursor: pointer; transition: all 0.12s; text-align: center; }
+.action-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+.action-icon { font-size: 20px; margin-bottom: 4px; }
+.action-label { font-size: 12px; font-weight: 500; color: var(--text-0); }
+
+/* Settings links */
+.settings-row { display: flex; gap: 8px; padding: 0 16px 12px; }
+.settings-link { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--text-1); cursor: pointer; transition: all 0.12s; text-decoration: none; }
+.settings-link:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Server info */
+.server-info { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-top: 1px solid var(--border); margin-top: 8px; }
+.server-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+/* Badge */
+.badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+
+/* Color utilities */
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.dim-green { background: var(--green-dim); }
+.dim-red { background: var(--red-dim); }
+
+/* Fullscreen mode */
+html.fullscreen body { font-size: 14px; }
+html.fullscreen .summary-value { font-size: 20px; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: 1fr; }
+  .actions-grid { grid-template-columns: 1fr; }
+  .settings-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Hub</span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
+    <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+  </div>
+</div>
+
+<div id="app"></div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge - minimal JSON-RPC over postMessage
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      // Handle incoming requests from host
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Hub', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+// --- DOM helpers ---
+function el(tag, className, textContent) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (textContent != null) e.textContent = String(textContent);
+  return e;
+}
+
+// --- Rendering ---
+function renderHub(data) {
+  const app = document.getElementById('app');
+  app.textContent = '';
+
+  // Account card
+  const accountCard = el('div', 'account-card');
+  const initial = (data.email || '?')[0].toUpperCase();
+  const avatar = el('div', 'account-avatar', initial);
+  accountCard.appendChild(avatar);
+
+  const info = el('div', 'account-info');
+  info.appendChild(el('div', 'account-email', data.email || 'Not authenticated'));
+
+  const statusRow = el('div', 'account-status');
+  const dot = el('span', 'status-dot ' + (data.kite_connected ? 'connected' : 'disconnected'));
+  statusRow.appendChild(dot);
+  statusRow.appendChild(el('span', 'status-label', data.kite_connected ? 'Kite Connected' : 'Kite Disconnected'));
+
+  if (data.credentials_set) {
+    const credBadge = el('span', 'badge dim-green');
+    credBadge.style.color = 'var(--green)';
+    credBadge.textContent = 'Credentials Set';
+    credBadge.style.marginLeft = '6px';
+    statusRow.appendChild(credBadge);
+  } else {
+    const credBadge = el('span', 'badge dim-red');
+    credBadge.style.color = 'var(--red)';
+    credBadge.textContent = 'No Credentials';
+    credBadge.style.marginLeft = '6px';
+    statusRow.appendChild(credBadge);
+  }
+
+  info.appendChild(statusRow);
+  accountCard.appendChild(info);
+  app.appendChild(accountCard);
+
+  // Quick stats row
+  const statsGrid = el('div', 'summary-grid');
+  const statsItems = [
+    { label: 'Tool Calls Today', value: String(data.tool_calls_today != null ? data.tool_calls_today : '--') },
+    { label: 'Active Alerts', value: String(data.active_alerts != null ? data.active_alerts : '--') },
+    { label: 'Paper Trading', value: data.paper_mode ? 'ON' : 'OFF' },
+  ];
+  for (const item of statsItems) {
+    const card = el('div', 'summary-card');
+    card.appendChild(el('div', 'summary-label', item.label));
+    const valDiv = el('div', 'summary-value', item.value);
+    if (item.label === 'Paper Trading') {
+      valDiv.className += data.paper_mode ? ' green' : ' dim';
+    }
+    card.appendChild(valDiv);
+    statsGrid.appendChild(card);
+  }
+  app.appendChild(statsGrid);
+
+  // Quick actions
+  const actionsSection = el('div', 'section');
+  actionsSection.appendChild(el('div', 'section-header', 'Quick Actions'));
+  app.appendChild(actionsSection);
+
+  const actionsGrid = el('div', 'actions-grid');
+  const actions = [
+    { icon: '\uD83D\uDCCA', label: 'Portfolio', message: 'Show my portfolio' },
+    { icon: '\uD83D\uDCCB', label: 'Orders', message: 'Show my orders' },
+    { icon: '\uD83D\uDD14', label: 'Alerts', message: 'Show my alerts' },
+    { icon: '\uD83D\uDED2', label: 'Place Order', message: 'I want to place an order' },
+  ];
+  for (const action of actions) {
+    const card = el('div', 'action-card');
+    card.appendChild(el('div', 'action-icon', action.icon));
+    card.appendChild(el('div', 'action-label', action.label));
+    card.addEventListener('click', () => AppBridge.sendMessage(action.message));
+    actionsGrid.appendChild(card);
+  }
+  app.appendChild(actionsGrid);
+
+  // Settings links
+  const settingsSection = el('div', 'section');
+  settingsSection.appendChild(el('div', 'section-header', 'Settings'));
+  app.appendChild(settingsSection);
+
+  const settingsRow = el('div', 'settings-row');
+  const baseUrl = data.external_url || 'https://kite-mcp-server.fly.dev';
+
+  const manageLink = el('a', 'settings-link');
+  manageLink.textContent = '\u2699 Manage Account';
+  manageLink.addEventListener('click', (e) => { e.preventDefault(); AppBridge.openLink(baseUrl + '/dashboard'); });
+  settingsRow.appendChild(manageLink);
+
+  const billingLink = el('a', 'settings-link');
+  billingLink.textContent = '\uD83D\uDCB3 Billing';
+  billingLink.addEventListener('click', (e) => { e.preventDefault(); AppBridge.openLink(baseUrl + '/dashboard'); });
+  settingsRow.appendChild(billingLink);
+
+  app.appendChild(settingsRow);
+
+  // Server info (fetched from /healthz)
+  const serverInfo = el('div', 'server-info');
+  serverInfo.id = 'serverInfo';
+  serverInfo.appendChild(el('span', 'server-meta', 'Loading server info...'));
+  app.appendChild(serverInfo);
+
+  fetchServerInfo(baseUrl);
+}
+
+function fetchServerInfo(baseUrl) {
+  fetch(baseUrl + '/healthz', { mode: 'cors' })
+    .then(function(r) { return r.json(); })
+    .then(function(info) {
+      var el = document.getElementById('serverInfo');
+      if (!el) return;
+      el.textContent = '';
+      var version = info.version || info.build || 'unknown';
+      var uptime = info.uptime || info.uptime_seconds || '--';
+      if (typeof uptime === 'number') {
+        var h = Math.floor(uptime / 3600);
+        var m = Math.floor((uptime % 3600) / 60);
+        uptime = h + 'h ' + m + 'm';
+      }
+      var meta = document.createElement('span');
+      meta.className = 'server-meta';
+      meta.textContent = 'v' + version + ' \u00B7 uptime ' + uptime;
+      el.appendChild(meta);
+
+      var dot = document.createElement('span');
+      dot.className = 'status-dot connected';
+      dot.title = 'Server online';
+      el.appendChild(dot);
+    })
+    .catch(function() {
+      var el = document.getElementById('serverInfo');
+      if (!el) return;
+      el.textContent = '';
+      var meta = document.createElement('span');
+      meta.className = 'server-meta';
+      meta.textContent = 'Server unreachable';
+      el.appendChild(meta);
+
+      var dot = document.createElement('span');
+      dot.className = 'status-dot disconnected';
+      dot.title = 'Server offline';
+      el.appendChild(dot);
+    });
+}
+
+function showEmpty(msg) {
+  var app = document.getElementById('app');
+  app.textContent = '';
+  var div = document.createElement('div');
+  div.className = 'empty-state';
+  div.style.cssText = 'text-align:center;padding:24px 16px;color:var(--text-2);font-size:12px;';
+  div.textContent = msg;
+  app.appendChild(div);
+}
+
+// --- Fullscreen toggle ---
+async function toggleFullscreen() {
+  var current = document.documentElement.classList.contains('fullscreen');
+  var result = await AppBridge.requestDisplayMode(current ? 'inline' : 'fullscreen');
+  if (result && result.granted !== false) {
+    document.documentElement.classList.toggle('fullscreen');
+  }
+}
+
+// --- Dashboard link ---
+document.getElementById('dashLink').addEventListener('click', function(e) {
+  e.preventDefault();
+  var baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
+  AppBridge.openLink(baseUrl + '/dashboard');
+});
+
+// --- Fullscreen button ---
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+// --- Init ---
+(async function() {
+  AppBridge.init().catch(function() {});
+
+  var data = window.__DATA__;
+  if (data && data.error) showEmpty(data.error);
+  else if (data) renderHub(data);
+  else if (data === null) showEmpty('Not authenticated \u2014 please log in via your MCP client');
+  else showEmpty('No hub data available');
+
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+
+  // Observe body resizes and notify host
+  if (typeof ResizeObserver !== 'undefined') {
+    var resizeTimer;
+    new ResizeObserver(function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() { AppBridge.notifySize(); }, 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>

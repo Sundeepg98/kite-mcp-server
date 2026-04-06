@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"math"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -73,6 +76,16 @@ var appResources = []appResource{
 		TemplateFile: "order_form_app.html",
 		DataFunc:     orderFormData,
 	},
+	{
+		URI: "ui://kite-mcp/watchlist", Name: "Watchlist Widget",
+		TemplateFile: "watchlist_app.html",
+		DataFunc:     watchlistData,
+	},
+	{
+		URI: "ui://kite-mcp/hub", Name: "Hub Widget",
+		TemplateFile: "hub_app.html",
+		DataFunc:     hubData,
+	},
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
@@ -84,6 +97,8 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/paper":    "ui://kite-mcp/paper",
 	"/dashboard/safety":      "ui://kite-mcp/safety",
 	"/dashboard/order-form": "ui://kite-mcp/order-form",
+	"/dashboard/watchlist":  "ui://kite-mcp/watchlist",
+	"/dashboard/hub":       "ui://kite-mcp/hub",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
@@ -557,6 +572,166 @@ func orderFormData(manager *kc.Manager, _ *audit.Store, email string) any {
 	}
 	return map[string]any{
 		"paper_mode": paperMode,
+	}
+}
+
+// watchlistData fetches all watchlists with items and LTP for the watchlist widget.
+func watchlistData(manager *kc.Manager, _ *audit.Store, email string) any {
+	store := manager.WatchlistStore()
+	if store == nil {
+		return nil
+	}
+
+	watchlists := store.ListWatchlists(email)
+	if len(watchlists) == 0 {
+		return map[string]any{"watchlists": []any{}, "total_count": 0}
+	}
+
+	// Sort by sort_order for consistent tab order.
+	sort.Slice(watchlists, func(i, j int) bool {
+		return watchlists[i].SortOrder < watchlists[j].SortOrder
+	})
+
+	// Collect all instruments across all watchlists for batch LTP.
+	type itemWithLTP struct {
+		Exchange        string  `json:"exchange"`
+		Tradingsymbol   string  `json:"tradingsymbol"`
+		Notes           string  `json:"notes,omitempty"`
+		TargetEntry     float64 `json:"target_entry,omitempty"`
+		TargetExit      float64 `json:"target_exit,omitempty"`
+		LTP             float64 `json:"ltp,omitempty"`
+		DistanceEntryPct float64 `json:"distance_entry_pct,omitempty"`
+		DistanceExitPct  float64 `json:"distance_exit_pct,omitempty"`
+		NearTarget      bool    `json:"near_target,omitempty"`
+	}
+
+	// Build per-watchlist item lists and collect instrument IDs.
+	type wlEntry struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Items []itemWithLTP `json:"items"`
+	}
+
+	entries := make([]wlEntry, 0, len(watchlists))
+	var allInstruments []string
+	instrumentSet := make(map[string]bool)
+
+	for _, wl := range watchlists {
+		items := store.GetItems(wl.ID)
+		entry := wlEntry{ID: wl.ID, Name: wl.Name, Items: make([]itemWithLTP, 0, len(items))}
+		for _, item := range items {
+			entry.Items = append(entry.Items, itemWithLTP{
+				Exchange:      item.Exchange,
+				Tradingsymbol: item.Tradingsymbol,
+				Notes:         item.Notes,
+				TargetEntry:   item.TargetEntry,
+				TargetExit:    item.TargetExit,
+			})
+			inst := item.Exchange + ":" + item.Tradingsymbol
+			if !instrumentSet[inst] {
+				instrumentSet[inst] = true
+				allInstruments = append(allInstruments, inst)
+			}
+		}
+		entries = append(entries, entry)
+	}
+
+	// Batch LTP fetch (max 50 per call, same pattern as alertsData).
+	ltpMap := make(map[string]float64)
+	client := kiteClientForEmail(manager, email)
+	if client != nil && len(allInstruments) > 0 {
+		const batchSize = 50
+		for i := 0; i < len(allInstruments); i += batchSize {
+			end := i + batchSize
+			if end > len(allInstruments) {
+				end = len(allInstruments)
+			}
+			batch := allInstruments[i:end]
+			if ltps, err := client.GetLTP(batch...); err == nil {
+				for k, v := range ltps {
+					ltpMap[k] = v.LastPrice
+				}
+			}
+		}
+	}
+
+	// Enrich items with LTP and distance calculations.
+	totalCount := 0
+	for ei := range entries {
+		for ii := range entries[ei].Items {
+			item := &entries[ei].Items[ii]
+			inst := item.Exchange + ":" + item.Tradingsymbol
+			if ltp, ok := ltpMap[inst]; ok && ltp > 0 {
+				item.LTP = ltp
+				if item.TargetEntry > 0 {
+					pct := ((ltp - item.TargetEntry) / item.TargetEntry) * 100
+					item.DistanceEntryPct = pct
+					if math.Abs(pct) <= 5.0 {
+						item.NearTarget = true
+					}
+				}
+				if item.TargetExit > 0 {
+					pct := ((ltp - item.TargetExit) / item.TargetExit) * 100
+					item.DistanceExitPct = pct
+					if math.Abs(pct) <= 5.0 {
+						item.NearTarget = true
+					}
+				}
+			}
+			totalCount++
+		}
+	}
+
+	return map[string]any{
+		"watchlists":  entries,
+		"total_count": totalCount,
+	}
+}
+
+// hubData returns account status, quick stats, and external URL for the hub widget.
+func hubData(manager *kc.Manager, auditStore *audit.Store, email string) any {
+	_, hasCreds := manager.CredentialStore().Get(email)
+
+	kiteConnected := false
+	if entry, ok := manager.TokenStore().Get(email); ok {
+		kiteConnected = !kc.IsKiteTokenExpired(entry.StoredAt)
+	}
+
+	paperOn := false
+	if engine := manager.PaperEngine(); engine != nil {
+		paperOn = engine.IsEnabled(email)
+	}
+
+	alertCount := 0
+	if manager.AlertStore() != nil {
+		for _, a := range manager.AlertStore().List(email) {
+			if !a.Triggered {
+				alertCount++
+			}
+		}
+	}
+
+	toolCallsToday := 0
+	if auditStore != nil {
+		since := time.Now().Truncate(24 * time.Hour)
+		if stats, err := auditStore.GetStats(email, since); err == nil {
+			toolCallsToday = stats.TotalCalls
+		}
+	}
+
+	externalURL := manager.ExternalURL()
+	if externalURL == "" {
+		externalURL = "https://kite-mcp-server.fly.dev"
+	}
+
+	return map[string]any{
+		"email":            email,
+		"kite_connected":   kiteConnected,
+		"credentials_set":  hasCreds,
+		"paper_mode":       paperOn,
+		"active_alerts":    alertCount,
+		"tool_calls_today": toolCallsToday,
+		"external_url":     externalURL,
 	}
 }
 

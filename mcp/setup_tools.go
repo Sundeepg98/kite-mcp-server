@@ -72,6 +72,7 @@ var pageRoutes = map[string]string{
 	"alerts":    "/dashboard/alerts",
 	"paper":     "/dashboard/paper",
 	"safety":    "/dashboard/safety",
+	"watchlist": "/dashboard/watchlist",
 }
 
 // toolDashboardPage maps tool names to the dashboard page path that is most
@@ -154,6 +155,14 @@ var toolDashboardPage = map[string]string{
 	// Mutual funds (portfolio page)
 	"get_mf_orders":            "/dashboard",
 	"get_mf_sips":              "/dashboard",
+
+	// Watchlist page
+	"list_watchlists":       "/dashboard/watchlist",
+	"get_watchlist":         "/dashboard/watchlist",
+	"create_watchlist":      "/dashboard/watchlist",
+	"delete_watchlist":      "/dashboard/watchlist",
+	"add_to_watchlist":      "/dashboard/watchlist",
+	"remove_from_watchlist": "/dashboard/watchlist",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,

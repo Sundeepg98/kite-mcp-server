@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Watchlist · Kite MCP</title>
+<style>
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.header-link { font-size: 11px; color: var(--text-2); text-decoration: none; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.header-link:hover { color: var(--accent); }
+
+/* Header buttons */
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 13px; cursor: pointer; transition: all 0.12s; line-height: 1; }
+.icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Tab bar */
+.tab-bar { display: flex; gap: 0; padding: 0 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab { padding: 8px 14px; font-size: 12px; font-weight: 500; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+.tab:hover { color: var(--text-1); background: var(--bg-2); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-count { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-left: 4px; }
+.tab.active .tab-count { color: var(--accent); opacity: 0.7; }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; padding: 0 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); }
+th.r, td.r { text-align: right; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+td.sym { font-weight: 600; color: var(--text-0); }
+
+/* Color utilities */
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.dim-green { background: var(--green-dim); }
+.dim-red { background: var(--red-dim); }
+.dim-amber { background: var(--amber-dim); }
+
+/* Near-target row highlight */
+tr.near-target td { background: var(--amber-dim); }
+tr.near-target:hover td { background: rgba(251,191,36,0.18); }
+
+/* Badge */
+.badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.exchange-badge { color: var(--text-2); background: var(--bg-3); margin-left: 4px; }
+.near-badge { color: var(--amber); background: var(--amber-dim); font-size: 9px; padding: 1px 5px; margin-left: 6px; }
+
+/* Notes column */
+td.notes { font-family: var(--sans); font-size: 11px; color: var(--text-2); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Footer */
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.refresh-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 24px 16px; color: var(--text-2); font-size: 12px; }
+
+/* Fullscreen mode */
+html.fullscreen body { font-size: 14px; }
+html.fullscreen table { font-size: 14px; }
+html.fullscreen td { font-size: 13px; padding: 7px 12px; }
+html.fullscreen th { font-size: 11px; padding: 8px 12px; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .tab { padding: 6px 10px; font-size: 11px; }
+  td.notes { max-width: 80px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Watchlists</span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
+    <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Full Dashboard</a>
+  </div>
+</div>
+
+<div class="tab-bar" id="tabBar"></div>
+<div id="app"></div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge - minimal JSON-RPC over postMessage
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Watchlist', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+// --- INR formatting (Indian numbering: lakhs/crores) ---
+function fmtINR(n, decimals) {
+  if (n == null || isNaN(n) || n === 0) return '--';
+  const d = decimals != null ? decimals : 2;
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  const parts = abs.toFixed(d).split('.');
+  let intPart = parts[0];
+  const decPart = parts[1];
+  if (intPart.length > 3) {
+    const last3 = intPart.slice(-3);
+    let rest = intPart.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest.length > 0) groups.unshift(rest);
+    intPart = groups.join(',') + ',' + last3;
+  }
+  return (neg ? '-' : '') + '\u20B9' + intPart + (decPart ? '.' + decPart : '');
+}
+
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '--';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+
+// --- DOM helpers ---
+function el(tag, className, textContent) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (textContent != null) e.textContent = String(textContent);
+  return e;
+}
+
+function td(text, classes) {
+  const cell = el('td', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+function th(text, classes) {
+  const cell = el('th', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+// --- State ---
+let activeTabId = null;
+let allData = null;
+
+// --- Tab rendering ---
+function renderTabs(data) {
+  const tabBar = document.getElementById('tabBar');
+  tabBar.textContent = '';
+
+  const watchlists = data.watchlists || [];
+  if (watchlists.length === 0) return;
+
+  // Default to first tab if no active or active not found
+  if (!activeTabId || !watchlists.find(function(w) { return w.id === activeTabId; })) {
+    activeTabId = watchlists[0].id;
+  }
+
+  for (var i = 0; i < watchlists.length; i++) {
+    var wl = watchlists[i];
+    var tab = el('div', 'tab' + (wl.id === activeTabId ? ' active' : ''));
+    tab.textContent = wl.name;
+    var countSpan = el('span', 'tab-count', '(' + (wl.items ? wl.items.length : 0) + ')');
+    tab.appendChild(countSpan);
+    tab.dataset.id = wl.id;
+    tab.addEventListener('click', function(e) {
+      var target = e.currentTarget;
+      activeTabId = target.dataset.id;
+      renderTabs(allData);
+      renderActiveWatchlist(allData);
+      requestAnimationFrame(function() { AppBridge.notifySize(); });
+    });
+    tabBar.appendChild(tab);
+  }
+}
+
+// --- Table rendering for active watchlist ---
+function renderActiveWatchlist(data) {
+  var app = document.getElementById('app');
+  app.textContent = '';
+
+  var watchlists = data.watchlists || [];
+  if (watchlists.length === 0) {
+    app.appendChild(el('div', 'empty-state', 'No watchlists yet. Ask the AI to create one.'));
+    renderFooter(app);
+    return;
+  }
+
+  var wl = watchlists.find(function(w) { return w.id === activeTabId; });
+  if (!wl) {
+    app.appendChild(el('div', 'empty-state', 'Watchlist not found.'));
+    renderFooter(app);
+    return;
+  }
+
+  var items = wl.items || [];
+  if (items.length === 0) {
+    app.appendChild(el('div', 'empty-state', 'This watchlist is empty. Ask the AI to add instruments.'));
+    renderFooter(app);
+    return;
+  }
+
+  var wrap = el('div', 'tbl-wrap');
+  var table = document.createElement('table');
+  var thead = document.createElement('thead');
+  var headRow = document.createElement('tr');
+  var cols = [['Symbol',''], ['Notes',''], ['LTP','r'], ['Entry','r'], ['Exit','r'], ['Dist%','r'], ['', '']];
+  for (var c = 0; c < cols.length; c++) {
+    headRow.appendChild(th(cols[c][0], cols[c][1]));
+  }
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var row = document.createElement('tr');
+    if (item.near_target) {
+      row.className = 'near-target';
+    }
+
+    // Symbol + exchange badge
+    var symCell = document.createElement('td');
+    symCell.className = 'sym';
+    symCell.textContent = item.tradingsymbol || '';
+    if (item.exchange) {
+      var exBadge = el('span', 'badge exchange-badge', item.exchange);
+      symCell.appendChild(exBadge);
+    }
+    row.appendChild(symCell);
+
+    // Notes
+    row.appendChild(td(item.notes || '', 'notes'));
+
+    // LTP
+    row.appendChild(td(item.ltp ? fmtINR(item.ltp) : '--', 'r'));
+
+    // Entry Target
+    row.appendChild(td(item.target_entry ? fmtINR(item.target_entry) : '--', 'r'));
+
+    // Exit Target
+    row.appendChild(td(item.target_exit ? fmtINR(item.target_exit) : '--', 'r'));
+
+    // Distance% (closest target)
+    var distText = '--';
+    var distClass = 'r';
+    if (item.distance_entry_pct != null && item.distance_entry_pct !== 0) {
+      distText = fmtPct(item.distance_entry_pct);
+      distClass = 'r';
+    } else if (item.distance_exit_pct != null && item.distance_exit_pct !== 0) {
+      distText = fmtPct(item.distance_exit_pct);
+      distClass = 'r';
+    }
+    row.appendChild(td(distText, distClass));
+
+    // Near badge column
+    var nearCell = document.createElement('td');
+    if (item.near_target) {
+      var nearBadge = el('span', 'near-badge', 'NEAR');
+      nearCell.appendChild(nearBadge);
+    }
+    row.appendChild(nearCell);
+
+    tbody.appendChild(row);
+  }
+
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  app.appendChild(wrap);
+
+  renderFooter(app);
+}
+
+function renderFooter(container) {
+  var now = new Date();
+  var ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    + ' ' + now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  var footer = el('div', 'footer');
+  var tsSpan = el('span', 'footer-ts', 'Last updated ' + ts);
+  tsSpan.id = 'lastTs';
+  footer.appendChild(tsSpan);
+  var refreshBtn = el('button', 'refresh-btn', 'Refresh');
+  refreshBtn.id = 'refreshBtn';
+  refreshBtn.addEventListener('click', refreshData);
+  footer.appendChild(refreshBtn);
+  container.appendChild(footer);
+}
+
+function showEmpty(msg) {
+  var app = document.getElementById('app');
+  app.textContent = '';
+  app.appendChild(el('div', 'empty-state', msg));
+}
+
+// --- Refresh via AppBridge (active tab only) ---
+async function refreshData() {
+  var btn = document.getElementById('refreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+
+  try {
+    if (!activeTabId || !allData) {
+      // No active tab — can't refresh a specific watchlist
+      if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+      return;
+    }
+
+    // Find the active watchlist name
+    var wl = (allData.watchlists || []).find(function(w) { return w.id === activeTabId; });
+    if (!wl) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+      return;
+    }
+
+    var result = await AppBridge.callServerTool('get_watchlist', { watchlist: wl.name, include_ltp: true });
+
+    // Update the active watchlist items in our data
+    if (result && result.items) {
+      var items = result.items.map(function(ri) {
+        // Map tool response fields to our widget item format
+        var parts = (ri.instrument || '').split(':');
+        var exchange = parts.length === 2 ? parts[0] : '';
+        var symbol = parts.length === 2 ? parts[1] : ri.instrument || '';
+        var distEntryPct = 0;
+        var distExitPct = 0;
+        if (ri.distance_to_entry) {
+          distEntryPct = parseFloat(ri.distance_to_entry);
+        }
+        if (ri.distance_to_exit) {
+          distExitPct = parseFloat(ri.distance_to_exit);
+        }
+        return {
+          id: ri.id,
+          exchange: exchange,
+          tradingsymbol: symbol,
+          notes: ri.notes || '',
+          target_entry: ri.target_entry || 0,
+          target_exit: ri.target_exit || 0,
+          ltp: ri.ltp || 0,
+          distance_entry_pct: distEntryPct,
+          distance_exit_pct: distExitPct,
+          near_target: ri.near_target || false
+        };
+      });
+
+      // Update in allData
+      for (var i = 0; i < allData.watchlists.length; i++) {
+        if (allData.watchlists[i].id === activeTabId) {
+          allData.watchlists[i].items = items;
+          break;
+        }
+      }
+    }
+
+    renderTabs(allData);
+    renderActiveWatchlist(allData);
+    requestAnimationFrame(function() { AppBridge.notifySize(); });
+  } catch (e) {
+    var tsEl = document.getElementById('lastTs');
+    if (tsEl) tsEl.textContent = 'Refresh failed: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+  }
+}
+
+// --- Fullscreen toggle ---
+async function toggleFullscreen() {
+  var current = document.documentElement.classList.contains('fullscreen');
+  var result = await AppBridge.requestDisplayMode(current ? 'inline' : 'fullscreen');
+  if (result && result.granted !== false) {
+    document.documentElement.classList.toggle('fullscreen');
+  }
+}
+
+// --- Dashboard link ---
+document.getElementById('dashLink').addEventListener('click', function(e) {
+  e.preventDefault();
+  var baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
+  AppBridge.openLink(baseUrl + '/dashboard/watchlist');
+});
+
+// --- Fullscreen button ---
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+// --- Init ---
+(async function() {
+  AppBridge.init().catch(function() {});
+
+  var data = window.__DATA__;
+  if (data && data.error) {
+    showEmpty(data.error);
+  } else if (data && data.watchlists) {
+    allData = data;
+    renderTabs(data);
+    renderActiveWatchlist(data);
+  } else if (data === null) {
+    showEmpty('Not authenticated \u2014 please log in via your MCP client');
+  } else {
+    showEmpty('No watchlists yet. Ask the AI to create one.');
+  }
+
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+
+  // Observe body resizes and notify host
+  if (typeof ResizeObserver !== 'undefined') {
+    var resizeTimer;
+    new ResizeObserver(function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() { AppBridge.notifySize(); }, 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>
