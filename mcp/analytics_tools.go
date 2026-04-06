@@ -7,7 +7,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
@@ -54,7 +53,7 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "portfolio_summary")
 
 		return handler.WithSession(ctx, "portfolio_summary", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_summary", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -73,13 +72,18 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 	}
 }
 
-func computePortfolioSummary(holdings kiteconnect.Holdings) *portfolioSummaryResponse {
+func computePortfolioSummary(holdings []broker.Holding) *portfolioSummaryResponse {
 	var totalInvested, totalCurrent, dayPnL float64
 
 	for _, h := range holdings {
 		totalInvested += h.AveragePrice * float64(h.Quantity)
-		totalCurrent += h.LastPrice * float64(h.Quantity)
-		dayPnL += h.DayChange
+		curVal := h.LastPrice * float64(h.Quantity)
+		totalCurrent += curVal
+		// DayChange (absolute) is not in broker.Holding; derive from DayChangePct.
+		// dayChange = currentValue * dayChangePct / (100 + dayChangePct)
+		if h.DayChangePct != -100 {
+			dayPnL += curVal * h.DayChangePct / (100 + h.DayChangePct)
+		}
 	}
 
 	overallPnL := totalCurrent - totalInvested
@@ -97,34 +101,44 @@ func computePortfolioSummary(holdings kiteconnect.Holdings) *portfolioSummaryRes
 	}
 
 	// Top gainers by day_change_percentage (descending)
-	sorted := make(kiteconnect.Holdings, len(holdings))
+	sorted := make([]broker.Holding, len(holdings))
 	copy(sorted, holdings)
 
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].DayChangePercentage > sorted[j].DayChangePercentage
+		return sorted[i].DayChangePct > sorted[j].DayChangePct
 	})
 	topGainers := make([]holdingSummaryEntry, 0, 5)
 	for i := 0; i < len(sorted) && i < 5; i++ {
-		if sorted[i].DayChangePercentage <= 0 {
+		if sorted[i].DayChangePct <= 0 {
 			break
+		}
+		curVal := sorted[i].LastPrice * float64(sorted[i].Quantity)
+		dayChange := 0.0
+		if sorted[i].DayChangePct != -100 {
+			dayChange = curVal * sorted[i].DayChangePct / (100 + sorted[i].DayChangePct)
 		}
 		topGainers = append(topGainers, holdingSummaryEntry{
 			Symbol:       sorted[i].Tradingsymbol,
-			DayChangePct: roundTo2(sorted[i].DayChangePercentage),
-			PnL:          roundTo2(sorted[i].DayChange),
+			DayChangePct: roundTo2(sorted[i].DayChangePct),
+			PnL:          roundTo2(dayChange),
 		})
 	}
 
 	// Top losers by day_change_percentage (ascending)
 	topLosers := make([]holdingSummaryEntry, 0, 5)
 	for i := len(sorted) - 1; i >= 0 && len(topLosers) < 5; i-- {
-		if sorted[i].DayChangePercentage >= 0 {
+		if sorted[i].DayChangePct >= 0 {
 			break
+		}
+		curVal := sorted[i].LastPrice * float64(sorted[i].Quantity)
+		dayChange := 0.0
+		if sorted[i].DayChangePct != -100 {
+			dayChange = curVal * sorted[i].DayChangePct / (100 + sorted[i].DayChangePct)
 		}
 		topLosers = append(topLosers, holdingSummaryEntry{
 			Symbol:       sorted[i].Tradingsymbol,
-			DayChangePct: roundTo2(sorted[i].DayChangePercentage),
-			PnL:          roundTo2(sorted[i].DayChange),
+			DayChangePct: roundTo2(sorted[i].DayChangePct),
+			PnL:          roundTo2(dayChange),
 		})
 	}
 
@@ -355,7 +369,7 @@ func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "position_analysis")
 
 		return handler.WithSession(ctx, "position_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Kite.Client.GetPositions()
+			positions, err := session.Broker.GetPositions()
 			if err != nil {
 				handler.trackToolError(ctx, "position_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get positions: " + err.Error()), nil
@@ -374,7 +388,7 @@ func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 	}
 }
 
-func computePositionAnalysis(netPositions []kiteconnect.Position) *positionAnalysisResponse {
+func computePositionAnalysis(netPositions []broker.Position) *positionAnalysisResponse {
 	var totalPnL, totalUnrealised, totalRealised float64
 
 	// Build position entries and group by product
@@ -390,16 +404,10 @@ func computePositionAnalysis(netPositions []kiteconnect.Position) *positionAnaly
 			AveragePrice: roundTo2(p.AveragePrice),
 			LastPrice:    roundTo2(p.LastPrice),
 			PnL:          roundTo2(p.PnL),
-			Unrealised:   roundTo2(p.Unrealised),
-			Realised:     roundTo2(p.Realised),
-			DayBuyValue:  roundTo2(p.DayBuyValue),
-			DaySellValue: roundTo2(p.DaySellValue),
 		}
 		entries = append(entries, entry)
 
 		totalPnL += p.PnL
-		totalUnrealised += p.Unrealised
-		totalRealised += p.Realised
 
 		group, ok := productMap[p.Product]
 		if !ok {
@@ -411,8 +419,6 @@ func computePositionAnalysis(netPositions []kiteconnect.Position) *positionAnaly
 		}
 		group.Count++
 		group.TotalPnL += p.PnL
-		group.Unrealised += p.Unrealised
-		group.Realised += p.Realised
 		group.Positions = append(group.Positions, entry)
 	}
 
@@ -420,8 +426,6 @@ func computePositionAnalysis(netPositions []kiteconnect.Position) *positionAnaly
 	byProduct := make([]productGroupSummary, 0, len(productMap))
 	for _, g := range productMap {
 		g.TotalPnL = roundTo2(g.TotalPnL)
-		g.Unrealised = roundTo2(g.Unrealised)
-		g.Realised = roundTo2(g.Realised)
 		byProduct = append(byProduct, *g)
 	}
 	// Sort product groups alphabetically for consistent output

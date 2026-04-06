@@ -4,11 +4,10 @@ import (
 	"context"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -117,7 +116,7 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		assumeDays := SafeAssertInt(request.GetArguments()["assume_ltcg_days"], 0)
 
 		return handler.WithSession(ctx, "tax_harvest_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Kite.Client.GetHoldings()
+			holdings, err := session.Broker.GetHoldings()
 			if err != nil {
 				handler.trackToolError(ctx, "tax_harvest_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -137,8 +136,7 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 // computeTaxHarvest performs the tax classification and harvest analysis.
-func computeTaxHarvest(holdings kiteconnect.Holdings, assumeDays int) *taxHarvestResponse {
-	now := time.Now()
+func computeTaxHarvest(holdings []broker.Holding, assumeDays int) *taxHarvestResponse {
 	entries := make([]taxHoldingEntry, 0, len(holdings))
 
 	var (
@@ -167,15 +165,11 @@ func computeTaxHarvest(holdings kiteconnect.Holdings, assumeDays int) *taxHarves
 		}
 
 		// Determine holding period.
+		// broker.Holding does not carry AuthorisedDate; rely on assumeDays param.
 		holdingDays := -1
 		holdingPeriod := "unknown"
 
-		// AuthorisedDate is the CDSL/NSDL authorization date — not the purchase date.
-		// However, for CNC (delivery) holdings it often aligns with the purchase date.
-		// Use it as a best-effort signal when non-zero.
-		if !h.AuthorisedDate.Time.IsZero() {
-			holdingDays = int(now.Sub(h.AuthorisedDate.Time).Hours() / 24)
-		} else if assumeDays > 0 {
+		if assumeDays > 0 {
 			holdingDays = assumeDays
 		} else {
 			// Default to 0 days (STCG) when unknown.

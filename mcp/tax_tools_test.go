@@ -2,21 +2,14 @@ package mcp
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
-	"github.com/zerodha/gokiteconnect/v4/models"
+	"github.com/zerodha/kite-mcp-server/broker"
 )
 
 func TestComputeTaxHarvest(t *testing.T) {
-	// Helper to create a models.Time from days ago.
-	daysAgo := func(days int) models.Time {
-		return models.Time{Time: time.Now().AddDate(0, 0, -days)}
-	}
-
 	t.Run("empty holdings", func(t *testing.T) {
-		resp := computeTaxHarvest(kiteconnect.Holdings{}, 0)
+		resp := computeTaxHarvest([]broker.Holding{}, 0)
 		assert.Equal(t, 0, resp.Summary.HoldingsCount)
 		assert.Empty(t, resp.HarvestCandidates)
 		assert.Empty(t, resp.ApproachingLTCG)
@@ -24,7 +17,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("single gaining STCG holding", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
 				Tradingsymbol: "RELIANCE",
 				Exchange:      "NSE",
@@ -53,7 +46,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("single losing STCG holding is harvestable", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
 				Tradingsymbol: "PAYTM",
 				Exchange:      "NSE",
@@ -75,19 +68,18 @@ func TestComputeTaxHarvest(t *testing.T) {
 		assert.InDelta(t, 4000.0, resp.HarvestCandidates[0].TaxSavings, 0.01)
 	})
 
-	t.Run("LTCG classification via authorised_date", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+	t.Run("LTCG classification via assume_ltcg_days", func(t *testing.T) {
+		holdings := []broker.Holding{
 			{
-				Tradingsymbol:  "INFY",
-				Exchange:       "NSE",
-				Quantity:       50,
-				AveragePrice:   1000,
-				LastPrice:      1800,
-				PnL:            40000,
-				AuthorisedDate: daysAgo(400), // > 365 days
+				Tradingsymbol: "INFY",
+				Exchange:      "NSE",
+				Quantity:      50,
+				AveragePrice:  1000,
+				LastPrice:     1800,
+				PnL:           40000,
 			},
 		}
-		resp := computeTaxHarvest(holdings, 0)
+		resp := computeTaxHarvest(holdings, 400) // assume 400 days (> 365 = LTCG)
 
 		entry := resp.AllHoldings[0]
 		assert.Equal(t, "LTCG", entry.HoldingPeriod)
@@ -100,18 +92,17 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("LTCG exemption threshold", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
-				Tradingsymbol:  "TCS",
-				Exchange:       "NSE",
-				Quantity:       100,
-				AveragePrice:   3000,
-				LastPrice:      5000,
-				PnL:            200000,
-				AuthorisedDate: daysAgo(500),
+				Tradingsymbol: "TCS",
+				Exchange:      "NSE",
+				Quantity:      100,
+				AveragePrice:  3000,
+				LastPrice:     5000,
+				PnL:           200000,
 			},
 		}
-		resp := computeTaxHarvest(holdings, 0)
+		resp := computeTaxHarvest(holdings, 500) // assume 500 days (LTCG)
 
 		// Gain: 200000, Exemption: 125000, Taxable: 75000, Tax: 75000 * 0.125 = 9375
 		assert.InDelta(t, 200000.0, resp.Summary.LTCGGains, 0.01)
@@ -119,7 +110,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("assume_ltcg_days overrides unknown dates", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
 				Tradingsymbol: "HDFCBANK",
 				Exchange:      "NSE",
@@ -138,19 +129,18 @@ func TestComputeTaxHarvest(t *testing.T) {
 		assert.Equal(t, 400, resp.Summary.AssumedHoldingDays)
 	})
 
-	t.Run("approaching LTCG detection", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+	t.Run("approaching LTCG detection via assume_ltcg_days", func(t *testing.T) {
+		holdings := []broker.Holding{
 			{
-				Tradingsymbol:  "SBIN",
-				Exchange:       "NSE",
-				Quantity:       30,
-				AveragePrice:   600,
-				LastPrice:      550,
-				PnL:            -1500,
-				AuthorisedDate: daysAgo(345), // 20 days from LTCG threshold
+				Tradingsymbol: "SBIN",
+				Exchange:      "NSE",
+				Quantity:      30,
+				AveragePrice:  600,
+				LastPrice:     550,
+				PnL:           -1500,
 			},
 		}
-		resp := computeTaxHarvest(holdings, 0)
+		resp := computeTaxHarvest(holdings, 345) // 20 days from LTCG threshold
 
 		assert.Equal(t, 1, resp.Summary.ApproachingLTCGCnt)
 		assert.Len(t, resp.ApproachingLTCG, 1)
@@ -160,7 +150,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("mixed portfolio with harvest candidates sorted by savings", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
 				Tradingsymbol: "LOSER_BIG",
 				Exchange:      "NSE",
@@ -198,7 +188,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 	})
 
 	t.Run("STCG losses offset gains at summary level", func(t *testing.T) {
-		holdings := kiteconnect.Holdings{
+		holdings := []broker.Holding{
 			{
 				Tradingsymbol: "WINNER",
 				Exchange:      "NSE",
