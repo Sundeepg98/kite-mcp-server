@@ -96,7 +96,7 @@ func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
 		logger.Info("Stripe checkout session created", "email", email, "plan", plan, "session_id", session.ID)
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"checkout_url": session.URL,
 		})
 	}
