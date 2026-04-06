@@ -735,3 +735,38 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}, "admin_freeze_global")
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tool 11: admin_unfreeze_global (write, no confirmation — restorative)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AdminUnfreezeGlobalTool struct{}
+
+func (*AdminUnfreezeGlobalTool) Tool() mcp.Tool {
+	return mcp.NewTool("admin_unfreeze_global",
+		mcp.WithDescription("Lift the server-wide trading freeze. Restores order placement for all users. Admin-only."),
+		mcp.WithTitleAnnotation("Admin: Lift Global Freeze"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
+	)
+}
+
+func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, "admin_unfreeze_global")
+		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+			return errResult, nil
+		}
+		guard := manager.RiskGuard()
+		if guard == nil {
+			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+		}
+		guard.UnfreezeGlobal()
+		return handler.MarshalResponse(map[string]string{
+			"status": "global_freeze_lifted",
+		}, "admin_unfreeze_global")
+	}
+}

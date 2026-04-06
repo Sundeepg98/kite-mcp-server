@@ -151,6 +151,7 @@ func GetAllTools() []Tool {
 		&AdminFreezeUserTool{},
 		&AdminUnfreezeUserTool{},
 		&AdminFreezeGlobalTool{},
+		&AdminUnfreezeGlobalTool{},
 	}
 }
 

@@ -129,7 +129,7 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 	tier := mapPriceToTier(extractPriceID(&session), pricePro, pricePremium)
 
 	sub := &Subscription{
-		Email:            email,
+		AdminEmail:       email,
 		Tier:             tier,
 		StripeCustomerID: customerID,
 		StripeSubID:      subID,
@@ -188,7 +188,7 @@ func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pric
 
 	existing := store.GetSubscription(email)
 	if existing == nil {
-		existing = &Subscription{Email: email}
+		existing = &Subscription{AdminEmail: email}
 	}
 	existing.Tier = tier
 	existing.Status = status
@@ -226,7 +226,7 @@ func handleSubscriptionDeleted(store *Store, event *stripe.Event, logger *slog.L
 
 	existing := store.GetSubscription(email)
 	if existing == nil {
-		existing = &Subscription{Email: email}
+		existing = &Subscription{AdminEmail: email}
 	}
 	existing.Tier = TierFree
 	existing.Status = StatusCanceled

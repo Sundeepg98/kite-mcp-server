@@ -65,6 +65,10 @@ func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
 					Quantity: stripe.Int64(1),
 				},
 			},
+			Metadata: map[string]string{
+				"max_users": strconv.Itoa(maxUsers),
+				"plan":      plan,
+			},
 			SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 				Metadata: map[string]string{
 					"max_users": strconv.Itoa(maxUsers),

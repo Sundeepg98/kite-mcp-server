@@ -20,7 +20,7 @@ const (
 
 // Subscription holds a user's billing subscription details.
 type Subscription struct {
-	Email            string    `json:"email"`
+	AdminEmail       string    `json:"admin_email"`
 	Tier             Tier      `json:"tier"`
 	StripeCustomerID string    `json:"stripe_customer_id,omitempty"`
 	StripeSubID      string    `json:"stripe_sub_id,omitempty"`
@@ -54,7 +54,7 @@ func (s *Store) InitTable() error {
 	}
 	ddl := `
 CREATE TABLE IF NOT EXISTS billing (
-    email              TEXT PRIMARY KEY,
+    admin_email        TEXT PRIMARY KEY,
     tier               INTEGER NOT NULL DEFAULT 0,
     stripe_customer_id TEXT DEFAULT '',
     stripe_sub_id      TEXT DEFAULT '',
@@ -67,6 +67,29 @@ CREATE TABLE IF NOT EXISTS billing (
 	}
 	// Migration: add max_users column for family billing.
 	_ = s.db.ExecDDL(`ALTER TABLE billing ADD COLUMN max_users INTEGER NOT NULL DEFAULT 1`)
+
+	// Migration: rename billing PK from email to admin_email (idempotent).
+	// Check if admin_email column already exists — if so, migration is done.
+	var colCount int
+	if row := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('billing') WHERE name='admin_email'`); row != nil {
+		_ = row.Scan(&colCount)
+	}
+	if colCount == 0 {
+		// Table rebuild: email → admin_email
+		_ = s.db.ExecDDL(`CREATE TABLE IF NOT EXISTS billing_mig (
+			admin_email        TEXT PRIMARY KEY,
+			tier               INTEGER NOT NULL DEFAULT 0,
+			stripe_customer_id TEXT DEFAULT '',
+			stripe_sub_id      TEXT DEFAULT '',
+			status             TEXT NOT NULL DEFAULT 'active',
+			expires_at         TEXT DEFAULT '',
+			updated_at         TEXT NOT NULL,
+			max_users          INTEGER NOT NULL DEFAULT 1
+		)`)
+		_ = s.db.ExecDDL(`INSERT OR IGNORE INTO billing_mig (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users) SELECT email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, COALESCE(max_users, 1) FROM billing`)
+		_ = s.db.ExecDDL(`DROP TABLE billing`)
+		_ = s.db.ExecDDL(`ALTER TABLE billing_mig RENAME TO billing`)
+	}
 	return nil
 }
 
@@ -75,7 +98,7 @@ func (s *Store) LoadFromDB() error {
 	if s.db == nil {
 		return nil
 	}
-	rows, err := s.db.RawQuery(`SELECT email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at, COALESCE(max_users, 1) FROM billing`)
+	rows, err := s.db.RawQuery(`SELECT admin_email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at, COALESCE(max_users, 1) FROM billing`)
 	if err != nil {
 		return fmt.Errorf("query billing: %w", err)
 	}
@@ -89,7 +112,7 @@ func (s *Store) LoadFromDB() error {
 		var tierInt int
 		var maxUsers int
 		var expiresAtS, updatedAtS string
-		if err := rows.Scan(&sub.Email, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil {
+		if err := rows.Scan(&sub.AdminEmail, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil {
 			return fmt.Errorf("scan billing row: %w", err)
 		}
 		sub.MaxUsers = maxUsers
@@ -98,7 +121,7 @@ func (s *Store) LoadFromDB() error {
 		if expiresAtS != "" {
 			sub.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAtS)
 		}
-		s.subs[strings.ToLower(sub.Email)] = &sub
+		s.subs[strings.ToLower(sub.AdminEmail)] = &sub
 	}
 	return rows.Err()
 }
@@ -143,14 +166,14 @@ func (s *Store) GetTierForUser(email string, adminEmailFn func(string) string) T
 
 // SetSubscription creates or updates a subscription for the given email.
 func (s *Store) SetSubscription(sub *Subscription) error {
-	key := strings.ToLower(strings.TrimSpace(sub.Email))
+	key := strings.ToLower(strings.TrimSpace(sub.AdminEmail))
 	if key == "" {
 		return fmt.Errorf("email is required")
 	}
 
 	now := time.Now()
 	stored := *sub
-	stored.Email = key
+	stored.AdminEmail = key
 	stored.UpdatedAt = now
 
 	s.mu.Lock()
@@ -163,9 +186,9 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			expiresAtS = stored.ExpiresAt.Format(time.RFC3339)
 		}
 		err := s.db.ExecInsert(
-			`INSERT INTO billing (email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users)
+			`INSERT INTO billing (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT(email) DO UPDATE SET
+			 ON CONFLICT(admin_email) DO UPDATE SET
 			   tier = excluded.tier,
 			   stripe_customer_id = excluded.stripe_customer_id,
 			   stripe_sub_id = excluded.stripe_sub_id,
@@ -173,7 +196,7 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			   expires_at = excluded.expires_at,
 			   updated_at = excluded.updated_at,
 			   max_users = excluded.max_users`,
-			stored.Email, int(stored.Tier), stored.StripeCustomerID, stored.StripeSubID,
+			stored.AdminEmail, int(stored.Tier), stored.StripeCustomerID, stored.StripeSubID,
 			stored.Status, expiresAtS, stored.UpdatedAt.Format(time.RFC3339), stored.MaxUsers,
 		)
 		if err != nil {
@@ -209,7 +232,7 @@ func (s *Store) GetEmailByCustomerID(customerID string) string {
 
 	for _, sub := range s.subs {
 		if sub.StripeCustomerID == customerID {
-			return sub.Email
+			return sub.AdminEmail
 		}
 	}
 	return ""

@@ -139,9 +139,9 @@ func TestFullChain_ProUserValidOrder(t *testing.T) {
 
 	// Set up Pro subscription
 	require.NoError(t, billingStore.SetSubscription(&billing.Subscription{
-		Email:  email,
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: email,
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	ctx := oauth.ContextWithEmail(context.Background(), email)
@@ -194,9 +194,9 @@ func TestFullChain_ProUserExcessiveValueBlocked(t *testing.T) {
 
 	// Set up Pro subscription
 	require.NoError(t, billingStore.SetSubscription(&billing.Subscription{
-		Email:  email,
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: email,
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	ctx := oauth.ContextWithEmail(context.Background(), email)
@@ -300,9 +300,9 @@ func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
 	// Set up Pro subscription BEFORE making calls to avoid concurrent DB writes
 	// between billing and audit worker (audit writes async, billing writes sync).
 	require.NoError(t, billingStore.SetSubscription(&billing.Subscription{
-		Email:  email,
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: email,
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	// Wait for any pending audit writes from setup
@@ -388,9 +388,9 @@ func TestFullChain_FrozenUserBlockedByRiskguard(t *testing.T) {
 
 	// Set up Pro subscription
 	require.NoError(t, billingStore.SetSubscription(&billing.Subscription{
-		Email:  email,
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: email,
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	// Freeze the user
@@ -464,9 +464,9 @@ func TestFullChain_DuplicateOrderDetection(t *testing.T) {
 
 	// Set up Pro subscription
 	require.NoError(t, billingStore.SetSubscription(&billing.Subscription{
-		Email:  email,
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: email,
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	ctx := oauth.ContextWithEmail(context.Background(), email)

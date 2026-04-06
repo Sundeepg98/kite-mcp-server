@@ -27,16 +27,16 @@ func TestSetSubscription_Create(t *testing.T) {
 	s := newTestStore()
 
 	sub := &Subscription{
-		Email:  "alice@example.com",
-		Tier:   TierPro,
-		Status: StatusActive,
+		AdminEmail: "alice@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
 	}
 	err := s.SetSubscription(sub)
 	require.NoError(t, err)
 
 	got := s.GetSubscription("alice@example.com")
 	require.NotNil(t, got)
-	assert.Equal(t, "alice@example.com", got.Email)
+	assert.Equal(t, "alice@example.com", got.AdminEmail)
 	assert.Equal(t, TierPro, got.Tier)
 	assert.Equal(t, StatusActive, got.Status)
 	assert.WithinDuration(t, time.Now(), got.UpdatedAt, 2*time.Second)
@@ -47,17 +47,17 @@ func TestSetSubscription_Update(t *testing.T) {
 
 	// Create initial subscription.
 	err := s.SetSubscription(&Subscription{
-		Email:  "bob@example.com",
-		Tier:   TierPro,
-		Status: StatusActive,
+		AdminEmail: "bob@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
 	})
 	require.NoError(t, err)
 
 	// Update to Premium.
 	err = s.SetSubscription(&Subscription{
-		Email:  "bob@example.com",
-		Tier:   TierPremium,
-		Status: StatusActive,
+		AdminEmail: "bob@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
 	})
 	require.NoError(t, err)
 
@@ -70,9 +70,9 @@ func TestSetSubscription_EmailNormalization(t *testing.T) {
 	s := newTestStore()
 
 	err := s.SetSubscription(&Subscription{
-		Email:  "Alice@Example.COM",
-		Tier:   TierPro,
-		Status: StatusActive,
+		AdminEmail: "Alice@Example.COM",
+		Tier:       TierPro,
+		Status:     StatusActive,
 	})
 	require.NoError(t, err)
 
@@ -90,14 +90,14 @@ func TestGetTier_Active(t *testing.T) {
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
-		Email:  "pro@example.com",
-		Tier:   TierPro,
-		Status: StatusActive,
+		AdminEmail: "pro@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
 	})
 	_ = s.SetSubscription(&Subscription{
-		Email:  "premium@example.com",
-		Tier:   TierPremium,
-		Status: StatusTrialing,
+		AdminEmail: "premium@example.com",
+		Tier:       TierPremium,
+		Status:     StatusTrialing,
 	})
 
 	assert.Equal(t, TierPro, s.GetTier("pro@example.com"))
@@ -108,10 +108,10 @@ func TestGetTier_Expired(t *testing.T) {
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
-		Email:     "expired@example.com",
-		Tier:      TierPro,
-		Status:    StatusActive,
-		ExpiresAt: time.Now().Add(-24 * time.Hour), // expired yesterday
+		AdminEmail: "expired@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		ExpiresAt:  time.Now().Add(-24 * time.Hour), // expired yesterday
 	})
 
 	assert.Equal(t, TierFree, s.GetTier("expired@example.com"),
@@ -122,9 +122,9 @@ func TestGetTier_Canceled(t *testing.T) {
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
-		Email:  "canceled@example.com",
-		Tier:   TierPremium,
-		Status: StatusCanceled,
+		AdminEmail: "canceled@example.com",
+		Tier:       TierPremium,
+		Status:     StatusCanceled,
 	})
 
 	assert.Equal(t, TierFree, s.GetTier("canceled@example.com"),
@@ -150,9 +150,9 @@ func TestConcurrentAccess(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			_ = s.SetSubscription(&Subscription{
-				Email:  fmt.Sprintf("user%d@example.com", n),
-				Tier:   TierPro,
-				Status: StatusActive,
+				AdminEmail: fmt.Sprintf("user%d@example.com", n),
+				Tier:       TierPro,
+				Status:     StatusActive,
 			})
 		}(i)
 	}

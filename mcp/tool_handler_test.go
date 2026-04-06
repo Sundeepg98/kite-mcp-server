@@ -131,9 +131,9 @@ func TestBillingMiddleware_ProUserAccessesProTools(t *testing.T) {
 
 	// Set up a Pro subscription.
 	require.NoError(t, store.SetSubscription(&billing.Subscription{
-		Email:  "pro@example.com",
-		Tier:   billing.TierPro,
-		Status: billing.StatusActive,
+		AdminEmail: "pro@example.com",
+		Tier:       billing.TierPro,
+		Status:     billing.StatusActive,
 	}))
 
 	mw := billing.Middleware(store, nil)

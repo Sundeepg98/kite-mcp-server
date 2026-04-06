@@ -106,25 +106,25 @@ li:before{content:"✓ ";color:#34d399;font-weight:700}
 .btn-pay:hover{opacity:0.9}
 </style>
 </head>
-<body>
+<body data-current="free">
 <h1>Simple, Transparent Pricing</h1>
 <p class="subtitle">AI-powered trading tools for your family.</p>
 <div class="grid">
-<div class="card">
+<div class="card" data-plan="free">
 <div class="tier">Free</div>
 <div class="price">₹0<span>/mo</span></div>
 <div class="period">1 user, forever free</div>
 <ul><li>Read-only market data</li><li>Paper trading</li><li>Watchlists</li><li>Basic portfolio view</li></ul>
-<span class="btn btn-free">Current Plan</span>
+<a class="btn btn-pay" onclick="checkout('free')">Get Started</a>
 </div>
-<div class="card featured">
+<div class="card featured" data-plan="pro">
 <div class="tier">Pro</div>
 <div class="price">₹349<span>/mo</span></div>
 <div class="period">Up to 5 family members</div>
 <ul><li>Live order execution</li><li>GTT orders</li><li>Price alerts + Telegram</li><li>Trailing stops</li><li>Advanced analytics</li></ul>
 <a class="btn btn-pay" onclick="checkout('pro')">Get Started</a>
 </div>
-<div class="card">
+<div class="card" data-plan="premium">
 <div class="tier">Premium</div>
 <div class="price">₹699<span>/mo</span></div>
 <div class="period">Up to 20 family members</div>
@@ -139,6 +139,19 @@ function checkout(plan){
   .then(d=>{if(d&&d.checkout_url)window.location=d.checkout_url})
   .catch(e=>alert('Checkout error: '+e.message))
 }
+(function(){
+  var current = document.body.getAttribute('data-current') || 'free';
+  document.querySelectorAll('.card').forEach(function(card){
+    if(card.getAttribute('data-plan') === current){
+      var btn = card.querySelector('.btn');
+      btn.textContent = 'Current Plan';
+      btn.className = 'btn btn-free';
+      btn.onclick = null;
+      btn.removeAttribute('onclick');
+      btn.style.cursor = 'default';
+    }
+  });
+})();
 </script>
 </body>
 </html>`
@@ -1079,10 +1092,27 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		}
 	}
 
-	// Pricing page (public).
+	// Pricing page (public, but detects logged-in user's tier).
 	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
+		currentTier := "free"
+		if app.oauthHandler != nil {
+			if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
+				if claims, err := app.oauthHandler.JWTManager().ValidateToken(cookie.Value, "dashboard"); err == nil && claims.Subject != "" {
+					if bs := kcManager.BillingStoreConcrete(); bs != nil {
+						tier := bs.GetTier(claims.Subject)
+						switch tier {
+						case billing.TierPro:
+							currentTier = "pro"
+						case billing.TierPremium:
+							currentTier = "premium"
+						}
+					}
+				}
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, pricingPageHTML)
+		html := strings.Replace(pricingPageHTML, `data-current="free"`, `data-current="`+currentTier+`"`, 1)
+		fmt.Fprint(w, html)
 	})
 
 	// Checkout handler (requires browser auth).
