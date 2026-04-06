@@ -333,3 +333,36 @@ func TestAdminServerStatus_NonAdminBlocked(t *testing.T) {
 	result := callAdminTool(t, mgr, "admin_server_status", "trader@example.com", nil)
 	assert.True(t, result.IsError, "non-admin should be blocked from server status")
 }
+
+func TestFamilyInviteFlow(t *testing.T) {
+	manager := newAdminTestManager(t)
+	seedUsers(t, manager)
+
+	// Wire up InvitationStore (no DB for tests)
+	invStore := users.NewInvitationStore(nil)
+	manager.SetInvitationStore(invStore)
+
+	// Step 1: Admin invites family member
+	result := callAdminTool(t, manager, "admin_invite_family_member", "admin@example.com", map[string]any{
+		"invited_email": "family@example.com",
+	})
+	assert.False(t, result.IsError, "invite should succeed")
+
+	// Step 2: Admin lists family (should show pending invite)
+	result = callAdminTool(t, manager, "admin_list_family", "admin@example.com", nil)
+	assert.False(t, result.IsError, "list family should succeed")
+
+	// Step 3: Admin tries to invite themselves (should fail)
+	result = callAdminTool(t, manager, "admin_invite_family_member", "admin@example.com", map[string]any{
+		"invited_email": "admin@example.com",
+	})
+	assert.True(t, result.IsError, "self-invite should fail")
+
+	// Step 4: Admin removes family member (should fail if not linked yet)
+	result = callAdminTool(t, manager, "admin_remove_family_member", "admin@example.com", map[string]any{
+		"target_email": "family@example.com",
+		"confirm":      true,
+	})
+	// This should fail because family@example.com isn't linked yet (just invited)
+	assert.True(t, result.IsError, "remove unlinked member should fail")
+}

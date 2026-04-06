@@ -265,7 +265,29 @@ function render() {
   }
   try { await AppBridge.init(); } catch(e) {}
   if (typeof window.__DATA__ === 'string') { try { window.__DATA__ = JSON.parse(window.__DATA__); } catch(e) { window.__DATA__ = null; } }
-  render();
+  try { render(); } catch(e) {
+    const app = document.querySelector('.content') || document.body;
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'padding:40px;text-align:center;color:var(--red,#f87171);font-size:13px;';
+    errDiv.textContent = 'Widget error: ' + (e.message || 'Unknown error');
+    app.textContent = '';
+    app.appendChild(errDiv);
+    if (typeof AppBridge !== 'undefined') AppBridge.notifySize();
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      // Close any open dropdowns or modals
+      document.querySelectorAll('.dropdown-open').forEach(function(el) {
+        el.classList.remove('dropdown-open');
+      });
+    }
+    if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) {
+      // Refresh data
+      location.reload();
+    }
+  });
 })();
 </script>
 </body>

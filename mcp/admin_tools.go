@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -436,6 +437,15 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 		terminated := manager.SessionManager().TerminateByEmail(targetEmail)
 
+		if ed := manager.EventDispatcher(); ed != nil {
+			ed.Dispatch(domain.UserSuspendedEvent{
+				Email:     targetEmail,
+				By:        adminEmail,
+				Reason:    reason,
+				Timestamp: time.Now(),
+			})
+		}
+
 		return handler.MarshalResponse(map[string]any{
 			"status":               "suspended",
 			"email":                targetEmail,
@@ -742,6 +752,14 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		guard.FreezeGlobal(adminEmail, reason)
 
+		if ed := manager.EventDispatcher(); ed != nil {
+			ed.Dispatch(domain.GlobalFreezeEvent{
+				By:        adminEmail,
+				Reason:    reason,
+				Timestamp: time.Now(),
+			})
+		}
+
 		return handler.MarshalResponse(map[string]string{
 			"status":    "global_freeze_active",
 			"frozen_by": adminEmail,
@@ -866,6 +884,14 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		}
 		if err := invStore.Create(inv); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create invitation: %s", err.Error())), nil
+		}
+
+		if ed := manager.EventDispatcher(); ed != nil {
+			ed.Dispatch(domain.FamilyInvitedEvent{
+				AdminEmail:   adminEmail,
+				InvitedEmail: invitedEmail,
+				Timestamp:    time.Now(),
+			})
 		}
 
 		acceptURL := ""

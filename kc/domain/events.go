@@ -77,6 +77,37 @@ type UserFrozenEvent struct {
 func (e UserFrozenEvent) EventType() string    { return "user.frozen" }
 func (e UserFrozenEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// UserSuspendedEvent is emitted when an admin suspends a user account.
+type UserSuspendedEvent struct {
+	Email    string
+	By       string // admin email
+	Reason   string
+	Timestamp time.Time
+}
+
+func (e UserSuspendedEvent) EventType() string    { return "user.suspended" }
+func (e UserSuspendedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// GlobalFreezeEvent is emitted when an admin activates the server-wide trading freeze.
+type GlobalFreezeEvent struct {
+	By     string // admin email
+	Reason string
+	Timestamp time.Time
+}
+
+func (e GlobalFreezeEvent) EventType() string    { return "global.freeze" }
+func (e GlobalFreezeEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// FamilyInvitedEvent is emitted when an admin invites a family member.
+type FamilyInvitedEvent struct {
+	AdminEmail   string
+	InvitedEmail string
+	Timestamp    time.Time
+}
+
+func (e FamilyInvitedEvent) EventType() string    { return "family.invited" }
+func (e FamilyInvitedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.
