@@ -38,6 +38,9 @@ td { padding: 9px 12px; }
 .tl-delta { color: var(--text-2); font-size: 10px; }
 .tl-arrow { color: var(--text-2); margin: 0 6px; }
 
+.admin-link { margin-left: auto; background: rgba(251,191,36,0.12); color: #fbbf24; border-radius: 4px; padding: 6px 12px; font-size: 11px; font-weight: 600; }
+.admin-link:hover { background: #fbbf24; color: #0a0c10; }
+
 @media (max-width: 640px) {
   .topbar-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -74,6 +77,8 @@ td { padding: 9px 12px; }
   <a href="/dashboard/alerts" class="dash-nav-link active">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
+  <a href="/dashboard/billing" class="dash-nav-link">Billing</a>
+  {{if eq .Role "admin"}}<a href="/admin/ops" class="dash-nav-link admin-link">Admin</a>{{end}}
 </nav>
 
 <div class="content">

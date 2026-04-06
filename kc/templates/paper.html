@@ -19,6 +19,9 @@
 .reset-btn:hover { background: rgba(248,113,113,0.2); }
 .reset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.admin-link { margin-left: auto; background: rgba(251,191,36,0.12); color: #fbbf24; border-radius: 4px; padding: 6px 12px; font-size: 11px; font-weight: 600; }
+.admin-link:hover { background: #fbbf24; color: #0a0c10; }
+
 @media (max-width: 640px) {
   .stat-value { font-size: 18px; }
   .paper-banner { flex-direction: column; align-items: flex-start; }
@@ -53,6 +56,8 @@
   <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
   <a href="/dashboard/paper" class="dash-nav-link active">Paper</a>
   <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
+  <a href="/dashboard/billing" class="dash-nav-link">Billing</a>
+  {{if eq .Role "admin"}}<a href="/admin/ops" class="dash-nav-link admin-link">Admin</a>{{end}}
 </nav>
 
 <div class="content">

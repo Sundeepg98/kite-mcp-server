@@ -1164,11 +1164,13 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		fmt.Fprint(w, html)
 	})
 
-	// Checkout handler (requires browser auth).
+	// Checkout + Stripe portal handlers (require browser auth).
 	if app.oauthHandler != nil {
 		if bs := kcManager.BillingStoreConcrete(); bs != nil {
 			mux.Handle("/billing/checkout", app.oauthHandler.RequireAuthBrowser(
 				billing.CheckoutHandler(bs, app.logger)))
+			mux.Handle("/stripe-portal", app.oauthHandler.RequireAuthBrowser(
+				billing.PortalHandler(bs, app.logger)))
 		}
 	}
 
