@@ -94,11 +94,11 @@ func TestResourceURIForTool(t *testing.T) {
 		}
 	})
 
-	t.Run("analytics tools return portfolio URI", func(t *testing.T) {
+	t.Run("analytics tools return chart URI", func(t *testing.T) {
 		analyticsTools := []string{"technical_indicators", "backtest_strategy"}
 		for _, name := range analyticsTools {
 			uri := resourceURIForTool(name)
-			assert.Equal(t, "ui://kite-mcp/portfolio", uri, "tool %s", name)
+			assert.Equal(t, "ui://kite-mcp/chart", uri, "tool %s", name)
 		}
 	})
 

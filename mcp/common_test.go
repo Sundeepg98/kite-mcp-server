@@ -275,7 +275,6 @@ func TestToolDashboardPage(t *testing.T) {
 		unmappedTools := []string{
 			"login", "open_dashboard", "get_ltp", "get_quotes",
 			"search_instruments", "start_ticker", "stop_ticker",
-			"create_watchlist", "get_watchlist",
 		}
 		for _, tool := range unmappedTools {
 			_, ok := toolDashboardPage[tool]

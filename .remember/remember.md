@@ -1,16 +1,18 @@
 # Handoff
 
 ## State
-80 tools, v1.1.0+, all 7 arch patterns at 10/10 (Hexagonal, SOLID, Clean Arch, DDD, ES, CQRS, Testing). Full htmx migration (6 admin SSE + 6 user pages). 159+ new tests this session (700+ total). CI + Security Scan green. Deployed on Fly.io.
+9 MCP App widgets (7 existing + watchlist_app + hub_app), 80 tools on Fly.io. 6 critical bugs fixed (alert delete, order form, GTT confirm, cancel variety, positions merge, tool routing). DEV_MODE mock broker wired. Auth separation live. Kite token valid (logged in today). CI+Security green. Deploy running.
 
 ## Next
-1. Verify env vars/secrets management + metrics/observability for admin operations readiness
-2. Promotion strategy — create 4-5 sample use cases showing ROI, then launch posts (docs/launch/ ready)
-3. Google SSO + Stripe operational setup (GCP OAuth callback: /auth/google/callback, Stripe products ₹499/₹999)
+1. Build options_app.html widget (option chain + Greeks — AppBridge-driven, no pre-injected data, lazy Greeks per row click)
+2. Build chart_app.html widget (candlestick + indicators — needs inline TradingView Lightweight Charts ~65KB, 3 AppBridge calls per load)
+3. Managed hosting MVP: pricing page + Stripe Checkout + onboarding email (~40h total)
 
 ## Context
-- User wants thorough verification of env/secrets handling, dynamic config, and admin observability before promoting
-- User wants sample trading scenarios showing profit potential as proof for promotion
-- User dashboard scalability is deferred — admin + core is done, user UX improvements come later
-- Launch materials in docs/launch/ (5 posts ready but gitignored), tool count now dynamic everywhere
-- Domain events + use cases created but not yet wired into tool handlers (ready for integration)
+- Codebase at D:\kite-mcp-temp — ALWAYS tell agents this path explicitly with specific file paths
+- Widget pattern: read mcp/ext_apps.go + kc/templates/portfolio_app.html for exact pattern
+- Options widget: get_option_chain returns NO greeks — need lazy options_greeks call per row click via AppBridge
+- Chart widget: must inline TradingView Lightweight Charts standalone JS (~65KB) — no CDN in widgets
+- Chart needs 2-step: search_instruments (get token) → get_historical_data (get candles) → technical_indicators (get scalars)
+- Dashboard pages KEPT (decided: don't remove, widgets complement not compete)
+- Both new widgets modify ext_apps.go — check for merge conflicts
