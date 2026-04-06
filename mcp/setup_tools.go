@@ -179,6 +179,11 @@ var toolDashboardPage = map[string]string{
 	"delete_watchlist":      "/dashboard/watchlist",
 	"add_to_watchlist":      "/dashboard/watchlist",
 	"remove_from_watchlist": "/dashboard/watchlist",
+
+	// Ticker tools (chart page)
+	"start_ticker":          "/dashboard/chart",
+	"ticker_status":         "/dashboard/chart",
+	"subscribe_instruments": "/dashboard/chart",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,
