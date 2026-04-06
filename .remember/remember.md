@@ -1,19 +1,20 @@
 # Handoff
 
 ## State
-18 research agents completed across 6 rounds. Design spec committed at docs/superpowers/specs/2026-04-06-admin-mcp-billing-design.md (afa7d97). ALL conflicts resolved. NOTHING built yet — purely research. CI green (930d0bb), 80 tools, 11 widgets, 330+ tests.
+All 5 phases built and committed at 29c1a07. 90 tools, 15 widgets, billing refactor, family onboarding, pricing page, Stripe checkout. Build clean, vet clean. MCP tests blocked by SAC (Windows Smart App Control) not code. Deploy not yet done.
 
 ## Next
-1. Build Phase 1: 10 admin MCP tools in mcp/admin_tools.go + mcp.go registration + tiers.go (TierFree) + guard.go GlobalFreezeStatus + common_test.go unmapped list update. Use direct requestConfirmation() calls, NOT confirmableTools map. Suspend must Freeze+UpdateStatus+TerminateByEmail.
-2. Build Phase 2: Billing refactor — store.go PK rebuild (BEGIN/COMMIT transaction, pragma_table_info idempotency check), middleware.go adminEmailFn, webhook.go userStore+max_users, users/store.go AdminEmail field, interfaces.go, app.go wiring.
-3. Build Phases 3-5: oauth/google_sso.go registry lookup (h.registry already wired), pricing.html+checkout.go, 4 admin widget templates in ext_apps.go.
+1. Deploy to Fly.io: `flyctl deploy -a kite-mcp-server` — set STRIPE_SECRET_KEY, STRIPE_PRICE_PRO, STRIPE_PRICE_PREMIUM env vars first
+2. Test E2E: pricing page → checkout → webhook → subscription → family member SSO → tier inheritance
+3. Review agent changes: oauth/handlers.go KeyRegistry interface changed (GetByEmail now returns *RegistryEntry), verify all callers work correctly
 
 ## Context
 - Codebase at D:\kite-mcp-temp — ALWAYS tell agents this path with specific file paths
-- Tool names from SPEC not research agents: admin_list_users, admin_get_user, admin_server_status, admin_get_risk_status, admin_suspend_user, admin_activate_user, admin_change_role, admin_freeze_user, admin_unfreeze_user, admin_freeze_global (10 total, skip admin_unfreeze_global)
-- guard.go needs globalFrozenReason field added (FreezeGlobal stores reason in log only, not field)
-- Admin tools stay UNMAPPED from toolDashboardPage; update common_test.go unmapped list instead
-- Migration safe: SQLite WAL + Litestream unaffected by BEGIN/COMMIT table rebuild
-- manager.MCPServer() returns server ref for elicitation (stored as `any`)
-- h.registry KeyRegistry field already exists on oauth Handler — no new wiring for family linkage
-- User must re-login after admin registers app (no event system on Register())
+- 10 admin tools use direct requestConfirmation() calls, NOT confirmableTools map. 3 destructive tools also have confirm:bool param
+- admin_suspend_user does Freeze+UpdateStatus+TerminateByEmail (all three, in that order)
+- billing.Middleware now takes (store, adminEmailFn) — tests pass nil for adminEmailFn
+- WebhookHandler now takes (store, signingSecret, logger, adminUpgrade) — 4th param is func(email string)
+- oauth/handlers.go: KeyRegistry.GetByEmail returns (*RegistryEntry, bool) now — was (string, string, bool)
+- Phase 3 agent changed the KeyRegistry interface — verify registryAdapter in app.go still works
+- SAC blocks mcp test binary intermittently — not a code issue
+- globalFrozenReason field added to guard.go — FreezeGlobal now stores reason
