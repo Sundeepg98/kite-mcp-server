@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Technical Analysis &middot; Kite MCP</title>
+<style>
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.header-sep { width: 1px; height: 16px; background: var(--border); }
+.header-title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.header-link { font-size: 11px; color: var(--text-2); text-decoration: none; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.header-link:hover { color: var(--accent); }
+
+/* Header buttons */
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 13px; cursor: pointer; transition: all 0.12s; line-height: 1; }
+.icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Search bar */
+.search-bar { display: flex; gap: 8px; padding: 12px 16px; background: var(--bg-1); border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+.search-input { flex: 1; min-width: 120px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-0); font-family: var(--mono); font-size: 12px; outline: none; }
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-2); }
+.sel { padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 11px; font-family: var(--sans); cursor: pointer; outline: none; }
+.sel:focus { border-color: var(--accent); }
+
+/* Range pills */
+.range-pills { display: flex; gap: 4px; }
+.pill { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-2); font-size: 10px; font-weight: 600; font-family: var(--mono); cursor: pointer; transition: all 0.12s; }
+.pill:hover { border-color: var(--accent); color: var(--text-1); }
+.pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Fetch button */
+.fetch-btn { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 600; font-family: var(--sans); cursor: pointer; transition: all 0.12s; white-space: nowrap; }
+.fetch-btn:hover { background: var(--accent); color: var(--bg-0); }
+.fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 16px; }
+.summary-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.summary-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.summary-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text-0); }
+
+/* Section */
+.section { padding: 0 16px; }
+.section-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); }
+th.r, td.r { text-align: right; }
+td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--text-1); white-space: nowrap; }
+tr:hover td { background: var(--bg-2); }
+
+/* Indicator grid */
+.ind-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 0; }
+.ind-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.ind-name { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.ind-value { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text-0); }
+.ind-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-top: 2px; }
+
+/* Signals */
+.signal-list { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; }
+.signal { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.signal-bullish { background: var(--green-dim); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+.signal-bearish { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+.signal-neutral { background: var(--bg-2); color: var(--text-1); border: 1px solid var(--border); }
+.signal-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.signal-bullish .signal-dot { background: var(--green); }
+.signal-bearish .signal-dot { background: var(--red); }
+.signal-neutral .signal-dot { background: var(--text-2); }
+
+/* Color utilities */
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+
+/* Footer */
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+/* Empty / loading state */
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-2); font-size: 12px; }
+.loading-state { text-align: center; padding: 32px 16px; color: var(--accent); font-size: 12px; }
+.error-state { text-align: center; padding: 16px; color: var(--red); font-size: 12px; background: var(--red-dim); margin: 12px 16px; border-radius: 6px; border: 1px solid rgba(248,113,113,0.2); }
+
+/* Fullscreen mode */
+html.fullscreen body { font-size: 14px; }
+html.fullscreen .summary-value { font-size: 20px; }
+html.fullscreen .ind-value { font-size: 16px; }
+html.fullscreen table { font-size: 14px; }
+html.fullscreen td { font-size: 13px; padding: 7px 12px; }
+html.fullscreen th { font-size: 11px; padding: 8px 12px; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .ind-grid { grid-template-columns: repeat(2, 1fr); }
+  .search-bar { flex-direction: column; }
+  .range-pills { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Technical Analysis</span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="fullscreenBtn" title="Toggle fullscreen">&#x26F6;</button>
+    <a class="header-link" id="dashLink" title="Open full dashboard">&#8599; Dashboard</a>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input class="search-input" id="symbolInput" type="text" placeholder="Symbol (e.g. RELIANCE)" spellcheck="false" autocomplete="off">
+  <select class="sel" id="exchangeSel">
+    <option value="NSE" selected>NSE</option>
+    <option value="BSE">BSE</option>
+    <option value="NFO">NFO</option>
+  </select>
+  <select class="sel" id="intervalSel">
+    <option value="day" selected>Daily</option>
+    <option value="60minute">1 Hour</option>
+    <option value="15minute">15 Min</option>
+  </select>
+  <div class="range-pills">
+    <button class="pill" data-days="7">1W</button>
+    <button class="pill active" data-days="30">1M</button>
+    <button class="pill" data-days="90">3M</button>
+    <button class="pill" data-days="365">1Y</button>
+  </div>
+  <button class="fetch-btn" id="fetchBtn">Analyze</button>
+</div>
+
+<div id="app">
+  <div class="empty-state">Enter a symbol above and click Analyze to view technical data.</div>
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge - minimal JSON-RPC over postMessage
+var AppBridge = (function() {
+  var isIframe = window.parent !== window;
+  var nextId = 1;
+  var pending = new Map();
+  var hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', function(event) {
+      if (event.source !== window.parent) return;
+      var msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        var cb = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) cb.reject(new Error(msg.error.message || 'RPC error'));
+        else cb.resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise(function(resolve, reject) {
+      var id = nextId++;
+      pending.set(id, {resolve: resolve, reject: reject});
+      window.parent.postMessage({jsonrpc: '2.0', id: id, method: method, params: params}, '*');
+      setTimeout(function() {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  function init() {
+    if (!isIframe) return Promise.resolve(null);
+    return sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Technical Analysis', version: '1.0.0' },
+      appCapabilities: {},
+    }).then(function(result) {
+      hostContext = result.hostContext || null;
+      if (hostContext) applyHostTheme(hostContext);
+      window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+      return result;
+    });
+  }
+
+  function callServerTool(name, args) {
+    return sendRequest('tools/call', { name: name, arguments: args || {} }).then(function(result) {
+      if (result && result.content && result.content[0] && result.content[0].text) {
+        try { return JSON.parse(result.content[0].text); } catch(e) {}
+        return result.content[0].text;
+      }
+      return result;
+    });
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url: url }).catch(function() { window.open(url, '_blank'); });
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode: mode });
+  }
+
+  function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename: filename, mimeType: mimeType, data: btoa(data) });
+  }
+
+  return { init: init, callServerTool: callServerTool, openLink: openLink,
+    notifySize: notifySize, requestDisplayMode: requestDisplayMode, downloadFile: downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+// --- Formatting helpers ---
+function fmtNum(n, d) {
+  if (n == null || isNaN(n)) return '--';
+  return Number(n).toFixed(d != null ? d : 2);
+}
+
+function fmtINR(n, decimals) {
+  if (n == null || isNaN(n)) return '--';
+  var d = decimals != null ? decimals : 2;
+  var neg = n < 0;
+  var abs = Math.abs(n);
+  var parts = abs.toFixed(d).split('.');
+  var intPart = parts[0];
+  var decPart = parts[1];
+  if (intPart.length > 3) {
+    var last3 = intPart.slice(-3);
+    var rest = intPart.slice(0, -3);
+    var groups = [];
+    while (rest.length > 2) { groups.unshift(rest.slice(-2)); rest = rest.slice(0, -2); }
+    if (rest.length > 0) groups.unshift(rest);
+    intPart = groups.join(',') + ',' + last3;
+  }
+  return (neg ? '-' : '') + '\u20B9' + intPart + (decPart ? '.' + decPart : '');
+}
+
+function fmtVol(v) {
+  if (v == null || isNaN(v)) return '--';
+  if (v >= 10000000) return (v / 10000000).toFixed(2) + ' Cr';
+  if (v >= 100000) return (v / 100000).toFixed(2) + ' L';
+  if (v >= 1000) return (v / 1000).toFixed(1) + ' K';
+  return String(v);
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '--';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+function fmtDateTime(dateStr) {
+  if (!dateStr) return '--';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' +
+    d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function pnlClass(n) {
+  if (n == null || isNaN(n) || n === 0) return '';
+  return n > 0 ? 'green' : 'red';
+}
+
+// --- DOM helpers ---
+function el(tag, className, textContent) {
+  var e = document.createElement(tag);
+  if (className) e.className = className;
+  if (textContent != null) e.textContent = String(textContent);
+  return e;
+}
+
+function tdCell(text, classes) {
+  var cell = el('td', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+function thCell(text, classes) {
+  var cell = el('th', classes || '');
+  cell.textContent = text != null ? String(text) : '';
+  return cell;
+}
+
+// --- State ---
+var selectedDays = 30;
+var lastOHLC = null;
+var lastIndicators = null;
+var currentInterval = 'day';
+
+// --- Range pill selection ---
+document.querySelectorAll('.pill').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.pill').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    selectedDays = parseInt(btn.dataset.days, 10);
+  });
+});
+
+// --- Enter key support on symbol input ---
+document.getElementById('symbolInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); fetchAnalysis(); }
+});
+
+// --- Fetch button ---
+document.getElementById('fetchBtn').addEventListener('click', fetchAnalysis);
+
+// --- Main fetch flow ---
+function fetchAnalysis() {
+  var symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+  if (!symbol) return;
+
+  var exchange = document.getElementById('exchangeSel').value;
+  var interval = document.getElementById('intervalSel').value;
+  currentInterval = interval;
+  var app = document.getElementById('app');
+  var fetchBtn = document.getElementById('fetchBtn');
+
+  fetchBtn.disabled = true;
+  fetchBtn.textContent = 'Loading...';
+  showLoading(app, exchange, symbol);
+
+  // Step 1: Search for instrument to get instrument_token
+  AppBridge.callServerTool('search_instruments', {
+    query: exchange + ':' + symbol,
+    filter_on: 'id',
+    limit: 5
+  }).then(function(searchRes) {
+    // Parse search results
+    var instruments = [];
+    if (searchRes && searchRes.data) {
+      instruments = searchRes.data;
+    } else if (Array.isArray(searchRes)) {
+      instruments = searchRes;
+    }
+
+    // Find exact match
+    var instrument = null;
+    for (var i = 0; i < instruments.length; i++) {
+      if (instruments[i].tradingsymbol === symbol && instruments[i].exchange === exchange) {
+        instrument = instruments[i];
+        break;
+      }
+    }
+    if (!instrument && instruments.length > 0) {
+      instrument = instruments[0];
+    }
+    if (!instrument) {
+      throw new Error('Instrument not found: ' + exchange + ':' + symbol);
+    }
+
+    var token = instrument.instrument_token;
+    var now = new Date();
+    var from = new Date(now);
+    from.setDate(from.getDate() - selectedDays);
+
+    function fmtDateParam(d) {
+      return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0') + ' ' +
+        String(d.getHours()).padStart(2, '0') + ':' +
+        String(d.getMinutes()).padStart(2, '0') + ':' +
+        String(d.getSeconds()).padStart(2, '0');
+    }
+
+    // Step 2 & 3: Fetch historical data + technical indicators in parallel
+    return Promise.all([
+      AppBridge.callServerTool('get_historical_data', {
+        instrument_token: token,
+        from_date: fmtDateParam(from),
+        to_date: fmtDateParam(now),
+        interval: interval
+      }),
+      AppBridge.callServerTool('technical_indicators', {
+        exchange: exchange,
+        tradingsymbol: symbol,
+        interval: interval,
+        days: selectedDays < 90 ? 90 : selectedDays
+      })
+    ]).then(function(results) {
+      return { hist: results[0], ind: results[1], sym: symbol, exch: exchange };
+    });
+  }).then(function(data) {
+    // Parse OHLC data
+    var candles = [];
+    if (Array.isArray(data.hist)) {
+      candles = data.hist;
+    } else if (data.hist && data.hist.candles) {
+      candles = data.hist.candles;
+    } else if (data.hist && data.hist.data) {
+      candles = data.hist.data;
+    }
+
+    lastOHLC = candles;
+    lastIndicators = data.ind;
+
+    renderAnalysis(data.sym, data.exch, interval, candles, data.ind);
+  }).catch(function(err) {
+    showError(app, err.message || String(err));
+  }).finally(function() {
+    fetchBtn.disabled = false;
+    fetchBtn.textContent = 'Analyze';
+    requestAnimationFrame(function() { AppBridge.notifySize(); });
+  });
+}
+
+function showLoading(app, exchange, symbol) {
+  app.textContent = '';
+  app.appendChild(el('div', 'loading-state', 'Fetching data for ' + exchange + ':' + symbol + '...'));
+  AppBridge.notifySize();
+}
+
+function showError(app, msg) {
+  app.textContent = '';
+  app.appendChild(el('div', 'error-state', 'Error: ' + msg));
+}
+
+// --- Render all sections ---
+function renderAnalysis(symbol, exchange, interval, candles, indicators) {
+  var app = document.getElementById('app');
+  app.textContent = '';
+
+  // Price summary cards
+  var price = indicators && indicators.current_price ? indicators.current_price : (candles.length > 0 ? candles[candles.length - 1].close : null);
+  var prevClose = candles.length > 1 ? candles[candles.length - 2].close : null;
+  var change = (price != null && prevClose != null) ? price - prevClose : null;
+  var changePct = (change != null && prevClose) ? (change / prevClose) * 100 : null;
+
+  var latest = candles.length > 0 ? candles[candles.length - 1] : null;
+  var dayHigh = latest ? latest.high : null;
+  var dayLow = latest ? latest.low : null;
+  var dayVol = latest ? latest.volume : null;
+
+  var summaryGrid = el('div', 'summary-grid');
+  var summaryItems = [
+    { label: exchange + ':' + symbol, value: fmtINR(price), cls: '' },
+    { label: 'Change', value: (change != null ? (change >= 0 ? '+' : '') + fmtNum(change) + ' (' + fmtNum(changePct) + '%)' : '--'), cls: pnlClass(change) },
+    { label: 'High / Low', value: (dayHigh != null ? fmtNum(dayHigh) + ' / ' + fmtNum(dayLow) : '--'), cls: '' },
+    { label: 'Volume', value: fmtVol(dayVol), cls: '' },
+  ];
+  for (var si = 0; si < summaryItems.length; si++) {
+    var sItem = summaryItems[si];
+    var card = el('div', 'summary-card');
+    card.appendChild(el('div', 'summary-label', sItem.label));
+    card.appendChild(el('div', 'summary-value' + (sItem.cls ? ' ' + sItem.cls : ''), sItem.value));
+    summaryGrid.appendChild(card);
+  }
+  app.appendChild(summaryGrid);
+
+  // Indicator panel
+  if (indicators && indicators.indicators) {
+    var indSection = el('div', 'section');
+    indSection.appendChild(el('div', 'section-header', 'Indicators'));
+    var indGrid = el('div', 'ind-grid');
+    var ind = indicators.indicators;
+
+    // RSI
+    var rsiCard = el('div', 'ind-card');
+    rsiCard.appendChild(el('div', 'ind-name', 'RSI (14)'));
+    var rsiVal = ind.rsi_14;
+    var rsiCls = rsiVal > 70 ? ' red' : (rsiVal < 30 ? ' green' : '');
+    rsiCard.appendChild(el('div', 'ind-value' + rsiCls, fmtNum(rsiVal, 1)));
+    var rsiLabel = rsiVal > 70 ? 'Overbought' : (rsiVal < 30 ? 'Oversold' : 'Neutral');
+    rsiCard.appendChild(el('div', 'ind-sub', rsiLabel));
+    indGrid.appendChild(rsiCard);
+
+    // SMA 20 / 50
+    var smaCard = el('div', 'ind-card');
+    smaCard.appendChild(el('div', 'ind-name', 'SMA'));
+    smaCard.appendChild(el('div', 'ind-value', fmtNum(ind.sma_20)));
+    smaCard.appendChild(el('div', 'ind-sub', 'SMA20: ' + fmtNum(ind.sma_20) + '  SMA50: ' + fmtNum(ind.sma_50)));
+    indGrid.appendChild(smaCard);
+
+    // EMA 12 / 26
+    var emaCard = el('div', 'ind-card');
+    emaCard.appendChild(el('div', 'ind-name', 'EMA'));
+    emaCard.appendChild(el('div', 'ind-value', fmtNum(ind.ema_12)));
+    emaCard.appendChild(el('div', 'ind-sub', 'EMA12: ' + fmtNum(ind.ema_12) + '  EMA26: ' + fmtNum(ind.ema_26)));
+    indGrid.appendChild(emaCard);
+
+    // MACD
+    if (ind.macd) {
+      var macdCard = el('div', 'ind-card');
+      macdCard.appendChild(el('div', 'ind-name', 'MACD'));
+      var histVal = ind.macd.histogram;
+      var macdCls = histVal > 0 ? ' green' : (histVal < 0 ? ' red' : '');
+      macdCard.appendChild(el('div', 'ind-value' + macdCls, fmtNum(ind.macd.line)));
+      macdCard.appendChild(el('div', 'ind-sub', 'Signal: ' + fmtNum(ind.macd.signal) + '  Hist: ' + fmtNum(histVal)));
+      indGrid.appendChild(macdCard);
+    }
+
+    // Bollinger Bands
+    if (ind.bollinger_bands) {
+      var bbCard = el('div', 'ind-card');
+      bbCard.appendChild(el('div', 'ind-name', 'Bollinger Bands'));
+      bbCard.appendChild(el('div', 'ind-value', fmtNum(ind.bollinger_bands.middle)));
+      bbCard.appendChild(el('div', 'ind-sub', 'Upper: ' + fmtNum(ind.bollinger_bands.upper) + '  Lower: ' + fmtNum(ind.bollinger_bands.lower)));
+      indGrid.appendChild(bbCard);
+
+      // BB Width
+      var bwCard = el('div', 'ind-card');
+      bwCard.appendChild(el('div', 'ind-name', 'BB Width'));
+      bwCard.appendChild(el('div', 'ind-value', fmtNum(ind.bollinger_bands.width, 1) + '%'));
+      var bwLabel = ind.bollinger_bands.width > 10 ? 'High volatility' : (ind.bollinger_bands.width < 4 ? 'Low volatility (squeeze)' : 'Normal');
+      bwCard.appendChild(el('div', 'ind-sub', bwLabel));
+      indGrid.appendChild(bwCard);
+    }
+
+    indSection.appendChild(indGrid);
+    app.appendChild(indSection);
+  }
+
+  // Signals section
+  if (indicators && indicators.signals && indicators.signals.length > 0) {
+    var sigSection = el('div', 'section');
+    sigSection.appendChild(el('div', 'section-header', 'Signals'));
+    var sigList = el('div', 'signal-list');
+
+    for (var si2 = 0; si2 < indicators.signals.length; si2++) {
+      var sigText = indicators.signals[si2];
+      var sigType = 'neutral';
+      var lc = sigText.toLowerCase();
+      if (lc.indexOf('bullish') !== -1 || lc.indexOf('oversold') !== -1) {
+        sigType = 'bullish';
+      } else if (lc.indexOf('bearish') !== -1 || lc.indexOf('overbought') !== -1) {
+        sigType = 'bearish';
+      } else if (lc.indexOf('above') !== -1) {
+        sigType = 'bullish';
+      } else if (lc.indexOf('below') !== -1) {
+        sigType = 'bearish';
+      }
+      var sigEl = el('div', 'signal signal-' + sigType);
+      sigEl.appendChild(el('span', 'signal-dot'));
+      sigEl.appendChild(el('span', '', sigText));
+      sigList.appendChild(sigEl);
+    }
+    sigSection.appendChild(sigList);
+    app.appendChild(sigSection);
+  }
+
+  // OHLC table (recent 20 candles, newest first)
+  if (candles.length > 0) {
+    var ohlcCount = Math.min(candles.length, 20);
+    var ohlcSection = el('div', 'section');
+    ohlcSection.appendChild(el('div', 'section-header', 'OHLC Data (Recent ' + ohlcCount + ' candles)'));
+
+    var wrap = el('div', 'tbl-wrap');
+    var table = document.createElement('table');
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+    var hCols = [['Date',''], ['Open','r'], ['High','r'], ['Low','r'], ['Close','r'], ['Volume','r'], ['Chg %','r']];
+    for (var hi = 0; hi < hCols.length; hi++) headRow.appendChild(thCell(hCols[hi][0], hCols[hi][1]));
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    var recent = candles.slice(-20).reverse();
+    for (var ci = 0; ci < recent.length; ci++) {
+      var c = recent[ci];
+      var chg = c.open !== 0 ? ((c.close - c.open) / c.open * 100) : 0;
+      var row = document.createElement('tr');
+
+      var dateDisplay = (interval === 'day') ? fmtDate(c.date) : fmtDateTime(c.date);
+      row.appendChild(tdCell(dateDisplay, ''));
+      row.appendChild(tdCell(fmtNum(c.open), 'r'));
+      row.appendChild(tdCell(fmtNum(c.high), 'r'));
+      row.appendChild(tdCell(fmtNum(c.low), 'r'));
+      row.appendChild(tdCell(fmtNum(c.close), 'r ' + pnlClass(c.close - c.open)));
+      row.appendChild(tdCell(fmtVol(c.volume), 'r'));
+      row.appendChild(tdCell((chg >= 0 ? '+' : '') + fmtNum(chg) + '%', 'r ' + pnlClass(chg)));
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    ohlcSection.appendChild(wrap);
+    app.appendChild(ohlcSection);
+  }
+
+  // Footer
+  var now = new Date();
+  var ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    + ' ' + now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  var footer = el('div', 'footer');
+  footer.appendChild(el('span', 'footer-ts', candles.length + ' candles | ' + ts));
+
+  var btnGroup = el('div', '');
+  btnGroup.style.cssText = 'display:flex;gap:6px';
+  var csvBtn = el('button', 'fetch-btn', 'Export CSV');
+  csvBtn.style.cssText = 'font-size:10px;padding:4px 10px';
+  csvBtn.addEventListener('click', exportCSV);
+  btnGroup.appendChild(csvBtn);
+  footer.appendChild(btnGroup);
+  app.appendChild(footer);
+
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+}
+
+// --- CSV Export ---
+function exportCSV() {
+  if (!lastOHLC || lastOHLC.length === 0) return;
+  var rows = [['Date','Open','High','Low','Close','Volume']];
+  for (var i = 0; i < lastOHLC.length; i++) {
+    var c = lastOHLC[i];
+    rows.push([
+      c.date || '',
+      c.open != null ? c.open.toFixed(2) : '',
+      c.high != null ? c.high.toFixed(2) : '',
+      c.low != null ? c.low.toFixed(2) : '',
+      c.close != null ? c.close.toFixed(2) : '',
+      c.volume != null ? String(c.volume) : ''
+    ]);
+  }
+  var sym = document.getElementById('symbolInput').value.trim().toUpperCase() || 'data';
+  var csv = rows.map(function(r) { return r.join(','); }).join('\n');
+  AppBridge.downloadFile(sym + '-ohlc-' + new Date().toISOString().slice(0,10) + '.csv', 'text/csv', csv);
+}
+
+// --- Fullscreen toggle ---
+function toggleFullscreen() {
+  var current = document.documentElement.classList.contains('fullscreen');
+  AppBridge.requestDisplayMode(current ? 'inline' : 'fullscreen').then(function(result) {
+    if (result && result.granted !== false) {
+      document.documentElement.classList.toggle('fullscreen');
+    }
+  });
+}
+
+// --- Dashboard link ---
+document.getElementById('dashLink').addEventListener('click', function(e) {
+  e.preventDefault();
+  var baseUrl = (window.__DATA__ && window.__DATA__.external_url) || 'https://kite-mcp-server.fly.dev';
+  AppBridge.openLink(baseUrl + '/dashboard/chart');
+});
+
+// --- Fullscreen button ---
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+// --- Init ---
+(function() {
+  AppBridge.init().catch(function() {});
+
+  requestAnimationFrame(function() { AppBridge.notifySize(); });
+
+  // Observe body resizes and notify host
+  if (typeof ResizeObserver !== 'undefined') {
+    var resizeTimer;
+    new ResizeObserver(function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() { AppBridge.notifySize(); }, 100);
+    }).observe(document.body);
+  }
+})();
+</script>
+</body>
+</html>

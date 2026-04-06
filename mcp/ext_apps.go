@@ -91,6 +91,11 @@ var appResources = []appResource{
 		TemplateFile: "options_chain_app.html",
 		DataFunc:     optionsChainData,
 	},
+	{
+		URI: "ui://kite-mcp/chart", Name: "Chart Widget",
+		TemplateFile: "chart_app.html",
+		DataFunc:     chartData,
+	},
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
@@ -105,6 +110,7 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/watchlist":  "ui://kite-mcp/watchlist",
 	"/dashboard/hub":       "ui://kite-mcp/hub",
 	"/dashboard/options":   "ui://kite-mcp/options-chain",
+	"/dashboard/chart":     "ui://kite-mcp/chart",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
@@ -745,6 +751,13 @@ func hubData(manager *kc.Manager, auditStore *audit.Store, email string) any {
 // idle state. The user picks the underlying interactively and loads data via
 // AppBridge calls to get_option_chain / options_greeks.
 func optionsChainData(manager *kc.Manager, _ *audit.Store, email string) any {
+	return nil
+}
+
+// chartData returns nil because the chart widget boots into an idle state.
+// The user picks the symbol interactively and loads data via AppBridge calls
+// to search_instruments, get_historical_data, and technical_indicators.
+func chartData(_ *kc.Manager, _ *audit.Store, _ string) any {
 	return nil
 }
 

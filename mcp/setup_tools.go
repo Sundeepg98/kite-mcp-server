@@ -74,6 +74,7 @@ var pageRoutes = map[string]string{
 	"safety":    "/dashboard/safety",
 	"watchlist": "/dashboard/watchlist",
 	"options":   "/dashboard/options",
+	"chart":     "/dashboard/chart",
 }
 
 // toolDashboardPage maps tool names to the dashboard page path that is most
@@ -124,9 +125,9 @@ var toolDashboardPage = map[string]string{
 	"options_greeks":           "/dashboard/options",
 	"options_strategy":         "/dashboard/options",
 
-	// Analytics tools → portfolio page
-	"technical_indicators":     "/dashboard",
-	"backtest_strategy":        "/dashboard",
+	// Analytics tools → chart page
+	"technical_indicators":     "/dashboard/chart",
+	"backtest_strategy":        "/dashboard/chart",
 
 	// Paper trading page
 	"paper_trading_toggle":     "/dashboard/paper",
