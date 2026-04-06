@@ -19,6 +19,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	stripe "github.com/stripe/stripe-go/v82"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
@@ -531,7 +532,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
 	// Skipped entirely in DEV_MODE — all tools are free tier.
-	if os.Getenv("STRIPE_SECRET_KEY") != "" && !app.DevMode {
+	if stripeKey := os.Getenv("STRIPE_SECRET_KEY"); stripeKey != "" && !app.DevMode {
+		stripe.Key = stripeKey
 		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
 		if err := billingStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize billing table", "error", err)
