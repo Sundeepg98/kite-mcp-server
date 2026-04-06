@@ -86,6 +86,11 @@ var appResources = []appResource{
 		TemplateFile: "hub_app.html",
 		DataFunc:     hubData,
 	},
+	{
+		URI: "ui://kite-mcp/options-chain", Name: "Options Chain Widget",
+		TemplateFile: "options_chain_app.html",
+		DataFunc:     optionsChainData,
+	},
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
@@ -99,6 +104,7 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/order-form": "ui://kite-mcp/order-form",
 	"/dashboard/watchlist":  "ui://kite-mcp/watchlist",
 	"/dashboard/hub":       "ui://kite-mcp/hub",
+	"/dashboard/options":   "ui://kite-mcp/options-chain",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
@@ -733,6 +739,13 @@ func hubData(manager *kc.Manager, auditStore *audit.Store, email string) any {
 		"tool_calls_today": toolCallsToday,
 		"external_url":     externalURL,
 	}
+}
+
+// optionsChainData returns nil because the options chain widget boots into an
+// idle state. The user picks the underlying interactively and loads data via
+// AppBridge calls to get_option_chain / options_greeks.
+func optionsChainData(manager *kc.Manager, _ *audit.Store, email string) any {
+	return nil
 }
 
 // kiteClientForEmail creates a kiteconnect.Client for the given email,

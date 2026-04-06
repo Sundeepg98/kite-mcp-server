@@ -37,13 +37,15 @@ func (*OptionChainTool) Tool() mcp.Tool {
 
 // optionChainEntry represents one strike row in the chain.
 type optionChainEntry struct {
-	Strike   float64 `json:"strike"`
-	CELTP    float64 `json:"ce_ltp"`
-	CEOI     float64 `json:"ce_oi"`
-	CEVolume int     `json:"ce_volume"`
-	PELTP    float64 `json:"pe_ltp"`
-	PEOI     float64 `json:"pe_oi"`
-	PEVolume int     `json:"pe_volume"`
+	Strike          float64 `json:"strike"`
+	CELTP           float64 `json:"ce_ltp"`
+	CEOI            float64 `json:"ce_oi"`
+	CEVolume        int     `json:"ce_volume"`
+	CETradingsymbol string  `json:"ce_tradingsymbol,omitempty"`
+	PELTP           float64 `json:"pe_ltp"`
+	PEOI            float64 `json:"pe_oi"`
+	PEVolume        int     `json:"pe_volume"`
+	PETradingsymbol string  `json:"pe_tradingsymbol,omitempty"`
 }
 
 // optionChainResponse is the full response returned to the caller.
@@ -244,6 +246,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				oid := &oiData{}
 
 				if inst, ok := ceByStrike[strike]; ok {
+					entry.CETradingsymbol = inst.Tradingsymbol
 					key := "NFO:" + inst.Tradingsymbol
 					if q, ok := quotes[key]; ok {
 						entry.CELTP = q.LastPrice
@@ -255,6 +258,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				}
 
 				if inst, ok := peByStrike[strike]; ok {
+					entry.PETradingsymbol = inst.Tradingsymbol
 					key := "NFO:" + inst.Tradingsymbol
 					if q, ok := quotes[key]; ok {
 						entry.PELTP = q.LastPrice

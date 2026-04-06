@@ -73,6 +73,7 @@ var pageRoutes = map[string]string{
 	"paper":     "/dashboard/paper",
 	"safety":    "/dashboard/safety",
 	"watchlist": "/dashboard/watchlist",
+	"options":   "/dashboard/options",
 }
 
 // toolDashboardPage maps tool names to the dashboard page path that is most
@@ -118,10 +119,10 @@ var toolDashboardPage = map[string]string{
 	"list_trailing_stops":      "/dashboard/alerts",
 	"cancel_trailing_stop":     "/dashboard/alerts",
 
-	// Derivatives / options tools → orders page (closest match)
-	"get_option_chain":         "/dashboard/orders",
-	"options_greeks":           "/dashboard/orders",
-	"options_strategy":         "/dashboard/orders",
+	// Derivatives / options tools → options chain page
+	"get_option_chain":         "/dashboard/options",
+	"options_greeks":           "/dashboard/options",
+	"options_strategy":         "/dashboard/options",
 
 	// Analytics tools → portfolio page
 	"technical_indicators":     "/dashboard",
