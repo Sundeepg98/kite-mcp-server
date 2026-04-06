@@ -443,6 +443,7 @@ type Manager struct {
 	riskGuard          *riskguard.Guard               // optional: financial safety controls
 	paperEngine        *papertrading.PaperEngine      // optional: virtual trading engine
 	billingStore       *billing.Store                 // optional: billing tier enforcement
+	invitationStore    *users.InvitationStore         // optional: family invitation management
 	eventDispatcher    *domain.EventDispatcher        // optional: domain event pub/sub
 	eventStore         *eventsourcing.EventStore      // optional: append-only event persistence
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
@@ -806,6 +807,16 @@ func (m *Manager) BillingStore() BillingStoreInterface {
 // BillingStoreConcrete returns the concrete billing store (for internal wiring).
 func (m *Manager) BillingStoreConcrete() *billing.Store {
 	return m.billingStore
+}
+
+// SetInvitationStore sets the invitation store for family invite management.
+func (m *Manager) SetInvitationStore(store *users.InvitationStore) {
+	m.invitationStore = store
+}
+
+// InvitationStore returns the invitation store, or nil if not configured.
+func (m *Manager) InvitationStore() *users.InvitationStore {
+	return m.invitationStore
 }
 
 // SetEventDispatcher sets the domain event dispatcher.

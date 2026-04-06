@@ -568,6 +568,18 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
 		}
 	}
+
+	// Initialize family invitation store.
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		invStore := users.NewInvitationStore(alertDB)
+		if err := invStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize invitations table", "error", err)
+		} else if err := invStore.LoadFromDB(); err != nil {
+			app.logger.Error("Failed to load invitations from DB", "error", err)
+		}
+		kcManager.SetInvitationStore(invStore)
+	}
+
 	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
 	if paperEngine != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(papertrading.Middleware(paperEngine)))
@@ -1070,6 +1082,43 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/auth/admin-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleAdminLogin))
 		mux.Handle("/auth/google/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleLogin))
 		mux.Handle("/auth/google/callback", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleCallback))
+	}
+
+	// Family invitation acceptance (public — invitee clicks link).
+	if invStore := kcManager.InvitationStore(); invStore != nil {
+		mux.HandleFunc("/auth/accept-invite", func(w http.ResponseWriter, r *http.Request) {
+			token := r.URL.Query().Get("token")
+			if token == "" {
+				http.Error(w, "missing token", http.StatusBadRequest)
+				return
+			}
+			inv := invStore.Get(token)
+			if inv == nil {
+				http.Error(w, "invitation not found", http.StatusNotFound)
+				return
+			}
+			if inv.Status != "pending" {
+				http.Error(w, "invitation already "+inv.Status, http.StatusGone)
+				return
+			}
+			if time.Now().After(inv.ExpiresAt) {
+				http.Error(w, "invitation expired", http.StatusGone)
+				return
+			}
+			// Auto-create user if needed and link to admin.
+			uStore := kcManager.UserStoreConcrete()
+			if uStore != nil {
+				uStore.EnsureUser(inv.InvitedEmail, "", "", "family_invite")
+				if err := uStore.SetAdminEmail(inv.InvitedEmail, inv.AdminEmail); err != nil {
+					app.logger.Error("Failed to link family member", "invited", inv.InvitedEmail, "admin", inv.AdminEmail, "error", err)
+				}
+			}
+			if err := invStore.Accept(token); err != nil {
+				app.logger.Error("Failed to accept invitation", "token", token, "error", err)
+			}
+			// Redirect to login.
+			http.Redirect(w, r, "/auth/login?msg=welcome", http.StatusFound)
+		})
 	}
 
 	// Register Stripe webhook endpoint (no auth — Stripe calls this with a signed payload).

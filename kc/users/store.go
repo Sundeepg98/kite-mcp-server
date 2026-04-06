@@ -354,6 +354,21 @@ func (s *Store) SetAdminEmail(email, adminEmail string) error {
 	return nil
 }
 
+// ListByAdminEmail returns all users linked to this admin.
+func (s *Store) ListByAdminEmail(adminEmail string) []*User {
+	adminEmail = strings.ToLower(adminEmail)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []*User
+	for _, u := range s.users {
+		if u.AdminEmail == adminEmail {
+			cp := *u
+			result = append(result, &cp)
+		}
+	}
+	return result
+}
+
 // List returns all users as a slice (copies).
 func (s *Store) List() []*User {
 	s.mu.RLock()

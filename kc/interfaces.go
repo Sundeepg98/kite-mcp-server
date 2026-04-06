@@ -218,6 +218,9 @@ type UserStoreInterface interface {
 	// EnsureUser creates a user if they don't exist, returning the user.
 	EnsureUser(email, kiteUID, displayName, onboardedBy string) *users.User
 
+	// ListByAdminEmail returns all users linked to this admin.
+	ListByAdminEmail(adminEmail string) []*users.User
+
 	// SetPasswordHash stores a bcrypt password hash for the given user.
 	SetPasswordHash(email, hash string) error
 
