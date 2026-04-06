@@ -389,6 +389,7 @@ func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
 	client := kiteClientForEmail(manager, email)
 
 	type alertItem struct {
+		ID          string  `json:"id"`
 		Symbol      string  `json:"tradingsymbol"`
 		Exchange    string  `json:"exchange"`
 		Direction   string  `json:"direction"`
@@ -424,7 +425,7 @@ func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
 
 	for _, a := range allAlerts {
 		item := alertItem{
-			Symbol: a.Tradingsymbol, Exchange: a.Exchange,
+			ID: a.ID, Symbol: a.Tradingsymbol, Exchange: a.Exchange,
 			Direction: string(a.Direction), TargetPrice: a.TargetPrice,
 			CreatedAt: a.CreatedAt.Format(time.RFC3339),
 		}

@@ -257,7 +257,7 @@ func TestCancelOrder(t *testing.T) {
 		Price:           1700,
 	})
 
-	_, err := c.CancelOrder(resp.OrderID)
+	_, err := c.CancelOrder(resp.OrderID, "regular")
 	if err != nil {
 		t.Fatalf("CancelOrder() error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestCancelOrder(t *testing.T) {
 
 func TestCancelNonExistentOrder(t *testing.T) {
 	c := New()
-	_, err := c.CancelOrder("nonexistent")
+	_, err := c.CancelOrder("nonexistent", "regular")
 	if err == nil {
 		t.Fatal("expected error for nonexistent order")
 	}
@@ -282,8 +282,8 @@ func TestCancelAlreadyCancelledOrder(t *testing.T) {
 		Exchange: "NSE", Tradingsymbol: "A", TransactionType: "BUY",
 		OrderType: "LIMIT", Product: "CNC", Quantity: 1, Price: 100,
 	})
-	c.CancelOrder(resp.OrderID)
-	_, err := c.CancelOrder(resp.OrderID)
+	c.CancelOrder(resp.OrderID, "regular")
+	_, err := c.CancelOrder(resp.OrderID, "regular")
 	if err == nil {
 		t.Fatal("expected error when cancelling already-cancelled order")
 	}
@@ -415,7 +415,7 @@ func TestErrorInjection(t *testing.T) {
 			return e
 		}, func(c *Client) { c.PlaceOrderErr = injected }},
 		{"ModifyOrder", func(c *Client) error { _, e := c.ModifyOrder("1", broker.OrderParams{}); return e }, func(c *Client) { c.ModifyOrderErr = injected }},
-		{"CancelOrder", func(c *Client) error { _, e := c.CancelOrder("1"); return e }, func(c *Client) { c.CancelOrderErr = injected }},
+		{"CancelOrder", func(c *Client) error { _, e := c.CancelOrder("1", "regular"); return e }, func(c *Client) { c.CancelOrderErr = injected }},
 		{"GetLTP", func(c *Client) error { _, e := c.GetLTP("NSE:X"); return e }, func(c *Client) { c.GetLTPErr = injected }},
 		{"GetOHLC", func(c *Client) error { _, e := c.GetOHLC("NSE:X"); return e }, func(c *Client) { c.GetOHLCErr = injected }},
 		{"GetHistoricalData", func(c *Client) error {

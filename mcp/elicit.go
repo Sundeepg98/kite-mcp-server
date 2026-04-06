@@ -143,8 +143,8 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 		symbol := SafeAssertString(args["tradingsymbol"], "?")
 		txn := SafeAssertString(args["transaction_type"], "?")
 		triggerType := SafeAssertString(args["trigger_type"], "single")
-		triggerVal := SafeAssertFloat64(args["trigger_value_1"], 0)
-		limitPrice := SafeAssertFloat64(args["limit_price_1"], 0)
+		triggerVal := SafeAssertFloat64(args["trigger_value"], 0)
+		limitPrice := SafeAssertFloat64(args["limit_price"], 0)
 
 		return fmt.Sprintf("Confirm GTT: %s %s:%s (%s) trigger %.2f, limit %.2f",
 			txn, exchange, symbol, triggerType, triggerVal, limitPrice)
@@ -153,7 +153,7 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 		triggerID := SafeAssertInt(args["trigger_id"], 0)
 		exchange := SafeAssertString(args["exchange"], "?")
 		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		triggerVal := SafeAssertFloat64(args["trigger_value_1"], 0)
+		triggerVal := SafeAssertFloat64(args["trigger_value"], 0)
 
 		return fmt.Sprintf("Confirm: Modify GTT %d (%s:%s) → trigger %.2f",
 			triggerID, exchange, symbol, triggerVal)

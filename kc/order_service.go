@@ -61,12 +61,12 @@ func (os *OrderService) ModifyOrder(email, orderID string, params broker.OrderPa
 }
 
 // CancelOrder cancels an existing pending order.
-func (os *OrderService) CancelOrder(email, orderID string) (broker.OrderResponse, error) {
+func (os *OrderService) CancelOrder(email, orderID, variety string) (broker.OrderResponse, error) {
 	b, err := os.getBroker(email)
 	if err != nil {
 		return broker.OrderResponse{}, err
 	}
-	resp, err := b.CancelOrder(orderID)
+	resp, err := b.CancelOrder(orderID, variety)
 	if err != nil {
 		os.logger.Error("Failed to cancel order", "email", email, "order_id", orderID, "error", err)
 		return broker.OrderResponse{}, fmt.Errorf("failed to cancel order: %w", err)

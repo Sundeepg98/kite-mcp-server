@@ -353,7 +353,7 @@ func (c *Client) ModifyOrder(orderID string, params broker.OrderParams) (broker.
 }
 
 // CancelOrder marks a pending order as CANCELLED.
-func (c *Client) CancelOrder(orderID string) (broker.OrderResponse, error) {
+func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
 	if c.CancelOrderErr != nil {
 		return broker.OrderResponse{}, c.CancelOrderErr
 	}

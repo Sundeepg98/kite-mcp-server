@@ -176,7 +176,8 @@ type Client interface {
 	ModifyOrder(orderID string, params OrderParams) (OrderResponse, error)
 
 	// CancelOrder cancels an existing pending order.
-	CancelOrder(orderID string) (OrderResponse, error)
+	// variety specifies the order variety (e.g., "regular", "co", "amo", "iceberg", "auction").
+	CancelOrder(orderID string, variety string) (OrderResponse, error)
 
 	// GetLTP returns the last traded price for the given instruments.
 	// Instrument format is "EXCHANGE:TRADINGSYMBOL" (e.g., "NSE:RELIANCE").

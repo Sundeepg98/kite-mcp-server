@@ -117,12 +117,14 @@ var toolDashboardPage = map[string]string{
 	"list_trailing_stops":      "/dashboard/alerts",
 	"cancel_trailing_stop":     "/dashboard/alerts",
 
-	// Activity page
-	"get_option_chain":         "/dashboard/activity",
-	"technical_indicators":     "/dashboard/activity",
-	"backtest_strategy":        "/dashboard/activity",
-	"options_greeks":           "/dashboard/activity",
-	"options_strategy":         "/dashboard/activity",
+	// Derivatives / options tools → orders page (closest match)
+	"get_option_chain":         "/dashboard/orders",
+	"options_greeks":           "/dashboard/orders",
+	"options_strategy":         "/dashboard/orders",
+
+	// Analytics tools → portfolio page
+	"technical_indicators":     "/dashboard",
+	"backtest_strategy":        "/dashboard",
 
 	// Paper trading page
 	"paper_trading_toggle":     "/dashboard/paper",

@@ -6,6 +6,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 )
 
@@ -83,11 +84,16 @@ type PositionsTool struct{}
 
 func (*PositionsTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_positions",
-		mcp.WithDescription("Get current positions. Supports pagination for large datasets."),
+		mcp.WithDescription("Get current positions. Returns net positions by default (use position_type='day' for intraday). Supports pagination for large datasets."),
 		mcp.WithTitleAnnotation("Get Positions"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithString("position_type",
+			mcp.Description("Type of positions to return: 'net' (default, end-of-day view) or 'day' (intraday view)"),
+			mcp.DefaultString("net"),
+			mcp.Enum("net", "day"),
+		),
 		mcp.WithNumber("from",
 			mcp.Description("Starting index for pagination (0-based). Default: 0"),
 		),
@@ -98,22 +104,25 @@ func (*PositionsTool) Tool() mcp.Tool {
 }
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_positions", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]interface{}, error) {
 		positions, err := session.Broker.GetPositions()
 		if err != nil {
 			return nil, err
 		}
 
-		// Convert to []interface{} for generic pagination
-		result := make([]interface{}, len(positions.Day)+len(positions.Net))
-		idx := 0
-		for _, pos := range positions.Day {
-			result[idx] = pos
-			idx++
+		posType := SafeAssertString(args["position_type"], "net")
+
+		var source []broker.Position
+		switch posType {
+		case "day":
+			source = positions.Day
+		default:
+			source = positions.Net
 		}
-		for _, pos := range positions.Net {
-			result[idx] = pos
-			idx++
+
+		result := make([]interface{}, len(source))
+		for i, pos := range source {
+			result[i] = pos
 		}
 		return result, nil
 	})

@@ -318,13 +318,11 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		// variety is accepted by the tool schema but broker.CancelOrder
-		// defaults to "regular" internally.
-		_ = SafeAssertString(args["variety"], "regular")
+		variety := SafeAssertString(args["variety"], "regular")
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Broker.CancelOrder(orderID)
+			resp, err := session.Broker.CancelOrder(orderID, variety)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel order: %s", err.Error())), nil

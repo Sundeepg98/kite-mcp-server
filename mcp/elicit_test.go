@@ -65,8 +65,8 @@ func TestBuildOrderConfirmMessage(t *testing.T) {
 			"tradingsymbol":    "INFY",
 			"transaction_type": "BUY",
 			"trigger_type":     "single",
-			"trigger_value_1":  float64(1400),
-			"limit_price_1":    float64(1395),
+			"trigger_value":    float64(1400),
+			"limit_price":      float64(1395),
 		})
 		assert.Contains(t, msg, "GTT")
 		assert.Contains(t, msg, "NSE:INFY")

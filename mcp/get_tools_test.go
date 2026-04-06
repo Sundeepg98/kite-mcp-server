@@ -356,7 +356,7 @@ func TestMockBroker_CancelOrder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = client.CancelOrder(resp.OrderID)
+		_, err = client.CancelOrder(resp.OrderID, "regular")
 		require.NoError(t, err)
 
 		orders := client.Orders()
@@ -375,7 +375,7 @@ func TestMockBroker_CancelOrder(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = client.CancelOrder(resp.OrderID)
+		_, err = client.CancelOrder(resp.OrderID, "regular")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "COMPLETE")
 	})

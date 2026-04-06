@@ -60,7 +60,7 @@ func (m *mockBrokerClient) PlaceOrder(params broker.OrderParams) (broker.OrderRe
 func (m *mockBrokerClient) ModifyOrder(orderID string, params broker.OrderParams) (broker.OrderResponse, error) {
 	return broker.OrderResponse{}, nil
 }
-func (m *mockBrokerClient) CancelOrder(orderID string) (broker.OrderResponse, error) {
+func (m *mockBrokerClient) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
 	return broker.OrderResponse{}, nil
 }
 func (m *mockBrokerClient) GetLTP(instruments ...string) (map[string]broker.LTP, error) {

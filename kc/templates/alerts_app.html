@@ -290,9 +290,9 @@ function updateFooterTs() {
   }
 }
 
-async function deleteAlert(symbol, exchange, direction, row) {
+async function deleteAlert(alertId, symbol, direction, row) {
   try {
-    await AppBridge.callServerTool('delete_alert', { tradingsymbol: symbol, exchange: exchange, direction: direction });
+    await AppBridge.callServerTool('delete_alert', { alert_id: alertId });
     AppBridge.sendMessage('Deleted ' + symbol + ' ' + direction + ' alert');
     if (row && row.parentNode) row.parentNode.removeChild(row);
   } catch (e) {
@@ -415,11 +415,11 @@ function render() {
       const tdDel = document.createElement('td');
       const delBtn = el('button', 'del-btn', '\u2715');
       delBtn.title = 'Delete alert';
-      (function(symbol, exchange, direction, row) {
+      (function(alertId, symbol, direction, row) {
         delBtn.addEventListener('click', function() {
-          deleteAlert(symbol, exchange, direction, row);
+          deleteAlert(alertId, symbol, direction, row);
         });
-      })(a.tradingsymbol, a.exchange, a.direction, tr);
+      })(a.id, a.tradingsymbol, a.direction, tr);
       tdDel.appendChild(delBtn);
       tr.appendChild(tdDel);
 

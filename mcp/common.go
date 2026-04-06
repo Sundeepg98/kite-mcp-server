@@ -502,3 +502,42 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 		return result, err
 	}
 }
+
+// PaginatedToolHandlerWithArgs is like PaginatedToolHandler but passes
+// the request arguments to the API call function, allowing tool-specific
+// parameters (e.g., position_type) to influence which data is returned.
+func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData, map[string]any) ([]T, error)) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handler.trackToolCall(ctx, toolName)
+		result, err := handler.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			args := request.GetArguments()
+			data, err := apiCall(session, args)
+			if err != nil {
+				handler.manager.Logger.Error("API call failed", "tool", toolName, "error", err)
+				handler.trackToolError(ctx, toolName, "api_error")
+				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
+			}
+
+			params := ParsePaginationParams(args)
+			originalLength := len(data)
+			paginatedData := ApplyPagination(data, params)
+
+			var responseData interface{}
+			if params.Limit > 0 {
+				responseData = CreatePaginatedResponse(data, paginatedData, params, originalLength)
+			} else {
+				responseData = paginatedData
+			}
+
+			return handler.MarshalResponse(responseData, toolName)
+		})
+
+		if err != nil {
+			handler.trackToolError(ctx, toolName, "execution_error")
+		} else if result != nil && result.IsError {
+			handler.trackToolError(ctx, toolName, "api_error")
+		}
+		return result, err
+	}
+}

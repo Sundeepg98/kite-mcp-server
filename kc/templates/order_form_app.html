@@ -522,13 +522,13 @@ $placeBtn.addEventListener('click', async function() {
       // Parse pre-trade response
       var rows = [];
       if (result.current_price) rows.push(['Current Price', fmtINR(result.current_price)]);
-      if (result.margin_required != null) rows.push(['Margin Required', fmtINR(result.margin_required)]);
-      if (result.margin_available != null) rows.push(['Margin Available', fmtINR(result.margin_available)]);
+      if (result.margin && result.margin.required != null) rows.push(['Margin Required', fmtINR(result.margin.required)]);
+      if (result.margin && result.margin.available != null) rows.push(['Margin Available', fmtINR(result.margin.available)]);
       if (result.order_value != null) rows.push(['Order Value', fmtINR(result.order_value)]);
-      if (result.concentration_pct != null) rows.push(['Portfolio Concentration', result.concentration_pct.toFixed(1) + '%']);
+      if (result.portfolio_impact && result.portfolio_impact.order_as_pct_of_portfolio != null) rows.push(['Portfolio Concentration', result.portfolio_impact.order_as_pct_of_portfolio.toFixed(1) + '%']);
 
       var warnings = result.warnings || [];
-      var blocked = result.blocked === true;
+      var blocked = result.recommendation === 'BLOCKED';
 
       if (blocked) {
         stage = 'idle';

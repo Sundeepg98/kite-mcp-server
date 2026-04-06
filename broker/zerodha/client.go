@@ -120,12 +120,11 @@ func (c *Client) ModifyOrder(orderID string, params broker.OrderParams) (broker.
 }
 
 // CancelOrder cancels an existing pending order.
-func (c *Client) CancelOrder(orderID string) (broker.OrderResponse, error) {
-	// Kite's CancelOrder requires variety; use "regular" as the default.
-	// Callers that need a specific variety should set it via OrderParams.Variety
-	// on the broker.OrderParams (though CancelOrder doesn't take params in the interface).
-	// For phase-0, the tool handlers pass variety separately, so we default to "regular".
-	resp, err := c.kite.CancelOrder(kiteconnect.VarietyRegular, orderID, nil)
+func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
+	if variety == "" {
+		variety = kiteconnect.VarietyRegular
+	}
+	resp, err := c.kite.CancelOrder(variety, orderID, nil)
 	if err != nil {
 		return broker.OrderResponse{}, err
 	}
