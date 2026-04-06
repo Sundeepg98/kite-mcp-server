@@ -229,6 +229,7 @@ function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChil
 
 function makeStat(label, value, cls) {
   const card = el('div', 'stat');
+  card.setAttribute('role', 'status');
   card.appendChild(el('div', 'stat-label', label));
   card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), value));
   return card;
@@ -314,6 +315,8 @@ function render() {
   } else {
     const wrap = el('div', 'table-wrap');
     const tbl = document.createElement('table');
+    tbl.setAttribute('role', 'table');
+    tbl.setAttribute('aria-label', 'App registrations');
 
     const thead = document.createElement('thead');
     const hr = document.createElement('tr');
@@ -363,6 +366,15 @@ function render() {
 
 // Boot
 (async () => {
+  // Show loading state
+  const app = document.querySelector('.content') || document.getElementById('app');
+  if (app) {
+    const loader = document.createElement('div');
+    loader.className = 'loading-state';
+    loader.textContent = 'Loading...';
+    loader.style.cssText = 'text-align:center;padding:40px;color:var(--text-2);font-size:13px;';
+    app.appendChild(loader);
+  }
   try { await AppBridge.init(); } catch(e) {}
   if (typeof window.__DATA__ === 'string') {
     try { window.__DATA__ = JSON.parse(window.__DATA__); } catch(e) { window.__DATA__ = null; }

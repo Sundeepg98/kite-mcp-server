@@ -282,6 +282,7 @@ func TestToolDashboardPage(t *testing.T) {
 			"admin_unfreeze_global",
 			"admin_invite_family_member",
 			"admin_list_family",
+			"admin_remove_family_member",
 		}
 		for _, tool := range unmappedTools {
 			_, ok := toolDashboardPage[tool]

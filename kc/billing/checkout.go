@@ -57,7 +57,7 @@ func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
 		params := &stripe.CheckoutSessionParams{
 			Mode:          stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 			CustomerEmail: stripe.String(email),
-			SuccessURL:    stripe.String(externalURL + "/dashboard?checkout=success"),
+			SuccessURL:    stripe.String(externalURL + "/checkout/success"),
 			CancelURL:     stripe.String(externalURL + "/pricing"),
 			LineItems: []*stripe.CheckoutSessionLineItemParams{
 				{

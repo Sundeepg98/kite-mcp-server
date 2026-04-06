@@ -76,7 +76,7 @@ const AppBridge=(()=>{const isIframe=window.parent!==window;let nextId=1;const p
 
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; }
 function clearEl(n) { while (n.firstChild) n.removeChild(n.firstChild); }
-function makeStat(label, value, cls) { const c = el('div','stat'); c.appendChild(el('div','stat-label',label)); c.appendChild(el('div','stat-value'+(cls?' '+cls:''),value)); return c; }
+function makeStat(label, value, cls) { const c = el('div','stat'); c.setAttribute('role','status'); c.appendChild(el('div','stat-label',label)); c.appendChild(el('div','stat-value'+(cls?' '+cls:''),value)); return c; }
 
 function render() {
   const data = window.__DATA__;
@@ -97,12 +97,15 @@ function render() {
   const gf = data.global_freeze || {};
   if (gf.is_frozen) {
     const banner = el('div', 'freeze-banner frozen');
+    banner.setAttribute('role', 'alert');
     banner.appendChild(el('strong', '', 'GLOBAL FREEZE ACTIVE'));
     if (gf.frozen_by) banner.appendChild(el('div', 'freeze-meta', 'Frozen by: ' + gf.frozen_by));
     if (gf.reason) banner.appendChild(el('div', 'freeze-meta', 'Reason: ' + gf.reason));
     fb.appendChild(banner);
   } else {
-    fb.appendChild(el('div', 'freeze-banner clear', 'Trading: Normal'));
+    const clearBanner = el('div', 'freeze-banner clear', 'Trading: Normal');
+    clearBanner.setAttribute('role', 'alert');
+    fb.appendChild(clearBanner);
   }
 
   const sr1 = document.getElementById('statsRow1');
@@ -124,6 +127,15 @@ function render() {
 }
 
 (async () => {
+  // Show loading state
+  const app = document.querySelector('.content') || document.getElementById('app');
+  if (app) {
+    const loader = document.createElement('div');
+    loader.className = 'loading-state';
+    loader.textContent = 'Loading...';
+    loader.style.cssText = 'text-align:center;padding:40px;color:var(--text-2);font-size:13px;';
+    app.appendChild(loader);
+  }
   try { await AppBridge.init(); } catch(e) {}
   if (typeof window.__DATA__ === 'string') { try { window.__DATA__ = JSON.parse(window.__DATA__); } catch(e) { window.__DATA__ = null; } }
   render();

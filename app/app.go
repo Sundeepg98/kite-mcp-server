@@ -156,6 +156,48 @@ function checkout(plan){
 </body>
 </html>`
 
+const checkoutSuccessHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to Pro - Kite MCP</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui;background:#0a0c10;color:#e2e8f0;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:40px 20px}
+.card{max-width:500px;width:100%;background:#0f1218;border:1px solid #1e293b;border-radius:12px;padding:40px;text-align:center}
+h1{color:#22d3ee;font-size:1.8rem;margin-bottom:8px}
+.subtitle{color:#94a3b8;margin-bottom:32px}
+.features{text-align:left;margin-bottom:32px}
+.feature{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1e293b;font-size:14px;color:#94a3b8}
+.feature:last-child{border-bottom:none}
+.check{color:#34d399;font-weight:700;font-size:16px}
+.actions{display:flex;flex-direction:column;gap:12px}
+.btn{display:block;padding:12px;border-radius:6px;font-weight:600;font-size:14px;text-decoration:none;text-align:center}
+.btn-primary{background:#22d3ee;color:#0a0c10}
+.btn-secondary{background:transparent;color:#94a3b8;border:1px solid #1e293b}
+.btn:hover{opacity:0.9}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>Welcome to Pro!</h1>
+<p class="subtitle">Your subscription is active. Here's what you unlocked:</p>
+<div class="features">
+<div class="feature"><span class="check">&#10003;</span> Live order execution</div>
+<div class="feature"><span class="check">&#10003;</span> GTT orders</div>
+<div class="feature"><span class="check">&#10003;</span> Price alerts + Telegram</div>
+<div class="feature"><span class="check">&#10003;</span> Trailing stops</div>
+<div class="feature"><span class="check">&#10003;</span> Advanced analytics</div>
+<div class="feature"><span class="check">&#10003;</span> Up to 5 family members</div>
+</div>
+<div class="actions">
+<a href="/dashboard" class="btn btn-primary">Go to Dashboard</a>
+<a href="/dashboard/billing" class="btn btn-secondary">Manage Subscription</a>
+</div>
+</div>
+</body>
+</html>`
+
 // Config holds the application configuration
 type Config struct {
 	KiteAPIKey      string
@@ -1162,6 +1204,12 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		html := strings.Replace(pricingPageHTML, `data-current="free"`, `data-current="`+currentTier+`"`, 1)
 		fmt.Fprint(w, html)
+	})
+
+	// Post-purchase welcome page.
+	mux.HandleFunc("/checkout/success", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, checkoutSuccessHTML)
 	})
 
 	// Checkout + Stripe portal handlers (require browser auth).

@@ -105,3 +105,9 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
   .dash-nav { padding: 0 12px; }
   .stats-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 }
+
+/* Accessibility: focus styles */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #22d3ee);
+  outline-offset: 2px;
+}

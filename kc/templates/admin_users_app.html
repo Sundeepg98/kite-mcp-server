@@ -87,7 +87,7 @@ const AppBridge=(()=>{const isIframe=window.parent!==window;let nextId=1;const p
 
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; }
 function clearEl(n) { while (n.firstChild) n.removeChild(n.firstChild); }
-function makeStat(label, value, cls) { const c = el('div','stat'); c.appendChild(el('div','stat-label',label)); c.appendChild(el('div','stat-value'+(cls?' '+cls:''),value)); return c; }
+function makeStat(label, value, cls) { const c = el('div','stat'); c.setAttribute('role','status'); c.appendChild(el('div','stat-label',label)); c.appendChild(el('div','stat-value'+(cls?' '+cls:''),value)); return c; }
 
 function roleBadge(role) {
   const b = el('span', 'badge', role);
@@ -145,6 +145,8 @@ function render() {
   } else {
     const wrap = el('div', 'table-wrap');
     const tbl = document.createElement('table');
+    tbl.setAttribute('role', 'table');
+    tbl.setAttribute('aria-label', 'User list');
     const thead = document.createElement('thead');
     const hr = document.createElement('tr');
     ['Email', 'Role', 'Status', 'Last Login', 'Actions'].forEach(function(h) {
@@ -174,6 +176,7 @@ function render() {
       const tdActions = document.createElement('td');
       if (u.status === 'active') {
         const btn = el('button', 'action-btn suspend', 'Suspend');
+        btn.setAttribute('aria-label', 'Suspend ' + u.email);
         btn.addEventListener('click', function() {
           AppBridge.callServerTool('admin_suspend_user', { target_email: u.email, confirm: true, reason: 'Admin action' })
             .then(function() { location.reload(); })
@@ -182,6 +185,7 @@ function render() {
         tdActions.appendChild(btn);
       } else if (u.status === 'suspended') {
         const btn = el('button', 'action-btn activate', 'Activate');
+        btn.setAttribute('aria-label', 'Activate ' + u.email);
         btn.addEventListener('click', function() {
           AppBridge.callServerTool('admin_activate_user', { target_email: u.email })
             .then(function() { location.reload(); })
@@ -203,6 +207,15 @@ function render() {
 }
 
 (async () => {
+  // Show loading state
+  const app = document.querySelector('.content') || document.getElementById('app');
+  if (app) {
+    const loader = document.createElement('div');
+    loader.className = 'loading-state';
+    loader.textContent = 'Loading...';
+    loader.style.cssText = 'text-align:center;padding:40px;color:var(--text-2);font-size:13px;';
+    app.appendChild(loader);
+  }
   try { await AppBridge.init(); } catch(e) {}
   if (typeof window.__DATA__ === 'string') { try { window.__DATA__ = JSON.parse(window.__DATA__); } catch(e) { window.__DATA__ = null; } }
   render();

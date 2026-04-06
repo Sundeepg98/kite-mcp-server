@@ -154,6 +154,7 @@ func GetAllTools() []Tool {
 		&AdminUnfreezeGlobalTool{},
 		&AdminInviteFamilyMemberTool{},
 		&AdminListFamilyTool{},
+		&AdminRemoveFamilyMemberTool{},
 	}
 }
 

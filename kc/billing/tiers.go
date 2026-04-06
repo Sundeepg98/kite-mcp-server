@@ -51,6 +51,7 @@ var toolTiers = map[string]Tier{
 	"admin_unfreeze_user": TierFree, "admin_freeze_global": TierFree,
 	"admin_unfreeze_global": TierFree,
 	"admin_invite_family_member": TierFree, "admin_list_family": TierFree,
+	"admin_remove_family_member": TierFree,
 
 	// Pro — order placement, GTT, alerts, Telegram, trailing stops, analytics, MF orders, native alerts
 	"place_order": TierPro, "modify_order": TierPro, "cancel_order": TierPro,
