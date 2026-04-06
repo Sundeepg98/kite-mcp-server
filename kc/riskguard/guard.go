@@ -115,7 +115,8 @@ type Guard struct {
 	// Global trading freeze — blocks ALL users from placing orders.
 	globalFrozen   bool
 	globalFrozenBy string
-	globalFrozenAt time.Time
+	globalFrozenAt     time.Time
+	globalFrozenReason string
 }
 
 // NewGuard creates a new Guard with system defaults.
@@ -143,6 +144,7 @@ func (g *Guard) FreezeGlobal(frozenBy, reason string) {
 	defer g.mu.Unlock()
 	g.globalFrozen = true
 	g.globalFrozenBy = frozenBy
+	g.globalFrozenReason = reason
 	g.globalFrozenAt = time.Now()
 	if g.logger != nil {
 		g.logger.Warn("GLOBAL TRADING FREEZE ACTIVATED", "by", frozenBy, "reason", reason)
@@ -155,6 +157,7 @@ func (g *Guard) UnfreezeGlobal() {
 	defer g.mu.Unlock()
 	g.globalFrozen = false
 	g.globalFrozenBy = ""
+	g.globalFrozenReason = ""
 	g.globalFrozenAt = time.Time{}
 	if g.logger != nil {
 		g.logger.Info("Global trading freeze lifted")
@@ -166,6 +169,26 @@ func (g *Guard) IsGloballyFrozen() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.globalFrozen
+}
+
+// GlobalFreezeStatus holds the current global freeze state with metadata.
+type GlobalFreezeStatus struct {
+	IsFrozen bool      `json:"is_frozen"`
+	FrozenBy string    `json:"frozen_by,omitempty"`
+	Reason   string    `json:"reason,omitempty"`
+	FrozenAt time.Time `json:"frozen_at,omitempty"`
+}
+
+// GetGlobalFreezeStatus returns the current global freeze status.
+func (g *Guard) GetGlobalFreezeStatus() GlobalFreezeStatus {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return GlobalFreezeStatus{
+		IsFrozen: g.globalFrozen,
+		FrozenBy: g.globalFrozenBy,
+		Reason:   g.globalFrozenReason,
+		FrozenAt: g.globalFrozenAt,
+	}
 }
 
 // OrderCheckRequest contains the data needed to evaluate an order.

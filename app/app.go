@@ -79,6 +79,69 @@ type StatusPageData struct {
 // cookieName must match the JWT cookie name used by oauth.RequireAuthBrowser.
 const cookieName = "kite_jwt"
 
+const pricingPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing - Kite MCP</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui;background:#0a0c10;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:60px 20px}
+h1{font-size:2rem;margin-bottom:8px}
+.subtitle{color:#94a3b8;margin-bottom:48px;font-size:1.1rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:960px;width:100%}
+.card{border:1px solid #1e293b;border-radius:12px;padding:32px 24px;text-align:center}
+.card.featured{border-color:#22d3ee;background:rgba(34,211,238,0.04)}
+.tier{font-size:1.3rem;font-weight:700;margin-bottom:8px}
+.price{font-size:2.5rem;font-weight:700;color:#22d3ee}
+.price span{font-size:1rem;color:#94a3b8}
+.period{color:#64748b;font-size:0.9rem;margin-bottom:24px}
+ul{list-style:none;text-align:left;margin-bottom:28px}
+li{padding:8px 0;font-size:0.9rem;color:#94a3b8;border-bottom:1px solid #1e293b}
+li:before{content:"✓ ";color:#34d399;font-weight:700}
+.btn{display:inline-block;width:100%;padding:12px;border-radius:6px;font-weight:600;font-size:0.9rem;cursor:pointer;border:1px solid #1e293b;text-decoration:none;text-align:center}
+.btn-free{background:transparent;color:#94a3b8}
+.btn-pay{background:#22d3ee;color:#0a0c10;border-color:#22d3ee}
+.btn-pay:hover{opacity:0.9}
+</style>
+</head>
+<body>
+<h1>Simple, Transparent Pricing</h1>
+<p class="subtitle">AI-powered trading tools for your family.</p>
+<div class="grid">
+<div class="card">
+<div class="tier">Free</div>
+<div class="price">₹0<span>/mo</span></div>
+<div class="period">1 user, forever free</div>
+<ul><li>Read-only market data</li><li>Paper trading</li><li>Watchlists</li><li>Basic portfolio view</li></ul>
+<span class="btn btn-free">Current Plan</span>
+</div>
+<div class="card featured">
+<div class="tier">Pro</div>
+<div class="price">₹349<span>/mo</span></div>
+<div class="period">Up to 5 family members</div>
+<ul><li>Live order execution</li><li>GTT orders</li><li>Price alerts + Telegram</li><li>Trailing stops</li><li>Advanced analytics</li></ul>
+<a class="btn btn-pay" onclick="checkout('pro')">Get Started</a>
+</div>
+<div class="card">
+<div class="tier">Premium</div>
+<div class="price">₹699<span>/mo</span></div>
+<div class="period">Up to 20 family members</div>
+<ul><li>Everything in Pro</li><li>Backtesting</li><li>Options strategies</li><li>Technical indicators</li><li>Tax harvesting</li><li>SEBI compliance</li></ul>
+<a class="btn btn-pay" onclick="checkout('premium')">Get Started</a>
+</div>
+</div>
+<script>
+function checkout(plan){
+  fetch('/billing/checkout?plan='+plan,{method:'POST',credentials:'include'})
+  .then(r=>{if(r.status===401){window.location='/auth/login?redirect=/pricing';return}return r.json()})
+  .then(d=>{if(d&&d.checkout_url)window.location=d.checkout_url})
+  .catch(e=>alert('Checkout error: '+e.message))
+}
+</script>
+</body>
+</html>`
+
 // Config holds the application configuration
 type Config struct {
 	KiteAPIKey      string
@@ -476,7 +539,15 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Error("Failed to load billing data from DB", "error", err)
 		}
 		kcManager.SetBillingStore(billingStore)
-		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore)))
+		// Create adminEmailFn closure for family tier resolution.
+		adminEmailFn := func(email string) string {
+			u, ok := kcManager.UserStore().Get(email)
+			if !ok || u.AdminEmail == "" {
+				return ""
+			}
+			return u.AdminEmail
+		}
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore, adminEmailFn)))
 		app.logger.Info("Billing tier enforcement enabled")
 		if os.Getenv("STRIPE_PRICE_PRO") == "" || os.Getenv("STRIPE_PRICE_PREMIUM") == "" {
 			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
@@ -992,10 +1063,31 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			if err := bs.InitEventLogTable(); err != nil {
 				app.logger.Error("Failed to initialize webhook_events table", "error", err)
 			}
-			mux.Handle("/webhooks/stripe", billing.WebhookHandler(bs, webhookSecret, app.logger))
+			adminUpgrade := func(email string) {
+				if uStore := kcManager.UserStoreConcrete(); uStore != nil {
+					if err := uStore.UpdateRole(email, "admin"); err != nil {
+						app.logger.Error("Failed to upgrade payer to admin", "email", email, "error", err)
+					}
+				}
+			}
+			mux.Handle("/webhooks/stripe", billing.WebhookHandler(bs, webhookSecret, app.logger, adminUpgrade))
 			app.logger.Info("Stripe webhook endpoint registered at /webhooks/stripe")
 		} else {
 			app.logger.Warn("STRIPE_WEBHOOK_SECRET set but billing store not initialized (need STRIPE_SECRET_KEY)")
+		}
+	}
+
+	// Pricing page (public).
+	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, pricingPageHTML)
+	})
+
+	// Checkout handler (requires browser auth).
+	if app.oauthHandler != nil {
+		if bs := kcManager.BillingStoreConcrete(); bs != nil {
+			mux.Handle("/billing/checkout", app.oauthHandler.RequireAuthBrowser(
+				billing.CheckoutHandler(bs, app.logger)))
 		}
 	}
 
@@ -1616,12 +1708,16 @@ func (a *registryAdapter) HasEntries() bool {
 	return a.store.HasEntries()
 }
 
-func (a *registryAdapter) GetByEmail(email string) (apiKey, apiSecret string, ok bool) {
+func (a *registryAdapter) GetByEmail(email string) (*oauth.RegistryEntry, bool) {
 	reg, found := a.store.GetByEmail(email)
 	if !found {
-		return "", "", false
+		return nil, false
 	}
-	return reg.APIKey, reg.APISecret, true
+	return &oauth.RegistryEntry{
+		APIKey:       reg.APIKey,
+		APISecret:    reg.APISecret,
+		RegisteredBy: reg.RegisteredBy,
+	}, true
 }
 
 func (a *registryAdapter) GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool) {

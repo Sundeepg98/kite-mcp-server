@@ -38,6 +38,7 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	LastLogin    time.Time `json:"last_login,omitempty"`
 	OnboardedBy  string    `json:"onboarded_by"`
+	AdminEmail   string    `json:"admin_email,omitempty"`
 }
 
 // Store is a thread-safe in-memory user store backed by SQLite.
@@ -92,6 +93,8 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);`
 	// Migration: add password_hash column for admin password-based login.
 	// ALTER TABLE ADD COLUMN is idempotent-safe in SQLite (errors if column exists).
 	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''`)
+	// Migration: add admin_email column for family billing.
+	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN admin_email TEXT DEFAULT ''`)
 	return nil
 }
 
@@ -101,7 +104,7 @@ func (s *Store) LoadFromDB() error {
 		return nil
 	}
 	rows, err := s.db.RawQuery(`SELECT id, email, kite_uid, display_name, role, status,
-		created_at, updated_at, COALESCE(last_login, ''), onboarded_by, COALESCE(password_hash, '') FROM users`)
+		created_at, updated_at, COALESCE(last_login, ''), onboarded_by, COALESCE(password_hash, ''), COALESCE(admin_email, '') FROM users`)
 	if err != nil {
 		return fmt.Errorf("query users: %w", err)
 	}
@@ -112,9 +115,9 @@ func (s *Store) LoadFromDB() error {
 
 	for rows.Next() {
 		var u User
-		var createdAtS, updatedAtS, lastLoginS, onboardedBy string
+		var createdAtS, updatedAtS, lastLoginS, onboardedBy, adminEmailStr string
 		if err := rows.Scan(&u.ID, &u.Email, &u.KiteUID, &u.DisplayName, &u.Role, &u.Status,
-			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy, &u.PasswordHash); err != nil {
+			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy, &u.PasswordHash, &adminEmailStr); err != nil {
 			return fmt.Errorf("scan user: %w", err)
 		}
 		u.CreatedAt, _ = time.Parse(time.RFC3339, createdAtS)
@@ -123,6 +126,7 @@ func (s *Store) LoadFromDB() error {
 			u.LastLogin, _ = time.Parse(time.RFC3339, lastLoginS)
 		}
 		u.OnboardedBy = onboardedBy
+		u.AdminEmail = adminEmailStr
 		s.users[strings.ToLower(u.Email)] = &u
 	}
 	return rows.Err()
@@ -167,10 +171,10 @@ func (s *Store) Create(u *User) error {
 			lastLogin = stored.LastLogin.Format(time.RFC3339)
 		}
 		err := s.db.ExecInsert(
-			`INSERT OR IGNORE INTO users (id, email, kite_uid, display_name, role, status, created_at, updated_at, last_login, onboarded_by) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT OR IGNORE INTO users (id, email, kite_uid, display_name, role, status, created_at, updated_at, last_login, onboarded_by, admin_email) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 			stored.ID, stored.Email, stored.KiteUID, stored.DisplayName, stored.Role, stored.Status,
 			stored.CreatedAt.Format(time.RFC3339), stored.UpdatedAt.Format(time.RFC3339),
-			lastLogin, stored.OnboardedBy,
+			lastLogin, stored.OnboardedBy, stored.AdminEmail,
 		)
 		if err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist user", "email", key, "error", err)
@@ -321,6 +325,33 @@ func (s *Store) UpdateKiteUID(email, kiteUID string) {
 			s.logger.Error("Failed to update kite_uid", "email", key, "error", err)
 		}
 	}
+}
+
+// SetAdminEmail links a user to their admin for family billing tier inheritance.
+func (s *Store) SetAdminEmail(email, adminEmail string) error {
+	key := strings.ToLower(email)
+	adminKey := strings.ToLower(adminEmail)
+	now := time.Now()
+
+	s.mu.Lock()
+	u, ok := s.users[key]
+	if !ok {
+		s.mu.Unlock()
+		return fmt.Errorf("user not found: %s", key)
+	}
+	u.AdminEmail = adminKey
+	u.UpdatedAt = now
+	s.mu.Unlock()
+
+	if s.db != nil {
+		if err := s.db.ExecInsert(
+			`UPDATE users SET admin_email = ?, updated_at = ? WHERE email = ?`,
+			adminKey, now.Format(time.RFC3339), key,
+		); err != nil {
+			return fmt.Errorf("persist admin_email: %w", err)
+		}
+	}
+	return nil
 }
 
 // List returns all users as a slice (copies).

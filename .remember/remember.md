@@ -1,19 +1,19 @@
 # Handoff
 
 ## State
-11 widgets, 80 tools (73 routed), CI green (930d0bb). Activity crash + 5 bugs fixed. Deploy may need retry. Admin MCP (10 tools) fully specced but NOT built. Billing refactor fully designed but NOT built. Commercial model decided: Model A (admin pays for family ₹349/699).
+18 research agents completed across 6 rounds. Design spec committed at docs/superpowers/specs/2026-04-06-admin-mcp-billing-design.md (afa7d97). ALL conflicts resolved. NOTHING built yet — purely research. CI green (930d0bb), 80 tools, 11 widgets, 330+ tests.
 
 ## Next
-1. Build billing refactor: admin_email PK in billing table, admin_email FK in users table, GetTierForUser with adminEmailFn, webhook upgrades payer to admin role. 6 files change (billing/store, middleware, webhook, users/store, app.go, interfaces.go)
-2. Build 10 admin MCP tools in mcp/admin_tools.go (4 read + 5 reversible + 1 global freeze). Use elicitation, self-action guards, last-admin guards. Add GlobalFreezeStatus() to guard.go
-3. Build 4 admin widgets (overview, users, metrics, registry) + pricing page + Stripe Checkout CREATE endpoint
+1. Build Phase 1: 10 admin MCP tools in mcp/admin_tools.go + mcp.go registration + tiers.go (TierFree) + guard.go GlobalFreezeStatus + common_test.go unmapped list update. Use direct requestConfirmation() calls, NOT confirmableTools map. Suspend must Freeze+UpdateStatus+TerminateByEmail.
+2. Build Phase 2: Billing refactor — store.go PK rebuild (BEGIN/COMMIT transaction, pragma_table_info idempotency check), middleware.go adminEmailFn, webhook.go userStore+max_users, users/store.go AdminEmail field, interfaces.go, app.go wiring.
+3. Build Phases 3-5: oauth/google_sso.go registry lookup (h.registry already wired), pricing.html+checkout.go, 4 admin widget templates in ext_apps.go.
 
 ## Context
 - Codebase at D:\kite-mcp-temp — ALWAYS tell agents this path with specific file paths
-- Family onboarding: dad pays → registers Kite apps → mom joins via Google SSO → registry.RegisteredBy links her to dad → billing inherits dad's tier
-- Tier resolution: GetTierForUser checks direct subscription first, then admin's. adminEmailFn closure bridges billing↔user stores without circular deps
-- Schema: billing PK rename email→admin_email + max_users col. users table add admin_email col. Migration: existing rows become solo (admin_email="")
-- Admin MCP: NO approval workflow — use existing elicitation. Suspend must call Freeze+UpdateStatus+TerminateByEmail (HTTP handler only does UpdateStatus). guard.go globalFrozenBy/At unexported — need GlobalFreezeStatus() getter
-- Pricing: Free ₹0/1user, Pro ₹349/5users, Premium ₹699/20users. Stripe flat-rate with metadata not per-seat
-- htmx migration left broken getElementById refs — ALWAYS check IDs exist when converting pages to templates
-- 7 tools intentionally unmapped (login, open_dashboard, stop_ticker, unsubscribe, delete_account, update_creds, server_metrics)
+- Tool names from SPEC not research agents: admin_list_users, admin_get_user, admin_server_status, admin_get_risk_status, admin_suspend_user, admin_activate_user, admin_change_role, admin_freeze_user, admin_unfreeze_user, admin_freeze_global (10 total, skip admin_unfreeze_global)
+- guard.go needs globalFrozenReason field added (FreezeGlobal stores reason in log only, not field)
+- Admin tools stay UNMAPPED from toolDashboardPage; update common_test.go unmapped list instead
+- Migration safe: SQLite WAL + Litestream unaffected by BEGIN/COMMIT table rebuild
+- manager.MCPServer() returns server ref for elicitation (stored as `any`)
+- h.registry KeyRegistry field already exists on oauth Handler — no new wiring for family linkage
+- User must re-login after admin registers app (no event system on Register())

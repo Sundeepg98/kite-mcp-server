@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -96,6 +98,116 @@ var appResources = []appResource{
 		TemplateFile: "chart_app.html",
 		DataFunc:     chartData,
 	},
+	{
+		URI: "ui://kite-mcp/admin-overview", Name: "Admin Overview",
+		TemplateFile: "admin_overview_app.html",
+		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
+			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
+				return nil
+			}
+			resp := map[string]any{
+				"active_sessions": manager.GetActiveSessionCount(),
+				"uptime":          time.Since(serverStartTime).Truncate(time.Second).String(),
+				"go_version":      runtime.Version(),
+				"goroutines":      runtime.NumGoroutine(),
+			}
+			if uStore := manager.UserStore(); uStore != nil {
+				resp["total_users"] = uStore.Count()
+			}
+			if rg := manager.RiskGuard(); rg != nil {
+				resp["global_freeze"] = rg.GetGlobalFreezeStatus()
+			}
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+			resp["heap_alloc_mb"] = float64(memStats.HeapAlloc) / 1024 / 1024
+			if memStats.NumGC > 0 {
+				resp["gc_pause_ms"] = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
+			}
+			return resp
+		},
+	},
+	{
+		URI: "ui://kite-mcp/admin-users", Name: "Admin Users",
+		TemplateFile: "admin_users_app.html",
+		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
+			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
+				return nil
+			}
+			users := manager.UserStore().List()
+			type entry struct {
+				Email       string `json:"email"`
+				Role        string `json:"role"`
+				Status      string `json:"status"`
+				CreatedAt   string `json:"created_at"`
+				LastLogin   string `json:"last_login,omitempty"`
+				OnboardedBy string `json:"onboarded_by"`
+			}
+			entries := make([]entry, 0, len(users))
+			for _, u := range users {
+				var ll string
+				if !u.LastLogin.IsZero() {
+					ll = u.LastLogin.Format(time.RFC3339)
+				}
+				entries = append(entries, entry{
+					Email: u.Email, Role: u.Role, Status: u.Status,
+					CreatedAt: u.CreatedAt.Format(time.RFC3339), LastLogin: ll, OnboardedBy: u.OnboardedBy,
+				})
+			}
+			return map[string]any{"total": len(users), "from": 0, "limit": len(users), "users": entries}
+		},
+	},
+	{
+		URI: "ui://kite-mcp/admin-metrics", Name: "Admin Metrics",
+		TemplateFile: "admin_metrics_app.html",
+		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
+			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
+				return nil
+			}
+			resp := map[string]any{"period": "24h", "active_sessions": manager.GetActiveSessionCount()}
+			if auditStore != nil {
+				since := time.Now().Add(-24 * time.Hour)
+				if stats, err := auditStore.GetGlobalStats(since); err == nil {
+					resp["total_calls"] = stats.TotalCalls
+					resp["error_count"] = stats.ErrorCount
+					resp["avg_latency_ms"] = stats.AvgLatencyMs
+					if stats.TotalCalls > 0 {
+						resp["error_rate"] = fmt.Sprintf("%.1f%%", float64(stats.ErrorCount)/float64(stats.TotalCalls)*100)
+					} else {
+						resp["error_rate"] = "0.0%"
+					}
+				}
+				if metrics, err := auditStore.GetToolMetrics(since); err == nil {
+					resp["tool_metrics"] = metrics
+				}
+			}
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+			resp["heap_alloc_mb"] = float64(memStats.HeapAlloc) / 1024 / 1024
+			resp["goroutines"] = runtime.NumGoroutine()
+			return resp
+		},
+	},
+	{
+		URI: "ui://kite-mcp/admin-registry", Name: "Admin Registry",
+		TemplateFile: "admin_registry_app.html",
+		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
+			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
+				return nil
+			}
+			regStore := manager.RegistryStoreConcrete()
+			if regStore == nil {
+				return map[string]any{"total": 0, "active": 0, "registrations": []any{}}
+			}
+			regs := regStore.List()
+			active := 0
+			for _, r := range regs {
+				if r.Status == "active" {
+					active++
+				}
+			}
+			return map[string]any{"total": len(regs), "active": active, "registrations": regs}
+		},
+	},
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
@@ -111,6 +223,10 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/hub":       "ui://kite-mcp/hub",
 	"/dashboard/options":   "ui://kite-mcp/options-chain",
 	"/dashboard/chart":     "ui://kite-mcp/chart",
+	"/admin/overview":      "ui://kite-mcp/admin-overview",
+	"/admin/users":         "ui://kite-mcp/admin-users",
+	"/admin/metrics":       "ui://kite-mcp/admin-metrics",
+	"/admin/registry":      "ui://kite-mcp/admin-registry",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.

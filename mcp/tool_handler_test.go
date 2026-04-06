@@ -73,7 +73,7 @@ func TestBillingMiddleware_FreeUserBlockedFromProTool(t *testing.T) {
 	require.NoError(t, store.InitTable())
 
 	// No subscription set — user defaults to TierFree.
-	mw := billing.Middleware(store)
+	mw := billing.Middleware(store, nil)
 
 	passthrough := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("OK"), nil
@@ -136,7 +136,7 @@ func TestBillingMiddleware_ProUserAccessesProTools(t *testing.T) {
 		Status: billing.StatusActive,
 	}))
 
-	mw := billing.Middleware(store)
+	mw := billing.Middleware(store, nil)
 
 	passthrough := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("OK"), nil
@@ -177,7 +177,7 @@ func TestBillingMiddleware_NoAuthPassesThrough(t *testing.T) {
 	store := billing.NewStore(db, logger)
 	require.NoError(t, store.InitTable())
 
-	mw := billing.Middleware(store)
+	mw := billing.Middleware(store, nil)
 
 	passthrough := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("OK"), nil
@@ -405,7 +405,7 @@ func TestMiddlewareChain_BillingBlocksBeforeRiskguard(t *testing.T) {
 	// Apply middlewares in order (billing wraps riskguard wraps handler).
 	var chain server.ToolHandlerFunc = passthrough
 	chain = riskguard.Middleware(guard)(chain)
-	chain = billing.Middleware(billingStore)(chain)
+	chain = billing.Middleware(billingStore, nil)(chain)
 
 	ctx := oauth.ContextWithEmail(context.Background(), "free@example.com")
 

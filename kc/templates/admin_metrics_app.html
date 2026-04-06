@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Admin Metrics · Kite MCP</title>
+<style>
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee);
+  --green: var(--mcp-ui-success-color, #34d399);
+  --red: var(--mcp-ui-error-color, #f87171);
+  --amber: var(--mcp-ui-warning-color, #fbbf24);
+  --accent-dim: rgba(34,211,238,0.12); --green-dim: rgba(52,211,153,0.12);
+  --red-dim: rgba(248,113,113,0.1); --amber-dim: rgba(251,191,36,0.1);
+  --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.12);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+  --accent-dim: rgba(34,211,238,0.08); --green-dim: rgba(52,211,153,0.08);
+  --red-dim: rgba(248,113,113,0.06); --amber-dim: rgba(251,191,36,0.06);
+  --purple-dim: rgba(167,139,250,0.08);
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); -webkit-font-smoothing: antialiased; }
+
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-1); }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.sep { width: 1px; height: 16px; background: var(--border); }
+.title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.dash-link { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; opacity: 0.8; }
+.dash-link:hover { opacity: 1; }
+
+.content { padding: 16px 20px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 4px; }
+.stat-value { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.green { color: var(--green); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.red { color: var(--red); }
+
+.section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-1); margin-bottom: 18px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 9px 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+th.right, td.right { text-align: right; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-1); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-2); }
+
+/* Error rate bar */
+.err-bar-wrap { display: flex; align-items: center; gap: 6px; }
+.err-bar-track { width: 60px; height: 6px; background: var(--bg-2); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.err-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; min-width: 0; }
+.err-bar-fill.low { background: var(--green); }
+.err-bar-fill.mid { background: var(--amber); }
+.err-bar-fill.high { background: var(--red); }
+.err-bar-pct { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+
+/* Top tools bar chart */
+.bar-chart { margin-bottom: 20px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-label { font-family: var(--mono); font-size: 11px; color: var(--text-1); width: 140px; flex-shrink: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 20px; background: var(--bg-2); border-radius: 3px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; min-width: 2px; }
+.bar-count { font-family: var(--mono); font-size: 11px; color: var(--text-2); width: 50px; flex-shrink: 0; }
+
+.sys-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-2); font-size: 13px; }
+
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; margin-top: 12px; border-top: 1px solid var(--border); }
+.footer-ts { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+.auth-error { text-align: center; padding: 40px 16px; color: var(--text-2); font-size: 13px; }
+.auth-error strong { color: var(--red); }
+
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .sys-row { grid-template-columns: 1fr; }
+  .content { padding: 12px; }
+  .bar-label { width: 100px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span><span class="sep"></span><span class="title">Admin Metrics</span>
+  </div>
+  <a href="#" class="dash-link" onclick="AppBridge.openLink('https://kite-mcp-server.fly.dev/admin/ops'); return false;">&#8599; Admin Panel</a>
+</div>
+
+<div class="content">
+  <div class="stats-row" id="statsRow"></div>
+  <div class="section-title">Top 10 Tools by Call Count</div>
+  <div class="bar-chart" id="barChart"></div>
+  <div class="section-title">Tool Metrics</div>
+  <div id="toolTable"></div>
+  <div class="section-title" style="margin-top:18px">System</div>
+  <div class="sys-row" id="sysRow"></div>
+</div>
+<div class="footer" id="footerBar">
+  <span class="footer-ts" id="footerTs"></span>
+  <span class="footer-ts" style="font-style:italic">Data loaded at page render</span>
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch(e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); } }, 30000);
+    });
+  }
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {} return result.content[0].text;
+    }
+    return result;
+  }
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => { window.open(url, '_blank'); });
+  }
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }}, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = String(text);
+  return e;
+}
+
+function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function makeStat(label, value, cls) {
+  const card = el('div', 'stat');
+  card.appendChild(el('div', 'stat-label', label));
+  card.appendChild(el('div', 'stat-value' + (cls ? ' ' + cls : ''), value));
+  return card;
+}
+
+function isDataEmpty(d) {
+  if (!d || typeof d !== 'object') return true;
+  return Object.keys(d).length === 0;
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '--';
+  return Number(n).toLocaleString();
+}
+
+function fmtMs(n) {
+  if (n == null || isNaN(n)) return '--';
+  return Number(n).toFixed(1);
+}
+
+const BAR_COLORS = ['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--red)','var(--text-1)','var(--accent)','var(--green)','var(--amber)','var(--purple)'];
+
+function errBarClass(pct) {
+  if (pct <= 1) return 'low';
+  if (pct <= 5) return 'mid';
+  return 'high';
+}
+
+function computeErrorPct(errs, total) {
+  if (!total || total === 0) return 0;
+  return (errs / total) * 100;
+}
+
+function updateFooterTs() {
+  const ts = document.getElementById('footerTs');
+  if (ts) {
+    const now = new Date();
+    ts.textContent = 'Last updated: ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
+}
+
+function render() {
+  const data = window.__DATA__;
+
+  if (isDataEmpty(data)) {
+    document.getElementById('statsRow').textContent = '';
+    const toolDiv = document.getElementById('toolTable');
+    clearEl(toolDiv);
+    const errMsg = el('div', 'auth-error');
+    const strong = el('strong', '', 'Not authenticated');
+    errMsg.appendChild(strong);
+    errMsg.appendChild(document.createElement('br'));
+    errMsg.appendChild(document.createTextNode('Admin access required'));
+    toolDiv.appendChild(errMsg);
+    AppBridge.notifySize();
+    return;
+  }
+
+  const totalCalls = data.total_calls || 0;
+  const errorCount = data.error_count || 0;
+  const errorRate = data.error_rate || '0%';
+  const avgLatency = data.avg_latency_ms != null ? fmtMs(data.avg_latency_ms) + ' ms' : '--';
+  const tools = data.tool_metrics || [];
+
+  // Summary cards
+  const statsRow = document.getElementById('statsRow');
+  clearEl(statsRow);
+  statsRow.appendChild(makeStat('Total Calls', fmtNum(totalCalls), 'accent'));
+  statsRow.appendChild(makeStat('Errors', fmtNum(errorCount), errorCount > 0 ? 'red' : 'green'));
+  statsRow.appendChild(makeStat('Error Rate', errorRate, 'amber'));
+  statsRow.appendChild(makeStat('Avg Latency', avgLatency, ''));
+
+  // Top 10 bar chart
+  const barChart = document.getElementById('barChart');
+  clearEl(barChart);
+  const sorted = tools.slice().sort(function(a, b) { return (b.call_count || 0) - (a.call_count || 0); });
+  const top10 = sorted.slice(0, 10);
+
+  if (top10.length === 0) {
+    barChart.appendChild(el('div', 'empty-state', 'No tool metrics available'));
+  } else {
+    const maxCount = top10[0].call_count || 1;
+    top10.forEach(function(t, i) {
+      const row = el('div', 'bar-row');
+      row.appendChild(el('div', 'bar-label', t.tool_name || '--'));
+      const track = el('div', 'bar-track');
+      const fill = el('div', 'bar-fill');
+      const pct = ((t.call_count || 0) / maxCount) * 100;
+      fill.style.width = Math.max(pct, 1) + '%';
+      fill.style.background = BAR_COLORS[i % BAR_COLORS.length];
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el('div', 'bar-count', fmtNum(t.call_count)));
+      barChart.appendChild(row);
+    });
+  }
+
+  // Tool metrics table
+  const toolTable = document.getElementById('toolTable');
+  clearEl(toolTable);
+
+  if (tools.length === 0) {
+    toolTable.appendChild(el('div', 'empty-state', 'No tool metrics available'));
+  } else {
+    const wrap = el('div', 'table-wrap');
+    const tbl = document.createElement('table');
+
+    const thead = document.createElement('thead');
+    const hr = document.createElement('tr');
+    ['Tool Name', 'Calls', 'Avg ms', 'Max ms', 'Errors', 'Error %'].forEach(function(h, idx) {
+      const th = document.createElement('th');
+      th.textContent = h;
+      if (idx >= 1) th.className = 'right';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    tbl.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    sorted.forEach(function(t) {
+      const tr = document.createElement('tr');
+
+      const tdName = document.createElement('td');
+      tdName.style.color = 'var(--text-0)';
+      tdName.style.fontWeight = '500';
+      tdName.textContent = t.tool_name || '--';
+      tr.appendChild(tdName);
+
+      var tdCalls = el('td', 'right', fmtNum(t.call_count));
+      tr.appendChild(tdCalls);
+
+      var tdAvg = el('td', 'right', fmtMs(t.avg_ms));
+      tr.appendChild(tdAvg);
+
+      var tdMax = el('td', 'right', fmtNum(t.max_ms));
+      tr.appendChild(tdMax);
+
+      var tdErrs = el('td', 'right', fmtNum(t.error_count || 0));
+      if ((t.error_count || 0) > 0) tdErrs.style.color = 'var(--red)';
+      tr.appendChild(tdErrs);
+
+      // Error % with visual bar
+      var tdErrPct = document.createElement('td');
+      tdErrPct.className = 'right';
+      var pct = computeErrorPct(t.error_count || 0, t.call_count || 0);
+      var barWrap = el('div', 'err-bar-wrap');
+      barWrap.style.justifyContent = 'flex-end';
+      var track = el('div', 'err-bar-track');
+      var fill = el('div', 'err-bar-fill ' + errBarClass(pct));
+      fill.style.width = Math.min(pct, 100) + '%';
+      track.appendChild(fill);
+      barWrap.appendChild(track);
+      barWrap.appendChild(el('span', 'err-bar-pct', pct.toFixed(1) + '%'));
+      tdErrPct.appendChild(barWrap);
+      tr.appendChild(tdErrPct);
+
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    toolTable.appendChild(wrap);
+  }
+
+  // System stats
+  var sysRow = document.getElementById('sysRow');
+  clearEl(sysRow);
+  sysRow.appendChild(makeStat('Active Sessions', fmtNum(data.active_sessions), 'accent'));
+  sysRow.appendChild(makeStat('Goroutines', fmtNum(data.goroutines), ''));
+  sysRow.appendChild(makeStat('Heap Alloc', data.heap_alloc_mb != null ? fmtMs(data.heap_alloc_mb) + ' MB' : '--', ''));
+
+  updateFooterTs();
+  AppBridge.notifySize();
+}
+
+// Boot
+(async () => {
+  try { await AppBridge.init(); } catch(e) {}
+  if (typeof window.__DATA__ === 'string') {
+    try { window.__DATA__ = JSON.parse(window.__DATA__); } catch(e) { window.__DATA__ = null; }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

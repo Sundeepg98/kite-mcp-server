@@ -27,6 +27,7 @@ type Subscription struct {
 	Status           string    `json:"status"`
 	ExpiresAt        time.Time `json:"expires_at,omitempty"`
 	UpdatedAt        time.Time `json:"updated_at"`
+	MaxUsers int `json:"max_users"`
 }
 
 // Store is a thread-safe in-memory billing store backed by SQLite.
@@ -61,7 +62,12 @@ CREATE TABLE IF NOT EXISTS billing (
     expires_at         TEXT DEFAULT '',
     updated_at         TEXT NOT NULL
 )`
-	return s.db.ExecDDL(ddl)
+	if err := s.db.ExecDDL(ddl); err != nil {
+		return err
+	}
+	// Migration: add max_users column for family billing.
+	_ = s.db.ExecDDL(`ALTER TABLE billing ADD COLUMN max_users INTEGER NOT NULL DEFAULT 1`)
+	return nil
 }
 
 // LoadFromDB populates the in-memory store from the database.
@@ -69,7 +75,7 @@ func (s *Store) LoadFromDB() error {
 	if s.db == nil {
 		return nil
 	}
-	rows, err := s.db.RawQuery(`SELECT email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at FROM billing`)
+	rows, err := s.db.RawQuery(`SELECT email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at, COALESCE(max_users, 1) FROM billing`)
 	if err != nil {
 		return fmt.Errorf("query billing: %w", err)
 	}
@@ -81,10 +87,12 @@ func (s *Store) LoadFromDB() error {
 	for rows.Next() {
 		var sub Subscription
 		var tierInt int
+		var maxUsers int
 		var expiresAtS, updatedAtS string
-		if err := rows.Scan(&sub.Email, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS); err != nil {
+		if err := rows.Scan(&sub.Email, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil {
 			return fmt.Errorf("scan billing row: %w", err)
 		}
+		sub.MaxUsers = maxUsers
 		sub.Tier = Tier(tierInt)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtS)
 		if expiresAtS != "" {
@@ -117,6 +125,22 @@ func (s *Store) GetTier(email string) Tier {
 	return sub.Tier
 }
 
+// GetTierForUser returns the billing tier for a user, checking both
+// direct subscription and admin parent linkage via adminEmailFn.
+func (s *Store) GetTierForUser(email string, adminEmailFn func(string) string) Tier {
+	key := strings.ToLower(email)
+	if tier := s.GetTier(key); tier > TierFree {
+		return tier
+	}
+	if adminEmailFn != nil {
+		adminEmail := adminEmailFn(key)
+		if adminEmail != "" && adminEmail != key {
+			return s.GetTier(strings.ToLower(adminEmail))
+		}
+	}
+	return TierFree
+}
+
 // SetSubscription creates or updates a subscription for the given email.
 func (s *Store) SetSubscription(sub *Subscription) error {
 	key := strings.ToLower(strings.TrimSpace(sub.Email))
@@ -139,17 +163,18 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			expiresAtS = stored.ExpiresAt.Format(time.RFC3339)
 		}
 		err := s.db.ExecInsert(
-			`INSERT INTO billing (email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO billing (email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(email) DO UPDATE SET
 			   tier = excluded.tier,
 			   stripe_customer_id = excluded.stripe_customer_id,
 			   stripe_sub_id = excluded.stripe_sub_id,
 			   status = excluded.status,
 			   expires_at = excluded.expires_at,
-			   updated_at = excluded.updated_at`,
+			   updated_at = excluded.updated_at,
+			   max_users = excluded.max_users`,
 			stored.Email, int(stored.Tier), stored.StripeCustomerID, stored.StripeSubID,
-			stored.Status, expiresAtS, stored.UpdatedAt.Format(time.RFC3339),
+			stored.Status, expiresAtS, stored.UpdatedAt.Format(time.RFC3339), stored.MaxUsers,
 		)
 		if err != nil {
 			if s.logger != nil {

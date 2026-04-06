@@ -60,7 +60,7 @@ func setupChain(t *testing.T, handler server.ToolHandlerFunc) (server.ToolHandle
 	// Applied in reverse so that audit is outermost (runs first).
 	var chain server.ToolHandlerFunc = handler
 	chain = riskguard.Middleware(guard)(chain)
-	chain = billing.Middleware(billingStore)(chain)
+	chain = billing.Middleware(billingStore, nil)(chain)
 	chain = audit.Middleware(auditStore)(chain)
 
 	cleanup := func() {

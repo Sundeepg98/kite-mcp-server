@@ -12,7 +12,7 @@ import (
 // Middleware returns an MCP tool handler middleware that enforces billing tier
 // requirements. Tools that require a higher tier than the user's current
 // subscription are rejected with an upgrade prompt.
-func Middleware(store *Store) server.ToolHandlerMiddleware {
+func Middleware(store *Store, adminEmailFn func(string) string) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
@@ -23,7 +23,7 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 			}
 
 			required := RequiredTier(request.Params.Name)
-			current := store.GetTier(email)
+			current := store.GetTierForUser(email, adminEmailFn)
 
 			if current < required {
 				return gomcp.NewToolResultError(fmt.Sprintf(

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	stripe "github.com/stripe/stripe-go/v82"
@@ -21,7 +22,7 @@ import (
 //
 // Events are checked for idempotency via the webhook_events table before processing.
 // The handler returns 200 immediately; processing is synchronous but fast (no API calls).
-func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger) http.HandlerFunc {
+func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger, adminUpgrade func(email string)) http.HandlerFunc {
 	pricePro := os.Getenv("STRIPE_PRICE_PRO")
 	pricePremium := os.Getenv("STRIPE_PRICE_PREMIUM")
 
@@ -59,7 +60,7 @@ func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger) htt
 		// Process the event synchronously (no Stripe API calls — all data is in the event payload).
 		switch event.Type {
 		case "checkout.session.completed":
-			handleCheckoutCompleted(store, &event, pricePro, pricePremium, logger)
+			handleCheckoutCompleted(store, &event, pricePro, pricePremium, logger, adminUpgrade)
 
 		case "customer.subscription.updated":
 			handleSubscriptionUpdated(store, &event, pricePro, pricePremium, logger)
@@ -85,7 +86,7 @@ func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger) htt
 
 // handleCheckoutCompleted processes a checkout.session.completed event.
 // It extracts the customer email and price ID to create a subscription mapping.
-func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, pricePremium string, logger *slog.Logger) {
+func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, pricePremium string, logger *slog.Logger, adminUpgrade func(email string)) {
 	var session stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 		logger.Error("stripe webhook: failed to unmarshal checkout session", "error", err)
@@ -114,6 +115,16 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 		subID = session.Subscription.ID
 	}
 
+	// Extract max_users from checkout metadata.
+	maxUsers := 1
+	if session.Metadata != nil {
+		if val, ok := session.Metadata["max_users"]; ok {
+			if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
+				maxUsers = parsed
+			}
+		}
+	}
+
 	// Determine tier from the price ID in the line items (from subscription object).
 	tier := mapPriceToTier(extractPriceID(&session), pricePro, pricePremium)
 
@@ -123,13 +134,20 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 		StripeCustomerID: customerID,
 		StripeSubID:      subID,
 		Status:           StatusActive,
+		MaxUsers:         maxUsers,
 	}
 
 	if err := store.SetSubscription(sub); err != nil {
 		logger.Error("stripe webhook: failed to set subscription on checkout", "email", email, "error", err)
 		return
 	}
-	logger.Info("stripe webhook: subscription created from checkout", "email", email, "tier", tier.String(), "customer_id", customerID)
+
+	// Upgrade payer to admin role.
+	if adminUpgrade != nil {
+		adminUpgrade(email)
+		logger.Info("stripe webhook: upgraded payer to admin role", "email", email)
+	}
+	logger.Info("stripe webhook: subscription created from checkout", "email", email, "tier", tier.String(), "customer_id", customerID, "max_users", maxUsers)
 }
 
 // handleSubscriptionUpdated processes a customer.subscription.updated event.

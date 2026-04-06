@@ -170,6 +170,19 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Existing admins keep their admin role (EnsureGoogleUser only creates if missing).
 	h.userStore.EnsureGoogleUser(email)
 
+	// Link user to admin if a pre-registered app exists for this email.
+	if h.registry != nil {
+		if reg, found := h.registry.GetByEmail(email); found && reg != nil && reg.RegisteredBy != "" {
+			if setter, ok := h.userStore.(interface{ SetAdminEmail(string, string) error }); ok {
+				if err := setter.SetAdminEmail(email, reg.RegisteredBy); err != nil {
+					h.logger.Error("Failed to link user to admin", "email", email, "admin", reg.RegisteredBy, "error", err)
+				} else {
+					h.logger.Info("Linked Google SSO user to admin", "email", email, "admin", reg.RegisteredBy)
+				}
+			}
+		}
+	}
+
 	status := h.userStore.GetStatus(email)
 	if status != "active" {
 		h.logger.Warn("Google SSO login denied: account not active", "email", email, "status", status)

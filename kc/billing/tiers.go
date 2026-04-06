@@ -43,6 +43,13 @@ var toolTiers = map[string]Tier{
 	"delete_my_account": TierFree, "update_my_credentials": TierFree,
 	"server_metrics": TierFree,
 
+	// Admin tools (gated by admin role check, not billing tier)
+	"admin_list_users": TierFree, "admin_get_user": TierFree,
+	"admin_server_status": TierFree, "admin_get_risk_status": TierFree,
+	"admin_suspend_user": TierFree, "admin_activate_user": TierFree,
+	"admin_change_role": TierFree, "admin_freeze_user": TierFree,
+	"admin_unfreeze_user": TierFree, "admin_freeze_global": TierFree,
+
 	// Pro — order placement, GTT, alerts, Telegram, trailing stops, analytics, MF orders, native alerts
 	"place_order": TierPro, "modify_order": TierPro, "cancel_order": TierPro,
 	"close_position": TierPro, "close_all_positions": TierPro, "convert_position": TierPro,

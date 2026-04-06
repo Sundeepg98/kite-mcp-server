@@ -139,6 +139,18 @@ func GetAllTools() []Tool {
 
 		// Server observability
 		&ServerMetricsTool{},
+
+		// Admin tools (admin-only, gated by IsAdmin check in handlers)
+		&AdminListUsersTool{},
+		&AdminGetUserTool{},
+		&AdminServerStatusTool{},
+		&AdminGetRiskStatusTool{},
+		&AdminSuspendUserTool{},
+		&AdminActivateUserTool{},
+		&AdminChangeRoleTool{},
+		&AdminFreezeUserTool{},
+		&AdminUnfreezeUserTool{},
+		&AdminFreezeGlobalTool{},
 	}
 }
 

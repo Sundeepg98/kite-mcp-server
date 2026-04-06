@@ -46,11 +46,19 @@ type AdminUserStore interface {
 	EnsureGoogleUser(email string)
 }
 
+// RegistryEntry is a thin projection of a pre-registered Kite app, used inside
+// the oauth package to avoid importing the registry package directly.
+type RegistryEntry struct {
+	APIKey       string
+	APISecret    string
+	RegisteredBy string // admin email who registered the app
+}
+
 // KeyRegistry provides access to the pre-registered Kite app credentials.
 // Implemented by registry.Store to avoid direct import.
 type KeyRegistry interface {
 	HasEntries() bool
-	GetByEmail(email string) (apiKey, apiSecret string, ok bool)
+	GetByEmail(email string) (*RegistryEntry, bool)
 	GetSecretByAPIKey(apiKey string) (apiSecret string, ok bool)
 }
 
@@ -442,7 +450,7 @@ func (h *Handler) HandleEmailLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKey, _, ok := h.registry.GetByEmail(email)
+	reg, ok := h.registry.GetByEmail(email)
 	if !ok {
 		h.logger.Info("Email not found in key registry", "email", email)
 		h.serveEmailPrompt(w, st, "No app registered for this email. Contact your admin.")
@@ -450,11 +458,11 @@ func (h *Handler) HandleEmailLookup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the RegistryKey in the state so callback knows to use registry credentials
-	st.RegistryKey = apiKey
-	h.logger.Info("Registry lookup successful, redirecting to Kite login", "email", email, "api_key", apiKey[:8]+"...")
+	st.RegistryKey = reg.APIKey
+	h.logger.Info("Registry lookup successful, redirecting to Kite login", "email", email, "api_key", reg.APIKey[:8]+"...")
 
 	// Redirect to Kite login with the registry-provided API key
-	h.redirectToKiteLogin(w, r, apiKey, st)
+	h.redirectToKiteLogin(w, r, reg.APIKey, st)
 }
 
 // recoverOAuthState decodes and verifies a signed OAuth state string.
@@ -859,8 +867,8 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 		apiKey, _, ok := h.exchanger.GetCredentials(email)
 		if !ok && h.registry != nil {
 			// Fallback: check the key registry for pre-registered credentials
-			if regKey, _, regOK := h.registry.GetByEmail(email); regOK {
-				apiKey = regKey
+			if reg, regOK := h.registry.GetByEmail(email); regOK {
+				apiKey = reg.APIKey
 				ok = true
 				h.logger.Info("Browser login: found credentials via key registry", "email", email)
 			}
@@ -887,8 +895,8 @@ func (h *Handler) HandleBrowserLogin(w http.ResponseWriter, r *http.Request) {
 		apiKey, _, ok := h.exchanger.GetCredentials(email)
 		if !ok && h.registry != nil {
 			// Fallback: check the key registry for pre-registered credentials
-			if regKey, _, regOK := h.registry.GetByEmail(email); regOK {
-				apiKey = regKey
+			if reg, regOK := h.registry.GetByEmail(email); regOK {
+				apiKey = reg.APIKey
 				ok = true
 				h.logger.Info("Browser login: found credentials via key registry (GET)", "email", email)
 			}

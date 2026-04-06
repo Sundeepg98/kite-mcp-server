@@ -155,6 +155,9 @@ type BillingStoreInterface interface {
 
 	// MarkEventProcessed records that an event has been processed.
 	MarkEventProcessed(eventID, eventType string) error
+
+	// GetTierForUser returns the tier checking both direct subscription and admin linkage.
+	GetTierForUser(email string, adminEmailFn func(string) string) billing.Tier
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +199,9 @@ type UserStoreInterface interface {
 
 	// UpdateKiteUID sets the Kite user ID for a user.
 	UpdateKiteUID(email, kiteUID string)
+
+	// SetAdminEmail links a user to their admin for family billing.
+	SetAdminEmail(email, adminEmail string) error
 
 	// List returns all users as a slice.
 	List() []*users.User
