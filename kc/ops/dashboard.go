@@ -231,15 +231,16 @@ func (d *DashboardHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compute aggregate stats from the DB (not just the current page).
+	// Pass category and errorsOnly so stats reflect the user's active filters.
 	var stats *audit.Stats
-	stats, err = d.auditStore.GetStats(email, opts.Since)
+	stats, err = d.auditStore.GetStats(email, opts.Since, opts.Category, opts.OnlyErrors)
 	if err != nil {
 		d.logger.Error("Failed to get audit stats", "error", err)
 		// Non-fatal: return entries without stats.
 	}
 
-	// Get tool usage counts for the bar chart.
-	toolCounts, tcErr := d.auditStore.GetToolCounts(email, opts.Since)
+	// Get tool usage counts for the bar chart (scoped to active filters).
+	toolCounts, tcErr := d.auditStore.GetToolCounts(email, opts.Since, opts.Category, opts.OnlyErrors)
 	if tcErr != nil {
 		d.logger.Error("Failed to get tool counts", "error", tcErr)
 	}
@@ -272,7 +273,7 @@ func (d *DashboardHandler) activityExport(w http.ResponseWriter, r *http.Request
 		format = "csv"
 	}
 
-	// Parse time range
+	// Parse time range and filters
 	opts := audit.ListOptions{Limit: 10000} // cap at 10K rows per export
 	if since := r.URL.Query().Get("since"); since != "" {
 		if t, err := time.Parse(time.RFC3339, since); err == nil {
@@ -284,6 +285,8 @@ func (d *DashboardHandler) activityExport(w http.ResponseWriter, r *http.Request
 			opts.Until = t
 		}
 	}
+	opts.Category = r.URL.Query().Get("category")
+	opts.OnlyErrors = r.URL.Query().Get("errors") == "true"
 
 	results, _, err := d.auditStore.List(email, opts)
 	if err != nil {

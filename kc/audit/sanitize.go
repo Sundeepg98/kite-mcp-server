@@ -106,9 +106,21 @@ var toolCategories = map[string]string{
 	// pnl
 	"get_pnl_journal": "query",
 
+	// analytics
+	"backtest_strategy":      "analytics",
+	"technical_indicators":   "analytics",
+	"options_greeks":         "analytics",
+	"options_strategy":       "analytics",
+	"portfolio_rebalance":    "analytics",
+	"tax_harvest_analysis":   "analytics",
+	"sector_exposure":        "analytics",
+	"dividend_calendar":      "analytics",
+	"sebi_compliance_status": "analytics",
+
 	// setup
 	"login":          "setup",
 	"open_dashboard": "setup",
+	"server_metrics": "setup",
 
 	// notification (synthetic events from alert triggers / trailing stop modifications)
 	"alert_triggered":        "notification",

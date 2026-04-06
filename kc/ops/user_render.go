@@ -24,6 +24,7 @@ type UserStatCard struct {
 	Class string // CSS class: "green", "red", "amber", ""
 	Sub   string // optional subtitle text
 	Hero  bool   // if true, renders as a wider hero card
+	ID    string // optional HTML id for JS updates
 }
 
 // fmtINR formats a float64 as Indian Rupee string with grouping (e.g. "₹1,23,456.78").
@@ -324,23 +325,31 @@ type ActivityTimelineData struct {
 
 // Category color config matching the JS catColors map.
 var catColors = map[string]struct{ bg, fg string }{
-	"order":        {"var(--accent-dim)", "var(--accent)"},
-	"query":        {"rgba(148,163,184,0.12)", "var(--text-1)"},
-	"market_data":  {"var(--green-dim)", "var(--green)"},
-	"alert":        {"var(--amber-dim)", "var(--amber)"},
-	"notification": {"var(--amber-dim)", "var(--amber)"},
-	"ticker":       {"var(--purple-dim)", "var(--purple)"},
-	"setup":        {"rgba(100,116,139,0.12)", "var(--text-2)"},
+	"order":         {"var(--accent-dim)", "var(--accent)"},
+	"query":         {"rgba(148,163,184,0.12)", "var(--text-1)"},
+	"market_data":   {"var(--green-dim)", "var(--green)"},
+	"alert":         {"var(--amber-dim)", "var(--amber)"},
+	"notification":  {"var(--amber-dim)", "var(--amber)"},
+	"ticker":        {"var(--purple-dim)", "var(--purple)"},
+	"setup":         {"rgba(100,116,139,0.12)", "var(--text-2)"},
+	"mf_order":      {"var(--accent-dim)", "var(--accent)"},
+	"trailing_stop": {"var(--amber-dim)", "var(--amber)"},
+	"watchlist":     {"rgba(148,163,184,0.12)", "var(--text-1)"},
+	"analytics":     {"var(--purple-dim)", "var(--purple)"},
 }
 
 var catLabels = map[string]string{
-	"order":        "ORDER",
-	"query":        "QUERY",
-	"market_data":  "MARKET",
-	"alert":        "ALERT",
-	"notification": "NOTIF",
-	"ticker":       "TICKER",
-	"setup":        "SETUP",
+	"order":         "ORDER",
+	"query":         "QUERY",
+	"market_data":   "MARKET",
+	"alert":         "ALERT",
+	"notification":  "NOTIF",
+	"ticker":        "TICKER",
+	"setup":         "SETUP",
+	"mf_order":      "MF ORDER",
+	"trailing_stop": "TRAILING",
+	"watchlist":     "WATCHLIST",
+	"analytics":     "ANALYTICS",
 }
 
 func getCatColor(cat string) (string, string) {
@@ -364,10 +373,10 @@ func getCatLabel(cat string) string {
 func activityToStatsData(stats *audit.Stats) ActivityStatsData {
 	if stats == nil {
 		return ActivityStatsData{Cards: []UserStatCard{
-			{Label: "Total Calls", Value: "--"},
-			{Label: "Errors", Value: "--"},
-			{Label: "Avg Latency", Value: "--"},
-			{Label: "Top Tool", Value: "--"},
+			{Label: "Total Calls", Value: "--", ID: "statTotal"},
+			{Label: "Errors", Value: "--", ID: "statErrors"},
+			{Label: "Avg Latency", Value: "--", ID: "statLatency"},
+			{Label: "Top Tool", Value: "--", ID: "statTopTool"},
 		}}
 	}
 	errCls := ""
@@ -384,10 +393,10 @@ func activityToStatsData(stats *audit.Stats) ActivityStatsData {
 		topTool = "--"
 	}
 	return ActivityStatsData{Cards: []UserStatCard{
-		{Label: "Total Calls", Value: strconv.Itoa(stats.TotalCalls)},
-		{Label: "Errors", Value: strconv.Itoa(stats.ErrorCount), Class: errCls},
-		{Label: "Avg Latency", Value: latency},
-		{Label: "Top Tool", Value: topTool, Sub: topSub},
+		{Label: "Total Calls", Value: strconv.Itoa(stats.TotalCalls), ID: "statTotal"},
+		{Label: "Errors", Value: strconv.Itoa(stats.ErrorCount), Class: errCls, ID: "statErrors"},
+		{Label: "Avg Latency", Value: latency, Sub: "across all calls", ID: "statLatency"},
+		{Label: "Top Tool", Value: topTool, Sub: topSub, ID: "statTopTool"},
 	}}
 }
 

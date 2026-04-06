@@ -105,10 +105,12 @@ type AuditStoreInterface interface {
 	DeleteOlderThan(before time.Time) (int64, error)
 
 	// GetStats returns aggregate stats for a given email since the given time.
-	GetStats(email string, since time.Time) (*audit.Stats, error)
+	// Optional category and errorsOnly filters scope the results.
+	GetStats(email string, since time.Time, category string, errorsOnly bool) (*audit.Stats, error)
 
 	// GetToolCounts returns tool_name -> count for the given email.
-	GetToolCounts(email string, since time.Time) (map[string]int, error)
+	// Optional category and errorsOnly filters scope the results.
+	GetToolCounts(email string, since time.Time, category string, errorsOnly bool) (map[string]int, error)
 
 	// GetToolMetrics returns per-tool aggregate metrics since the given time.
 	GetToolMetrics(since time.Time) ([]audit.ToolMetric, error)

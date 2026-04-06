@@ -119,6 +119,7 @@ var toolDashboardPage = map[string]string{
 	"set_trailing_stop":        "/dashboard/alerts",
 	"list_trailing_stops":      "/dashboard/alerts",
 	"cancel_trailing_stop":     "/dashboard/alerts",
+	"setup_telegram":           "/dashboard/alerts",
 
 	// Derivatives / options tools → options chain page
 	"get_option_chain":         "/dashboard/options",
@@ -144,6 +145,19 @@ var toolDashboardPage = map[string]string{
 	// Analytics (portfolio page)
 	"dividend_calendar":        "/dashboard",
 	"sector_exposure":          "/dashboard",
+
+	// Market data -> chart widget
+	"get_quotes":               "/dashboard/chart",
+	"get_ltp":                  "/dashboard/chart",
+	"get_ohlc":                 "/dashboard/chart",
+	"get_historical_data":      "/dashboard/chart",
+	"search_instruments":       "/dashboard/chart",
+
+	// Mutual fund orders -> portfolio
+	"place_mf_order":           "/dashboard",
+	"cancel_mf_order":          "/dashboard",
+	"place_mf_sip":             "/dashboard",
+	"cancel_mf_sip":            "/dashboard",
 
 	// Safety page
 	"sebi_compliance_status":   "/dashboard/safety",

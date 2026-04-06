@@ -95,6 +95,10 @@
       <button class="fbtn" data-cat="notification">Notifications</button>
       <button class="fbtn" data-cat="ticker">Ticker</button>
       <button class="fbtn" data-cat="setup">Setup</button>
+      <button class="fbtn" data-cat="mf_order">MF Orders</button>
+      <button class="fbtn" data-cat="trailing_stop">Trailing</button>
+      <button class="fbtn" data-cat="watchlist">Watchlist</button>
+      <button class="fbtn" data-cat="analytics">Analytics</button>
     </div>
     <div class="filter-sep"></div>
     <button class="fbtn error-toggle" id="errorToggle">Errors Only</button>
@@ -157,17 +161,21 @@
 
   // --- Category badge config ---
   var catColors = {
-    order:        { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
-    query:        { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
-    market_data:  { bg: 'var(--green-dim)', fg: 'var(--green)' },
-    alert:        { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
-    notification: { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
-    ticker:       { bg: 'var(--purple-dim)', fg: 'var(--purple)' },
-    setup:        { bg: 'rgba(100,116,139,0.12)', fg: 'var(--text-2)' }
+    order:         { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
+    query:         { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
+    market_data:   { bg: 'var(--green-dim)', fg: 'var(--green)' },
+    alert:         { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    notification:  { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    ticker:        { bg: 'var(--purple-dim)', fg: 'var(--purple)' },
+    setup:         { bg: 'rgba(100,116,139,0.12)', fg: 'var(--text-2)' },
+    mf_order:      { bg: 'var(--accent-dim)', fg: 'var(--accent)' },
+    trailing_stop: { bg: 'var(--amber-dim)', fg: 'var(--amber)' },
+    watchlist:     { bg: 'rgba(148,163,184,0.12)', fg: 'var(--text-1)' },
+    analytics:     { bg: 'var(--purple-dim)', fg: 'var(--purple)' }
   };
   function getCatColor(cat) { return catColors[cat] || catColors.setup; }
   function catLabel(cat) {
-    var map = { order: 'ORDER', query: 'QUERY', market_data: 'MARKET', alert: 'ALERT', notification: 'NOTIF', ticker: 'TICKER', setup: 'SETUP' };
+    var map = { order: 'ORDER', query: 'QUERY', market_data: 'MARKET', alert: 'ALERT', notification: 'NOTIF', ticker: 'TICKER', setup: 'SETUP', mf_order: 'MF ORDER', trailing_stop: 'TRAILING', watchlist: 'WATCHLIST', analytics: 'ANALYTICS' };
     return map[cat] || (cat ? cat.toUpperCase() : 'OTHER');
   }
 
@@ -286,8 +294,12 @@
   // --- Stats ---
   // Uses server-side aggregate stats (from data.stats) when available.
   // Falls back to page-level computation only if stats are missing.
+  // All getElementById calls are null-guarded for safety.
   function updateStats(entries, total, stats) {
-    document.getElementById('statTotal').textContent = (stats && stats.total_calls != null) ? stats.total_calls : total;
+    var el;
+
+    el = document.getElementById('statTotal');
+    if (el) el.textContent = (stats && stats.total_calls != null) ? stats.total_calls : total;
 
     var errCount, avgMs, topTool, topCount;
 
@@ -315,15 +327,21 @@
       }
     }
 
-    var statErrors = document.getElementById('statErrors');
-    statErrors.textContent = errCount;
-    statErrors.className = 'stat-value' + (errCount > 0 ? ' red' : '');
+    el = document.getElementById('statErrors');
+    if (el) {
+      el.textContent = errCount;
+      el.className = 'stat-value' + (errCount > 0 ? ' red' : '');
+    }
 
-    document.getElementById('statLatency').textContent = avgMs + 'ms';
-    document.getElementById('statLatencySub').textContent = (stats ? 'across all calls' : (entries.length > 0 ? 'from ' + entries.length + ' calls' : ''));
+    el = document.getElementById('statLatency');
+    if (el) el.textContent = avgMs + 'ms';
+    el = document.getElementById('statLatencySub');
+    if (el) el.textContent = (stats ? 'across all calls' : (entries.length > 0 ? 'from ' + entries.length + ' calls' : ''));
 
-    document.getElementById('statTopTool').textContent = topTool;
-    document.getElementById('statTopToolSub').textContent = topCount > 0 ? topCount + ' calls' : '';
+    el = document.getElementById('statTopTool');
+    if (el) el.textContent = topTool;
+    el = document.getElementById('statTopToolSub');
+    if (el) el.textContent = topCount > 0 ? topCount + ' calls' : '';
   }
 
   // --- Render timeline ---

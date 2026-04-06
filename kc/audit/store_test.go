@@ -191,7 +191,7 @@ func TestStore_GetStats(t *testing.T) {
 	}
 
 	// Stats for all entries.
-	stats, err := s.GetStats(email, time.Time{})
+	stats, err := s.GetStats(email, time.Time{}, "", false)
 	require.NoError(t, err)
 	assert.Equal(t, 5, stats.TotalCalls)
 	assert.Equal(t, 1, stats.ErrorCount)
@@ -200,13 +200,13 @@ func TestStore_GetStats(t *testing.T) {
 	assert.Equal(t, 3, stats.TopToolCount)
 
 	// Stats with a since filter (only entries at T+2min and later).
-	stats, err = s.GetStats(email, base.Add(2*time.Minute))
+	stats, err = s.GetStats(email, base.Add(2*time.Minute), "", false)
 	require.NoError(t, err)
 	assert.Equal(t, 3, stats.TotalCalls)
 	assert.Equal(t, 1, stats.ErrorCount)
 
 	// Stats for a different user — empty.
-	stats, err = s.GetStats("nobody@example.com", time.Time{})
+	stats, err = s.GetStats("nobody@example.com", time.Time{}, "", false)
 	require.NoError(t, err)
 	assert.Equal(t, 0, stats.TotalCalls)
 	assert.Equal(t, 0, stats.ErrorCount)

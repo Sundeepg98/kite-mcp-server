@@ -340,7 +340,7 @@ func (d *DashboardHandler) serveActivityPageSSR(w http.ResponseWriter, r *http.R
 			Since: today,
 		}
 		ptrEntries, _, _ := d.auditStore.List(email, opts)
-		stats, _ := d.auditStore.GetStats(email, today)
+		stats, _ := d.auditStore.GetStats(email, today, "", false)
 
 		// Convert []*ToolCall to []ToolCall for the converter function.
 		entries := make([]audit.ToolCall, 0, len(ptrEntries))

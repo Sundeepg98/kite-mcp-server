@@ -567,8 +567,9 @@ type Stats struct {
 }
 
 // GetStats returns aggregate stats for a given email since the given time.
-// If since is zero, all records are included.
-func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
+// If since is zero, all records are included. Optional category and errorsOnly
+// filters scope the stats to match the user's active filters.
+func (s *Store) GetStats(email string, since time.Time, category string, errorsOnly bool) (*Stats, error) {
 	var where []string
 	var args []any
 
@@ -579,6 +580,13 @@ func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
 	if !since.IsZero() {
 		where = append(where, "started_at >= ?")
 		args = append(args, since.Format(time.RFC3339Nano))
+	}
+	if category != "" {
+		where = append(where, "tool_category = ?")
+		args = append(args, category)
+	}
+	if errorsOnly {
+		where = append(where, "is_error = 1")
 	}
 
 	whereClause := strings.Join(where, " AND ")
@@ -617,7 +625,8 @@ func (s *Store) GetStats(email string, since time.Time) (*Stats, error) {
 
 // GetToolCounts returns tool_name -> count for the given email since the given time.
 // Results are ordered by count descending, limited to the top 20 tools.
-func (s *Store) GetToolCounts(email string, since time.Time) (map[string]int, error) {
+// Optional category and errorsOnly filters scope results to match the user's active filters.
+func (s *Store) GetToolCounts(email string, since time.Time, category string, errorsOnly bool) (map[string]int, error) {
 	var where []string
 	var args []any
 
@@ -628,6 +637,13 @@ func (s *Store) GetToolCounts(email string, since time.Time) (map[string]int, er
 	if !since.IsZero() {
 		where = append(where, "started_at >= ?")
 		args = append(args, since.Format(time.RFC3339Nano))
+	}
+	if category != "" {
+		where = append(where, "tool_category = ?")
+		args = append(args, category)
+	}
+	if errorsOnly {
+		where = append(where, "is_error = 1")
 	}
 
 	whereClause := strings.Join(where, " AND ")

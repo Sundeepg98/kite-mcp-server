@@ -306,8 +306,8 @@ func activityData(_ *kc.Manager, auditStore *audit.Store, email string) any {
 		return nil
 	}
 
-	stats, _ := auditStore.GetStats(email, since)
-	toolCounts, _ := auditStore.GetToolCounts(email, since)
+	stats, _ := auditStore.GetStats(email, since, "", false)
+	toolCounts, _ := auditStore.GetToolCounts(email, since, "", false)
 
 	return map[string]any{
 		"entries":     entries,
@@ -726,7 +726,7 @@ func hubData(manager *kc.Manager, auditStore *audit.Store, email string) any {
 	toolCallsToday := 0
 	if auditStore != nil {
 		since := time.Now().Truncate(24 * time.Hour)
-		if stats, err := auditStore.GetStats(email, since); err == nil {
+		if stats, err := auditStore.GetStats(email, since, "", false); err == nil {
 			toolCallsToday = stats.TotalCalls
 		}
 	}

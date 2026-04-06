@@ -248,11 +248,20 @@ function formatINR(n) {
 const BAR_COLORS = ['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--red)','var(--text-1)','var(--accent)','var(--green)'];
 
 function badgeClass(cat) {
-  if (cat === 'query') return 'badge-query';
-  if (cat === 'action') return 'badge-action';
-  if (cat === 'mutation') return 'badge-mutation';
-  if (cat === 'auth') return 'badge-auth';
-  return 'badge-query';
+  switch(cat) {
+    case 'order': return 'badge-red';
+    case 'query': return 'badge-accent';
+    case 'market_data': return 'badge-green';
+    case 'alert': return 'badge-amber';
+    case 'notification': return 'badge-purple';
+    case 'ticker': return 'badge-green';
+    case 'setup': return 'badge-accent';
+    case 'mf_order': return 'badge-red';
+    case 'trailing_stop': return 'badge-amber';
+    case 'watchlist': return 'badge-accent';
+    case 'analytics': return 'badge-purple';
+    default: return 'badge-accent';
+  }
 }
 
 function fmtDuration(ms) {

@@ -434,11 +434,14 @@
         var data = d[item.key];
         if (data) {
           var priceStr = formatINR(data.last_price).replace('\u20B9', '');
-          document.getElementById(item.id + 'Price').textContent = priceStr;
+          var priceEl = document.getElementById(item.id + 'Price');
+          if (priceEl) priceEl.textContent = priceStr;
           var changeEl = document.getElementById(item.id + 'Change');
-          var sign = data.change >= 0 ? '+' : '';
-          changeEl.textContent = sign + data.change.toFixed(2) + ' (' + sign + data.change_pct.toFixed(2) + '%)';
-          changeEl.className = 'market-change ' + (data.change >= 0 ? 'up' : 'down');
+          if (changeEl) {
+            var sign = data.change >= 0 ? '+' : '';
+            changeEl.textContent = sign + data.change.toFixed(2) + ' (' + sign + data.change_pct.toFixed(2) + '%)';
+            changeEl.className = 'market-change ' + (data.change >= 0 ? 'up' : 'down');
+          }
         }
       });
     }).catch(function() {});
@@ -467,20 +470,20 @@
       var tokenValid = d.kite_token && d.kite_token.valid;
       if (tokenValid) {
         dot.className = 'status-dot valid';
-        cardToken.textContent = 'Valid';
-        cardToken.className = 'stat-value green';
+        if (cardToken) { cardToken.textContent = 'Valid'; cardToken.className = 'stat-value green'; }
         hideAuthBanner();
       } else {
         dot.className = 'status-dot expired';
-        cardToken.textContent = 'Expired';
-        cardToken.className = 'stat-value red';
+        if (cardToken) { cardToken.textContent = 'Expired'; cardToken.className = 'stat-value red'; }
         showAuthBanner('Your Kite session has expired. Please re-authenticate.');
       }
       // Ticker
       var cardTicker = document.getElementById('cardTicker');
       var tickerRunning = d.ticker && d.ticker.running;
-      cardTicker.textContent = tickerRunning ? 'Running' : 'Stopped';
-      cardTicker.className = 'stat-value ' + (tickerRunning ? 'green' : '');
+      if (cardTicker) {
+        cardTicker.textContent = tickerRunning ? 'Running' : 'Stopped';
+        cardTicker.className = 'stat-value ' + (tickerRunning ? 'green' : '');
+      }
       // Credentials
       var credSection = document.getElementById('credSection');
       credSection.style.display = 'flex';
@@ -493,8 +496,7 @@
         showAuthBanner(e.message || 'Kite token expired. Please re-authenticate.');
         document.getElementById('tokenDot').className = 'status-dot expired';
         var cardToken = document.getElementById('cardToken');
-        cardToken.textContent = 'Expired';
-        cardToken.className = 'stat-value red';
+        if (cardToken) { cardToken.textContent = 'Expired'; cardToken.className = 'stat-value red'; }
       }
     });
   }
@@ -505,22 +507,27 @@
       hideAuthBanner();
       var summary = d.summary || {};
       // Status cards
-      document.getElementById('cardHoldings').textContent = summary.holdings_count != null ? summary.holdings_count : '--';
+      var cardHoldings = document.getElementById('cardHoldings');
+      if (cardHoldings) cardHoldings.textContent = summary.holdings_count != null ? summary.holdings_count : '--';
       var pnlCard = document.getElementById('cardPnl');
       var totalPnl = (summary.total_pnl || 0) + (summary.positions_pnl || 0);
-      pnlCard.textContent = pnlSign(totalPnl);
-      pnlCard.className = 'stat-value ' + pnlClass(totalPnl);
+      if (pnlCard) {
+        pnlCard.textContent = pnlSign(totalPnl);
+        pnlCard.className = 'stat-value ' + pnlClass(totalPnl);
+      }
 
       // Hero subtitle: breakdown of holdings P&L + positions P&L
       var pnlSub = document.getElementById('cardPnlSub');
-      var parts = [];
-      if (summary.total_pnl != null && summary.total_pnl !== 0) {
-        parts.push('Holdings ' + pnlSign(summary.total_pnl));
+      if (pnlSub) {
+        var parts = [];
+        if (summary.total_pnl != null && summary.total_pnl !== 0) {
+          parts.push('Holdings ' + pnlSign(summary.total_pnl));
+        }
+        if (summary.positions_pnl != null && summary.positions_pnl !== 0) {
+          parts.push('Positions ' + pnlSign(summary.positions_pnl));
+        }
+        pnlSub.textContent = parts.length > 0 ? parts.join('  |  ') : '';
       }
-      if (summary.positions_pnl != null && summary.positions_pnl !== 0) {
-        parts.push('Positions ' + pnlSign(summary.positions_pnl));
-      }
-      pnlSub.textContent = parts.length > 0 ? parts.join('  |  ') : '';
 
       // Holdings/positions tables are server-rendered via Go templates.
       // Only update the donut chart from the JSON data.
@@ -635,7 +642,8 @@
   function refreshAlerts() {
     fetchJSON('alerts').then(function(d) {
       // Active alerts count card
-      document.getElementById('cardAlerts').textContent = d.active_count != null ? d.active_count : '--';
+      var cardAlerts = document.getElementById('cardAlerts');
+      if (cardAlerts) cardAlerts.textContent = d.active_count != null ? d.active_count : '--';
 
       // Active alerts table
       var activeBody = document.getElementById('activeAlertsBody');
