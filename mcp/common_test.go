@@ -273,8 +273,8 @@ func TestToolDashboardPage(t *testing.T) {
 
 	t.Run("unmapped tools return empty", func(t *testing.T) {
 		unmappedTools := []string{
-			"login", "open_dashboard", "get_ltp", "get_quotes",
-			"search_instruments", "start_ticker", "stop_ticker",
+			"login", "open_dashboard", "start_ticker", "stop_ticker",
+			"ticker_status", "subscribe_instruments", "unsubscribe_instruments",
 		}
 		for _, tool := range unmappedTools {
 			_, ok := toolDashboardPage[tool]

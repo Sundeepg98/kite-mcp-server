@@ -103,7 +103,7 @@ func TestResourceURIForTool(t *testing.T) {
 	})
 
 	t.Run("unmapped tools return empty string", func(t *testing.T) {
-		unmapped := []string{"login", "open_dashboard", "get_ltp", "search_instruments"}
+		unmapped := []string{"login", "open_dashboard", "start_ticker", "stop_ticker"}
 		for _, name := range unmapped {
 			uri := resourceURIForTool(name)
 			assert.Empty(t, uri, "tool %s should have no resource URI", name)
