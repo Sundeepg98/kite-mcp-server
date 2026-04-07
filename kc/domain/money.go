@@ -45,6 +45,11 @@ func (m Money) Multiply(factor float64) Money {
 	return Money{Amount: m.Amount * factor, Currency: m.Currency}
 }
 
+// IsPositive returns true if the amount is greater than zero.
+func (m Money) IsPositive() bool {
+	return m.Amount > 0
+}
+
 // IsZero returns true if the amount is exactly zero.
 func (m Money) IsZero() bool {
 	return m.Amount == 0

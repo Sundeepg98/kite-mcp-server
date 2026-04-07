@@ -13,6 +13,7 @@ import (
 const (
 	OrderStatusNew       = "NEW"
 	OrderStatusPlaced    = "PLACED"
+	OrderStatusModified  = "MODIFIED"
 	OrderStatusFilled    = "FILLED"
 	OrderStatusCancelled = "CANCELLED"
 )
@@ -32,7 +33,9 @@ type OrderAggregate struct {
 	Price           float64
 	FilledPrice     float64
 	FilledQuantity  int
+	ModifyCount     int
 	PlacedAt        time.Time
+	ModifiedAt      time.Time
 	CancelledAt     time.Time
 	FilledAt        time.Time
 }
@@ -60,6 +63,13 @@ type OrderPlacedPayload struct {
 	Product         string  `json:"product"`
 	Quantity        int     `json:"quantity"`
 	Price           float64 `json:"price"`
+}
+
+// OrderModifiedPayload is the JSON payload for an OrderModified event.
+type OrderModifiedPayload struct {
+	NewQuantity int     `json:"new_quantity,omitempty"`
+	NewPrice    float64 `json:"new_price,omitempty"`
+	NewOrderType string `json:"new_order_type,omitempty"`
 }
 
 // OrderCancelledPayload is the JSON payload for an OrderCancelled event.
@@ -106,10 +116,81 @@ func (o *OrderAggregate) Place(params broker.OrderParams, email string) error {
 	return nil
 }
 
-// Cancel emits an OrderCancelled event after validating the order is in PLACED state.
+// Modify emits an OrderModified event after validating the order can be modified.
+// At least one of newQty or newPrice must differ from current values.
+func (o *OrderAggregate) Modify(newQty int, newPrice float64, newOrderType string) error {
+	if err := o.CanModify(); err != nil {
+		return fmt.Errorf("eventsourcing: %w", err)
+	}
+	if newQty <= 0 {
+		return fmt.Errorf("eventsourcing: modify quantity must be positive, got %d", newQty)
+	}
+	if newQty == o.Quantity && newPrice == o.Price && (newOrderType == "" || newOrderType == o.OrderType) {
+		return fmt.Errorf("eventsourcing: modify must change at least one field")
+	}
+
+	now := time.Now().UTC()
+	effectiveOrderType := newOrderType
+	if effectiveOrderType == "" {
+		effectiveOrderType = o.OrderType
+	}
+	event := &orderModifiedEvent{
+		orderID:      o.id,
+		newQuantity:  newQty,
+		newPrice:     newPrice,
+		newOrderType: effectiveOrderType,
+		timestamp:    now,
+	}
+	o.Apply(event)
+	o.raise(event)
+	return nil
+}
+
+// --- Invariant query methods ---
+
+// CanModify returns an error if the order cannot be modified in its current state.
+func (o *OrderAggregate) CanModify() error {
+	switch o.Status {
+	case OrderStatusNew:
+		return fmt.Errorf("cannot modify order in NEW state (not yet placed)")
+	case OrderStatusCancelled:
+		return fmt.Errorf("cannot modify cancelled order")
+	case OrderStatusFilled:
+		return fmt.Errorf("cannot modify filled order")
+	}
+	return nil
+}
+
+// CanCancel returns an error if the order cannot be cancelled in its current state.
+func (o *OrderAggregate) CanCancel() error {
+	switch o.Status {
+	case OrderStatusNew:
+		return fmt.Errorf("cannot cancel order in NEW state")
+	case OrderStatusCancelled:
+		return fmt.Errorf("order already cancelled")
+	case OrderStatusFilled:
+		return fmt.Errorf("cannot cancel filled order")
+	}
+	return nil
+}
+
+// CanFill returns an error if the order cannot be filled in its current state.
+func (o *OrderAggregate) CanFill() error {
+	switch o.Status {
+	case OrderStatusNew:
+		return fmt.Errorf("cannot fill order in NEW state")
+	case OrderStatusCancelled:
+		return fmt.Errorf("cannot fill cancelled order")
+	case OrderStatusFilled:
+		return fmt.Errorf("order already filled")
+	}
+	return nil
+}
+
+// Cancel emits an OrderCancelled event after validating the order is in PLACED or MODIFIED state.
 func (o *OrderAggregate) Cancel() error {
-	if o.Status != OrderStatusPlaced {
-		return fmt.Errorf("eventsourcing: cannot cancel order in %s state", o.Status)
+	if err := o.CanCancel(); err != nil {
+		return fmt.Errorf("eventsourcing: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -122,10 +203,10 @@ func (o *OrderAggregate) Cancel() error {
 	return nil
 }
 
-// Fill emits an OrderFilled event after validating the order is in PLACED state.
+// Fill emits an OrderFilled event after validating the order is in PLACED or MODIFIED state.
 func (o *OrderAggregate) Fill(price float64, qty int) error {
-	if o.Status != OrderStatusPlaced {
-		return fmt.Errorf("eventsourcing: cannot fill order in %s state", o.Status)
+	if err := o.CanFill(); err != nil {
+		return fmt.Errorf("eventsourcing: %w", err)
 	}
 	if qty <= 0 {
 		return fmt.Errorf("eventsourcing: fill quantity must be positive, got %d", qty)
@@ -164,6 +245,13 @@ func (o *OrderAggregate) Apply(event domain.Event) {
 		o.Quantity = e.quantity
 		o.Price = e.price
 		o.PlacedAt = e.timestamp
+	case *orderModifiedEvent:
+		o.Status = OrderStatusModified
+		o.Quantity = e.newQuantity
+		o.Price = e.newPrice
+		o.OrderType = e.newOrderType
+		o.ModifyCount++
+		o.ModifiedAt = e.timestamp
 	case *orderCancelledEvent:
 		o.Status = OrderStatusCancelled
 		o.CancelledAt = e.timestamp
@@ -193,6 +281,17 @@ type orderPlacedEvent struct {
 
 func (e *orderPlacedEvent) EventType() string    { return "OrderPlaced" }
 func (e *orderPlacedEvent) OccurredAt() time.Time { return e.timestamp }
+
+type orderModifiedEvent struct {
+	orderID      string
+	newQuantity  int
+	newPrice     float64
+	newOrderType string
+	timestamp    time.Time
+}
+
+func (e *orderModifiedEvent) EventType() string    { return "OrderModified" }
+func (e *orderModifiedEvent) OccurredAt() time.Time { return e.timestamp }
 
 type orderCancelledEvent struct {
 	orderID   string
@@ -257,6 +356,19 @@ func deserializeOrderEvent(stored StoredEvent) (domain.Event, error) {
 			timestamp:       stored.OccurredAt,
 		}, nil
 
+	case "OrderModified":
+		var p OrderModifiedPayload
+		if err := json.Unmarshal(stored.Payload, &p); err != nil {
+			return nil, err
+		}
+		return &orderModifiedEvent{
+			orderID:      stored.AggregateID,
+			newQuantity:  p.NewQuantity,
+			newPrice:     p.NewPrice,
+			newOrderType: p.NewOrderType,
+			timestamp:    stored.OccurredAt,
+		}, nil
+
 	case "OrderCancelled":
 		return &orderCancelledEvent{
 			orderID:   stored.AggregateID,
@@ -300,6 +412,12 @@ func ToStoredEvents(agg *OrderAggregate, startSequence int64) ([]StoredEvent, er
 				Product:         e.product,
 				Quantity:        e.quantity,
 				Price:           e.price,
+			})
+		case *orderModifiedEvent:
+			payload, err = MarshalPayload(OrderModifiedPayload{
+				NewQuantity:  e.newQuantity,
+				NewPrice:     e.newPrice,
+				NewOrderType: e.newOrderType,
 			})
 		case *orderCancelledEvent:
 			payload, err = MarshalPayload(OrderCancelledPayload{})

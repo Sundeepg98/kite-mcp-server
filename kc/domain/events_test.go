@@ -72,6 +72,18 @@ func TestMoneyMultiply(t *testing.T) {
 	}
 }
 
+func TestMoneyIsPositive(t *testing.T) {
+	if !NewINR(10).IsPositive() {
+		t.Error("expected IsPositive for 10")
+	}
+	if NewINR(0).IsPositive() {
+		t.Error("expected !IsPositive for 0")
+	}
+	if NewINR(-5).IsPositive() {
+		t.Error("expected !IsPositive for -5")
+	}
+}
+
 func TestMoneyIsZero(t *testing.T) {
 	if !NewINR(0).IsZero() {
 		t.Error("expected IsZero for 0")
@@ -144,6 +156,18 @@ func TestNewQuantityNegativeRejected(t *testing.T) {
 	_, err := NewQuantity(-5)
 	if err == nil {
 		t.Error("expected error for negative quantity")
+	}
+}
+
+func TestQuantityIsValid(t *testing.T) {
+	q, _ := NewQuantity(10)
+	if !q.IsValid() {
+		t.Error("expected IsValid for quantity 10")
+	}
+
+	var zero Quantity
+	if zero.IsValid() {
+		t.Error("expected !IsValid for zero-value Quantity")
 	}
 }
 

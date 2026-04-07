@@ -21,6 +21,12 @@ func (q Quantity) Int() int {
 	return q.value
 }
 
+// IsValid returns true if the quantity has a positive value.
+// A zero-value Quantity (e.g., from var q Quantity) is invalid.
+func (q Quantity) IsValid() bool {
+	return q.value > 0
+}
+
 // String returns the quantity as a string.
 func (q Quantity) String() string {
 	return fmt.Sprintf("%d", q.value)

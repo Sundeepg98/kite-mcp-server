@@ -522,6 +522,9 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
+			// because PlaceGTT is a Kite-specific API not abstracted in broker.Client.
+			// See broker/broker.go for the abstracted interface.
 			resp, err := session.Kite.Client.PlaceGTT(gttParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place GTT order", "error", err)
@@ -564,6 +567,9 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		triggerID := SafeAssertInt(args["trigger_id"], 0)
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
+			// because DeleteGTT is a Kite-specific API not abstracted in broker.Client.
+			// See broker/broker.go for the abstracted interface.
 			resp, err := session.Kite.Client.DeleteGTT(triggerID)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to delete GTT order", "error", err)
@@ -802,6 +808,9 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
+			// because ModifyGTT is a Kite-specific API not abstracted in broker.Client.
+			// See broker/broker.go for the abstracted interface.
 			resp, err := session.Kite.Client.ModifyGTT(triggerID, gttParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify GTT order", "error", err)

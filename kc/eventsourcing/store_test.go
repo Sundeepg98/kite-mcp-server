@@ -265,7 +265,7 @@ func TestOrderAggregate_InvalidTransitions(t *testing.T) {
 	_ = agg2.Fill(3001, 5)
 	err = agg2.Cancel()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot cancel order in FILLED state")
+	assert.Contains(t, err.Error(), "cannot cancel filled order")
 }
 
 func TestOrderAggregate_PlaceValidation(t *testing.T) {
@@ -465,4 +465,203 @@ func TestAggregateType(t *testing.T) {
 	agg := NewOrderAggregate("order-type-test")
 	assert.Equal(t, "Order", agg.AggregateType())
 	assert.Equal(t, "order-type-test", agg.AggregateID())
+}
+
+// --- OrderModified tests ---
+
+func TestOrderAggregate_PlaceModifyFillLifecycle(t *testing.T) {
+	agg := NewOrderAggregate("order-modify-1")
+
+	err := agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Product: "CNC", Quantity: 10, Price: 2500.0,
+	}, "user@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusPlaced, agg.Status)
+
+	// Modify price and quantity.
+	err = agg.Modify(20, 2600.0, "")
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusModified, agg.Status)
+	assert.Equal(t, 20, agg.Quantity)
+	assert.Equal(t, 2600.0, agg.Price)
+	assert.Equal(t, "LIMIT", agg.OrderType) // unchanged since we passed ""
+	assert.Equal(t, 1, agg.ModifyCount)
+	assert.False(t, agg.ModifiedAt.IsZero())
+	assert.Equal(t, 2, agg.Version())
+
+	// Fill the modified order.
+	err = agg.Fill(2598.0, 20)
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusFilled, agg.Status)
+	assert.Equal(t, 3, agg.Version())
+}
+
+func TestOrderAggregate_ModifyMultipleTimes(t *testing.T) {
+	agg := NewOrderAggregate("order-multi-mod")
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "INFY", TransactionType: "BUY",
+		OrderType: "LIMIT", Product: "CNC", Quantity: 10, Price: 1500,
+	}, "user@example.com")
+
+	// First modification.
+	err := agg.Modify(15, 1550, "")
+	require.NoError(t, err)
+	assert.Equal(t, 1, agg.ModifyCount)
+
+	// Second modification — modify a MODIFIED order.
+	err = agg.Modify(20, 1600, "MARKET")
+	require.NoError(t, err)
+	assert.Equal(t, 2, agg.ModifyCount)
+	assert.Equal(t, "MARKET", agg.OrderType)
+	assert.Equal(t, 20, agg.Quantity)
+	assert.Equal(t, 1600.0, agg.Price)
+}
+
+func TestOrderAggregate_ModifyCancelLifecycle(t *testing.T) {
+	agg := NewOrderAggregate("order-mod-cancel")
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "TCS", TransactionType: "SELL",
+		OrderType: "LIMIT", Product: "CNC", Quantity: 5, Price: 3000,
+	}, "user@example.com")
+
+	err := agg.Modify(10, 3100, "")
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusModified, agg.Status)
+
+	// Cancel a modified order — should succeed.
+	err = agg.Cancel()
+	require.NoError(t, err)
+	assert.Equal(t, OrderStatusCancelled, agg.Status)
+}
+
+func TestOrderAggregate_ModifyInvalidTransitions(t *testing.T) {
+	// Cannot modify a NEW order.
+	agg := NewOrderAggregate("order-mod-inv-1")
+	err := agg.Modify(10, 100, "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot modify order in NEW state")
+
+	// Cannot modify a CANCELLED order.
+	agg2 := NewOrderAggregate("order-mod-inv-2")
+	_ = agg2.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+	_ = agg2.Cancel()
+	err = agg2.Modify(20, 2600, "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot modify cancelled order")
+
+	// Cannot modify a FILLED order.
+	agg3 := NewOrderAggregate("order-mod-inv-3")
+	_ = agg3.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+	_ = agg3.Fill(2501, 10)
+	err = agg3.Modify(20, 2600, "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot modify filled order")
+}
+
+func TestOrderAggregate_ModifyValidation(t *testing.T) {
+	agg := NewOrderAggregate("order-mod-val")
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+
+	// Zero quantity.
+	err := agg.Modify(0, 2600, "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "modify quantity must be positive")
+
+	// No changes.
+	err = agg.Modify(10, 2500, "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "modify must change at least one field")
+
+	// Same quantity and price but new order type — should succeed.
+	err = agg.Modify(10, 2500, "MARKET")
+	require.NoError(t, err)
+}
+
+// --- Invariant query method tests ---
+
+func TestCanModifyInvariant(t *testing.T) {
+	agg := NewOrderAggregate("inv-modify")
+	assert.Error(t, agg.CanModify(), "NEW should not be modifiable")
+
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+	assert.NoError(t, agg.CanModify(), "PLACED should be modifiable")
+}
+
+func TestCanCancelInvariant(t *testing.T) {
+	agg := NewOrderAggregate("inv-cancel")
+	assert.Error(t, agg.CanCancel(), "NEW should not be cancellable")
+
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+	assert.NoError(t, agg.CanCancel(), "PLACED should be cancellable")
+
+	_ = agg.Cancel()
+	assert.Error(t, agg.CanCancel(), "CANCELLED should not be cancellable again")
+}
+
+func TestCanFillInvariant(t *testing.T) {
+	agg := NewOrderAggregate("inv-fill")
+	assert.Error(t, agg.CanFill(), "NEW should not be fillable")
+
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Quantity: 10, Price: 2500,
+	}, "user@example.com")
+	assert.NoError(t, agg.CanFill(), "PLACED should be fillable")
+
+	_ = agg.Fill(2501, 10)
+	assert.Error(t, agg.CanFill(), "FILLED should not be fillable again")
+}
+
+// --- Modify event reconstitution tests ---
+
+func TestReconstitutePlaceModifyFillFromEvents(t *testing.T) {
+	store := newTestStore(t)
+
+	agg := NewOrderAggregate("order-mod-recon")
+	_ = agg.Place(broker.OrderParams{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
+		OrderType: "LIMIT", Product: "CNC", Quantity: 10, Price: 2500,
+	}, "mod@example.com")
+	_ = agg.Modify(20, 2600, "")
+	_ = agg.Fill(2598, 20)
+
+	storedEvents, err := ToStoredEvents(agg, 1)
+	require.NoError(t, err)
+	require.Len(t, storedEvents, 3)
+	assert.Equal(t, "OrderPlaced", storedEvents[0].EventType)
+	assert.Equal(t, "OrderModified", storedEvents[1].EventType)
+	assert.Equal(t, "OrderFilled", storedEvents[2].EventType)
+
+	err = store.Append(storedEvents...)
+	require.NoError(t, err)
+
+	loaded, err := store.LoadEvents("order-mod-recon")
+	require.NoError(t, err)
+
+	reconstituted, err := LoadOrderFromEvents(loaded)
+	require.NoError(t, err)
+
+	assert.Equal(t, OrderStatusFilled, reconstituted.Status)
+	assert.Equal(t, 20, reconstituted.Quantity)
+	assert.Equal(t, 2600.0, reconstituted.Price)
+	assert.Equal(t, 2598.0, reconstituted.FilledPrice)
+	assert.Equal(t, 1, reconstituted.ModifyCount)
+	assert.Equal(t, 3, reconstituted.Version())
+	assert.Empty(t, reconstituted.PendingEvents())
 }
