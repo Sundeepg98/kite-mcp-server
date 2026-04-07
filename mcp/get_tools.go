@@ -224,9 +224,9 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
-		// because GetGTTs is a Kite-specific API not abstracted in broker.Client.
-		// See broker/broker.go for the abstracted interface.
+		// NOTE: GTT operations use session.Kite.Client directly (Kite-specific, deferred
+		// from broker.Client abstraction). GTT types involve nested trigger interfaces
+		// (single-leg, two-leg) that are tightly coupled to the Kite SDK.
 		gttBook, err := session.Kite.Client.GetGTTs()
 		if err != nil {
 			return nil, err
@@ -271,10 +271,7 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
-			// because GetOrderTrades is a Kite-specific API not abstracted in broker.Client.
-			// See broker/broker.go for the abstracted interface.
-			orderTrades, err := session.Kite.Client.GetOrderTrades(orderID)
+			orderTrades, err := session.Broker.GetOrderTrades(orderID)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order trades: %s", err.Error())), nil
 			}

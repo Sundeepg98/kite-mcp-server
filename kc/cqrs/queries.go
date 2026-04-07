@@ -56,6 +56,17 @@ type GetOHLCQuery struct {
 	Instruments []string `json:"instruments"`
 }
 
+// GetQuotesQuery requests full market quotes for instruments.
+type GetQuotesQuery struct {
+	Instruments []string `json:"instruments"` // "EXCHANGE:SYMBOL" format
+}
+
+// GetOrderTradesQuery requests executed trades for a specific order.
+type GetOrderTradesQuery struct {
+	Email   string `json:"email"`
+	OrderID string `json:"order_id"`
+}
+
 // GetHistoricalDataQuery requests historical candle data.
 type GetHistoricalDataQuery struct {
 	InstrumentToken int       `json:"instrument_token"`

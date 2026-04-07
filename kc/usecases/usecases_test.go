@@ -114,6 +114,12 @@ func (m *mockBrokerClient) GetOHLC(instruments ...string) (map[string]broker.OHL
 func (m *mockBrokerClient) GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]broker.HistoricalCandle, error) {
 	return m.historicalData, m.historicalErr
 }
+func (m *mockBrokerClient) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
+	return nil, nil
+}
+func (m *mockBrokerClient) GetOrderTrades(orderID string) ([]broker.Trade, error) {
+	return nil, nil
+}
 
 // mockAlertStore is a minimal in-memory alert store.
 type mockAlertStore struct {

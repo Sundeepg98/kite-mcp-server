@@ -224,6 +224,81 @@ func (uc *GetOHLCUseCase) Execute(ctx context.Context, email string, query cqrs.
 	return ohlc, nil
 }
 
+// --- Quote queries ---
+
+// GetQuotesUseCase retrieves full market quotes for instruments.
+type GetQuotesUseCase struct {
+	brokerResolver BrokerResolver
+	logger         *slog.Logger
+}
+
+// NewGetQuotesUseCase creates a GetQuotesUseCase with all dependencies injected.
+func NewGetQuotesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetQuotesUseCase {
+	return &GetQuotesUseCase{
+		brokerResolver: resolver,
+		logger:         logger,
+	}
+}
+
+// Execute retrieves full market quotes for the given instruments.
+func (uc *GetQuotesUseCase) Execute(ctx context.Context, email string, query cqrs.GetQuotesQuery) (map[string]broker.Quote, error) {
+	if len(query.Instruments) == 0 {
+		return nil, fmt.Errorf("usecases: at least one instrument is required")
+	}
+
+	client, err := uc.brokerResolver.GetBrokerForEmail(email)
+	if err != nil {
+		return nil, fmt.Errorf("usecases: resolve broker: %w", err)
+	}
+
+	quotes, err := client.GetQuotes(query.Instruments...)
+	if err != nil {
+		uc.logger.Error("Failed to get quotes", "error", err)
+		return nil, fmt.Errorf("usecases: get quotes: %w", err)
+	}
+
+	return quotes, nil
+}
+
+// --- Order trade queries ---
+
+// GetOrderTradesUseCase retrieves executed trades for a specific order.
+type GetOrderTradesUseCase struct {
+	brokerResolver BrokerResolver
+	logger         *slog.Logger
+}
+
+// NewGetOrderTradesUseCase creates a GetOrderTradesUseCase with all dependencies injected.
+func NewGetOrderTradesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOrderTradesUseCase {
+	return &GetOrderTradesUseCase{
+		brokerResolver: resolver,
+		logger:         logger,
+	}
+}
+
+// Execute retrieves executed trades for a specific order.
+func (uc *GetOrderTradesUseCase) Execute(ctx context.Context, query cqrs.GetOrderTradesQuery) ([]broker.Trade, error) {
+	if query.Email == "" {
+		return nil, fmt.Errorf("usecases: email is required")
+	}
+	if query.OrderID == "" {
+		return nil, fmt.Errorf("usecases: order_id is required")
+	}
+
+	client, err := uc.brokerResolver.GetBrokerForEmail(query.Email)
+	if err != nil {
+		return nil, fmt.Errorf("usecases: resolve broker: %w", err)
+	}
+
+	trades, err := client.GetOrderTrades(query.OrderID)
+	if err != nil {
+		uc.logger.Error("Failed to get order trades", "email", query.Email, "order_id", query.OrderID, "error", err)
+		return nil, fmt.Errorf("usecases: get order trades: %w", err)
+	}
+
+	return trades, nil
+}
+
 // GetHistoricalDataUseCase retrieves historical candle data for an instrument.
 type GetHistoricalDataUseCase struct {
 	brokerResolver BrokerResolver

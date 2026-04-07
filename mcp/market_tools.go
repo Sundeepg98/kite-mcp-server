@@ -53,10 +53,7 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_quotes", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
-			// because GetQuote is a Kite-specific API not abstracted in broker.Client.
-			// See broker/broker.go for the abstracted interface.
-			quotes, err := session.Kite.Client.GetQuote(instruments...)
+			quotes, err := session.Broker.GetQuotes(instruments...)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get quotes: %s", err.Error())), nil
 			}

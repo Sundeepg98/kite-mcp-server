@@ -184,6 +184,52 @@ func convertOHLC(q kiteconnect.QuoteOHLC) map[string]broker.OHLC {
 	return out
 }
 
+// --- Quotes ---
+
+func convertQuotes(q kiteconnect.Quote) map[string]broker.Quote {
+	out := make(map[string]broker.Quote, len(q))
+	for key, val := range q {
+		bq := broker.Quote{
+			InstrumentToken:   val.InstrumentToken,
+			LastPrice:         val.LastPrice,
+			LastQuantity:      val.LastQuantity,
+			AveragePrice:      val.AveragePrice,
+			Volume:            val.Volume,
+			BuyQuantity:       val.BuyQuantity,
+			SellQuantity:      val.SellQuantity,
+			NetChange:         val.NetChange,
+			OI:                val.OI,
+			OIDayHigh:         val.OIDayHigh,
+			OIDayLow:          val.OIDayLow,
+			LowerCircuitLimit: val.LowerCircuitLimit,
+			UpperCircuitLimit: val.UpperCircuitLimit,
+			OHLC: broker.OHLC{
+				Open:  val.OHLC.Open,
+				High:  val.OHLC.High,
+				Low:   val.OHLC.Low,
+				Close: val.OHLC.Close,
+			},
+		}
+		// Convert market depth.
+		for i, d := range val.Depth.Buy {
+			bq.Depth.Buy[i] = broker.DepthItem{
+				Price:    d.Price,
+				Quantity: int(d.Quantity),
+				Orders:   int(d.Orders),
+			}
+		}
+		for i, d := range val.Depth.Sell {
+			bq.Depth.Sell[i] = broker.DepthItem{
+				Price:    d.Price,
+				Quantity: int(d.Quantity),
+				Orders:   int(d.Orders),
+			}
+		}
+		out[key] = bq
+	}
+	return out
+}
+
 // --- Historical Data ---
 
 func convertHistoricalData(data []kiteconnect.HistoricalData) []broker.HistoricalCandle {

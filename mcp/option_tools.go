@@ -225,10 +225,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Step 8: Batch get quotes
-			// NOTE: Uses session.Kite.Client directly (not broker.Client interface)
-			// because GetQuote is a Kite-specific API not abstracted in broker.Client.
-			// See broker/broker.go for the abstracted interface.
-			quotes, err := session.Kite.Client.GetQuote(instrumentKeys...)
+			quotes, err := session.Broker.GetQuotes(instrumentKeys...)
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch option quotes: %s", err.Error())), nil
 			}

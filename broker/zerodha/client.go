@@ -157,3 +157,21 @@ func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, t
 	}
 	return convertHistoricalData(data), nil
 }
+
+// GetQuotes returns full market quotes for the given instruments.
+func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
+	q, err := c.kite.GetQuote(instruments...)
+	if err != nil {
+		return nil, err
+	}
+	return convertQuotes(q), nil
+}
+
+// GetOrderTrades returns executed trades for a specific order.
+func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
+	t, err := c.kite.GetOrderTrades(orderID)
+	if err != nil {
+		return nil, err
+	}
+	return convertTrades(kiteconnect.Trades(t)), nil
+}

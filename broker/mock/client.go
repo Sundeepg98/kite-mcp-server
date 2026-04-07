@@ -32,6 +32,7 @@ type Client struct {
 	trades    []broker.Trade
 	prices    map[string]float64 // "EXCHANGE:SYMBOL" → last price
 	ohlc      map[string]broker.OHLC
+	quotes    map[string]broker.Quote
 
 	// Auto-incrementing order/trade IDs.
 	nextOrderID atomic.Int64
@@ -53,6 +54,8 @@ type Client struct {
 	GetLTPErr         error
 	GetOHLCErr        error
 	GetHistoricalErr  error
+	GetQuotesErr      error
+	GetOrderTradesErr error
 }
 
 // New creates a ready-to-use mock Client with sensible defaults.
@@ -60,6 +63,7 @@ func New() *Client {
 	c := &Client{
 		prices:    make(map[string]float64),
 		ohlc:      make(map[string]broker.OHLC),
+		quotes:    make(map[string]broker.Quote),
 		profile: broker.Profile{
 			UserID:    "MOCK01",
 			UserName:  "Mock User",
@@ -450,4 +454,51 @@ func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, t
 		})
 	}
 	return candles, nil
+}
+
+// SetQuotes sets full quote data. Keys are "EXCHANGE:SYMBOL".
+func (c *Client) SetQuotes(data map[string]broker.Quote) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.quotes = data
+}
+
+// GetQuotes returns full market quotes for the requested instruments.
+func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
+	if c.GetQuotesErr != nil {
+		return nil, c.GetQuotesErr
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	out := make(map[string]broker.Quote, len(instruments))
+	for _, inst := range instruments {
+		if data, ok := c.quotes[inst]; ok {
+			out[inst] = data
+		}
+	}
+	return out, nil
+}
+
+// GetOrderTrades returns trades for a specific order.
+// In the mock, this filters the trades list by order ID.
+func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
+	if c.GetOrderTradesErr != nil {
+		return nil, c.GetOrderTradesErr
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var out []broker.Trade
+	for _, t := range c.trades {
+		if t.OrderID == orderID {
+			out = append(out, t)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no trades found for order %s", orderID)
+	}
+	return out, nil
 }

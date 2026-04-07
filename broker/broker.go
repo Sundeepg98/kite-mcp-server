@@ -132,6 +132,38 @@ type OHLC struct {
 	LastPrice float64 `json:"last_price"`
 }
 
+// DepthItem represents a single entry in the market depth (bid/ask).
+type DepthItem struct {
+	Price    float64 `json:"price"`
+	Quantity int     `json:"quantity"`
+	Orders   int     `json:"orders"`
+}
+
+// Depth represents market depth with buy and sell sides.
+type Depth struct {
+	Buy  [5]DepthItem `json:"buy"`
+	Sell [5]DepthItem `json:"sell"`
+}
+
+// Quote contains the full market quote for a single instrument.
+type Quote struct {
+	InstrumentToken   int     `json:"instrument_token"`
+	LastPrice         float64 `json:"last_price"`
+	LastQuantity      int     `json:"last_quantity"`
+	AveragePrice      float64 `json:"average_price"`
+	Volume            int     `json:"volume"`
+	BuyQuantity       int     `json:"buy_quantity"`
+	SellQuantity      int     `json:"sell_quantity"`
+	OHLC              OHLC    `json:"ohlc"`
+	NetChange         float64 `json:"net_change"`
+	OI                float64 `json:"oi"`
+	OIDayHigh         float64 `json:"oi_day_high"`
+	OIDayLow          float64 `json:"oi_day_low"`
+	LowerCircuitLimit float64 `json:"lower_circuit_limit"`
+	UpperCircuitLimit float64 `json:"upper_circuit_limit"`
+	Depth             Depth   `json:"depth"`
+}
+
 // HistoricalCandle represents a single OHLCV candle.
 type HistoricalCandle struct {
 	Date   time.Time `json:"date"`
@@ -188,4 +220,11 @@ type Client interface {
 
 	// GetHistoricalData returns historical candle data for an instrument.
 	GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]HistoricalCandle, error)
+
+	// GetQuotes returns full market quotes for the given instruments.
+	// Instrument format is "EXCHANGE:TRADINGSYMBOL" (e.g., "NSE:RELIANCE").
+	GetQuotes(instruments ...string) (map[string]Quote, error)
+
+	// GetOrderTrades returns executed trades for a specific order.
+	GetOrderTrades(orderID string) ([]Trade, error)
 }
