@@ -380,10 +380,10 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
-		reason := SafeAssertString(args["reason"], "")
-		confirmed := SafeAssertBool(args["confirm"], false)
+		p := NewArgParser(request.GetArguments())
+		targetEmail := p.String("target_email", "")
+		reason := p.String("reason", "")
+		confirmed := p.Bool("confirm", false)
 
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
@@ -523,9 +523,9 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
-		newRole := SafeAssertString(args["role"], "")
+		p := NewArgParser(request.GetArguments())
+		targetEmail := p.String("target_email", "")
+		newRole := p.String("role", "")
 		if targetEmail == "" || newRole == "" {
 			return mcp.NewToolResultError("target_email and role are required."), nil
 		}
@@ -604,10 +604,10 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
-		reason := SafeAssertString(args["reason"], "")
-		confirmed := SafeAssertBool(args["confirm"], false)
+		p := NewArgParser(request.GetArguments())
+		targetEmail := p.String("target_email", "")
+		reason := p.String("reason", "")
+		confirmed := p.Bool("confirm", false)
 
 		if targetEmail == "" || reason == "" {
 			return mcp.NewToolResultError("target_email and reason are required."), nil
@@ -721,9 +721,9 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		args := request.GetArguments()
-		reason := SafeAssertString(args["reason"], "")
-		confirmed := SafeAssertBool(args["confirm"], false)
+		p := NewArgParser(request.GetArguments())
+		reason := p.String("reason", "")
+		confirmed := p.Bool("confirm", false)
 
 		if reason == "" {
 			return mcp.NewToolResultError("reason is required."), nil
@@ -829,8 +829,8 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		invitedEmail := strings.ToLower(SafeAssertString(args["invited_email"], ""))
+		p := NewArgParser(request.GetArguments())
+		invitedEmail := strings.ToLower(p.String("invited_email", ""))
 		if invitedEmail == "" {
 			return mcp.NewToolResultError("invited_email is required."), nil
 		}

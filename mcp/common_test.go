@@ -73,6 +73,52 @@ func TestSafeAssertFunctions(t *testing.T) {
 	})
 }
 
+// TestArgParser tests the declarative argument parser
+func TestArgParser(t *testing.T) {
+	args := map[string]interface{}{
+		"name":    "test",
+		"count":   42,
+		"price":   3.14,
+		"active":  true,
+		"tags":    []interface{}{"a", "b"},
+	}
+	p := NewArgParser(args)
+
+	t.Run("String", func(t *testing.T) {
+		assert.Equal(t, "test", p.String("name", ""))
+		assert.Equal(t, "default", p.String("missing", "default"))
+	})
+
+	t.Run("Int", func(t *testing.T) {
+		assert.Equal(t, 42, p.Int("count", 0))
+		assert.Equal(t, 99, p.Int("missing", 99))
+	})
+
+	t.Run("Float", func(t *testing.T) {
+		assert.Equal(t, 3.14, p.Float("price", 0.0))
+		assert.Equal(t, 1.0, p.Float("missing", 1.0))
+	})
+
+	t.Run("Bool", func(t *testing.T) {
+		assert.True(t, p.Bool("active", false))
+		assert.False(t, p.Bool("missing", false))
+	})
+
+	t.Run("StringArray", func(t *testing.T) {
+		assert.Equal(t, []string{"a", "b"}, p.StringArray("tags"))
+		assert.Nil(t, p.StringArray("missing"))
+	})
+
+	t.Run("Required", func(t *testing.T) {
+		assert.NoError(t, p.Required("name", "count"))
+		assert.Error(t, p.Required("name", "missing_key"))
+	})
+
+	t.Run("Raw", func(t *testing.T) {
+		assert.Equal(t, args, p.Raw())
+	})
+}
+
 // TestValidateRequired tests parameter validation
 func TestValidateRequired(t *testing.T) {
 	t.Run("valid parameters", func(t *testing.T) {

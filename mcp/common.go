@@ -263,6 +263,52 @@ func ValidateRequired(args map[string]interface{}, required ...string) error {
 	return nil
 }
 
+// ArgParser provides declarative argument extraction from MCP tool requests.
+// Eliminates repetitive SafeAssertString/Int/Float chains.
+type ArgParser struct {
+	args map[string]interface{}
+}
+
+// NewArgParser wraps tool request arguments for fluent extraction.
+func NewArgParser(args map[string]interface{}) *ArgParser {
+	return &ArgParser{args: args}
+}
+
+// String extracts a string argument with default.
+func (p *ArgParser) String(key, defaultVal string) string {
+	return SafeAssertString(p.args[key], defaultVal)
+}
+
+// Int extracts an integer argument with default.
+func (p *ArgParser) Int(key string, defaultVal int) int {
+	return SafeAssertInt(p.args[key], defaultVal)
+}
+
+// Float extracts a float64 argument with default.
+func (p *ArgParser) Float(key string, defaultVal float64) float64 {
+	return SafeAssertFloat64(p.args[key], defaultVal)
+}
+
+// Bool extracts a boolean argument with default.
+func (p *ArgParser) Bool(key string, defaultVal bool) bool {
+	return SafeAssertBool(p.args[key], defaultVal)
+}
+
+// StringArray extracts a string array argument.
+func (p *ArgParser) StringArray(key string) []string {
+	return SafeAssertStringArray(p.args[key])
+}
+
+// Required checks that required keys exist and are non-empty.
+func (p *ArgParser) Required(keys ...string) error {
+	return ValidateRequired(p.args, keys...)
+}
+
+// Raw returns the underlying args map.
+func (p *ArgParser) Raw() map[string]interface{} {
+	return p.args
+}
+
 // SafeAssertString safely converts interface{} to string with fallback
 func SafeAssertString(v interface{}, fallback string) string {
 	if v == nil {
