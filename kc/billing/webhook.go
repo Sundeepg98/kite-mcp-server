@@ -25,6 +25,7 @@ import (
 func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger, adminUpgrade func(email string)) http.HandlerFunc {
 	pricePro := os.Getenv("STRIPE_PRICE_PRO")
 	pricePremium := os.Getenv("STRIPE_PRICE_PREMIUM")
+	priceSoloPro := os.Getenv("STRIPE_PRICE_SOLO_PRO")
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -60,10 +61,10 @@ func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger, adm
 		// Process the event synchronously (no Stripe API calls — all data is in the event payload).
 		switch event.Type {
 		case "checkout.session.completed":
-			handleCheckoutCompleted(store, &event, pricePro, pricePremium, logger, adminUpgrade)
+			handleCheckoutCompleted(store, &event, pricePro, pricePremium, priceSoloPro, logger, adminUpgrade)
 
 		case "customer.subscription.updated":
-			handleSubscriptionUpdated(store, &event, pricePro, pricePremium, logger)
+			handleSubscriptionUpdated(store, &event, pricePro, pricePremium, priceSoloPro, logger)
 
 		case "customer.subscription.deleted":
 			handleSubscriptionDeleted(store, &event, logger)
@@ -86,7 +87,7 @@ func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger, adm
 
 // handleCheckoutCompleted processes a checkout.session.completed event.
 // It extracts the customer email and price ID to create a subscription mapping.
-func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, pricePremium string, logger *slog.Logger, adminUpgrade func(email string)) {
+func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, pricePremium, priceSoloPro string, logger *slog.Logger, adminUpgrade func(email string)) {
 	var session stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 		logger.Error("stripe webhook: failed to unmarshal checkout session", "error", err)
@@ -126,7 +127,7 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 	}
 
 	// Determine tier from the price ID in the line items (from subscription object).
-	tier := mapPriceToTier(extractPriceID(&session), pricePro, pricePremium)
+	tier := mapPriceToTier(extractPriceID(&session), pricePro, pricePremium, priceSoloPro)
 
 	sub := &Subscription{
 		AdminEmail:       email,
@@ -152,7 +153,7 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 
 // handleSubscriptionUpdated processes a customer.subscription.updated event.
 // It updates the tier, status, and expiry from the subscription object.
-func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pricePremium string, logger *slog.Logger) {
+func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pricePremium, priceSoloPro string, logger *slog.Logger) {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 		logger.Error("stripe webhook: failed to unmarshal subscription", "error", err)
@@ -175,7 +176,7 @@ func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pric
 	if sub.Items != nil && len(sub.Items.Data) > 0 && sub.Items.Data[0].Price != nil {
 		priceID = sub.Items.Data[0].Price.ID
 	}
-	tier := mapPriceToTier(priceID, pricePro, pricePremium)
+	tier := mapPriceToTier(priceID, pricePro, pricePremium, priceSoloPro)
 
 	// Map Stripe status to our status constants.
 	status := mapStripeStatus(sub.Status)
@@ -284,7 +285,7 @@ func extractPriceID(session *stripe.CheckoutSession) string {
 }
 
 // mapPriceToTier maps a Stripe price ID to a billing tier using env-configured price IDs.
-func mapPriceToTier(priceID, pricePro, pricePremium string) Tier {
+func mapPriceToTier(priceID, pricePro, pricePremium, priceSoloPro string) Tier {
 	switch priceID {
 	case pricePremium:
 		if pricePremium != "" {
@@ -293,6 +294,10 @@ func mapPriceToTier(priceID, pricePro, pricePremium string) Tier {
 	case pricePro:
 		if pricePro != "" {
 			return TierPro
+		}
+	case priceSoloPro:
+		if priceSoloPro != "" {
+			return TierSoloPro
 		}
 	}
 	// Default to Pro for any paid checkout with an unrecognized price ID.

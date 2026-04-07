@@ -7,11 +7,14 @@ const (
 	TierFree    Tier = 0
 	TierPro     Tier = 1
 	TierPremium Tier = 2
+	TierSoloPro Tier = 3 // Solo Pro: same tool access as Pro, max_users=1
 )
 
 // String returns the human-readable name of the tier.
 func (t Tier) String() string {
 	switch t {
+	case TierSoloPro:
+		return "solo_pro"
 	case TierPro:
 		return "pro"
 	case TierPremium:
@@ -19,6 +22,16 @@ func (t Tier) String() string {
 	default:
 		return "free"
 	}
+}
+
+// EffectiveTier returns the tier used for tool-access comparisons.
+// TierSoloPro grants the same tool access as TierPro (the difference is
+// max_users, not feature gates), so it maps down to TierPro here.
+func (t Tier) EffectiveTier() Tier {
+	if t == TierSoloPro {
+		return TierPro
+	}
+	return t
 }
 
 // toolTiers maps each MCP tool name to its minimum required billing tier.

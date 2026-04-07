@@ -22,11 +22,11 @@ import (
 func adminCheck(ctx context.Context, manager *kc.Manager) (string, *mcp.CallToolResult) {
 	email := oauth.EmailFromContext(ctx)
 	if email == "" {
-		return "", mcp.NewToolResultError("Authentication required. Please log in first.")
+		return "", mcp.NewToolResultError(ErrAuthRequired)
 	}
 	if uStore := manager.UserStore(); uStore != nil {
 		if !uStore.IsAdmin(email) {
-			return "", mcp.NewToolResultError("Admin access required. This tool is restricted to server administrators.")
+			return "", mcp.NewToolResultError(ErrAdminRequired)
 		}
 	}
 	return email, nil
@@ -81,11 +81,8 @@ type adminUserEntry struct {
 
 func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "admin_list_users")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
-			return errResult, nil
-		}
 
 		args := request.GetArguments()
 		from := SafeAssertInt(args["from"], 0)
@@ -99,7 +96,7 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 		allUsers := uStore.List()
 
@@ -134,7 +131,7 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Limit: limit,
 			Users: entries,
 		}, "admin_list_users")
-	}
+	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,12 +182,12 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		args := request.GetArguments()
 		targetEmail := SafeAssertString(args["target_email"], "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 		user, found := uStore.Get(targetEmail)
 		if !found {
@@ -323,12 +320,12 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		args := request.GetArguments()
 		targetEmail := SafeAssertString(args["target_email"], "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
 		rg := manager.RiskGuard()
 		if rg == nil {
-			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		status := rg.GetUserStatus(targetEmail)
@@ -389,18 +386,18 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		confirmed := SafeAssertBool(args["confirm"], false)
 
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 		if !confirmed {
 			return mcp.NewToolResultError("confirm must be true. This action suspends the user, freezes trading, and terminates sessions."), nil
 		}
 		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError("Cannot suspend yourself."), nil
+			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		// Last-admin guard: don't suspend the last active admin.
@@ -474,21 +471,18 @@ func (*AdminActivateUserTool) Tool() mcp.Tool {
 
 func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "admin_activate_user")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
-			return errResult, nil
-		}
 
 		args := request.GetArguments()
 		targetEmail := SafeAssertString(args["target_email"], "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 		if err := uStore.UpdateStatus(targetEmail, users.StatusActive); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to activate user: %s", err.Error())), nil
@@ -498,7 +492,7 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			"status": "active",
 			"email":  targetEmail,
 		}, "admin_activate_user")
-	}
+	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -538,7 +532,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		// Last-admin guard.
@@ -622,12 +616,12 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("confirm must be true to freeze trading."), nil
 		}
 		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError("Cannot freeze yourself."), nil
+			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
 		guard := manager.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Elicitation confirmation.
@@ -668,21 +662,18 @@ func (*AdminUnfreezeUserTool) Tool() mcp.Tool {
 
 func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
-	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "admin_unfreeze_user")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
-			return errResult, nil
-		}
 
 		args := request.GetArguments()
 		targetEmail := SafeAssertString(args["target_email"], "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
 		guard := manager.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		guard.Unfreeze(targetEmail)
@@ -691,7 +682,7 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			"status": "unfrozen",
 			"email":  targetEmail,
 		}, "admin_unfreeze_user")
-	}
+	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -722,6 +713,14 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return errResult, nil
 		}
 
+		// Solo Pro users (max_users=1) shouldn't use global freeze — it only
+		// affects themselves. Require a Family (Pro) or Premium plan.
+		if bs := manager.BillingStore(); bs != nil {
+			if sub := bs.GetSubscription(adminEmail); sub != nil && sub.MaxUsers <= 1 {
+				return mcp.NewToolResultError("Global freeze requires a Family or Premium plan."), nil
+			}
+		}
+
 		args := request.GetArguments()
 		reason := SafeAssertString(args["reason"], "")
 		confirmed := SafeAssertBool(args["confirm"], false)
@@ -735,7 +734,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		guard := manager.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Double elicitation: two sequential confirmations.
@@ -794,7 +793,7 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}
 		guard := manager.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError("RiskGuard not available on this server."), nil
+			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 		guard.UnfreezeGlobal()
 		return handler.MarshalResponse(map[string]string{
@@ -836,13 +835,13 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 			return mcp.NewToolResultError("invited_email is required."), nil
 		}
 		if strings.EqualFold(invitedEmail, adminEmail) {
-			return mcp.NewToolResultError("Cannot invite yourself."), nil
+			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
 		// Check max_users
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 		currentFamily := uStore.ListByAdminEmail(adminEmail)
 
@@ -870,7 +869,7 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		// Create invitation
 		invStore := manager.InvitationStore()
 		if invStore == nil {
-			return mcp.NewToolResultError("Invitation store not available."), nil
+			return mcp.NewToolResultError(ErrInvitationStoreNA), nil
 		}
 
 		invID := fmt.Sprintf("inv_%d", time.Now().UnixNano())
@@ -950,7 +949,7 @@ func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		members := uStore.ListByAdminEmail(adminEmail)
@@ -1054,18 +1053,18 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		targetEmail := strings.ToLower(SafeAssertString(args["target_email"], ""))
 		confirmed := SafeAssertBool(args["confirm"], false)
 		if targetEmail == "" {
-			return mcp.NewToolResultError("target_email is required."), nil
+			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 		if !confirmed {
 			return mcp.NewToolResultError("confirm must be true. Member will lose tier access."), nil
 		}
 		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError("Cannot remove yourself."), nil
+			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
 		uStore := manager.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError("User store not available."), nil
+			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		u, ok := uStore.Get(targetEmail)

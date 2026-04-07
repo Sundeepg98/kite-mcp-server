@@ -593,6 +593,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
 	var serverOpts []server.ServerOption
+	// Timeout middleware kills tool handlers that exceed 30 seconds.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.TimeoutMiddleware(30*time.Second)))
 	if auditMiddleware != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
 	}

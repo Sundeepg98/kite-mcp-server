@@ -348,6 +348,19 @@ func SafeAssertStringArray(v interface{}) []string {
 	return result
 }
 
+// Common error messages for tool handlers.
+const (
+	ErrAuthRequired        = "Authentication required. Please log in first."
+	ErrAdminRequired       = "Admin access required. This tool is restricted to server administrators."
+	ErrUserStoreNA         = "User store not available."
+	ErrTargetEmailRequired = "target_email is required."
+	ErrSelfAction          = "Cannot perform this action on yourself."
+	ErrLastAdmin           = "Cannot demote/suspend the last active admin."
+	ErrRiskGuardNA         = "RiskGuard not available on this server."
+	ErrConfirmRequired     = "confirm must be true to execute this action."
+	ErrInvitationStoreNA   = "Invitation store not available."
+)
+
 // MaxPaginationLimit caps the maximum number of items returned per page.
 const MaxPaginationLimit = 500
 

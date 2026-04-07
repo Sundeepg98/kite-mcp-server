@@ -23,7 +23,7 @@ func Middleware(store *Store, adminEmailFn func(string) string) server.ToolHandl
 			}
 
 			required := RequiredTier(request.Params.Name)
-			current := store.GetTierForUser(email, adminEmailFn)
+			current := store.GetTierForUser(email, adminEmailFn).EffectiveTier()
 
 			if current < required {
 				return gomcp.NewToolResultError(fmt.Sprintf(
