@@ -29,6 +29,39 @@ type OrderPlacedEvent struct {
 func (e OrderPlacedEvent) EventType() string    { return "order.placed" }
 func (e OrderPlacedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// OrderModifiedEvent is emitted after an order is successfully modified.
+type OrderModifiedEvent struct {
+	Email     string
+	OrderID   string
+	Timestamp time.Time
+}
+
+func (e OrderModifiedEvent) EventType() string    { return "order.modified" }
+func (e OrderModifiedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// OrderCancelledEvent is emitted after an order is successfully cancelled.
+type OrderCancelledEvent struct {
+	Email     string
+	OrderID   string
+	Timestamp time.Time
+}
+
+func (e OrderCancelledEvent) EventType() string    { return "order.cancelled" }
+func (e OrderCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PositionClosedEvent is emitted after a position is closed via close_position.
+type PositionClosedEvent struct {
+	Email           string
+	OrderID         string
+	Instrument      InstrumentKey
+	Qty             Quantity
+	TransactionType string // opposite direction used to close
+	Timestamp       time.Time
+}
+
+func (e PositionClosedEvent) EventType() string    { return "position.closed" }
+func (e PositionClosedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // AlertTriggeredEvent is emitted when a price alert fires.
 type AlertTriggeredEvent struct {
 	Email        string

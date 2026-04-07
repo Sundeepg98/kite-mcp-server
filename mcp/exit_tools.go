@@ -3,14 +3,12 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
-	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // ClosePositionTool closes a single position by placing an opposite MARKET order.
@@ -63,64 +61,27 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Broker.GetPositions()
+			// Route through ClosePositionUseCase (riskguard + broker + event dispatch).
+			uc := usecases.NewClosePositionUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				handler.manager.RiskGuard(),
+				handler.manager.EventDispatcher(),
+				handler.manager.Logger,
+			)
+			result, err := uc.Execute(ctx, session.Email, exchange, symbol, productFilter)
 			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch positions: %s", err.Error())), nil
-			}
-
-			// Find the matching position
-			var matched *broker.Position
-			for i, p := range positions.Net {
-				if p.Quantity == 0 {
-					continue
-				}
-				if strings.EqualFold(p.Exchange, exchange) && strings.EqualFold(p.Tradingsymbol, symbol) {
-					if productFilter != "" && strings.ToUpper(p.Product) != productFilter {
-						continue
-					}
-					matched = &positions.Net[i]
-					break
-				}
-			}
-
-			if matched == nil {
-				return mcp.NewToolResultError(fmt.Sprintf("No open position found for %s", instrumentID)), nil
-			}
-
-			// Determine opposite direction
-			var txnType string
-			qty := int(math.Abs(float64(matched.Quantity)))
-			if matched.Quantity > 0 {
-				txnType = "SELL"
-			} else {
-				txnType = "BUY"
-			}
-
-			orderParams := broker.OrderParams{
-				Exchange:         matched.Exchange,
-				Tradingsymbol:    matched.Tradingsymbol,
-				TransactionType:  txnType,
-				Quantity:         qty,
-				Product:          matched.Product,
-				OrderType:        "MARKET",
-				Validity:         "DAY",
-				MarketProtection: kiteconnect.MarketProtectionAuto,
-				Variety:          "regular",
-			}
-
-			resp, placeErr := session.Broker.PlaceOrder(orderParams)
-			if placeErr != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to close position %s: %s", instrumentID, placeErr.Error())), nil
+				handler.manager.Logger.Error("Failed to close position", "error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("close_position: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(map[string]any{
-				"message":       fmt.Sprintf("Position closed: %s %s %d x %s", txnType, instrumentID, qty, matched.Product),
-				"order_id":      resp.OrderID,
-				"instrument":    instrumentID,
-				"quantity":      qty,
-				"direction":     txnType,
-				"product":       matched.Product,
-				"position_pnl":  matched.PnL,
+				"message":      fmt.Sprintf("Position closed: %s %s %d x %s", result.Direction, instrumentID, result.Quantity, result.Product),
+				"order_id":     result.OrderID,
+				"instrument":   result.Instrument,
+				"quantity":     result.Quantity,
+				"direction":    result.Direction,
+				"product":      result.Product,
+				"position_pnl": result.PositionPnL,
 			}, "close_position")
 		})
 	}
@@ -171,85 +132,48 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		productFilter := strings.ToUpper(SafeAssertString(args["product"], "ALL"))
+		productFilter := SafeAssertString(args["product"], "ALL")
 
 		return handler.WithSession(ctx, "close_all_positions", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Broker.GetPositions()
+			// Route through CloseAllPositionsUseCase (riskguard + broker + event dispatch).
+			uc := usecases.NewCloseAllPositionsUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				handler.manager.RiskGuard(),
+				handler.manager.EventDispatcher(),
+				handler.manager.Logger,
+			)
+			result, err := uc.Execute(ctx, session.Email, productFilter)
 			if err != nil {
-				handler.manager.Logger.Error("Failed to fetch positions", "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: failed to fetch positions: %s", err.Error())), nil
+				handler.manager.Logger.Error("Failed to close all positions", "error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: %s", err.Error())), nil
 			}
 
-			// Filter to positions with non-zero Quantity (net positions)
-			var toClose []broker.Position
-			for _, p := range positions.Net {
-				if p.Quantity == 0 {
-					continue
-				}
-				if productFilter != "ALL" && strings.ToUpper(p.Product) != productFilter {
-					continue
-				}
-				toClose = append(toClose, p)
-			}
-
-			if len(toClose) == 0 {
+			if result.Total == 0 {
 				return handler.MarshalResponse(map[string]any{
 					"message":        "No open positions to close",
-					"product_filter": productFilter,
+					"product_filter": result.ProductFilter,
 				}, "close_all_positions")
 			}
 
+			// Convert use case results to the MCP response format.
 			var results []closeResult
-			successCount := 0
-			errorCount := 0
-
-			for _, p := range toClose {
-				// Determine opposite direction
-				var txnType string
-				qty := int(math.Abs(float64(p.Quantity)))
-				if p.Quantity > 0 {
-					txnType = "SELL"
-				} else {
-					txnType = "BUY"
-				}
-
-				orderParams := broker.OrderParams{
-					Exchange:         p.Exchange,
-					Tradingsymbol:    p.Tradingsymbol,
-					TransactionType:  txnType,
-					Quantity:         qty,
-					Product:          p.Product,
-					OrderType:        "MARKET",
-					Validity:         "DAY",
-					MarketProtection: kiteconnect.MarketProtectionAuto,
-					Variety:          "regular",
-				}
-
-				resp, placeErr := session.Broker.PlaceOrder(orderParams)
-				r := closeResult{
-					Tradingsymbol: p.Tradingsymbol,
-					Exchange:      p.Exchange,
-					Quantity:      qty,
-					Direction:     txnType,
-				}
-				if placeErr != nil {
-					r.Error = placeErr.Error()
-					errorCount++
-					handler.manager.Logger.Error("Failed to close position",
-						"symbol", p.Tradingsymbol, "error", placeErr)
-				} else {
-					r.OrderID = resp.OrderID
-					successCount++
-				}
-				results = append(results, r)
+			for _, r := range result.Results {
+				results = append(results, closeResult{
+					Tradingsymbol: r.Tradingsymbol,
+					Exchange:      r.Exchange,
+					Quantity:      r.Quantity,
+					Direction:     r.Direction,
+					OrderID:       r.OrderID,
+					Error:         r.Error,
+				})
 			}
 
 			return handler.MarshalResponse(map[string]any{
-				"message":        fmt.Sprintf("Closed %d/%d positions", successCount, len(toClose)),
-				"product_filter": productFilter,
-				"success_count":  successCount,
-				"error_count":    errorCount,
-				"total":          len(toClose),
+				"message":        fmt.Sprintf("Closed %d/%d positions", result.SuccessCount, result.Total),
+				"product_filter": result.ProductFilter,
+				"success_count":  result.SuccessCount,
+				"error_count":    result.ErrorCount,
+				"total":          result.Total,
 				"results":        results,
 			}, "close_all_positions")
 		})

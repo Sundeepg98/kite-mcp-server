@@ -28,16 +28,21 @@ type PlaceOrderCommand struct {
 type CancelOrderCommand struct {
 	Email   string `json:"email"`
 	OrderID string `json:"order_id"`
+	Variety string `json:"variety,omitempty"`
 }
 
 // ModifyOrderCommand requests modifying an existing pending order.
 type ModifyOrderCommand struct {
-	Email        string  `json:"email"`
-	OrderID      string  `json:"order_id"`
-	Quantity     int     `json:"quantity,omitempty"`
-	Price        float64 `json:"price,omitempty"`
-	TriggerPrice float64 `json:"trigger_price,omitempty"`
-	OrderType    string  `json:"order_type,omitempty"`
+	Email            string  `json:"email"`
+	OrderID          string  `json:"order_id"`
+	Variety          string  `json:"variety,omitempty"`
+	Quantity         int     `json:"quantity,omitempty"`
+	Price            float64 `json:"price,omitempty"`
+	TriggerPrice     float64 `json:"trigger_price,omitempty"`
+	OrderType        string  `json:"order_type,omitempty"`
+	Validity         string  `json:"validity,omitempty"`
+	DisclosedQty     int     `json:"disclosed_quantity,omitempty"`
+	MarketProtection float64 `json:"market_protection,omitempty"`
 }
 
 // --- Alert commands ---

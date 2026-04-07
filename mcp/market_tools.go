@@ -9,7 +9,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type QuotesTool struct{}
@@ -247,13 +249,13 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// expose them. They are silently ignored for now.
 
 		return handler.WithSession(ctx, "get_historical_data", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Get historical data
-			historicalData, err := session.Broker.GetHistoricalData(
-				instrumentToken,
-				interval,
-				fromDate,
-				toDate,
-			)
+			uc := usecases.NewGetHistoricalDataUseCase(manager.SessionSvc(), manager.Logger)
+			historicalData, err := uc.Execute(ctx, session.Email, cqrs.GetHistoricalDataQuery{
+				InstrumentToken: instrumentToken,
+				Interval:        interval,
+				From:            fromDate,
+				To:              toDate,
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get historical data: %s", err.Error())), nil
 			}
@@ -302,7 +304,8 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ltp", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ltp, err := session.Broker.GetLTP(instruments...)
+			uc := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
+			ltp, err := uc.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest trading prices: %s", err.Error())), nil
 			}
@@ -351,7 +354,8 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ohlc", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ohlc, err := session.Broker.GetOHLC(instruments...)
+			uc := usecases.NewGetOHLCUseCase(manager.SessionSvc(), manager.Logger)
+			ohlc, err := uc.Execute(ctx, session.Email, cqrs.GetOHLCQuery{Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get OHLC data: %s", err.Error())), nil
 			}

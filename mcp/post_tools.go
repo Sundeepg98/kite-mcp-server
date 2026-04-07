@@ -292,10 +292,29 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Broker.ModifyOrder(orderID, orderParams)
+			// Route through ModifyOrderUseCase (riskguard + broker + event dispatch).
+			uc := usecases.NewModifyOrderUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				handler.manager.RiskGuard(),
+				handler.manager.EventDispatcher(),
+				handler.manager.Logger,
+			)
+			cmd := cqrs.ModifyOrderCommand{
+				Email:            session.Email,
+				OrderID:          orderID,
+				Variety:          variety,
+				Quantity:         orderParams.Quantity,
+				Price:            orderParams.Price,
+				TriggerPrice:     orderParams.TriggerPrice,
+				OrderType:        orderParams.OrderType,
+				Validity:         orderParams.Validity,
+				DisclosedQty:     orderParams.DisclosedQty,
+				MarketProtection: orderParams.MarketProtection,
+			}
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify order: %s", err.Error())), nil
+				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "modify_order")
@@ -340,10 +359,21 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Broker.CancelOrder(orderID, variety)
+			// Route through CancelOrderUseCase (broker + event dispatch).
+			uc := usecases.NewCancelOrderUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				handler.manager.EventDispatcher(),
+				handler.manager.Logger,
+			)
+			cmd := cqrs.CancelOrderCommand{
+				Email:   session.Email,
+				OrderID: orderID,
+				Variety: variety,
+			}
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel order: %s", err.Error())), nil
+				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
 
 			return handler.MarshalResponse(resp, "cancel_order")

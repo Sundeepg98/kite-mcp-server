@@ -26,7 +26,8 @@ func (*ProfileTool) Tool() mcp.Tool {
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (interface{}, error) {
-		return session.Broker.GetProfile()
+		uc := usecases.NewGetProfileUseCase(manager.SessionSvc(), manager.Logger)
+		return uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
 	})
 }
 
@@ -44,7 +45,8 @@ func (*MarginsTool) Tool() mcp.Tool {
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (interface{}, error) {
-		return session.Broker.GetMargins()
+		uc := usecases.NewGetMarginsUseCase(manager.SessionSvc(), manager.Logger)
+		return uc.Execute(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
 	})
 }
 
@@ -152,7 +154,8 @@ func (*TradesTool) Tool() mcp.Tool {
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		trades, err := session.Broker.GetTrades()
+		uc := usecases.NewGetTradesUseCase(manager.SessionSvc(), manager.Logger)
+		trades, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -305,7 +308,8 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := SafeAssertString(args["order_id"], "")
 
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			orderHistory, err := session.Broker.GetOrderHistory(orderID)
+			uc := usecases.NewGetOrderHistoryUseCase(manager.SessionSvc(), manager.Logger)
+			orderHistory, err := uc.Execute(ctx, cqrs.GetOrderHistoryQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order history: %s", err.Error())), nil
 			}
