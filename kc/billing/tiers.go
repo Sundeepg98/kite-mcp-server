@@ -55,6 +55,7 @@ var toolTiers = map[string]Tier{
 	"get_order_margins": TierFree, "get_basket_margins": TierFree, "get_order_charges": TierFree,
 	"delete_my_account": TierFree, "update_my_credentials": TierFree,
 	"server_metrics": TierFree,
+	"server_time":    TierFree,
 
 	// Admin tools (gated by admin role check, not billing tier)
 	"admin_list_users": TierFree, "admin_get_user": TierFree,

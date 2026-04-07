@@ -29,6 +29,11 @@ const ResourceMIMEType = "text/html;profile=mcp-app"
 // dataPlaceholder is replaced with pre-injected JSON in widget HTML.
 const dataPlaceholder = `"__INJECTED_DATA__"`
 
+// cssPlaceholder is replaced with the contents of dashboard-base.css at serve
+// time so that widget HTML files don't need to duplicate the common variables
+// and reset styles inline.
+const cssPlaceholder = "/*__INJECTED_CSS__*/"
+
 // appResource defines a UI resource served as an MCP App widget.
 type appResource struct {
 	URI          string
@@ -281,6 +286,11 @@ func injectData(html string, data any) string {
 // Each resource handler dynamically injects user-specific data so widgets
 // render instantly without needing AppBridge round-trips for initial load.
 func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore *audit.Store, logger *slog.Logger) {
+	// Read the shared base CSS once so it can be injected into every widget
+	// that contains the cssPlaceholder token.
+	cssBytes, _ := templates.FS.ReadFile("dashboard-base.css")
+	cssContent := string(cssBytes)
+
 	registered := 0
 	for _, res := range appResources {
 		res := res
@@ -292,6 +302,9 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 			continue
 		}
 		htmlTemplate := string(htmlBytes)
+		if cssContent != "" {
+			htmlTemplate = strings.Replace(htmlTemplate, cssPlaceholder, cssContent, 1)
+		}
 
 		srv.AddResource(
 			gomcp.Resource{

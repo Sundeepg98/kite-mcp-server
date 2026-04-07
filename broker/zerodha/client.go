@@ -100,35 +100,44 @@ func (c *Client) GetTrades() ([]broker.Trade, error) {
 }
 
 // PlaceOrder places a new order and returns the order ID.
+// Retries up to 2 times on transient network errors.
 func (c *Client) PlaceOrder(params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
-	resp, err := c.kite.PlaceOrder(variety, kp)
-	if err != nil {
-		return broker.OrderResponse{}, err
-	}
-	return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	return retryOnTransient(func() (broker.OrderResponse, error) {
+		resp, err := c.kite.PlaceOrder(variety, kp)
+		if err != nil {
+			return broker.OrderResponse{}, err
+		}
+		return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	}, 2)
 }
 
 // ModifyOrder modifies an existing pending order.
+// Retries up to 2 times on transient network errors.
 func (c *Client) ModifyOrder(orderID string, params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
-	resp, err := c.kite.ModifyOrder(variety, orderID, kp)
-	if err != nil {
-		return broker.OrderResponse{}, err
-	}
-	return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	return retryOnTransient(func() (broker.OrderResponse, error) {
+		resp, err := c.kite.ModifyOrder(variety, orderID, kp)
+		if err != nil {
+			return broker.OrderResponse{}, err
+		}
+		return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	}, 2)
 }
 
 // CancelOrder cancels an existing pending order.
+// Retries up to 2 times on transient network errors.
 func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
 	if variety == "" {
 		variety = kiteconnect.VarietyRegular
 	}
-	resp, err := c.kite.CancelOrder(variety, orderID, nil)
-	if err != nil {
-		return broker.OrderResponse{}, err
-	}
-	return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	return retryOnTransient(func() (broker.OrderResponse, error) {
+		resp, err := c.kite.CancelOrder(variety, orderID, nil)
+		if err != nil {
+			return broker.OrderResponse{}, err
+		}
+		return broker.OrderResponse{OrderID: resp.OrderID}, nil
+	}, 2)
 }
 
 // GetLTP returns the last traded price for the given instruments.

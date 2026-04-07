@@ -191,6 +191,7 @@ func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pric
 	if existing == nil {
 		existing = &Subscription{AdminEmail: email}
 	}
+	oldTier := existing.Tier
 	existing.Tier = tier
 	existing.Status = status
 	existing.ExpiresAt = expiresAt
@@ -203,6 +204,16 @@ func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pric
 		logger.Error("stripe webhook: failed to update subscription", "email", email, "error", err)
 		return
 	}
+
+	// Log a warning on downgrades so operators can monitor for family members
+	// who may lose access. Actual enforcement happens at tool-call time via
+	// the billing middleware (we cannot reject a Stripe webhook).
+	if tier < oldTier {
+		logger.Warn("stripe webhook: subscription downgraded",
+			"email", email, "old_tier", oldTier.String(), "new_tier", tier.String(),
+			"note", "Family members may lose access at next tool call")
+	}
+
 	logger.Info("stripe webhook: subscription updated", "email", email, "tier", tier.String(), "status", status)
 }
 

@@ -14,6 +14,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
+// ltpCache caches LTP responses for 30 seconds to reduce API calls.
+var ltpCache = NewToolCache(30 * time.Second)
+
 type QuotesTool struct{}
 
 func (*QuotesTool) Tool() mcp.Tool {
@@ -304,12 +307,18 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ltp", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			cacheKey := CacheKey("get_ltp", session.Email, strings.Join(instruments, ","))
+			if cached, ok := ltpCache.Get(cacheKey); ok {
+				return handler.MarshalResponse(cached, "get_ltp")
+			}
+
 			uc := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
 			ltp, err := uc.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest trading prices: %s", err.Error())), nil
 			}
 
+			ltpCache.Set(cacheKey, ltp)
 			return handler.MarshalResponse(ltp, "get_ltp")
 		})
 	}

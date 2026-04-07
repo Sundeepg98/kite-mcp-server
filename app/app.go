@@ -602,6 +602,15 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
 	// Riskguard middleware blocks orders exceeding safety limits.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
+	// Per-tool rate limiter prevents abuse of order-related tools.
+	toolRateLimiter := mcp.NewToolRateLimiter(map[string]int{
+		"place_order":     10,
+		"modify_order":    10,
+		"cancel_order":    20,
+		"place_gtt_order": 5,
+		"set_alert":       10,
+	})
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(toolRateLimiter.Middleware()))
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
 	// Skipped entirely in DEV_MODE — all tools are free tier.
 	if stripeKey := os.Getenv("STRIPE_SECRET_KEY"); stripeKey != "" && !app.DevMode {
