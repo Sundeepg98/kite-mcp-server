@@ -30,6 +30,8 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
+		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+		// not abstracted in broker.Client. See broker/broker.go.
 		orders, err := session.Kite.Client.GetMFOrders()
 		if err != nil {
 			return nil, err
@@ -63,6 +65,8 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]interface{}, error) {
+		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+		// not abstracted in broker.Client. See broker/broker.go.
 		sips, err := session.Kite.Client.GetMFSIPs()
 		if err != nil {
 			return nil, err
@@ -96,6 +100,8 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
+		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+		// not abstracted in broker.Client. See broker/broker.go.
 		holdings, err := session.Kite.Client.GetMFHoldings()
 		if err != nil {
 			return nil, err
@@ -184,6 +190,8 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.PlaceMFOrder(orderParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place MF order", "error", err)
@@ -223,6 +231,8 @@ func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := NewArgParser(args).String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.CancelMFOrder(orderID)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel MF order", "error", err)
@@ -308,6 +318,8 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.PlaceMFSIP(sipParams)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place MF SIP", "error", err)
@@ -347,6 +359,8 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		sipID := NewArgParser(args).String("sip_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.CancelMFSIP(sipID)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel MF SIP", "error", err)

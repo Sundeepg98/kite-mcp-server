@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // --- Portfolio Summary Tool ---
@@ -53,20 +55,21 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "portfolio_summary")
 
 		return handler.WithSession(ctx, "portfolio_summary", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Broker.GetHoldings()
+			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_summary", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 
-			if len(holdings) == 0 {
+			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "portfolio_summary")
 			}
 
-			resp := computePortfolioSummary(holdings)
+			resp := computePortfolioSummary(portfolio.Holdings)
 			return handler.MarshalResponse(resp, "portfolio_summary")
 		})
 	}
@@ -214,20 +217,21 @@ func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandl
 		handler.trackToolCall(ctx, "portfolio_concentration")
 
 		return handler.WithSession(ctx, "portfolio_concentration", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Broker.GetHoldings()
+			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_concentration", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 
-			if len(holdings) == 0 {
+			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "portfolio_concentration")
 			}
 
-			resp := computePortfolioConcentration(holdings)
+			resp := computePortfolioConcentration(portfolio.Holdings)
 			return handler.MarshalResponse(resp, "portfolio_concentration")
 		})
 	}
@@ -369,20 +373,21 @@ func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "position_analysis")
 
 		return handler.WithSession(ctx, "position_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			positions, err := session.Broker.GetPositions()
+			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "position_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get positions: " + err.Error()), nil
 			}
 
-			if len(positions.Net) == 0 {
+			if len(portfolio.Positions.Net) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{
 					"net_positions_count": 0,
 					"message":             "No open positions",
 				}, "position_analysis")
 			}
 
-			resp := computePositionAnalysis(positions.Net)
+			resp := computePositionAnalysis(portfolio.Positions.Net)
 			return handler.MarshalResponse(resp, "position_analysis")
 		})
 	}

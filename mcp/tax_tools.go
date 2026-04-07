@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // Indian equity capital gains tax rates (post Budget 2024, effective FY 2024-25 onwards).
@@ -116,20 +118,21 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
 		return handler.WithSession(ctx, "tax_harvest_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			holdings, err := session.Broker.GetHoldings()
+			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "tax_harvest_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 
-			if len(holdings) == 0 {
+			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "tax_harvest_analysis")
 			}
 
-			resp := computeTaxHarvest(holdings, assumeDays)
+			resp := computeTaxHarvest(portfolio.Holdings, assumeDays)
 			return handler.MarshalResponse(resp, "tax_harvest_analysis")
 		})
 	}

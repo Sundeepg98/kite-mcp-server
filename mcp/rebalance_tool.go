@@ -11,6 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // --- Portfolio Rebalance Tool ---
@@ -124,12 +126,14 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		return handler.WithSession(ctx, "portfolio_rebalance", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Fetch current holdings
-			holdings, err := session.Broker.GetHoldings()
+			// Fetch current holdings via use case
+			portfolioUC := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := portfolioUC.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_rebalance", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
+			holdings := portfolio.Holdings
 
 			// Build a map of current holdings: symbol -> {exchange, quantity, lastPrice}
 			type holdingInfo struct {
@@ -159,10 +163,11 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 				}
 			}
 
-			// Fetch LTP for symbols not in holdings
+			// Fetch LTP for symbols not in holdings via use case
 			ltpMap := make(map[string]float64) // symbol -> lastPrice
 			if len(ltpNeeded) > 0 {
-				ltpResp, ltpErr := session.Broker.GetLTP(ltpNeeded...)
+				ltpUC := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
+				ltpResp, ltpErr := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: ltpNeeded})
 				if ltpErr != nil {
 					handler.trackToolError(ctx, "portfolio_rebalance", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil

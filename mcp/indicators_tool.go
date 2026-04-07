@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type TechnicalIndicatorsTool struct{}
@@ -65,7 +67,13 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			// Fetch historical data
 			now := time.Now()
 			from := now.AddDate(0, 0, -days)
-			candles, err := session.Broker.GetHistoricalData(token, interval, from, now)
+			uc := usecases.NewGetHistoricalDataUseCase(manager.SessionSvc(), manager.Logger)
+			candles, err := uc.Execute(ctx, session.Email, cqrs.GetHistoricalDataQuery{
+				InstrumentToken: token,
+				Interval:        interval,
+				From:            from,
+				To:              now,
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch historical data: %s", err.Error())), nil
 			}

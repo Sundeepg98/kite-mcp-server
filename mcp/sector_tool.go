@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // --- Sector Exposure Analysis Tool ---
@@ -60,20 +62,21 @@ func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "sector_exposure")
 
 		return handler.WithSession(ctx, "sector_exposure", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
-			holdings, err := session.Broker.GetHoldings()
+			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "sector_exposure", "api_error")
 				return gomcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 
-			if len(holdings) == 0 {
+			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "sector_exposure")
 			}
 
-			resp := computeSectorExposure(holdings)
+			resp := computeSectorExposure(portfolio.Holdings)
 			return handler.MarshalResponse(resp, "sector_exposure")
 		})
 	}

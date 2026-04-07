@@ -7,7 +7,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -72,7 +74,8 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 			// Check session validity by calling a lightweight Kite endpoint.
 			tokenStatus := "VALID"
-			if _, err := session.Broker.GetProfile(); err != nil {
+			profileUC := usecases.NewGetProfileUseCase(manager.SessionSvc(), manager.Logger)
+			if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
 				tokenStatus = "EXPIRED"
 			}
 

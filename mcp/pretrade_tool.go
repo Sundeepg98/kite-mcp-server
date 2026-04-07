@@ -136,6 +136,10 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		instrumentKey := exchange + ":" + tradingsymbol
 
 		return handler.WithSession(ctx, "pre_trade_check", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: Pre-trade check uses session.Kite.Client directly for 5 parallel
+			// Kite-specific calls (GetLTP, GetUserMargins, GetPositions, GetHoldings,
+			// GetOrderMargins). GetUserMargins and GetOrderMargins are Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			client := session.Kite.Client
 
 			// 5 parallel API calls

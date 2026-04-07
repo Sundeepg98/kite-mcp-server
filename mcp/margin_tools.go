@@ -101,6 +101,8 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: GetOrderMargins uses session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.GetOrderMargins(kiteconnect.GetMarginParams{
 				OrderParams: []kiteconnect.OrderMarginParam{param},
 			})
@@ -171,6 +173,8 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: GetBasketMargins uses session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.GetBasketMargins(kiteconnect.GetBasketParams{
 				OrderParams:       orderParams,
 				ConsiderPositions: considerPositions,
@@ -229,6 +233,8 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			// NOTE: GetOrderCharges uses session.Kite.Client directly — Kite-specific,
+			// not abstracted in broker.Client. See broker/broker.go.
 			resp, err := session.Kite.Client.GetOrderCharges(kiteconnect.GetChargesParams{
 				OrderParams: orderParams,
 			})
