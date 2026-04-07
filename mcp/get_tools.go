@@ -116,7 +116,8 @@ func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return nil, err
 		}
 
-		posType := SafeAssertString(args["position_type"], "net")
+		p := NewArgParser(args)
+		posType := p.String("position_type", "net")
 
 		var source []broker.Position
 		switch posType {
@@ -259,14 +260,14 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_order_trades")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "order_id"); err != nil {
+		if err := p.Required("order_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		orderID := SafeAssertString(args["order_id"], "")
+		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			orderTrades, err := session.Broker.GetOrderTrades(orderID)
@@ -299,14 +300,14 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_order_history")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "order_id"); err != nil {
+		if err := p.Required("order_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		orderID := SafeAssertString(args["order_id"], "")
+		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			uc := usecases.NewGetOrderHistoryUseCase(manager.SessionSvc(), manager.Logger)

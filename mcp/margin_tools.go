@@ -74,9 +74,10 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		orderType := SafeAssertString(args["order_type"], "")
-		price := SafeAssertFloat64(args["price"], 0.0)
-		triggerPrice := SafeAssertFloat64(args["trigger_price"], 0.0)
+		p := NewArgParser(args)
+		orderType := p.String("order_type", "")
+		price := p.Float("price", 0.0)
+		triggerPrice := p.Float("trigger_price", 0.0)
 
 		// Validate price for LIMIT orders
 		if orderType == "LIMIT" && price <= 0 {
@@ -88,13 +89,13 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		param := kiteconnect.OrderMarginParam{
-			Exchange:        SafeAssertString(args["exchange"], "NSE"),
-			Tradingsymbol:   SafeAssertString(args["tradingsymbol"], ""),
-			TransactionType: SafeAssertString(args["transaction_type"], ""),
-			Variety:         SafeAssertString(args["variety"], "regular"),
-			Product:         SafeAssertString(args["product"], ""),
+			Exchange:        p.String("exchange", "NSE"),
+			Tradingsymbol:   p.String("tradingsymbol", ""),
+			TransactionType: p.String("transaction_type", ""),
+			Variety:         p.String("variety", "regular"),
+			Product:         p.String("product", ""),
 			OrderType:       orderType,
-			Quantity:        SafeAssertFloat64(args["quantity"], 0),
+			Quantity:        p.Float("quantity", 0),
 			Price:           price,
 			TriggerPrice:    triggerPrice,
 		}
@@ -144,7 +145,8 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		ordersJSON := SafeAssertString(args["orders"], "")
+		p := NewArgParser(args)
+		ordersJSON := p.String("orders", "")
 		if ordersJSON == "" {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
 		}
@@ -166,7 +168,7 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		considerPositions := SafeAssertBool(args["consider_positions"], false)
+		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp, err := session.Kite.Client.GetBasketMargins(kiteconnect.GetBasketParams{
@@ -211,7 +213,7 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		ordersJSON := SafeAssertString(args["orders"], "")
+		ordersJSON := NewArgParser(args).String("orders", "")
 		if ordersJSON == "" {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
 		}

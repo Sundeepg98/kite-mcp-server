@@ -77,14 +77,15 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instrumentID := SafeAssertString(args["instrument"], "")
-		orderID := SafeAssertString(args["order_id"], "")
-		direction := SafeAssertString(args["direction"], "")
-		trailAmount := SafeAssertFloat64(args["trail_amount"], 0)
-		trailPct := SafeAssertFloat64(args["trail_pct"], 0)
-		currentStop := SafeAssertFloat64(args["current_stop"], 0)
-		referencePrice := SafeAssertFloat64(args["reference_price"], 0)
-		variety := SafeAssertString(args["variety"], "regular")
+		p := NewArgParser(args)
+		instrumentID := p.String("instrument", "")
+		orderID := p.String("order_id", "")
+		direction := p.String("direction", "")
+		trailAmount := p.Float("trail_amount", 0)
+		trailPct := p.Float("trail_pct", 0)
+		currentStop := p.Float("current_stop", 0)
+		referencePrice := p.Float("reference_price", 0)
+		variety := p.String("variety", "regular")
 
 		if trailAmount <= 0 && trailPct <= 0 {
 			return mcp.NewToolResultError("Either trail_amount or trail_pct must be provided and positive"), nil
@@ -286,7 +287,7 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		tsID := SafeAssertString(args["trailing_stop_id"], "")
+		tsID := NewArgParser(args).String("trailing_stop_id", "")
 		tsManager := manager.TrailingStopManager()
 		if tsManager == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil

@@ -103,12 +103,13 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		strategy := SafeAssertString(args["strategy"], "")
-		exchange := SafeAssertString(args["exchange"], "NSE")
-		symbol := SafeAssertString(args["tradingsymbol"], "")
-		days := SafeAssertInt(args["days"], 365)
-		initialCapital := SafeAssertFloat64(args["initial_capital"], 1000000)
-		positionSizePct := SafeAssertFloat64(args["position_size_pct"], 100)
+		p := NewArgParser(args)
+		strategy := p.String("strategy", "")
+		exchange := p.String("exchange", "NSE")
+		symbol := p.String("tradingsymbol", "")
+		days := p.Int("days", 365)
+		initialCapital := p.Float("initial_capital", 1000000)
+		positionSizePct := p.Float("position_size_pct", 100)
 
 		// Validate strategy
 		validStrategies := map[string]bool{
@@ -182,8 +183,9 @@ func backtestDefaults(strategy string, args map[string]interface{}) (float64, fl
 	case "mean_reversion":
 		p1Default, p2Default = 20, 2.0
 	}
-	p1 := SafeAssertFloat64(args["param1"], p1Default)
-	p2 := SafeAssertFloat64(args["param2"], p2Default)
+	ap := NewArgParser(args)
+	p1 := ap.Float("param1", p1Default)
+	p2 := ap.Float("param2", p2Default)
 	return p1, p2
 }
 

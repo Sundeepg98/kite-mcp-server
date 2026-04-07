@@ -172,12 +172,13 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			instrumentIDs := SafeAssertStringArray(args["instruments"])
+			p := NewArgParser(args)
+			instrumentIDs := p.StringArray("instruments")
 			if len(instrumentIDs) == 0 {
 				return mcp.NewToolResultError("At least one instrument must be specified"), nil
 			}
 
-			modeStr := SafeAssertString(args["mode"], "full")
+			modeStr := p.String("mode", "full")
 
 			// Resolve instrument IDs to tokens using the instruments manager
 			tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
@@ -239,7 +240,7 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			instrumentIDs := SafeAssertStringArray(args["instruments"])
+			instrumentIDs := NewArgParser(args).StringArray("instruments")
 			if len(instrumentIDs) == 0 {
 				return mcp.NewToolResultError("At least one instrument must be specified"), nil
 			}

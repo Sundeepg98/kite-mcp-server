@@ -66,7 +66,7 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		chatIDFloat := SafeAssertFloat64(args["chat_id"], 0)
+		chatIDFloat := NewArgParser(args).Float("chat_id", 0)
 		if math.IsNaN(chatIDFloat) || math.IsInf(chatIDFloat, 0) || chatIDFloat > float64(math.MaxInt64) || chatIDFloat < float64(math.MinInt64) {
 			return mcp.NewToolResultError("Invalid chat_id: must be a valid integer"), nil
 		}
@@ -129,10 +129,11 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instrumentID := SafeAssertString(args["instrument"], "")
-		targetPrice := SafeAssertFloat64(args["price"], 0)
-		directionStr := SafeAssertString(args["direction"], "above")
-		referencePrice := SafeAssertFloat64(args["reference_price"], 0)
+		p := NewArgParser(args)
+		instrumentID := p.String("instrument", "")
+		targetPrice := p.Float("price", 0)
+		directionStr := p.String("direction", "above")
+		referencePrice := p.Float("reference_price", 0)
 
 		if targetPrice <= 0 {
 			return mcp.NewToolResultError("Price must be positive"), nil
@@ -304,7 +305,7 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		alertID := SafeAssertString(args["alert_id"], "")
+		alertID := NewArgParser(args).String("alert_id", "")
 		if err := manager.AlertStore().Delete(email, alertID); err != nil {
 			handler.trackToolError(ctx, "delete_alert", "delete_error")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete alert: %s", err)), nil

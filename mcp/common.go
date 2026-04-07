@@ -418,12 +418,13 @@ type PaginationParams struct {
 
 // ParsePaginationParams extracts pagination parameters from arguments
 func ParsePaginationParams(args map[string]interface{}) PaginationParams {
-	limit := SafeAssertInt(args["limit"], 0)
+	p := NewArgParser(args)
+	limit := p.Int("limit", 0)
 	if limit > MaxPaginationLimit {
 		limit = MaxPaginationLimit
 	}
 	return PaginationParams{
-		From:  SafeAssertInt(args["from"], 0),
+		From:  p.Int("from", 0),
 		Limit: limit,
 	}
 }

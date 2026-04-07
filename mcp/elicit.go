@@ -88,16 +88,17 @@ func requestConfirmation(ctx context.Context, mcpServerRef any, message string) 
 
 // buildOrderConfirmMessage creates a human-readable confirmation message for the given tool.
 func buildOrderConfirmMessage(toolName string, args map[string]any) string {
+	p := NewArgParser(args)
 	switch toolName {
 	case "place_order":
-		txn := SafeAssertString(args["transaction_type"], "?")
-		qty := SafeAssertInt(args["quantity"], 0)
-		exchange := SafeAssertString(args["exchange"], "?")
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		orderType := SafeAssertString(args["order_type"], "?")
-		product := SafeAssertString(args["product"], "?")
-		price := SafeAssertFloat64(args["price"], 0)
-		triggerPrice := SafeAssertFloat64(args["trigger_price"], 0)
+		txn := p.String("transaction_type", "?")
+		qty := p.Int("quantity", 0)
+		exchange := p.String("exchange", "?")
+		symbol := p.String("tradingsymbol", "?")
+		orderType := p.String("order_type", "?")
+		product := p.String("product", "?")
+		price := p.Float("price", 0)
+		triggerPrice := p.Float("trigger_price", 0)
 
 		priceStr := "MARKET"
 		if orderType == "LIMIT" && price > 0 {
@@ -110,11 +111,11 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 			txn, qty, exchange, symbol, priceStr, orderType, product)
 
 	case "modify_order":
-		orderID := SafeAssertString(args["order_id"], "?")
-		orderType := SafeAssertString(args["order_type"], "?")
-		qty := SafeAssertInt(args["quantity"], 0)
-		price := SafeAssertFloat64(args["price"], 0)
-		triggerPrice := SafeAssertFloat64(args["trigger_price"], 0)
+		orderID := p.String("order_id", "?")
+		orderType := p.String("order_type", "?")
+		qty := p.Int("quantity", 0)
+		price := p.Float("price", 0)
+		triggerPrice := p.Float("trigger_price", 0)
 
 		detail := fmt.Sprintf("qty %d", qty)
 		if orderType == "LIMIT" && price > 0 {
@@ -126,8 +127,8 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 		return fmt.Sprintf("Confirm: Modify order %s → %s (%s)", orderID, detail, orderType)
 
 	case "close_position":
-		instrument := SafeAssertString(args["instrument"], "?")
-		product := SafeAssertString(args["product"], "")
+		instrument := p.String("instrument", "?")
+		product := p.String("product", "")
 		msg := fmt.Sprintf("Confirm: Close position %s at MARKET", instrument)
 		if product != "" {
 			msg += fmt.Sprintf(" (%s)", product)
@@ -135,34 +136,34 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 		return msg
 
 	case "close_all_positions":
-		product := SafeAssertString(args["product"], "ALL")
+		product := p.String("product", "ALL")
 		return fmt.Sprintf("Confirm: Close ALL open positions at MARKET (product: %s)", product)
 
 	case "place_gtt_order":
-		exchange := SafeAssertString(args["exchange"], "?")
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		txn := SafeAssertString(args["transaction_type"], "?")
-		triggerType := SafeAssertString(args["trigger_type"], "single")
-		triggerVal := SafeAssertFloat64(args["trigger_value"], 0)
-		limitPrice := SafeAssertFloat64(args["limit_price"], 0)
+		exchange := p.String("exchange", "?")
+		symbol := p.String("tradingsymbol", "?")
+		txn := p.String("transaction_type", "?")
+		triggerType := p.String("trigger_type", "single")
+		triggerVal := p.Float("trigger_value", 0)
+		limitPrice := p.Float("limit_price", 0)
 
 		return fmt.Sprintf("Confirm GTT: %s %s:%s (%s) trigger %.2f, limit %.2f",
 			txn, exchange, symbol, triggerType, triggerVal, limitPrice)
 
 	case "modify_gtt_order":
-		triggerID := SafeAssertInt(args["trigger_id"], 0)
-		exchange := SafeAssertString(args["exchange"], "?")
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		triggerVal := SafeAssertFloat64(args["trigger_value"], 0)
+		triggerID := p.Int("trigger_id", 0)
+		exchange := p.String("exchange", "?")
+		symbol := p.String("tradingsymbol", "?")
+		triggerVal := p.Float("trigger_value", 0)
 
 		return fmt.Sprintf("Confirm: Modify GTT %d (%s:%s) → trigger %.2f",
 			triggerID, exchange, symbol, triggerVal)
 
 	case "place_mf_order":
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		txn := SafeAssertString(args["transaction_type"], "?")
-		amount := SafeAssertFloat64(args["amount"], 0)
-		qty := SafeAssertFloat64(args["quantity"], 0)
+		symbol := p.String("tradingsymbol", "?")
+		txn := p.String("transaction_type", "?")
+		amount := p.Float("amount", 0)
+		qty := p.Float("quantity", 0)
 
 		if amount > 0 {
 			return fmt.Sprintf("Confirm MF: %s ₹%.0f of %s", txn, amount, symbol)
@@ -170,35 +171,35 @@ func buildOrderConfirmMessage(toolName string, args map[string]any) string {
 		return fmt.Sprintf("Confirm MF: %s %.0f units of %s", txn, qty, symbol)
 
 	case "place_mf_sip":
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		amount := SafeAssertFloat64(args["amount"], 0)
-		freq := SafeAssertString(args["frequency"], "?")
-		instalments := SafeAssertInt(args["instalments"], 0)
+		symbol := p.String("tradingsymbol", "?")
+		amount := p.Float("amount", 0)
+		freq := p.String("frequency", "?")
+		instalments := p.Int("instalments", 0)
 
 		return fmt.Sprintf("Confirm SIP: ₹%.0f/%s into %s, %d instalments",
 			amount, freq, symbol, instalments)
 
 	case "place_native_alert":
-		name := SafeAssertString(args["name"], "?")
-		alertType := SafeAssertString(args["type"], "simple")
-		exchange := SafeAssertString(args["exchange"], "?")
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		operator := SafeAssertString(args["operator"], "?")
-		rhsType := SafeAssertString(args["rhs_type"], "constant")
-		rhs := fmt.Sprintf("%.2f", SafeAssertFloat64(args["rhs_constant"], 0))
+		name := p.String("name", "?")
+		alertType := p.String("type", "simple")
+		exchange := p.String("exchange", "?")
+		symbol := p.String("tradingsymbol", "?")
+		operator := p.String("operator", "?")
+		rhsType := p.String("rhs_type", "constant")
+		rhs := fmt.Sprintf("%.2f", p.Float("rhs_constant", 0))
 		if rhsType == "instrument" {
-			rhs = fmt.Sprintf("%s:%s", SafeAssertString(args["rhs_exchange"], "?"), SafeAssertString(args["rhs_tradingsymbol"], "?"))
+			rhs = fmt.Sprintf("%s:%s", p.String("rhs_exchange", "?"), p.String("rhs_tradingsymbol", "?"))
 		}
 		return fmt.Sprintf("Confirm: Create %s alert '%s' — %s:%s %s %s",
 			alertType, name, exchange, symbol, operator, rhs)
 
 	case "modify_native_alert":
-		uuid := SafeAssertString(args["uuid"], "?")
-		name := SafeAssertString(args["name"], "?")
-		alertType := SafeAssertString(args["type"], "simple")
-		exchange := SafeAssertString(args["exchange"], "?")
-		symbol := SafeAssertString(args["tradingsymbol"], "?")
-		operator := SafeAssertString(args["operator"], "?")
+		uuid := p.String("uuid", "?")
+		name := p.String("name", "?")
+		alertType := p.String("type", "simple")
+		exchange := p.String("exchange", "?")
+		symbol := p.String("tradingsymbol", "?")
+		operator := p.String("operator", "?")
 
 		return fmt.Sprintf("Confirm: Modify %s alert %s ('%s') — %s:%s %s",
 			alertType, uuid, name, exchange, symbol, operator)

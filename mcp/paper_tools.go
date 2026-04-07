@@ -36,7 +36,7 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 		args := request.GetArguments()
 		enable, _ := args["enable"].(bool)
-		initialCash := SafeAssertFloat64(args["initial_cash"], 10000000)
+		initialCash := NewArgParser(args).Float("initial_cash", 10000000)
 
 		if enable {
 			if err := engine.Enable(email, initialCash); err != nil {

@@ -108,32 +108,33 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "place_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "variety", "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
+		if err := p.Required("variety", "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		variety := SafeAssertString(args["variety"], "regular")
+		variety := p.String("variety", "regular")
 		orderParams := broker.OrderParams{
-			Exchange:         SafeAssertString(args["exchange"], "NSE"),
-			Tradingsymbol:    SafeAssertString(args["tradingsymbol"], ""),
-			Validity:         SafeAssertString(args["validity"], ""),
-			Product:          SafeAssertString(args["product"], ""),
-			OrderType:        SafeAssertString(args["order_type"], ""),
-			TransactionType:  SafeAssertString(args["transaction_type"], ""),
-			Quantity:         SafeAssertInt(args["quantity"], 1),
-			DisclosedQty:     SafeAssertInt(args["disclosed_quantity"], 0),
-			Price:            SafeAssertFloat64(args["price"], 0.0),
-			TriggerPrice:     SafeAssertFloat64(args["trigger_price"], 0.0),
-			Tag:              SafeAssertString(args["tag"], "mcp"),
-			MarketProtection: SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+			Exchange:         p.String("exchange", "NSE"),
+			Tradingsymbol:    p.String("tradingsymbol", ""),
+			Validity:         p.String("validity", ""),
+			Product:          p.String("product", ""),
+			OrderType:        p.String("order_type", ""),
+			TransactionType:  p.String("transaction_type", ""),
+			Quantity:         p.Int("quantity", 1),
+			DisclosedQty:     p.Int("disclosed_quantity", 0),
+			Price:            p.Float("price", 0.0),
+			TriggerPrice:     p.Float("trigger_price", 0.0),
+			Tag:              p.String("tag", "mcp"),
+			MarketProtection: p.Float("market_protection", kiteconnect.MarketProtectionAuto),
 			Variety:          variety,
 		}
 
 		// Iceberg params — validated here, passed through via Variety (adapter handles Kite-specific fields)
-		icebergLegs := SafeAssertInt(args["iceberg_legs"], 0)
-		icebergQty := SafeAssertInt(args["iceberg_quantity"], 0)
+		icebergLegs := p.Int("iceberg_legs", 0)
+		icebergQty := p.Int("iceberg_quantity", 0)
 
 		// Validate order parameters
 		if orderParams.OrderType == "LIMIT" && orderParams.Price <= 0 {
@@ -262,23 +263,24 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "modify_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "variety", "order_id", "order_type"); err != nil {
+		if err := p.Required("variety", "order_id", "order_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		variety := SafeAssertString(args["variety"], "regular")
-		orderID := SafeAssertString(args["order_id"], "")
+		variety := p.String("variety", "regular")
+		orderID := p.String("order_id", "")
 
 		orderParams := broker.OrderParams{
-			Quantity:         SafeAssertInt(args["quantity"], 1),
-			Price:            SafeAssertFloat64(args["price"], 0.0),
-			OrderType:        SafeAssertString(args["order_type"], ""),
-			TriggerPrice:     SafeAssertFloat64(args["trigger_price"], 0.0),
-			Validity:         SafeAssertString(args["validity"], ""),
-			DisclosedQty:     SafeAssertInt(args["disclosed_quantity"], 0),
-			MarketProtection: SafeAssertFloat64(args["market_protection"], kiteconnect.MarketProtectionAuto),
+			Quantity:         p.Int("quantity", 1),
+			Price:            p.Float("price", 0.0),
+			OrderType:        p.String("order_type", ""),
+			TriggerPrice:     p.Float("trigger_price", 0.0),
+			Validity:         p.String("validity", ""),
+			DisclosedQty:     p.Int("disclosed_quantity", 0),
+			MarketProtection: p.Float("market_protection", kiteconnect.MarketProtectionAuto),
 			Variety:          variety,
 		}
 
@@ -349,14 +351,15 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "cancel_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "variety", "order_id"); err != nil {
+		if err := p.Required("variety", "order_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		variety := SafeAssertString(args["variety"], "regular")
-		orderID := SafeAssertString(args["order_id"], "")
+		variety := p.String("variety", "regular")
+		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Route through CancelOrderUseCase (broker + event dispatch).
@@ -456,9 +459,10 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "place_gtt_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
+		if err := p.Required("exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -471,20 +475,20 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		triggerType := SafeAssertString(args["trigger_type"], "")
+		triggerType := p.String("trigger_type", "")
 
 		// Validate trigger-type-specific fields before session lookup.
 		switch triggerType {
 		case "single":
-			triggerValue := SafeAssertFloat64(args["trigger_value"], 0.0)
+			triggerValue := p.Float("trigger_value", 0.0)
 			if triggerValue <= 0 {
 				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
 			}
 		case "two-leg":
-			if SafeAssertFloat64(args["upper_trigger_value"], 0.0) <= 0 {
+			if p.Float("upper_trigger_value", 0.0) <= 0 {
 				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
 			}
-			if SafeAssertFloat64(args["lower_trigger_value"], 0.0) <= 0 {
+			if p.Float("lower_trigger_value", 0.0) <= 0 {
 				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
 			}
 		default:
@@ -494,21 +498,21 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmd := cqrs.PlaceGTTCommand{
 				Email:             session.Email,
-				Exchange:          SafeAssertString(args["exchange"], "NSE"),
-				Tradingsymbol:     SafeAssertString(args["tradingsymbol"], ""),
-				LastPrice:         SafeAssertFloat64(args["last_price"], 0.0),
-				TransactionType:   SafeAssertString(args["transaction_type"], ""),
-				Product:           SafeAssertString(args["product"], ""),
+				Exchange:          p.String("exchange", "NSE"),
+				Tradingsymbol:     p.String("tradingsymbol", ""),
+				LastPrice:         p.Float("last_price", 0.0),
+				TransactionType:   p.String("transaction_type", ""),
+				Product:           p.String("product", ""),
 				Type:              triggerType,
-				TriggerValue:      SafeAssertFloat64(args["trigger_value"], 0.0),
-				Quantity:          SafeAssertFloat64(args["quantity"], 0.0),
-				LimitPrice:        SafeAssertFloat64(args["limit_price"], 0.0),
-				UpperTriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
-				UpperQuantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
-				UpperLimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
-				LowerTriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
-				LowerQuantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
-				LowerLimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
+				TriggerValue:      p.Float("trigger_value", 0.0),
+				Quantity:          p.Float("quantity", 0.0),
+				LimitPrice:        p.Float("limit_price", 0.0),
+				UpperTriggerValue: p.Float("upper_trigger_value", 0.0),
+				UpperQuantity:     p.Float("upper_quantity", 0.0),
+				UpperLimitPrice:   p.Float("upper_limit_price", 0.0),
+				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
+				LowerQuantity:     p.Float("lower_quantity", 0.0),
+				LowerLimitPrice:   p.Float("lower_limit_price", 0.0),
 			}
 
 			uc := usecases.NewPlaceGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
@@ -543,14 +547,15 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "delete_gtt_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "trigger_id"); err != nil {
+		if err := p.Required("trigger_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Get the trigger ID to delete
-		triggerID := SafeAssertInt(args["trigger_id"], 0)
+		triggerID := p.Int("trigger_id", 0)
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmd := cqrs.DeleteGTTCommand{
@@ -620,20 +625,21 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "convert_position")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "old_product", "new_product", "position_type"); err != nil {
+		if err := p.Required("exchange", "tradingsymbol", "transaction_type", "quantity", "old_product", "new_product", "position_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		positionParams := kiteconnect.ConvertPositionParams{
-			Exchange:        SafeAssertString(args["exchange"], ""),
-			TradingSymbol:   SafeAssertString(args["tradingsymbol"], ""),
-			TransactionType: SafeAssertString(args["transaction_type"], ""),
-			Quantity:        SafeAssertInt(args["quantity"], 0),
-			OldProduct:      SafeAssertString(args["old_product"], ""),
-			NewProduct:      SafeAssertString(args["new_product"], ""),
-			PositionType:    SafeAssertString(args["position_type"], ""),
+			Exchange:        p.String("exchange", ""),
+			TradingSymbol:   p.String("tradingsymbol", ""),
+			TransactionType: p.String("transaction_type", ""),
+			Quantity:        p.Int("quantity", 0),
+			OldProduct:      p.String("old_product", ""),
+			NewProduct:      p.String("new_product", ""),
+			PositionType:    p.String("position_type", ""),
 		}
 
 		return handler.WithSession(ctx, "convert_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
@@ -727,9 +733,10 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "modify_gtt_order")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
+		if err := p.Required("trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -742,19 +749,19 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		triggerType := SafeAssertString(args["trigger_type"], "")
+		triggerType := p.String("trigger_type", "")
 
 		// Validate trigger-type-specific fields before session lookup.
 		switch triggerType {
 		case "single":
-			if SafeAssertFloat64(args["trigger_value"], 0.0) <= 0 {
+			if p.Float("trigger_value", 0.0) <= 0 {
 				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
 			}
 		case "two-leg":
-			if SafeAssertFloat64(args["upper_trigger_value"], 0.0) <= 0 {
+			if p.Float("upper_trigger_value", 0.0) <= 0 {
 				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
 			}
-			if SafeAssertFloat64(args["lower_trigger_value"], 0.0) <= 0 {
+			if p.Float("lower_trigger_value", 0.0) <= 0 {
 				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
 			}
 		default:
@@ -764,22 +771,22 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmd := cqrs.ModifyGTTCommand{
 				Email:             session.Email,
-				TriggerID:         SafeAssertInt(args["trigger_id"], 0),
-				Exchange:          SafeAssertString(args["exchange"], "NSE"),
-				Tradingsymbol:     SafeAssertString(args["tradingsymbol"], ""),
-				LastPrice:         SafeAssertFloat64(args["last_price"], 0.0),
-				TransactionType:   SafeAssertString(args["transaction_type"], ""),
-				Product:           SafeAssertString(args["product"], ""),
+				TriggerID:         p.Int("trigger_id", 0),
+				Exchange:          p.String("exchange", "NSE"),
+				Tradingsymbol:     p.String("tradingsymbol", ""),
+				LastPrice:         p.Float("last_price", 0.0),
+				TransactionType:   p.String("transaction_type", ""),
+				Product:           p.String("product", ""),
 				Type:              triggerType,
-				TriggerValue:      SafeAssertFloat64(args["trigger_value"], 0.0),
-				Quantity:          SafeAssertFloat64(args["quantity"], 0.0),
-				LimitPrice:        SafeAssertFloat64(args["limit_price"], 0.0),
-				UpperTriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
-				UpperQuantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
-				UpperLimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
-				LowerTriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
-				LowerQuantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
-				LowerLimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
+				TriggerValue:      p.Float("trigger_value", 0.0),
+				Quantity:          p.Float("quantity", 0.0),
+				LimitPrice:        p.Float("limit_price", 0.0),
+				UpperTriggerValue: p.Float("upper_trigger_value", 0.0),
+				UpperQuantity:     p.Float("upper_quantity", 0.0),
+				UpperLimitPrice:   p.Float("upper_limit_price", 0.0),
+				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
+				LowerQuantity:     p.Float("lower_quantity", 0.0),
+				LowerLimitPrice:   p.Float("lower_limit_price", 0.0),
 			}
 
 			uc := usecases.NewModifyGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)

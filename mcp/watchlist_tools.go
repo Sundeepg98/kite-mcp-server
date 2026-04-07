@@ -45,7 +45,7 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		name := strings.TrimSpace(SafeAssertString(args["name"], ""))
+		name := strings.TrimSpace(NewArgParser(args).String("name", ""))
 		if name == "" {
 			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
 		}
@@ -97,7 +97,7 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		watchlistRef := SafeAssertString(args["watchlist"], "")
+		watchlistRef := NewArgParser(args).String("watchlist", "")
 		wl := resolveWatchlist(manager, email, watchlistRef)
 		if wl == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
@@ -158,11 +158,12 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		watchlistRef := SafeAssertString(args["watchlist"], "")
-		instrumentsStr := SafeAssertString(args["instruments"], "")
-		notes := SafeAssertString(args["notes"], "")
-		targetEntry := SafeAssertFloat64(args["target_entry"], 0)
-		targetExit := SafeAssertFloat64(args["target_exit"], 0)
+		p := NewArgParser(args)
+		watchlistRef := p.String("watchlist", "")
+		instrumentsStr := p.String("instruments", "")
+		notes := p.String("notes", "")
+		targetEntry := p.Float("target_entry", 0)
+		targetExit := p.Float("target_exit", 0)
 
 		wl := resolveWatchlist(manager, email, watchlistRef)
 		if wl == nil {
@@ -264,8 +265,9 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		watchlistRef := SafeAssertString(args["watchlist"], "")
-		itemsStr := SafeAssertString(args["items"], "")
+		p := NewArgParser(args)
+		watchlistRef := p.String("watchlist", "")
+		itemsStr := p.String("items", "")
 
 		wl := resolveWatchlist(manager, email, watchlistRef)
 		if wl == nil {
@@ -356,13 +358,9 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		watchlistRef := SafeAssertString(args["watchlist"], "")
-		includeLTP := true
-		if v, ok := args["include_ltp"]; ok {
-			if b, isBool := v.(bool); isBool {
-				includeLTP = b
-			}
-		}
+		p := NewArgParser(args)
+		watchlistRef := p.String("watchlist", "")
+		includeLTP := p.Bool("include_ltp", true)
 
 		wl := resolveWatchlist(manager, email, watchlistRef)
 		if wl == nil {

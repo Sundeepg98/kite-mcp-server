@@ -37,12 +37,13 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "close_position")
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "instrument"); err != nil {
+		p := NewArgParser(args)
+		if err := p.Required("instrument"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instrumentID := SafeAssertString(args["instrument"], "")
-		productFilter := strings.ToUpper(SafeAssertString(args["product"], ""))
+		instrumentID := p.String("instrument", "")
+		productFilter := strings.ToUpper(p.String("product", ""))
 
 		parts := strings.SplitN(instrumentID, ":", 2)
 		if len(parts) != 2 {
@@ -116,9 +117,10 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "close_all_positions")
 		args := request.GetArguments()
+		p := NewArgParser(args)
 
 		// Safety: confirm must be true
-		confirm := SafeAssertBool(args["confirm"], false)
+		confirm := p.Bool("confirm", false)
 		if !confirm {
 			return mcp.NewToolResultError("Safety check failed: 'confirm' must be true to close all positions. This is a destructive operation."), nil
 		}
@@ -132,7 +134,7 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		productFilter := SafeAssertString(args["product"], "ALL")
+		productFilter := p.String("product", "ALL")
 
 		return handler.WithSession(ctx, "close_all_positions", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Route through CloseAllPositionsUseCase (riskguard + broker + event dispatch).

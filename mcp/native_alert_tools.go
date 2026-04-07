@@ -103,8 +103,9 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		alertType := kiteconnect.AlertType(SafeAssertString(args["type"], "simple"))
-		rhsType := SafeAssertString(args["rhs_type"], "constant")
+		p := NewArgParser(args)
+		alertType := kiteconnect.AlertType(p.String("type", "simple"))
+		rhsType := p.String("rhs_type", "constant")
 
 		// Validate RHS params
 		if rhsType == "constant" {
@@ -118,22 +119,22 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		params := kiteconnect.AlertParams{
-			Name:             SafeAssertString(args["name"], ""),
+			Name:             p.String("name", ""),
 			Type:             alertType,
-			LHSExchange:      SafeAssertString(args["exchange"], ""),
-			LHSTradingSymbol: SafeAssertString(args["tradingsymbol"], ""),
-			LHSAttribute:     SafeAssertString(args["lhs_attribute"], "last_price"),
-			Operator:         kiteconnect.AlertOperator(SafeAssertString(args["operator"], ">=")),
+			LHSExchange:      p.String("exchange", ""),
+			LHSTradingSymbol: p.String("tradingsymbol", ""),
+			LHSAttribute:     p.String("lhs_attribute", "last_price"),
+			Operator:         kiteconnect.AlertOperator(p.String("operator", ">=")),
 			RHSType:          rhsType,
-			RHSConstant:      SafeAssertFloat64(args["rhs_constant"], 0),
-			RHSExchange:      SafeAssertString(args["rhs_exchange"], ""),
-			RHSTradingSymbol: SafeAssertString(args["rhs_tradingsymbol"], ""),
-			RHSAttribute:     SafeAssertString(args["rhs_attribute"], ""),
+			RHSConstant:      p.Float("rhs_constant", 0),
+			RHSExchange:      p.String("rhs_exchange", ""),
+			RHSTradingSymbol: p.String("rhs_tradingsymbol", ""),
+			RHSAttribute:     p.String("rhs_attribute", ""),
 		}
 
 		// Parse basket JSON for ATO alerts
 		if alertType == kiteconnect.AlertTypeATO {
-			basketJSON := SafeAssertString(args["basket_json"], "")
+			basketJSON := p.String("basket_json", "")
 			if basketJSON == "" {
 				return mcp.NewToolResultError("basket_json is required when type='ato'"), nil
 			}
@@ -201,8 +202,9 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 
 		return handler.WithSession(ctx, "list_native_alerts", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			args := request.GetArguments()
+			p := NewArgParser(args)
 			filters := make(map[string]string)
-			if status := SafeAssertString(args["status"], ""); status != "" {
+			if status := p.String("status", ""); status != "" {
 				filters["status"] = status
 			}
 
@@ -310,9 +312,10 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		uuid := SafeAssertString(args["uuid"], "")
-		alertType := kiteconnect.AlertType(SafeAssertString(args["type"], "simple"))
-		rhsType := SafeAssertString(args["rhs_type"], "constant")
+		p := NewArgParser(args)
+		uuid := p.String("uuid", "")
+		alertType := kiteconnect.AlertType(p.String("type", "simple"))
+		rhsType := p.String("rhs_type", "constant")
 
 		if rhsType == "constant" {
 			if err := ValidateRequired(args, "rhs_constant"); err != nil {
@@ -325,21 +328,21 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		params := kiteconnect.AlertParams{
-			Name:             SafeAssertString(args["name"], ""),
+			Name:             p.String("name", ""),
 			Type:             alertType,
-			LHSExchange:      SafeAssertString(args["exchange"], ""),
-			LHSTradingSymbol: SafeAssertString(args["tradingsymbol"], ""),
-			LHSAttribute:     SafeAssertString(args["lhs_attribute"], "last_price"),
-			Operator:         kiteconnect.AlertOperator(SafeAssertString(args["operator"], ">=")),
+			LHSExchange:      p.String("exchange", ""),
+			LHSTradingSymbol: p.String("tradingsymbol", ""),
+			LHSAttribute:     p.String("lhs_attribute", "last_price"),
+			Operator:         kiteconnect.AlertOperator(p.String("operator", ">=")),
 			RHSType:          rhsType,
-			RHSConstant:      SafeAssertFloat64(args["rhs_constant"], 0),
-			RHSExchange:      SafeAssertString(args["rhs_exchange"], ""),
-			RHSTradingSymbol: SafeAssertString(args["rhs_tradingsymbol"], ""),
-			RHSAttribute:     SafeAssertString(args["rhs_attribute"], ""),
+			RHSConstant:      p.Float("rhs_constant", 0),
+			RHSExchange:      p.String("rhs_exchange", ""),
+			RHSTradingSymbol: p.String("rhs_tradingsymbol", ""),
+			RHSAttribute:     p.String("rhs_attribute", ""),
 		}
 
 		if alertType == kiteconnect.AlertTypeATO {
-			basketJSON := SafeAssertString(args["basket_json"], "")
+			basketJSON := p.String("basket_json", "")
 			if basketJSON == "" {
 				return mcp.NewToolResultError("basket_json is required when type='ato'"), nil
 			}
@@ -409,7 +412,7 @@ func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		uuidStr := SafeAssertString(args["uuid"], "")
+		uuidStr := NewArgParser(args).String("uuid", "")
 		if uuidStr == "" {
 			return mcp.NewToolResultError("uuid is required"), nil
 		}
@@ -466,7 +469,7 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		uuid := SafeAssertString(args["uuid"], "")
+		uuid := NewArgParser(args).String("uuid", "")
 
 		return handler.WithSession(ctx, "get_native_alert_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			history, err := session.Kite.Client.GetAlertHistory(uuid)

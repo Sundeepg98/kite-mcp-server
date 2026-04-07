@@ -69,9 +69,10 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		underlying := strings.ToUpper(SafeAssertString(args["underlying"], ""))
-		requestedExpiry := SafeAssertString(args["expiry"], "")
-		strikesAround := SafeAssertInt(args["strikes_around_atm"], 10)
+		p := NewArgParser(args)
+		underlying := strings.ToUpper(p.String("underlying", ""))
+		requestedExpiry := p.String("expiry", "")
+		strikesAround := p.Int("strikes_around_atm", 10)
 		if strikesAround <= 0 {
 			strikesAround = 10
 		}

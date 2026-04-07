@@ -52,9 +52,10 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		fromDate := SafeAssertString(args["from"], "")
-		toDate := SafeAssertString(args["to"], "")
-		period := SafeAssertString(args["period"], "month")
+		p := NewArgParser(args)
+		fromDate := p.String("from", "")
+		toDate := p.String("to", "")
+		period := p.String("period", "month")
 
 		now := time.Now()
 

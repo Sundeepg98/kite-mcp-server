@@ -85,8 +85,9 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "admin_list_users")
 
 		args := request.GetArguments()
-		from := SafeAssertInt(args["from"], 0)
-		limit := SafeAssertInt(args["limit"], 100)
+		p := NewArgParser(args)
+		from := p.Int("from", 0)
+		limit := p.Int("limit", 100)
 		if from < 0 {
 			from = 0
 		}
@@ -180,7 +181,7 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
+		targetEmail := NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
@@ -318,7 +319,7 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
+		targetEmail := NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
@@ -475,7 +476,7 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		handler.trackToolCall(ctx, "admin_activate_user")
 
 		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
+		targetEmail := NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
@@ -666,7 +667,7 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		handler.trackToolCall(ctx, "admin_unfreeze_user")
 
 		args := request.GetArguments()
-		targetEmail := SafeAssertString(args["target_email"], "")
+		targetEmail := NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
@@ -938,8 +939,9 @@ func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		args := request.GetArguments()
-		from := SafeAssertInt(args["from"], 0)
-		limit := SafeAssertInt(args["limit"], 50)
+		p := NewArgParser(args)
+		from := p.Int("from", 0)
+		limit := p.Int("limit", 50)
 		if from < 0 {
 			from = 0
 		}
@@ -1050,8 +1052,9 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		}
 
 		args := request.GetArguments()
-		targetEmail := strings.ToLower(SafeAssertString(args["target_email"], ""))
-		confirmed := SafeAssertBool(args["confirm"], false)
+		p := NewArgParser(args)
+		targetEmail := strings.ToLower(p.String("target_email", ""))
+		confirmed := p.Bool("confirm", false)
 		if targetEmail == "" {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}

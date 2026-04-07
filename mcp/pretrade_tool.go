@@ -115,13 +115,14 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		exchange := SafeAssertString(args["exchange"], "NSE")
-		tradingsymbol := SafeAssertString(args["tradingsymbol"], "")
-		transactionType := SafeAssertString(args["transaction_type"], "BUY")
-		quantity := SafeAssertFloat64(args["quantity"], 0)
-		product := SafeAssertString(args["product"], "CNC")
-		orderType := SafeAssertString(args["order_type"], "MARKET")
-		price := SafeAssertFloat64(args["price"], 0)
+		p := NewArgParser(args)
+		exchange := p.String("exchange", "NSE")
+		tradingsymbol := p.String("tradingsymbol", "")
+		transactionType := p.String("transaction_type", "BUY")
+		quantity := p.Float("quantity", 0)
+		product := p.String("product", "CNC")
+		orderType := p.String("order_type", "MARKET")
+		price := p.Float("price", 0)
 
 		if quantity <= 0 {
 			return mcp.NewToolResultError("quantity must be greater than 0"), nil

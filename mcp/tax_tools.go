@@ -113,7 +113,7 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "tax_harvest_analysis")
 
-		assumeDays := SafeAssertInt(request.GetArguments()["assume_ltcg_days"], 0)
+		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
 		return handler.WithSession(ctx, "tax_harvest_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			holdings, err := session.Broker.GetHoldings()

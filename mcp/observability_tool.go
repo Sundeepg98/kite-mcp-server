@@ -87,7 +87,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Parse period.
 		args := request.GetArguments()
-		period := SafeAssertString(args["period"], "24h")
+		period := NewArgParser(args).String("period", "24h")
 		var since time.Time
 		now := time.Now()
 		switch period {

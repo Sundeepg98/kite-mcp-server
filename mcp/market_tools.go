@@ -37,14 +37,14 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_quotes")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "instruments"); err != nil {
+		if err := p.Required("instruments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instruments := SafeAssertStringArray(args["instruments"])
+		instruments := p.StringArray("instruments")
 		if len(instruments) == 0 {
 			return mcp.NewToolResultError("At least one instrument must be specified"), nil
 		}
@@ -93,15 +93,15 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "search_instruments")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "query"); err != nil {
+		if err := p.Required("query"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		query := SafeAssertString(args["query"], "")
-		filterOn := SafeAssertString(args["filter_on"], "id")
+		query := p.String("query", "")
+		filterOn := p.String("filter_on", "id")
 
 		// Don't call UpdateInstruments() here since it might already be happening in another thread
 		// But we do need to ensure instruments are loaded
@@ -153,7 +153,7 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		// Parse pagination parameters
-		params := ParsePaginationParams(args)
+		params := ParsePaginationParams(p.Raw())
 
 		// Apply pagination if limit is specified
 		originalLength := len(out)
@@ -217,23 +217,23 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_historical_data")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "instrument_token", "from_date", "to_date", "interval"); err != nil {
+		if err := p.Required("instrument_token", "from_date", "to_date", "interval"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Parse instrument token
-		instrumentToken := SafeAssertInt(args["instrument_token"], 0)
+		instrumentToken := p.Int("instrument_token", 0)
 
 		// Parse from_date and to_date
-		fromDate, err := time.Parse("2006-01-02 15:04:05", SafeAssertString(args["from_date"], ""))
+		fromDate, err := time.Parse("2006-01-02 15:04:05", p.String("from_date", ""))
 		if err != nil {
 			return mcp.NewToolResultError("Failed to parse from_date, use format YYYY-MM-DD HH:MM:SS"), nil
 		}
 
-		toDate, err := time.Parse("2006-01-02 15:04:05", SafeAssertString(args["to_date"], ""))
+		toDate, err := time.Parse("2006-01-02 15:04:05", p.String("to_date", ""))
 		if err != nil {
 			return mcp.NewToolResultError("Failed to parse to_date, use format YYYY-MM-DD HH:MM:SS"), nil
 		}
@@ -243,7 +243,7 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Get other parameters
-		interval := SafeAssertString(args["interval"], "")
+		interval := p.String("interval", "")
 		// Note: continuous and oi params are accepted by the tool schema
 		// but are Zerodha-specific; the broker.Client interface does not
 		// expose them. They are silently ignored for now.
@@ -288,14 +288,14 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_ltp")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "instruments"); err != nil {
+		if err := p.Required("instruments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instruments := SafeAssertStringArray(args["instruments"])
+		instruments := p.StringArray("instruments")
 		if len(instruments) == 0 {
 			return mcp.NewToolResultError("At least one instrument must be specified"), nil
 		}
@@ -338,14 +338,14 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "get_ohlc")
-		args := request.GetArguments()
+		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "instruments"); err != nil {
+		if err := p.Required("instruments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		instruments := SafeAssertStringArray(args["instruments"])
+		instruments := p.StringArray("instruments")
 		if len(instruments) == 0 {
 			return mcp.NewToolResultError("At least one instrument must be specified"), nil
 		}

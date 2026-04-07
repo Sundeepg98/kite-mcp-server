@@ -237,13 +237,14 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		exchange := strings.ToUpper(SafeAssertString(args["exchange"], "NFO"))
-		tradingsymbol := strings.ToUpper(SafeAssertString(args["tradingsymbol"], ""))
-		strikePrice := SafeAssertFloat64(args["strike_price"], 0)
-		expiryStr := SafeAssertString(args["expiry_date"], "")
-		optionTypeStr := strings.ToUpper(SafeAssertString(args["option_type"], ""))
-		riskFreeRate := SafeAssertFloat64(args["risk_free_rate"], 0.07)
-		underlyingPriceArg := SafeAssertFloat64(args["underlying_price"], 0)
+		p := NewArgParser(args)
+		exchange := strings.ToUpper(p.String("exchange", "NFO"))
+		tradingsymbol := strings.ToUpper(p.String("tradingsymbol", ""))
+		strikePrice := p.Float("strike_price", 0)
+		expiryStr := p.String("expiry_date", "")
+		optionTypeStr := strings.ToUpper(p.String("option_type", ""))
+		riskFreeRate := p.Float("risk_free_rate", 0.07)
+		underlyingPriceArg := p.Float("underlying_price", 0)
 
 		if optionTypeStr != "CE" && optionTypeStr != "PE" {
 			return gomcp.NewToolResultError("option_type must be CE or PE"), nil
@@ -445,15 +446,16 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		strategy := strings.ToLower(SafeAssertString(args["strategy"], ""))
-		underlying := strings.ToUpper(SafeAssertString(args["underlying"], ""))
-		expiryStr := SafeAssertString(args["expiry"], "")
-		strike1 := SafeAssertFloat64(args["strike1"], 0)
-		strike2 := SafeAssertFloat64(args["strike2"], 0)
-		strike3 := SafeAssertFloat64(args["strike3"], 0)
-		strike4 := SafeAssertFloat64(args["strike4"], 0)
-		lotSizeOverride := SafeAssertInt(args["lot_size"], 0)
-		lots := SafeAssertInt(args["lots"], 1)
+		p := NewArgParser(args)
+		strategy := strings.ToLower(p.String("strategy", ""))
+		underlying := strings.ToUpper(p.String("underlying", ""))
+		expiryStr := p.String("expiry", "")
+		strike1 := p.Float("strike1", 0)
+		strike2 := p.Float("strike2", 0)
+		strike3 := p.Float("strike3", 0)
+		strike4 := p.Float("strike4", 0)
+		lotSizeOverride := p.Int("lot_size", 0)
+		lots := p.Int("lots", 1)
 		if lots < 1 {
 			lots = 1
 		}

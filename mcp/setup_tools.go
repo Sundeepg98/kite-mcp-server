@@ -256,8 +256,9 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// If user provided their own credentials, store them for per-user isolation
 		args := request.GetArguments()
-		apiKey := SafeAssertString(args["api_key"], "")
-		apiSecret := SafeAssertString(args["api_secret"], "")
+		p := NewArgParser(args)
+		apiKey := p.String("api_key", "")
+		apiSecret := p.String("api_secret", "")
 
 		// Validate that api_key and api_secret contain only alphanumeric characters
 		if apiKey != "" && !isAlphanumeric(apiKey) {
@@ -446,7 +447,8 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Parse page parameter
 		args := request.GetArguments()
-		page := SafeAssertString(args["page"], "portfolio")
+		p := NewArgParser(args)
+		page := p.String("page", "portfolio")
 		pagePath, ok := pageRoutes[page]
 		if !ok {
 			pagePath = pageRoutes["portfolio"]
@@ -455,7 +457,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Build query parameters for deep-linking
 		queryParams := url.Values{}
-		if category := SafeAssertString(args["category"], ""); category != "" && page == "activity" {
+		if category := p.String("category", ""); category != "" && page == "activity" {
 			queryParams.Set("category", category)
 		}
 		if days, ok := args["days"].(float64); ok && days > 0 && (page == "activity" || page == "orders") {

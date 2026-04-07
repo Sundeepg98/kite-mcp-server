@@ -162,9 +162,10 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		txnType := SafeAssertString(args["transaction_type"], "")
-		amount := SafeAssertFloat64(args["amount"], 0)
-		quantity := SafeAssertFloat64(args["quantity"], 0)
+		p := NewArgParser(args)
+		txnType := p.String("transaction_type", "")
+		amount := p.Float("amount", 0)
+		quantity := p.Float("quantity", 0)
 
 		// Validate: BUY needs amount, SELL needs quantity
 		if txnType == "BUY" && amount <= 0 {
@@ -175,11 +176,11 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		orderParams := kiteconnect.MFOrderParams{
-			Tradingsymbol:   SafeAssertString(args["tradingsymbol"], ""),
+			Tradingsymbol:   p.String("tradingsymbol", ""),
 			TransactionType: txnType,
 			Amount:          amount,
 			Quantity:        quantity,
-			Tag:             SafeAssertString(args["tag"], ""),
+			Tag:             p.String("tag", ""),
 		}
 
 		return handler.WithSession(ctx, "place_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
@@ -219,7 +220,7 @@ func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		orderID := SafeAssertString(args["order_id"], "")
+		orderID := NewArgParser(args).String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp, err := session.Kite.Client.CancelMFOrder(orderID)
@@ -290,19 +291,20 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		amount := SafeAssertFloat64(args["amount"], 0)
+		p := NewArgParser(args)
+		amount := p.Float("amount", 0)
 		if amount <= 0 {
 			return mcp.NewToolResultError("amount must be greater than 0"), nil
 		}
 
 		sipParams := kiteconnect.MFSIPParams{
-			Tradingsymbol: SafeAssertString(args["tradingsymbol"], ""),
+			Tradingsymbol: p.String("tradingsymbol", ""),
 			Amount:        amount,
-			Frequency:     SafeAssertString(args["frequency"], ""),
-			Instalments:   SafeAssertInt(args["instalments"], 0),
-			InitialAmount: SafeAssertFloat64(args["initial_amount"], 0),
-			InstalmentDay: SafeAssertInt(args["instalment_day"], 0),
-			Tag:           SafeAssertString(args["tag"], ""),
+			Frequency:     p.String("frequency", ""),
+			Instalments:   p.Int("instalments", 0),
+			InitialAmount: p.Float("initial_amount", 0),
+			InstalmentDay: p.Int("instalment_day", 0),
+			Tag:           p.String("tag", ""),
 		}
 
 		return handler.WithSession(ctx, "place_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
@@ -342,7 +344,7 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		sipID := SafeAssertString(args["sip_id"], "")
+		sipID := NewArgParser(args).String("sip_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp, err := session.Kite.Client.CancelMFSIP(sipID)

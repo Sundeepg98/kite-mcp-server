@@ -77,7 +77,8 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		args := request.GetArguments()
 
 		// Parse targets JSON string
-		targetsStr := SafeAssertString(args["targets"], "")
+		p := NewArgParser(args)
+		targetsStr := p.String("targets", "")
 		if targetsStr == "" {
 			return mcp.NewToolResultError("Parameter 'targets' is required and must be a JSON object mapping symbols to allocation values."), nil
 		}
@@ -91,13 +92,13 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		// Parse mode
-		mode := SafeAssertString(args["mode"], "percentage")
+		mode := p.String("mode", "percentage")
 		if mode != "percentage" && mode != "value" {
 			return mcp.NewToolResultError("Invalid 'mode': must be 'percentage' or 'value'."), nil
 		}
 
 		// Parse threshold (default 2.0)
-		threshold := SafeAssertFloat64(args["threshold"], 2.0)
+		threshold := p.Float("threshold", 2.0)
 		if threshold < 0 {
 			return mcp.NewToolResultError("'threshold' must be non-negative."), nil
 		}

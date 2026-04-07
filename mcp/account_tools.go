@@ -39,7 +39,7 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		args := request.GetArguments()
-		confirm := SafeAssertBool(args["confirm"], false)
+		confirm := NewArgParser(args).Bool("confirm", false)
 		if !confirm {
 			return gomcp.NewToolResultError("This permanently deletes ALL your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading). Set confirm: true to proceed."), nil
 		}
@@ -119,8 +119,9 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		apiKey := strings.TrimSpace(SafeAssertString(args["api_key"], ""))
-		apiSecret := strings.TrimSpace(SafeAssertString(args["api_secret"], ""))
+		p := NewArgParser(args)
+		apiKey := strings.TrimSpace(p.String("api_key", ""))
+		apiSecret := strings.TrimSpace(p.String("api_secret", ""))
 
 		if apiKey == "" || apiSecret == "" {
 			return gomcp.NewToolResultError("Both api_key and api_secret must be non-empty"), nil

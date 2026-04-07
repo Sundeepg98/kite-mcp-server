@@ -125,7 +125,7 @@ func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "dividend_calendar")
 
-		days := SafeAssertInt(request.GetArguments()["days"], 30)
+		days := NewArgParser(request.GetArguments()).Int("days", 30)
 		if days <= 0 {
 			days = 30
 		}

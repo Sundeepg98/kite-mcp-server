@@ -37,10 +37,11 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		exchange := SafeAssertString(args["exchange"], "NSE")
-		symbol := SafeAssertString(args["tradingsymbol"], "")
-		interval := SafeAssertString(args["interval"], "day")
-		days := SafeAssertInt(args["days"], 90)
+		p := NewArgParser(args)
+		exchange := p.String("exchange", "NSE")
+		symbol := p.String("tradingsymbol", "")
+		interval := p.String("interval", "day")
+		days := p.Int("days", 90)
 		if days > 365 {
 			days = 365
 		}
