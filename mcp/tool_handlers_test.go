@@ -562,6 +562,535 @@ func TestValidateRequired_AlertParams(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GTT tools: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestPlaceGTTOrder_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	// No params at all → should fail on required fields
+	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "place_gtt_order with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestPlaceGTTOrder_MissingTradingsymbol(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
+		"exchange":         "NSE",
+		"last_price":       float64(1500),
+		"transaction_type": "BUY",
+		"product":          "CNC",
+		"trigger_type":     "single",
+		// tradingsymbol missing
+	})
+	assert.True(t, result.IsError, "place_gtt_order without tradingsymbol should fail")
+	assertResultContains(t, result, "tradingsymbol")
+}
+
+func TestPlaceGTTOrder_SingleLegMissingTriggerValue(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"last_price":       float64(1500),
+		"transaction_type": "BUY",
+		"product":          "CNC",
+		"trigger_type":     "single",
+		// trigger_value missing → should error
+	})
+	assert.True(t, result.IsError, "place_gtt_order single without trigger_value should fail")
+	assertResultContains(t, result, "trigger_value must be greater than 0")
+}
+
+func TestPlaceGTTOrder_TwoLegMissingUpperTrigger(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
+		"exchange":            "NSE",
+		"tradingsymbol":       "INFY",
+		"last_price":          float64(1500),
+		"transaction_type":    "BUY",
+		"product":             "CNC",
+		"trigger_type":        "two-leg",
+		"lower_trigger_value": float64(1400),
+		// upper_trigger_value missing
+	})
+	assert.True(t, result.IsError, "place_gtt_order two-leg without upper_trigger_value should fail")
+	assertResultContains(t, result, "upper_trigger_value must be greater than 0")
+}
+
+func TestPlaceGTTOrder_InvalidTriggerType(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"last_price":       float64(1500),
+		"transaction_type": "BUY",
+		"product":          "CNC",
+		"trigger_type":     "invalid",
+	})
+	assert.True(t, result.IsError, "place_gtt_order with invalid trigger_type should fail")
+	assertResultContains(t, result, "Invalid trigger_type")
+}
+
+func TestDeleteGTTOrder_MissingTriggerID(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "delete_gtt_order", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "delete_gtt_order without trigger_id should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestModifyGTTOrder_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "modify_gtt_order", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "modify_gtt_order with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestModifyGTTOrder_MissingTriggerID(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "modify_gtt_order", "trader@example.com", map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"last_price":       float64(1500),
+		"transaction_type": "BUY",
+		"product":          "CNC",
+		"trigger_type":     "single",
+		// trigger_id missing
+	})
+	assert.True(t, result.IsError, "modify_gtt_order without trigger_id should fail")
+	assertResultContains(t, result, "trigger_id")
+}
+
+// ---------------------------------------------------------------------------
+// MF tools: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestPlaceMFOrder_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "place_mf_order with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestPlaceMFOrder_MissingTradingsymbol(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
+		"transaction_type": "BUY",
+		"amount":           float64(5000),
+		// tradingsymbol missing
+	})
+	assert.True(t, result.IsError, "place_mf_order without tradingsymbol should fail")
+	assertResultContains(t, result, "tradingsymbol")
+}
+
+func TestPlaceMFOrder_BuyRequiresAmount(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
+		"tradingsymbol":    "INF209K01YS2",
+		"transaction_type": "BUY",
+		// amount missing → should error for BUY
+	})
+	assert.True(t, result.IsError, "place_mf_order BUY without amount should fail")
+	assertResultContains(t, result, "amount is required")
+}
+
+func TestPlaceMFOrder_SellRequiresQuantity(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
+		"tradingsymbol":    "INF209K01YS2",
+		"transaction_type": "SELL",
+		// quantity missing → should error for SELL
+	})
+	assert.True(t, result.IsError, "place_mf_order SELL without quantity should fail")
+	assertResultContains(t, result, "quantity is required")
+}
+
+func TestPlaceMFSIP_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_sip", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "place_mf_sip with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestPlaceMFSIP_ZeroAmount(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "place_mf_sip", "trader@example.com", map[string]any{
+		"tradingsymbol": "INF209K01YS2",
+		"amount":        float64(0),
+		"frequency":     "monthly",
+		"instalments":   float64(12),
+	})
+	assert.True(t, result.IsError, "place_mf_sip with zero amount should fail")
+	assertResultContains(t, result, "amount must be greater than 0")
+}
+
+func TestCancelMFOrder_MissingOrderID(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "cancel_mf_order", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "cancel_mf_order without order_id should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestCancelMFSIP_MissingSIPID(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "cancel_mf_sip", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "cancel_mf_sip without sip_id should fail")
+	assertResultContains(t, result, "is required")
+}
+
+// ---------------------------------------------------------------------------
+// Watchlist tools: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestCreateWatchlist_MissingName(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "create_watchlist", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "create_watchlist without name should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestCreateWatchlist_EmptyName(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "create_watchlist", "trader@example.com", map[string]any{
+		"name": "   ", // whitespace only
+	})
+	assert.True(t, result.IsError, "create_watchlist with empty name should fail")
+	assertResultContains(t, result, "cannot be empty")
+}
+
+func TestCreateWatchlist_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "create_watchlist", "", map[string]any{
+		"name": "Tech Stocks",
+	})
+	assert.True(t, result.IsError, "create_watchlist without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+func TestAddToWatchlist_MissingParams(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "add_to_watchlist", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "add_to_watchlist without params should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestAddToWatchlist_MissingInstruments(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "add_to_watchlist", "trader@example.com", map[string]any{
+		"watchlist": "my-list",
+		// instruments missing
+	})
+	assert.True(t, result.IsError, "add_to_watchlist without instruments should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestAddToWatchlist_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "add_to_watchlist", "", map[string]any{
+		"watchlist":   "my-list",
+		"instruments": "NSE:INFY",
+	})
+	assert.True(t, result.IsError, "add_to_watchlist without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+func TestDeleteWatchlist_MissingWatchlist(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "delete_watchlist", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "delete_watchlist without watchlist should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestRemoveFromWatchlist_MissingParams(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "remove_from_watchlist", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "remove_from_watchlist without params should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestGetWatchlist_MissingWatchlist(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "get_watchlist", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "get_watchlist without watchlist should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestGetWatchlist_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "get_watchlist", "", map[string]any{
+		"watchlist": "my-list",
+	})
+	assert.True(t, result.IsError, "get_watchlist without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+func TestListWatchlists_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "list_watchlists", "", map[string]any{})
+	assert.True(t, result.IsError, "list_watchlists without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+// ---------------------------------------------------------------------------
+// Trailing stop tools: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestSetTrailingStop_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "set_trailing_stop with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestSetTrailingStop_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "", map[string]any{
+		"instrument": "NSE:INFY",
+		"order_id":   "12345",
+		"direction":  "long",
+		"trail_pct":  float64(1.5),
+	})
+	assert.True(t, result.IsError, "set_trailing_stop without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+func TestSetTrailingStop_MissingTrailAmountAndPct(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
+		"instrument": "NSE:INFY",
+		"order_id":   "12345",
+		"direction":  "long",
+		// neither trail_amount nor trail_pct
+	})
+	assert.True(t, result.IsError, "set_trailing_stop without trail_amount or trail_pct should fail")
+	assertResultContains(t, result, "trail_amount or trail_pct must be provided")
+}
+
+func TestSetTrailingStop_BothTrailAmountAndPct(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
+		"instrument":   "NSE:INFY",
+		"order_id":     "12345",
+		"direction":    "long",
+		"trail_amount": float64(20),
+		"trail_pct":    float64(1.5),
+	})
+	assert.True(t, result.IsError, "set_trailing_stop with both trail_amount and trail_pct should fail")
+	assertResultContains(t, result, "not both")
+}
+
+func TestSetTrailingStop_TrailPctTooHigh(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
+		"instrument": "NSE:INFY",
+		"order_id":   "12345",
+		"direction":  "long",
+		"trail_pct":  float64(60),
+	})
+	assert.True(t, result.IsError, "set_trailing_stop with trail_pct > 50 should fail")
+	assertResultContains(t, result, "cannot exceed 50%")
+}
+
+func TestSetTrailingStop_InvalidInstrumentFormat(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
+		"instrument":   "NOINFY", // missing colon
+		"order_id":     "12345",
+		"direction":    "long",
+		"trail_amount": float64(20),
+	})
+	assert.True(t, result.IsError, "set_trailing_stop with invalid instrument format should fail")
+	assertResultContains(t, result, "Invalid instrument format")
+}
+
+func TestCancelTrailingStop_MissingID(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "cancel_trailing_stop", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "cancel_trailing_stop without trailing_stop_id should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestCancelTrailingStop_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "cancel_trailing_stop", "", map[string]any{
+		"trailing_stop_id": "ts-123",
+	})
+	assert.True(t, result.IsError, "cancel_trailing_stop without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+func TestListTrailingStops_RequiresAuth(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "list_trailing_stops", "", map[string]any{})
+	assert.True(t, result.IsError, "list_trailing_stops without email should fail")
+	assertResultContains(t, result, "Email required")
+}
+
+// ---------------------------------------------------------------------------
+// Options tools: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestGetOptionChain_MissingUnderlying(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "get_option_chain", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "get_option_chain without underlying should fail")
+	assertResultContains(t, result, "is required")
+}
+
+func TestOptionsGreeks_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_greeks", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "options_greeks with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestOptionsGreeks_MissingStrikePrice(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_greeks", "trader@example.com", map[string]any{
+		"exchange":       "NFO",
+		"tradingsymbol":  "NIFTY2440324000CE",
+		"expiry_date":    "2024-04-03",
+		"option_type":    "CE",
+		// strike_price missing
+	})
+	assert.True(t, result.IsError, "options_greeks without strike_price should fail")
+	assertResultContains(t, result, "strike_price")
+}
+
+func TestOptionsGreeks_InvalidOptionType(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_greeks", "trader@example.com", map[string]any{
+		"exchange":      "NFO",
+		"tradingsymbol": "NIFTY2440324000CE",
+		"strike_price":  float64(24000),
+		"expiry_date":   "2024-04-03",
+		"option_type":   "INVALID",
+	})
+	assert.True(t, result.IsError, "options_greeks with invalid option_type should fail")
+	assertResultContains(t, result, "option_type must be CE or PE")
+}
+
+func TestOptionsGreeks_NegativeStrikePrice(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_greeks", "trader@example.com", map[string]any{
+		"exchange":      "NFO",
+		"tradingsymbol": "NIFTY2440324000CE",
+		"strike_price":  float64(-100),
+		"expiry_date":   "2024-04-03",
+		"option_type":   "CE",
+	})
+	assert.True(t, result.IsError, "options_greeks with negative strike_price should fail")
+	assertResultContains(t, result, "strike_price must be positive")
+}
+
+func TestOptionsGreeks_InvalidExpiryDate(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_greeks", "trader@example.com", map[string]any{
+		"exchange":      "NFO",
+		"tradingsymbol": "NIFTY2440324000CE",
+		"strike_price":  float64(24000),
+		"expiry_date":   "not-a-date",
+		"option_type":   "CE",
+	})
+	assert.True(t, result.IsError, "options_greeks with invalid expiry_date should fail")
+	assertResultContains(t, result, "YYYY-MM-DD")
+}
+
+func TestOptionsStrategy_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "options_strategy with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestOptionsStrategy_MissingStrike1(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+		"strategy":   "bull_call_spread",
+		"underlying": "NIFTY",
+		"expiry":     "2024-04-03",
+		// strike1 missing
+	})
+	assert.True(t, result.IsError, "options_strategy without strike1 should fail")
+	assertResultContains(t, result, "strike1")
+}
+
+// ---------------------------------------------------------------------------
+// Backtest and indicators: pre-session validation
+// ---------------------------------------------------------------------------
+
+func TestBacktestStrategy_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "backtest_strategy with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+func TestTechnicalIndicators_MissingRequired(t *testing.T) {
+	mgr := newTestManager(t)
+	result := callToolWithManager(t, mgr, "technical_indicators", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "technical_indicators with no params should fail validation")
+	assertResultContains(t, result, "is required")
+}
+
+// ---------------------------------------------------------------------------
+// Analytics tools: annotations (read-only, etc.)
+// ---------------------------------------------------------------------------
+
+func TestAnalyticsToolsAnnotations(t *testing.T) {
+	tools := GetAllTools()
+	readOnlyTools := []string{
+		"portfolio_summary", "portfolio_concentration", "position_analysis",
+		"sector_exposure", "tax_harvest_analysis", "dividend_calendar",
+		"portfolio_rebalance", "sebi_compliance_status",
+		"backtest_strategy", "technical_indicators",
+		"options_greeks", "options_strategy",
+	}
+
+	toolMap := make(map[string]Tool)
+	for _, td := range tools {
+		toolMap[td.Tool().Name] = td
+	}
+
+	for _, name := range readOnlyTools {
+		td, found := toolMap[name]
+		if !found {
+			t.Errorf("expected tool %s to be registered", name)
+			continue
+		}
+		toolDef := td.Tool()
+		assert.True(t, toolDef.Annotations.ReadOnlyHint != nil && *toolDef.Annotations.ReadOnlyHint,
+			"tool %s should be read-only", name)
+	}
+}
+
+func TestWriteToolsHaveDestructiveHint(t *testing.T) {
+	tools := GetAllTools()
+	destructiveTools := []string{
+		"place_order", "cancel_order", "place_gtt_order", "delete_gtt_order",
+		"place_mf_order", "cancel_mf_order", "cancel_mf_sip",
+		"delete_watchlist", "remove_from_watchlist",
+		"cancel_trailing_stop",
+	}
+
+	toolMap := make(map[string]Tool)
+	for _, td := range tools {
+		toolMap[td.Tool().Name] = td
+	}
+
+	for _, name := range destructiveTools {
+		td, found := toolMap[name]
+		if !found {
+			t.Errorf("expected tool %s to be registered", name)
+			continue
+		}
+		toolDef := td.Tool()
+		assert.True(t, toolDef.Annotations.DestructiveHint != nil && *toolDef.Annotations.DestructiveHint,
+			"tool %s should be marked destructive", name)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
 
