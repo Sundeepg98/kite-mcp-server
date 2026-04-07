@@ -342,6 +342,7 @@ func New(cfg Config) (*Manager, error) {
 		DevMode:       cfg.DevMode,
 	})
 	m.sessionSvc.SetSessionManager(m.sessionManager)
+	m.managedSessionSvc = NewManagedSessionService(m.sessionManager)
 
 	// Initialize portfolio and order services
 	m.portfolioSvc = NewPortfolioService(m.sessionSvc, cfg.Logger)
@@ -427,12 +428,13 @@ type Manager struct {
 	templates map[string]*template.Template
 
 	// Focused service objects (Clean Architecture)
-	credentialSvc  *CredentialService  // credential resolution (per-user + global)
-	sessionSvc     *SessionService     // MCP session lifecycle
-	portfolioSvc   *PortfolioService   // portfolio queries (holdings, positions, margins, profile)
-	orderSvc       *OrderService       // order placement, modification, cancellation
-	alertSvc       *AlertService       // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
-	familyService  *FamilyService      // family billing (invite, remove, list, tier resolution)
+	credentialSvc     *CredentialService     // credential resolution (per-user + global)
+	sessionSvc        *SessionService        // MCP session lifecycle
+	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
+	portfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
+	orderSvc          *OrderService          // order placement, modification, cancellation
+	alertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
+	familyService     *FamilyService         // family billing (invite, remove, list, tier resolution)
 
 	Instruments    *instruments.Manager
 	sessionManager *SessionRegistry
@@ -1067,6 +1069,11 @@ func (m *Manager) ForceInstrumentsUpdate() error {
 // SessionManager returns the MCP session manager instance
 func (m *Manager) SessionManager() *SessionRegistry {
 	return m.sessionManager
+}
+
+// ManagedSessionSvc returns the thin session facade for active-count and terminate-by-email.
+func (m *Manager) ManagedSessionSvc() *ManagedSessionService {
+	return m.managedSessionSvc
 }
 
 // SessionSigner returns the session signer instance

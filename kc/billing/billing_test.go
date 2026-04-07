@@ -304,3 +304,93 @@ func TestGetTierForUser_ExpiredAdmin(t *testing.T) {
 	// Canceled admin = family gets Free
 	assert.Equal(t, TierFree, s.GetTierForUser("family@example.com", adminEmailFn))
 }
+
+func TestHandleCheckoutCompleted_CreatesSubscription(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Simulate: admin pays, webhook fires, subscription created
+	sub := &Subscription{
+		AdminEmail:       "admin@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_test123",
+		StripeSubID:      "sub_test456",
+		Status:           StatusActive,
+		MaxUsers:         5,
+	}
+	require.NoError(t, s.SetSubscription(sub))
+
+	// Verify subscription stored
+	got := s.GetSubscription("admin@example.com")
+	require.NotNil(t, got)
+	assert.Equal(t, TierPro, got.Tier)
+	assert.Equal(t, "cus_test123", got.StripeCustomerID)
+	assert.Equal(t, 5, got.MaxUsers)
+	assert.Equal(t, StatusActive, got.Status)
+
+	// Verify GetEmailByCustomerID works
+	email := s.GetEmailByCustomerID("cus_test123")
+	assert.Equal(t, "admin@example.com", email)
+
+	// Verify tier for family member
+	adminEmailFn := func(e string) string {
+		if e == "family@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+	assert.Equal(t, TierPro, s.GetTierForUser("family@example.com", adminEmailFn))
+}
+
+func TestSubscriptionUpdate_StatusChange(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Create active subscription
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		MaxUsers:   5,
+	}))
+
+	// Simulate: subscription canceled via webhook
+	existing := s.GetSubscription("admin@example.com")
+	require.NotNil(t, existing)
+	existing.Status = StatusCanceled
+	existing.Tier = TierFree
+	require.NoError(t, s.SetSubscription(existing))
+
+	// Family member should now get Free
+	adminEmailFn := func(e string) string {
+		if e == "family@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+	assert.Equal(t, TierFree, s.GetTierForUser("family@example.com", adminEmailFn))
+	assert.Equal(t, TierFree, s.GetTier("admin@example.com"))
+}
+
+func TestEventIdempotency(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitEventLogTable())
+
+	// First time: not processed
+	assert.False(t, s.IsEventProcessed("evt_test_001"))
+
+	// Mark as processed
+	require.NoError(t, s.MarkEventProcessed("evt_test_001", "checkout.session.completed"))
+
+	// Second time: already processed
+	assert.True(t, s.IsEventProcessed("evt_test_001"))
+
+	// Different event: not processed
+	assert.False(t, s.IsEventProcessed("evt_test_002"))
+}
