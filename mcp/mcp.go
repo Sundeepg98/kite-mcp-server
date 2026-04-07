@@ -15,9 +15,10 @@ type Tool interface {
 	Handler(*kc.Manager) server.ToolHandlerFunc
 }
 
-// GetAllTools returns all available tools for registration
+// GetAllTools returns all available tools for registration, including
+// any externally registered plugins.
 func GetAllTools() []Tool {
-	return []Tool{
+	builtIn := []Tool{
 		// Tools for setting up the client
 		&LoginTool{},
 		&OpenDashboardTool{},
@@ -156,6 +157,15 @@ func GetAllTools() []Tool {
 		&AdminListFamilyTool{},
 		&AdminRemoveFamilyMemberTool{},
 	}
+
+	// Append registered plugins
+	registry.mu.Lock()
+	if len(registry.plugins) > 0 {
+		builtIn = append(builtIn, registry.plugins...)
+	}
+	registry.mu.Unlock()
+
+	return builtIn
 }
 
 // parseExcludedTools parses a comma-separated string of tool names and returns a set of excluded tools.
