@@ -4,6 +4,9 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // testLogger creates a discard logger for tests
@@ -123,5 +126,79 @@ func TestSetVersion(t *testing.T) {
 
 	if app.Version != testVersion {
 		t.Errorf("Expected version '%s', got '%s'", testVersion, app.Version)
+	}
+}
+
+func TestDeriveAggregateID(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name     string
+		event    domain.Event
+		expected string
+	}{
+		{
+			name:     "OrderPlacedEvent uses OrderID",
+			event:    domain.OrderPlacedEvent{OrderID: "ORD-123", Timestamp: now},
+			expected: "ORD-123",
+		},
+		{
+			name:     "OrderModifiedEvent uses OrderID",
+			event:    domain.OrderModifiedEvent{OrderID: "ORD-456", Timestamp: now},
+			expected: "ORD-456",
+		},
+		{
+			name:     "OrderCancelledEvent uses OrderID",
+			event:    domain.OrderCancelledEvent{OrderID: "ORD-789", Timestamp: now},
+			expected: "ORD-789",
+		},
+		{
+			name:     "PositionClosedEvent uses OrderID",
+			event:    domain.PositionClosedEvent{OrderID: "ORD-POS-1", Timestamp: now},
+			expected: "ORD-POS-1",
+		},
+		{
+			name:     "AlertTriggeredEvent uses AlertID",
+			event:    domain.AlertTriggeredEvent{AlertID: "ALERT-42", Timestamp: now},
+			expected: "ALERT-42",
+		},
+		{
+			name:     "UserFrozenEvent uses Email",
+			event:    domain.UserFrozenEvent{Email: "user@example.com", Timestamp: now},
+			expected: "user@example.com",
+		},
+		{
+			name:     "UserSuspendedEvent uses Email",
+			event:    domain.UserSuspendedEvent{Email: "suspended@example.com", Timestamp: now},
+			expected: "suspended@example.com",
+		},
+		{
+			name:     "GlobalFreezeEvent uses By (admin email)",
+			event:    domain.GlobalFreezeEvent{By: "admin@example.com", Timestamp: now},
+			expected: "admin@example.com",
+		},
+		{
+			name:     "FamilyInvitedEvent uses AdminEmail",
+			event:    domain.FamilyInvitedEvent{AdminEmail: "family-admin@example.com", Timestamp: now},
+			expected: "family-admin@example.com",
+		},
+		{
+			name:     "RiskLimitBreachedEvent uses Email",
+			event:    domain.RiskLimitBreachedEvent{Email: "risky@example.com", Timestamp: now},
+			expected: "risky@example.com",
+		},
+		{
+			name:     "SessionCreatedEvent uses SessionID",
+			event:    domain.SessionCreatedEvent{SessionID: "sess-abc", Timestamp: now},
+			expected: "sess-abc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deriveAggregateID(tt.event)
+			if got != tt.expected {
+				t.Errorf("deriveAggregateID() = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }

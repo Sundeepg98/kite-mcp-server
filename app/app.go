@@ -565,8 +565,14 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			kcManager.SetEventStore(eventStore)
 			// Subscribe the event store to persist all dispatched events.
 			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("order.modified", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("order.cancelled", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))
 			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
 			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
+			eventDispatcher.Subscribe("user.suspended", makeEventPersister(eventStore, "User", app.logger))
+			eventDispatcher.Subscribe("global.freeze", makeEventPersister(eventStore, "Global", app.logger))
+			eventDispatcher.Subscribe("family.invited", makeEventPersister(eventStore, "Family", app.logger))
 			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
 			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
@@ -1957,10 +1963,22 @@ func deriveAggregateID(e domain.Event) string {
 	switch ev := e.(type) {
 	case domain.OrderPlacedEvent:
 		return ev.OrderID
+	case domain.OrderModifiedEvent:
+		return ev.OrderID
+	case domain.OrderCancelledEvent:
+		return ev.OrderID
+	case domain.PositionClosedEvent:
+		return ev.OrderID
 	case domain.AlertTriggeredEvent:
 		return ev.AlertID
 	case domain.UserFrozenEvent:
 		return ev.Email
+	case domain.UserSuspendedEvent:
+		return ev.Email
+	case domain.GlobalFreezeEvent:
+		return ev.By
+	case domain.FamilyInvitedEvent:
+		return ev.AdminEmail
 	case domain.RiskLimitBreachedEvent:
 		return ev.Email
 	case domain.SessionCreatedEvent:
