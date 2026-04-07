@@ -1,19 +1,21 @@
 # Handoff
 
 ## State
-94 tools (14 admin), 15 widgets, 25 admin tests, full billing+family+Stripe+pricing deployed at kite-mcp-server.fly.dev (commit 1ebd808). Scores: Product 9.2, UX 9.0, Architecture 9.0 (overall 9.1/10). Solo Pro tier added (₹199). Domain events emitting. Invitation cleanup running. All ARIA done.
+94 tools (14 admin), 15 widgets, 19 use cases, 3 aggregates, 11 domain events, 10 middleware decorators, plugin registry, 900+ tests. All deployed at kite-mcp-server.fly.dev (commit 41f2b1c). CI+security green. Stripe test mode with 4 tiers live (Free/SoloPro/FamilyPro/Premium).
 
 ## Next
-1. Remaining 0.9 to 10/10: manager decomposition (split god object), full keyboard nav on 11 user widgets, more integration tests (billing webhook E2E, Stripe checkout E2E), CSS template dedup (minor — widgets must be self-contained)
-2. Create STRIPE_PRICE_SOLO_PRO product in Stripe dashboard (₹199/mo) and set as Fly.io secret
-3. Push to origin: `git push origin master` (currently 10+ commits ahead)
+1. Testing: coverage at ~40% overall. Target 75%. Biggest gaps: mcp tool handlers (30%), kc/ops (6%), kc/telegram (0%). Need per-tool validation tests for 80 non-admin tools. Load testing not started.
+2. Hosting: SQLite single-writer limits to ~100 concurrent users. Plan PostgreSQL migration when targeting 200+ DAU. Current Fly.io Connect tier (512MB, ₹500/mo) sufficient for MVP.
+3. Admin role rename: "admin" is overloaded (server operator vs billing family head). Rename to operator/family_admin for clarity. Functional code is correct.
+4. Remaining Kite-specific tools (MF, margins, pretrade) documented as intentional broker.Client exclusions.
 
 ## Context
 - User wants PARALLEL BUILD AGENTS — never serial, max 1 round research then build
-- 14 admin tools: list_users, get_user, server_status, get_risk_status, suspend_user, activate_user, change_role, freeze_user, unfreeze_user, freeze_global, unfreeze_global, invite_family_member, list_family, remove_family_member
-- billing.Subscription field is AdminEmail (renamed from Email)
-- Stripe test keys in Fly.io secrets. Solo Pro needs STRIPE_PRICE_SOLO_PRO secret (not created yet)
-- Product direction committed: Option A (family platform) with Solo Pro for individuals
+- "Admin" means TWO things: server operator (ADMIN_EMAILS env) AND paying customer (Stripe webhook upgrades role). Architecture supports both but naming is confusing.
+- Per-user OAuth works: each user can bring own Kite credentials. Global KITE_API_KEY optional.
+- TierSoloPro (Tier=3) maps to Pro tool access via EffectiveTier(). STRIPE_PRICE_SOLO_PRO secret set on Fly.io.
+- CSS injection: dashboard-base.css injected into widgets via /*__INJECTED_CSS__*/ placeholder at serve time
+- RetryOnTransient wraps ALL 16 broker adapter methods (2 retries, exponential backoff)
+- Plugin registry: RegisterPlugin + HookMiddleware wired in middleware chain
+- ArgParser replaces all SafeAssert calls across 27 tool files
 - SAC blocks mcp test binary intermittently — not code issue
-- Domain events: UserSuspendedEvent, GlobalFreezeEvent, FamilyInvitedEvent in kc/domain/events.go
-- withAdminCheck helper available for future admin tools (existing 14 use adminCheck directly)
