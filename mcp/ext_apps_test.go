@@ -211,3 +211,29 @@ func TestResourceMIMEType(t *testing.T) {
 		assert.Equal(t, "text/html;profile=mcp-app", ResourceMIMEType)
 	})
 }
+
+func TestCSSInjection(t *testing.T) {
+	t.Run("replaces placeholder with CSS content", func(t *testing.T) {
+		html := `<style>/*__INJECTED_CSS__*/
+.custom { color: red; }</style>`
+		css := ":root { --bg: #000; }"
+		result := strings.Replace(html, cssPlaceholder, css, 1)
+		assert.Contains(t, result, ":root { --bg: #000; }")
+		assert.Contains(t, result, ".custom { color: red; }")
+		assert.NotContains(t, result, cssPlaceholder)
+	})
+
+	t.Run("replacement is idempotent when placeholder absent", func(t *testing.T) {
+		// If the placeholder isn't in the HTML, Replace is a no-op.
+		html := `<style>.foo { color: blue; }</style>`
+		css := ":root { --bg: #fff; }"
+		result := strings.Replace(html, cssPlaceholder, css, 1)
+		assert.Equal(t, html, result, "no placeholder means no change")
+	})
+
+	t.Run("base CSS file is readable and non-empty", func(t *testing.T) {
+		cssBytes, err := templates.FS.ReadFile("dashboard-base.css")
+		require.NoError(t, err, "dashboard-base.css should be readable")
+		assert.True(t, len(cssBytes) > 0, "dashboard-base.css should not be empty")
+	})
+}

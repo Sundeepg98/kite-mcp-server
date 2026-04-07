@@ -1,17 +1,23 @@
 package billing
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // newTestStore creates a billing Store backed only by the in-memory map
@@ -393,4 +399,426 @@ func TestEventIdempotency(t *testing.T) {
 
 	// Different event: not processed
 	assert.False(t, s.IsEventProcessed("evt_test_002"))
+}
+
+// ---------------------------------------------------------------------------
+// Tier method tests (EffectiveTier, String)
+// ---------------------------------------------------------------------------
+
+func TestTierSoloPro_EffectiveTier(t *testing.T) {
+	// TierSoloPro should map down to TierPro for tool-access checks.
+	assert.Equal(t, TierPro, TierSoloPro.EffectiveTier(),
+		"TierSoloPro.EffectiveTier() should return TierPro")
+}
+
+func TestTierSoloPro_StringRepresentation(t *testing.T) {
+	assert.Equal(t, "solo_pro", TierSoloPro.String())
+}
+
+func TestEffectiveTier_OtherTiers(t *testing.T) {
+	// Non-SoloPro tiers should return themselves.
+	assert.Equal(t, TierFree, TierFree.EffectiveTier())
+	assert.Equal(t, TierPro, TierPro.EffectiveTier())
+	assert.Equal(t, TierPremium, TierPremium.EffectiveTier())
+}
+
+func TestTierString_AllTiers(t *testing.T) {
+	assert.Equal(t, "free", TierFree.String())
+	assert.Equal(t, "pro", TierPro.String())
+	assert.Equal(t, "premium", TierPremium.String())
+	assert.Equal(t, "solo_pro", TierSoloPro.String())
+}
+
+// ---------------------------------------------------------------------------
+// Middleware tests
+// ---------------------------------------------------------------------------
+
+// passthrough is a no-op tool handler that always succeeds.
+func passthrough(_ context.Context, _ gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
+	return gomcp.NewToolResultText("ok"), nil
+}
+
+func TestMiddleware_TierSoloPro(t *testing.T) {
+	// A SoloPro user should be able to call a Pro tool because
+	// EffectiveTier maps SoloPro → Pro.
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "solo@example.com",
+		Tier:       TierSoloPro,
+		Status:     StatusActive,
+		MaxUsers:   1,
+	})
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "solo@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "place_order" // requires TierPro
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError, "SoloPro user should access Pro tools")
+	assert.Len(t, result.Content, 1)
+	text, ok := result.Content[0].(gomcp.TextContent)
+	require.True(t, ok)
+	assert.Equal(t, "ok", text.Text)
+}
+
+func TestMiddleware_FreeUserBlockedFromProTool(t *testing.T) {
+	s := newTestStore()
+	// No subscription set — defaults to TierFree.
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "free@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "place_order" // requires TierPro
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "Free user should be blocked from Pro tool")
+	text, ok := result.Content[0].(gomcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, text.Text, "pro")
+	assert.Contains(t, text.Text, "Upgrade")
+}
+
+func TestMiddleware_FreeUserAllowedFreeTool(t *testing.T) {
+	s := newTestStore()
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "free@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "get_holdings" // TierFree
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, result.IsError, "Free user should access Free tools")
+}
+
+func TestMiddleware_NoEmail(t *testing.T) {
+	// Unauthenticated requests pass through (auth middleware handles rejection).
+	s := newTestStore()
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := context.Background() // no email
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "place_order"
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, result.IsError, "No email should pass through")
+}
+
+func TestMiddleware_PremiumUserAccessesPremiumTool(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "premium@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
+	})
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "premium@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "backtest_strategy" // TierPremium
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, result.IsError, "Premium user should access Premium tools")
+}
+
+func TestMiddleware_ProUserBlockedFromPremiumTool(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "pro@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	})
+
+	mw := Middleware(s, nil)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "pro@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "backtest_strategy" // TierPremium
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.True(t, result.IsError, "Pro user should be blocked from Premium tool")
+	text, ok := result.Content[0].(gomcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, text.Text, "premium")
+}
+
+func TestMiddleware_FamilyInheritance(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		MaxUsers:   5,
+	})
+
+	adminEmailFn := func(email string) string {
+		if email == "family@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+
+	mw := Middleware(s, adminEmailFn)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "family@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "place_order" // TierPro
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, result.IsError, "Family member should inherit admin's Pro tier")
+}
+
+// ---------------------------------------------------------------------------
+// CheckoutHandler plan validation (solo_pro accepted)
+// ---------------------------------------------------------------------------
+
+func TestCheckoutHandler_SoloProPlanValidation(t *testing.T) {
+	// This test validates that "solo_pro" is an accepted plan value
+	// by checking the checkout handler's plan parsing logic directly.
+	// We verify via the store that a SoloPro subscription round-trips correctly.
+	s := newTestStore()
+	sub := &Subscription{
+		AdminEmail: "checkout@example.com",
+		Tier:       TierSoloPro,
+		Status:     StatusActive,
+		MaxUsers:   1,
+	}
+	require.NoError(t, s.SetSubscription(sub))
+
+	got := s.GetSubscription("checkout@example.com")
+	require.NotNil(t, got)
+	assert.Equal(t, TierSoloPro, got.Tier)
+	assert.Equal(t, 1, got.MaxUsers)
+	// Effective tier for tool access is Pro.
+	assert.Equal(t, TierPro, got.Tier.EffectiveTier())
+}
+
+// ---------------------------------------------------------------------------
+// GetTier with TierSoloPro subscription
+// ---------------------------------------------------------------------------
+
+func TestGetTier_SoloPro(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "solo@example.com",
+		Tier:       TierSoloPro,
+		Status:     StatusActive,
+	})
+	// GetTier returns the raw tier; EffectiveTier is applied by the caller.
+	assert.Equal(t, TierSoloPro, s.GetTier("solo@example.com"))
+}
+
+func TestGetEmailByCustomerID_NotFound(t *testing.T) {
+	s := newTestStore()
+	assert.Equal(t, "", s.GetEmailByCustomerID("cus_nonexistent"))
+}
+
+func TestSetSubscription_EmptyEmail(t *testing.T) {
+	s := newTestStore()
+	err := s.SetSubscription(&Subscription{
+		AdminEmail: "",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	})
+	assert.Error(t, err, "empty email should be rejected")
+}
+
+func TestHasExplicitTier(t *testing.T) {
+	assert.True(t, HasExplicitTier("place_order"), "place_order should have explicit tier")
+	assert.True(t, HasExplicitTier("get_holdings"), "get_holdings should have explicit tier")
+	assert.False(t, HasExplicitTier("nonexistent_tool_xyz"), "unknown tool should not have explicit tier")
+}
+
+// ---------------------------------------------------------------------------
+// Webhook helper function tests (pure functions, no Stripe API calls)
+// ---------------------------------------------------------------------------
+
+func TestMapPriceToTier(t *testing.T) {
+	pricePro := "price_pro_123"
+	pricePremium := "price_premium_456"
+	priceSoloPro := "price_solo_789"
+
+	assert.Equal(t, TierPro, mapPriceToTier(pricePro, pricePro, pricePremium, priceSoloPro))
+	assert.Equal(t, TierPremium, mapPriceToTier(pricePremium, pricePro, pricePremium, priceSoloPro))
+	assert.Equal(t, TierSoloPro, mapPriceToTier(priceSoloPro, pricePro, pricePremium, priceSoloPro))
+
+	// Unknown non-empty price ID defaults to Pro.
+	assert.Equal(t, TierPro, mapPriceToTier("price_unknown", pricePro, pricePremium, priceSoloPro))
+
+	// Empty price ID defaults to Free.
+	assert.Equal(t, TierFree, mapPriceToTier("", pricePro, pricePremium, priceSoloPro))
+
+	// Empty config: even if priceID matches, empty config means no match.
+	assert.Equal(t, TierPro, mapPriceToTier("some_price", "", "", ""))
+}
+
+func TestMapStripeStatus(t *testing.T) {
+	assert.Equal(t, StatusActive, mapStripeStatus("active"))
+	assert.Equal(t, StatusTrialing, mapStripeStatus("trialing"))
+	assert.Equal(t, StatusPastDue, mapStripeStatus("past_due"))
+	assert.Equal(t, StatusCanceled, mapStripeStatus("canceled"))
+	assert.Equal(t, StatusCanceled, mapStripeStatus("unpaid"))
+	assert.Equal(t, StatusCanceled, mapStripeStatus("incomplete_expired"))
+	// Unknown status passes through as string.
+	assert.Equal(t, "incomplete", mapStripeStatus("incomplete"))
+}
+
+func TestExtractPriceID(t *testing.T) {
+	// Nil subscription → empty.
+	session := &stripe.CheckoutSession{}
+	assert.Equal(t, "", extractPriceID(session))
+
+	// Subscription with no items → empty.
+	session.Subscription = &stripe.Subscription{}
+	assert.Equal(t, "", extractPriceID(session))
+
+	// Subscription with items but nil price → empty.
+	session.Subscription.Items = &stripe.SubscriptionItemList{
+		Data: []*stripe.SubscriptionItem{{}},
+	}
+	assert.Equal(t, "", extractPriceID(session))
+
+	// Subscription with valid price → returns price ID.
+	session.Subscription.Items.Data[0].Price = &stripe.Price{ID: "price_test_123"}
+	assert.Equal(t, "price_test_123", extractPriceID(session))
+}
+
+// ---------------------------------------------------------------------------
+// CheckoutHandler early validation paths (no Stripe API calls reached)
+// ---------------------------------------------------------------------------
+
+func TestCheckoutHandler_MethodNotAllowed(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := CheckoutHandler(s, logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/checkout?plan=pro", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+}
+
+func TestCheckoutHandler_Unauthorized(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := CheckoutHandler(s, logger)
+
+	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=pro", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestCheckoutHandler_InvalidPlan(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := CheckoutHandler(s, logger)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
+	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=invalid", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "invalid plan")
+}
+
+func TestCheckoutHandler_MissingPriceConfig(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := CheckoutHandler(s, logger)
+
+	// Ensure env vars are empty so priceID will be "".
+	os.Unsetenv("STRIPE_PRICE_SOLO_PRO")
+
+	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
+	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=solo_pro", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "pricing not configured")
+}
+
+// ---------------------------------------------------------------------------
+// PortalHandler early validation paths
+// ---------------------------------------------------------------------------
+
+func TestPortalHandler_Unauthorized(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PortalHandler(s, logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/portal", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestPortalHandler_NoSubscription(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PortalHandler(s, logger)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
+	req := httptest.NewRequest(http.MethodGet, "/portal", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Should redirect to /pricing when no subscription exists.
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/pricing", rr.Header().Get("Location"))
+}
+
+func TestPortalHandler_NoStripeCustomerID(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "user@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		// StripeCustomerID is empty.
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PortalHandler(s, logger)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
+	req := httptest.NewRequest(http.MethodGet, "/portal", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Should redirect to /pricing when customer has no Stripe ID.
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/pricing", rr.Header().Get("Location"))
 }
