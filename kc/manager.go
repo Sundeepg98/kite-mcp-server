@@ -347,6 +347,14 @@ func New(cfg Config) (*Manager, error) {
 	m.portfolioSvc = NewPortfolioService(m.sessionSvc, cfg.Logger)
 	m.orderSvc = NewOrderService(m.sessionSvc, cfg.Logger)
 
+	// Initialize alert service (wraps alert-related components)
+	m.alertSvc = NewAlertService(AlertServiceConfig{
+		AlertStore:       m.alertStore,
+		AlertEvaluator:   m.alertEvaluator,
+		TrailingStopMgr:  m.trailingStopMgr,
+		TelegramNotifier: m.telegramNotifier,
+	})
+
 	// Session persistence: share the same DB (if available)
 	if m.alertDB != nil {
 		m.sessionManager.SetDB(&sessionDBAdapter{db: m.alertDB})
@@ -423,6 +431,7 @@ type Manager struct {
 	sessionSvc     *SessionService     // MCP session lifecycle
 	portfolioSvc   *PortfolioService   // portfolio queries (holdings, positions, margins, profile)
 	orderSvc       *OrderService       // order placement, modification, cancellation
+	alertSvc       *AlertService       // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
 	familyService  *FamilyService      // family billing (invite, remove, list, tier resolution)
 
 	Instruments    *instruments.Manager
@@ -488,6 +497,11 @@ func (m *Manager) PortfolioSvc() *PortfolioService {
 // OrderSvc returns the order management service.
 func (m *Manager) OrderSvc() *OrderService {
 	return m.orderSvc
+}
+
+// AlertSvc returns the alert lifecycle service.
+func (m *Manager) AlertSvc() *AlertService {
+	return m.alertSvc
 }
 
 // FamilyService returns the family billing service, or nil if not configured.
@@ -618,8 +632,9 @@ func (m *Manager) TokenStoreConcrete() *KiteTokenStore {
 
 // TelegramStore returns the per-user Telegram chat ID store.
 // The underlying alerts.Store satisfies both AlertStoreInterface and TelegramStoreInterface.
+// Delegates to AlertService.
 func (m *Manager) TelegramStore() TelegramStoreInterface {
-	return m.alertStore
+	return m.alertSvc.AlertStore()
 }
 
 
@@ -640,13 +655,15 @@ func (m *Manager) TickerServiceConcrete() *ticker.Service {
 }
 
 // AlertStore returns the per-user alert store (alert CRUD).
+// Delegates to AlertService.
 func (m *Manager) AlertStore() AlertStoreInterface {
-	return m.alertStore
+	return m.alertSvc.AlertStore()
 }
 
 // AlertStoreConcrete returns the concrete alert store (for internal wiring).
+// Delegates to AlertService.
 func (m *Manager) AlertStoreConcrete() *alerts.Store {
-	return m.alertStore
+	return m.alertSvc.AlertStore()
 }
 
 // WatchlistStore returns the per-user watchlist store.
@@ -720,8 +737,9 @@ func truncKey(s string, n int) string {
 
 
 // TelegramNotifier returns the Telegram notifier (nil if not configured).
+// Delegates to AlertService.
 func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
-	return m.telegramNotifier
+	return m.alertSvc.TelegramNotifier()
 }
 
 // InstrumentsManager returns the instruments manager.
@@ -741,18 +759,21 @@ func (m *Manager) IsTokenValid(email string) bool {
 }
 
 // TrailingStopManager returns the trailing stop manager (nil if not initialized).
+// Delegates to AlertService.
 func (m *Manager) TrailingStopManager() *alerts.TrailingStopManager {
-	return m.trailingStopMgr
+	return m.alertSvc.TrailingStopManager()
 }
 
 // PnLService returns the P&L snapshot service (nil if not initialized).
+// Delegates to AlertService.
 func (m *Manager) PnLService() *alerts.PnLSnapshotService {
-	return m.pnlService
+	return m.alertSvc.PnLService()
 }
 
 // SetPnLService sets the P&L snapshot service (called from app layer after initialization).
+// Delegates to AlertService.
 func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
-	m.pnlService = svc
+	m.alertSvc.SetPnLService(svc)
 }
 
 // AuditStore returns the audit trail store, or nil if not configured.

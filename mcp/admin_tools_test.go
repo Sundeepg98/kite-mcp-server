@@ -366,3 +366,102 @@ func TestFamilyInviteFlow(t *testing.T) {
 	// This should fail because family@example.com isn't linked yet (just invited)
 	assert.True(t, result.IsError, "remove unlinked member should fail")
 }
+
+// ---------------------------------------------------------------------------
+// Integration tests — full admin workflows
+// ---------------------------------------------------------------------------
+
+func TestAdminWorkflow_SuspendActivateFreeze(t *testing.T) {
+	manager := newAdminTestManager(t)
+	seedUsers(t, manager)
+
+	// 1. Admin lists users — should see both admin and trader
+	result := callAdminTool(t, manager, "admin_list_users", "admin@example.com", nil)
+	assert.False(t, result.IsError)
+
+	// 2. Admin gets trader details
+	result = callAdminTool(t, manager, "admin_get_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+	})
+	assert.False(t, result.IsError)
+
+	// 3. Admin freezes trader
+	result = callAdminTool(t, manager, "admin_freeze_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"reason":       "suspicious activity",
+		"confirm":      true,
+	})
+	assert.False(t, result.IsError)
+
+	// 4. Admin checks risk status — trader should be frozen
+	result = callAdminTool(t, manager, "admin_get_risk_status", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+	})
+	assert.False(t, result.IsError)
+
+	// 5. Admin unfreezes trader
+	result = callAdminTool(t, manager, "admin_unfreeze_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+	})
+	assert.False(t, result.IsError)
+
+	// 6. Admin suspends trader
+	result = callAdminTool(t, manager, "admin_suspend_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"reason":       "TOS violation",
+		"confirm":      true,
+	})
+	assert.False(t, result.IsError)
+
+	// 7. Admin activates trader
+	result = callAdminTool(t, manager, "admin_activate_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+	})
+	assert.False(t, result.IsError)
+
+	// 8. Admin checks server status
+	result = callAdminTool(t, manager, "admin_server_status", "admin@example.com", nil)
+	assert.False(t, result.IsError)
+}
+
+func TestAdminWorkflow_RoleChanges(t *testing.T) {
+	manager := newAdminTestManager(t)
+	seedUsers(t, manager)
+
+	// Create a second admin so we can test demotion
+	uStore := manager.UserStoreConcrete()
+	require.NoError(t, uStore.Create(&users.User{
+		ID:     "u_admin2",
+		Email:  "admin2@example.com",
+		Role:   users.RoleAdmin,
+		Status: users.StatusActive,
+	}))
+
+	// 1. Change trader to viewer
+	result := callAdminTool(t, manager, "admin_change_role", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"role":         "viewer",
+	})
+	assert.False(t, result.IsError)
+
+	// 2. Change viewer back to trader
+	result = callAdminTool(t, manager, "admin_change_role", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"role":         "trader",
+	})
+	assert.False(t, result.IsError)
+
+	// 3. Promote trader to admin
+	result = callAdminTool(t, manager, "admin_change_role", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"role":         "admin",
+	})
+	assert.False(t, result.IsError)
+
+	// 4. Now demote admin2 (should work — 3 admins remain)
+	result = callAdminTool(t, manager, "admin_change_role", "admin@example.com", map[string]any{
+		"target_email": "admin2@example.com",
+		"role":         "trader",
+	})
+	assert.False(t, result.IsError)
+}

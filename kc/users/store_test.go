@@ -418,3 +418,34 @@ func TestStore_CaseInsensitive(t *testing.T) {
 	assert.True(t, s.IsAdmin("mixed@example.com") == false) // exists but not admin
 	assert.Equal(t, StatusActive, s.GetStatus("MIXED@example.com"))
 }
+
+func TestSetAdminEmail(t *testing.T) {
+	t.Parallel()
+	s := NewStore()
+	s.EnsureUser("family@example.com", "", "", "google_sso")
+
+	err := s.SetAdminEmail("family@example.com", "admin@example.com")
+	require.NoError(t, err)
+
+	u, ok := s.Get("family@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "admin@example.com", u.AdminEmail)
+}
+
+func TestListByAdminEmail(t *testing.T) {
+	t.Parallel()
+	s := NewStore()
+	s.EnsureUser("member1@example.com", "", "", "invite")
+	s.EnsureUser("member2@example.com", "", "", "invite")
+	s.EnsureUser("unlinked@example.com", "", "", "self")
+
+	_ = s.SetAdminEmail("member1@example.com", "admin@example.com")
+	_ = s.SetAdminEmail("member2@example.com", "admin@example.com")
+
+	members := s.ListByAdminEmail("admin@example.com")
+	assert.Len(t, members, 2)
+
+	// Unlinked user should not appear
+	members = s.ListByAdminEmail("nobody@example.com")
+	assert.Len(t, members, 0)
+}
