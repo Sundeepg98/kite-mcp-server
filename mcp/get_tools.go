@@ -224,17 +224,15 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		// NOTE: GTT operations use session.Kite.Client directly (Kite-specific, deferred
-		// from broker.Client abstraction). GTT types involve nested trigger interfaces
-		// (single-leg, two-leg) that are tightly coupled to the Kite SDK.
-		gttBook, err := session.Kite.Client.GetGTTs()
+		uc := usecases.NewGetGTTsUseCase(manager.SessionSvc(), manager.Logger)
+		gtts, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 
 		// Convert to []interface{} for generic pagination
-		result := make([]interface{}, len(gttBook))
-		for i, gtt := range gttBook {
+		result := make([]interface{}, len(gtts))
+		for i, gtt := range gtts {
 			result[i] = gtt
 		}
 		return result, nil

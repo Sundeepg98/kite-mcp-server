@@ -33,10 +33,12 @@ type Client struct {
 	prices    map[string]float64 // "EXCHANGE:SYMBOL" → last price
 	ohlc      map[string]broker.OHLC
 	quotes    map[string]broker.Quote
+	gtts      []broker.GTTOrder
 
 	// Auto-incrementing order/trade IDs.
-	nextOrderID atomic.Int64
-	nextTradeID atomic.Int64
+	nextOrderID   atomic.Int64
+	nextTradeID   atomic.Int64
+	nextTriggerID atomic.Int64
 
 	// Error injection: set any of these to force the corresponding method
 	// to return the error without performing any work.
@@ -56,6 +58,10 @@ type Client struct {
 	GetHistoricalErr  error
 	GetQuotesErr      error
 	GetOrderTradesErr error
+	GetGTTsErr        error
+	PlaceGTTErr       error
+	ModifyGTTErr      error
+	DeleteGTTErr      error
 }
 
 // New creates a ready-to-use mock Client with sensible defaults.
@@ -82,6 +88,7 @@ func New() *Client {
 	}
 	c.nextOrderID.Store(100000)
 	c.nextTradeID.Store(200000)
+	c.nextTriggerID.Store(300000)
 	return c
 }
 
@@ -501,4 +508,136 @@ func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
 		return nil, fmt.Errorf("no trades found for order %s", orderID)
 	}
 	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// GTT operations
+// ---------------------------------------------------------------------------
+
+// SetGTTs replaces all GTT orders in the mock.
+func (c *Client) SetGTTs(g []broker.GTTOrder) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.gtts = g
+}
+
+// GTTs returns a copy of the current GTT orders (for test assertions).
+func (c *Client) GTTs() []broker.GTTOrder {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]broker.GTTOrder, len(c.gtts))
+	copy(out, c.gtts)
+	return out
+}
+
+// GetGTTs returns all GTT orders in the mock.
+func (c *Client) GetGTTs() ([]broker.GTTOrder, error) {
+	if c.GetGTTsErr != nil {
+		return nil, c.GetGTTsErr
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]broker.GTTOrder, len(c.gtts))
+	copy(out, c.gtts)
+	return out, nil
+}
+
+// PlaceGTT creates a GTT order in memory and returns a generated trigger ID.
+func (c *Client) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
+	if c.PlaceGTTErr != nil {
+		return broker.GTTResponse{}, c.PlaceGTTErr
+	}
+
+	id := int(c.nextTriggerID.Add(1))
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	gtt := broker.GTTOrder{
+		ID:   id,
+		Type: params.Type,
+		Condition: broker.GTTCondition{
+			Exchange:      params.Exchange,
+			Tradingsymbol: params.Tradingsymbol,
+			LastPrice:     params.LastPrice,
+		},
+		Status: "active",
+	}
+
+	// Build trigger values and order legs based on type.
+	switch params.Type {
+	case "single":
+		gtt.Condition.TriggerValues = []float64{params.TriggerValue}
+		gtt.Orders = []broker.GTTOrderLeg{{
+			Exchange:        params.Exchange,
+			Tradingsymbol:   params.Tradingsymbol,
+			TransactionType: params.TransactionType,
+			Quantity:        int(params.Quantity),
+			OrderType:       "LIMIT",
+			Price:           params.LimitPrice,
+			Product:         params.Product,
+		}}
+	case "two-leg":
+		gtt.Condition.TriggerValues = []float64{params.LowerTriggerValue, params.UpperTriggerValue}
+		gtt.Orders = []broker.GTTOrderLeg{
+			{
+				Exchange:        params.Exchange,
+				Tradingsymbol:   params.Tradingsymbol,
+				TransactionType: params.TransactionType,
+				Quantity:        int(params.LowerQuantity),
+				OrderType:       "LIMIT",
+				Price:           params.LowerLimitPrice,
+				Product:         params.Product,
+			},
+			{
+				Exchange:        params.Exchange,
+				Tradingsymbol:   params.Tradingsymbol,
+				TransactionType: params.TransactionType,
+				Quantity:        int(params.UpperQuantity),
+				OrderType:       "LIMIT",
+				Price:           params.UpperLimitPrice,
+				Product:         params.Product,
+			},
+		}
+	}
+
+	c.gtts = append(c.gtts, gtt)
+	return broker.GTTResponse{TriggerID: id}, nil
+}
+
+// ModifyGTT modifies a GTT order in memory.
+func (c *Client) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTResponse, error) {
+	if c.ModifyGTTErr != nil {
+		return broker.GTTResponse{}, c.ModifyGTTErr
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i := range c.gtts {
+		if c.gtts[i].ID == triggerID {
+			c.gtts[i].Type = params.Type
+			c.gtts[i].Condition.LastPrice = params.LastPrice
+			return broker.GTTResponse{TriggerID: triggerID}, nil
+		}
+	}
+	return broker.GTTResponse{}, fmt.Errorf("GTT trigger %d not found", triggerID)
+}
+
+// DeleteGTT removes a GTT order from memory.
+func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
+	if c.DeleteGTTErr != nil {
+		return broker.GTTResponse{}, c.DeleteGTTErr
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i := range c.gtts {
+		if c.gtts[i].ID == triggerID {
+			c.gtts = append(c.gtts[:i], c.gtts[i+1:]...)
+			return broker.GTTResponse{TriggerID: triggerID}, nil
+		}
+	}
+	return broker.GTTResponse{}, fmt.Errorf("GTT trigger %d not found", triggerID)
 }

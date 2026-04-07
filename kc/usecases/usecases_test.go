@@ -120,6 +120,18 @@ func (m *mockBrokerClient) GetQuotes(instruments ...string) (map[string]broker.Q
 func (m *mockBrokerClient) GetOrderTrades(orderID string) ([]broker.Trade, error) {
 	return nil, nil
 }
+func (m *mockBrokerClient) GetGTTs() ([]broker.GTTOrder, error) {
+	return nil, nil
+}
+func (m *mockBrokerClient) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
+	return broker.GTTResponse{TriggerID: 1}, nil
+}
+func (m *mockBrokerClient) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTResponse, error) {
+	return broker.GTTResponse{TriggerID: triggerID}, nil
+}
+func (m *mockBrokerClient) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
+	return broker.GTTResponse{TriggerID: triggerID}, nil
+}
 
 // mockAlertStore is a minimal in-memory alert store.
 type mockAlertStore struct {

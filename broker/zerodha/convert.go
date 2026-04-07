@@ -1,6 +1,8 @@
 package zerodha
 
 import (
+	"fmt"
+
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 )
@@ -245,4 +247,84 @@ func convertHistoricalData(data []kiteconnect.HistoricalData) []broker.Historica
 		}
 	}
 	return out
+}
+
+// --- GTT (kite -> broker) ---
+
+func convertGTTs(gtts kiteconnect.GTTs) []broker.GTTOrder {
+	out := make([]broker.GTTOrder, len(gtts))
+	for i, g := range gtts {
+		out[i] = convertGTT(g)
+	}
+	return out
+}
+
+func convertGTT(g kiteconnect.GTT) broker.GTTOrder {
+	legs := make([]broker.GTTOrderLeg, len(g.Orders))
+	for i, o := range g.Orders {
+		legs[i] = broker.GTTOrderLeg{
+			Exchange:        o.Exchange,
+			Tradingsymbol:   o.TradingSymbol,
+			TransactionType: o.TransactionType,
+			Quantity:        int(o.Quantity),
+			OrderType:       o.OrderType,
+			Price:           o.Price,
+			Product:         o.Product,
+		}
+	}
+	return broker.GTTOrder{
+		ID:   g.ID,
+		Type: string(g.Type),
+		Condition: broker.GTTCondition{
+			Exchange:      g.Condition.Exchange,
+			Tradingsymbol: g.Condition.Tradingsymbol,
+			TriggerValues: g.Condition.TriggerValues,
+			LastPrice:     g.Condition.LastPrice,
+		},
+		Orders:    legs,
+		Status:    g.Status,
+		CreatedAt: g.CreatedAt.Time.Format("2006-01-02 15:04:05"),
+		UpdatedAt: g.UpdatedAt.Time.Format("2006-01-02 15:04:05"),
+		ExpiresAt: g.ExpiresAt.Time.Format("2006-01-02 15:04:05"),
+	}
+}
+
+// --- GTTParams (broker -> kite) ---
+
+func convertGTTParamsToKite(p broker.GTTParams) (kiteconnect.GTTParams, error) {
+	kp := kiteconnect.GTTParams{
+		Exchange:        p.Exchange,
+		Tradingsymbol:   p.Tradingsymbol,
+		LastPrice:       p.LastPrice,
+		TransactionType: p.TransactionType,
+		Product:         p.Product,
+	}
+
+	switch p.Type {
+	case "single":
+		kp.Trigger = &kiteconnect.GTTSingleLegTrigger{
+			TriggerParams: kiteconnect.TriggerParams{
+				TriggerValue: p.TriggerValue,
+				Quantity:     p.Quantity,
+				LimitPrice:   p.LimitPrice,
+			},
+		}
+	case "two-leg":
+		kp.Trigger = &kiteconnect.GTTOneCancelsOtherTrigger{
+			Upper: kiteconnect.TriggerParams{
+				TriggerValue: p.UpperTriggerValue,
+				Quantity:     p.UpperQuantity,
+				LimitPrice:   p.UpperLimitPrice,
+			},
+			Lower: kiteconnect.TriggerParams{
+				TriggerValue: p.LowerTriggerValue,
+				Quantity:     p.LowerQuantity,
+				LimitPrice:   p.LowerLimitPrice,
+			},
+		}
+	default:
+		return kp, fmt.Errorf("invalid GTT type: %q (must be \"single\" or \"two-leg\")", p.Type)
+	}
+
+	return kp, nil
 }

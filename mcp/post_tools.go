@@ -471,63 +471,49 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		// Set up basic GTT params
-		gttParams := kiteconnect.GTTParams{
-			Exchange:        SafeAssertString(args["exchange"], "NSE"),
-			Tradingsymbol:   SafeAssertString(args["tradingsymbol"], ""),
-			LastPrice:       SafeAssertFloat64(args["last_price"], 0.0),
-			TransactionType: SafeAssertString(args["transaction_type"], ""),
-			Product:         SafeAssertString(args["product"], ""),
-		}
-
-		// Set up trigger based on trigger_type
 		triggerType := SafeAssertString(args["trigger_type"], "")
 
+		// Validate trigger-type-specific fields before session lookup.
 		switch triggerType {
 		case "single":
 			triggerValue := SafeAssertFloat64(args["trigger_value"], 0.0)
 			if triggerValue <= 0 {
 				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
 			}
-			gttParams.Trigger = &kiteconnect.GTTSingleLegTrigger{
-				TriggerParams: kiteconnect.TriggerParams{
-					TriggerValue: triggerValue,
-					Quantity:     SafeAssertFloat64(args["quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["limit_price"], 0.0),
-				},
-			}
 		case "two-leg":
-			upperTriggerValue := SafeAssertFloat64(args["upper_trigger_value"], 0.0)
-			lowerTriggerValue := SafeAssertFloat64(args["lower_trigger_value"], 0.0)
-			if upperTriggerValue <= 0 {
+			if SafeAssertFloat64(args["upper_trigger_value"], 0.0) <= 0 {
 				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
 			}
-			if lowerTriggerValue <= 0 {
+			if SafeAssertFloat64(args["lower_trigger_value"], 0.0) <= 0 {
 				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
-			}
-			gttParams.Trigger = &kiteconnect.GTTOneCancelsOtherTrigger{
-				Upper: kiteconnect.TriggerParams{
-					TriggerValue: upperTriggerValue,
-					Quantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
-				},
-				Lower: kiteconnect.TriggerParams{
-					TriggerValue: lowerTriggerValue,
-					Quantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
-				},
 			}
 		default:
 			return mcp.NewToolResultError("Invalid trigger_type. Must be 'single' or 'two-leg'"), nil
 		}
 
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GTT operations use session.Kite.Client directly (Kite-specific, deferred
-			// from broker.Client abstraction). GTT types involve nested trigger interfaces
-			// (single-leg, two-leg) that are tightly coupled to the Kite SDK.
-			resp, err := session.Kite.Client.PlaceGTT(gttParams)
+			cmd := cqrs.PlaceGTTCommand{
+				Email:             session.Email,
+				Exchange:          SafeAssertString(args["exchange"], "NSE"),
+				Tradingsymbol:     SafeAssertString(args["tradingsymbol"], ""),
+				LastPrice:         SafeAssertFloat64(args["last_price"], 0.0),
+				TransactionType:   SafeAssertString(args["transaction_type"], ""),
+				Product:           SafeAssertString(args["product"], ""),
+				Type:              triggerType,
+				TriggerValue:      SafeAssertFloat64(args["trigger_value"], 0.0),
+				Quantity:          SafeAssertFloat64(args["quantity"], 0.0),
+				LimitPrice:        SafeAssertFloat64(args["limit_price"], 0.0),
+				UpperTriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
+				UpperQuantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
+				UpperLimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
+				LowerTriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
+				LowerQuantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
+				LowerLimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
+			}
+
+			uc := usecases.NewPlaceGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
-				handler.manager.Logger.Error("Failed to place GTT order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to place GTT order: %s", err.Error())), nil
 			}
 
@@ -567,11 +553,14 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		triggerID := SafeAssertInt(args["trigger_id"], 0)
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GTT operations use session.Kite.Client directly (Kite-specific, deferred
-			// from broker.Client abstraction).
-			resp, err := session.Kite.Client.DeleteGTT(triggerID)
+			cmd := cqrs.DeleteGTTCommand{
+				Email:     session.Email,
+				TriggerID: triggerID,
+			}
+
+			uc := usecases.NewDeleteGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
-				handler.manager.Logger.Error("Failed to delete GTT order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete GTT order: %s", err.Error())), nil
 			}
 
@@ -753,65 +742,49 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		// Get the trigger ID to modify
-		triggerID := SafeAssertInt(args["trigger_id"], 0)
-
-		// Set up basic GTT params
-		gttParams := kiteconnect.GTTParams{
-			Exchange:        SafeAssertString(args["exchange"], "NSE"),
-			Tradingsymbol:   SafeAssertString(args["tradingsymbol"], ""),
-			LastPrice:       SafeAssertFloat64(args["last_price"], 0.0),
-			TransactionType: SafeAssertString(args["transaction_type"], ""),
-			Product:         SafeAssertString(args["product"], ""),
-		}
-
-		// Set up trigger based on trigger_type
 		triggerType := SafeAssertString(args["trigger_type"], "")
 
+		// Validate trigger-type-specific fields before session lookup.
 		switch triggerType {
 		case "single":
-			triggerValue := SafeAssertFloat64(args["trigger_value"], 0.0)
-			if triggerValue <= 0 {
+			if SafeAssertFloat64(args["trigger_value"], 0.0) <= 0 {
 				return mcp.NewToolResultError("trigger_value must be greater than 0"), nil
 			}
-			gttParams.Trigger = &kiteconnect.GTTSingleLegTrigger{
-				TriggerParams: kiteconnect.TriggerParams{
-					TriggerValue: triggerValue,
-					Quantity:     SafeAssertFloat64(args["quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["limit_price"], 0.0),
-				},
-			}
 		case "two-leg":
-			upperTriggerValue := SafeAssertFloat64(args["upper_trigger_value"], 0.0)
-			lowerTriggerValue := SafeAssertFloat64(args["lower_trigger_value"], 0.0)
-			if upperTriggerValue <= 0 {
+			if SafeAssertFloat64(args["upper_trigger_value"], 0.0) <= 0 {
 				return mcp.NewToolResultError("upper_trigger_value must be greater than 0"), nil
 			}
-			if lowerTriggerValue <= 0 {
+			if SafeAssertFloat64(args["lower_trigger_value"], 0.0) <= 0 {
 				return mcp.NewToolResultError("lower_trigger_value must be greater than 0"), nil
-			}
-			gttParams.Trigger = &kiteconnect.GTTOneCancelsOtherTrigger{
-				Upper: kiteconnect.TriggerParams{
-					TriggerValue: upperTriggerValue,
-					Quantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
-				},
-				Lower: kiteconnect.TriggerParams{
-					TriggerValue: lowerTriggerValue,
-					Quantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
-					LimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
-				},
 			}
 		default:
 			return mcp.NewToolResultError("Invalid trigger_type. Must be 'single' or 'two-leg'"), nil
 		}
 
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GTT operations use session.Kite.Client directly (Kite-specific, deferred
-			// from broker.Client abstraction).
-			resp, err := session.Kite.Client.ModifyGTT(triggerID, gttParams)
+			cmd := cqrs.ModifyGTTCommand{
+				Email:             session.Email,
+				TriggerID:         SafeAssertInt(args["trigger_id"], 0),
+				Exchange:          SafeAssertString(args["exchange"], "NSE"),
+				Tradingsymbol:     SafeAssertString(args["tradingsymbol"], ""),
+				LastPrice:         SafeAssertFloat64(args["last_price"], 0.0),
+				TransactionType:   SafeAssertString(args["transaction_type"], ""),
+				Product:           SafeAssertString(args["product"], ""),
+				Type:              triggerType,
+				TriggerValue:      SafeAssertFloat64(args["trigger_value"], 0.0),
+				Quantity:          SafeAssertFloat64(args["quantity"], 0.0),
+				LimitPrice:        SafeAssertFloat64(args["limit_price"], 0.0),
+				UpperTriggerValue: SafeAssertFloat64(args["upper_trigger_value"], 0.0),
+				UpperQuantity:     SafeAssertFloat64(args["upper_quantity"], 0.0),
+				UpperLimitPrice:   SafeAssertFloat64(args["upper_limit_price"], 0.0),
+				LowerTriggerValue: SafeAssertFloat64(args["lower_trigger_value"], 0.0),
+				LowerQuantity:     SafeAssertFloat64(args["lower_quantity"], 0.0),
+				LowerLimitPrice:   SafeAssertFloat64(args["lower_limit_price"], 0.0),
+			}
+
+			uc := usecases.NewModifyGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
-				handler.manager.Logger.Error("Failed to modify GTT order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify GTT order: %s", err.Error())), nil
 			}
 

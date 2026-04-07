@@ -596,6 +596,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if auditMiddleware != nil {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
 	}
+	// Plugin hooks middleware runs registered before/after hooks around tool calls.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
 	// Riskguard middleware blocks orders exceeding safety limits.
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).

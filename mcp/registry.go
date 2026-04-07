@@ -1,6 +1,13 @@
 package mcp
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
 
 // ToolRegistry allows external packages to register custom MCP tools.
 // Tools are merged with built-in tools at server startup.
@@ -92,4 +99,19 @@ func ClearHooks() {
 	defer hooksMu.Unlock()
 	beforeHooks = beforeHooks[:0]
 	afterHooks = afterHooks[:0]
+}
+
+// HookMiddleware returns a ToolHandlerMiddleware that runs registered
+// before/after hooks around every tool invocation.
+func HookMiddleware() server.ToolHandlerMiddleware {
+	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if err := RunBeforeHooks(request.Params.Name, request.GetArguments()); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Hook blocked execution: %s", err.Error())), nil
+			}
+			result, err := next(ctx, request)
+			RunAfterHooks(request.Params.Name, request.GetArguments())
+			return result, err
+		}
+	}
 }

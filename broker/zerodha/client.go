@@ -175,3 +175,47 @@ func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
 	}
 	return convertTrades(kiteconnect.Trades(t)), nil
 }
+
+// GetGTTs returns all GTT orders.
+func (c *Client) GetGTTs() ([]broker.GTTOrder, error) {
+	gtts, err := c.kite.GetGTTs()
+	if err != nil {
+		return nil, err
+	}
+	return convertGTTs(gtts), nil
+}
+
+// PlaceGTT places a new GTT order.
+func (c *Client) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
+	kp, err := convertGTTParamsToKite(params)
+	if err != nil {
+		return broker.GTTResponse{}, err
+	}
+	resp, err := c.kite.PlaceGTT(kp)
+	if err != nil {
+		return broker.GTTResponse{}, err
+	}
+	return broker.GTTResponse{TriggerID: resp.TriggerID}, nil
+}
+
+// ModifyGTT modifies an existing GTT order.
+func (c *Client) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTResponse, error) {
+	kp, err := convertGTTParamsToKite(params)
+	if err != nil {
+		return broker.GTTResponse{}, err
+	}
+	resp, err := c.kite.ModifyGTT(triggerID, kp)
+	if err != nil {
+		return broker.GTTResponse{}, err
+	}
+	return broker.GTTResponse{TriggerID: resp.TriggerID}, nil
+}
+
+// DeleteGTT deletes an existing GTT order.
+func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
+	resp, err := c.kite.DeleteGTT(triggerID)
+	if err != nil {
+		return broker.GTTResponse{}, err
+	}
+	return broker.GTTResponse{TriggerID: resp.TriggerID}, nil
+}

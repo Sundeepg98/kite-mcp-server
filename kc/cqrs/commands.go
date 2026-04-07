@@ -45,6 +45,55 @@ type ModifyOrderCommand struct {
 	MarketProtection float64 `json:"market_protection,omitempty"`
 }
 
+// --- GTT commands ---
+
+// PlaceGTTCommand requests placing a new GTT order.
+type PlaceGTTCommand struct {
+	Email             string  `json:"email"`
+	Exchange          string  `json:"exchange"`
+	Tradingsymbol     string  `json:"tradingsymbol"`
+	LastPrice         float64 `json:"last_price"`
+	TransactionType   string  `json:"transaction_type"`
+	Product           string  `json:"product"`
+	Type              string  `json:"type"` // "single" or "two-leg"
+	TriggerValue      float64 `json:"trigger_value,omitempty"`
+	Quantity          float64 `json:"quantity,omitempty"`
+	LimitPrice        float64 `json:"limit_price,omitempty"`
+	UpperTriggerValue float64 `json:"upper_trigger_value,omitempty"`
+	UpperQuantity     float64 `json:"upper_quantity,omitempty"`
+	UpperLimitPrice   float64 `json:"upper_limit_price,omitempty"`
+	LowerTriggerValue float64 `json:"lower_trigger_value,omitempty"`
+	LowerQuantity     float64 `json:"lower_quantity,omitempty"`
+	LowerLimitPrice   float64 `json:"lower_limit_price,omitempty"`
+}
+
+// ModifyGTTCommand requests modifying an existing GTT order.
+type ModifyGTTCommand struct {
+	Email             string  `json:"email"`
+	TriggerID         int     `json:"trigger_id"`
+	Exchange          string  `json:"exchange"`
+	Tradingsymbol     string  `json:"tradingsymbol"`
+	LastPrice         float64 `json:"last_price"`
+	TransactionType   string  `json:"transaction_type"`
+	Product           string  `json:"product"`
+	Type              string  `json:"type"` // "single" or "two-leg"
+	TriggerValue      float64 `json:"trigger_value,omitempty"`
+	Quantity          float64 `json:"quantity,omitempty"`
+	LimitPrice        float64 `json:"limit_price,omitempty"`
+	UpperTriggerValue float64 `json:"upper_trigger_value,omitempty"`
+	UpperQuantity     float64 `json:"upper_quantity,omitempty"`
+	UpperLimitPrice   float64 `json:"upper_limit_price,omitempty"`
+	LowerTriggerValue float64 `json:"lower_trigger_value,omitempty"`
+	LowerQuantity     float64 `json:"lower_quantity,omitempty"`
+	LowerLimitPrice   float64 `json:"lower_limit_price,omitempty"`
+}
+
+// DeleteGTTCommand requests deleting an existing GTT order.
+type DeleteGTTCommand struct {
+	Email     string `json:"email"`
+	TriggerID int    `json:"trigger_id"`
+}
+
 // --- Alert commands ---
 
 // CreateAlertCommand requests creating a new price alert.

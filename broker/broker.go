@@ -174,6 +174,63 @@ type HistoricalCandle struct {
 	Volume int       `json:"volume"`
 }
 
+// GTTCondition represents the trigger condition for a GTT order.
+type GTTCondition struct {
+	Exchange      string    `json:"exchange"`
+	Tradingsymbol string    `json:"tradingsymbol"`
+	TriggerValues []float64 `json:"trigger_values"`
+	LastPrice     float64   `json:"last_price"`
+}
+
+// GTTOrderLeg represents a single order leg within a GTT.
+type GTTOrderLeg struct {
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Quantity        int     `json:"quantity"`
+	OrderType       string  `json:"order_type"`
+	Price           float64 `json:"price"`
+	Product         string  `json:"product"`
+}
+
+// GTTOrder represents a GTT (Good Till Triggered) order.
+type GTTOrder struct {
+	ID        int          `json:"id"`
+	Type      string       `json:"type"` // "single" or "two-leg"
+	Condition GTTCondition `json:"condition"`
+	Orders    []GTTOrderLeg `json:"orders"`
+	Status    string       `json:"status"`
+	CreatedAt string       `json:"created_at"`
+	UpdatedAt string       `json:"updated_at"`
+	ExpiresAt string       `json:"expires_at"`
+}
+
+// GTTParams contains parameters for placing or modifying a GTT order.
+type GTTParams struct {
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	LastPrice       float64 `json:"last_price"`
+	TransactionType string  `json:"transaction_type"`
+	Product         string  `json:"product"`
+	Type            string  `json:"type"` // "single" or "two-leg"
+	// For single-leg triggers:
+	TriggerValue float64 `json:"trigger_value,omitempty"`
+	Quantity     float64 `json:"quantity,omitempty"`
+	LimitPrice   float64 `json:"limit_price,omitempty"`
+	// For two-leg (OCO) triggers:
+	UpperTriggerValue float64 `json:"upper_trigger_value,omitempty"`
+	UpperQuantity     float64 `json:"upper_quantity,omitempty"`
+	UpperLimitPrice   float64 `json:"upper_limit_price,omitempty"`
+	LowerTriggerValue float64 `json:"lower_trigger_value,omitempty"`
+	LowerQuantity     float64 `json:"lower_quantity,omitempty"`
+	LowerLimitPrice   float64 `json:"lower_limit_price,omitempty"`
+}
+
+// GTTResponse is returned after placing or modifying a GTT order.
+type GTTResponse struct {
+	TriggerID int `json:"trigger_id"`
+}
+
 // Client is the core broker interface. Each broker implementation
 // (Zerodha, Angel One, Dhan, Upstox) must satisfy this contract.
 type Client interface {
@@ -227,4 +284,16 @@ type Client interface {
 
 	// GetOrderTrades returns executed trades for a specific order.
 	GetOrderTrades(orderID string) ([]Trade, error)
+
+	// GetGTTs returns all GTT (Good Till Triggered) orders.
+	GetGTTs() ([]GTTOrder, error)
+
+	// PlaceGTT places a new GTT order and returns the trigger ID.
+	PlaceGTT(params GTTParams) (GTTResponse, error)
+
+	// ModifyGTT modifies an existing GTT order.
+	ModifyGTT(triggerID int, params GTTParams) (GTTResponse, error)
+
+	// DeleteGTT deletes an existing GTT order.
+	DeleteGTT(triggerID int) (GTTResponse, error)
 }

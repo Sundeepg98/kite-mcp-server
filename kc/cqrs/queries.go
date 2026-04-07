@@ -87,6 +87,13 @@ type GetProfileQuery struct {
 	Email string `json:"email"`
 }
 
+// --- GTT queries ---
+
+// GetGTTsQuery requests all GTT orders for a user.
+type GetGTTsQuery struct {
+	Email string `json:"email"`
+}
+
 // --- Audit queries ---
 
 // GetAuditTrailQuery requests the tool call audit trail.
