@@ -37,66 +37,87 @@ func (c *Client) BrokerName() broker.Name {
 }
 
 // GetProfile returns the authenticated user's profile.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetProfile() (broker.Profile, error) {
-	p, err := c.kite.GetUserProfile()
-	if err != nil {
-		return broker.Profile{}, err
-	}
-	return convertProfile(p), nil
+	return retryOnTransient(func() (broker.Profile, error) {
+		p, err := c.kite.GetUserProfile()
+		if err != nil {
+			return broker.Profile{}, err
+		}
+		return convertProfile(p), nil
+	}, 2)
 }
 
 // GetMargins returns margin/funds information.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetMargins() (broker.Margins, error) {
-	m, err := c.kite.GetUserMargins()
-	if err != nil {
-		return broker.Margins{}, err
-	}
-	return convertMargins(m), nil
+	return retryOnTransient(func() (broker.Margins, error) {
+		m, err := c.kite.GetUserMargins()
+		if err != nil {
+			return broker.Margins{}, err
+		}
+		return convertMargins(m), nil
+	}, 2)
 }
 
 // GetHoldings returns the user's portfolio holdings.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetHoldings() ([]broker.Holding, error) {
-	h, err := c.kite.GetHoldings()
-	if err != nil {
-		return nil, err
-	}
-	return convertHoldings(h), nil
+	return retryOnTransient(func() ([]broker.Holding, error) {
+		h, err := c.kite.GetHoldings()
+		if err != nil {
+			return nil, err
+		}
+		return convertHoldings(h), nil
+	}, 2)
 }
 
 // GetPositions returns current day and net positions.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetPositions() (broker.Positions, error) {
-	p, err := c.kite.GetPositions()
-	if err != nil {
-		return broker.Positions{}, err
-	}
-	return convertPositions(p), nil
+	return retryOnTransient(func() (broker.Positions, error) {
+		p, err := c.kite.GetPositions()
+		if err != nil {
+			return broker.Positions{}, err
+		}
+		return convertPositions(p), nil
+	}, 2)
 }
 
 // GetOrders returns all orders for the current trading day.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetOrders() ([]broker.Order, error) {
-	o, err := c.kite.GetOrders()
-	if err != nil {
-		return nil, err
-	}
-	return convertOrders(o), nil
+	return retryOnTransient(func() ([]broker.Order, error) {
+		o, err := c.kite.GetOrders()
+		if err != nil {
+			return nil, err
+		}
+		return convertOrders(o), nil
+	}, 2)
 }
 
 // GetOrderHistory returns the state history of a specific order.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetOrderHistory(orderID string) ([]broker.Order, error) {
-	o, err := c.kite.GetOrderHistory(orderID)
-	if err != nil {
-		return nil, err
-	}
-	return convertOrders(kiteconnect.Orders(o)), nil
+	return retryOnTransient(func() ([]broker.Order, error) {
+		o, err := c.kite.GetOrderHistory(orderID)
+		if err != nil {
+			return nil, err
+		}
+		return convertOrders(kiteconnect.Orders(o)), nil
+	}, 2)
 }
 
 // GetTrades returns all executed trades for the day.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetTrades() ([]broker.Trade, error) {
-	t, err := c.kite.GetTrades()
-	if err != nil {
-		return nil, err
-	}
-	return convertTrades(t), nil
+	return retryOnTransient(func() ([]broker.Trade, error) {
+		t, err := c.kite.GetTrades()
+		if err != nil {
+			return nil, err
+		}
+		return convertTrades(t), nil
+	}, 2)
 }
 
 // PlaceOrder places a new order and returns the order ID.
@@ -141,57 +162,75 @@ func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderRespon
 }
 
 // GetLTP returns the last traded price for the given instruments.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetLTP(instruments ...string) (map[string]broker.LTP, error) {
-	q, err := c.kite.GetLTP(instruments...)
-	if err != nil {
-		return nil, err
-	}
-	return convertLTP(q), nil
+	return retryOnTransient(func() (map[string]broker.LTP, error) {
+		q, err := c.kite.GetLTP(instruments...)
+		if err != nil {
+			return nil, err
+		}
+		return convertLTP(q), nil
+	}, 2)
 }
 
 // GetOHLC returns OHLC data for the given instruments.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetOHLC(instruments ...string) (map[string]broker.OHLC, error) {
-	q, err := c.kite.GetOHLC(instruments...)
-	if err != nil {
-		return nil, err
-	}
-	return convertOHLC(q), nil
+	return retryOnTransient(func() (map[string]broker.OHLC, error) {
+		q, err := c.kite.GetOHLC(instruments...)
+		if err != nil {
+			return nil, err
+		}
+		return convertOHLC(q), nil
+	}, 2)
 }
 
 // GetHistoricalData returns historical candle data for an instrument.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]broker.HistoricalCandle, error) {
-	data, err := c.kite.GetHistoricalData(instrumentToken, interval, from, to, false, false)
-	if err != nil {
-		return nil, err
-	}
-	return convertHistoricalData(data), nil
+	return retryOnTransient(func() ([]broker.HistoricalCandle, error) {
+		data, err := c.kite.GetHistoricalData(instrumentToken, interval, from, to, false, false)
+		if err != nil {
+			return nil, err
+		}
+		return convertHistoricalData(data), nil
+	}, 2)
 }
 
 // GetQuotes returns full market quotes for the given instruments.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
-	q, err := c.kite.GetQuote(instruments...)
-	if err != nil {
-		return nil, err
-	}
-	return convertQuotes(q), nil
+	return retryOnTransient(func() (map[string]broker.Quote, error) {
+		q, err := c.kite.GetQuote(instruments...)
+		if err != nil {
+			return nil, err
+		}
+		return convertQuotes(q), nil
+	}, 2)
 }
 
 // GetOrderTrades returns executed trades for a specific order.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
-	t, err := c.kite.GetOrderTrades(orderID)
-	if err != nil {
-		return nil, err
-	}
-	return convertTrades(kiteconnect.Trades(t)), nil
+	return retryOnTransient(func() ([]broker.Trade, error) {
+		t, err := c.kite.GetOrderTrades(orderID)
+		if err != nil {
+			return nil, err
+		}
+		return convertTrades(kiteconnect.Trades(t)), nil
+	}, 2)
 }
 
 // GetGTTs returns all GTT orders.
+// Retries up to 2 times on transient network errors.
 func (c *Client) GetGTTs() ([]broker.GTTOrder, error) {
-	gtts, err := c.kite.GetGTTs()
-	if err != nil {
-		return nil, err
-	}
-	return convertGTTs(gtts), nil
+	return retryOnTransient(func() ([]broker.GTTOrder, error) {
+		gtts, err := c.kite.GetGTTs()
+		if err != nil {
+			return nil, err
+		}
+		return convertGTTs(gtts), nil
+	}, 2)
 }
 
 // PlaceGTT places a new GTT order.

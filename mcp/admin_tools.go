@@ -635,6 +635,16 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		guard.Freeze(targetEmail, adminEmail, reason)
 
+		// Dispatch domain event so subscribers (audit, notifications) are notified.
+		if ed := manager.EventDispatcher(); ed != nil {
+			ed.Dispatch(domain.UserFrozenEvent{
+				Email:    targetEmail,
+				FrozenBy: "admin",
+				Reason:   reason,
+				Timestamp: time.Now(),
+			})
+		}
+
 		return handler.MarshalResponse(map[string]string{
 			"status": "frozen",
 			"email":  targetEmail,

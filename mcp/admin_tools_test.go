@@ -4,12 +4,14 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -464,4 +466,45 @@ func TestAdminWorkflow_RoleChanges(t *testing.T) {
 		"role":         "trader",
 	})
 	assert.False(t, result.IsError)
+}
+
+// ---------------------------------------------------------------------------
+// E2E test: admin_freeze_user tool → riskguard state change + event dispatch
+// ---------------------------------------------------------------------------
+
+func TestE2E_FreezeUser_DispatchesEvent(t *testing.T) {
+	manager := newAdminTestManager(t)
+	seedUsers(t, manager)
+
+	// Wire up an EventDispatcher and subscribe to "user.frozen" events.
+	ed := domain.NewEventDispatcher()
+	manager.SetEventDispatcher(ed)
+
+	var mu sync.Mutex
+	var dispatched []string
+	ed.Subscribe("user.frozen", func(event domain.Event) {
+		mu.Lock()
+		defer mu.Unlock()
+		dispatched = append(dispatched, event.EventType())
+	})
+
+	// Call admin_freeze_user tool.
+	result := callAdminTool(t, manager, "admin_freeze_user", "admin@example.com", map[string]any{
+		"target_email": "trader@example.com",
+		"reason":       "E2E test",
+		"confirm":      true,
+	})
+	assert.False(t, result.IsError, "admin_freeze_user should succeed")
+
+	// Verify: user is frozen in riskguard.
+	rg := manager.RiskGuard()
+	require.NotNil(t, rg, "RiskGuard should be wired")
+	status := rg.GetUserStatus("trader@example.com")
+	assert.True(t, status.IsFrozen, "trader should be frozen after admin_freeze_user")
+	assert.Equal(t, "admin@example.com", status.FrozenBy)
+
+	// Verify: user.frozen event was dispatched.
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"user.frozen"}, dispatched, "expected exactly one user.frozen event")
 }
