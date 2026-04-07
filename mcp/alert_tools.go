@@ -10,9 +10,25 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// instrumentResolverAdapter adapts instruments.Manager to satisfy usecases.InstrumentResolver.
+type instrumentResolverAdapter struct {
+	mgr *instruments.Manager
+}
+
+func (a *instrumentResolverAdapter) GetInstrumentToken(exchange, tradingsymbol string) (uint32, error) {
+	inst, err := a.mgr.GetByTradingsymbol(exchange, tradingsymbol)
+	if err != nil {
+		return 0, err
+	}
+	return inst.InstrumentToken, nil
+}
 
 // SetupTelegramTool registers the user's Telegram chat ID for alert notifications.
 type SetupTelegramTool struct{}
@@ -165,7 +181,19 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			referencePrice = ltpData.LastPrice
 		}
 
-		alertID, err := manager.AlertStore().AddWithReferencePrice(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction, referencePrice)
+		uc := usecases.NewCreateAlertUseCase(
+			manager.AlertStore(),
+			&instrumentResolverAdapter{mgr: manager.Instruments},
+			manager.Logger,
+		)
+		alertID, err := uc.Execute(ctx, cqrs.CreateAlertCommand{
+			Email:          email,
+			Tradingsymbol:  tradingsymbol,
+			Exchange:       exchange,
+			TargetPrice:    targetPrice,
+			Direction:      directionStr,
+			ReferencePrice: referencePrice,
+		})
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to set alert: %s", err)), nil
 		}

@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type ProfileTool struct{}
@@ -66,14 +68,15 @@ func (*HoldingsTool) Tool() mcp.Tool {
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		holdings, err := session.Broker.GetHoldings()
+		uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+		portfolio, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 
 		// Convert to []interface{} for generic pagination
-		result := make([]interface{}, len(holdings))
-		for i, holding := range holdings {
+		result := make([]interface{}, len(portfolio.Holdings))
+		for i, holding := range portfolio.Holdings {
 			result[i] = holding
 		}
 		return result, nil
@@ -105,7 +108,8 @@ func (*PositionsTool) Tool() mcp.Tool {
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]interface{}, error) {
-		positions, err := session.Broker.GetPositions()
+		uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
+		portfolio, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -115,9 +119,9 @@ func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		var source []broker.Position
 		switch posType {
 		case "day":
-			source = positions.Day
+			source = portfolio.Positions.Day
 		default:
-			source = positions.Net
+			source = portfolio.Positions.Net
 		}
 
 		result := make([]interface{}, len(source))
@@ -182,7 +186,8 @@ func (*OrdersTool) Tool() mcp.Tool {
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		orders, err := session.Broker.GetOrders()
+		uc := usecases.NewGetOrdersUseCase(manager.SessionSvc(), manager.Logger)
+		orders, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}

@@ -10,8 +10,20 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
+
+// sessionBrokerResolver wraps an already-resolved broker.Client so that
+// usecases.BrokerResolver can be satisfied without a second credential lookup.
+// This is the per-request adapter created inside WithSession callbacks.
+type sessionBrokerResolver struct {
+	client broker.Client
+}
+
+func (r *sessionBrokerResolver) GetBrokerForEmail(_ string) (broker.Client, error) {
+	return r.client, nil
+}
 
 type PlaceOrderTool struct{}
 
@@ -147,28 +159,34 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := session.Broker.PlaceOrder(orderParams)
+			// Route through PlaceOrderUseCase (riskguard + broker + event dispatch).
+			uc := usecases.NewPlaceOrderUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				handler.manager.RiskGuard(),
+				handler.manager.EventDispatcher(),
+				handler.manager.Logger,
+			)
+			cmd := cqrs.PlaceOrderCommand{
+				Email:           session.Email,
+				Exchange:        orderParams.Exchange,
+				Tradingsymbol:   orderParams.Tradingsymbol,
+				TransactionType: orderParams.TransactionType,
+				Quantity:        orderParams.Quantity,
+				Price:           orderParams.Price,
+				OrderType:       orderParams.OrderType,
+				Product:         orderParams.Product,
+				TriggerPrice:    orderParams.TriggerPrice,
+				Validity:        orderParams.Validity,
+				Variety:         orderParams.Variety,
+				Tag:             orderParams.Tag,
+			}
+			orderID, err := uc.Execute(ctx, cmd)
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
 			}
 
-			// Dispatch domain event for successful order placement.
-			if d := handler.manager.EventDispatcher(); d != nil {
-				qty, _ := domain.NewQuantity(orderParams.Quantity)
-				d.Dispatch(domain.OrderPlacedEvent{
-					Email:           session.Email,
-					OrderID:         resp.OrderID,
-					Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
-					Qty:             qty,
-					Price:           domain.NewINR(orderParams.Price),
-					TransactionType: orderParams.TransactionType,
-					Timestamp:       time.Now().UTC(),
-				})
-			}
-
 			// Brief delay then check fill status for immediate feedback
-			orderID := resp.OrderID
 			if orderID != "" {
 				time.Sleep(1500 * time.Millisecond)
 				history, histErr := session.Broker.GetOrderHistory(orderID)
@@ -186,7 +204,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				}
 			}
 
-			return handler.MarshalResponse(resp, "place_order")
+			return handler.MarshalResponse(map[string]any{"order_id": orderID}, "place_order")
 		})
 	}
 }
