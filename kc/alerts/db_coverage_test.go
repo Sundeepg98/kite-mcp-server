@@ -1553,9 +1553,11 @@ func TestDeleteRegistryEntry_ClosedDB(t *testing.T) {
 // ===========================================================================
 
 func TestOpenDB_PingFail(t *testing.T) {
-	// Using a bad DSN that allows Open but fails Ping
-	// On SQLite, opening a non-existent directory path should fail
-	_, err := OpenDB("\\\\\\\\nonexistent\\\\share\\\\test.db")
+	// Use a path whose parent directory does not exist.
+	// SQLite will not create intermediate directories, so Open/Ping fails
+	// on both Windows and Linux.
+	badPath := filepath.Join(t.TempDir(), "no_such_subdir", "deep", "test.db")
+	_, err := OpenDB(badPath)
 	require.Error(t, err)
 }
 
