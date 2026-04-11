@@ -1,27 +1,33 @@
 # Handoff
 
 ## State
-94 tools, 15 widgets, 4649 test functions. Build+vet clean. 8 modules at 100% (cqrs, usecases, domain, zerodha, plugins, mock, registry, ticker). 20 at 90%+. Overall ~90%. mcp 81%, app 75%, ops 59%. Test consolidation done for mcp, oauth, kc root, alerts, app. CI race condition fixed (newBotFunc mutex). CI OpenDB path fixed (cross-platform).
+94 tools, 15 widgets, 5006 test functions. Build+vet clean. CI green (Node.js 24 fix applied). Zero coverage_* test files — all properly named. 8 modules at 100% (cqrs, usecases, domain, zerodha, plugins, mock, registry, ticker). 17 at 95%+. Overall ~92%. Test consolidation complete across all packages.
+
+## Coverage
+100%: cqrs, usecases, domain, zerodha, plugins, mock, registry, ticker
+99%+: riskguard 99.7%, eventsourcing 99.2%
+98%+: watchlist 98.9%, scheduler 98.2%
+97%+: telegram 97.8%, metrics 97.3%
+95%+: audit 96.4%, instruments 95.7%, billing 95.1%
+90%+: alerts 94.1%, users 94.6%, papertrading 91.5%
+85%+: oauth 87.6%, kc root 86.6%
+75%+: mcp 82.3%, app 78.5%, ops 75.5%, isttz 75% (documented unreachable)
+50%+: cmd/rotate-key 80%
 
 ## Next
-1. Verify CI green: `gh run list -L 2` — should pass now.
-2. Remaining consolidation: kc/ops/ has coverage_final_test.go + multiple test files. Consolidate.
-3. Remaining coverage: ops 59%, cmd/rotate-key 80%, isttz 75% (panic guard). Push ops with more handler tests.
-4. Test architecture: remaining coverage_*_test.go files in subpackages (kc/audit, kc/instruments, kc/eventsourcing, kc/riskguard, kc/papertrading, kc/ticker). These are properly named by concern but could be renamed to match source files.
-5. Deploy + verify: flyctl deploy after CI green.
-6. Future: PostgreSQL migration, load testing (k6), admin role rename, ARCHITECTURE.md.
+1. Remaining ceilings: mcp 82% (WithSession non-DevMode auth), app 79% (setupGracefulShutdown, registerTelegramWebhook), oauth 88% (template parse failures, crypto/rand). All documented — need interface extraction or integration tests.
+2. Deploy: flyctl deploy after CI green verification.
+3. Future: PostgreSQL migration, load testing (k6), admin role rename, ARCHITECTURE.md.
+4. Test architecture: All files properly named. Consider testdata/ directories + golden files for response snapshots. Build tags (//go:build integration) for slow tests.
 
 ## Context
-- 4649 test functions total (grep -r "func Test" count)
-- REUSE agents via SendMessage — 2-3 iterations per agent max
-- One agent per module, verify no file overlap before assigning
-- Don't touch files while agent is working on them
-- Agent reuse pattern in memory/feedback_agent_reuse.md
-- Clock injection pattern for time-dependent tests (scheduler, riskguard)
-- DevMode stub Kite client in session_service.go
-- newFullDevModeManager in mcp/tools_test_helpers_test.go — all stores wired
+- 5006 test functions (verified via grep)
+- REUSE agents via SendMessage — proven pattern (ticker 77→100% in 2 iterations)
+- One agent per module, verify no file overlap
+- Don't touch files while agent is working
+- Clock injection for time-dependent tests (scheduler, riskguard)
+- DevMode stub Kite client + newFullDevModeManager for handler testing
 - Telegram bot mock: httptest + newBotFunc with sync.Mutex
 - Stripe webhook mock: webhook.GenerateTestSignedPayload
-- ticker: wireCallbacks refactored into named methods + interfaces
 - BrokerDataProvider interface in alerts/briefing.go
-- Codebase at D:\kite-mcp-temp — ALWAYS tell agents this path
+- Codebase at D:\kite-mcp-temp
