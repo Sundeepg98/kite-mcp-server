@@ -40,28 +40,48 @@ type Client struct {
 	nextTradeID   atomic.Int64
 	nextTriggerID atomic.Int64
 
+	// MF data
+	mfOrders   []broker.MFOrder
+	mfSIPs     []broker.MFSIP
+	mfHoldings []broker.MFHolding
+
+	// Auto-incrementing MF IDs
+	nextMFOrderID atomic.Int64
+	nextMFSIPID   atomic.Int64
+
 	// Error injection: set any of these to force the corresponding method
 	// to return the error without performing any work.
-	BrokerNameVal     broker.Name // defaults to "mock"
-	GetProfileErr     error
-	GetMarginsErr     error
-	GetHoldingsErr    error
-	GetPositionsErr   error
-	GetOrdersErr      error
-	GetOrderHistoryErr error
-	GetTradesErr      error
-	PlaceOrderErr     error
-	ModifyOrderErr    error
-	CancelOrderErr    error
-	GetLTPErr         error
-	GetOHLCErr        error
-	GetHistoricalErr  error
-	GetQuotesErr      error
-	GetOrderTradesErr error
-	GetGTTsErr        error
-	PlaceGTTErr       error
-	ModifyGTTErr      error
-	DeleteGTTErr      error
+	BrokerNameVal       broker.Name // defaults to "mock"
+	GetProfileErr       error
+	GetMarginsErr       error
+	GetHoldingsErr      error
+	GetPositionsErr     error
+	GetOrdersErr        error
+	GetOrderHistoryErr  error
+	GetTradesErr        error
+	PlaceOrderErr       error
+	ModifyOrderErr      error
+	CancelOrderErr      error
+	GetLTPErr           error
+	GetOHLCErr          error
+	GetHistoricalErr    error
+	GetQuotesErr        error
+	GetOrderTradesErr   error
+	GetGTTsErr          error
+	PlaceGTTErr         error
+	ModifyGTTErr        error
+	DeleteGTTErr        error
+	ConvertPositionErr  error
+	GetMFOrdersErr      error
+	GetMFSIPsErr        error
+	GetMFHoldingsErr    error
+	PlaceMFOrderErr     error
+	CancelMFOrderErr    error
+	PlaceMFSIPErr       error
+	CancelMFSIPErr      error
+	GetOrderMarginsErr  error
+	GetBasketMarginsErr error
+	GetOrderChargesErr  error
 }
 
 // New creates a ready-to-use mock Client with sensible defaults.
@@ -89,6 +109,8 @@ func New() *Client {
 	c.nextOrderID.Store(100000)
 	c.nextTradeID.Store(200000)
 	c.nextTriggerID.Store(300000)
+	c.nextMFOrderID.Store(400000)
+	c.nextMFSIPID.Store(500000)
 	return c
 }
 
@@ -640,4 +662,189 @@ func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
 		}
 	}
 	return broker.GTTResponse{}, fmt.Errorf("GTT trigger %d not found", triggerID)
+}
+
+// ---------------------------------------------------------------------------
+// Position conversion
+// ---------------------------------------------------------------------------
+
+// ConvertPosition simulates converting a position between products.
+func (c *Client) ConvertPosition(_ broker.ConvertPositionParams) (bool, error) {
+	if c.ConvertPositionErr != nil {
+		return false, c.ConvertPositionErr
+	}
+	return true, nil
+}
+
+// ---------------------------------------------------------------------------
+// Mutual Fund operations
+// ---------------------------------------------------------------------------
+
+// SetMFOrders sets the MF orders returned by GetMFOrders.
+func (c *Client) SetMFOrders(orders []broker.MFOrder) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.mfOrders = orders
+}
+
+// SetMFSIPs sets the MF SIPs returned by GetMFSIPs.
+func (c *Client) SetMFSIPs(sips []broker.MFSIP) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.mfSIPs = sips
+}
+
+// SetMFHoldings sets the MF holdings returned by GetMFHoldings.
+func (c *Client) SetMFHoldings(holdings []broker.MFHolding) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.mfHoldings = holdings
+}
+
+// GetMFOrders returns mock mutual fund orders.
+func (c *Client) GetMFOrders() ([]broker.MFOrder, error) {
+	if c.GetMFOrdersErr != nil {
+		return nil, c.GetMFOrdersErr
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]broker.MFOrder, len(c.mfOrders))
+	copy(out, c.mfOrders)
+	return out, nil
+}
+
+// GetMFSIPs returns mock mutual fund SIPs.
+func (c *Client) GetMFSIPs() ([]broker.MFSIP, error) {
+	if c.GetMFSIPsErr != nil {
+		return nil, c.GetMFSIPsErr
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]broker.MFSIP, len(c.mfSIPs))
+	copy(out, c.mfSIPs)
+	return out, nil
+}
+
+// GetMFHoldings returns mock mutual fund holdings.
+func (c *Client) GetMFHoldings() ([]broker.MFHolding, error) {
+	if c.GetMFHoldingsErr != nil {
+		return nil, c.GetMFHoldingsErr
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]broker.MFHolding, len(c.mfHoldings))
+	copy(out, c.mfHoldings)
+	return out, nil
+}
+
+// PlaceMFOrder creates a mock MF order and returns a generated order ID.
+func (c *Client) PlaceMFOrder(params broker.MFOrderParams) (broker.MFOrderResponse, error) {
+	if c.PlaceMFOrderErr != nil {
+		return broker.MFOrderResponse{}, c.PlaceMFOrderErr
+	}
+	id := strconv.FormatInt(c.nextMFOrderID.Add(1), 10)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.mfOrders = append(c.mfOrders, broker.MFOrder{
+		OrderID:         id,
+		Tradingsymbol:   params.Tradingsymbol,
+		TransactionType: params.TransactionType,
+		Status:          "OPEN",
+		Amount:          params.Amount,
+		Quantity:        params.Quantity,
+		Tag:             params.Tag,
+	})
+	return broker.MFOrderResponse{OrderID: id}, nil
+}
+
+// CancelMFOrder removes a mock MF order.
+func (c *Client) CancelMFOrder(orderID string) (broker.MFOrderResponse, error) {
+	if c.CancelMFOrderErr != nil {
+		return broker.MFOrderResponse{}, c.CancelMFOrderErr
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.mfOrders {
+		if c.mfOrders[i].OrderID == orderID {
+			c.mfOrders[i].Status = "CANCELLED"
+			return broker.MFOrderResponse{OrderID: orderID}, nil
+		}
+	}
+	return broker.MFOrderResponse{}, fmt.Errorf("MF order %s not found", orderID)
+}
+
+// PlaceMFSIP creates a mock MF SIP and returns a generated SIP ID.
+func (c *Client) PlaceMFSIP(params broker.MFSIPParams) (broker.MFSIPResponse, error) {
+	if c.PlaceMFSIPErr != nil {
+		return broker.MFSIPResponse{}, c.PlaceMFSIPErr
+	}
+	id := strconv.FormatInt(c.nextMFSIPID.Add(1), 10)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.mfSIPs = append(c.mfSIPs, broker.MFSIP{
+		SIPID:         id,
+		Tradingsymbol: params.Tradingsymbol,
+		Frequency:     params.Frequency,
+		Amount:        params.Amount,
+		Instalments:   params.Instalments,
+		InstalmentDay: params.InstalmentDay,
+		Status:        "ACTIVE",
+		Tag:           params.Tag,
+	})
+	return broker.MFSIPResponse{SIPID: id}, nil
+}
+
+// CancelMFSIP cancels a mock MF SIP.
+func (c *Client) CancelMFSIP(sipID string) (broker.MFSIPResponse, error) {
+	if c.CancelMFSIPErr != nil {
+		return broker.MFSIPResponse{}, c.CancelMFSIPErr
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.mfSIPs {
+		if c.mfSIPs[i].SIPID == sipID {
+			c.mfSIPs[i].Status = "CANCELLED"
+			return broker.MFSIPResponse{SIPID: sipID}, nil
+		}
+	}
+	return broker.MFSIPResponse{}, fmt.Errorf("MF SIP %s not found", sipID)
+}
+
+// ---------------------------------------------------------------------------
+// Margin calculation operations
+// ---------------------------------------------------------------------------
+
+// GetOrderMargins returns mock margin data.
+func (c *Client) GetOrderMargins(_ []broker.OrderMarginParam) (any, error) {
+	if c.GetOrderMarginsErr != nil {
+		return nil, c.GetOrderMarginsErr
+	}
+	return map[string]any{
+		"total":  5000.0,
+		"type":   "equity",
+		"source": "mock",
+	}, nil
+}
+
+// GetBasketMargins returns mock basket margin data.
+func (c *Client) GetBasketMargins(_ []broker.OrderMarginParam, _ bool) (any, error) {
+	if c.GetBasketMarginsErr != nil {
+		return nil, c.GetBasketMarginsErr
+	}
+	return map[string]any{
+		"total":  10000.0,
+		"type":   "basket",
+		"source": "mock",
+	}, nil
+}
+
+// GetOrderCharges returns mock order charges data.
+func (c *Client) GetOrderCharges(_ []broker.OrderChargesParam) (any, error) {
+	if c.GetOrderChargesErr != nil {
+		return nil, c.GetOrderChargesErr
+	}
+	return map[string]any{
+		"total_charges": 50.0,
+		"source":        "mock",
+	}, nil
 }

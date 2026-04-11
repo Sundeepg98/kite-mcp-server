@@ -289,6 +289,69 @@ func convertGTT(g kiteconnect.GTT) broker.GTTOrder {
 	}
 }
 
+// --- MF Orders ---
+
+func convertMFOrders(orders kiteconnect.MFOrders) []broker.MFOrder {
+	out := make([]broker.MFOrder, len(orders))
+	for i, o := range orders {
+		out[i] = broker.MFOrder{
+			OrderID:           o.OrderID,
+			Tradingsymbol:     o.Tradingsymbol,
+			TransactionType:   o.TransactionType,
+			Status:            o.Status,
+			Amount:            o.Amount,
+			Quantity:          o.Quantity,
+			Folio:             o.Folio,
+			Fund:              o.Fund,
+			Tag:               o.Tag,
+			StatusMessage:     o.StatusMessage,
+			PurchaseType:      o.PurchaseType,
+			OrderTimestamp:    o.OrderTimestamp.String(),
+			ExchangeTimestamp: o.ExchangeTimestamp.String(),
+		}
+	}
+	return out
+}
+
+// --- MF SIPs ---
+
+func convertMFSIPs(sips kiteconnect.MFSIPs) []broker.MFSIP {
+	out := make([]broker.MFSIP, len(sips))
+	for i, s := range sips {
+		out[i] = broker.MFSIP{
+			SIPID:         s.ID,
+			Tradingsymbol: s.Tradingsymbol,
+			Fund:          s.FundName,
+			Frequency:     s.Frequency,
+			Amount:        s.InstalmentAmount,
+			Instalments:   s.Instalments,
+			Status:        s.Status,
+			InstalmentDay: s.InstalmentDay,
+			Tag:           s.Tag,
+			Created:       s.Created.String(),
+		}
+	}
+	return out
+}
+
+// --- MF Holdings ---
+
+func convertMFHoldings(holdings kiteconnect.MFHoldings) []broker.MFHolding {
+	out := make([]broker.MFHolding, len(holdings))
+	for i, h := range holdings {
+		out[i] = broker.MFHolding{
+			Tradingsymbol: h.Tradingsymbol,
+			Folio:         h.Folio,
+			Fund:          h.Fund,
+			Quantity:      h.Quantity,
+			AveragePrice:  h.AveragePrice,
+			LastPrice:     h.LastPrice,
+			PnL:           h.Pnl,
+		}
+	}
+	return out
+}
+
 // --- GTTParams (broker -> kite) ---
 
 func convertGTTParamsToKite(p broker.GTTParams) (kiteconnect.GTTParams, error) {

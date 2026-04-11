@@ -191,11 +191,11 @@ func TestOrderAggregate_PlaceCancelLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, OrderStatusPlaced, agg.Status)
 	assert.Equal(t, "user@example.com", agg.Email)
-	assert.Equal(t, "RELIANCE", agg.Tradingsymbol)
-	assert.Equal(t, "NSE", agg.Exchange)
+	assert.Equal(t, "RELIANCE", agg.Instrument.Tradingsymbol)
+	assert.Equal(t, "NSE", agg.Instrument.Exchange)
 	assert.Equal(t, "BUY", agg.TransactionType)
-	assert.Equal(t, 10, agg.Quantity)
-	assert.Equal(t, 2500.0, agg.Price)
+	assert.Equal(t, 10, agg.Quantity.Int())
+	assert.Equal(t, 2500.0, agg.Price.Amount)
 	assert.Equal(t, 1, agg.Version())
 	assert.Len(t, agg.PendingEvents(), 1)
 
@@ -224,8 +224,8 @@ func TestOrderAggregate_PlaceFillLifecycle(t *testing.T) {
 	err = agg.Fill(1800.50, 50)
 	require.NoError(t, err)
 	assert.Equal(t, OrderStatusFilled, agg.Status)
-	assert.Equal(t, 1800.50, agg.FilledPrice)
-	assert.Equal(t, 50, agg.FilledQuantity)
+	assert.Equal(t, 1800.50, agg.FilledPrice.Amount)
+	assert.Equal(t, 50, agg.FilledQuantity.Int())
 	assert.False(t, agg.FilledAt.IsZero())
 	assert.Equal(t, 2, agg.Version())
 }
@@ -308,7 +308,7 @@ func TestOrderAggregate_FillValidation(t *testing.T) {
 
 	err = agg.Fill(2500, 0)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "fill quantity must be positive")
+	assert.Contains(t, err.Error(), "quantity must be positive")
 }
 
 func TestReconstitutFromEvents(t *testing.T) {
@@ -349,13 +349,13 @@ func TestReconstitutFromEvents(t *testing.T) {
 	assert.Equal(t, agg.AggregateID(), reconstituted.AggregateID())
 	assert.Equal(t, OrderStatusFilled, reconstituted.Status)
 	assert.Equal(t, "recon@example.com", reconstituted.Email)
-	assert.Equal(t, "HDFCBANK", reconstituted.Tradingsymbol)
-	assert.Equal(t, "NSE", reconstituted.Exchange)
+	assert.Equal(t, "HDFCBANK", reconstituted.Instrument.Tradingsymbol)
+	assert.Equal(t, "NSE", reconstituted.Instrument.Exchange)
 	assert.Equal(t, "BUY", reconstituted.TransactionType)
-	assert.Equal(t, 20, reconstituted.Quantity)
-	assert.Equal(t, 1700.0, reconstituted.Price)
-	assert.Equal(t, 1698.50, reconstituted.FilledPrice)
-	assert.Equal(t, 20, reconstituted.FilledQuantity)
+	assert.Equal(t, 20, reconstituted.Quantity.Int())
+	assert.Equal(t, 1700.0, reconstituted.Price.Amount)
+	assert.Equal(t, 1698.50, reconstituted.FilledPrice.Amount)
+	assert.Equal(t, 20, reconstituted.FilledQuantity.Int())
 	assert.Equal(t, 2, reconstituted.Version())
 	assert.Empty(t, reconstituted.PendingEvents(), "reconstituted aggregate should have no pending events")
 }
@@ -385,7 +385,7 @@ func TestReconstitutePlaceCancelFromEvents(t *testing.T) {
 
 	assert.Equal(t, OrderStatusCancelled, reconstituted.Status)
 	assert.Equal(t, "cancel@example.com", reconstituted.Email)
-	assert.Equal(t, "WIPRO", reconstituted.Tradingsymbol)
+	assert.Equal(t, "WIPRO", reconstituted.Instrument.Tradingsymbol)
 	assert.False(t, reconstituted.CancelledAt.IsZero())
 }
 
@@ -483,8 +483,8 @@ func TestOrderAggregate_PlaceModifyFillLifecycle(t *testing.T) {
 	err = agg.Modify(20, 2600.0, "")
 	require.NoError(t, err)
 	assert.Equal(t, OrderStatusModified, agg.Status)
-	assert.Equal(t, 20, agg.Quantity)
-	assert.Equal(t, 2600.0, agg.Price)
+	assert.Equal(t, 20, agg.Quantity.Int())
+	assert.Equal(t, 2600.0, agg.Price.Amount)
 	assert.Equal(t, "LIMIT", agg.OrderType) // unchanged since we passed ""
 	assert.Equal(t, 1, agg.ModifyCount)
 	assert.False(t, agg.ModifiedAt.IsZero())
@@ -514,8 +514,8 @@ func TestOrderAggregate_ModifyMultipleTimes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, agg.ModifyCount)
 	assert.Equal(t, "MARKET", agg.OrderType)
-	assert.Equal(t, 20, agg.Quantity)
-	assert.Equal(t, 1600.0, agg.Price)
+	assert.Equal(t, 20, agg.Quantity.Int())
+	assert.Equal(t, 1600.0, agg.Price.Amount)
 }
 
 func TestOrderAggregate_ModifyCancelLifecycle(t *testing.T) {
@@ -575,7 +575,7 @@ func TestOrderAggregate_ModifyValidation(t *testing.T) {
 	// Zero quantity.
 	err := agg.Modify(0, 2600, "")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "modify quantity must be positive")
+	assert.Contains(t, err.Error(), "quantity must be positive")
 
 	// No changes.
 	err = agg.Modify(10, 2500, "")
@@ -658,9 +658,9 @@ func TestReconstitutePlaceModifyFillFromEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, OrderStatusFilled, reconstituted.Status)
-	assert.Equal(t, 20, reconstituted.Quantity)
-	assert.Equal(t, 2600.0, reconstituted.Price)
-	assert.Equal(t, 2598.0, reconstituted.FilledPrice)
+	assert.Equal(t, 20, reconstituted.Quantity.Int())
+	assert.Equal(t, 2600.0, reconstituted.Price.Amount)
+	assert.Equal(t, 2598.0, reconstituted.FilledPrice.Amount)
 	assert.Equal(t, 1, reconstituted.ModifyCount)
 	assert.Equal(t, 3, reconstituted.Version())
 	assert.Empty(t, reconstituted.PendingEvents())

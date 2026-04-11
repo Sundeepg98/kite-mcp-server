@@ -2244,35 +2244,32 @@ func TestDevMode_GetOrderCharges_V2(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-func TestDevMode_GetMFOrders_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetMFOrders_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_mf_orders", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	// Should NOT contain the old panic-guard message
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	// MF tools now route through broker.Client (mock in DEV_MODE) — they succeed.
+	assert.False(t, result.IsError, "MF orders should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_GetMFSIPs_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetMFSIPs_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_mf_sips", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "MF SIPs should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_GetMFHoldings_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetMFHoldings_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_mf_holdings", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "MF holdings should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_PlaceMFOrder_ReturnsAPIError(t *testing.T) {
+func TestDevMode_PlaceMFOrder_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "place_mf_order", "dev@example.com", map[string]any{
@@ -2281,11 +2278,10 @@ func TestDevMode_PlaceMFOrder_ReturnsAPIError(t *testing.T) {
 		"amount":           float64(10000),
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "PlaceMFOrder should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_PlaceMFSIP_ReturnsAPIError(t *testing.T) {
+func TestDevMode_PlaceMFSIP_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "place_mf_sip", "dev@example.com", map[string]any{
@@ -2296,33 +2292,32 @@ func TestDevMode_PlaceMFSIP_ReturnsAPIError(t *testing.T) {
 		"tag":           "test",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "PlaceMFSIP should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_CancelMFOrder_ReturnsAPIError(t *testing.T) {
+func TestDevMode_CancelMFOrder_ReturnsNotFoundFromMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "cancel_mf_order", "dev@example.com", map[string]any{
 		"order_id": "MF001",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	// CancelMFOrder on a non-existent order returns an error from the mock.
+	assert.True(t, result.IsError, "cancel of non-existent MF order should error")
 }
 
-func TestDevMode_CancelMFSIP_ReturnsAPIError(t *testing.T) {
+func TestDevMode_CancelMFSIP_ReturnsNotFoundFromMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "cancel_mf_sip", "dev@example.com", map[string]any{
 		"sip_id": "SIP001",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	// CancelMFSIP on a non-existent SIP returns an error from the mock.
+	assert.True(t, result.IsError, "cancel of non-existent MF SIP should error")
 }
 
-func TestDevMode_GetOrderMargins_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetOrderMargins_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_order_margins", "dev@example.com", map[string]any{
@@ -2334,30 +2329,28 @@ func TestDevMode_GetOrderMargins_ReturnsAPIError(t *testing.T) {
 		"product":          "CNC",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "GetOrderMargins should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_GetBasketMargins_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetBasketMargins_SucceedsViaMockBroker(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_basket_margins", "dev@example.com", map[string]any{
-		"orders_json": `[{"exchange":"NSE","tradingsymbol":"INFY","transaction_type":"BUY","quantity":10,"order_type":"MARKET","product":"CNC"}]`,
+		"orders": `[{"exchange":"NSE","tradingsymbol":"INFY","transaction_type":"BUY","quantity":10,"order_type":"MARKET","product":"CNC"}]`,
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, "GetBasketMargins should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_GetOrderCharges_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetOrderCharges_RequiresOrdersParam(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_order_charges", "dev@example.com", map[string]any{
-		"order_id": "ORD001",
+		"orders": `[{"order_id":"ORD001","exchange":"NSE","tradingsymbol":"INFY","transaction_type":"BUY","quantity":10,"average_price":1500,"product":"CNC","order_type":"MARKET","variety":"regular"}]`,
 	})
 	assert.NotNil(t, result)
-	// get_order_charges may or may not error depending on mock fallback
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	// get_order_charges now routes through mock broker and succeeds
+	assert.False(t, result.IsError, "GetOrderCharges should succeed via mock broker in DEV_MODE")
 }
 
 func TestDevMode_PlaceNativeAlert_ReturnsAPIError(t *testing.T) {

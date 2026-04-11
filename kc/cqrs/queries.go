@@ -94,6 +94,70 @@ type GetGTTsQuery struct {
 	Email string `json:"email"`
 }
 
+// --- Mutual Fund queries ---
+
+// GetMFOrdersQuery requests all mutual fund orders.
+type GetMFOrdersQuery struct {
+	Email string `json:"email"`
+}
+
+// GetMFSIPsQuery requests all mutual fund SIPs.
+type GetMFSIPsQuery struct {
+	Email string `json:"email"`
+}
+
+// GetMFHoldingsQuery requests all mutual fund holdings.
+type GetMFHoldingsQuery struct {
+	Email string `json:"email"`
+}
+
+// --- Margin queries ---
+
+// GetOrderMarginsQuery requests margin calculation for orders.
+type GetOrderMarginsQuery struct {
+	Email  string `json:"email"`
+	Orders []OrderMarginQueryParam `json:"orders"`
+}
+
+// OrderMarginQueryParam holds parameters for a single order margin calculation.
+type OrderMarginQueryParam struct {
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Variety         string  `json:"variety"`
+	Product         string  `json:"product"`
+	OrderType       string  `json:"order_type"`
+	Quantity        float64 `json:"quantity"`
+	Price           float64 `json:"price,omitempty"`
+	TriggerPrice    float64 `json:"trigger_price,omitempty"`
+}
+
+// GetBasketMarginsQuery requests combined margin for a basket of orders.
+type GetBasketMarginsQuery struct {
+	Email             string `json:"email"`
+	Orders            []OrderMarginQueryParam `json:"orders"`
+	ConsiderPositions bool `json:"consider_positions"`
+}
+
+// GetOrderChargesQuery requests brokerage and charges calculation for orders.
+type GetOrderChargesQuery struct {
+	Email  string `json:"email"`
+	Orders []OrderChargesQueryParam `json:"orders"`
+}
+
+// OrderChargesQueryParam holds parameters for a single order charges calculation.
+type OrderChargesQueryParam struct {
+	OrderID         string  `json:"order_id"`
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Quantity        float64 `json:"quantity"`
+	AveragePrice    float64 `json:"average_price"`
+	Product         string  `json:"product"`
+	OrderType       string  `json:"order_type"`
+	Variety         string  `json:"variety"`
+}
+
 // --- Audit queries ---
 
 // GetAuditTrailQuery requests the tool call audit trail.

@@ -270,7 +270,8 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			orderTrades, err := session.Broker.GetOrderTrades(orderID)
+			uc := usecases.NewGetOrderTradesUseCase(manager.SessionSvc(), manager.Logger)
+			orderTrades, err := uc.Execute(ctx, cqrs.GetOrderTradesQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order trades: %s", err.Error())), nil
 			}

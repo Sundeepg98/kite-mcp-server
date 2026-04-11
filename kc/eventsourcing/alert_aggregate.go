@@ -17,12 +17,14 @@ const (
 
 // AlertAggregate models the lifecycle of a price alert through events.
 // State is only mutated via Apply, which processes domain events.
+//
+// NOTE: Not instantiated in production. Alert state is managed by alerts.Store
+// (CRUD). This aggregate exists for testing event replay correctness.
 type AlertAggregate struct {
 	BaseAggregate
 	Email       string
-	Symbol      string
-	Exchange    string
-	TargetPrice float64
+	Instrument  domain.InstrumentKey
+	TargetPrice domain.Money
 	Direction   string // above, below, drop_pct, rise_pct
 	Status      string // ACTIVE, TRIGGERED, DELETED
 	CreatedAt   time.Time
@@ -79,9 +81,8 @@ func (a *AlertAggregate) Create(email, symbol, exchange string, targetPrice floa
 	event := &alertCreatedEvent{
 		alertID:     a.id,
 		email:       email,
-		symbol:      symbol,
-		exchange:    exchange,
-		targetPrice: targetPrice,
+		instrument:  domain.NewInstrumentKey(exchange, symbol),
+		targetPrice: domain.NewINR(targetPrice),
 		direction:   direction,
 		timestamp:   now,
 	}
@@ -148,8 +149,7 @@ func (a *AlertAggregate) Apply(event domain.Event) {
 	switch e := event.(type) {
 	case *alertCreatedEvent:
 		a.Email = e.email
-		a.Symbol = e.symbol
-		a.Exchange = e.exchange
+		a.Instrument = e.instrument
 		a.TargetPrice = e.targetPrice
 		a.Direction = e.direction
 		a.Status = AlertStatusActive
@@ -169,9 +169,8 @@ func (a *AlertAggregate) Apply(event domain.Event) {
 type alertCreatedEvent struct {
 	alertID     string
 	email       string
-	symbol      string
-	exchange    string
-	targetPrice float64
+	instrument  domain.InstrumentKey
+	targetPrice domain.Money
 	direction   string
 	timestamp   time.Time
 }
@@ -229,9 +228,8 @@ func deserializeAlertEvent(stored StoredEvent) (domain.Event, error) {
 		return &alertCreatedEvent{
 			alertID:     stored.AggregateID,
 			email:       p.Email,
-			symbol:      p.Symbol,
-			exchange:    p.Exchange,
-			targetPrice: p.TargetPrice,
+			instrument:  domain.NewInstrumentKey(p.Exchange, p.Symbol),
+			targetPrice: domain.NewINR(p.TargetPrice),
 			direction:   p.Direction,
 			timestamp:   stored.OccurredAt,
 		}, nil
@@ -270,9 +268,9 @@ func ToAlertStoredEvents(agg *AlertAggregate, startSequence int64) ([]StoredEven
 		case *alertCreatedEvent:
 			payload, err = MarshalPayload(AlertCreatedPayload{
 				Email:       e.email,
-				Symbol:      e.symbol,
-				Exchange:    e.exchange,
-				TargetPrice: e.targetPrice,
+				Symbol:      e.instrument.Tradingsymbol,
+				Exchange:    e.instrument.Exchange,
+				TargetPrice: e.targetPrice.Amount,
 				Direction:   e.direction,
 			})
 		case *alertTriggeredEvent:

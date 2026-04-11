@@ -1,8 +1,16 @@
-// Package eventsourcing provides an append-only event store backed by SQLite
-// and aggregate patterns for reconstituting domain state from events.
+// Package eventsourcing provides an append-only domain audit log backed by SQLite
+// and aggregate patterns for modeling domain state transitions.
 //
-// The event store is the single source of truth for Order lifecycle transitions.
+// ARCHITECTURE NOTE: In production, the EventStore functions as a **domain audit log**,
+// not a true event-sourced system. Domain events are appended by makeEventPersister
+// (in app/app.go) whenever use cases dispatch events, but they are never read back
+// to reconstitute state. Reads go to broker APIs (orders, positions) or CRUD stores
+// (alerts, users). The aggregate types (OrderAggregate, PositionAggregate, AlertAggregate)
+// and their Load*FromEvents functions exist as test infrastructure for verifying
+// event replay correctness — they are not instantiated in production code paths.
+//
 // Events are immutable once appended — no UPDATE or DELETE is ever issued.
+// The domain_events table serves as a compliance/debugging audit trail.
 package eventsourcing
 
 import (
@@ -28,6 +36,9 @@ type StoredEvent struct {
 }
 
 // EventStore provides append-only persistence for domain events backed by SQLite.
+// In production, this acts as a domain audit log — events are appended but not
+// read back for state reconstitution. LoadEvents and LoadEventsSince are available
+// for debugging, compliance queries, and test infrastructure.
 // It reuses the existing alerts.DB handle for database access.
 type EventStore struct {
 	db *alerts.DB

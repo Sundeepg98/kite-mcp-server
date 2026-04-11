@@ -56,7 +56,8 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_quotes", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			quotes, err := session.Broker.GetQuotes(instruments...)
+			uc := usecases.NewGetQuotesUseCase(manager.SessionSvc(), manager.Logger)
+			quotes, err := uc.Execute(ctx, session.Email, cqrs.GetQuotesQuery{Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get quotes: %s", err.Error())), nil
 			}

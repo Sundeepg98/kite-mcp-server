@@ -7,6 +7,13 @@ import (
 // AggregateRoot is the interface that all event-sourced aggregates must satisfy.
 // An aggregate reconstitutes its state by replaying events, and emits new events
 // when commands mutate it.
+//
+// ARCHITECTURE NOTE: Aggregates are currently used as test infrastructure only.
+// In production, order/position/alert state comes from broker APIs and CRUD stores,
+// not from event replay. The aggregates model domain invariants and lifecycle
+// transitions, which is valuable for testing correctness of event schemas and
+// state machine logic. They may be wired into production use cases in the future
+// if temporal queries or multi-broker replay become requirements.
 type AggregateRoot interface {
 	// AggregateID returns the unique identifier for this aggregate instance.
 	AggregateID() string

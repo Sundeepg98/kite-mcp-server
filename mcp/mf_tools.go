@@ -6,8 +6,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type MFOrdersTool struct{}
@@ -30,9 +31,8 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-		// not abstracted in broker.Client. See broker/broker.go.
-		orders, err := session.Kite.Client.GetMFOrders()
+		uc := usecases.NewGetMFOrdersUseCase(manager.SessionSvc(), manager.Logger)
+		orders, err := uc.Execute(context.Background(), cqrs.GetMFOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -65,9 +65,8 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-		// not abstracted in broker.Client. See broker/broker.go.
-		sips, err := session.Kite.Client.GetMFSIPs()
+		uc := usecases.NewGetMFSIPsUseCase(manager.SessionSvc(), manager.Logger)
+		sips, err := uc.Execute(context.Background(), cqrs.GetMFSIPsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -100,14 +99,12 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-		// not abstracted in broker.Client. See broker/broker.go.
-		holdings, err := session.Kite.Client.GetMFHoldings()
+		uc := usecases.NewGetMFHoldingsUseCase(manager.SessionSvc(), manager.Logger)
+		holdings, err := uc.Execute(context.Background(), cqrs.GetMFHoldingsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 
-		// Convert to []interface{} for generic pagination
 		result := make([]interface{}, len(holdings))
 		for i, holding := range holdings {
 			result[i] = holding
@@ -181,20 +178,17 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("quantity is required and must be greater than 0 for SELL orders"), nil
 		}
 
-		orderParams := kiteconnect.MFOrderParams{
-			Tradingsymbol:   p.String("tradingsymbol", ""),
-			TransactionType: txnType,
-			Amount:          amount,
-			Quantity:        quantity,
-			Tag:             p.String("tag", ""),
-		}
-
 		return handler.WithSession(ctx, "place_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.PlaceMFOrder(orderParams)
+			uc := usecases.NewPlaceMFOrderUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.PlaceMFOrderCommand{
+				Email:           session.Email,
+				Tradingsymbol:   p.String("tradingsymbol", ""),
+				TransactionType: txnType,
+				Amount:          amount,
+				Quantity:        quantity,
+				Tag:             p.String("tag", ""),
+			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to place MF order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_mf_order: %s", err.Error())), nil
 			}
 			return handler.MarshalResponse(resp, "place_mf_order")
@@ -231,11 +225,12 @@ func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := NewArgParser(args).String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.CancelMFOrder(orderID)
+			uc := usecases.NewCancelMFOrderUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.CancelMFOrderCommand{
+				Email:   session.Email,
+				OrderID: orderID,
+			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to cancel MF order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_mf_order: %s", err.Error())), nil
 			}
 			return handler.MarshalResponse(resp, "cancel_mf_order")
@@ -307,22 +302,19 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("amount must be greater than 0"), nil
 		}
 
-		sipParams := kiteconnect.MFSIPParams{
-			Tradingsymbol: p.String("tradingsymbol", ""),
-			Amount:        amount,
-			Frequency:     p.String("frequency", ""),
-			Instalments:   p.Int("instalments", 0),
-			InitialAmount: p.Float("initial_amount", 0),
-			InstalmentDay: p.Int("instalment_day", 0),
-			Tag:           p.String("tag", ""),
-		}
-
 		return handler.WithSession(ctx, "place_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.PlaceMFSIP(sipParams)
+			uc := usecases.NewPlaceMFSIPUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.PlaceMFSIPCommand{
+				Email:         session.Email,
+				Tradingsymbol: p.String("tradingsymbol", ""),
+				Amount:        amount,
+				Frequency:     p.String("frequency", ""),
+				Instalments:   p.Int("instalments", 0),
+				InitialAmount: p.Float("initial_amount", 0),
+				InstalmentDay: p.Int("instalment_day", 0),
+				Tag:           p.String("tag", ""),
+			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to place MF SIP", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_mf_sip: %s", err.Error())), nil
 			}
 			return handler.MarshalResponse(resp, "place_mf_sip")
@@ -359,11 +351,12 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		sipID := NewArgParser(args).String("sip_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: MF operations use session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.CancelMFSIP(sipID)
+			uc := usecases.NewCancelMFSIPUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.CancelMFSIPCommand{
+				Email: session.Email,
+				SIPID: sipID,
+			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to cancel MF SIP", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_mf_sip: %s", err.Error())), nil
 			}
 			return handler.MarshalResponse(resp, "cancel_mf_sip")

@@ -7,8 +7,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // OrderMarginsTool calculates margin required for an order before placing it.
@@ -88,26 +89,23 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("trigger_price must be greater than 0 for SL/SL-M orders"), nil
 		}
 
-		param := kiteconnect.OrderMarginParam{
-			Exchange:        p.String("exchange", "NSE"),
-			Tradingsymbol:   p.String("tradingsymbol", ""),
-			TransactionType: p.String("transaction_type", ""),
-			Variety:         p.String("variety", "regular"),
-			Product:         p.String("product", ""),
-			OrderType:       orderType,
-			Quantity:        p.Float("quantity", 0),
-			Price:           price,
-			TriggerPrice:    triggerPrice,
-		}
-
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GetOrderMargins uses session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.GetOrderMargins(kiteconnect.GetMarginParams{
-				OrderParams: []kiteconnect.OrderMarginParam{param},
+			uc := usecases.NewGetOrderMarginsUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.GetOrderMarginsQuery{
+				Email: session.Email,
+				Orders: []cqrs.OrderMarginQueryParam{{
+					Exchange:        p.String("exchange", "NSE"),
+					Tradingsymbol:   p.String("tradingsymbol", ""),
+					TransactionType: p.String("transaction_type", ""),
+					Variety:         p.String("variety", "regular"),
+					Product:         p.String("product", ""),
+					OrderType:       orderType,
+					Quantity:        p.Float("quantity", 0),
+					Price:           price,
+					TriggerPrice:    triggerPrice,
+				}},
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to get order margins", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("get_order_margins: %s", err.Error())), nil
 			}
 
@@ -153,8 +151,8 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
 		}
 
-		// Parse the JSON orders array
-		var orderParams []kiteconnect.OrderMarginParam
+		// Parse the JSON orders array into CQRS query params
+		var orderParams []cqrs.OrderMarginQueryParam
 		if err := json.Unmarshal([]byte(ordersJSON), &orderParams); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid orders JSON: %s", err.Error())), nil
 		}
@@ -173,14 +171,13 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GetBasketMargins uses session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.GetBasketMargins(kiteconnect.GetBasketParams{
-				OrderParams:       orderParams,
+			uc := usecases.NewGetBasketMarginsUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.GetBasketMarginsQuery{
+				Email:             session.Email,
+				Orders:            orderParams,
 				ConsiderPositions: considerPositions,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to get basket margins", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("get_basket_margins: %s", err.Error())), nil
 			}
 
@@ -222,8 +219,8 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
 		}
 
-		// Parse the JSON orders array
-		var orderParams []kiteconnect.OrderChargesParam
+		// Parse the JSON orders array into CQRS query params
+		var orderParams []cqrs.OrderChargesQueryParam
 		if err := json.Unmarshal([]byte(ordersJSON), &orderParams); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid orders JSON: %s", err.Error())), nil
 		}
@@ -233,13 +230,12 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: GetOrderCharges uses session.Kite.Client directly — Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			resp, err := session.Kite.Client.GetOrderCharges(kiteconnect.GetChargesParams{
-				OrderParams: orderParams,
+			uc := usecases.NewGetOrderChargesUseCase(manager.SessionSvc(), manager.Logger)
+			resp, err := uc.Execute(ctx, cqrs.GetOrderChargesQuery{
+				Email:  session.Email,
+				Orders: orderParams,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to get order charges", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("get_order_charges: %s", err.Error())), nil
 			}
 

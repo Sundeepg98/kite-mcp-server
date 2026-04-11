@@ -20,19 +20,22 @@ const (
 
 // OrderAggregate models the full lifecycle of a trading order through events.
 // State is never set directly — only via Apply, which processes domain events.
+//
+// NOTE: Not instantiated in production. PlaceOrderUseCase calls broker.Client
+// directly and dispatches domain events to the audit log. This aggregate exists
+// for testing event replay correctness and modeling order state machine invariants.
 type OrderAggregate struct {
 	BaseAggregate
 	Status          string
 	Email           string
-	Tradingsymbol   string
-	Exchange        string
+	Instrument      domain.InstrumentKey
 	TransactionType string
 	OrderType       string
 	Product         string
-	Quantity        int
-	Price           float64
-	FilledPrice     float64
-	FilledQuantity  int
+	Quantity        domain.Quantity
+	Price           domain.Money
+	FilledPrice     domain.Money
+	FilledQuantity  domain.Quantity
 	ModifyCount     int
 	PlacedAt        time.Time
 	ModifiedAt      time.Time
@@ -88,8 +91,9 @@ func (o *OrderAggregate) Place(params broker.OrderParams, email string) error {
 	if o.Status != OrderStatusNew {
 		return fmt.Errorf("eventsourcing: cannot place order in %s state", o.Status)
 	}
-	if params.Quantity <= 0 {
-		return fmt.Errorf("eventsourcing: quantity must be positive, got %d", params.Quantity)
+	qty, err := domain.NewQuantity(params.Quantity)
+	if err != nil {
+		return fmt.Errorf("eventsourcing: %w", err)
 	}
 	if params.Tradingsymbol == "" {
 		return fmt.Errorf("eventsourcing: tradingsymbol is required")
@@ -102,13 +106,12 @@ func (o *OrderAggregate) Place(params broker.OrderParams, email string) error {
 	event := &orderPlacedEvent{
 		orderID:         o.id,
 		email:           email,
-		exchange:        params.Exchange,
-		tradingsymbol:   params.Tradingsymbol,
+		instrument:      domain.NewInstrumentKey(params.Exchange, params.Tradingsymbol),
 		transactionType: params.TransactionType,
 		orderType:       params.OrderType,
 		product:         params.Product,
-		quantity:        params.Quantity,
-		price:           params.Price,
+		quantity:        qty,
+		price:           domain.NewINR(params.Price),
 		timestamp:       now,
 	}
 	o.Apply(event)
@@ -122,10 +125,12 @@ func (o *OrderAggregate) Modify(newQty int, newPrice float64, newOrderType strin
 	if err := o.CanModify(); err != nil {
 		return fmt.Errorf("eventsourcing: %w", err)
 	}
-	if newQty <= 0 {
-		return fmt.Errorf("eventsourcing: modify quantity must be positive, got %d", newQty)
+	qty, err := domain.NewQuantity(newQty)
+	if err != nil {
+		return fmt.Errorf("eventsourcing: modify: %w", err)
 	}
-	if newQty == o.Quantity && newPrice == o.Price && (newOrderType == "" || newOrderType == o.OrderType) {
+	price := domain.NewINR(newPrice)
+	if newQty == o.Quantity.Int() && newPrice == o.Price.Amount && (newOrderType == "" || newOrderType == o.OrderType) {
 		return fmt.Errorf("eventsourcing: modify must change at least one field")
 	}
 
@@ -136,8 +141,8 @@ func (o *OrderAggregate) Modify(newQty int, newPrice float64, newOrderType strin
 	}
 	event := &orderModifiedEvent{
 		orderID:      o.id,
-		newQuantity:  newQty,
-		newPrice:     newPrice,
+		newQuantity:  qty,
+		newPrice:     price,
 		newOrderType: effectiveOrderType,
 		timestamp:    now,
 	}
@@ -208,8 +213,9 @@ func (o *OrderAggregate) Fill(price float64, qty int) error {
 	if err := o.CanFill(); err != nil {
 		return fmt.Errorf("eventsourcing: %w", err)
 	}
-	if qty <= 0 {
-		return fmt.Errorf("eventsourcing: fill quantity must be positive, got %d", qty)
+	filledQty, err := domain.NewQuantity(qty)
+	if err != nil {
+		return fmt.Errorf("eventsourcing: fill: %w", err)
 	}
 	if price <= 0 {
 		return fmt.Errorf("eventsourcing: fill price must be positive, got %f", price)
@@ -218,8 +224,8 @@ func (o *OrderAggregate) Fill(price float64, qty int) error {
 	now := time.Now().UTC()
 	event := &orderFilledEvent{
 		orderID:        o.id,
-		filledPrice:    price,
-		filledQuantity: qty,
+		filledPrice:    domain.NewINR(price),
+		filledQuantity: filledQty,
 		timestamp:      now,
 	}
 	o.Apply(event)
@@ -237,8 +243,7 @@ func (o *OrderAggregate) Apply(event domain.Event) {
 	case *orderPlacedEvent:
 		o.Status = OrderStatusPlaced
 		o.Email = e.email
-		o.Exchange = e.exchange
-		o.Tradingsymbol = e.tradingsymbol
+		o.Instrument = e.instrument
 		o.TransactionType = e.transactionType
 		o.OrderType = e.orderType
 		o.Product = e.product
@@ -269,13 +274,12 @@ func (o *OrderAggregate) Apply(event domain.Event) {
 type orderPlacedEvent struct {
 	orderID         string
 	email           string
-	exchange        string
-	tradingsymbol   string
+	instrument      domain.InstrumentKey
 	transactionType string
 	orderType       string
 	product         string
-	quantity        int
-	price           float64
+	quantity        domain.Quantity
+	price           domain.Money
 	timestamp       time.Time
 }
 
@@ -284,8 +288,8 @@ func (e *orderPlacedEvent) OccurredAt() time.Time { return e.timestamp }
 
 type orderModifiedEvent struct {
 	orderID      string
-	newQuantity  int
-	newPrice     float64
+	newQuantity  domain.Quantity
+	newPrice     domain.Money
 	newOrderType string
 	timestamp    time.Time
 }
@@ -303,8 +307,8 @@ func (e *orderCancelledEvent) OccurredAt() time.Time { return e.timestamp }
 
 type orderFilledEvent struct {
 	orderID        string
-	filledPrice    float64
-	filledQuantity int
+	filledPrice    domain.Money
+	filledQuantity domain.Quantity
 	timestamp      time.Time
 }
 
@@ -343,16 +347,16 @@ func deserializeOrderEvent(stored StoredEvent) (domain.Event, error) {
 		if err := json.Unmarshal(stored.Payload, &p); err != nil {
 			return nil, err
 		}
+		qty, _ := domain.NewQuantity(p.Quantity)
 		return &orderPlacedEvent{
 			orderID:         stored.AggregateID,
 			email:           p.Email,
-			exchange:        p.Exchange,
-			tradingsymbol:   p.Tradingsymbol,
+			instrument:      domain.NewInstrumentKey(p.Exchange, p.Tradingsymbol),
 			transactionType: p.TransactionType,
 			orderType:       p.OrderType,
 			product:         p.Product,
-			quantity:        p.Quantity,
-			price:           p.Price,
+			quantity:        qty,
+			price:           domain.NewINR(p.Price),
 			timestamp:       stored.OccurredAt,
 		}, nil
 
@@ -361,10 +365,11 @@ func deserializeOrderEvent(stored StoredEvent) (domain.Event, error) {
 		if err := json.Unmarshal(stored.Payload, &p); err != nil {
 			return nil, err
 		}
+		qty, _ := domain.NewQuantity(p.NewQuantity)
 		return &orderModifiedEvent{
 			orderID:      stored.AggregateID,
-			newQuantity:  p.NewQuantity,
-			newPrice:     p.NewPrice,
+			newQuantity:  qty,
+			newPrice:     domain.NewINR(p.NewPrice),
 			newOrderType: p.NewOrderType,
 			timestamp:    stored.OccurredAt,
 		}, nil
@@ -380,10 +385,11 @@ func deserializeOrderEvent(stored StoredEvent) (domain.Event, error) {
 		if err := json.Unmarshal(stored.Payload, &p); err != nil {
 			return nil, err
 		}
+		filledQty, _ := domain.NewQuantity(p.FilledQuantity)
 		return &orderFilledEvent{
 			orderID:        stored.AggregateID,
-			filledPrice:    p.FilledPrice,
-			filledQuantity: p.FilledQuantity,
+			filledPrice:    domain.NewINR(p.FilledPrice),
+			filledQuantity: filledQty,
 			timestamp:      stored.OccurredAt,
 		}, nil
 
@@ -405,26 +411,26 @@ func ToStoredEvents(agg *OrderAggregate, startSequence int64) ([]StoredEvent, er
 		case *orderPlacedEvent:
 			payload, err = MarshalPayload(OrderPlacedPayload{
 				Email:           e.email,
-				Exchange:        e.exchange,
-				Tradingsymbol:   e.tradingsymbol,
+				Exchange:        e.instrument.Exchange,
+				Tradingsymbol:   e.instrument.Tradingsymbol,
 				TransactionType: e.transactionType,
 				OrderType:       e.orderType,
 				Product:         e.product,
-				Quantity:        e.quantity,
-				Price:           e.price,
+				Quantity:        e.quantity.Int(),
+				Price:           e.price.Amount,
 			})
 		case *orderModifiedEvent:
 			payload, err = MarshalPayload(OrderModifiedPayload{
-				NewQuantity:  e.newQuantity,
-				NewPrice:     e.newPrice,
+				NewQuantity:  e.newQuantity.Int(),
+				NewPrice:     e.newPrice.Amount,
 				NewOrderType: e.newOrderType,
 			})
 		case *orderCancelledEvent:
 			payload, err = MarshalPayload(OrderCancelledPayload{})
 		case *orderFilledEvent:
 			payload, err = MarshalPayload(OrderFilledPayload{
-				FilledPrice:    e.filledPrice,
-				FilledQuantity: e.filledQuantity,
+				FilledPrice:    e.filledPrice.Amount,
+				FilledQuantity: e.filledQuantity.Int(),
 			})
 		default:
 			return nil, fmt.Errorf("eventsourcing: unknown event type %T", event)

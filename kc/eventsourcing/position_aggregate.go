@@ -16,14 +16,16 @@ const (
 
 // PositionAggregate models the lifecycle of a trading position through events.
 // State is only mutated via Apply, which processes domain events.
+//
+// NOTE: Not instantiated in production. Position state comes from broker API
+// (GetPositions). This aggregate exists for testing event replay correctness.
 type PositionAggregate struct {
 	BaseAggregate
 	Email           string
-	Symbol          string
-	Exchange        string
+	Instrument      domain.InstrumentKey
 	TransactionType string // original direction: BUY or SELL
-	Quantity        int
-	AvgPrice        float64
+	Quantity        domain.Quantity
+	AvgPrice        domain.Money
 	Status          string // OPEN, CLOSED
 	OpenedAt        time.Time
 	ClosedAt        time.Time
@@ -69,19 +71,19 @@ func (p *PositionAggregate) Open(email, symbol, exchange, txnType string, qty in
 	if symbol == "" {
 		return fmt.Errorf("eventsourcing: symbol is required")
 	}
-	if qty <= 0 {
-		return fmt.Errorf("eventsourcing: quantity must be positive, got %d", qty)
+	q, err := domain.NewQuantity(qty)
+	if err != nil {
+		return fmt.Errorf("eventsourcing: %w", err)
 	}
 
 	now := time.Now().UTC()
 	event := &positionOpenedEvent{
 		positionID:      p.id,
 		email:           email,
-		symbol:          symbol,
-		exchange:        exchange,
+		instrument:      domain.NewInstrumentKey(exchange, symbol),
 		transactionType: txnType,
-		quantity:        qty,
-		avgPrice:        avgPrice,
+		quantity:        q,
+		avgPrice:        domain.NewINR(avgPrice),
 		timestamp:       now,
 	}
 	p.Apply(event)
@@ -127,8 +129,7 @@ func (p *PositionAggregate) Apply(event domain.Event) {
 	switch e := event.(type) {
 	case *positionOpenedEvent:
 		p.Email = e.email
-		p.Symbol = e.symbol
-		p.Exchange = e.exchange
+		p.Instrument = e.instrument
 		p.TransactionType = e.transactionType
 		p.Quantity = e.quantity
 		p.AvgPrice = e.avgPrice
@@ -136,7 +137,7 @@ func (p *PositionAggregate) Apply(event domain.Event) {
 		p.OpenedAt = e.timestamp
 	case *positionClosedEvent:
 		p.Status = PositionStatusClosed
-		p.Quantity = 0
+		p.Quantity = domain.Quantity{} // zero value
 		p.ClosedAt = e.timestamp
 	}
 	p.incrementVersion()
@@ -147,11 +148,10 @@ func (p *PositionAggregate) Apply(event domain.Event) {
 type positionOpenedEvent struct {
 	positionID      string
 	email           string
-	symbol          string
-	exchange        string
+	instrument      domain.InstrumentKey
 	transactionType string
-	quantity        int
-	avgPrice        float64
+	quantity        domain.Quantity
+	avgPrice        domain.Money
 	timestamp       time.Time
 }
 
@@ -199,14 +199,14 @@ func deserializePositionEvent(stored StoredEvent) (domain.Event, error) {
 		if err := json.Unmarshal(stored.Payload, &p); err != nil {
 			return nil, err
 		}
+		qty, _ := domain.NewQuantity(p.Quantity)
 		return &positionOpenedEvent{
 			positionID:      stored.AggregateID,
 			email:           p.Email,
-			symbol:          p.Symbol,
-			exchange:        p.Exchange,
+			instrument:      domain.NewInstrumentKey(p.Exchange, p.Symbol),
 			transactionType: p.TransactionType,
-			quantity:        p.Quantity,
-			avgPrice:        p.AvgPrice,
+			quantity:        qty,
+			avgPrice:        domain.NewINR(p.AvgPrice),
 			timestamp:       stored.OccurredAt,
 		}, nil
 
@@ -239,11 +239,11 @@ func ToPositionStoredEvents(agg *PositionAggregate, startSequence int64) ([]Stor
 		case *positionOpenedEvent:
 			payload, err = MarshalPayload(PositionOpenedPayload{
 				Email:           e.email,
-				Symbol:          e.symbol,
-				Exchange:        e.exchange,
+				Symbol:          e.instrument.Tradingsymbol,
+				Exchange:        e.instrument.Exchange,
 				TransactionType: e.transactionType,
-				Quantity:        e.quantity,
-				AvgPrice:        e.avgPrice,
+				Quantity:        e.quantity.Int(),
+				AvgPrice:        e.avgPrice.Amount,
 			})
 		case *positionClosedEvent:
 			payload, err = MarshalPayload(PositionClosedPayload{

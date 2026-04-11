@@ -49,6 +49,32 @@ type OrderCancelledEvent struct {
 func (e OrderCancelledEvent) EventType() string    { return "order.cancelled" }
 func (e OrderCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// OrderFilledEvent is emitted after an order is filled by the exchange.
+type OrderFilledEvent struct {
+	Email      string
+	OrderID    string
+	FilledQty  Quantity
+	FilledPrice Money
+	Timestamp  time.Time
+}
+
+func (e OrderFilledEvent) EventType() string    { return "order.filled" }
+func (e OrderFilledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PositionOpenedEvent is emitted when a new position is opened.
+type PositionOpenedEvent struct {
+	Email           string
+	PositionID      string
+	Instrument      InstrumentKey
+	Qty             Quantity
+	AvgPrice        Money
+	TransactionType string // "BUY" or "SELL"
+	Timestamp       time.Time
+}
+
+func (e PositionOpenedEvent) EventType() string    { return "position.opened" }
+func (e PositionOpenedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // PositionClosedEvent is emitted after a position is closed via close_position.
 type PositionClosedEvent struct {
 	Email           string
@@ -61,6 +87,19 @@ type PositionClosedEvent struct {
 
 func (e PositionClosedEvent) EventType() string    { return "position.closed" }
 func (e PositionClosedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// AlertCreatedEvent is emitted when a new price alert is created.
+type AlertCreatedEvent struct {
+	Email       string
+	AlertID     string
+	Instrument  InstrumentKey
+	TargetPrice Money
+	Direction   string // "above", "below", "drop_pct", "rise_pct"
+	Timestamp   time.Time
+}
+
+func (e AlertCreatedEvent) EventType() string    { return "alert.created" }
+func (e AlertCreatedEvent) OccurredAt() time.Time { return e.Timestamp }
 
 // AlertTriggeredEvent is emitted when a price alert fires.
 type AlertTriggeredEvent struct {
@@ -75,6 +114,16 @@ type AlertTriggeredEvent struct {
 
 func (e AlertTriggeredEvent) EventType() string    { return "alert.triggered" }
 func (e AlertTriggeredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// AlertDeletedEvent is emitted when a price alert is deleted.
+type AlertDeletedEvent struct {
+	Email   string
+	AlertID string
+	Timestamp time.Time
+}
+
+func (e AlertDeletedEvent) EventType() string    { return "alert.deleted" }
+func (e AlertDeletedEvent) OccurredAt() time.Time { return e.Timestamp }
 
 // RiskLimitBreachedEvent is emitted when riskguard blocks an order.
 type RiskLimitBreachedEvent struct {

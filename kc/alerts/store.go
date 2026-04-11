@@ -52,6 +52,47 @@ type Alert struct {
 	NotificationSentAt time.Time `json:"notification_sent_at,omitempty"`
 }
 
+// ShouldTrigger checks if the current price meets this alert's trigger condition.
+func (a *Alert) ShouldTrigger(currentPrice float64) bool {
+	switch a.Direction {
+	case DirectionAbove:
+		return currentPrice >= a.TargetPrice
+	case DirectionBelow:
+		return currentPrice <= a.TargetPrice
+	case DirectionDropPct:
+		if a.ReferencePrice <= 0 {
+			return false
+		}
+		pctChange := (a.ReferencePrice - currentPrice) / a.ReferencePrice * 100
+		return pctChange >= a.TargetPrice
+	case DirectionRisePct:
+		if a.ReferencePrice <= 0 {
+			return false
+		}
+		pctChange := (currentPrice - a.ReferencePrice) / a.ReferencePrice * 100
+		return pctChange >= a.TargetPrice
+	default:
+		return false
+	}
+}
+
+// MarkTriggered transitions the alert to triggered state with the given price.
+// Returns true if newly triggered, false if already triggered.
+func (a *Alert) MarkTriggered(currentPrice float64) bool {
+	if a.Triggered {
+		return false
+	}
+	a.Triggered = true
+	a.TriggeredAt = time.Now()
+	a.TriggeredPrice = currentPrice
+	return true
+}
+
+// IsPercentageAlert returns true if this alert uses a percentage-change direction.
+func (a *Alert) IsPercentageAlert() bool {
+	return a.Direction == DirectionDropPct || a.Direction == DirectionRisePct
+}
+
 // NotifyCallback is invoked when an alert is triggered.
 type NotifyCallback func(alert *Alert, currentPrice float64)
 
@@ -233,12 +274,9 @@ func (s *Store) MarkTriggered(alertID string, currentPrice float64) bool {
 	for _, alerts := range s.alerts {
 		for _, a := range alerts {
 			if a.ID == alertID {
-				if a.Triggered {
+				if !a.MarkTriggered(currentPrice) {
 					return false
 				}
-				a.Triggered = true
-				a.TriggeredAt = time.Now()
-				a.TriggeredPrice = currentPrice
 				if s.db != nil {
 					if err := s.db.UpdateTriggered(alertID, currentPrice, a.TriggeredAt); err != nil {
 						s.logger.Error("Failed to persist triggered alert", "id", alertID, "error", err)

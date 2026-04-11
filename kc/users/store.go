@@ -41,6 +41,26 @@ type User struct {
 	AdminEmail   string    `json:"admin_email,omitempty"`
 }
 
+// IsAdmin returns true if this user has the admin role and is active.
+func (u *User) IsAdmin() bool {
+	return u.Role == RoleAdmin && u.Status == StatusActive
+}
+
+// IsActive returns true if this user's status is active.
+func (u *User) IsActive() bool {
+	return u.Status == StatusActive
+}
+
+// CanTrade returns true if this user is allowed to place trades (not a viewer, and active).
+func (u *User) CanTrade() bool {
+	return u.Role != RoleViewer && u.Status == StatusActive
+}
+
+// HasPassword returns true if this user has a non-empty password hash.
+func (u *User) HasPassword() bool {
+	return u.PasswordHash != ""
+}
+
 // Store is a thread-safe in-memory user store backed by SQLite.
 type Store struct {
 	mu     sync.RWMutex
@@ -209,11 +229,12 @@ func (s *Store) Exists(email string) bool {
 }
 
 // IsAdmin returns true if the given email belongs to an admin user.
+// Delegates to User.IsAdmin() for the actual check.
 func (s *Store) IsAdmin(email string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	u, ok := s.users[strings.ToLower(email)]
-	return ok && u.Role == RoleAdmin && u.Status == StatusActive
+	return ok && u.IsAdmin()
 }
 
 // GetStatus returns the user's status. Returns empty string if user not found.
@@ -528,11 +549,12 @@ func (s *Store) SetPasswordHash(email, hash string) error {
 }
 
 // HasPassword returns true if the given user has a non-empty password hash.
+// Delegates to User.HasPassword() for the actual check.
 func (s *Store) HasPassword(email string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	u, ok := s.users[strings.ToLower(email)]
-	return ok && u.PasswordHash != ""
+	return ok && u.HasPassword()
 }
 
 // VerifyPassword checks the given plaintext password against the stored bcrypt hash.

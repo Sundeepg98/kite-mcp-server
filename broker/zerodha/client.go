@@ -267,3 +267,170 @@ func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
 	}
 	return broker.GTTResponse{TriggerID: resp.TriggerID}, nil
 }
+
+// ConvertPosition converts a position from one product type to another.
+func (c *Client) ConvertPosition(params broker.ConvertPositionParams) (bool, error) {
+	return c.kite.ConvertPosition(kiteconnect.ConvertPositionParams{
+		Exchange:        params.Exchange,
+		TradingSymbol:   params.Tradingsymbol,
+		TransactionType: params.TransactionType,
+		Quantity:        params.Quantity,
+		OldProduct:      params.OldProduct,
+		NewProduct:      params.NewProduct,
+		PositionType:    params.PositionType,
+	})
+}
+
+// --- Mutual Fund operations ---
+
+// GetMFOrders returns all mutual fund orders.
+func (c *Client) GetMFOrders() ([]broker.MFOrder, error) {
+	return retryOnTransient(func() ([]broker.MFOrder, error) {
+		orders, err := c.kite.GetMFOrders()
+		if err != nil {
+			return nil, err
+		}
+		return convertMFOrders(orders), nil
+	}, 2)
+}
+
+// GetMFSIPs returns all mutual fund SIPs.
+func (c *Client) GetMFSIPs() ([]broker.MFSIP, error) {
+	return retryOnTransient(func() ([]broker.MFSIP, error) {
+		sips, err := c.kite.GetMFSIPs()
+		if err != nil {
+			return nil, err
+		}
+		return convertMFSIPs(sips), nil
+	}, 2)
+}
+
+// GetMFHoldings returns all mutual fund holdings.
+func (c *Client) GetMFHoldings() ([]broker.MFHolding, error) {
+	return retryOnTransient(func() ([]broker.MFHolding, error) {
+		holdings, err := c.kite.GetMFHoldings()
+		if err != nil {
+			return nil, err
+		}
+		return convertMFHoldings(holdings), nil
+	}, 2)
+}
+
+// PlaceMFOrder places a mutual fund order.
+func (c *Client) PlaceMFOrder(params broker.MFOrderParams) (broker.MFOrderResponse, error) {
+	resp, err := c.kite.PlaceMFOrder(kiteconnect.MFOrderParams{
+		Tradingsymbol:   params.Tradingsymbol,
+		TransactionType: params.TransactionType,
+		Amount:          params.Amount,
+		Quantity:        params.Quantity,
+		Tag:             params.Tag,
+	})
+	if err != nil {
+		return broker.MFOrderResponse{}, err
+	}
+	return broker.MFOrderResponse{OrderID: resp.OrderID}, nil
+}
+
+// CancelMFOrder cancels a pending mutual fund order.
+func (c *Client) CancelMFOrder(orderID string) (broker.MFOrderResponse, error) {
+	resp, err := c.kite.CancelMFOrder(orderID)
+	if err != nil {
+		return broker.MFOrderResponse{}, err
+	}
+	return broker.MFOrderResponse{OrderID: resp.OrderID}, nil
+}
+
+// PlaceMFSIP starts a new mutual fund SIP.
+func (c *Client) PlaceMFSIP(params broker.MFSIPParams) (broker.MFSIPResponse, error) {
+	resp, err := c.kite.PlaceMFSIP(kiteconnect.MFSIPParams{
+		Tradingsymbol: params.Tradingsymbol,
+		Amount:        params.Amount,
+		Frequency:     params.Frequency,
+		Instalments:   params.Instalments,
+		InitialAmount: params.InitialAmount,
+		InstalmentDay: params.InstalmentDay,
+		Tag:           params.Tag,
+	})
+	if err != nil {
+		return broker.MFSIPResponse{}, err
+	}
+	return broker.MFSIPResponse{SIPID: resp.SIPID}, nil
+}
+
+// CancelMFSIP cancels an existing mutual fund SIP.
+func (c *Client) CancelMFSIP(sipID string) (broker.MFSIPResponse, error) {
+	resp, err := c.kite.CancelMFSIP(sipID)
+	if err != nil {
+		return broker.MFSIPResponse{}, err
+	}
+	return broker.MFSIPResponse{SIPID: resp.SIPID}, nil
+}
+
+// --- Margin calculation operations ---
+
+// GetOrderMargins calculates margin required for orders.
+// Returns the raw Kite API response as any for pass-through.
+func (c *Client) GetOrderMargins(orders []broker.OrderMarginParam) (any, error) {
+	kiteParams := make([]kiteconnect.OrderMarginParam, len(orders))
+	for i, o := range orders {
+		kiteParams[i] = kiteconnect.OrderMarginParam{
+			Exchange:        o.Exchange,
+			Tradingsymbol:   o.Tradingsymbol,
+			TransactionType: o.TransactionType,
+			Variety:         o.Variety,
+			Product:         o.Product,
+			OrderType:       o.OrderType,
+			Quantity:        o.Quantity,
+			Price:           o.Price,
+			TriggerPrice:    o.TriggerPrice,
+		}
+	}
+	return c.kite.GetOrderMargins(kiteconnect.GetMarginParams{
+		OrderParams: kiteParams,
+	})
+}
+
+// GetBasketMargins calculates combined margin for a basket of orders.
+// Returns the raw Kite API response as any for pass-through.
+func (c *Client) GetBasketMargins(orders []broker.OrderMarginParam, considerPositions bool) (any, error) {
+	kiteParams := make([]kiteconnect.OrderMarginParam, len(orders))
+	for i, o := range orders {
+		kiteParams[i] = kiteconnect.OrderMarginParam{
+			Exchange:        o.Exchange,
+			Tradingsymbol:   o.Tradingsymbol,
+			TransactionType: o.TransactionType,
+			Variety:         o.Variety,
+			Product:         o.Product,
+			OrderType:       o.OrderType,
+			Quantity:        o.Quantity,
+			Price:           o.Price,
+			TriggerPrice:    o.TriggerPrice,
+		}
+	}
+	return c.kite.GetBasketMargins(kiteconnect.GetBasketParams{
+		OrderParams:       kiteParams,
+		ConsiderPositions: considerPositions,
+	})
+}
+
+// GetOrderCharges calculates brokerage, taxes, and charges for orders.
+// Returns the raw Kite API response as any for pass-through.
+func (c *Client) GetOrderCharges(orders []broker.OrderChargesParam) (any, error) {
+	kiteParams := make([]kiteconnect.OrderChargesParam, len(orders))
+	for i, o := range orders {
+		kiteParams[i] = kiteconnect.OrderChargesParam{
+			OrderID:         o.OrderID,
+			Exchange:        o.Exchange,
+			Tradingsymbol:   o.Tradingsymbol,
+			TransactionType: o.TransactionType,
+			Quantity:        o.Quantity,
+			AveragePrice:    o.AveragePrice,
+			Product:         o.Product,
+			OrderType:       o.OrderType,
+			Variety:         o.Variety,
+		}
+	}
+	return c.kite.GetOrderCharges(kiteconnect.GetChargesParams{
+		OrderParams: kiteParams,
+	})
+}

@@ -129,7 +129,7 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	}
 
 	var text string
-	if IsPercentageDirection(alert.Direction) {
+	if alert.IsPercentageAlert() {
 		var dirLabel string
 		if alert.Direction == DirectionDropPct {
 			dirLabel = "dropped"

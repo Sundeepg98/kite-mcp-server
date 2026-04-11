@@ -457,7 +457,7 @@ type Manager struct {
 	billingStore       *billing.Store                 // optional: billing tier enforcement
 	invitationStore    *users.InvitationStore         // optional: family invitation management
 	eventDispatcher    *domain.EventDispatcher        // optional: domain event pub/sub
-	eventStore         *eventsourcing.EventStore      // optional: append-only event persistence
+	eventStore         *eventsourcing.EventStore      // optional: domain audit log (append-only, not used for state reconstitution)
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
 	appMode            string
 	externalURL        string
@@ -863,12 +863,13 @@ func (m *Manager) EventDispatcher() *domain.EventDispatcher {
 	return m.eventDispatcher
 }
 
-// SetEventStore sets the event sourcing store.
+// SetEventStore sets the domain audit log (append-only event store).
 func (m *Manager) SetEventStore(s *eventsourcing.EventStore) {
 	m.eventStore = s
 }
 
-// EventStore returns the event sourcing store, or nil if not configured.
+// EventStoreConcrete returns the domain audit log, or nil if not configured.
+// Events are written by makeEventPersister but never read for state reconstitution.
 func (m *Manager) EventStoreConcrete() *eventsourcing.EventStore {
 	return m.eventStore
 }

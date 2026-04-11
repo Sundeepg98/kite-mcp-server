@@ -632,20 +632,19 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		positionParams := kiteconnect.ConvertPositionParams{
-			Exchange:        p.String("exchange", ""),
-			TradingSymbol:   p.String("tradingsymbol", ""),
-			TransactionType: p.String("transaction_type", ""),
-			Quantity:        p.Int("quantity", 0),
-			OldProduct:      p.String("old_product", ""),
-			NewProduct:      p.String("new_product", ""),
-			PositionType:    p.String("position_type", ""),
-		}
-
 		return handler.WithSession(ctx, "convert_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ok, err := session.Kite.Client.ConvertPosition(positionParams)
+			uc := usecases.NewConvertPositionUseCase(manager.SessionSvc(), manager.Logger)
+			ok, err := uc.Execute(ctx, cqrs.ConvertPositionCommand{
+				Email:           session.Email,
+				Exchange:        p.String("exchange", ""),
+				Tradingsymbol:   p.String("tradingsymbol", ""),
+				TransactionType: p.String("transaction_type", ""),
+				Quantity:        p.Int("quantity", 0),
+				OldProduct:      p.String("old_product", ""),
+				NewProduct:      p.String("new_product", ""),
+				PositionType:    p.String("position_type", ""),
+			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to convert position", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert position: %s", err.Error())), nil
 			}
 

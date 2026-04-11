@@ -108,7 +108,7 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 	if !ok || !kc.IsKiteTokenExpired(entry.StoredAt) {
 		return nil
 	}
-	if _, err := session.Kite.Client.GetUserProfile(); err != nil {
+	if _, err := session.Broker.GetProfile(); err != nil {
 		h.manager.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
 		h.manager.TokenStore().Delete(email)
 		h.trackToolError(ctx, toolName, "token_expired")

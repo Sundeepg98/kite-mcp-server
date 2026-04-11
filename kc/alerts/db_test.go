@@ -1998,56 +1998,56 @@ func TestSaveSession_WithEncryption(t *testing.T) {
 
 func TestShouldTrigger_ExactlyAtAboveTarget(t *testing.T) {
 	a := &Alert{Direction: DirectionAbove, TargetPrice: 100}
-	assert.True(t, shouldTrigger(a, 100)) // >= target
+	assert.True(t, a.ShouldTrigger( 100)) // >= target
 }
 
 func TestShouldTrigger_ExactlyAtBelowTarget(t *testing.T) {
 	a := &Alert{Direction: DirectionBelow, TargetPrice: 100}
-	assert.True(t, shouldTrigger(a, 100)) // <= target
+	assert.True(t, a.ShouldTrigger( 100)) // <= target
 }
 
 func TestShouldTrigger_DropPctExactly(t *testing.T) {
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: 1000}
 	// Exactly 5% drop: (1000 - 950) / 1000 * 100 = 5.0
-	assert.True(t, shouldTrigger(a, 950))
+	assert.True(t, a.ShouldTrigger( 950))
 }
 
 func TestShouldTrigger_RisePctExactly(t *testing.T) {
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 1000}
 	// Exactly 10% rise: (1100 - 1000) / 1000 * 100 = 10.0
-	assert.True(t, shouldTrigger(a, 1100))
+	assert.True(t, a.ShouldTrigger( 1100))
 }
 
 func TestShouldTrigger_DropPctJustUnder(t *testing.T) {
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: 1000}
 	// 4.9% drop: (1000 - 951) / 1000 * 100 = 4.9
-	assert.False(t, shouldTrigger(a, 951))
+	assert.False(t, a.ShouldTrigger( 951))
 }
 
 func TestShouldTrigger_RisePctJustUnder(t *testing.T) {
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 1000}
 	// 9.9% rise: (1099 - 1000) / 1000 * 100 = 9.9
-	assert.False(t, shouldTrigger(a, 1099))
+	assert.False(t, a.ShouldTrigger( 1099))
 }
 
 func TestShouldTrigger_RisePctZeroReference(t *testing.T) {
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 0}
-	assert.False(t, shouldTrigger(a, 1100))
+	assert.False(t, a.ShouldTrigger( 1100))
 }
 
 func TestShouldTrigger_DropPctNegativeReference(t *testing.T) {
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: -100}
-	assert.False(t, shouldTrigger(a, 50))
+	assert.False(t, a.ShouldTrigger( 50))
 }
 
 func TestShouldTrigger_AboveJustBelow(t *testing.T) {
 	a := &Alert{Direction: DirectionAbove, TargetPrice: 100}
-	assert.False(t, shouldTrigger(a, 99.99))
+	assert.False(t, a.ShouldTrigger( 99.99))
 }
 
 func TestShouldTrigger_BelowJustAbove(t *testing.T) {
 	a := &Alert{Direction: DirectionBelow, TargetPrice: 100}
-	assert.False(t, shouldTrigger(a, 100.01))
+	assert.False(t, a.ShouldTrigger( 100.01))
 }
 
 // ===========================================================================

@@ -554,7 +554,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 	kcManager.SetRiskGuard(riskGuard)
 
-	// Initialize domain event dispatcher and event store.
+	// Initialize domain event dispatcher and audit log.
+	// Events flow: use case -> EventDispatcher.Dispatch() -> makeEventPersister() -> domain_events table.
+	// This is a write-only audit trail — events are never read back for state reconstitution.
 	eventDispatcher := domain.NewEventDispatcher()
 	kcManager.SetEventDispatcher(eventDispatcher)
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
@@ -563,7 +565,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Error("Failed to initialize domain_events table", "error", err)
 		} else {
 			kcManager.SetEventStore(eventStore)
-			// Subscribe the event store to persist all dispatched events.
+			// Subscribe the domain audit log to persist all dispatched events.
 			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("order.modified", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("order.cancelled", makeEventPersister(eventStore, "Order", app.logger))
@@ -1949,7 +1951,10 @@ func (a *telegramManagerAdapter) TickerServiceConcrete() *ticker.Service {
 	return a.m.TickerServiceConcrete()
 }
 
-// makeEventPersister returns a domain.Event handler that persists events to the EventStore.
+// makeEventPersister returns a domain.Event handler that appends events to the domain audit log.
+// This is the production event persistence path — events are written but never read back
+// for state reconstitution. The domain_events table serves as an immutable audit trail
+// for compliance, debugging, and activity dashboards.
 // Each event is stored with the given aggregateType. The aggregate ID is derived from
 // the event's fields (e.g. OrderID for orders, AlertID for alerts, Email for users).
 func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, logger *slog.Logger) func(domain.Event) {

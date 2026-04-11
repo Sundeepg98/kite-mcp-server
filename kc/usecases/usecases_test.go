@@ -154,6 +154,33 @@ func (m *mockBrokerClient) DeleteGTT(triggerID int) (broker.GTTResponse, error) 
 	m.lastDeleteGTTID = triggerID
 	return m.deleteGTTResp, m.deleteGTTErr
 }
+func (m *mockBrokerClient) ConvertPosition(_ broker.ConvertPositionParams) (bool, error) {
+	return true, nil
+}
+func (m *mockBrokerClient) GetMFOrders() ([]broker.MFOrder, error)   { return nil, nil }
+func (m *mockBrokerClient) GetMFSIPs() ([]broker.MFSIP, error)       { return nil, nil }
+func (m *mockBrokerClient) GetMFHoldings() ([]broker.MFHolding, error) { return nil, nil }
+func (m *mockBrokerClient) PlaceMFOrder(_ broker.MFOrderParams) (broker.MFOrderResponse, error) {
+	return broker.MFOrderResponse{}, nil
+}
+func (m *mockBrokerClient) CancelMFOrder(_ string) (broker.MFOrderResponse, error) {
+	return broker.MFOrderResponse{}, nil
+}
+func (m *mockBrokerClient) PlaceMFSIP(_ broker.MFSIPParams) (broker.MFSIPResponse, error) {
+	return broker.MFSIPResponse{}, nil
+}
+func (m *mockBrokerClient) CancelMFSIP(_ string) (broker.MFSIPResponse, error) {
+	return broker.MFSIPResponse{}, nil
+}
+func (m *mockBrokerClient) GetOrderMargins(_ []broker.OrderMarginParam) (any, error) {
+	return nil, nil
+}
+func (m *mockBrokerClient) GetBasketMargins(_ []broker.OrderMarginParam, _ bool) (any, error) {
+	return nil, nil
+}
+func (m *mockBrokerClient) GetOrderCharges(_ []broker.OrderChargesParam) (any, error) {
+	return nil, nil
+}
 
 // mockAlertStore is a minimal in-memory alert store.
 type mockAlertStore struct {

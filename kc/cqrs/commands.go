@@ -126,6 +126,56 @@ type UnfreezeUserCommand struct {
 	Email string `json:"email"`
 }
 
+// --- Position commands ---
+
+// ConvertPositionCommand requests converting a position from one product to another.
+type ConvertPositionCommand struct {
+	Email           string `json:"email"`
+	Exchange        string `json:"exchange"`
+	Tradingsymbol   string `json:"tradingsymbol"`
+	TransactionType string `json:"transaction_type"`
+	Quantity        int    `json:"quantity"`
+	OldProduct      string `json:"old_product"`
+	NewProduct      string `json:"new_product"`
+	PositionType    string `json:"position_type"` // "day" or "overnight"
+}
+
+// --- Mutual Fund commands ---
+
+// PlaceMFOrderCommand requests placing a mutual fund order.
+type PlaceMFOrderCommand struct {
+	Email           string  `json:"email"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Amount          float64 `json:"amount,omitempty"`
+	Quantity        float64 `json:"quantity,omitempty"`
+	Tag             string  `json:"tag,omitempty"`
+}
+
+// CancelMFOrderCommand requests cancelling a mutual fund order.
+type CancelMFOrderCommand struct {
+	Email   string `json:"email"`
+	OrderID string `json:"order_id"`
+}
+
+// PlaceMFSIPCommand requests placing a mutual fund SIP.
+type PlaceMFSIPCommand struct {
+	Email         string  `json:"email"`
+	Tradingsymbol string  `json:"tradingsymbol"`
+	Amount        float64 `json:"amount"`
+	Frequency     string  `json:"frequency"`
+	Instalments   int     `json:"instalments"`
+	InitialAmount float64 `json:"initial_amount,omitempty"`
+	InstalmentDay int     `json:"instalment_day,omitempty"`
+	Tag           string  `json:"tag,omitempty"`
+}
+
+// CancelMFSIPCommand requests cancelling a mutual fund SIP.
+type CancelMFSIPCommand struct {
+	Email string `json:"email"`
+	SIPID string `json:"sip_id"`
+}
+
 // --- Watchlist commands ---
 
 // CreateWatchlistCommand requests creating a new named watchlist.

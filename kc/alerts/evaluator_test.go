@@ -1,6 +1,6 @@
 package alerts
 
-// evaluator_test.go -- tests for alert evaluation logic (shouldTrigger, Evaluator).
+// evaluator_test.go -- tests for alert evaluation logic (Alert.ShouldTrigger, Evaluator).
 // Extracted from coverage_test.go.
 import (
 	"testing"
@@ -113,7 +113,7 @@ func TestEvaluator_NoAlerts(t *testing.T) {
 func TestShouldTrigger_InvalidDirection_Coverage(t *testing.T) {
 	t.Parallel()
 	a := &Alert{Direction: Direction("unknown"), TargetPrice: 100}
-	assert.False(t, shouldTrigger(a, 100))
+	assert.False(t, a.ShouldTrigger(100))
 }
 
 // ===========================================================================

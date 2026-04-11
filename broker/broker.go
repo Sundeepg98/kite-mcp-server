@@ -231,6 +231,168 @@ type GTTResponse struct {
 	TriggerID int `json:"trigger_id"`
 }
 
+// ConvertPositionParams contains parameters for converting a position from one product to another.
+type ConvertPositionParams struct {
+	Exchange        string `json:"exchange"`
+	Tradingsymbol   string `json:"tradingsymbol"`
+	TransactionType string `json:"transaction_type"`
+	Quantity        int    `json:"quantity"`
+	OldProduct      string `json:"old_product"`
+	NewProduct      string `json:"new_product"`
+	PositionType    string `json:"position_type"` // "day" or "overnight"
+}
+
+// MFOrder represents a mutual fund order.
+type MFOrder struct {
+	OrderID           string  `json:"order_id"`
+	Tradingsymbol     string  `json:"tradingsymbol"`
+	TransactionType   string  `json:"transaction_type"`
+	Status            string  `json:"status"`
+	Amount            float64 `json:"amount"`
+	Quantity          float64 `json:"quantity"`
+	Folio             string  `json:"folio,omitempty"`
+	Fund              string  `json:"fund,omitempty"`
+	Tag               string  `json:"tag,omitempty"`
+	StatusMessage     string  `json:"status_message,omitempty"`
+	PurchaseType      string  `json:"purchase_type,omitempty"`
+	OrderTimestamp    string  `json:"order_timestamp,omitempty"`
+	ExchangeTimestamp string  `json:"exchange_timestamp,omitempty"`
+}
+
+// MFSIP represents a mutual fund SIP (Systematic Investment Plan).
+type MFSIP struct {
+	SIPID         string  `json:"sip_id"`
+	Tradingsymbol string  `json:"tradingsymbol"`
+	Fund          string  `json:"fund,omitempty"`
+	Frequency     string  `json:"frequency"`
+	Amount        float64 `json:"amount"`
+	Instalments   int     `json:"instalments"`
+	Status        string  `json:"status"`
+	InstalmentDay int     `json:"instalment_day,omitempty"`
+	Tag           string  `json:"tag,omitempty"`
+	Created       string  `json:"created,omitempty"`
+}
+
+// MFHolding represents a mutual fund holding.
+type MFHolding struct {
+	Tradingsymbol string  `json:"tradingsymbol"`
+	Folio         string  `json:"folio,omitempty"`
+	Fund          string  `json:"fund,omitempty"`
+	Quantity      float64 `json:"quantity"`
+	AveragePrice  float64 `json:"average_price"`
+	LastPrice     float64 `json:"last_price"`
+	PnL           float64 `json:"pnl"`
+}
+
+// MFOrderParams contains parameters for placing a mutual fund order.
+type MFOrderParams struct {
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Amount          float64 `json:"amount,omitempty"`
+	Quantity        float64 `json:"quantity,omitempty"`
+	Tag             string  `json:"tag,omitempty"`
+}
+
+// MFOrderResponse is returned after placing or cancelling a mutual fund order.
+type MFOrderResponse struct {
+	OrderID string `json:"order_id"`
+}
+
+// MFSIPParams contains parameters for placing a mutual fund SIP.
+type MFSIPParams struct {
+	Tradingsymbol string  `json:"tradingsymbol"`
+	Amount        float64 `json:"amount"`
+	Frequency     string  `json:"frequency"`
+	Instalments   int     `json:"instalments"`
+	InitialAmount float64 `json:"initial_amount,omitempty"`
+	InstalmentDay int     `json:"instalment_day,omitempty"`
+	Tag           string  `json:"tag,omitempty"`
+}
+
+// MFSIPResponse is returned after placing or cancelling a mutual fund SIP.
+type MFSIPResponse struct {
+	SIPID string `json:"sip_id"`
+}
+
+// OrderMarginParam represents a single order for margin calculation.
+type OrderMarginParam struct {
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Variety         string  `json:"variety"`
+	Product         string  `json:"product"`
+	OrderType       string  `json:"order_type"`
+	Quantity        float64 `json:"quantity"`
+	Price           float64 `json:"price,omitempty"`
+	TriggerPrice    float64 `json:"trigger_price,omitempty"`
+}
+
+// OrderMarginResult represents the margin result for one order.
+type OrderMarginResult struct {
+	Type     string  `json:"type"`
+	Exchange string  `json:"exchange"`
+	Total    float64 `json:"total"`
+	// Raw holds the full margin response from the broker for pass-through.
+	Raw any `json:"raw,omitempty"`
+}
+
+// BasketMarginResult represents the combined margin for a basket of orders.
+type BasketMarginResult struct {
+	// Raw holds the full basket margin response from the broker for pass-through.
+	Raw any `json:"raw"`
+}
+
+// OrderChargesParam represents a single order for charges calculation.
+type OrderChargesParam struct {
+	OrderID         string  `json:"order_id"`
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	Quantity        float64 `json:"quantity"`
+	AveragePrice    float64 `json:"average_price"`
+	Product         string  `json:"product"`
+	OrderType       string  `json:"order_type"`
+	Variety         string  `json:"variety"`
+}
+
+// OrderChargesResult represents the charges for one order.
+type OrderChargesResult struct {
+	// Raw holds the full charges response from the broker for pass-through.
+	Raw any `json:"raw"`
+}
+
+// Factory creates broker Client instances from credentials.
+type Factory interface {
+	// Create returns a new unauthenticated broker client for the given API key.
+	Create(apiKey string) (Client, error)
+
+	// CreateWithToken returns an authenticated broker client.
+	CreateWithToken(apiKey, accessToken string) (Client, error)
+
+	// BrokerName returns which broker this factory creates.
+	BrokerName() Name
+}
+
+// Authenticator handles broker-specific auth lifecycle.
+type Authenticator interface {
+	// GetLoginURL returns the broker's login URL for OAuth/redirect flow.
+	GetLoginURL(apiKey string) string
+
+	// ExchangeToken completes auth flow, returns access token + user info.
+	ExchangeToken(apiKey, apiSecret, requestToken string) (AuthResult, error)
+
+	// InvalidateToken invalidates a token (best-effort).
+	InvalidateToken(apiKey, accessToken string) error
+}
+
+// AuthResult returned from ExchangeToken.
+type AuthResult struct {
+	AccessToken string `json:"access_token"`
+	UserID      string `json:"user_id"`
+	UserName    string `json:"user_name"`
+	UserType    string `json:"user_type"`
+}
+
 // Client is the core broker interface. Each broker implementation
 // (Zerodha, Angel One, Dhan, Upstox) must satisfy this contract.
 type Client interface {
@@ -296,4 +458,41 @@ type Client interface {
 
 	// DeleteGTT deletes an existing GTT order.
 	DeleteGTT(triggerID int) (GTTResponse, error)
+
+	// ConvertPosition converts a position from one product type to another.
+	ConvertPosition(params ConvertPositionParams) (bool, error)
+
+	// --- Mutual Fund operations ---
+
+	// GetMFOrders returns all mutual fund orders.
+	GetMFOrders() ([]MFOrder, error)
+
+	// GetMFSIPs returns all mutual fund SIPs.
+	GetMFSIPs() ([]MFSIP, error)
+
+	// GetMFHoldings returns all mutual fund holdings.
+	GetMFHoldings() ([]MFHolding, error)
+
+	// PlaceMFOrder places a mutual fund order.
+	PlaceMFOrder(params MFOrderParams) (MFOrderResponse, error)
+
+	// CancelMFOrder cancels a pending mutual fund order.
+	CancelMFOrder(orderID string) (MFOrderResponse, error)
+
+	// PlaceMFSIP starts a new mutual fund SIP.
+	PlaceMFSIP(params MFSIPParams) (MFSIPResponse, error)
+
+	// CancelMFSIP cancels an existing mutual fund SIP.
+	CancelMFSIP(sipID string) (MFSIPResponse, error)
+
+	// --- Margin calculation operations ---
+
+	// GetOrderMargins calculates margin required for orders.
+	GetOrderMargins(orders []OrderMarginParam) (any, error)
+
+	// GetBasketMargins calculates combined margin for a basket of orders.
+	GetBasketMargins(orders []OrderMarginParam, considerPositions bool) (any, error)
+
+	// GetOrderCharges calculates brokerage, taxes, and charges for orders.
+	GetOrderCharges(orders []OrderChargesParam) (any, error)
 }

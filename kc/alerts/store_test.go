@@ -311,29 +311,29 @@ func TestStore_ConcurrentAccess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// shouldTrigger / Evaluator tests
+// Alert.ShouldTrigger / Evaluator tests
 // ---------------------------------------------------------------------------
 
 func TestShouldTrigger_Above(t *testing.T) {
 	alert := &Alert{TargetPrice: 100.0, Direction: DirectionAbove}
 
 	// Price above target triggers.
-	assert.True(t, shouldTrigger(alert, 100.01))
-	assert.True(t, shouldTrigger(alert, 200.0))
+	assert.True(t, alert.ShouldTrigger( 100.01))
+	assert.True(t, alert.ShouldTrigger( 200.0))
 
 	// Price below target does not trigger.
-	assert.False(t, shouldTrigger(alert, 99.99))
+	assert.False(t, alert.ShouldTrigger( 99.99))
 }
 
 func TestShouldTrigger_Below(t *testing.T) {
 	alert := &Alert{TargetPrice: 100.0, Direction: DirectionBelow}
 
 	// Price below target triggers.
-	assert.True(t, shouldTrigger(alert, 99.99))
-	assert.True(t, shouldTrigger(alert, 50.0))
+	assert.True(t, alert.ShouldTrigger( 99.99))
+	assert.True(t, alert.ShouldTrigger( 50.0))
 
 	// Price above target does not trigger.
-	assert.False(t, shouldTrigger(alert, 100.01))
+	assert.False(t, alert.ShouldTrigger( 100.01))
 }
 
 func TestShouldTrigger_NoTrigger(t *testing.T) {
@@ -341,8 +341,8 @@ func TestShouldTrigger_NoTrigger(t *testing.T) {
 	below := &Alert{TargetPrice: 80.0, Direction: DirectionBelow}
 
 	// Price between the two thresholds triggers neither.
-	assert.False(t, shouldTrigger(above, 90.0))
-	assert.False(t, shouldTrigger(below, 90.0))
+	assert.False(t, above.ShouldTrigger( 90.0))
+	assert.False(t, below.ShouldTrigger( 90.0))
 }
 
 func TestShouldTrigger_ExactPrice(t *testing.T) {
@@ -350,17 +350,17 @@ func TestShouldTrigger_ExactPrice(t *testing.T) {
 	below := &Alert{TargetPrice: 100.0, Direction: DirectionBelow}
 
 	// Exact price should trigger both "above" (>=) and "below" (<=).
-	assert.True(t, shouldTrigger(above, 100.0))
-	assert.True(t, shouldTrigger(below, 100.0))
+	assert.True(t, above.ShouldTrigger( 100.0))
+	assert.True(t, below.ShouldTrigger( 100.0))
 }
 
 func TestShouldTrigger_InvalidDirection(t *testing.T) {
 	alert := &Alert{TargetPrice: 100.0, Direction: Direction("sideways")}
-	assert.False(t, shouldTrigger(alert, 100.0))
+	assert.False(t, alert.ShouldTrigger( 100.0))
 }
 
 func TestShouldTrigger_AlreadyTriggered(t *testing.T) {
-	// shouldTrigger itself does not check the Triggered flag — that's the Evaluator's
+	// ShouldTrigger itself does not check the Triggered flag — that's the Evaluator's
 	// responsibility via GetByToken (which filters out triggered alerts) and MarkTriggered
 	// (which returns false if already triggered). Verify the full flow:
 	s := newTestStore()
@@ -468,19 +468,19 @@ func TestShouldTrigger_DropPct(t *testing.T) {
 	}
 
 	// Price dropped 5% (1000 -> 950) — should trigger
-	assert.True(t, shouldTrigger(alert, 950.0))
+	assert.True(t, alert.ShouldTrigger( 950.0))
 
 	// Price dropped more than 5% — should trigger
-	assert.True(t, shouldTrigger(alert, 900.0))
+	assert.True(t, alert.ShouldTrigger( 900.0))
 
 	// Price dropped exactly 5% — should trigger (>=)
-	assert.True(t, shouldTrigger(alert, 950.0))
+	assert.True(t, alert.ShouldTrigger( 950.0))
 
 	// Price dropped less than 5% — should NOT trigger
-	assert.False(t, shouldTrigger(alert, 960.0))
+	assert.False(t, alert.ShouldTrigger( 960.0))
 
 	// Price went UP — should NOT trigger
-	assert.False(t, shouldTrigger(alert, 1050.0))
+	assert.False(t, alert.ShouldTrigger( 1050.0))
 }
 
 func TestShouldTrigger_RisePct(t *testing.T) {
@@ -491,19 +491,19 @@ func TestShouldTrigger_RisePct(t *testing.T) {
 	}
 
 	// Price rose 10% (500 -> 550) — should trigger
-	assert.True(t, shouldTrigger(alert, 550.0))
+	assert.True(t, alert.ShouldTrigger( 550.0))
 
 	// Price rose more than 10% — should trigger
-	assert.True(t, shouldTrigger(alert, 600.0))
+	assert.True(t, alert.ShouldTrigger( 600.0))
 
 	// Price rose exactly 10% — should trigger (>=)
-	assert.True(t, shouldTrigger(alert, 550.0))
+	assert.True(t, alert.ShouldTrigger( 550.0))
 
 	// Price rose less than 10% — should NOT trigger
-	assert.False(t, shouldTrigger(alert, 540.0))
+	assert.False(t, alert.ShouldTrigger( 540.0))
 
 	// Price went DOWN — should NOT trigger
-	assert.False(t, shouldTrigger(alert, 450.0))
+	assert.False(t, alert.ShouldTrigger( 450.0))
 }
 
 func TestShouldTrigger_DropPct_ZeroReferencePrice(t *testing.T) {
@@ -512,7 +512,7 @@ func TestShouldTrigger_DropPct_ZeroReferencePrice(t *testing.T) {
 		Direction:      DirectionDropPct,
 		ReferencePrice: 0, // invalid — should not trigger
 	}
-	assert.False(t, shouldTrigger(alert, 950.0))
+	assert.False(t, alert.ShouldTrigger( 950.0))
 }
 
 func TestShouldTrigger_RisePct_ZeroReferencePrice(t *testing.T) {
@@ -521,7 +521,7 @@ func TestShouldTrigger_RisePct_ZeroReferencePrice(t *testing.T) {
 		Direction:      DirectionRisePct,
 		ReferencePrice: 0, // invalid — should not trigger
 	}
-	assert.False(t, shouldTrigger(alert, 550.0))
+	assert.False(t, alert.ShouldTrigger( 550.0))
 }
 
 func TestShouldTrigger_DropPct_NegativeReferencePrice(t *testing.T) {
@@ -530,7 +530,7 @@ func TestShouldTrigger_DropPct_NegativeReferencePrice(t *testing.T) {
 		Direction:      DirectionDropPct,
 		ReferencePrice: -100.0, // invalid — should not trigger
 	}
-	assert.False(t, shouldTrigger(alert, 50.0))
+	assert.False(t, alert.ShouldTrigger( 50.0))
 }
 
 func TestShouldTrigger_RisePct_NegativeReferencePrice(t *testing.T) {
@@ -539,7 +539,7 @@ func TestShouldTrigger_RisePct_NegativeReferencePrice(t *testing.T) {
 		Direction:      DirectionRisePct,
 		ReferencePrice: -100.0, // invalid — should not trigger
 	}
-	assert.False(t, shouldTrigger(alert, 50.0))
+	assert.False(t, alert.ShouldTrigger( 50.0))
 }
 
 func TestShouldTrigger_DropPct_ExactThreshold(t *testing.T) {
@@ -549,7 +549,7 @@ func TestShouldTrigger_DropPct_ExactThreshold(t *testing.T) {
 		Direction:      DirectionDropPct,
 		ReferencePrice: 200.0,
 	}
-	assert.True(t, shouldTrigger(alert, 190.0))
+	assert.True(t, alert.ShouldTrigger( 190.0))
 }
 
 func TestShouldTrigger_RisePct_ExactThreshold(t *testing.T) {
@@ -559,7 +559,7 @@ func TestShouldTrigger_RisePct_ExactThreshold(t *testing.T) {
 		Direction:      DirectionRisePct,
 		ReferencePrice: 200.0,
 	}
-	assert.True(t, shouldTrigger(alert, 220.0))
+	assert.True(t, alert.ShouldTrigger( 220.0))
 }
 
 func TestShouldTrigger_DropPct_SmallPercentage(t *testing.T) {
@@ -569,8 +569,8 @@ func TestShouldTrigger_DropPct_SmallPercentage(t *testing.T) {
 		Direction:      DirectionDropPct,
 		ReferencePrice: 100.0,
 	}
-	assert.True(t, shouldTrigger(alert, 99.5))
-	assert.False(t, shouldTrigger(alert, 99.6))
+	assert.True(t, alert.ShouldTrigger( 99.5))
+	assert.False(t, alert.ShouldTrigger( 99.6))
 }
 
 func TestStore_AddWithReferencePrice(t *testing.T) {
