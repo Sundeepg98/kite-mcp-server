@@ -106,17 +106,31 @@ func TestMock_NewTelegramNotifier_EmptyToken(t *testing.T) {
 	assert.Nil(t, notifier, "should return nil when token is empty")
 }
 
+// overrideNewBotFunc safely replaces newBotFunc for the duration of a test.
+// It acquires the mutex, swaps the function, and returns a cleanup function
+// that restores the original. The caller must defer the cleanup.
+func overrideNewBotFunc(t *testing.T, fn func(string) (*tgbotapi.BotAPI, error)) func() {
+	t.Helper()
+	newBotFuncMu.Lock()
+	orig := newBotFunc
+	newBotFunc = fn
+	newBotFuncMu.Unlock()
+	return func() {
+		newBotFuncMu.Lock()
+		newBotFunc = orig
+		newBotFuncMu.Unlock()
+	}
+}
+
 func TestNewTelegramNotifier_WithMockServer(t *testing.T) {
 	server := fakeTelegramServer(false)
 	defer server.Close()
 
-	// Override newBotFunc to route through our mock server.
 	apiEndpoint := server.URL + "/bot%s/%s"
-	origBotFunc := newBotFunc
-	newBotFunc = func(token string) (*tgbotapi.BotAPI, error) {
+	cleanup := overrideNewBotFunc(t, func(token string) (*tgbotapi.BotAPI, error) {
 		return tgbotapi.NewBotAPIWithClient(token, apiEndpoint, &http.Client{})
-	}
-	defer func() { newBotFunc = origBotFunc }()
+	})
+	defer cleanup()
 
 	store := newTestStore()
 	logger := slog.Default()
@@ -129,7 +143,6 @@ func TestNewTelegramNotifier_WithMockServer(t *testing.T) {
 }
 
 func TestNewTelegramNotifier_InvalidToken(t *testing.T) {
-	// Create a server that returns an error for getMe
 	errServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -140,13 +153,11 @@ func TestNewTelegramNotifier_InvalidToken(t *testing.T) {
 	}))
 	defer errServer.Close()
 
-	// Override newBotFunc to route through our error server.
 	apiEndpoint := errServer.URL + "/bot%s/%s"
-	origBotFunc := newBotFunc
-	newBotFunc = func(token string) (*tgbotapi.BotAPI, error) {
+	cleanup := overrideNewBotFunc(t, func(token string) (*tgbotapi.BotAPI, error) {
 		return tgbotapi.NewBotAPIWithClient(token, apiEndpoint, &http.Client{})
-	}
-	defer func() { newBotFunc = origBotFunc }()
+	})
+	defer cleanup()
 
 	store := newTestStore()
 	logger := slog.Default()

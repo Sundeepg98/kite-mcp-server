@@ -4,9 +4,19 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+// newBotFunc is the function used to create a BotAPI instance.
+// Protected by newBotFuncMu to allow safe override in tests.
+var (
+	newBotFuncMu sync.Mutex
+	newBotFunc   = func(token string) (*tgbotapi.BotAPI, error) {
+		return tgbotapi.NewBotAPI(token)
+	}
 )
 
 // escapeTelegramMarkdown escapes special Markdown characters for Telegram messages.
@@ -24,12 +34,6 @@ type TelegramNotifier struct {
 	logger *slog.Logger
 }
 
-// newBotFunc is the function used to create a BotAPI instance.
-// It defaults to tgbotapi.NewBotAPI and can be overridden in tests.
-var newBotFunc = func(token string) (*tgbotapi.BotAPI, error) {
-	return tgbotapi.NewBotAPI(token)
-}
-
 // NewTelegramNotifier creates a new Telegram notifier.
 // Returns nil if botToken is empty (Telegram notifications disabled).
 func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*TelegramNotifier, error) {
@@ -38,7 +42,11 @@ func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*T
 		return nil, nil
 	}
 
-	bot, err := newBotFunc(botToken)
+	newBotFuncMu.Lock()
+	createBot := newBotFunc
+	newBotFuncMu.Unlock()
+
+	bot, err := createBot(botToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Telegram bot: %w", err)
 	}
