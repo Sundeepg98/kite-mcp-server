@@ -84,4 +84,4 @@ kite-mcp-server-*
 .memory
 
 # Local files
-*.local*
+*.local**.out

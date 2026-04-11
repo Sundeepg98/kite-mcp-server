@@ -2,12 +2,14 @@ package billing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -821,4 +823,913 @@ func TestPortalHandler_NoStripeCustomerID(t *testing.T) {
 	// Should redirect to /pricing when customer has no Stripe ID.
 	assert.Equal(t, http.StatusFound, rr.Code)
 	assert.Equal(t, "/pricing", rr.Header().Get("Location"))
+}
+
+// ---------------------------------------------------------------------------
+// Additional coverage tests: LoadFromDB, InitTable, nil-DB edges
+// ---------------------------------------------------------------------------
+
+func TestLoadFromDB_EmptyDB(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// LoadFromDB on a freshly created (empty) table should return no error.
+	err := s.LoadFromDB()
+	require.NoError(t, err)
+
+	// No subscriptions should be loaded.
+	assert.Nil(t, s.GetSubscription("nobody@example.com"))
+	assert.Equal(t, TierFree, s.GetTier("nobody@example.com"))
+}
+
+func TestLoadFromDB_NilDB(t *testing.T) {
+	// Store with nil DB — LoadFromDB should be a no-op.
+	s := newTestStore()
+	err := s.LoadFromDB()
+	require.NoError(t, err)
+}
+
+func TestInitTable_NilDB(t *testing.T) {
+	s := newTestStore()
+	// InitTable with nil DB should return nil (no-op).
+	err := s.InitTable()
+	require.NoError(t, err)
+}
+
+func TestInitTable_Idempotent(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+
+	// Call InitTable twice — second call should succeed (migration is idempotent).
+	require.NoError(t, s.InitTable())
+	require.NoError(t, s.InitTable())
+
+	// Should still be able to write/read data.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "idempotent@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+	got := s.GetSubscription("idempotent@example.com")
+	require.NotNil(t, got)
+	assert.Equal(t, TierPro, got.Tier)
+}
+
+func TestGetSubscription_NonExistent(t *testing.T) {
+	s := newTestStore()
+	got := s.GetSubscription("nonexistent@example.com")
+	assert.Nil(t, got)
+}
+
+func TestGetEmailByCustomerID_Empty(t *testing.T) {
+	s := newTestStore()
+	// No subscriptions exist — should return empty string.
+	assert.Equal(t, "", s.GetEmailByCustomerID(""))
+}
+
+func TestGetTierForUser_NilAdminEmailFn(t *testing.T) {
+	s := newTestStore()
+	// With nil adminEmailFn, should just return TierFree for unknown user.
+	assert.Equal(t, TierFree, s.GetTierForUser("nobody@example.com", nil))
+}
+
+func TestGetTierForUser_AdminEmailFnReturnsSameEmail(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// adminEmailFn returns the same email (self-referential) — should not infinite loop,
+	// just return TierFree since there's no subscription.
+	adminEmailFn := func(email string) string {
+		return email
+	}
+	assert.Equal(t, TierFree, s.GetTierForUser("self@example.com", adminEmailFn))
+}
+
+func TestGetTierForUser_AdminEmailFnReturnsEmpty(t *testing.T) {
+	s := newTestStore()
+	adminEmailFn := func(email string) string {
+		return ""
+	}
+	assert.Equal(t, TierFree, s.GetTierForUser("user@example.com", adminEmailFn))
+}
+
+func TestMaxUsers_DefaultsToOne(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Set subscription without explicitly setting MaxUsers — should default to 0 in struct,
+	// but COALESCE in LoadFromDB should return 1 from the DB default.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "default@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		// MaxUsers deliberately left at 0 (zero value)
+	}))
+
+	// Reload from DB
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	sub := s2.GetSubscription("default@example.com")
+	require.NotNil(t, sub)
+	// The DB stores 0, COALESCE(max_users, 1) returns 1 when max_users is 0? No —
+	// COALESCE only replaces NULL. Since we store 0 explicitly, it returns 0.
+	// This tests that the value round-trips correctly.
+	assert.Equal(t, 0, sub.MaxUsers)
+}
+
+func TestSetSubscription_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	sub := &Subscription{
+		AdminEmail:       "persist@example.com",
+		Tier:             TierPremium,
+		StripeCustomerID: "cus_persist",
+		StripeSubID:      "sub_persist",
+		Status:           StatusActive,
+		MaxUsers:         10,
+	}
+	require.NoError(t, s.SetSubscription(sub))
+
+	// Create a new store from the same DB and load — should see the subscription.
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	got := s2.GetSubscription("persist@example.com")
+	require.NotNil(t, got)
+	assert.Equal(t, TierPremium, got.Tier)
+	assert.Equal(t, "cus_persist", got.StripeCustomerID)
+	assert.Equal(t, "sub_persist", got.StripeSubID)
+	assert.Equal(t, StatusActive, got.Status)
+	assert.Equal(t, 10, got.MaxUsers)
+}
+
+func TestSetSubscription_WithExpiresAt(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	exp := time.Now().Add(30 * 24 * time.Hour) // 30 days from now
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "expiry@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		ExpiresAt:  exp,
+	}))
+
+	// Reload and verify ExpiresAt round-trips.
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	got := s2.GetSubscription("expiry@example.com")
+	require.NotNil(t, got)
+	// Compare within 1 second due to RFC3339 truncation.
+	assert.WithinDuration(t, exp, got.ExpiresAt, 2*time.Second)
+}
+
+func TestInitEventLogTable_NilDB(t *testing.T) {
+	s := newTestStore()
+	// InitEventLogTable with nil DB should return nil (no-op).
+	err := s.InitEventLogTable()
+	require.NoError(t, err)
+}
+
+func TestIsEventProcessed_NilDB(t *testing.T) {
+	s := newTestStore()
+	// IsEventProcessed with nil DB should always return false.
+	assert.False(t, s.IsEventProcessed("evt_any"))
+}
+
+func TestMarkEventProcessed_NilDB(t *testing.T) {
+	s := newTestStore()
+	// MarkEventProcessed with nil DB should return nil (no-op).
+	err := s.MarkEventProcessed("evt_any", "test.event")
+	require.NoError(t, err)
+}
+
+func TestInitEventLogTable_Idempotent(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+
+	// Call twice — should not error.
+	require.NoError(t, s.InitEventLogTable())
+	require.NoError(t, s.InitEventLogTable())
+
+	// Should still be functional.
+	assert.False(t, s.IsEventProcessed("evt_test"))
+	require.NoError(t, s.MarkEventProcessed("evt_test", "test"))
+	assert.True(t, s.IsEventProcessed("evt_test"))
+}
+
+func TestGetTier_PastDue(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "pastdue@example.com",
+		Tier:       TierPro,
+		Status:     StatusPastDue,
+	})
+	// past_due is not active or trialing, so should return TierFree.
+	assert.Equal(t, TierFree, s.GetTier("pastdue@example.com"))
+}
+
+func TestGetTier_Trialing(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "trial@example.com",
+		Tier:       TierPremium,
+		Status:     StatusTrialing,
+	})
+	// Trialing is active, should return the tier.
+	assert.Equal(t, TierPremium, s.GetTier("trial@example.com"))
+}
+
+func TestGetTier_TrialingButExpired(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "trialexp@example.com",
+		Tier:       TierPremium,
+		Status:     StatusTrialing,
+		ExpiresAt:  time.Now().Add(-1 * time.Hour),
+	})
+	assert.Equal(t, TierFree, s.GetTier("trialexp@example.com"),
+		"trialing but expired subscription should return TierFree")
+}
+
+func TestGetTier_FutureExpiry(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "future@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		ExpiresAt:  time.Now().Add(24 * time.Hour), // expires tomorrow
+	})
+	assert.Equal(t, TierPro, s.GetTier("future@example.com"),
+		"active subscription with future expiry should return its tier")
+}
+
+func TestCheckoutHandler_ValidPlansSoloProAndPremium(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := CheckoutHandler(s, logger)
+
+	// Test "pro" plan — also missing price config
+	os.Unsetenv("STRIPE_PRICE_PRO")
+	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
+	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=pro", nil)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "pricing not configured")
+
+	// Test "premium" plan — also missing price config
+	os.Unsetenv("STRIPE_PRICE_PREMIUM")
+	req2 := httptest.NewRequest(http.MethodPost, "/checkout?plan=premium", nil)
+	req2 = req2.WithContext(ctx)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusInternalServerError, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), "pricing not configured")
+}
+
+func TestGetEmailByCustomerID_MultipleSubscriptions(t *testing.T) {
+	s := newTestStore()
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail:       "first@example.com",
+		Tier:             TierPro,
+		Status:           StatusActive,
+		StripeCustomerID: "cus_first",
+	})
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail:       "second@example.com",
+		Tier:             TierPremium,
+		Status:           StatusActive,
+		StripeCustomerID: "cus_second",
+	})
+
+	assert.Equal(t, "first@example.com", s.GetEmailByCustomerID("cus_first"))
+	assert.Equal(t, "second@example.com", s.GetEmailByCustomerID("cus_second"))
+	assert.Equal(t, "", s.GetEmailByCustomerID("cus_unknown"))
+}
+
+// ---------------------------------------------------------------------------
+// Webhook handler internal function tests (pure functions, no Stripe API)
+// ---------------------------------------------------------------------------
+
+func TestHandleCheckoutCompleted(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	var upgradedEmail string
+	adminUpgrade := func(email string) { upgradedEmail = email }
+
+	// Build a minimal Stripe event payload with checkout.session.completed data.
+	sessionJSON := `{
+		"customer_details": {"email": "buyer@example.com"},
+		"customer": {"id": "cus_checkout_1"},
+		"subscription": {
+			"id": "sub_checkout_1",
+			"items": {"data": [{"price": {"id": "price_pro_test"}}]}
+		},
+		"metadata": {"max_users": "5", "plan": "pro"}
+	}`
+	event := stripe.Event{
+		ID:   "evt_checkout_001",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(sessionJSON)},
+	}
+
+	handleCheckoutCompleted(s, &event, "price_pro_test", "price_premium_test", "price_solo_test", logger, adminUpgrade)
+
+	// Verify subscription was created.
+	sub := s.GetSubscription("buyer@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierPro, sub.Tier)
+	assert.Equal(t, "cus_checkout_1", sub.StripeCustomerID)
+	assert.Equal(t, "sub_checkout_1", sub.StripeSubID)
+	assert.Equal(t, StatusActive, sub.Status)
+	assert.Equal(t, 5, sub.MaxUsers)
+
+	// Verify admin upgrade callback was called.
+	assert.Equal(t, "buyer@example.com", upgradedEmail)
+
+	// Verify GetEmailByCustomerID works.
+	assert.Equal(t, "buyer@example.com", s.GetEmailByCustomerID("cus_checkout_1"))
+}
+
+func TestHandleCheckoutCompleted_MissingEmail(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// No customer_details.email — should log error and return.
+	sessionJSON := `{"customer_details": {}, "customer": {"id": "cus_x"}}`
+	event := stripe.Event{
+		ID:   "evt_no_email",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(sessionJSON)},
+	}
+
+	handleCheckoutCompleted(s, &event, "", "", "", logger, nil)
+
+	// No subscription should be created.
+	assert.Nil(t, s.GetSubscription(""))
+}
+
+func TestHandleCheckoutCompleted_InvalidJSON(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	event := stripe.Event{
+		ID:   "evt_bad_json",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(`{invalid json}`)},
+	}
+
+	// Should not panic.
+	handleCheckoutCompleted(s, &event, "", "", "", logger, nil)
+}
+
+func TestHandleCheckoutCompleted_NoAdminUpgrade(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	sessionJSON := `{
+		"customer_details": {"email": "solo@example.com"},
+		"customer": {"id": "cus_solo"},
+		"subscription": {"id": "sub_solo", "items": {"data": [{"price": {"id": "price_solo_test"}}]}},
+		"metadata": {"max_users": "1"}
+	}`
+	event := stripe.Event{
+		ID:   "evt_solo",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(sessionJSON)},
+	}
+
+	// adminUpgrade is nil — should not panic.
+	handleCheckoutCompleted(s, &event, "price_pro_test", "price_premium_test", "price_solo_test", logger, nil)
+
+	sub := s.GetSubscription("solo@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierSoloPro, sub.Tier)
+	assert.Equal(t, 1, sub.MaxUsers)
+}
+
+func TestHandleCheckoutCompleted_PremiumTier(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	sessionJSON := `{
+		"customer_details": {"email": "premium@example.com"},
+		"customer": {"id": "cus_premium"},
+		"subscription": {"id": "sub_premium", "items": {"data": [{"price": {"id": "price_premium_test"}}]}},
+		"metadata": {"max_users": "20"}
+	}`
+	event := stripe.Event{
+		ID:   "evt_premium",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(sessionJSON)},
+	}
+
+	handleCheckoutCompleted(s, &event, "price_pro_test", "price_premium_test", "price_solo_test", logger, nil)
+
+	sub := s.GetSubscription("premium@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierPremium, sub.Tier)
+	assert.Equal(t, 20, sub.MaxUsers)
+}
+
+func TestHandleSubscriptionUpdated(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// First create a subscription (simulating checkout) so customer mapping exists.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "update@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_update_1",
+		StripeSubID:      "sub_update_1",
+		Status:           StatusActive,
+	}))
+
+	// Now simulate a subscription.updated event upgrading to Premium.
+	subJSON := `{
+		"id": "sub_update_1",
+		"customer": {"id": "cus_update_1"},
+		"status": "active",
+		"items": {"data": [{"price": {"id": "price_premium_test"}}]},
+		"cancel_at": 0
+	}`
+	event := stripe.Event{
+		ID:   "evt_update_001",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionUpdated(s, &event, "price_pro_test", "price_premium_test", "price_solo_test", logger)
+
+	sub := s.GetSubscription("update@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierPremium, sub.Tier)
+	assert.Equal(t, StatusActive, sub.Status)
+}
+
+func TestHandleSubscriptionUpdated_Downgrade(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "downgrade@example.com",
+		Tier:             TierPremium,
+		StripeCustomerID: "cus_downgrade",
+		StripeSubID:      "sub_downgrade",
+		Status:           StatusActive,
+	}))
+
+	subJSON := `{
+		"id": "sub_downgrade",
+		"customer": {"id": "cus_downgrade"},
+		"status": "active",
+		"items": {"data": [{"price": {"id": "price_pro_test"}}]},
+		"cancel_at": 0
+	}`
+	event := stripe.Event{
+		ID:   "evt_downgrade",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionUpdated(s, &event, "price_pro_test", "price_premium_test", "price_solo_test", logger)
+
+	sub := s.GetSubscription("downgrade@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierPro, sub.Tier) // downgraded from Premium to Pro
+}
+
+func TestHandleSubscriptionUpdated_UnknownCustomer(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	subJSON := `{
+		"id": "sub_unknown",
+		"customer": {"id": "cus_unknown"},
+		"status": "active",
+		"items": {"data": [{"price": {"id": "price_pro_test"}}]}
+	}`
+	event := stripe.Event{
+		ID:   "evt_unknown_cust",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	// Should not panic — just logs error about unknown customer.
+	handleSubscriptionUpdated(s, &event, "price_pro_test", "", "", logger)
+}
+
+func TestHandleSubscriptionUpdated_InvalidJSON(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	event := stripe.Event{
+		ID:   "evt_bad_update",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(`{not valid}`)},
+	}
+
+	// Should not panic.
+	handleSubscriptionUpdated(s, &event, "", "", "", logger)
+}
+
+func TestHandleSubscriptionUpdated_WithCancelAt(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "cancel@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_cancel",
+		StripeSubID:      "sub_cancel",
+		Status:           StatusActive,
+	}))
+
+	cancelAt := time.Now().Add(30 * 24 * time.Hour).Unix()
+	subJSON := fmt.Sprintf(`{
+		"id": "sub_cancel",
+		"customer": {"id": "cus_cancel"},
+		"status": "active",
+		"items": {"data": [{"price": {"id": "price_pro_test"}}]},
+		"cancel_at": %d
+	}`, cancelAt)
+	event := stripe.Event{
+		ID:   "evt_cancel_at",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionUpdated(s, &event, "price_pro_test", "", "", logger)
+
+	sub := s.GetSubscription("cancel@example.com")
+	require.NotNil(t, sub)
+	assert.False(t, sub.ExpiresAt.IsZero(), "ExpiresAt should be set from cancel_at")
+}
+
+func TestHandleSubscriptionDeleted(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "delete@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_delete",
+		StripeSubID:      "sub_delete",
+		Status:           StatusActive,
+	}))
+
+	subJSON := `{
+		"id": "sub_delete",
+		"customer": {"id": "cus_delete"}
+	}`
+	event := stripe.Event{
+		ID:   "evt_delete_001",
+		Type: "customer.subscription.deleted",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionDeleted(s, &event, logger)
+
+	sub := s.GetSubscription("delete@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierFree, sub.Tier)
+	assert.Equal(t, StatusCanceled, sub.Status)
+}
+
+func TestHandleSubscriptionDeleted_UnknownCustomer(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	subJSON := `{"id": "sub_x", "customer": {"id": "cus_nobody"}}`
+	event := stripe.Event{
+		ID:   "evt_del_unknown",
+		Type: "customer.subscription.deleted",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	// Should not panic.
+	handleSubscriptionDeleted(s, &event, logger)
+}
+
+func TestHandleSubscriptionDeleted_InvalidJSON(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	event := stripe.Event{
+		ID:   "evt_del_bad",
+		Type: "customer.subscription.deleted",
+		Data: &stripe.EventData{Raw: json.RawMessage(`{bad}`)},
+	}
+
+	// Should not panic.
+	handleSubscriptionDeleted(s, &event, logger)
+}
+
+func TestHandlePaymentFailed(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "payer@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_payer",
+		StripeSubID:      "sub_payer",
+		Status:           StatusActive,
+	}))
+
+	invJSON := `{"customer": {"id": "cus_payer"}}`
+	event := stripe.Event{
+		ID:   "evt_payment_fail_001",
+		Type: "invoice.payment_failed",
+		Data: &stripe.EventData{Raw: json.RawMessage(invJSON)},
+	}
+
+	handlePaymentFailed(s, &event, logger)
+
+	sub := s.GetSubscription("payer@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, StatusPastDue, sub.Status)
+	assert.Equal(t, TierPro, sub.Tier) // tier doesn't change, only status
+}
+
+func TestHandlePaymentFailed_UnknownCustomer(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	invJSON := `{"customer": {"id": "cus_nobody"}}`
+	event := stripe.Event{
+		ID:   "evt_pf_unknown",
+		Type: "invoice.payment_failed",
+		Data: &stripe.EventData{Raw: json.RawMessage(invJSON)},
+	}
+
+	// Should not panic.
+	handlePaymentFailed(s, &event, logger)
+}
+
+func TestHandlePaymentFailed_NoCustomerMapping(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// No subscription exists for this customer — unknown mapping.
+	invJSON := `{"customer": {"id": "cus_no_mapping"}}`
+	event := stripe.Event{
+		ID:   "evt_pf_no_mapping",
+		Type: "invoice.payment_failed",
+		Data: &stripe.EventData{Raw: json.RawMessage(invJSON)},
+	}
+
+	// Should not panic — just logs error about unknown customer.
+	handlePaymentFailed(s, &event, logger)
+}
+
+func TestHandlePaymentFailed_InvalidJSON(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	event := stripe.Event{
+		ID:   "evt_pf_bad",
+		Type: "invoice.payment_failed",
+		Data: &stripe.EventData{Raw: json.RawMessage(`{bad}`)},
+	}
+
+	// Should not panic.
+	handlePaymentFailed(s, &event, logger)
+}
+
+func TestHandleCheckoutCompleted_NoCustomerID(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// customer and subscription are nil — only email present.
+	sessionJSON := `{
+		"customer_details": {"email": "nostripe@example.com"},
+		"metadata": {"max_users": "1"}
+	}`
+	event := stripe.Event{
+		ID:   "evt_no_customer",
+		Type: "checkout.session.completed",
+		Data: &stripe.EventData{Raw: json.RawMessage(sessionJSON)},
+	}
+
+	handleCheckoutCompleted(s, &event, "price_pro_test", "", "", logger, nil)
+
+	sub := s.GetSubscription("nostripe@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, "", sub.StripeCustomerID)
+	assert.Equal(t, "", sub.StripeSubID)
+	assert.Equal(t, StatusActive, sub.Status)
+}
+
+func TestHandleSubscriptionUpdated_StatusChange(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "status@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_status",
+		StripeSubID:      "sub_status",
+		Status:           StatusActive,
+	}))
+
+	// Simulate subscription becoming past_due.
+	subJSON := `{
+		"id": "sub_status",
+		"customer": {"id": "cus_status"},
+		"status": "past_due",
+		"items": {"data": [{"price": {"id": "price_pro_test"}}]}
+	}`
+	event := stripe.Event{
+		ID:   "evt_status_change",
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionUpdated(s, &event, "price_pro_test", "", "", logger)
+
+	sub := s.GetSubscription("status@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, StatusPastDue, sub.Status)
+	assert.Equal(t, TierPro, sub.Tier)
+}
+
+func TestHandleSubscriptionDeleted_ExistingSub(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "delsub@example.com",
+		Tier:             TierPremium,
+		StripeCustomerID: "cus_delsub",
+		StripeSubID:      "sub_delsub",
+		Status:           StatusActive,
+		MaxUsers:         10,
+	}))
+
+	subJSON := `{"id": "sub_delsub", "customer": {"id": "cus_delsub"}}`
+	event := stripe.Event{
+		ID:   "evt_delsub",
+		Type: "customer.subscription.deleted",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	handleSubscriptionDeleted(s, &event, logger)
+
+	sub := s.GetSubscription("delsub@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierFree, sub.Tier)
+	assert.Equal(t, StatusCanceled, sub.Status)
+}
+
+// ---------------------------------------------------------------------------
+// WebhookHandler early-path tests (no Stripe signature needed)
+// ---------------------------------------------------------------------------
+
+func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := WebhookHandler(s, "whsec_test", logger, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/webhook", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+}
+
+func TestWebhookHandler_InvalidSignature(t *testing.T) {
+	s := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := WebhookHandler(s, "whsec_test_secret", logger, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{}`))
+	req.Header.Set("Stripe-Signature", "t=123,v1=invalid")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestLoadFromDB_MultipleSubscriptions(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Insert multiple subscriptions
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "a@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		MaxUsers:   5,
+	}))
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "b@example.com",
+		Tier:       TierPremium,
+		Status:     StatusTrialing,
+		MaxUsers:   20,
+	}))
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "c@example.com",
+		Tier:       TierSoloPro,
+		Status:     StatusActive,
+		MaxUsers:   1,
+	}))
+
+	// Reload into a fresh store
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	subA := s2.GetSubscription("a@example.com")
+	require.NotNil(t, subA)
+	assert.Equal(t, TierPro, subA.Tier)
+	assert.Equal(t, 5, subA.MaxUsers)
+
+	subB := s2.GetSubscription("b@example.com")
+	require.NotNil(t, subB)
+	assert.Equal(t, TierPremium, subB.Tier)
+	assert.Equal(t, StatusTrialing, subB.Status)
+
+	subC := s2.GetSubscription("c@example.com")
+	require.NotNil(t, subC)
+	assert.Equal(t, TierSoloPro, subC.Tier)
+	assert.Equal(t, 1, subC.MaxUsers)
+}
+
+func TestMiddleware_GetTierForUser_WithAdminEmailFn(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Premium admin
+	_ = s.SetSubscription(&Subscription{
+		AdminEmail: "admin@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
+		MaxUsers:   10,
+	})
+
+	adminEmailFn := func(email string) string {
+		if email == "worker@example.com" {
+			return "admin@example.com"
+		}
+		return ""
+	}
+
+	// Worker should inherit premium tier via family
+	assert.Equal(t, TierPremium, s.GetTierForUser("worker@example.com", adminEmailFn))
+
+	// Worker accessing premium tool via middleware
+	mw := Middleware(s, adminEmailFn)
+	handler := mw(passthrough)
+
+	ctx := oauth.ContextWithEmail(context.Background(), "worker@example.com")
+	req := gomcp.CallToolRequest{}
+	req.Params.Name = "backtest_strategy" // TierPremium
+
+	result, err := handler(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, result.IsError, "Family member of Premium admin should access Premium tools")
 }

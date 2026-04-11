@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- Well-Known Metadata ---
@@ -1290,4 +1291,535 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// --- HandleLoginChoice ---
+
+func TestHandleLoginChoice_GET_NoCookie(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/dashboard", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleLoginChoice(rr, req)
+
+	// Should render the login choice page (200).
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Sign In") && !strings.Contains(body, "sign") {
+		// Template should render some form content.
+		if len(body) == 0 {
+			t.Error("Body should not be empty")
+		}
+	}
+}
+
+func TestHandleLoginChoice_GET_ValidCookie(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Generate a valid dashboard token
+	token, err := h.jwt.GenerateToken("user@test.com", "dashboard")
+	if err != nil {
+		t.Fatalf("GenerateToken failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/admin/ops", nil)
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	rr := httptest.NewRecorder()
+
+	h.HandleLoginChoice(rr, req)
+
+	// Should redirect since the user already has a valid cookie.
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 (valid cookie should redirect)", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if location != "/admin/ops" {
+		t.Errorf("Location = %q, want /admin/ops", location)
+	}
+}
+
+func TestHandleLoginChoice_GET_InvalidCookie(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/dashboard", nil)
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: "invalid-jwt"})
+	rr := httptest.NewRecorder()
+
+	h.HandleLoginChoice(rr, req)
+
+	// Invalid cookie should render the login page (200).
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (invalid cookie should show login)", rr.Code)
+	}
+}
+
+func TestHandleLoginChoice_DefaultRedirect(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Generate a valid dashboard token.
+	token, _ := h.jwt.GenerateToken("user@test.com", "dashboard")
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login", nil)
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	rr := httptest.NewRecorder()
+
+	h.HandleLoginChoice(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if location != "/dashboard" {
+		t.Errorf("Location = %q, want /dashboard (default redirect)", location)
+	}
+}
+
+// --- HandleAdminLogin ---
+
+func TestHandleAdminLogin_GET(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/admin-login?redirect=/admin/ops", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// Should render the admin login form.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+}
+
+func TestHandleAdminLogin_POST_MissingCSRF(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	form := url.Values{
+		"email":    {"admin@test.com"},
+		"password": {"secret"},
+		"redirect": {"/admin/ops"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// Should re-render the form (200) due to missing CSRF.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (CSRF check re-renders form)", rr.Code)
+	}
+}
+
+func TestHandleAdminLogin_POST_NoUserStore(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Set valid CSRF cookie + form value.
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"secret"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {"test-csrf-value"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: "test-csrf-value"})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// No user store configured — should re-render form with error.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (no user store)", rr.Code)
+	}
+}
+
+func TestHandleAdminLogin_DefaultRedirect(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// GET with no redirect param — should default to /admin/ops.
+	req := httptest.NewRequest(http.MethodGet, "/auth/admin-login", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+}
+
+// --- HandleEmailLookup ---
+
+func TestHandleEmailLookup_GET_NotAllowed(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/email-lookup", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleEmailLookup(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want 405", rr.Code)
+	}
+}
+
+func TestHandleEmailLookup_POST_MissingCSRF(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	form := url.Values{
+		"email":       {"user@test.com"},
+		"oauth_state": {""},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/email-lookup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.HandleEmailLookup(rr, req)
+
+	// Missing CSRF + empty oauth_state → should return 400.
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 (missing CSRF + invalid state)", rr.Code)
+	}
+}
+
+// --- recoverOAuthState ---
+
+func TestRecoverOAuthState_EmptyString(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	_, ok := h.recoverOAuthState("")
+	if ok {
+		t.Error("recoverOAuthState should return false for empty string")
+	}
+}
+
+func TestRecoverOAuthState_InvalidSignature(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	_, ok := h.recoverOAuthState("invalid-signed-data")
+	if ok {
+		t.Error("recoverOAuthState should return false for invalid signature")
+	}
+}
+
+func TestRecoverOAuthState_InvalidBase64(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, signer *mockSigner, exchanger *mockExchanger) {
+		signer.verifyFunc = func(signed string) (string, error) {
+			// Return invalid base64
+			return "not-base64!@#$%^", nil
+		}
+	})
+	defer h.Close()
+
+	_, ok := h.recoverOAuthState("some-signed-value")
+	if ok {
+		t.Error("recoverOAuthState should return false for invalid base64")
+	}
+}
+
+func TestRecoverOAuthState_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, signer *mockSigner, exchanger *mockExchanger) {
+		signer.verifyFunc = func(signed string) (string, error) {
+			// Return valid base64 but invalid JSON
+			return base64.URLEncoding.EncodeToString([]byte("not json")), nil
+		}
+	})
+	defer h.Close()
+
+	_, ok := h.recoverOAuthState("some-signed-value")
+	if ok {
+		t.Error("recoverOAuthState should return false for invalid JSON")
+	}
+}
+
+func TestRecoverOAuthState_ValidRoundTrip(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	state := oauthState{
+		ClientID:      "client-123",
+		RedirectURI:   "https://example.com/callback",
+		CodeChallenge: "abc123",
+	}
+
+	stateJSON, _ := json.Marshal(state)
+	encoded := base64.URLEncoding.EncodeToString(stateJSON)
+	signed := h.signer.Sign(encoded)
+
+	recovered, ok := h.recoverOAuthState(signed)
+	if !ok {
+		t.Fatal("recoverOAuthState should return true for valid state")
+	}
+	if recovered.ClientID != "client-123" {
+		t.Errorf("ClientID = %q, want %q", recovered.ClientID, "client-123")
+	}
+	if recovered.RedirectURI != "https://example.com/callback" {
+		t.Errorf("RedirectURI = %q, want %q", recovered.RedirectURI, "https://example.com/callback")
+	}
+}
+
+// --- HandleBrowserLogin additional tests ---
+
+func TestHandleBrowserLogin_GET_WithEmail_NoCredentials(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, signer *mockSigner, exchanger *mockExchanger) {
+		exchanger.getCredentials = func(email string) (string, string, bool) {
+			return "", "", false
+		}
+	})
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/browser-login?email=unknown@test.com&redirect=/dashboard", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleBrowserLogin(rr, req)
+
+	// Should render the form with error message (200).
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (no creds → show form)", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "No credentials") {
+		// Some form of error message should be present.
+		if !strings.Contains(body, "email") {
+			t.Error("Should render login form with email field")
+		}
+	}
+}
+
+func TestHandleBrowserLogin_POST_ValidCSRF_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	form := url.Values{
+		"email":      {""},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {"valid-csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "valid-csrf"})
+	rr := httptest.NewRecorder()
+
+	h.HandleBrowserLogin(rr, req)
+
+	// Empty email with valid CSRF → should re-render form.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (empty email → form)", rr.Code)
+	}
+}
+
+func TestHandleBrowserLogin_POST_ValidCSRF_NoCredentials(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, signer *mockSigner, exchanger *mockExchanger) {
+		exchanger.getCredentials = func(email string) (string, string, bool) {
+			return "", "", false
+		}
+	})
+	defer h.Close()
+
+	form := url.Values{
+		"email":      {"noone@test.com"},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {"valid-csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "valid-csrf"})
+	rr := httptest.NewRecorder()
+
+	h.HandleBrowserLogin(rr, req)
+
+	// Valid CSRF, email exists but no credentials → should show form with error.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (no creds → form)", rr.Code)
+	}
+}
+
+func TestHandleBrowserLogin_POST_ValidCSRF_WithCredentials(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, signer *mockSigner, exchanger *mockExchanger) {
+		exchanger.getCredentials = func(email string) (string, string, bool) {
+			if email == "known@test.com" {
+				return "user-api-key", "user-api-secret", true
+			}
+			return "", "", false
+		}
+	})
+	defer h.Close()
+
+	form := url.Values{
+		"email":      {"known@test.com"},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {"valid-csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "valid-csrf"})
+	rr := httptest.NewRecorder()
+
+	h.HandleBrowserLogin(rr, req)
+
+	// Valid CSRF, email has credentials → should redirect to Kite login.
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 (redirect to Kite login)", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if !strings.Contains(location, "kite.zerodha.com") {
+		t.Errorf("Location = %q, should contain kite.zerodha.com", location)
+	}
+}
+
+// --- AuthCodeStore additional edge cases ---
+
+func TestAuthCodeStore_ConsumeExpiredCode(t *testing.T) {
+	t.Parallel()
+	store := NewAuthCodeStore()
+	defer store.Close()
+
+	code, err := store.Generate(&AuthCodeEntry{
+		ClientID: "client",
+		Email:    "user@test.com",
+	})
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Manually expire the entry.
+	store.mu.Lock()
+	if entry, ok := store.entries[code]; ok {
+		entry.ExpiresAt = time.Now().Add(-1 * time.Minute)
+	}
+	store.mu.Unlock()
+
+	// Consume should fail for expired code.
+	_, ok := store.Consume(code)
+	if ok {
+		t.Error("Consume should fail for expired code")
+	}
+}
+
+func TestAuthCodeStore_Full(t *testing.T) {
+	t.Parallel()
+	store := &AuthCodeStore{
+		entries: make(map[string]*AuthCodeEntry),
+		done:    make(chan struct{}),
+	}
+	defer store.Close()
+
+	// Fill the store to capacity.
+	for i := 0; i < maxAuthCodes; i++ {
+		store.entries[fmt.Sprintf("code-%d", i)] = &AuthCodeEntry{
+			ExpiresAt: time.Now().Add(10 * time.Minute),
+		}
+	}
+
+	// Next Generate should fail.
+	_, err := store.Generate(&AuthCodeEntry{ClientID: "overflow"})
+	if err != ErrAuthCodeStoreFull {
+		t.Errorf("Expected ErrAuthCodeStoreFull, got %v", err)
+	}
+}
+
+// --- ClientStore eviction ---
+
+func TestClientStore_EvictOldest(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+
+	// Fill the store to capacity with known clients.
+	for i := 0; i < maxClients; i++ {
+		store.mu.Lock()
+		store.clients[fmt.Sprintf("client-%06d", i)] = &ClientEntry{
+			ClientName: fmt.Sprintf("Client %d", i),
+			CreatedAt:  time.Now().Add(time.Duration(i) * time.Second),
+		}
+		store.mu.Unlock()
+	}
+
+	// Register one more — should evict the oldest (client-000000).
+	id, secret, err := store.Register([]string{"https://example.com/cb"}, "NewClient")
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if id == "" || secret == "" {
+		t.Error("Register should return non-empty id and secret")
+	}
+
+	// The oldest client should have been evicted.
+	store.mu.RLock()
+	_, exists := store.clients["client-000000"]
+	store.mu.RUnlock()
+	if exists {
+		t.Error("Oldest client should have been evicted")
+	}
+}
+
+// --- serveEmailPrompt ---
+
+func TestServeEmailPrompt(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	rr := httptest.NewRecorder()
+	state := oauthState{
+		ClientID:    "test-client",
+		RedirectURI: "https://example.com/callback",
+	}
+
+	h.serveEmailPrompt(rr, state, "Test error message")
+
+	// Should render the email prompt page.
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+}
+
+// --- HandleBrowserAuthCallback ---
+
+func TestHandleBrowserAuthCallback_MissingRequestToken(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?flow=browser", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleBrowserAuthCallback(rr, req, "")
+
+	// Missing request_token should return 400.
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400", rr.Code)
+	}
 }

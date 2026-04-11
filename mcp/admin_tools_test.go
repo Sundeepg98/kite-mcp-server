@@ -25,6 +25,7 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	// Minimal instruments manager (required by kc.New).
+	// Use TestData to avoid hitting the real Kite API.
 	instMgr, err := instruments.New(instruments.Config{
 		UpdateConfig: func() *instruments.UpdateConfig {
 			c := instruments.DefaultUpdateConfig()
@@ -32,6 +33,9 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 			return c
 		}(),
 		Logger: logger,
+		TestData: map[uint32]*instruments.Instrument{
+			256265: {InstrumentToken: 256265, Tradingsymbol: "INFY", Exchange: "NSE", Segment: "NSE"},
+		},
 	})
 	require.NoError(t, err)
 

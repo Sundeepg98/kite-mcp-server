@@ -688,3 +688,689 @@ func defaultTestLogger() *slog.Logger {
 	return slog.Default()
 }
 
+// ---------------------------------------------------------------------------
+// Store.SetDB / Store.SetLogger / Store.LoadFromDB
+// ---------------------------------------------------------------------------
+
+func TestStore_SetDB(t *testing.T) {
+	s := newTestStore()
+	// SetDB should not panic with nil.
+	s.SetDB(nil)
+}
+
+func TestStore_SetLogger(t *testing.T) {
+	s := newTestStore()
+	// SetLogger should not panic.
+	s.SetLogger(slog.Default())
+}
+
+func TestStore_LoadFromDB_NilDB(t *testing.T) {
+	s := newTestStore()
+	// LoadFromDB with nil DB should be a no-op.
+	err := s.LoadFromDB()
+	require.NoError(t, err)
+}
+
+func TestStore_LoadFromDB_WithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	// Save an alert directly to DB.
+	alert := &Alert{
+		ID:              "load-db-1",
+		Email:           "dbuser@example.com",
+		Tradingsymbol:   "TCS",
+		Exchange:        "NSE",
+		InstrumentToken: 2953217,
+		TargetPrice:     3500.0,
+		Direction:       DirectionAbove,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+	require.NoError(t, db.SaveAlert(alert))
+
+	// Save a Telegram chat ID directly to DB.
+	require.NoError(t, db.SaveTelegramChatID("dbuser@example.com", 555666777))
+
+	// Create a new store and load from DB.
+	s2 := NewStore(nil)
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+
+	// Verify alert loaded.
+	alerts := s2.List("dbuser@example.com")
+	require.Len(t, alerts, 1)
+	assert.Equal(t, "load-db-1", alerts[0].ID)
+	assert.Equal(t, "TCS", alerts[0].Tradingsymbol)
+
+	// Verify Telegram chat ID loaded.
+	chatID, ok := s2.GetTelegramChatID("dbuser@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, int64(555666777), chatID)
+}
+
+func TestStore_ListByEmail_Empty(t *testing.T) {
+	s := newTestStore()
+	// List for a non-existent email should return empty (not nil).
+	alerts := s.List("nonexistent@example.com")
+	assert.Empty(t, alerts)
+}
+
+// ---------------------------------------------------------------------------
+// DB operations: DeleteAlert, DeleteAlertsByEmail, LoadTelegramChatIDs,
+// SaveTelegramChatID, UpdateTriggered, UpdateAlertNotification, DeleteTelegramChatID
+// ---------------------------------------------------------------------------
+
+func TestDB_DeleteAlert(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "del-01",
+		Email:           "user@example.com",
+		Tradingsymbol:   "RELIANCE",
+		Exchange:        "NSE",
+		InstrumentToken: 738561,
+		TargetPrice:     2500.0,
+		Direction:       DirectionAbove,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+	require.NoError(t, db.SaveAlert(alert))
+
+	// Delete the alert.
+	require.NoError(t, db.DeleteAlert("user@example.com", "del-01"))
+
+	// Verify it's gone.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	assert.Empty(t, alertMap["user@example.com"])
+}
+
+func TestDB_DeleteAlertsByEmail(t *testing.T) {
+	db := openTestDB(t)
+
+	for i := 0; i < 3; i++ {
+		alert := &Alert{
+			ID:              fmt.Sprintf("batch-%d", i),
+			Email:           "user@example.com",
+			Tradingsymbol:   fmt.Sprintf("SYM%d", i),
+			Exchange:        "NSE",
+			InstrumentToken: uint32(1000 + i),
+			TargetPrice:     float64(100 + i),
+			Direction:       DirectionAbove,
+			CreatedAt:       time.Now().Truncate(time.Second),
+		}
+		require.NoError(t, db.SaveAlert(alert))
+	}
+
+	// Delete all alerts for user.
+	require.NoError(t, db.DeleteAlertsByEmail("user@example.com"))
+
+	// Verify all gone.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	assert.Empty(t, alertMap["user@example.com"])
+}
+
+func TestDB_TelegramChatIDs(t *testing.T) {
+	db := openTestDB(t)
+
+	// Save chat IDs.
+	require.NoError(t, db.SaveTelegramChatID("a@example.com", 111))
+	require.NoError(t, db.SaveTelegramChatID("b@example.com", 222))
+
+	// Load all.
+	chatIDs, err := db.LoadTelegramChatIDs()
+	require.NoError(t, err)
+	assert.Equal(t, int64(111), chatIDs["a@example.com"])
+	assert.Equal(t, int64(222), chatIDs["b@example.com"])
+
+	// Overwrite.
+	require.NoError(t, db.SaveTelegramChatID("a@example.com", 333))
+	chatIDs, err = db.LoadTelegramChatIDs()
+	require.NoError(t, err)
+	assert.Equal(t, int64(333), chatIDs["a@example.com"])
+
+	// Delete.
+	require.NoError(t, db.DeleteTelegramChatID("a@example.com"))
+	chatIDs, err = db.LoadTelegramChatIDs()
+	require.NoError(t, err)
+	_, exists := chatIDs["a@example.com"]
+	assert.False(t, exists)
+	assert.Equal(t, int64(222), chatIDs["b@example.com"])
+}
+
+func TestDB_UpdateTriggered(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "trig-01",
+		Email:           "user@example.com",
+		Tradingsymbol:   "INFY",
+		Exchange:        "NSE",
+		InstrumentToken: 408065,
+		TargetPrice:     1500.0,
+		Direction:       DirectionBelow,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+	require.NoError(t, db.SaveAlert(alert))
+
+	// Trigger the alert.
+	trigTime := time.Now().Truncate(time.Second)
+	require.NoError(t, db.UpdateTriggered("trig-01", 1490.5, trigTime))
+
+	// Verify in DB.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+	loaded := alertMap["user@example.com"][0]
+	assert.True(t, loaded.Triggered)
+	assert.InDelta(t, 1490.5, loaded.TriggeredPrice, 0.01)
+}
+
+func TestDB_UpdateAlertNotification(t *testing.T) {
+	db := openTestDB(t)
+
+	alert := &Alert{
+		ID:              "notif-01",
+		Email:           "user@example.com",
+		Tradingsymbol:   "TCS",
+		Exchange:        "NSE",
+		InstrumentToken: 2953217,
+		TargetPrice:     3500.0,
+		Direction:       DirectionAbove,
+		CreatedAt:       time.Now().Truncate(time.Second),
+	}
+	require.NoError(t, db.SaveAlert(alert))
+
+	// Update notification sent time.
+	sentAt := time.Now().Truncate(time.Second)
+	require.NoError(t, db.UpdateAlertNotification("notif-01", sentAt))
+
+	// Verify in DB (LoadAlerts doesn't load notification_sent_at, but the update should not error).
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	assert.Len(t, alertMap["user@example.com"], 1)
+}
+
+func TestDB_DeleteClient(t *testing.T) {
+	db := openTestDB(t)
+
+	now := time.Now().Truncate(time.Second)
+	require.NoError(t, db.SaveClient("client-del-1", "secret", `["http://localhost"]`, "App", now, false))
+
+	// Verify it exists.
+	clients, err := db.LoadClients()
+	require.NoError(t, err)
+	assert.Len(t, clients, 1)
+
+	// Delete it.
+	require.NoError(t, db.DeleteClient("client-del-1"))
+
+	// Verify gone.
+	clients, err = db.LoadClients()
+	require.NoError(t, err)
+	assert.Empty(t, clients)
+}
+
+// ---------------------------------------------------------------------------
+// Store.Add with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestStore_AddWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	id, err := s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	require.NoError(t, err)
+	assert.NotEmpty(t, id)
+
+	// Verify persisted in DB.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+	assert.Equal(t, "RELIANCE", alertMap["user@example.com"][0].Tradingsymbol)
+}
+
+func TestStore_DeleteWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	id, err := s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	require.NoError(t, err)
+
+	// Delete via store.
+	require.NoError(t, s.Delete("user@example.com", id))
+
+	// Verify removed from DB.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	assert.Empty(t, alertMap["user@example.com"])
+}
+
+func TestStore_DeleteByEmailWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionBelow)
+	s.SetTelegramChatID("user@example.com", 123456)
+
+	// Delete all by email.
+	s.DeleteByEmail("user@example.com")
+
+	// Verify removed from DB.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	assert.Empty(t, alertMap["user@example.com"])
+
+	chatIDs, err := db.LoadTelegramChatIDs()
+	require.NoError(t, err)
+	_, exists := chatIDs["user@example.com"]
+	assert.False(t, exists)
+}
+
+func TestStore_SetTelegramChatIDWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	s.SetTelegramChatID("user@example.com", 999888777)
+
+	// Verify persisted.
+	chatIDs, err := db.LoadTelegramChatIDs()
+	require.NoError(t, err)
+	assert.Equal(t, int64(999888777), chatIDs["user@example.com"])
+}
+
+func TestStore_MarkTriggeredWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	id, err := s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	require.NoError(t, err)
+
+	ok := s.MarkTriggered(id, 2550.0)
+	assert.True(t, ok)
+
+	// Verify in DB.
+	alertMap, err := db.LoadAlerts()
+	require.NoError(t, err)
+	require.Len(t, alertMap["user@example.com"], 1)
+	assert.True(t, alertMap["user@example.com"][0].Triggered)
+	assert.InDelta(t, 2550.0, alertMap["user@example.com"][0].TriggeredPrice, 0.01)
+}
+
+func TestStore_MarkNotificationSentWithDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	id, _ := s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+
+	sentAt := time.Now().Truncate(time.Second)
+	s.MarkNotificationSent(id, sentAt)
+
+	// Should not panic — just verify it didn't error silently.
+	alerts := s.List("user@example.com")
+	require.Len(t, alerts, 1)
+	assert.WithinDuration(t, sentAt, alerts[0].NotificationSentAt, 2*time.Second)
+}
+
+// ---------------------------------------------------------------------------
+// PnLSnapshotService.GetJournal
+// ---------------------------------------------------------------------------
+
+func TestPnLSnapshotService_GetJournal(t *testing.T) {
+	db := openTestDB(t)
+
+	svc := NewPnLSnapshotService(db, nil, nil, defaultTestLogger())
+	require.NotNil(t, svc)
+
+	// Insert P&L data.
+	entries := []*DailyPnLEntry{
+		{Date: "2026-04-01", Email: "user@example.com", HoldingsPnL: 1000, PositionsPnL: 200, NetPnL: 1200, HoldingsCount: 10, TradesCount: 3},
+		{Date: "2026-04-02", Email: "user@example.com", HoldingsPnL: -500, PositionsPnL: 100, NetPnL: -400, HoldingsCount: 10, TradesCount: 2},
+		{Date: "2026-04-03", Email: "user@example.com", HoldingsPnL: 300, PositionsPnL: 0, NetPnL: 300, HoldingsCount: 10, TradesCount: 1},
+		{Date: "2026-04-04", Email: "user@example.com", HoldingsPnL: 700, PositionsPnL: 50, NetPnL: 750, HoldingsCount: 10, TradesCount: 4},
+	}
+	for _, e := range entries {
+		require.NoError(t, db.SaveDailyPnL(e))
+	}
+
+	result, err := svc.GetJournal("user@example.com", "2026-04-01", "2026-04-04")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, 4, result.TotalDays)
+	assert.InDelta(t, 1850.0, result.CumulativePnL, 0.01)
+	assert.Equal(t, 3, result.WinDays)
+	assert.Equal(t, 1, result.LossDays)
+	assert.InDelta(t, 1850.0/4, result.AvgDailyPnL, 0.01)
+
+	require.NotNil(t, result.BestDay)
+	assert.Equal(t, "2026-04-01", result.BestDay.Date)
+
+	require.NotNil(t, result.WorstDay)
+	assert.Equal(t, "2026-04-02", result.WorstDay.Date)
+}
+
+func TestPnLSnapshotService_GetJournal_Empty(t *testing.T) {
+	db := openTestDB(t)
+
+	svc := NewPnLSnapshotService(db, nil, nil, defaultTestLogger())
+	require.NotNil(t, svc)
+
+	result, err := svc.GetJournal("nobody@example.com", "2026-01-01", "2026-12-31")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 0, result.TotalDays)
+	assert.Empty(t, result.Entries)
+	assert.Nil(t, result.BestDay)
+	assert.Nil(t, result.WorstDay)
+}
+
+// ---------------------------------------------------------------------------
+// TrailingStopManager.CancelByEmail / SetOnModify
+// ---------------------------------------------------------------------------
+
+func TestTrailingStopManager_CancelByEmail(t *testing.T) {
+	m, _ := newTestManager(t)
+
+	// Add stops for two users.
+	ts1 := &TrailingStop{
+		Email: "userA@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "O1", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	ts2 := &TrailingStop{
+		Email: "userA@example.com", Exchange: "NSE", Tradingsymbol: "TCS",
+		InstrumentToken: 2953217, OrderID: "O2", TrailAmount: 15,
+		Direction: "long", HighWaterMark: 3500, CurrentStop: 3485,
+	}
+	ts3 := &TrailingStop{
+		Email: "userB@example.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
+		InstrumentToken: 738561, OrderID: "O3", TrailAmount: 25,
+		Direction: "long", HighWaterMark: 2500, CurrentStop: 2475,
+	}
+
+	_, err := m.Add(ts1)
+	require.NoError(t, err)
+	_, err = m.Add(ts2)
+	require.NoError(t, err)
+	_, err = m.Add(ts3)
+	require.NoError(t, err)
+
+	// Cancel all for userA.
+	m.CancelByEmail("userA@example.com")
+
+	// userA's stops should be inactive.
+	stopsA := m.List("userA@example.com")
+	for _, s := range stopsA {
+		assert.False(t, s.Active, "userA's stop %s should be inactive", s.ID)
+	}
+
+	// userB's stop should still be active.
+	stopsB := m.List("userB@example.com")
+	require.Len(t, stopsB, 1)
+	assert.True(t, stopsB[0].Active)
+}
+
+func TestTrailingStopManager_CancelByEmail_NoneExist(t *testing.T) {
+	m, _ := newTestManager(t)
+	// Should not panic when no stops exist for the user.
+	m.CancelByEmail("nobody@example.com")
+}
+
+func TestTrailingStopManager_SetOnModify(t *testing.T) {
+	m, _ := newTestManager(t)
+
+	var called bool
+	m.SetOnModify(func(ts *TrailingStop, oldStop, newStop float64) {
+		called = true
+	})
+
+	ts := &TrailingStop{
+		Email: "test@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "SL-ONMOD", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	_, err := m.Add(ts)
+	require.NoError(t, err)
+
+	// Trigger a modify.
+	tick := models.Tick{InstrumentToken: 408065, LastPrice: 1550}
+	m.Evaluate("test@example.com", tick)
+
+	assert.True(t, called, "onModify callback should have been invoked")
+}
+
+// ---------------------------------------------------------------------------
+// DB ExecDDL, ExecInsert, QueryRow (used by billing package)
+// ---------------------------------------------------------------------------
+
+func TestDB_ExecDDL(t *testing.T) {
+	db := openTestDB(t)
+
+	// Create a custom table.
+	err := db.ExecDDL(`CREATE TABLE IF NOT EXISTS test_table (id TEXT PRIMARY KEY)`)
+	require.NoError(t, err)
+
+	// Insert via ExecInsert.
+	err = db.ExecInsert(`INSERT INTO test_table (id) VALUES (?)`, "row1")
+	require.NoError(t, err)
+
+	// Query via QueryRow.
+	var id string
+	row := db.QueryRow(`SELECT id FROM test_table WHERE id = ?`, "row1")
+	require.NoError(t, row.Scan(&id))
+	assert.Equal(t, "row1", id)
+}
+
+// ---------------------------------------------------------------------------
+// DB registry operations
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// TelegramNotifier.Store / Logger (non-nil receiver)
+// ---------------------------------------------------------------------------
+
+func TestTelegramNotifier_StoreAndLogger(t *testing.T) {
+	s := newTestStore()
+	logger := defaultTestLogger()
+	// Construct a TelegramNotifier directly (no bot, but non-nil receiver).
+	tn := &TelegramNotifier{
+		store:  s,
+		logger: logger,
+	}
+	assert.Equal(t, s, tn.Store())
+	assert.Equal(t, logger, tn.Logger())
+}
+
+// ---------------------------------------------------------------------------
+// BriefingService.recentlyTriggeredAlerts
+// ---------------------------------------------------------------------------
+
+func TestBriefingService_RecentlyTriggeredAlerts(t *testing.T) {
+	s := newTestStore()
+
+	// Add and trigger an alert.
+	id, err := s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	require.NoError(t, err)
+	s.MarkTriggered(id, 2550.0)
+
+	// Add a non-triggered alert.
+	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionBelow)
+
+	// Create a BriefingService with a nil notifier (won't send, but we can test the method).
+	// Since the method is on BriefingService, we need a non-nil service.
+	logger := defaultTestLogger()
+	// Can't use NewBriefingService (requires non-nil notifier), so construct directly.
+	bs := &BriefingService{
+		alertStore: s,
+		logger:     logger,
+	}
+
+	// Cutoff before now — the triggered alert should be included.
+	cutoff := time.Now().Add(-1 * time.Minute)
+	triggered := bs.recentlyTriggeredAlerts("user@example.com", cutoff)
+	assert.Len(t, triggered, 1)
+	assert.Equal(t, "RELIANCE", triggered[0].Tradingsymbol)
+
+	// Cutoff after now — nothing should match.
+	futureCutoff := time.Now().Add(1 * time.Hour)
+	triggered = bs.recentlyTriggeredAlerts("user@example.com", futureCutoff)
+	assert.Empty(t, triggered)
+
+	// Non-existent user.
+	triggered = bs.recentlyTriggeredAlerts("nobody@example.com", cutoff)
+	assert.Empty(t, triggered)
+}
+
+// ---------------------------------------------------------------------------
+// Store.LoadFromDB round-trip (alerts + telegram)
+// ---------------------------------------------------------------------------
+
+func TestStore_LoadFromDB_FullRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+
+	// Populate store and persist.
+	s := NewStore(nil)
+	s.SetDB(db)
+
+	id1, _ := s.Add("a@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	s.AddWithReferencePrice("a@example.com", "INFY", "NSE", 408065, 5.0, DirectionDropPct, 1500.0)
+	s.MarkTriggered(id1, 2550.0)
+	s.SetTelegramChatID("a@example.com", 111222)
+	s.Add("b@example.com", "TCS", "NSE", 2953217, 3500.0, DirectionBelow)
+
+	// Create new store and load from DB.
+	s2 := NewStore(nil)
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+
+	// Verify user a.
+	alertsA := s2.List("a@example.com")
+	assert.Len(t, alertsA, 2)
+	chatID, ok := s2.GetTelegramChatID("a@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, int64(111222), chatID)
+
+	// Verify user b.
+	alertsB := s2.List("b@example.com")
+	assert.Len(t, alertsB, 1)
+}
+
+func TestDB_RegistryCRUD(t *testing.T) {
+	db := openTestDB(t)
+
+	now := time.Now().Truncate(time.Second)
+	entry := &RegistryDBEntry{
+		ID:           "reg-001",
+		APIKey:       "apikey1",
+		APISecret:    "apisecret1",
+		AssignedTo:   "user@example.com",
+		Label:        "Test App",
+		Status:       "active",
+		RegisteredBy: "admin@example.com",
+		Source:       "manual",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	require.NoError(t, db.SaveRegistryEntry(entry))
+
+	// Load entries.
+	entries, err := db.LoadRegistryEntries()
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "admin@example.com", entries["reg-001"].RegisteredBy)
+	assert.Equal(t, "apikey1", entries["reg-001"].APIKey)
+	assert.Equal(t, "apisecret1", entries["reg-001"].APISecret)
+
+	// Delete entry.
+	require.NoError(t, db.DeleteRegistryEntry("reg-001"))
+
+	entries, err = db.LoadRegistryEntries()
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestStore_DeleteByEmail_NoAlerts(t *testing.T) {
+	s := newTestStore()
+
+	// DeleteByEmail on non-existent user should not panic.
+	s.DeleteByEmail("nobody@example.com")
+
+	// Also exercise with telegram mapping only.
+	s.SetTelegramChatID("tgonly@example.com", 111222)
+	s.DeleteByEmail("tgonly@example.com")
+
+	_, ok := s.GetTelegramChatID("tgonly@example.com")
+	assert.False(t, ok)
+}
+
+func TestStore_DeleteByEmail_WithAlertsAndTelegram(t *testing.T) {
+	s := newTestStore()
+
+	s.Add("user@example.com", "RELIANCE", "NSE", 738561, 2500.0, DirectionAbove)
+	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionBelow)
+	s.SetTelegramChatID("user@example.com", 555666)
+
+	// Verify data exists.
+	assert.Len(t, s.List("user@example.com"), 2)
+	_, ok := s.GetTelegramChatID("user@example.com")
+	assert.True(t, ok)
+
+	s.DeleteByEmail("user@example.com")
+
+	// All data should be gone.
+	assert.Empty(t, s.List("user@example.com"))
+	_, ok = s.GetTelegramChatID("user@example.com")
+	assert.False(t, ok)
+}
+
+func TestEvaluator_PercentageDropAlert(t *testing.T) {
+	var notified []*Alert
+	s := NewStore(func(alert *Alert, currentPrice float64) {
+		notified = append(notified, alert)
+	})
+
+	// Create a 5% drop alert with reference price 1000.
+	s.AddWithReferencePrice("user@example.com", "RELIANCE", "NSE", 738561, 5.0, DirectionDropPct, 1000.0)
+
+	eval := NewEvaluator(s, defaultTestLogger())
+
+	// Price at 960 → only 4% drop → should NOT trigger.
+	eval.Evaluate("user@example.com", models.Tick{InstrumentToken: 738561, LastPrice: 960.0})
+	assert.Len(t, notified, 0)
+
+	// Price at 950 → exactly 5% drop → should trigger.
+	eval.Evaluate("user@example.com", models.Tick{InstrumentToken: 738561, LastPrice: 950.0})
+	assert.Len(t, notified, 1)
+	assert.Equal(t, DirectionDropPct, notified[0].Direction)
+}
+
+func TestEvaluator_PercentageRiseAlert(t *testing.T) {
+	var notified []*Alert
+	s := NewStore(func(alert *Alert, currentPrice float64) {
+		notified = append(notified, alert)
+	})
+
+	// Create a 10% rise alert with reference price 500.
+	s.AddWithReferencePrice("user@example.com", "INFY", "NSE", 408065, 10.0, DirectionRisePct, 500.0)
+
+	eval := NewEvaluator(s, defaultTestLogger())
+
+	// Price at 540 → only 8% rise → should NOT trigger.
+	eval.Evaluate("user@example.com", models.Tick{InstrumentToken: 408065, LastPrice: 540.0})
+	assert.Len(t, notified, 0)
+
+	// Price at 550 → exactly 10% rise → should trigger.
+	eval.Evaluate("user@example.com", models.Tick{InstrumentToken: 408065, LastPrice: 550.0})
+	assert.Len(t, notified, 1)
+	assert.Equal(t, DirectionRisePct, notified[0].Direction)
+}
+
