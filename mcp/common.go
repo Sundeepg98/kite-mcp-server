@@ -141,11 +141,11 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	}
 
 	// DEV_MODE: mock broker session — skip all token/auth checks.
-	// Tools that access session.Kite.Client directly will panic on nil;
-	// the deferred recover translates that into a user-friendly error.
-	if kiteSession.Kite == nil {
+	// The stub Kite client (non-nil, dead base URI) lets handler bodies execute
+	// and return API errors instead of panicking on nil dereference.
+	if h.manager.DevMode() {
 		h.manager.Logger.Debug("DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
-		return h.callWithNilKiteGuard(toolName, kiteSession, fn)
+		return fn(kiteSession)
 	}
 
 	if isNew {

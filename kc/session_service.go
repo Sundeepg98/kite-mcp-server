@@ -91,14 +91,19 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 	ss.logger.Debug("Creating new Kite session data for MCP session ID", "session_id", sessionID, "email", email)
 
 	// DEV_MODE: use mock broker — no real Kite login required.
+	// Create a stub KiteConnect with a dead base URI so session.Kite is non-nil.
+	// This lets tool handlers execute their body (returning API errors from the stub)
+	// instead of panicking on nil dereference — critical for test coverage.
 	if ss.devMode {
 		mockClient := mock.NewDemoClient()
 		if email == "" {
 			email = "demo@kitemcp.dev"
 		}
-		ss.logger.Info("DEV_MODE: created mock broker session", "session_id", sessionID, "email", email)
+		stubKite := NewKiteConnect("dev_key")
+		stubKite.Client.SetBaseURI("http://localhost:1/dev-stub")
+		ss.logger.Info("DEV_MODE: created mock broker session with stub Kite client", "session_id", sessionID, "email", email)
 		return &KiteSessionData{
-			Kite:   nil,
+			Kite:   stubKite,
 			Broker: mockClient,
 			Email:  email,
 		}
@@ -180,7 +185,7 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 	}
 
 	// Restore Kite client for sessions loaded from DB (Data.Kite is nil after restart).
-	// In DEV_MODE, Kite is intentionally nil (mock broker) — skip restoration.
+	// In DEV_MODE, Kite has a stub client (non-nil) so this branch is never entered.
 	if kiteData.Kite == nil && !ss.devMode {
 		resolvedEmail := email
 		if resolvedEmail == "" {
