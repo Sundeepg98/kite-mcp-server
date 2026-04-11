@@ -253,7 +253,7 @@ func ToPositionStoredEvents(agg *PositionAggregate, startSequence int64) ([]Stor
 		default:
 			return nil, fmt.Errorf("eventsourcing: unknown event type %T", event)
 		}
-		if err != nil {
+		if err != nil { // COVERAGE: unreachable — all payload types are plain structs that json.Marshal cannot fail on
 			return nil, err
 		}
 

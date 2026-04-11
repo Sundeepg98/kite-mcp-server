@@ -284,7 +284,7 @@ func ToAlertStoredEvents(agg *AlertAggregate, startSequence int64) ([]StoredEven
 		default:
 			return nil, fmt.Errorf("eventsourcing: unknown event type %T", event)
 		}
-		if err != nil {
+		if err != nil { // COVERAGE: unreachable — all payload types are plain structs that json.Marshal cannot fail on
 			return nil, err
 		}
 

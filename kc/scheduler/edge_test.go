@@ -134,3 +134,29 @@ func TestTick_DedupResetsNextTradingDay(t *testing.T) {
 		t.Fatalf("should run on Monday (new date), ran %d", ran.Load())
 	}
 }
+
+// TestLoop_TickerBranch exercises the case <-ticker.C branch in loop()
+// by using a fast tick interval and letting the goroutine run briefly.
+func TestLoop_TickerBranch(t *testing.T) {
+	s := New(edgeLogger())
+	s.SetTickInterval(10 * time.Millisecond) // fast ticker for testing
+
+	var ran atomic.Int32
+	// Monday 2026-04-06 10:00 IST — a trading day.
+	monday := time.Date(2026, 4, 6, 10, 0, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return monday })
+
+	s.Add(Task{Name: "loop_test", Hour: 10, Minute: 0, Fn: func() { ran.Add(1) }})
+
+	s.Start()
+	// Wait long enough for the initial tick + at least one ticker.C tick.
+	time.Sleep(80 * time.Millisecond)
+	s.Stop()
+
+	// The task fires on the initial s.tick() call in loop().
+	// The ticker.C branch also calls s.tick(), but dedup prevents a second run
+	// on the same date. The important thing is that the ticker branch was exercised.
+	if ran.Load() < 1 {
+		t.Fatalf("task should run at least once, ran %d", ran.Load())
+	}
+}

@@ -429,7 +429,7 @@ func ToStoredEvents(agg *OrderAggregate, startSequence int64) ([]StoredEvent, er
 		default:
 			return nil, fmt.Errorf("eventsourcing: unknown event type %T", event)
 		}
-		if err != nil {
+		if err != nil { // COVERAGE: unreachable — all payload types are plain structs that json.Marshal cannot fail on
 			return nil, err
 		}
 

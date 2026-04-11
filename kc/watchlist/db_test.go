@@ -530,3 +530,47 @@ func TestDeleteByEmail_DBError(t *testing.T) {
 	// In-memory delete should still have worked.
 	assert.Len(t, s.ListWatchlists("alice@example.com"), 0)
 }
+
+// TestLoadWatchlists_ScanError triggers the rows.Scan error path (db.go:80-82)
+// by dropping the real table and recreating it with all column names but NULL
+// values in columns that Go Scan expects non-nil.
+func TestLoadWatchlists_ScanError(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	// Drop and recreate with all 6 expected column names but no constraints.
+	require.NoError(t, db.ExecDDL(`DROP TABLE watchlists`))
+	require.NoError(t, db.ExecDDL(`CREATE TABLE watchlists (
+		id TEXT, email TEXT, name TEXT, sort_order TEXT, created_at TEXT, updated_at TEXT
+	)`))
+	// Insert a row where sort_order is NULL (Scan into int fails).
+	require.NoError(t, db.ExecInsert(
+		`INSERT INTO watchlists (id, email, name) VALUES ('bad-wl', 'a@b.com', 'test')`))
+
+	_, err := loadWatchlists(db)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "scan watchlist")
+}
+
+// TestLoadItems_ScanError triggers the rows.Scan error path (db.go:122-126)
+// by dropping the real table and recreating it with all column names but NULL
+// values in columns that Go Scan expects non-nil.
+func TestLoadItems_ScanError(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	// Drop and recreate with all 11 expected column names but no constraints.
+	require.NoError(t, db.ExecDDL(`DROP TABLE watchlist_items`))
+	require.NoError(t, db.ExecDDL(`CREATE TABLE watchlist_items (
+		id TEXT, watchlist_id TEXT, email TEXT, exchange TEXT, tradingsymbol TEXT,
+		instrument_token TEXT, notes TEXT, target_entry TEXT, target_exit TEXT,
+		sort_order TEXT, added_at TEXT
+	)`))
+	// Insert a row where instrument_token is NULL (Scan into uint32 fails).
+	require.NoError(t, db.ExecInsert(
+		`INSERT INTO watchlist_items (id, watchlist_id, email) VALUES ('bad-item', 'wl1', 'a@b.com')`))
+
+	_, err := loadItems(db)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "scan watchlist item")
+}

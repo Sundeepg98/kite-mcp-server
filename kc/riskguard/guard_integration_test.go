@@ -660,3 +660,42 @@ func TestFullChain_EmailCaseInsensitive(t *testing.T) {
 	g.Unfreeze("USER@EXAMPLE.COM")
 	assert.False(t, g.IsFrozen("user@example.com"))
 }
+
+// TestLoadLimits_ScanError triggers the rows.Scan error path (guard.go:730-732)
+// by dropping the real table, recreating it with all column names, and inserting
+// a row where an INTEGER column contains a non-numeric string (causing Scan to fail).
+func TestLoadLimits_ScanError(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	g := NewGuard(logger)
+	g.SetDB(db)
+	require.NoError(t, g.InitTable())
+
+	// Drop the real table and recreate with all expected column names but
+	// no type constraints. Then insert a row where max_orders_per_day holds
+	// NULL. The Go Scan into int will fail.
+	require.NoError(t, db.ExecDDL(`DROP TABLE risk_limits`))
+	require.NoError(t, db.ExecDDL(`CREATE TABLE risk_limits (
+		email TEXT,
+		max_single_order_inr TEXT,
+		max_orders_per_day TEXT,
+		max_orders_per_minute TEXT,
+		duplicate_window_secs TEXT,
+		max_daily_value_inr TEXT,
+		auto_freeze_on_limit_hit TEXT,
+		trading_frozen TEXT,
+		frozen_at TEXT,
+		frozen_by TEXT,
+		frozen_reason TEXT
+	)`))
+	// Insert a row where integer columns contain NULL (scan into int fails).
+	require.NoError(t, db.ExecInsert(
+		`INSERT INTO risk_limits (email) VALUES ('bad@test.com')`))
+
+	err = g.LoadLimits()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "scan risk_limits")
+}

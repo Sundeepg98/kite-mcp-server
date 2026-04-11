@@ -29,26 +29,31 @@ type Clock func() time.Time
 // Scheduler checks every minute whether any registered task should fire.
 // Tasks only run on weekdays (Mon-Fri) and at most once per calendar day.
 type Scheduler struct {
-	mu      sync.Mutex
-	tasks   []Task
-	lastRun map[string]string // task name -> "2006-01-02" of last execution
-	done    chan struct{}
-	logger  *slog.Logger
-	clock   Clock
+	mu           sync.Mutex
+	tasks        []Task
+	lastRun      map[string]string // task name -> "2006-01-02" of last execution
+	done         chan struct{}
+	logger       *slog.Logger
+	clock        Clock
+	tickInterval time.Duration // default 60s, override in tests
 }
 
 // New creates a new Scheduler.
 func New(logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		lastRun: make(map[string]string),
-		done:    make(chan struct{}),
-		logger:  logger,
-		clock:   time.Now,
+		lastRun:      make(map[string]string),
+		done:         make(chan struct{}),
+		logger:       logger,
+		clock:        time.Now,
+		tickInterval: 60 * time.Second,
 	}
 }
 
 // SetClock overrides the time source (for testing).
 func (s *Scheduler) SetClock(c Clock) { s.clock = c }
+
+// SetTickInterval overrides the loop tick interval (for testing).
+func (s *Scheduler) SetTickInterval(d time.Duration) { s.tickInterval = d }
 
 // Add registers a task. Must be called before Start.
 func (s *Scheduler) Add(task Task) {
@@ -72,9 +77,9 @@ func (s *Scheduler) Stop() {
 	}
 }
 
-// loop is the main ticker loop, running every 60 seconds.
+// loop is the main ticker loop, running at tickInterval (default 60s).
 func (s *Scheduler) loop() {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
 	// Check immediately on start so we don't wait up to 60s for the first tick.
