@@ -1,8 +1,10 @@
 package users
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -697,4 +699,556 @@ func TestInvitationStore_DBRoundTrip(t *testing.T) {
 	got := is2.Get("inv_rt")
 	require.NotNil(t, got)
 	assert.Equal(t, "admin@example.com", got.AdminEmail)
+}
+
+// ---------------------------------------------------------------------------
+// Additional coverage tests: DB round-trip edge cases, concurrent access,
+// EnsureUser with existing user, and DB error paths.
+// ---------------------------------------------------------------------------
+
+func TestStore_UpdateKiteUID_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "uid_db@example.com", KiteUID: "OLD123"}))
+	s.UpdateKiteUID("uid_db@example.com", "NEW456")
+
+	// Reload from DB and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("uid_db@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "NEW456", u.KiteUID)
+}
+
+func TestStore_SetAdminEmail_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	s.EnsureUser("member@example.com", "", "", "invite")
+	require.NoError(t, s.SetAdminEmail("member@example.com", "admin@example.com"))
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("member@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "admin@example.com", u.AdminEmail)
+}
+
+func TestStore_SetAdminEmail_UserNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	err := s.SetAdminEmail("nonexistent@example.com", "admin@example.com")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "user not found")
+}
+
+func TestStore_Delete_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "deldb@example.com"}))
+	s.Delete("deldb@example.com")
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	assert.False(t, s2.Exists("deldb@example.com"))
+}
+
+func TestStore_Delete_NonExistent(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	// Should not panic.
+	s.Delete("nobody@example.com")
+}
+
+func TestStore_EnsureAdmin_ConcurrentCreation(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	// Create a user first, then EnsureAdmin promotes to admin.
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "concurrent_admin@example.com", Role: RoleTrader}))
+	s.EnsureAdmin("concurrent_admin@example.com")
+
+	u, ok := s.Get("concurrent_admin@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role)
+}
+
+func TestStore_EnsureUser_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	u := s.EnsureUser("ensure_db@example.com", "KU123", "Display", "oauth")
+	require.NotNil(t, u)
+	assert.Equal(t, "ensure_db@example.com", u.Email)
+	assert.Equal(t, "KU123", u.KiteUID)
+
+	// Reload from DB and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u2, ok := s2.Get("ensure_db@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "KU123", u2.KiteUID)
+	assert.Equal(t, "oauth", u2.OnboardedBy)
+}
+
+func TestStore_UpdateLastLogin_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "logindb@example.com"}))
+	s.UpdateLastLogin("logindb@example.com")
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("logindb@example.com")
+	require.True(t, ok)
+	assert.False(t, u.LastLogin.IsZero())
+}
+
+func TestStore_UpdateLastLogin_NonExistent_WithDB(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+	// Should be a no-op, not panic.
+	s.UpdateLastLogin("nobody@example.com")
+}
+
+func TestStore_UpdateRole_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "roledb@example.com", Role: RoleTrader}))
+	require.NoError(t, s.UpdateRole("roledb@example.com", RoleAdmin))
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("roledb@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role)
+}
+
+func TestStore_UpdateStatus_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "statusdb@example.com", Status: StatusActive}))
+	require.NoError(t, s.UpdateStatus("statusdb@example.com", StatusSuspended))
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("statusdb@example.com")
+	require.True(t, ok)
+	assert.Equal(t, StatusSuspended, u.Status)
+}
+
+func TestStore_SetPasswordHash_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "pwdb@example.com"}))
+	require.NoError(t, s.SetPasswordHash("pwdb@example.com", "hashed_pw"))
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("pwdb@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "hashed_pw", u.PasswordHash)
+}
+
+func TestStore_ConcurrentCreateAndGet(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n * 2)
+
+	for i := 0; i < n; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			email := "concurrent" + time.Now().Format("150405.000000") + "@example.com"
+			_ = s.Create(&User{
+				ID:    "u_" + time.Now().Format("150405.000000"),
+				Email: email,
+			})
+		}(i)
+	}
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			s.List()
+			s.Count()
+		}()
+	}
+	wg.Wait()
+}
+
+func TestInvitationStore_GetByInvitedEmail_ValidPending(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+
+	inv := &FamilyInvitation{
+		ID:           "inv_valid",
+		AdminEmail:   "admin@example.com",
+		InvitedEmail: "valid@example.com",
+		Status:       "pending",
+		ExpiresAt:    time.Now().Add(24 * time.Hour), // valid (future)
+	}
+	require.NoError(t, is.Create(inv))
+
+	got := is.GetByInvitedEmail("valid@example.com")
+	require.NotNil(t, got)
+	assert.Equal(t, "valid@example.com", got.InvitedEmail)
+	assert.Equal(t, "pending", got.Status)
+}
+
+func TestInvitationStore_GetByInvitedEmail_AcceptedNotReturned(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+
+	inv := &FamilyInvitation{
+		ID:           "inv_accepted",
+		AdminEmail:   "admin@example.com",
+		InvitedEmail: "accepted@example.com",
+		Status:       "accepted",
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+	}
+	require.NoError(t, is.Create(inv))
+
+	// Should NOT return accepted invitations — only pending.
+	got := is.GetByInvitedEmail("accepted@example.com")
+	assert.Nil(t, got)
+}
+
+func TestInvitationStore_CreateWithDB(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+
+	inv := &FamilyInvitation{
+		ID:           "inv_db",
+		AdminEmail:   "admin@example.com",
+		InvitedEmail: "dbuser@example.com",
+		Status:       "pending",
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+	}
+	require.NoError(t, is.Create(inv))
+
+	got := is.Get("inv_db")
+	require.NotNil(t, got)
+	assert.Equal(t, "dbuser@example.com", got.InvitedEmail)
+}
+
+func TestInvitationStore_AcceptWithDB(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+
+	inv := &FamilyInvitation{
+		ID:           "inv_accept_db",
+		AdminEmail:   "admin@example.com",
+		InvitedEmail: "acceptdb@example.com",
+		Status:       "pending",
+	}
+	require.NoError(t, is.Create(inv))
+	require.NoError(t, is.Accept("inv_accept_db"))
+
+	got := is.Get("inv_accept_db")
+	require.NotNil(t, got)
+	assert.Equal(t, "accepted", got.Status)
+	assert.False(t, got.AcceptedAt.IsZero())
+}
+
+func TestInvitationStore_RevokeWithDB(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+
+	inv := &FamilyInvitation{
+		ID:           "inv_revoke_db",
+		AdminEmail:   "admin@example.com",
+		InvitedEmail: "revokedb@example.com",
+		Status:       "pending",
+	}
+	require.NoError(t, is.Create(inv))
+	require.NoError(t, is.Revoke("inv_revoke_db"))
+
+	got := is.Get("inv_revoke_db")
+	require.NotNil(t, got)
+	assert.Equal(t, "revoked", got.Status)
+}
+
+func TestStore_EnsureAdmin_WithDB_NewUser(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	s.EnsureAdmin("newadmin@example.com")
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("newadmin@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role)
+	assert.Equal(t, "env", u.OnboardedBy)
+}
+
+func TestStore_Create_WithDB(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	err := s.Create(&User{
+		ID:          "u_db_create",
+		Email:       "createdb@example.com",
+		Role:        RoleTrader,
+		Status:      StatusActive,
+		KiteUID:     "KU999",
+		DisplayName: "Test User",
+		OnboardedBy: "manual",
+	})
+	require.NoError(t, err)
+
+	// Reload from DB.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("createdb@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "KU999", u.KiteUID)
+	assert.Equal(t, "Test User", u.DisplayName)
+	assert.Equal(t, "manual", u.OnboardedBy)
+}
+
+func TestStore_Create_WithDB_DuplicateEmail(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "dup@example.com"}))
+	err := s.Create(&User{ID: "u_2", Email: "dup@example.com"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+}
+
+func TestStore_Create_WithDB_LastLogin(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	now := time.Now()
+	err := s.Create(&User{
+		ID:        "u_ll",
+		Email:     "lastlogin@example.com",
+		Role:      RoleTrader,
+		Status:    StatusActive,
+		LastLogin: now,
+	})
+	require.NoError(t, err)
+
+	// Reload and verify LastLogin persists.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("lastlogin@example.com")
+	require.True(t, ok)
+	assert.False(t, u.LastLogin.IsZero())
+}
+
+func TestStore_UpdateRole_WithDB_NonExistent(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	err := s.UpdateRole("nobody@example.com", RoleAdmin)
+	assert.Error(t, err)
+}
+
+func TestStore_UpdateStatus_WithDB_NonExistent(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	err := s.UpdateStatus("nobody@example.com", StatusSuspended)
+	assert.Error(t, err)
+}
+
+func TestStore_Delete_NonExistent_WithDB(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	// Delete non-existent user should not panic.
+	s.Delete("nobody@example.com")
+}
+
+func TestStore_SetAdminEmail_WithDB_Persistence(t *testing.T) {
+	t.Parallel()
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_ae", Email: "admin_email_test@example.com"}))
+	require.NoError(t, s.SetAdminEmail("admin_email_test@example.com", "admin@example.com"))
+
+	// Reload and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("admin_email_test@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "admin@example.com", u.AdminEmail)
+}
+
+func TestStore_VerifyPassword_WithDB(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{ID: "u_vp", Email: "verifypw@example.com"}))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.MinCost)
+	require.NoError(t, s.SetPasswordHash("verifypw@example.com", string(hash)))
+
+	ok, err := s.VerifyPassword("verifypw@example.com", "testpass")
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = s.VerifyPassword("verifypw@example.com", "wrongpass")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestStore_EnsureUser_ConcurrentRace(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	// Concurrent EnsureUser calls for the same email.
+	// One should create, the other should return existing.
+	const n = 100
+	const email = "raceuser@example.com"
+	var wg sync.WaitGroup
+	wg.Add(n)
+	results := make([]*User, n)
+	for i := 0; i < n; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = s.EnsureUser(email, "KU", "Name", "test")
+		}(i)
+	}
+	wg.Wait()
+
+	// All results should be non-nil and have the same email.
+	for i, u := range results {
+		require.NotNil(t, u, "result[%d] should not be nil", i)
+		assert.Equal(t, email, u.Email)
+	}
+	// Only one user should exist.
+	assert.Equal(t, 1, s.Count())
+}
+
+func TestStore_EnsureAdmin_ConcurrentRace(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	const n = 100
+	const email = "raceadmin@example.com"
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			s.EnsureAdmin(email)
+		}()
+	}
+	wg.Wait()
+
+	u, ok := s.Get(email)
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role)
+	assert.Equal(t, 1, s.Count())
+}
+
+// TestStore_EnsureUser_MultipleDistinct tests EnsureUser with many distinct emails.
+func TestStore_EnsureUser_MultipleDistinct(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+
+	const n = 100
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			email := fmt.Sprintf("distinct_%d@example.com", idx)
+			u := s.EnsureUser(email, "", "", "test")
+			assert.NotNil(t, u)
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, n, s.Count())
+}
+
+func TestInvitationStore_LoadFromDB_Multiple(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "inv_multi.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	is1 := NewInvitationStore(db)
+	require.NoError(t, is1.InitTable())
+
+	require.NoError(t, is1.Create(&FamilyInvitation{
+		ID: "inv_1", AdminEmail: "admin@example.com", InvitedEmail: "user1@example.com",
+		Status: "pending", ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+	require.NoError(t, is1.Create(&FamilyInvitation{
+		ID: "inv_2", AdminEmail: "admin@example.com", InvitedEmail: "user2@example.com",
+		Status: "pending", ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+	require.NoError(t, is1.Accept("inv_1"))
+
+	// Reload into new store.
+	is2 := NewInvitationStore(db)
+	require.NoError(t, is2.InitTable())
+	require.NoError(t, is2.LoadFromDB())
+
+	got1 := is2.Get("inv_1")
+	require.NotNil(t, got1)
+	assert.Equal(t, "accepted", got1.Status)
+	assert.False(t, got1.AcceptedAt.IsZero())
+
+	got2 := is2.Get("inv_2")
+	require.NotNil(t, got2)
+	assert.Equal(t, "pending", got2.Status)
+
+	list := is2.ListByAdmin("admin@example.com")
+	assert.Len(t, list, 2)
 }

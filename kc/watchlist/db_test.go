@@ -2,6 +2,7 @@ package watchlist
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -225,4 +226,307 @@ func TestTimestampUpdate_Persistence(t *testing.T) {
 	require.Len(t, wlAfter, 1)
 	assert.False(t, wlAfter[0].UpdatedAt.IsZero(), "UpdatedAt should be set")
 	assert.False(t, wlAfter[0].CreatedAt.IsZero(), "CreatedAt should be set")
+}
+
+// ---------------------------------------------------------------------------
+// Additional coverage: DB error paths, loadWatchlists/loadItems edge cases,
+// DeleteByEmail with DB, RemoveItem with DB.
+// ---------------------------------------------------------------------------
+
+func TestLoadFromDB_EmptyTables(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	err := s.LoadFromDB()
+	require.NoError(t, err)
+	assert.Len(t, s.ListWatchlists("nobody@example.com"), 0)
+}
+
+func TestLoadFromDB_MultipleWatchlistsAndItems(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	id1, _ := s.CreateWatchlist("alice@example.com", "WL1")
+	id2, _ := s.CreateWatchlist("alice@example.com", "WL2")
+
+	_ = s.AddItem("alice@example.com", id1, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "RELIANCE"})
+	_ = s.AddItem("alice@example.com", id1, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "INFY"})
+	_ = s.AddItem("alice@example.com", id2, &WatchlistItem{Exchange: "BSE", Tradingsymbol: "TCS"})
+
+	// Reload into fresh store.
+	s2 := NewStore()
+	s2.SetDB(db)
+	err := s2.LoadFromDB()
+	require.NoError(t, err)
+
+	wls := s2.ListWatchlists("alice@example.com")
+	assert.Len(t, wls, 2)
+
+	items1 := s2.GetItems(id1)
+	assert.Len(t, items1, 2)
+
+	items2 := s2.GetItems(id2)
+	assert.Len(t, items2, 1)
+	assert.Equal(t, "TCS", items2[0].Tradingsymbol)
+}
+
+func TestDeleteByEmail_Persistence_WithItems(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	id, _ := s.CreateWatchlist("alice@example.com", "With Items")
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "RELIANCE"})
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "INFY"})
+
+	s.DeleteByEmail("alice@example.com")
+
+	// Reload and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+
+	assert.Len(t, s2.ListWatchlists("alice@example.com"), 0)
+	assert.Len(t, s2.GetItems(id), 0)
+}
+
+func TestRemoveItem_Persistence_Multiple(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	id, _ := s.CreateWatchlist("alice@example.com", "Multi Remove")
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "A"})
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "B"})
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{Exchange: "NSE", Tradingsymbol: "C"})
+
+	items := s.GetItems(id)
+	require.Len(t, items, 3)
+
+	// Remove middle item.
+	err := s.RemoveItem("alice@example.com", id, items[1].ID)
+	require.NoError(t, err)
+
+	// Reload and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+
+	remaining := s2.GetItems(id)
+	assert.Len(t, remaining, 2)
+}
+
+func TestCreateWatchlist_PersistenceMultiple(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	_, _ = s.CreateWatchlist("alice@example.com", "WL1")
+	_, _ = s.CreateWatchlist("alice@example.com", "WL2")
+	_, _ = s.CreateWatchlist("bob@example.com", "BobWL")
+
+	// Reload.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+
+	assert.Len(t, s2.ListWatchlists("alice@example.com"), 2)
+	assert.Len(t, s2.ListWatchlists("bob@example.com"), 1)
+}
+
+func TestDeleteWatchlist_NonExistentWatchlist(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+
+	err := s.DeleteWatchlist("alice@example.com", "nonexistent")
+	assert.Error(t, err)
+}
+
+func TestRemoveItem_WrongWatchlist(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	err := s.RemoveItem("alice@example.com", "nonexistent", "item1")
+	assert.Error(t, err)
+}
+
+func TestAddItem_WrongWatchlist_DB(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	err := s.AddItem("alice@example.com", "nonexistent", &WatchlistItem{
+		Exchange: "NSE", Tradingsymbol: "TCS",
+	})
+	assert.Error(t, err)
+}
+
+// errDB is a WatchlistDB that returns errors on all operations.
+type errDB struct {
+	loadOK bool // if true, allow RawQuery to succeed
+}
+
+func (d *errDB) ExecDDL(ddl string) error                               { return fmt.Errorf("db error") }
+func (d *errDB) ExecInsert(query string, args ...any) error              { return fmt.Errorf("db error") }
+func (d *errDB) RawQuery(query string, args ...any) (*sql.Rows, error) {
+	return nil, fmt.Errorf("db error")
+}
+func (d *errDB) QueryRow(query string, args ...any) *sql.Row             { return nil }
+
+func TestLoadFromDB_WatchlistsError(t *testing.T) {
+	s := NewStore()
+	s.SetDB(&errDB{})
+	err := s.LoadFromDB()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load watchlists")
+}
+
+// halfErrDB allows watchlists to load but items fail.
+type halfErrDB struct {
+	db     *testDB
+	callNo int
+}
+
+func (d *halfErrDB) ExecDDL(ddl string) error                  { return d.db.ExecDDL(ddl) }
+func (d *halfErrDB) ExecInsert(query string, args ...any) error { return d.db.ExecInsert(query, args...) }
+func (d *halfErrDB) RawQuery(query string, args ...any) (*sql.Rows, error) {
+	d.callNo++
+	if d.callNo == 1 {
+		// First call (loadWatchlists) succeeds.
+		return d.db.RawQuery(query, args...)
+	}
+	// Second call (loadItems) fails.
+	return nil, fmt.Errorf("items db error")
+}
+func (d *halfErrDB) QueryRow(query string, args ...any) *sql.Row { return d.db.QueryRow(query, args...) }
+
+func TestLoadFromDB_ItemsError(t *testing.T) {
+	realDB := newTestDB(t)
+	require.NoError(t, InitTables(realDB))
+
+	// Create a watchlist in the real DB.
+	s := NewStore()
+	s.SetDB(realDB)
+	s.CreateWatchlist("alice@example.com", "Test WL")
+
+	// Now try loading with a DB that fails on items query.
+	s2 := NewStore()
+	s2.SetDB(&halfErrDB{db: realDB})
+	err := s2.LoadFromDB()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load watchlist items")
+}
+
+func TestDeleteWatchlist_DBErrorOnItems(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	id, _ := s.CreateWatchlist("alice@example.com", "Test WL")
+
+	// Now set a broken DB for the delete to trigger error logging.
+	s.SetDB(&errDB{})
+	err := s.DeleteWatchlist("alice@example.com", id)
+	// The delete should succeed in-memory but log DB errors.
+	require.NoError(t, err)
+}
+
+func TestCreateWatchlist_DBError(t *testing.T) {
+	s := NewStore()
+	s.SetDB(&errDB{})
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	// Even though DB persist fails, in-memory creation succeeds.
+	id, err := s.CreateWatchlist("alice@example.com", "Test WL")
+	require.NoError(t, err)
+	assert.NotEmpty(t, id)
+}
+
+func TestAddItem_DBError(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	id, _ := s.CreateWatchlist("alice@example.com", "Test WL")
+
+	// Switch to error DB for the add.
+	s.SetDB(&errDB{})
+	err := s.AddItem("alice@example.com", id, &WatchlistItem{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE",
+	})
+	// In-memory add succeeds; DB error is logged.
+	require.NoError(t, err)
+}
+
+func TestRemoveItem_DBError(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	id, _ := s.CreateWatchlist("alice@example.com", "Test WL")
+	_ = s.AddItem("alice@example.com", id, &WatchlistItem{
+		Exchange: "NSE", Tradingsymbol: "RELIANCE",
+	})
+
+	items := s.GetItems(id)
+	require.Len(t, items, 1)
+
+	// Switch to error DB for the remove.
+	s.SetDB(&errDB{})
+	err := s.RemoveItem("alice@example.com", id, items[0].ID)
+	// In-memory remove succeeds; DB error is logged.
+	require.NoError(t, err)
+}
+
+func TestDeleteByEmail_DBError(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, InitTables(db))
+
+	s := NewStore()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	s.CreateWatchlist("alice@example.com", "WL1")
+
+	// Switch to error DB for the delete.
+	s.SetDB(&errDB{})
+	// Should not panic — DB errors are logged.
+	s.DeleteByEmail("alice@example.com")
+
+	// In-memory delete should still have worked.
+	assert.Len(t, s.ListWatchlists("alice@example.com"), 0)
 }

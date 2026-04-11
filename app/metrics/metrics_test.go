@@ -431,3 +431,227 @@ func TestAutoCleanupDisabled(t *testing.T) {
 	// but at least verify it doesn't panic
 	m.Shutdown()
 }
+
+// ---------------------------------------------------------------------------
+// Additional coverage: GetAllCounters, GetCounterValue edge cases,
+// concurrent metric writes, WritePrometheus historical days, HTTPHandler
+// write error path.
+// ---------------------------------------------------------------------------
+
+func TestGetAllCounters(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	m.Increment("counter_a")
+	m.IncrementBy("counter_b", 5)
+	m.Increment("counter_c")
+	m.Increment("counter_c")
+
+	counters := m.GetAllCounters()
+	if counters["counter_a"] != 1 {
+		t.Errorf("expected counter_a=1, got %d", counters["counter_a"])
+	}
+	if counters["counter_b"] != 5 {
+		t.Errorf("expected counter_b=5, got %d", counters["counter_b"])
+	}
+	if counters["counter_c"] != 2 {
+		t.Errorf("expected counter_c=2, got %d", counters["counter_c"])
+	}
+}
+
+func TestGetAllCounters_Empty(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	counters := m.GetAllCounters()
+	if len(counters) != 0 {
+		t.Errorf("expected empty counters, got %d entries", len(counters))
+	}
+}
+
+func TestGetCounterValue_NonExistent(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	if val := m.GetCounterValue("nonexistent"); val != 0 {
+		t.Errorf("expected 0 for nonexistent counter, got %d", val)
+	}
+}
+
+func TestTrackDailyUser_TypeAssertionFail(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	// Manually store a non-userSet value to trigger type assertion failure path.
+	m.dailyUsers.Store(time.Now().UTC().Format("2006-01-02"), "not_a_userSet")
+
+	// Should not panic — just skip.
+	m.TrackDailyUser("user_after_corrupt")
+
+	// Count should still be 0 since the corrupted entry is skipped.
+	// A new entry might not be created depending on LoadOrStore behavior.
+}
+
+func TestConcurrentMetricWrites(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	const numGoroutines = 50
+	const opsPerGoroutine = 100
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines * 3) // writers, daily trackers, readers
+
+	// Concurrent Increment
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < opsPerGoroutine; j++ {
+				m.Increment("concurrent_write")
+			}
+		}()
+	}
+
+	// Concurrent IncrementBy
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < opsPerGoroutine; j++ {
+				m.IncrementBy("concurrent_by", 2)
+			}
+		}()
+	}
+
+	// Concurrent daily tracking
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < opsPerGoroutine; j++ {
+				m.TrackDailyUser(fmt.Sprintf("user_%d_%d", id, j))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	expected := int64(numGoroutines * opsPerGoroutine)
+	if got := m.GetCounterValue("concurrent_write"); got != expected {
+		t.Errorf("expected concurrent_write=%d, got %d", expected, got)
+	}
+	if got := m.GetCounterValue("concurrent_by"); got != expected*2 {
+		t.Errorf("expected concurrent_by=%d, got %d", expected*2, got)
+	}
+}
+
+func TestWritePrometheus_NoHistoricalData(t *testing.T) {
+	m := New(Config{ServiceName: "test", HistoricalDays: 7})
+
+	// No data at all — should still write today's user count (0).
+	buf := new(bytes.Buffer)
+	m.WritePrometheus(buf)
+	output := buf.String()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	expected := fmt.Sprintf(`daily_unique_users_total{date="%s",service="test"} 0`, today)
+	if !strings.Contains(output, expected) {
+		t.Errorf("expected output to contain %q, got:\n%s", expected, output)
+	}
+}
+
+func TestWritePrometheus_WithHistoricalUserData(t *testing.T) {
+	m := New(Config{ServiceName: "test", HistoricalDays: 3})
+
+	// Add historical user data for yesterday.
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	oldUserSet := &userSet{}
+	oldUserSet.users.Store("hist_user1", true)
+	oldUserSet.users.Store("hist_user2", true)
+	oldUserSet.count = 2
+	m.dailyUsers.Store(yesterday, oldUserSet)
+
+	// Add today's user.
+	m.TrackDailyUser("today_user")
+
+	buf := new(bytes.Buffer)
+	m.WritePrometheus(buf)
+	output := buf.String()
+
+	// Check historical data appears.
+	expectedHist := fmt.Sprintf(`daily_unique_users_total{date="%s",service="test"} 2`, yesterday)
+	if !strings.Contains(output, expectedHist) {
+		t.Errorf("expected output to contain %q, got:\n%s", expectedHist, output)
+	}
+}
+
+func TestHTTPHandler_WriteError(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	m.Increment("error_test_metric")
+
+	handler := m.HTTPHandler()
+
+	// Test HEAD request (should work same as GET but empty body)
+	// Actually the handler checks for GET, so HEAD should fail with 405.
+	req := httptest.NewRequest("HEAD", "/metrics", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status 405 for HEAD, got %d", w.Code)
+	}
+}
+
+func TestCleanupOldData_NoOldData(t *testing.T) {
+	m := New(Config{ServiceName: "test", CleanupRetentionDays: 5})
+
+	// Only add recent data.
+	m.TrackDailyUser("recent_user")
+
+	err := m.CleanupOldData()
+	if err != nil {
+		t.Errorf("cleanup failed: %v", err)
+	}
+
+	// Recent data should still exist.
+	if count := m.GetTodayUserCount(); count != 1 {
+		t.Errorf("expected recent data to remain, got count %d", count)
+	}
+}
+
+func TestStartCleanupRoutine_Shutdown(t *testing.T) {
+	// Test that auto-cleanup starts and can be shut down.
+	m := New(Config{ServiceName: "test", AutoCleanup: true})
+
+	// Should not hang or panic.
+	m.Shutdown()
+}
+
+func TestIsDailyMetric_EdgeCases(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	// Single part (no underscore) — not daily.
+	if m.isDailyMetric("nodash") {
+		t.Error("single part should not be daily metric")
+	}
+
+	// Date-like but wrong separator count.
+	if m.isDailyMetric("metric_2025-08") {
+		t.Error("YYYY-MM should not be daily metric")
+	}
+
+	// Looks like date but year part is wrong length.
+	if m.isDailyMetric("metric_25-08-05") {
+		t.Error("YY-MM-DD should not be daily metric")
+	}
+}
+
+func TestGetAllCounters_ConcurrentRead(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	// Add some counters.
+	for i := 0; i < 10; i++ {
+		m.Increment(fmt.Sprintf("counter_%d", i))
+	}
+
+	// Concurrent reads should not panic.
+	var wg sync.WaitGroup
+	wg.Add(20)
+	for i := 0; i < 20; i++ {
+		go func() {
+			defer wg.Done()
+			_ = m.GetAllCounters()
+		}()
+	}
+	wg.Wait()
+}

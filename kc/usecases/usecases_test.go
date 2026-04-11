@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
 // --- Mock implementations ---
@@ -1746,4 +1747,438 @@ func TestDeleteGTT_BrokerError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "delete gtt")
+}
+
+// ---------------------------------------------------------------------------
+// Additional coverage: riskguard branches, event dispatching, error combination paths
+// ---------------------------------------------------------------------------
+
+func TestPlaceOrder_WithRiskguard(t *testing.T) {
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	// Create a riskguard that allows all orders (not frozen, high limits).
+	guard := newTestGuard(t)
+
+	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
+
+	orderID, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
+		Email:           "test@example.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		Quantity:        1,
+	})
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, orderID)
+}
+
+func TestModifyOrder_WithRiskguard(t *testing.T) {
+	client := &mockBrokerClient{
+		modifyResp: broker.OrderResponse{OrderID: "ORD-42"},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+	guard := newTestGuard(t)
+
+	uc := NewModifyOrderUseCase(resolver, guard, events, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email:    "test@example.com",
+		OrderID:  "ORD-42",
+		Quantity: 1,
+		Price:    100.0,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ORD-42", resp.OrderID)
+}
+
+func TestClosePosition_WithRiskguard(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+	guard := newTestGuard(t)
+
+	uc := NewClosePositionUseCase(resolver, guard, events, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "ORD-1", result.OrderID)
+}
+
+func TestCloseAllPositions_WithRiskguard(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
+				{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: -1, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+	guard := newTestGuard(t)
+
+	uc := NewCloseAllPositionsUseCase(resolver, guard, events, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Total)
+	assert.Equal(t, 2, result.SuccessCount)
+}
+
+func TestCloseAllPositions_WithEvents(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 5, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("position.closed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCloseAllPositionsUseCase(resolver, nil, events, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.SuccessCount)
+	require.NotNil(t, captured)
+}
+
+func TestClosePosition_WithEvents(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 3, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("position.closed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewClosePositionUseCase(resolver, nil, events, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "INFY", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "ORD-1", result.OrderID)
+	require.NotNil(t, captured)
+}
+
+func TestGetPortfolio_HoldingsError(t *testing.T) {
+	client := &mockBrokerClient{}
+	// Override GetHoldings to return error.
+	client.holdings = nil
+	resolver := &mockBrokerResolver{client: &holdingsErrClient{}}
+	uc := NewGetPortfolioUseCase(resolver, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get holdings")
+}
+
+func TestGetPortfolio_PositionsError(t *testing.T) {
+	client := &mockBrokerClient{
+		holdings:     []broker.Holding{{Tradingsymbol: "A"}},
+		positionsErr: fmt.Errorf("positions API down"),
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetPortfolioUseCase(resolver, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get positions")
+}
+
+func TestGetOrders_GetOrdersError(t *testing.T) {
+	client := &ordersErrClient{}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetOrdersUseCase(resolver, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get orders")
+}
+
+func TestClosePosition_FetchPositionsError(t *testing.T) {
+	client := &mockBrokerClient{
+		positionsErr: fmt.Errorf("network timeout"),
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fetch positions")
+}
+
+func TestModifyOrder_NoEventsDispatcher(t *testing.T) {
+	client := &mockBrokerClient{
+		modifyResp: broker.OrderResponse{OrderID: "ORD-99"},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email: "test@test.com", OrderID: "ORD-99", Quantity: 5,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ORD-99", resp.OrderID)
+}
+
+func TestCreateAlert_WithReferencePrice(t *testing.T) {
+	store := &mockAlertStore{alerts: make(map[string]string)}
+	instruments := &mockInstrumentResolver{token: 738561}
+	uc := NewCreateAlertUseCase(store, instruments, testLogger())
+
+	alertID, err := uc.Execute(context.Background(), cqrs.CreateAlertCommand{
+		Email:          "test@test.com",
+		Tradingsymbol:  "RELIANCE",
+		Exchange:       "NSE",
+		TargetPrice:    2600.0,
+		Direction:      "above",
+		ReferencePrice: 2500.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ALT-1", alertID)
+}
+
+func TestClosePosition_ExchangeEmptySymbolPresent(t *testing.T) {
+	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), "test@test.com", "", "RELIANCE", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exchange and symbol are required")
+}
+
+func TestClosePosition_SymbolEmptyExchangePresent(t *testing.T) {
+	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exchange and symbol are required")
+}
+
+func TestCloseAllPositions_EmptyProductFilter(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 10, Product: "CNC"},
+				{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 5, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewCloseAllPositionsUseCase(resolver, nil, nil, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Total) // Both products included with empty filter
+	assert.Equal(t, "ALL", result.ProductFilter)
+}
+
+// holdingsErrClient is a broker client that returns an error on GetHoldings.
+type holdingsErrClient struct {
+	mockBrokerClient
+}
+
+func (c *holdingsErrClient) GetHoldings() ([]broker.Holding, error) {
+	return nil, fmt.Errorf("holdings API error")
+}
+
+// ordersErrClient is a broker client that returns an error on GetOrders.
+type ordersErrClient struct {
+	mockBrokerClient
+}
+
+func (c *ordersErrClient) GetOrders() ([]broker.Order, error) {
+	return nil, fmt.Errorf("orders API error")
+}
+
+// newTestGuard creates a riskguard with default limits for testing.
+func newTestGuard(t *testing.T) *riskguard.Guard {
+	t.Helper()
+	return riskguard.NewGuard(testLogger())
+}
+
+// newFrozenGuard creates a riskguard with global freeze enabled.
+func newFrozenGuard(t *testing.T) *riskguard.Guard {
+	t.Helper()
+	g := riskguard.NewGuard(testLogger())
+	g.FreezeGlobal("test", "test freeze")
+	return g
+}
+
+func TestPlaceOrder_BlockedByRiskguard(t *testing.T) {
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("risk.limit_breached", func(e domain.Event) {
+		captured = e
+	})
+
+	guard := newFrozenGuard(t)
+	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
+		Email:           "test@example.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		Quantity:        1,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
+}
+
+func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	guard := newFrozenGuard(t)
+	uc := NewPlaceOrderUseCase(resolver, guard, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
+		Email:           "test@example.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        1,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+}
+
+func TestModifyOrder_BlockedByRiskguard(t *testing.T) {
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("risk.limit_breached", func(e domain.Event) {
+		captured = e
+	})
+
+	guard := newFrozenGuard(t)
+	uc := NewModifyOrderUseCase(resolver, guard, events, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email:    "test@example.com",
+		OrderID:  "ORD-1",
+		Quantity: 1,
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
+}
+
+func TestModifyOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	guard := newFrozenGuard(t)
+	uc := NewModifyOrderUseCase(resolver, guard, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email:   "test@example.com",
+		OrderID: "ORD-1",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+}
+
+func TestClosePosition_BlockedByRiskguard(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("risk.limit_breached", func(e domain.Event) {
+		captured = e
+	})
+
+	guard := newFrozenGuard(t)
+	uc := NewClosePositionUseCase(resolver, guard, events, testLogger())
+
+	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
+}
+
+func TestClosePosition_BlockedByRiskguard_NoEvents(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	guard := newFrozenGuard(t)
+	uc := NewClosePositionUseCase(resolver, guard, nil, testLogger())
+
+	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "riskguard")
+}
+
+func TestCloseAllPositions_BlockedByRiskguard(t *testing.T) {
+	client := &mockBrokerClient{
+		positions: broker.Positions{
+			Net: []broker.Position{
+				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
+			},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	guard := newFrozenGuard(t)
+	uc := NewCloseAllPositionsUseCase(resolver, guard, nil, testLogger())
+
+	result, err := uc.Execute(context.Background(), "test@test.com", "")
+
+	require.NoError(t, err) // CloseAll doesn't fail overall, it reports per-entry errors.
+	assert.Equal(t, 1, result.ErrorCount)
+	assert.Contains(t, result.Results[0].Error, "riskguard")
 }
