@@ -22,8 +22,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// newTestAdminHandler creates an ops Handler with a user store, audit store, and registry.
-func newTestAdminHandler(t *testing.T) *Handler {
+// newTestAdminOpsHandler creates an ops Handler with a user store, audit store,
+// and an admin user pre-registered so isAdmin() returns true for "admin@test.com".
+func newTestAdminOpsHandler(t *testing.T) *Handler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(devNull{}, &slog.HandlerOptions{Level: slog.LevelError}))
 
@@ -44,10 +45,18 @@ func newTestAdminHandler(t *testing.T) *Handler {
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
-	auditStore := audit.NewStore(mgr.AlertDB(), logger)
+	// Set up user store with admin user
+	userStore := mgr.UserStoreConcrete()
+	if userStore != nil {
+		userStore.EnsureAdmin("admin@test.com")
+	}
+
+	auditStore := audit.New(mgr.AlertDB())
+	auditStore.SetLogger(logger)
+	_ = auditStore.InitTable()
 
 	lb := NewLogBuffer(100)
-	h := New(mgr, nil, lb, logger, "test-v1", time.Now(), mgr.UserStoreConcrete(), auditStore)
+	h := New(mgr, nil, lb, logger, "test-v1", time.Now(), userStore, auditStore)
 	return h
 }
 
@@ -134,13 +143,10 @@ func TestTeeHandler_WithGroup(t *testing.T) {
 
 func TestOpsHandler_ListUsers_Admin(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
-
-	// Register as admin by email (default isAdmin is false)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
 
 	req := requestWithEmail(http.MethodGet, "/admin/ops/api/users", "admin@test.com", nil)
 	rec := httptest.NewRecorder()
@@ -151,13 +157,12 @@ func TestOpsHandler_ListUsers_Admin(t *testing.T) {
 
 func TestOpsHandler_ListUsers_Forbidden(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
 
-	h.isAdmin = func(email string) bool { return false }
-
+	// non-admin user
 	req := requestWithEmail(http.MethodGet, "/admin/ops/api/users", "user@test.com", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -171,8 +176,7 @@ func TestOpsHandler_ListUsers_Forbidden(t *testing.T) {
 
 func TestOpsHandler_SuspendUser_Success(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -189,8 +193,7 @@ func TestOpsHandler_SuspendUser_Success(t *testing.T) {
 
 func TestOpsHandler_SuspendUser_SelfAction(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -204,8 +207,7 @@ func TestOpsHandler_SuspendUser_SelfAction(t *testing.T) {
 
 func TestOpsHandler_SuspendUser_MissingEmail(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -217,10 +219,9 @@ func TestOpsHandler_SuspendUser_MissingEmail(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestOpsHandler_SuspendUser_WrongMethod(t *testing.T) {
+func TestOpsHandler_SuspendUser_WrongMethod_Final(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -238,8 +239,7 @@ func TestOpsHandler_SuspendUser_WrongMethod(t *testing.T) {
 
 func TestOpsHandler_ActivateUser_Success(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -256,8 +256,7 @@ func TestOpsHandler_ActivateUser_Success(t *testing.T) {
 
 func TestOpsHandler_ActivateUser_SelfAction(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -275,8 +274,7 @@ func TestOpsHandler_ActivateUser_SelfAction(t *testing.T) {
 
 func TestOpsHandler_OffboardUser_Success(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -294,8 +292,7 @@ func TestOpsHandler_OffboardUser_Success(t *testing.T) {
 
 func TestOpsHandler_OffboardUser_NoConfirm(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -311,8 +308,7 @@ func TestOpsHandler_OffboardUser_NoConfirm(t *testing.T) {
 
 func TestOpsHandler_OffboardUser_SelfAction(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -332,8 +328,7 @@ func TestOpsHandler_OffboardUser_SelfAction(t *testing.T) {
 
 func TestOpsHandler_ChangeRole_Success(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -355,8 +350,7 @@ func TestOpsHandler_ChangeRole_Success(t *testing.T) {
 
 func TestOpsHandler_FreezeTrading_NoRiskGuard(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -372,10 +366,9 @@ func TestOpsHandler_FreezeTrading_NoRiskGuard(t *testing.T) {
 
 func TestOpsHandler_FreezeTrading_WithRiskGuard(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil) // Create guard
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -392,10 +385,9 @@ func TestOpsHandler_FreezeTrading_WithRiskGuard(t *testing.T) {
 
 func TestOpsHandler_FreezeTrading_NoConfirm(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -412,8 +404,7 @@ func TestOpsHandler_FreezeTrading_NoConfirm(t *testing.T) {
 
 func TestOpsHandler_FreezeTrading_SelfAction(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -433,10 +424,9 @@ func TestOpsHandler_FreezeTrading_SelfAction(t *testing.T) {
 
 func TestOpsHandler_UnfreezeTrading_WithRiskGuard(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -453,10 +443,9 @@ func TestOpsHandler_UnfreezeTrading_WithRiskGuard(t *testing.T) {
 
 func TestOpsHandler_UnfreezeTrading_SelfAction(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -477,10 +466,9 @@ func TestOpsHandler_UnfreezeTrading_SelfAction(t *testing.T) {
 
 func TestOpsHandler_FreezeTradingGlobal_WithRiskGuard(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -497,10 +485,9 @@ func TestOpsHandler_FreezeTradingGlobal_WithRiskGuard(t *testing.T) {
 
 func TestOpsHandler_FreezeTradingGlobal_NoConfirm(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -517,10 +504,9 @@ func TestOpsHandler_FreezeTradingGlobal_NoConfirm(t *testing.T) {
 
 func TestOpsHandler_UnfreezeTradingGlobal_WithRiskGuard(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	h.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -540,8 +526,7 @@ func TestOpsHandler_UnfreezeTradingGlobal_WithRiskGuard(t *testing.T) {
 
 func TestOpsHandler_VerifyChain_Admin(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -553,10 +538,9 @@ func TestOpsHandler_VerifyChain_Admin(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-func TestOpsHandler_VerifyChain_WrongMethod(t *testing.T) {
+func TestOpsHandler_VerifyChain_WrongMethod_Final(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -574,8 +558,7 @@ func TestOpsHandler_VerifyChain_WrongMethod(t *testing.T) {
 
 func TestOpsHandler_Registry_GET(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -589,8 +572,7 @@ func TestOpsHandler_Registry_GET(t *testing.T) {
 
 func TestOpsHandler_Registry_POST_Success(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -606,8 +588,7 @@ func TestOpsHandler_Registry_POST_Success(t *testing.T) {
 
 func TestOpsHandler_Registry_POST_MissingFields(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -623,8 +604,7 @@ func TestOpsHandler_Registry_POST_MissingFields(t *testing.T) {
 
 func TestOpsHandler_Registry_POST_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -644,11 +624,10 @@ func TestOpsHandler_Registry_POST_InvalidJSON(t *testing.T) {
 
 func TestOpsHandler_RegistryItem_PUT(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	// Pre-register an entry
-	h.registryStore.Register(&registry.AppRegistration{
+	_ = h.registryStore.Register(&registry.AppRegistration{
 		ID:           "test-entry",
 		APIKey:       "key-12345678",
 		APISecret:    "secret",
@@ -671,10 +650,9 @@ func TestOpsHandler_RegistryItem_PUT(t *testing.T) {
 
 func TestOpsHandler_RegistryItem_DELETE(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
-	h.registryStore.Register(&registry.AppRegistration{
+	_ = h.registryStore.Register(&registry.AppRegistration{
 		ID:           "del-entry",
 		APIKey:       "key-12345678",
 		APISecret:    "secret",
@@ -695,8 +673,7 @@ func TestOpsHandler_RegistryItem_DELETE(t *testing.T) {
 
 func TestOpsHandler_RegistryItem_DELETE_NotFound(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -710,8 +687,7 @@ func TestOpsHandler_RegistryItem_DELETE_NotFound(t *testing.T) {
 
 func TestOpsHandler_RegistryItem_EmptyID(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -729,8 +705,7 @@ func TestOpsHandler_RegistryItem_EmptyID(t *testing.T) {
 
 func TestOpsHandler_MetricsAPI_Admin(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return email == "admin@test.com" }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -744,8 +719,7 @@ func TestOpsHandler_MetricsAPI_Admin(t *testing.T) {
 
 func TestOpsHandler_MetricsAPI_AllPeriods(t *testing.T) {
 	t.Parallel()
-	h := newTestAdminHandler(t)
-	h.isAdmin = func(email string) bool { return true }
+	h := newTestAdminOpsHandler(t)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
@@ -1008,7 +982,7 @@ func TestDashboard_SafetyStatus_WithRiskGuard(t *testing.T) {
 	t.Parallel()
 	d := newTestDashboardWithAudit(t)
 
-	guard := riskguard.New(nil)
+	guard := riskguard.NewGuard(nil)
 	d.manager.SetRiskGuard(guard)
 
 	mux := http.NewServeMux()
@@ -1255,7 +1229,7 @@ func TestDashboard_MarketIndices_WrongMethod(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — portfolio
+// Dashboard Handler — portfolio + ordersAPI
 // ===========================================================================
 
 func TestDashboard_Portfolio_NoCreds(t *testing.T) {
@@ -1270,10 +1244,6 @@ func TestDashboard_Portfolio_NoCreds(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
-
-// ===========================================================================
-// Dashboard Handler — ordersAPI
-// ===========================================================================
 
 func TestDashboard_OrdersAPI_NoAuditStore(t *testing.T) {
 	t.Parallel()
@@ -1314,7 +1284,6 @@ func TestDashboard_WriteJSON_ErrorPath(t *testing.T) {
 		"bad": math.Inf(1),
 	})
 
-	// Status is already written (200) before encode fails
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -1322,7 +1291,7 @@ func TestDashboard_WriteJSON_ErrorPath(t *testing.T) {
 // Admin Ops Handler — writeJSON + writeJSONError on handler
 // ===========================================================================
 
-func TestOpsHandler_WriteJSONError(t *testing.T) {
+func TestOpsHandler_WriteJSONError_Final(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler(t)
 
@@ -1360,7 +1329,9 @@ func newTestDashboardWithAudit(t *testing.T) *DashboardHandler {
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
-	auditStore := audit.NewStore(mgr.AlertDB(), logger)
+	auditStore := audit.New(mgr.AlertDB())
+	auditStore.SetLogger(logger)
+	_ = auditStore.InitTable()
 
 	d := NewDashboardHandler(mgr, logger, auditStore)
 	d.SetAdminCheck(func(email string) bool { return email == "admin@test.com" })

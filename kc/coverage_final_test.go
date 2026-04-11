@@ -117,7 +117,7 @@ func TestNew_AppModeSSE(t *testing.T) {
 // KiteCredentialStore.Delete — with DB persistence
 // ===========================================================================
 
-func TestKiteCredentialStore_DeleteWithDB(t *testing.T) {
+func TestKiteCredentialStore_DeleteWithDB_Final(t *testing.T) {
 	t.Parallel()
 
 	db, err := alerts.OpenDB(":memory:")
@@ -354,7 +354,7 @@ func TestKiteTokenStore_Set_WithDBAndCallback(t *testing.T) {
 // BackfillRegistryFromCredentials — no registry store
 // ===========================================================================
 
-func TestBackfillRegistryFromCredentials_NilRegistry(t *testing.T) {
+func TestBackfillRegistryFromCredentials_NilRegistry_Final(t *testing.T) {
 	t.Parallel()
 
 	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{
@@ -376,7 +376,7 @@ func TestBackfillRegistryFromCredentials_NilRegistry(t *testing.T) {
 // BackfillRegistryFromCredentials — empty credentials
 // ===========================================================================
 
-func TestBackfillRegistryFromCredentials_EmptyCredentials(t *testing.T) {
+func TestBackfillRegistryFromCredentials_EmptyCredentials_Final(t *testing.T) {
 	t.Parallel()
 
 	credStore := &mockCredentialStoreWithRaw{
@@ -401,7 +401,7 @@ func TestBackfillRegistryFromCredentials_EmptyCredentials(t *testing.T) {
 // BackfillRegistryFromCredentials — already in registry (skip)
 // ===========================================================================
 
-func TestBackfillRegistryFromCredentials_AlreadyInRegistry(t *testing.T) {
+func TestBackfillRegistryFromCredentials_AlreadyInRegistry_Final(t *testing.T) {
 	t.Parallel()
 
 	credStore := &mockCredentialStoreWithRaw{
@@ -637,7 +637,7 @@ func TestRenderSuccessTemplate_Success(t *testing.T) {
 // AuditStore / PaperEngine / BillingStore — non-nil paths
 // ===========================================================================
 
-func TestManager_AuditStore_NonNil(t *testing.T) {
+func TestManager_AuditStore_NonNil_Final(t *testing.T) {
 	t.Parallel()
 	m, err := New(Config{
 		APIKey:             "test_key",
