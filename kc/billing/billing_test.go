@@ -2602,3 +2602,126 @@ func TestCheckoutHandler_PremiumPlan(t *testing.T) {
 	// Stripe API call will fail but this exercises the premium plan switch case.
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }
+
+// ===========================================================================
+// DB error-path tests to push coverage above 95%
+// ===========================================================================
+
+func TestSetSubscription_DBWriteError(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Close the DB to force a write error.
+	db.Close()
+
+	err := s.SetSubscription(&Subscription{
+		AdminEmail: "err@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "persist subscription")
+}
+
+func TestSetSubscription_WithExpiresAtDBRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Empty ExpiresAt should persist as empty string.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "noexpiry@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	s2 := NewStore(db, logger)
+	require.NoError(t, s2.LoadFromDB())
+	got := s2.GetSubscription("noexpiry@example.com")
+	require.NotNil(t, got)
+	assert.True(t, got.ExpiresAt.IsZero())
+}
+
+func TestLoadFromDB_ClosedDB(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+	db.Close()
+
+	err := s.LoadFromDB()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query billing")
+}
+
+func TestIsEventProcessed_ClosedDB(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitEventLogTable())
+	db.Close()
+
+	// Scan error falls through to return false.
+	assert.False(t, s.IsEventProcessed("evt_test"))
+}
+
+func TestHandleSubscriptionDeleted_SetSubError(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	// Seed a subscription so GetEmailByCustomerID works.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "del@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_del",
+		Status:           StatusActive,
+	}))
+
+	// Close DB to make SetSubscription fail inside the handler.
+	db.Close()
+
+	raw, _ := json.Marshal(&stripe.Subscription{
+		ID:       "sub_del",
+		Customer: &stripe.Customer{ID: "cus_del"},
+	})
+	event := &stripe.Event{Data: &stripe.EventData{Raw: raw}}
+	// Should not panic — error is logged.
+	handleSubscriptionDeleted(s, event, logger)
+}
+
+func TestHandlePaymentFailed_SetSubError(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewStore(db, logger)
+	require.NoError(t, s.InitTable())
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail:       "pay@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_pay",
+		Status:           StatusActive,
+	}))
+
+	db.Close()
+
+	raw, _ := json.Marshal(&stripe.Invoice{
+		Customer: &stripe.Customer{ID: "cus_pay"},
+	})
+	event := &stripe.Event{Data: &stripe.EventData{Raw: raw}}
+	// Should not panic — error is logged.
+	handlePaymentFailed(s, event, logger)
+}
+
+func TestInitTable_ClosedDB(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(db, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	db.Close()
+
+	err := s.InitTable()
+	require.Error(t, err)
+}

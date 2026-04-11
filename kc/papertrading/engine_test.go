@@ -355,3 +355,213 @@ func TestReset(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
 }
+
+// ===========================================================================
+// Edge cases and error paths to push coverage above 95%
+// ===========================================================================
+
+func TestStatus_NotEnabled(t *testing.T) {
+	engine := testEngine(t, nil)
+
+	status, err := engine.Status(testEmail)
+	require.NoError(t, err)
+	assert.Equal(t, false, status["enabled"])
+	assert.Contains(t, status["message"], "not configured")
+}
+
+func TestStatus_Enabled(t *testing.T) {
+	engine := testEngine(t, nil)
+	require.NoError(t, engine.Enable(testEmail, 500_000))
+
+	status, err := engine.Status(testEmail)
+	require.NoError(t, err)
+	assert.Equal(t, true, status["enabled"])
+	assert.Equal(t, 500_000.0, status["initial_cash"])
+	assert.Equal(t, 500_000.0, status["cash_balance"])
+	assert.Equal(t, 0, status["positions"])
+	assert.Equal(t, 0, status["holdings"])
+	assert.Equal(t, 0, status["open_orders"])
+}
+
+func TestStatus_WithOpenOrders(t *testing.T) {
+	engine := testEngine(t, nil)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place a LIMIT order (stays OPEN since no LTP to fill).
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"transaction_type": "BUY",
+		"order_type":       "LIMIT",
+		"product":          "MIS",
+		"quantity":         10,
+		"price":            1500.0,
+	})
+	require.NoError(t, err)
+
+	status, err := engine.Status(testEmail)
+	require.NoError(t, err)
+	assert.Equal(t, 1, status["open_orders"])
+}
+
+func TestGetMargins_NoAccount(t *testing.T) {
+	engine := testEngine(t, nil)
+
+	margins, err := engine.GetMargins(testEmail)
+	require.NoError(t, err)
+	// Should return zero-value margins for non-existent account.
+	assert.NotNil(t, margins)
+}
+
+func TestGetMargins_Enabled(t *testing.T) {
+	engine := testEngine(t, map[string]float64{
+		"NSE:RELIANCE": 2500.0,
+	})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place and fill an order to create positions.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	margins, err := engine.GetMargins(testEmail)
+	require.NoError(t, err)
+	assert.NotNil(t, margins)
+}
+
+func TestMonitor_FillLimitOrder(t *testing.T) {
+	prices := map[string]float64{"NSE:SBIN": 600.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place a BUY LIMIT order at 610 (above current price 600, so it fills).
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "SBIN",
+		"transaction_type": "BUY",
+		"order_type":       "LIMIT",
+		"product":          "CNC",
+		"quantity":         100,
+		"price":            610.0,
+	})
+	require.NoError(t, err)
+
+	// Start the monitor, which should pick up and fill the LIMIT order.
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	// After tick, the order should be COMPLETE.
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+	assert.Equal(t, "COMPLETE", orders[0].Status)
+	assert.Equal(t, 100, orders[0].FilledQuantity)
+
+	// Cash should be reduced.
+	acct, err := engine.store.GetAccount(testEmail)
+	require.NoError(t, err)
+	assert.Less(t, acct.CashBalance, 1_000_000.0)
+
+	// Since CNC, holdings should be updated.
+	holdings, err := engine.store.GetHoldings(testEmail)
+	require.NoError(t, err)
+	assert.Len(t, holdings, 1)
+}
+
+func TestMonitor_FillSellOrder(t *testing.T) {
+	prices := map[string]float64{"NSE:TCS": 3500.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// First buy some shares.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "TCS",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "MIS", "quantity": 10,
+	})
+	require.NoError(t, err)
+
+	// Now place a SELL LIMIT at 3400 (below current 3500, so it fills).
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "TCS",
+		"transaction_type": "SELL", "order_type": "LIMIT",
+		"product": "MIS", "quantity": 5, "price": 3400.0,
+	})
+	require.NoError(t, err)
+
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	// The SELL order should be filled.
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	// Both BUY (already filled) and SELL should be COMPLETE.
+	completed := 0
+	for _, o := range orders {
+		if o.Status == "COMPLETE" {
+			completed++
+		}
+	}
+	assert.Equal(t, 2, completed)
+}
+
+func TestMonitor_InsufficientCashReject(t *testing.T) {
+	prices := map[string]float64{"NSE:RELIANCE": 2500.0}
+	engine := testEngine(t, prices)
+	// Enable with very small cash.
+	require.NoError(t, engine.Enable(testEmail, 100))
+
+	// Place a BUY LIMIT that should be rejected by the monitor (cost > cash).
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "RELIANCE",
+		"transaction_type": "BUY", "order_type": "LIMIT",
+		"product": "MIS", "quantity": 10, "price": 2600.0,
+	})
+	require.NoError(t, err)
+
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	// The order should be REJECTED due to insufficient cash.
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+	assert.Equal(t, "REJECTED", orders[0].Status)
+}
+
+func TestResetAccount(t *testing.T) {
+	engine := testEngine(t, map[string]float64{"NSE:INFY": 1500.0})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place an order and fill it.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "CNC", "quantity": 10,
+	})
+	require.NoError(t, err)
+
+	// Reset.
+	require.NoError(t, engine.store.ResetAccount(testEmail))
+
+	// All cleared.
+	orders, _ := engine.store.GetOrders(testEmail)
+	assert.Empty(t, orders)
+	positions, _ := engine.store.GetPositions(testEmail)
+	assert.Empty(t, positions)
+	holdings, _ := engine.store.GetHoldings(testEmail)
+	assert.Empty(t, holdings)
+
+	acct, err := engine.store.GetAccount(testEmail)
+	require.NoError(t, err)
+	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
+}

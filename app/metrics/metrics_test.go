@@ -655,3 +655,173 @@ func TestGetAllCounters_ConcurrentRead(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// ===========================================================================
+// Additional edge cases to push coverage above 98%
+// ===========================================================================
+
+func TestCleanupOldData_WithExpiredEntries(t *testing.T) {
+	m := New(Config{ServiceName: "test", CleanupRetentionDays: 7})
+
+	// Inject a daily user entry for 30 days ago directly into the sync.Map
+	// (TrackDailyUser always uses today's date, so we inject manually).
+	oldDate := time.Now().UTC().AddDate(0, 0, -30).Format("2006-01-02")
+	oldSet := &userSet{}
+	oldSet.users.Store("old@example.com", true)
+	oldSet.count = 1
+	m.dailyUsers.Store(oldDate, oldSet)
+
+	// Track a user for today normally.
+	m.TrackDailyUser("new@example.com")
+	recentDate := time.Now().UTC().Format("2006-01-02")
+
+	err := m.CleanupOldData()
+	if err != nil {
+		t.Fatalf("CleanupOldData error: %v", err)
+	}
+
+	if m.GetDailyUserCount(oldDate) != 0 {
+		t.Errorf("old date should have been cleaned, got count=%d", m.GetDailyUserCount(oldDate))
+	}
+	if m.GetDailyUserCount(recentDate) != 1 {
+		t.Errorf("recent date should survive cleanup, got count=%d", m.GetDailyUserCount(recentDate))
+	}
+}
+
+func TestCleanupOldData_NonStringKey(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	// Inject a non-string key into dailyUsers sync.Map.
+	m.dailyUsers.Store(12345, &sync.Map{})
+
+	// Should not panic, just skip the non-string key.
+	err := m.CleanupOldData()
+	if err != nil {
+		t.Fatalf("CleanupOldData error: %v", err)
+	}
+}
+
+func TestStartCleanupRoutine_StopsOnShutdown(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	m.startCleanupRoutine()
+
+	// Shutdown should stop the cleanup goroutine.
+	m.Shutdown()
+	// Double shutdown should not panic.
+	m.Shutdown()
+}
+
+func TestWritePrometheus_WithDailyMetrics(t *testing.T) {
+	m := New(Config{ServiceName: "test", HistoricalDays: 3})
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	// Add a daily counter (has date suffix).
+	m.Increment("tool_calls_mcp_" + today)
+	// Add a regular counter (no date).
+	m.Increment("api_calls")
+
+	// Add historical daily user entries directly (yesterday).
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	ySet := &userSet{}
+	ySet.users.Store("user1@test.com", true)
+	ySet.users.Store("user2@test.com", true)
+	ySet.count = 2
+	m.dailyUsers.Store(yesterday, ySet)
+
+	buf := new(bytes.Buffer)
+	m.WritePrometheus(buf)
+
+	output := buf.String()
+	// Should contain the daily metric with date label.
+	if !strings.Contains(output, "tool_calls_total") {
+		t.Errorf("expected tool_calls_total in output, got:\n%s", output)
+	}
+	// Should contain the regular counter.
+	if !strings.Contains(output, "api_calls_total") {
+		t.Errorf("expected api_calls_total in output, got:\n%s", output)
+	}
+	// Should contain historical daily users.
+	if !strings.Contains(output, "daily_unique_users_total") {
+		t.Errorf("expected daily_unique_users_total in output, got:\n%s", output)
+	}
+}
+
+func TestWritePrometheus_DailyMetricWithSessionType(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	today := time.Now().UTC().Format("2006-01-02")
+	m.Increment("sessions_sse_" + today)
+
+	buf := new(bytes.Buffer)
+	m.WritePrometheus(buf)
+
+	output := buf.String()
+	if !strings.Contains(output, "sessions_total") {
+		t.Errorf("expected sessions_total in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "session_type") {
+		t.Errorf("expected session_type label in output, got:\n%s", output)
+	}
+}
+
+func TestHTTPHandler_MethodNotAllowed(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	handler := m.HTTPHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rr.Code)
+	}
+}
+
+func TestHTTPHandler_GET_ReturnsPrometheus(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+	m.Increment("test_counter")
+
+	handler := m.HTTPHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if ct != PrometheusContentType {
+		t.Errorf("expected Content-Type %q, got %q", PrometheusContentType, ct)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "test_counter_total") {
+		t.Errorf("expected test_counter_total in response body")
+	}
+}
+
+func TestIsDailyMetric_MoreEdgeCases(t *testing.T) {
+	m := New(Config{ServiceName: "test"})
+
+	// Single part (no underscore).
+	if m.isDailyMetric("nodashes") {
+		t.Error("single part should not be daily metric")
+	}
+	// Date-like but wrong separators.
+	if m.isDailyMetric("counter_20260411") {
+		t.Error("no dashes in date part should not match")
+	}
+	// Empty base name after removing date.
+	if m.isDailyMetric("2026-04-11") {
+		t.Error("just a date with no base should not match")
+	}
+	// Valid daily metric.
+	if !m.isDailyMetric("counter_2026-04-11") {
+		t.Error("counter_2026-04-11 should be daily metric")
+	}
+	// Wrong date part lengths.
+	if m.isDailyMetric("counter_26-04-11") {
+		t.Error("short year should not match")
+	}
+}
