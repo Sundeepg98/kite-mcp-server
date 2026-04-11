@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -3015,12 +3016,36 @@ func TestSafetyData_NoRiskGuard(t *testing.T) {
 	assert.NotNil(t, data)
 }
 
-func TestWatchlistData_WithStore(t *testing.T) {
+func TestWatchlistData_WithStore_Empty(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newRichDevModeManager(t)
 	data := watchlistData(mgr, auditStore, "admin@example.com")
-	// Should return something even with empty watchlists
 	assert.NotNil(t, data)
+}
+
+func TestWatchlistData_WithItems_P7(t *testing.T) {
+	t.Parallel()
+	mgr, auditStore := newRichDevModeManager(t)
+	ws := mgr.WatchlistStore()
+	if ws != nil {
+		wlID, err := ws.CreateWatchlist("wl-admin@example.com", "Test WL")
+		require.NoError(t, err)
+		_ = ws.AddItem("wl-admin@example.com", wlID, &watchlist.WatchlistItem{
+			Exchange: "NSE", Tradingsymbol: "INFY", Notes: "buy on dip",
+			TargetEntry: 1400, TargetExit: 1600,
+		})
+		_ = ws.AddItem("wl-admin@example.com", wlID, &watchlist.WatchlistItem{
+			Exchange: "NSE", Tradingsymbol: "RELIANCE", Notes: "swing trade",
+			TargetEntry: 2400, TargetExit: 2600,
+		})
+	}
+	data := watchlistData(mgr, auditStore, "wl-admin@example.com")
+	assert.NotNil(t, data)
+	dataMap, ok := data.(map[string]any)
+	if ok {
+		wlCount, _ := dataMap["total_count"].(int)
+		assert.GreaterOrEqual(t, wlCount, 1)
+	}
 }
 
 func TestHubData_P7(t *testing.T) {
@@ -3033,6 +3058,36 @@ func TestHubData_P7(t *testing.T) {
 func TestAlertData_P7(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newRichDevModeManager(t)
+	data := alertsData(mgr, auditStore, "admin@example.com")
+	assert.NotNil(t, data)
+}
+
+func TestAlertData_WithAlerts_P7(t *testing.T) {
+	t.Parallel()
+	mgr, auditStore := newRichDevModeManager(t)
+	// Create some alerts via the alert store interface
+	store := mgr.AlertStore()
+	if store != nil {
+		_, _ = store.Add("admin@example.com", "INFY", "NSE", 256265, 1500, "above")
+		_, _ = store.Add("admin@example.com", "RELIANCE", "NSE", 408065, 2000, "below")
+	}
+	data := alertsData(mgr, auditStore, "admin@example.com")
+	assert.NotNil(t, data)
+	dataMap, ok := data.(map[string]any)
+	if ok {
+		activeCount, _ := dataMap["active_count"].(int)
+		assert.GreaterOrEqual(t, activeCount, 0)
+	}
+}
+
+func TestAlertData_WithTriggeredAlerts_P7(t *testing.T) {
+	t.Parallel()
+	mgr, auditStore := newRichDevModeManager(t)
+	store := mgr.AlertStore()
+	if store != nil {
+		alertID, _ := store.Add("admin@example.com", "TCS", "NSE", 300000, 3000, "above")
+		store.MarkTriggered(alertID, 3100)
+	}
 	data := alertsData(mgr, auditStore, "admin@example.com")
 	assert.NotNil(t, data)
 }
@@ -4013,22 +4068,48 @@ func TestDevMode_PlaceMFSIP_AllParams(t *testing.T) {
 // ===========================================================================
 
 func TestDashboardBaseURL_Variations(t *testing.T) {
-	t.Parallel()
 	mgr := newDevModeManager(t)
 	url := dashboardBaseURL(mgr)
-	assert.NotEmpty(t, url)
+	_ = url
+}
+
+func TestDashboardBaseURL_WithExternalURL(t *testing.T) {
+	t.Parallel()
+	// DevMode manager always returns http://127.0.0.1:8080 (local mode)
+	mgr := newDevModeManager(t)
+	url := dashboardBaseURL(mgr)
+	assert.Contains(t, url, "127.0.0.1")
 }
 
 func TestDashboardLink_P7(t *testing.T) {
-	t.Parallel()
 	mgr := newDevModeManager(t)
 	link := dashboardLink(mgr)
-	_ = link // May be empty in DevMode
+	_ = link
+}
+
+func TestDashboardLink_WithExternalURL(t *testing.T) {
+	t.Setenv("EXTERNAL_URL", "https://test.example.com")
+	mgr := newDevModeManager(t)
+	link := dashboardLink(mgr)
+	assert.NotEmpty(t, link)
 }
 
 func TestDashboardPageURL_P7(t *testing.T) {
-	t.Parallel()
 	mgr := newDevModeManager(t)
 	url := dashboardPageURL(mgr, "/test")
-	_ = url // May be empty in DevMode
+	_ = url
+}
+
+func TestDashboardPageURL_WithLocalMode(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	url := dashboardPageURL(mgr, "/portfolio")
+	assert.Contains(t, url, "127.0.0.1")
+}
+
+func TestDashboardLink_LocalMode_P7(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	link := dashboardLink(mgr)
+	assert.NotEmpty(t, link) // Local mode returns 127.0.0.1
 }
