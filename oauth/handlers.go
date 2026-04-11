@@ -75,6 +75,7 @@ type Handler struct {
 	userStore        AdminUserStore
 	registry         KeyRegistry
 	googleSSO        *GoogleSSOConfig
+	httpClient       *http.Client // nil = default; injectable for testing Google OAuth
 
 	// Cached templates (parsed once at startup)
 	loginSuccessTmpl   *template.Template
@@ -1092,6 +1093,12 @@ func (h *Handler) SetUserStore(store AdminUserStore) {
 // SetGoogleSSO enables Google SSO for admin login.
 func (h *Handler) SetGoogleSSO(cfg *GoogleSSOConfig) {
 	h.googleSSO = cfg
+}
+
+// SetHTTPClient sets a custom HTTP client for Google OAuth operations (token exchange + userinfo).
+// When nil (default), the standard library clients are used.
+func (h *Handler) SetHTTPClient(c *http.Client) {
+	h.httpClient = c
 }
 
 // GoogleSSOEnabled returns true if Google SSO is configured.

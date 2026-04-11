@@ -435,8 +435,11 @@ func validateSessionID(sessionID string) error {
 }
 
 // GetBrokerForEmail resolves a broker.Client for the given email using cached credentials.
-// Returns an error if no access token is available.
+// In DevMode, returns a mock broker. Otherwise, returns an error if no access token is available.
 func (ss *SessionService) GetBrokerForEmail(email string) (broker.Client, error) {
+	if ss.devMode {
+		return mock.NewDemoClient(), nil
+	}
 	apiKey := ss.credentialSvc.GetAPIKeyForEmail(email)
 	accessToken := ss.credentialSvc.GetAccessTokenForEmail(email)
 	if accessToken == "" {

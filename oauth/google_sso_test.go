@@ -217,7 +217,7 @@ func TestFetchGoogleUserInfo_EmptyToken(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	// Empty access token will fail at Google's API
-	_, err := fetchGoogleUserInfo(ctx, "")
+	_, err := fetchGoogleUserInfo(ctx, "", nil, "")
 	if err == nil {
 		t.Error("Expected error with empty access token")
 	}
@@ -227,9 +227,568 @@ func TestFetchGoogleUserInfo_InvalidToken(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	// This will make a real HTTP call that returns 401
-	_, err := fetchGoogleUserInfo(ctx, "definitely-invalid-token-xyz123")
+	_, err := fetchGoogleUserInfo(ctx, "definitely-invalid-token-xyz123", nil, "")
 	if err == nil {
 		t.Error("Expected error with invalid access token")
+	}
+}
+
+func TestFetchGoogleUserInfo_MockSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify auth header is set
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer test-token-123" {
+			t.Errorf("Expected Bearer test-token-123, got %q", auth)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "user@example.com",
+			"verified_email": true,
+		})
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	email, err := fetchGoogleUserInfo(ctx, "test-token-123", nil, srv.URL)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if email != "user@example.com" {
+		t.Errorf("Email = %q, want user@example.com", email)
+	}
+}
+
+func TestFetchGoogleUserInfo_MockWithCustomClient(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "custom@example.com",
+			"verified_email": true,
+		})
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	email, err := fetchGoogleUserInfo(ctx, "tok", srv.Client(), srv.URL)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if email != "custom@example.com" {
+		t.Errorf("Email = %q, want custom@example.com", email)
+	}
+}
+
+func TestFetchGoogleUserInfo_UnverifiedEmail(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "unverified@example.com",
+			"verified_email": false,
+		})
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	_, err := fetchGoogleUserInfo(ctx, "tok", nil, srv.URL)
+	if err == nil {
+		t.Error("Expected error for unverified email")
+	}
+	if !strings.Contains(err.Error(), "email not verified") {
+		t.Errorf("Expected 'email not verified' error, got: %v", err)
+	}
+}
+
+func TestFetchGoogleUserInfo_ServerError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	_, err := fetchGoogleUserInfo(ctx, "tok", nil, srv.URL)
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("Expected error to mention 500, got: %v", err)
+	}
+}
+
+func TestFetchGoogleUserInfo_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("not-json"))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	_, err := fetchGoogleUserInfo(ctx, "tok", nil, srv.URL)
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+// ===========================================================================
+// HandleGoogleCallback — full happy path with mock OAuth + userinfo servers
+// ===========================================================================
+
+func TestHandleGoogleCallback_FullHappyPath(t *testing.T) {
+	t.Parallel()
+
+	// Mock Google token endpoint: returns an access token
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "mock-access-tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	// Mock Google userinfo endpoint
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "admin@test.com",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	// Configure Google SSO with mock token + userinfo endpoints
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:     "test-google-client-id",
+		ClientSecret: "test-google-secret",
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
+	})
+
+	h.SetHTTPClient(tokenSrv.Client())
+
+	h.SetUserStore(&mockAdminUserStore{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+	})
+
+	// Build request with valid state cookie
+	state := base64.URLEncoding.EncodeToString([]byte("test-state-value"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=test-auth-code&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/admin/ops",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	// Should redirect (302) after successful login
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302. Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_TokenExchangeFails(t *testing.T) {
+	t.Parallel()
+
+	// Mock token endpoint that returns an error
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":             "invalid_grant",
+			"error_description": "code expired",
+		})
+	}))
+	defer tokenSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+
+	state := base64.URLEncoding.EncodeToString([]byte("test-state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=expired-code&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500 (token exchange failure). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_UserInfoFails(t *testing.T) {
+	t.Parallel()
+
+	// Mock token endpoint: succeeds
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "mock-tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	// Mock userinfo endpoint: returns 500
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+		UserInfoURL: userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+
+	state := base64.URLEncoding.EncodeToString([]byte("test-state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=ok-code&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500 (userinfo failure). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_EmptyEmail(t *testing.T) {
+	t.Parallel()
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+		UserInfoURL: userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+
+	// Must set a userStore so the test reaches the empty-email check
+	h.SetUserStore(&mockAdminUserStore{
+		roles:    map[string]string{},
+		statuses: map[string]string{},
+	})
+
+	state := base64.URLEncoding.EncodeToString([]byte("state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 (empty email). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_SuspendedUser(t *testing.T) {
+	t.Parallel()
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "suspended@test.com",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+		UserInfoURL: userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+
+	h.SetUserStore(&mockAdminUserStore{
+		roles:    map[string]string{"suspended@test.com": "admin"},
+		statuses: map[string]string{"suspended@test.com": "suspended"},
+	})
+
+	state := base64.URLEncoding.EncodeToString([]byte("state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("Status = %d, want 403 (suspended). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_MissingCode_WithValidState(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:     "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+	})
+
+	state := "mystate"
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 (missing code). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_OAuthError_RedirectsToAdminLogin(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:     "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+	})
+
+	state := "mystate"
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?error=access_denied&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/admin/ops",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	// Should redirect to admin login page
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 (redirect on OAuth error). Body: %s", rr.Code, rr.Body.String())
+	}
+	location := rr.Header().Get("Location")
+	if !strings.Contains(location, "/auth/admin-login") {
+		t.Errorf("Expected redirect to admin-login, got: %q", location)
+	}
+}
+
+func TestHandleGoogleCallback_MalformedStateCookie_NoPipe(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:     "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+	})
+
+	// Cookie with no pipe separator
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=abc&state=xyz", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: "no-pipe-separator",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 (malformed cookie). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_NoUserStore(t *testing.T) {
+	t.Parallel()
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "user@example.com",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+		UserInfoURL: userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+	// Deliberately do NOT set a userStore
+
+	state := base64.URLEncoding.EncodeToString([]byte("state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500 (no user store). Body: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleGoogleCallback_TraderRedirectToDashboard(t *testing.T) {
+	t.Parallel()
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "trader@test.com",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:    "test-id",
+		ClientSecret: "test-secret",
+		RedirectURL: "https://test.example.com/auth/google/callback",
+		Endpoint:    tokenSrv.URL,
+		UserInfoURL: userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+
+	h.SetUserStore(&mockAdminUserStore{
+		roles:    map[string]string{"trader@test.com": "trader"},
+		statuses: map[string]string{"trader@test.com": "active"},
+	})
+
+	state := base64.URLEncoding.EncodeToString([]byte("state"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{
+		Name:  googleStateCookieName,
+		Value: state + "|/dashboard/activity",
+	})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302. Body: %s", rr.Code, rr.Body.String())
+	}
+	location := rr.Header().Get("Location")
+	if location != "/dashboard/activity" {
+		t.Errorf("Location = %q, want /dashboard/activity", location)
 	}
 }
 
@@ -930,7 +1489,7 @@ func TestRegister_TooManyRedirectURIs(t *testing.T) {
 	}
 }
 
-func TestRegister_InvalidJSON(t *testing.T) {
+func TestRegister_InvalidJSON_SSOFile(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
 	defer h.Close()
@@ -999,7 +1558,7 @@ func TestRegister_Success(t *testing.T) {
 // HandleAdminLogin — GET with redirect param
 // ===========================================================================
 
-func TestHandleAdminLogin_GET_WithRedirect(t *testing.T) {
+func TestHandleAdminLogin_GET_WithRedirect_SSOFile(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
 	defer h.Close()
@@ -1018,7 +1577,7 @@ func TestHandleAdminLogin_GET_WithRedirect(t *testing.T) {
 // Authorize endpoint — additional error paths
 // ===========================================================================
 
-func TestAuthorize_MethodNotAllowed(t *testing.T) {
+func TestAuthorize_MethodNotAllowed_SSOFile(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
 	defer h.Close()

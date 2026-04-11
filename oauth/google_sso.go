@@ -21,16 +21,33 @@ type GoogleSSOConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
+	Endpoint     string // Optional: override token endpoint URL (for testing). Empty = Google default.
+	UserInfoURL  string // Optional: override userinfo URL (for testing). Empty = Google default.
+}
+
+// userInfoURL returns the effective userinfo URL (test override or default).
+func (g *GoogleSSOConfig) userInfoURL() string {
+	if g.UserInfoURL != "" {
+		return g.UserInfoURL
+	}
+	return googleUserInfoURL
 }
 
 // oauthConfig returns the golang.org/x/oauth2 config for Google.
 func (g *GoogleSSOConfig) oauthConfig() *oauth2.Config {
+	endpoint := google.Endpoint
+	if g.Endpoint != "" {
+		endpoint = oauth2.Endpoint{
+			AuthURL:  g.Endpoint + "/auth",
+			TokenURL: g.Endpoint + "/token",
+		}
+	}
 	return &oauth2.Config{
 		ClientID:     g.ClientID,
 		ClientSecret: g.ClientSecret,
 		RedirectURL:  g.RedirectURL,
 		Scopes:       []string{"openid", "email", "profile"},
-		Endpoint:     google.Endpoint,
+		Endpoint:     endpoint,
 	}
 }
 
@@ -139,15 +156,21 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	token, err := h.googleSSO.oauthConfig().Exchange(ctx, code)
+	// Inject custom HTTP client for OAuth token exchange if set (used in tests).
+	exchangeCtx := ctx
+	if h.httpClient != nil {
+		exchangeCtx = context.WithValue(ctx, oauth2.HTTPClient, h.httpClient)
+	}
+
+	token, err := h.googleSSO.oauthConfig().Exchange(exchangeCtx, code)
 	if err != nil {
 		h.logger.Error("Google SSO token exchange failed", "error", err)
 		http.Error(w, "Failed to exchange authorization code", http.StatusInternalServerError)
 		return
 	}
 
-	// Fetch user info from Google.
-	email, err := fetchGoogleUserInfo(ctx, token.AccessToken)
+	// Fetch user info from Google (uses config's userInfoURL for test overrides).
+	email, err := fetchGoogleUserInfo(ctx, token.AccessToken, h.httpClient, h.googleSSO.userInfoURL())
 	if err != nil {
 		h.logger.Error("Google SSO userinfo fetch failed", "error", err)
 		http.Error(w, "Failed to fetch user info", http.StatusInternalServerError)
@@ -209,15 +232,26 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
-// fetchGoogleUserInfo calls the Google userinfo endpoint and returns the email.
-func fetchGoogleUserInfo(ctx context.Context, accessToken string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+// googleUserInfoURL is the Google userinfo endpoint. Package-level var for testing.
+var googleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
+
+// fetchGoogleUserInfo calls the given userinfo URL and returns the email.
+// It uses the provided httpClient if non-nil, otherwise http.DefaultClient.
+func fetchGoogleUserInfo(ctx context.Context, accessToken string, httpClient *http.Client, infoURL string) (string, error) {
+	if infoURL == "" {
+		infoURL = googleUserInfoURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, infoURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetch userinfo: %w", err)
 	}

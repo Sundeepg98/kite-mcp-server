@@ -862,7 +862,7 @@ func TestHandleBrowserLogin_CSRFProtection(t *testing.T) {
 	}
 }
 
-func TestHandleBrowserLogin_GET_NoEmail(t *testing.T) {
+func TestHandleBrowserLogin_GET_NoEmail_HandlersFile(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
 	defer h.Close()
@@ -1362,7 +1362,7 @@ func TestHandleLoginChoice_GET_InvalidCookie(t *testing.T) {
 	}
 }
 
-func TestHandleLoginChoice_DefaultRedirect(t *testing.T) {
+func TestHandleLoginChoice_DefaultRedirect_HandlersFile(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
 	defer h.Close()

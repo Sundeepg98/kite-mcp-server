@@ -3,9 +3,11 @@ package kc
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 )
@@ -320,5 +322,368 @@ func TestNewPortfolioService(t *testing.T) {
 	ps := NewPortfolioService(ss, testLogger())
 	if ps == nil {
 		t.Error("Expected non-nil PortfolioService")
+	}
+}
+
+// ===========================================================================
+// GetBrokerForEmail — devMode and non-devMode paths
+// ===========================================================================
+
+func createDevModeSessionService() *SessionService {
+	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{}}
+	tokenStore := &mockTokenStore{entries: map[string]*KiteTokenEntry{}}
+	credSvc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      tokenStore,
+		Logger:          testLogger(),
+	})
+	signer, _ := NewSessionSigner()
+	ss := NewSessionService(SessionServiceConfig{
+		CredentialSvc: credSvc,
+		TokenStore:    tokenStore,
+		SessionSigner: signer,
+		Logger:        testLogger(),
+		DevMode:       true,
+	})
+	return ss
+}
+
+func TestGetBrokerForEmail_DevMode(t *testing.T) {
+	t.Parallel()
+	ss := createDevModeSessionService()
+
+	client, err := ss.GetBrokerForEmail("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error in devMode, got: %v", err)
+	}
+	if client == nil {
+		t.Fatal("Expected non-nil broker client in devMode")
+	}
+}
+
+func TestGetBrokerForEmail_DevMode_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	ss := createDevModeSessionService()
+
+	client, err := ss.GetBrokerForEmail("")
+	if err != nil {
+		t.Fatalf("Expected no error in devMode with empty email, got: %v", err)
+	}
+	if client == nil {
+		t.Fatal("Expected non-nil broker client in devMode")
+	}
+}
+
+func TestGetBrokerForEmail_NoToken(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+
+	_, err := ss.GetBrokerForEmail("notoken@example.com")
+	if err == nil {
+		t.Fatal("Expected error for email with no access token")
+	}
+	if !strings.Contains(err.Error(), "no Kite access token") {
+		t.Errorf("Error should mention 'no Kite access token', got: %v", err)
+	}
+}
+
+func TestGetBrokerForEmail_WithToken(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{
+		"user@example.com": {APIKey: "test-key", APISecret: "test-secret"},
+	}}
+	tokenStore := &mockTokenStore{entries: map[string]*KiteTokenEntry{
+		"user@example.com": {AccessToken: "valid-access-token", UserName: "TestUser"},
+	}}
+	credSvc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      tokenStore,
+		Logger:          testLogger(),
+	})
+	signer, _ := NewSessionSigner()
+	ss := NewSessionService(SessionServiceConfig{
+		CredentialSvc: credSvc,
+		TokenStore:    tokenStore,
+		SessionSigner: signer,
+		Logger:        testLogger(),
+	})
+
+	client, err := ss.GetBrokerForEmail("user@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error with valid token, got: %v", err)
+	}
+	if client == nil {
+		t.Fatal("Expected non-nil broker client")
+	}
+}
+
+// ===========================================================================
+// OrderService — all methods with devMode (mock broker)
+// ===========================================================================
+
+func createDevModeOrderService() *OrderService {
+	ss := createDevModeSessionService()
+	return NewOrderService(ss, testLogger())
+}
+
+func TestOrderService_GetBroker_Error(t *testing.T) {
+	t.Parallel()
+	// Non-devMode, no credentials => error
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.getBroker("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error from getBroker with no token")
+	}
+	if !strings.Contains(err.Error(), "order:") {
+		t.Errorf("Error should be wrapped with 'order:', got: %v", err)
+	}
+}
+
+func TestOrderService_PlaceOrder_Success(t *testing.T) {
+	t.Parallel()
+	os := createDevModeOrderService()
+
+	resp, err := os.PlaceOrder("test@example.com", broker.OrderParams{
+		Tradingsymbol: "INFY",
+		Exchange:      "NSE",
+		TransactionType: "BUY",
+		OrderType:     "MARKET",
+		Quantity:      1,
+		Product:       "CNC",
+		Variety:       "regular",
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if resp.OrderID == "" {
+		t.Error("Expected non-empty OrderID")
+	}
+}
+
+func TestOrderService_PlaceOrder_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.PlaceOrder("nouser@example.com", broker.OrderParams{})
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestOrderService_ModifyOrder_BrokerError(t *testing.T) {
+	t.Parallel()
+	os := createDevModeOrderService()
+
+	// In devMode, each GetBrokerForEmail returns a fresh mock client.
+	// ModifyOrder on a non-existent order ID triggers the broker error path.
+	_, err := os.ModifyOrder("test@example.com", "nonexistent-order", broker.OrderParams{
+		Quantity: 2,
+		Price:    1510.0,
+	})
+	if err == nil {
+		t.Fatal("Expected error for modifying nonexistent order")
+	}
+	if !strings.Contains(err.Error(), "failed to modify order") {
+		t.Errorf("Error should mention 'failed to modify order', got: %v", err)
+	}
+}
+
+func TestOrderService_ModifyOrder_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.ModifyOrder("nouser@example.com", "order-123", broker.OrderParams{})
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestOrderService_CancelOrder_BrokerError(t *testing.T) {
+	t.Parallel()
+	os := createDevModeOrderService()
+
+	// Cancel a non-existent order triggers the broker error path.
+	_, err := os.CancelOrder("test@example.com", "nonexistent-order", "regular")
+	if err == nil {
+		t.Fatal("Expected error for cancelling nonexistent order")
+	}
+	if !strings.Contains(err.Error(), "failed to cancel order") {
+		t.Errorf("Error should mention 'failed to cancel order', got: %v", err)
+	}
+}
+
+func TestOrderService_CancelOrder_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.CancelOrder("nouser@example.com", "order-123", "regular")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestOrderService_GetOrders_Success(t *testing.T) {
+	t.Parallel()
+	os := createDevModeOrderService()
+
+	orders, err := os.GetOrders("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	// Mock client returns empty or pre-configured orders
+	_ = orders
+}
+
+func TestOrderService_GetOrders_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.GetOrders("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestOrderService_GetTrades_Success(t *testing.T) {
+	t.Parallel()
+	os := createDevModeOrderService()
+
+	trades, err := os.GetTrades("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	_ = trades
+}
+
+func TestOrderService_GetTrades_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	os := NewOrderService(ss, testLogger())
+
+	_, err := os.GetTrades("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+// ===========================================================================
+// PortfolioService — all methods with devMode (mock broker)
+// ===========================================================================
+
+func createDevModePortfolioService() *PortfolioService {
+	ss := createDevModeSessionService()
+	return NewPortfolioService(ss, testLogger())
+}
+
+func TestPortfolioService_GetBroker_Error(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	ps := NewPortfolioService(ss, testLogger())
+
+	_, err := ps.getBroker("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error from getBroker with no token")
+	}
+	if !strings.Contains(err.Error(), "portfolio:") {
+		t.Errorf("Error should be wrapped with 'portfolio:', got: %v", err)
+	}
+}
+
+func TestPortfolioService_GetHoldings_Success(t *testing.T) {
+	t.Parallel()
+	ps := createDevModePortfolioService()
+
+	holdings, err := ps.GetHoldings("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	// Demo client has pre-configured holdings
+	if len(holdings) == 0 {
+		t.Error("Expected demo holdings from mock broker")
+	}
+}
+
+func TestPortfolioService_GetHoldings_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	ps := NewPortfolioService(ss, testLogger())
+
+	_, err := ps.GetHoldings("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestPortfolioService_GetPositions_Success(t *testing.T) {
+	t.Parallel()
+	ps := createDevModePortfolioService()
+
+	positions, err := ps.GetPositions("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	_ = positions
+}
+
+func TestPortfolioService_GetPositions_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	ps := NewPortfolioService(ss, testLogger())
+
+	_, err := ps.GetPositions("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestPortfolioService_GetMargins_Success(t *testing.T) {
+	t.Parallel()
+	ps := createDevModePortfolioService()
+
+	margins, err := ps.GetMargins("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	_ = margins
+}
+
+func TestPortfolioService_GetMargins_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	ps := NewPortfolioService(ss, testLogger())
+
+	_, err := ps.GetMargins("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
+	}
+}
+
+func TestPortfolioService_GetProfile_Success(t *testing.T) {
+	t.Parallel()
+	ps := createDevModePortfolioService()
+
+	profile, err := ps.GetProfile("test@example.com")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if profile.UserID == "" {
+		t.Error("Expected non-empty UserID from demo profile")
+	}
+}
+
+func TestPortfolioService_GetProfile_NoBroker(t *testing.T) {
+	t.Parallel()
+	ss := createTestSessionService()
+	ps := NewPortfolioService(ss, testLogger())
+
+	_, err := ps.GetProfile("nouser@example.com")
+	if err == nil {
+		t.Fatal("Expected error when broker cannot be resolved")
 	}
 }
