@@ -3655,3 +3655,487 @@ func TestRegister_MethodNotAllowed_Final(t *testing.T) {
 		t.Errorf("Status = %d, want 405", rr.Code)
 	}
 }
+
+// ===========================================================================
+// Coverage push — deeper handler paths
+// ===========================================================================
+
+// Token with deferred exchange (ExchangeWithCredentials via stored secret)
+func TestToken_DeferredExchange_ViaStoredSecret(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "deferred@example.com", nil
+		}
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "stored-secret", true
+		}
+	})
+	defer h.Close()
+
+	// Register a Kite client
+	h.clients.RegisterKiteClient("kite-api-key", []string{"http://localhost:3000/callback"})
+
+	// Generate auth code with RequestToken (deferred exchange scenario)
+	verifier := "test-verifier-for-deferred-exchange"
+	challenge := pkceChallenge(verifier)
+	code, err := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      "kite-api-key",
+		CodeChallenge: challenge,
+		RedirectURI:   "http://localhost:3000/callback",
+		RequestToken:  "kite-request-token-123",
+	})
+	if err != nil {
+		t.Fatalf("Generate auth code: %v", err)
+	}
+
+	// Exchange — no client_secret in request, should use stored secret
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"code_verifier": {verifier},
+		"client_id":     {"kite-api-key"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.Token(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200; body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+// Token deferred exchange where ExchangeWithCredentials fails (via stored secret)
+func TestToken_DeferredExchange_ExchangeFails_ViaStoredSecret(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "", fmt.Errorf("kite rejected token")
+		}
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "stored-secret", true
+		}
+	})
+	defer h.Close()
+
+	h.clients.RegisterKiteClient("kite-fail-key", []string{"http://localhost:3000/callback"})
+	verifier := "test-verifier-deferred-fail"
+	challenge := pkceChallenge(verifier)
+	code, _ := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      "kite-fail-key",
+		CodeChallenge: challenge,
+		RedirectURI:   "http://localhost:3000/callback",
+		RequestToken:  "invalid-token",
+	})
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"code_verifier": {verifier},
+		"client_id":     {"kite-fail-key"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.Token(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400; body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+// Token deferred exchange — no stored secret, no client_secret in request (coverage push)
+func TestToken_DeferredExchange_NoSecret_Push(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "", false // no stored secret
+		}
+	})
+	defer h.Close()
+
+	h.clients.RegisterKiteClient("kite-no-secret-key", []string{"http://localhost:3000/callback"})
+	verifier := "test-verifier-no-secret"
+	challenge := pkceChallenge(verifier)
+	code, _ := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      "kite-no-secret-key",
+		CodeChallenge: challenge,
+		RedirectURI:   "http://localhost:3000/callback",
+		RequestToken:  "req-token",
+	})
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"code_verifier": {verifier},
+		"client_id":     {"kite-no-secret-key"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.Token(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400; body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+// Token where resolved email is empty
+func TestToken_DeferredExchange_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "", nil // empty email, no error
+		}
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "secret", true
+		}
+	})
+	defer h.Close()
+
+	h.clients.RegisterKiteClient("kite-empty-email", []string{"http://localhost:3000/callback"})
+	verifier := "test-verifier-empty"
+	challenge := pkceChallenge(verifier)
+	code, _ := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      "kite-empty-email",
+		CodeChallenge: challenge,
+		RedirectURI:   "http://localhost:3000/callback",
+		RequestToken:  "req-tok",
+	})
+
+	form := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"code_verifier": {verifier},
+		"client_id":     {"kite-empty-email"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.Token(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500; body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+// HandleLoginChoice — already authenticated via cookie
+func TestHandleLoginChoice_AlreadyAuthenticated(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Generate a valid dashboard JWT
+	token, err := h.jwt.GenerateToken("user@test.com", "dashboard")
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/custom", nil)
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	rr := httptest.NewRecorder()
+	h.HandleLoginChoice(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 redirect", rr.Code)
+	}
+	loc := rr.Header().Get("Location")
+	if loc != "/custom" {
+		t.Errorf("Location = %q, want /custom", loc)
+	}
+}
+
+// HandleLoginChoice — nil loginChoiceTmpl (coverage push)
+func TestHandleLoginChoice_NilTemplate_Push(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+	h.loginChoiceTmpl = nil
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login", nil)
+	rr := httptest.NewRecorder()
+	h.HandleLoginChoice(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want 500", rr.Code)
+	}
+}
+
+// HandleBrowserLogin POST — valid CSRF, empty email
+func TestHandleBrowserLogin_POST_EmptyEmail_CSRFValid(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	csrf := "test-csrf-token"
+	form := url.Values{
+		"email":      {""},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {csrf},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: csrf})
+	rr := httptest.NewRecorder()
+	h.HandleBrowserLogin(rr, req)
+
+	// Should re-serve the login form (200)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200; body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+// HandleBrowserLogin POST — valid CSRF, email with no credentials
+func TestHandleBrowserLogin_POST_NoCreds(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	csrf := "test-csrf-token-2"
+	form := url.Values{
+		"email":      {"nocred@example.com"},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {csrf},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: csrf})
+	rr := httptest.NewRecorder()
+	h.HandleBrowserLogin(rr, req)
+
+	// Should re-serve the login form with error message (200)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (form with error)", rr.Code)
+	}
+}
+
+// HandleBrowserLogin POST — valid CSRF, email with credentials -> redirect
+func TestHandleBrowserLogin_POST_WithCreds(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.getCredentials = func(email string) (string, string, bool) {
+			if email == "cred@example.com" {
+				return "api-key-123", "api-secret-456", true
+			}
+			return "", "", false
+		}
+	})
+	defer h.Close()
+
+	csrf := "test-csrf-token-3"
+	form := url.Values{
+		"email":      {"cred@example.com"},
+		"redirect":   {"/dashboard"},
+		"csrf_token": {csrf},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/browser-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: csrf})
+	rr := httptest.NewRecorder()
+	h.HandleBrowserLogin(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 (redirect to Kite)", rr.Code)
+	}
+}
+
+// HandleBrowserLogin GET — email with no credentials
+func TestHandleBrowserLogin_GET_NoCredsError(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/browser-login?email=nobody@test.com", nil)
+	rr := httptest.NewRecorder()
+	h.HandleBrowserLogin(rr, req)
+
+	// Should serve form with error message
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "No credentials") {
+		t.Errorf("Expected error about no credentials")
+	}
+}
+
+// HandleBrowserAuthCallback — per-user credentials path
+func TestHandleBrowserAuthCallback_PerUserCreds(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.getCredentials = func(email string) (string, string, bool) {
+			return "per-user-key", "per-user-secret", true
+		}
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "user@test.com", nil
+		}
+	})
+	defer h.Close()
+
+	raw := base64.RawURLEncoding.EncodeToString([]byte("user@test.com::/dashboard"))
+	signedTarget := h.signer.Sign(raw)
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?flow=browser&target="+url.QueryEscape(signedTarget), nil)
+	rr := httptest.NewRecorder()
+	h.HandleBrowserAuthCallback(rr, req, "valid-request-token")
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302; body = %s", rr.Code, rr.Body.String())
+	}
+	loc := rr.Header().Get("Location")
+	if loc != "/dashboard" {
+		t.Errorf("Location = %q, want /dashboard", loc)
+	}
+}
+
+// HandleAdminLogin POST — open redirect prevention (with valid credentials)
+func TestHandleAdminLogin_POST_OpenRedirectPrevention_Valid(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+	h.SetUserStore(&mockAdminUserStore{
+		roles:     map[string]string{"admin@test.com": "admin"},
+		statuses:  map[string]string{"admin@test.com": "active"},
+		passwords: map[string]string{"admin@test.com": "correct-password"},
+	})
+
+	csrf := "admin-csrf"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"correct-password"},
+		"redirect":   {"//evil.com"},
+		"csrf_token": {csrf},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: csrf})
+	rr := httptest.NewRecorder()
+	h.HandleAdminLogin(rr, req)
+
+	loc := rr.Header().Get("Location")
+	if loc == "//evil.com" {
+		t.Errorf("Open redirect not prevented: Location = %q", loc)
+	}
+}
+
+// HandleKiteOAuthCallback — immediate exchange (returning user SSO)
+func TestHandleKiteOAuthCallback_ImmediateExchange(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "stored-api-secret", true
+		}
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "returning@example.com", nil
+		}
+	})
+	defer h.Close()
+
+	h.clients.RegisterKiteClient("kite-returning-key", []string{"http://localhost:3000/callback"})
+
+	stateData := oauthState{
+		ClientID:      "kite-returning-key",
+		CodeChallenge: "test-challenge",
+		RedirectURI:   "http://localhost:3000/callback",
+	}
+	stateJSON, _ := json.Marshal(stateData)
+	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
+	signedState := h.signer.Sign(encodedState)
+
+	reqURL := "/callback?flow=oauth&data=" + url.QueryEscape(signedState)
+	req := httptest.NewRequest(http.MethodGet, reqURL, nil)
+	rr := httptest.NewRecorder()
+	h.HandleKiteOAuthCallback(rr, req, "valid-request-token")
+
+	// Handler serves a success HTML page (200) with auto-redirect, or 302 if template is nil
+	if rr.Code != http.StatusOK && rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 200 or 302; body snippet = %.200s", rr.Code, rr.Body.String())
+	}
+	// Verify the response contains the auth code (in HTML body or Location header)
+	body := rr.Body.String()
+	loc := rr.Header().Get("Location")
+	if !strings.Contains(body, "code=") && !strings.Contains(loc, "code=") {
+		t.Errorf("Expected auth code in response body or Location header")
+	}
+}
+
+// HandleKiteOAuthCallback — immediate exchange fails, falls back to deferred
+func TestHandleKiteOAuthCallback_ImmediateExchangeFails_DeferredFallback(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.getSecretByAPIKey = func(apiKey string) (string, bool) {
+			return "stale-secret", true
+		}
+		e.exchangeWithCreds = func(requestToken, apiKey, apiSecret string) (string, error) {
+			return "", fmt.Errorf("stale credentials")
+		}
+	})
+	defer h.Close()
+
+	h.clients.RegisterKiteClient("kite-stale-key", []string{"http://localhost:3000/callback"})
+
+	stateData := oauthState{
+		ClientID:      "kite-stale-key",
+		CodeChallenge: "test-challenge",
+		RedirectURI:   "http://localhost:3000/callback",
+	}
+	stateJSON, _ := json.Marshal(stateData)
+	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
+	signedState := h.signer.Sign(encodedState)
+
+	reqURL := "/callback?flow=oauth&data=" + url.QueryEscape(signedState)
+	req := httptest.NewRequest(http.MethodGet, reqURL, nil)
+	rr := httptest.NewRecorder()
+	h.HandleKiteOAuthCallback(rr, req, "valid-request-token")
+
+	// Deferred fallback still serves a success page or redirect
+	if rr.Code != http.StatusOK && rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 200 or 302 (deferred fallback); body snippet = %.200s", rr.Code, rr.Body.String())
+	}
+}
+
+// Authorize — redirect URI validation fails for non-Kite registered client
+func TestAuthorize_RedirectURIMismatch(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Register a non-Kite client with a specific redirect URI
+	clientID, _, _ := h.clients.Register([]string{"http://allowed.com/callback"}, "test-client")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/oauth/authorize?client_id="+clientID+
+			"&redirect_uri=http://evil.com/callback"+
+			"&code_challenge=testchallenge"+
+			"&code_challenge_method=S256"+
+			"&response_type=code",
+		nil)
+	rr := httptest.NewRecorder()
+	h.Authorize(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want 400 (redirect_uri mismatch)", rr.Code)
+	}
+}
+
+// HandleBrowserAuthCallback — legacy target format (no :: separator, just redirect)
+func TestHandleBrowserAuthCallback_LegacyTarget(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeFunc = func(requestToken string) (string, error) {
+			return "user@test.com", nil
+		}
+	})
+	defer h.Close()
+
+	// Sign a non-base64 target (legacy: plain redirect string)
+	signedTarget := h.signer.Sign("not-valid-base64")
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?flow=browser&target="+url.QueryEscape(signedTarget), nil)
+	rr := httptest.NewRecorder()
+	h.HandleBrowserAuthCallback(rr, req, "valid-token")
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302", rr.Code)
+	}
+}

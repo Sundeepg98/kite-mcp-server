@@ -407,10 +407,9 @@ func TestStatus_WithOpenOrders(t *testing.T) {
 func TestGetMargins_NoAccount(t *testing.T) {
 	engine := testEngine(t, nil)
 
-	margins, err := engine.GetMargins(testEmail)
-	require.NoError(t, err)
-	// Should return zero-value margins for non-existent account.
-	assert.NotNil(t, margins)
+	_, err := engine.GetMargins(testEmail)
+	require.Error(t, err, "should error for non-existent account")
+	assert.Contains(t, err.Error(), "not enabled")
 }
 
 func TestGetMargins_Enabled(t *testing.T) {
@@ -436,12 +435,13 @@ func TestGetMargins_Enabled(t *testing.T) {
 }
 
 func TestMonitor_FillLimitOrder(t *testing.T) {
-	prices := map[string]float64{"NSE:SBIN": 600.0}
-	engine := testEngine(t, prices)
+	// Set initial LTP high so BUY LIMIT stays OPEN at placement.
+	engine := testEngine(t, map[string]float64{"NSE:SBIN": 700.0})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
-	// Place a BUY LIMIT order at 610 (above current price 600, so it fills).
-	_, err := engine.PlaceOrder(testEmail, map[string]any{
+	// Place BUY LIMIT at 610. LTP is 700 so price(610) < ltp(700) → not
+	// immediately marketable → order stays OPEN.
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "SBIN",
 		"transaction_type": "BUY",
@@ -451,8 +451,12 @@ func TestMonitor_FillLimitOrder(t *testing.T) {
 		"price":            610.0,
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
 
-	// Start the monitor, which should pick up and fill the LIMIT order.
+	// Now drop the mock LTP to 600 so the monitor will fill it
+	// (shouldFill: ltp(600) <= price(610) → true).
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:SBIN": 600.0}})
+
 	monitor := NewMonitor(engine, time.Second,
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 	monitor.tick()
@@ -475,57 +479,77 @@ func TestMonitor_FillLimitOrder(t *testing.T) {
 	assert.Len(t, holdings, 1)
 }
 
-func TestMonitor_FillSellOrder(t *testing.T) {
+func TestMonitor_FillSellLimitOrder(t *testing.T) {
+	// Start with prices for BUY MARKET fill.
 	prices := map[string]float64{"NSE:TCS": 3500.0}
 	engine := testEngine(t, prices)
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
-	// First buy some shares.
+	// Buy some shares via MARKET order (fills immediately at 3500).
 	_, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "TCS",
 		"transaction_type": "BUY", "order_type": "MARKET",
 		"product": "MIS", "quantity": 10,
 	})
 	require.NoError(t, err)
+	time.Sleep(time.Millisecond) // Ensure unique nanosecond order ID.
 
-	// Now place a SELL LIMIT at 3400 (below current 3500, so it fills).
-	_, err = engine.PlaceOrder(testEmail, map[string]any{
+	// Place SELL LIMIT at 3600 (above LTP 3500, so NOT immediately marketable).
+	// This stays OPEN.
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "TCS",
 		"transaction_type": "SELL", "order_type": "LIMIT",
-		"product": "MIS", "quantity": 5, "price": 3400.0,
+		"product": "MIS", "quantity": 5, "price": 3600.0,
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
+
+	// Now change mock prices so LTP rises to 3700 (>= SELL limit 3600).
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:TCS": 3700.0}})
 
 	monitor := NewMonitor(engine, time.Second,
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 	monitor.tick()
 
-	// The SELL order should be filled.
+	// The SELL order should now be COMPLETE.
 	orders, err := engine.store.GetOrders(testEmail)
 	require.NoError(t, err)
-	// Both BUY (already filled) and SELL should be COMPLETE.
 	completed := 0
 	for _, o := range orders {
 		if o.Status == "COMPLETE" {
 			completed++
 		}
 	}
-	assert.Equal(t, 2, completed)
+	assert.Equal(t, 2, completed, "both BUY and SELL should be COMPLETE")
 }
 
 func TestMonitor_InsufficientCashReject(t *testing.T) {
-	prices := map[string]float64{"NSE:RELIANCE": 2500.0}
-	engine := testEngine(t, prices)
-	// Enable with very small cash.
-	require.NoError(t, engine.Enable(testEmail, 100))
+	// Set LTP high initially so the BUY LIMIT at 2600 stays OPEN
+	// (price 2600 < ltp 3000 → not marketable).
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 3000.0})
+	// Enable with very small cash (100). PlaceOrder LIMIT checks cost:
+	// quantity(10) * price(2600) = 26000 > 100 → REJECTED at placement.
+	// So use enough cash for the LIMIT check to pass but not enough for
+	// monitor fill. Actually, the PlaceOrder LIMIT cash check uses the
+	// limit price: 10 * 2600 = 26000. With cash=100 that rejects at placement.
+	// We need cash >= 26000 for it to become OPEN, then drain cash before monitor.
+	require.NoError(t, engine.Enable(testEmail, 30_000))
 
-	// Place a BUY LIMIT that should be rejected by the monitor (cost > cash).
-	_, err := engine.PlaceOrder(testEmail, map[string]any{
+	// Place BUY LIMIT at 2600 (below LTP 3000 → stays OPEN).
+	// Cash check: 10 * 2600 = 26000 < 30000 → passes.
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
 		"transaction_type": "BUY", "order_type": "LIMIT",
 		"product": "MIS", "quantity": 10, "price": 2600.0,
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
+
+	// Now drain cash so the monitor fill check fails.
+	require.NoError(t, engine.store.UpdateCashBalance(testEmail, 100))
+
+	// Drop LTP so monitor triggers the fill: ltp(2500) <= price(2600).
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 2500.0}})
 
 	monitor := NewMonitor(engine, time.Second,
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))

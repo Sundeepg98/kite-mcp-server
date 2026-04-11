@@ -1433,3 +1433,268 @@ func TestStore_Delete_ClosedDB(t *testing.T) {
 	_, found := s.GetByEmail("delfail@example.com")
 	assert.False(t, found, "user should be deleted from memory even if DB fails")
 }
+
+func TestStore_EnsureUser_ConcurrentCreation_DBDuplicate(t *testing.T) {
+	s, _ := newTestStoreWithDB(t)
+
+	// Create user via DB first.
+	require.NoError(t, s.Create(&User{
+		ID: "orig", Email: "dup@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+
+	// Delete from in-memory map only, leaving the DB record.
+	s.mu.Lock()
+	delete(s.users, "dup@example.com")
+	s.mu.Unlock()
+
+	// EnsureUser will try Create, fail on DB unique constraint,
+	// then re-check the in-memory map. Since we deleted from map,
+	// it won't find it there either → returns nil.
+	u := s.EnsureUser("dup@example.com", "uid", "name", "test")
+	// The user was re-inserted in memory by Create (memory insert
+	// succeeds, DB insert fails), so it should actually exist.
+	assert.NotNil(t, u)
+}
+
+func TestStore_EnsureAdmin_ConcurrentCreate_Fallback(t *testing.T) {
+	s, _ := newTestStoreWithDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s.SetLogger(logger)
+
+	// Pre-create user in DB only.
+	require.NoError(t, s.Create(&User{
+		ID: "admin-orig", Email: "admindup@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+
+	// Delete from map.
+	s.mu.Lock()
+	delete(s.users, "admindup@example.com")
+	s.mu.Unlock()
+
+	// EnsureAdmin on non-existent (in memory) user.
+	// Create will succeed in memory, fail in DB (duplicate), then
+	// the code tries UpdateRole as fallback.
+	s.EnsureAdmin("admindup@example.com")
+
+	u, ok := s.GetByEmail("admindup@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role)
+}
+
+func TestStore_UpdateLastLogin_WithDB_Verify(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{
+		ID: "ll1", Email: "login@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+
+	s.UpdateLastLogin("login@example.com")
+
+	// Reload and verify.
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+	u, ok := s2.GetByEmail("login@example.com")
+	require.True(t, ok)
+	assert.False(t, u.LastLogin.IsZero())
+}
+
+func TestStore_UpdateKiteUID_WithDB_Verify(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+
+	require.NoError(t, s.Create(&User{
+		ID: "ku1", Email: "kuid@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+
+	s.UpdateKiteUID("kuid@example.com", "ZP1234")
+
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.LoadFromDB())
+	u, ok := s2.GetByEmail("kuid@example.com")
+	require.True(t, ok)
+	assert.Equal(t, "ZP1234", u.KiteUID)
+}
+
+func TestStore_EnsureUser_ConcurrentMultiple(t *testing.T) {
+	// Hammer EnsureUser from many goroutines to exercise the Create-fail
+	// fallback path (lines 474-483 in store.go).
+	s := newTestStore(t)
+
+	var wg sync.WaitGroup
+	const n = 50
+	wg.Add(n)
+	results := make([]*User, n)
+	for i := 0; i < n; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = s.EnsureUser("race@example.com", fmt.Sprintf("uid%d", idx), "name", "test")
+		}(i)
+	}
+	wg.Wait()
+
+	// All goroutines should get a non-nil user back.
+	for i, u := range results {
+		assert.NotNil(t, u, "goroutine %d got nil user", i)
+	}
+	// Only one user should exist.
+	assert.Equal(t, 1, s.Count())
+}
+
+func TestStore_UpdateRole_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	require.NoError(t, s.Create(&User{
+		ID: "ur1", Email: "role@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	err := s.UpdateRole("role@example.com", RoleAdmin)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "persist role update")
+}
+
+func TestStore_UpdateStatus_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	require.NoError(t, s.Create(&User{
+		ID: "us1", Email: "stat@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	err := s.UpdateStatus("stat@example.com", StatusSuspended)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "persist status update")
+}
+
+func TestStore_SetAdminEmail_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	require.NoError(t, s.Create(&User{
+		ID: "sa1", Email: "child@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	err := s.SetAdminEmail("child@example.com", "admin@example.com")
+	require.Error(t, err)
+}
+
+func TestStore_SetPasswordHash_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	require.NoError(t, s.Create(&User{
+		ID: "pw1", Email: "pass@example.com",
+		Role: RoleAdmin, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	err := s.SetPasswordHash("pass@example.com", "$2a$10$fakehash")
+	require.Error(t, err)
+}
+
+func TestStore_UpdateLastLogin_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s.SetLogger(logger)
+	require.NoError(t, s.Create(&User{
+		ID: "ul1", Email: "lastlogin@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	// Should not panic — error is logged.
+	s.UpdateLastLogin("lastlogin@example.com")
+}
+
+func TestStore_UpdateKiteUID_ClosedDB(t *testing.T) {
+	s, db := newTestStoreWithDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s.SetLogger(logger)
+	require.NoError(t, s.Create(&User{
+		ID: "uk1", Email: "kuid2@example.com",
+		Role: RoleTrader, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	db.Close()
+	// Should not panic — error is logged.
+	s.UpdateKiteUID("kuid2@example.com", "ZP9999")
+}
+
+func TestInvitationStore_LoadFromDB_ClosedDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+
+	is := NewInvitationStore(db)
+	require.NoError(t, is.InitTable())
+	db.Close()
+
+	err = is.LoadFromDB()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query invitations")
+}
+
+func TestInvitationStore_Create_ClosedDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+
+	is := NewInvitationStore(db)
+	require.NoError(t, is.InitTable())
+	db.Close()
+
+	err = is.Create(&FamilyInvitation{
+		ID:           "inv_fail",
+		AdminEmail:   "admin@test.com",
+		InvitedEmail: "user@test.com",
+		Status:       "pending",
+		CreatedAt:    time.Now(),
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+	})
+	require.Error(t, err)
+}
+
+func TestInvitationStore_Accept_ClosedDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+
+	is := NewInvitationStore(db)
+	require.NoError(t, is.InitTable())
+
+	require.NoError(t, is.Create(&FamilyInvitation{
+		ID: "inv_acc", AdminEmail: "admin@test.com",
+		InvitedEmail: "user@test.com", Status: "pending",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+
+	db.Close()
+	err = is.Accept("inv_acc")
+	require.Error(t, err)
+}
+
+func TestInvitationStore_Revoke_ClosedDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+
+	is := NewInvitationStore(db)
+	require.NoError(t, is.InitTable())
+
+	require.NoError(t, is.Create(&FamilyInvitation{
+		ID: "inv_rev", AdminEmail: "admin@test.com",
+		InvitedEmail: "user@test.com", Status: "pending",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+
+	db.Close()
+	err = is.Revoke("inv_rev")
+	require.Error(t, err)
+}
