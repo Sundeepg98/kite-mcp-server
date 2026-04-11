@@ -281,8 +281,8 @@ func TestOpsHandler_OffboardUser_Success(t *testing.T) {
 
 	h.userStore.EnsureUser("target@test.com", "", "", "admin@test.com")
 
-	body := strings.NewReader(`{"email":"target@test.com","confirm":true}`)
-	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard", "admin@test.com", body)
+	body := strings.NewReader(`{"confirm":true}`)
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard?email=target@test.com", "admin@test.com", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -297,8 +297,8 @@ func TestOpsHandler_OffboardUser_NoConfirm(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
 
-	body := strings.NewReader(`{"email":"target@test.com","confirm":false}`)
-	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard", "admin@test.com", body)
+	body := strings.NewReader(`{"confirm":false}`)
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard?email=target@test.com", "admin@test.com", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -313,8 +313,8 @@ func TestOpsHandler_OffboardUser_SelfAction(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
 
-	body := strings.NewReader(`{"email":"admin@test.com","confirm":true}`)
-	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard", "admin@test.com", body)
+	body := strings.NewReader(`{"confirm":true}`)
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard?email=admin@test.com", "admin@test.com", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -335,8 +335,8 @@ func TestOpsHandler_ChangeRole_Success(t *testing.T) {
 
 	h.userStore.EnsureUser("target@test.com", "", "", "admin@test.com")
 
-	body := strings.NewReader(`{"email":"target@test.com","role":"admin"}`)
-	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/role", "admin@test.com", body)
+	body := strings.NewReader(`{"role":"admin"}`)
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/role?email=target@test.com", "admin@test.com", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
@@ -12,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -183,5 +185,80 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 
 	t.Cleanup(func() { db.Close() })
 
+	return mgr, auditStore
+}
+
+// newFullDevModeManager creates a DevMode Manager with ALL stores wired up:
+// AuditStore, PaperEngine, PnLService, admin user, and test credentials+tokens.
+// This enables testing handlers that depend on PaperEngine, PnLService,
+// or ext_apps data functions that need kiteClientForEmail to return non-nil.
+func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	testData := map[uint32]*instruments.Instrument{
+		256265: {InstrumentToken: 256265, ID: "NSE:INFY", Tradingsymbol: "INFY", Name: "INFOSYS", Exchange: "NSE", Segment: "NSE", InstrumentType: "EQ"},
+		408065: {InstrumentToken: 408065, ID: "NSE:RELIANCE", Tradingsymbol: "RELIANCE", Name: "RELIANCE INDUSTRIES", Exchange: "NSE", Segment: "NSE", InstrumentType: "EQ"},
+	}
+
+	instMgr, err := instruments.New(instruments.Config{
+		UpdateConfig: func() *instruments.UpdateConfig {
+			c := instruments.DefaultUpdateConfig()
+			c.EnableScheduler = false
+			return c
+		}(),
+		Logger:   logger,
+		TestData: testData,
+	})
+	require.NoError(t, err)
+
+	mgr, err := kc.New(kc.Config{
+		APIKey:             "test_key",
+		APISecret:          "test_secret",
+		Logger:             logger,
+		InstrumentsManager: instMgr,
+		DevMode:            true,
+	})
+	require.NoError(t, err)
+	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+
+	// SQLite-backed stores
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+
+	auditStore := audit.New(db)
+	require.NoError(t, auditStore.InitTable())
+	mgr.SetAuditStore(auditStore)
+
+	// PaperEngine
+	paperStore := papertrading.NewStore(db, logger)
+	require.NoError(t, paperStore.InitTables())
+	paperEngine := papertrading.NewEngine(paperStore, logger)
+	mgr.SetPaperEngine(paperEngine)
+
+	// PnLService (tokens/creds nil is fine -- GetJournal only needs the DB)
+	pnlSvc := alerts.NewPnLSnapshotService(db, nil, nil, logger)
+	mgr.SetPnLService(pnlSvc)
+
+	// Admin user
+	uStore := mgr.UserStoreConcrete()
+	require.NotNil(t, uStore)
+	require.NoError(t, uStore.Create(&users.User{
+		ID: "u_admin", Email: "admin@example.com",
+		Role: users.RoleAdmin, Status: users.StatusActive,
+	}))
+
+	// Seed test credentials + token so kiteClientForEmail returns non-nil
+	mgr.CredentialStore().Set("cred@example.com", &kc.KiteCredentialEntry{
+		APIKey:    "test_api_key",
+		APISecret: "test_api_secret",
+		StoredAt:  time.Now(),
+	})
+	mgr.TokenStore().Set("cred@example.com", &kc.KiteTokenEntry{
+		AccessToken: "test_access_token",
+		StoredAt:    time.Now(),
+	})
+
+	t.Cleanup(func() { db.Close() })
 	return mgr, auditStore
 }
