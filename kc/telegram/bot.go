@@ -85,6 +85,9 @@ type BotHandler struct {
 
 	// cleanupCancel stops the background cleanup goroutine.
 	cleanupCancel context.CancelFunc
+
+	// kiteBaseURI overrides the Kite API base URL (for testing).
+	kiteBaseURI string
 }
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
@@ -330,6 +333,9 @@ func (h *BotHandler) newKiteClient(email string) (*kiteconnect.Client, string) {
 	}
 	client := kiteconnect.New(apiKey)
 	client.SetAccessToken(accessToken)
+	if h.kiteBaseURI != "" {
+		client.SetBaseURI(h.kiteBaseURI)
+	}
 	return client, ""
 }
 
