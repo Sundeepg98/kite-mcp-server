@@ -1685,6 +1685,7 @@ type kiteExchangerAdapter struct {
 	registryStore   *registry.Store
 	userStore       *users.Store
 	logger          *slog.Logger
+	kiteBaseURI     string // override for testing; empty = production default
 }
 
 // provisionUser auto-provisions a user on first OAuth login and checks status.
@@ -1717,6 +1718,9 @@ func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string)
 
 func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string, error) {
 	client := kiteconnect.New(a.apiKey)
+	if a.kiteBaseURI != "" {
+		client.SetBaseURI(a.kiteBaseURI)
+	}
 	userSess, err := client.GenerateSession(requestToken, a.apiSecret)
 	if err != nil {
 		return "", fmt.Errorf("kite generate session: %w", err)
@@ -1752,6 +1756,9 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 
 func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, apiSecret string) (string, error) {
 	client := kiteconnect.New(apiKey)
+	if a.kiteBaseURI != "" {
+		client.SetBaseURI(a.kiteBaseURI)
+	}
 	userSess, err := client.GenerateSession(requestToken, apiSecret)
 	if err != nil {
 		return "", fmt.Errorf("kite generate session with per-user credentials: %w", err)

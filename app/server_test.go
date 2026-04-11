@@ -5439,3 +5439,204 @@ func TestSetupMux_PprofSpecificHandlers(t *testing.T) {
 	}
 }
 
+// ===========================================================================
+// Coverage push: ExchangeRequestToken / ExchangeWithCredentials success paths
+// ===========================================================================
+
+// mockKiteAPIServer starts an httptest server that mimics the Kite API
+// /session/token endpoint for GenerateSession.
+func mockKiteAPIServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/session/token" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"status": "success",
+				"data": {
+					"user_id": "XY1234",
+					"user_name": "Test User",
+					"email": "test@example.com",
+					"access_token": "mock-access-token",
+					"public_token": "mock-public-token",
+					"refresh_token": "mock-refresh-token"
+				}
+			}`))
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+}
+
+func TestExchangeRequestToken_Success(t *testing.T) {
+	t.Parallel()
+	mockServer := mockKiteAPIServer(t)
+	defer mockServer.Close()
+
+	tokenStore := kc.NewKiteTokenStore()
+	credStore := kc.NewKiteCredentialStore()
+	regStore := registry.New()
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "test-api-key",
+		apiSecret:       "test-api-secret",
+		tokenStore:      tokenStore,
+		credentialStore: credStore,
+		registryStore:   regStore,
+		logger:          testLogger(),
+		kiteBaseURI:     mockServer.URL,
+	}
+
+	email, err := adapter.ExchangeRequestToken("test-request-token")
+	if err != nil {
+		t.Fatalf("ExchangeRequestToken: %v", err)
+	}
+	assert.Equal(t, "test@example.com", email)
+
+	// Verify token was stored
+	entry, ok := tokenStore.Get("test@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "mock-access-token", entry.AccessToken)
+}
+
+func TestExchangeRequestToken_Success_FallbackToUserID(t *testing.T) {
+	t.Parallel()
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/session/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"status": "success",
+				"data": {
+					"user_id": "AB5678",
+					"user_name": "No Email User",
+					"access_token": "tok-no-email",
+					"public_token": "pub-no-email"
+				}
+			}`))
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer mockServer.Close()
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "test-key",
+		apiSecret:       "test-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		logger:          testLogger(),
+		kiteBaseURI:     mockServer.URL,
+	}
+
+	email, err := adapter.ExchangeRequestToken("test-request-token")
+	if err != nil {
+		t.Fatalf("ExchangeRequestToken: %v", err)
+	}
+	assert.Equal(t, "AB5678", email)
+}
+
+func TestExchangeWithCredentials_Success(t *testing.T) {
+	t.Parallel()
+	mockServer := mockKiteAPIServer(t)
+	defer mockServer.Close()
+
+	tokenStore := kc.NewKiteTokenStore()
+	credStore := kc.NewKiteCredentialStore()
+	regStore := registry.New()
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-api-key",
+		apiSecret:       "global-api-secret",
+		tokenStore:      tokenStore,
+		credentialStore: credStore,
+		registryStore:   regStore,
+		logger:          testLogger(),
+		kiteBaseURI:     mockServer.URL,
+	}
+
+	email, err := adapter.ExchangeWithCredentials("test-request-token", "per-user-key", "per-user-secret")
+	if err != nil {
+		t.Fatalf("ExchangeWithCredentials: %v", err)
+	}
+	assert.Equal(t, "test@example.com", email)
+
+	// Verify token was stored
+	entry, ok := tokenStore.Get("test@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "mock-access-token", entry.AccessToken)
+
+	// Verify credentials were stored
+	credEntry, ok := credStore.Get("test@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "per-user-key", credEntry.APIKey)
+}
+
+func TestExchangeWithCredentials_Success_WithRegistry(t *testing.T) {
+	t.Parallel()
+	mockServer := mockKiteAPIServer(t)
+	defer mockServer.Close()
+
+	tokenStore := kc.NewKiteTokenStore()
+	credStore := kc.NewKiteCredentialStore()
+	regStore := registry.New()
+
+	_ = regStore.Register(&registry.AppRegistration{
+		ID:         "old-reg",
+		APIKey:     "old-key",
+		APISecret:  "old-secret",
+		AssignedTo: "test@example.com",
+		Status:     registry.StatusActive,
+		Source:     registry.SourceSelfProvisioned,
+	})
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		tokenStore:      tokenStore,
+		credentialStore: credStore,
+		registryStore:   regStore,
+		logger:          testLogger(),
+		kiteBaseURI:     mockServer.URL,
+	}
+
+	email, err := adapter.ExchangeWithCredentials("test-request-token", "new-per-user-key", "new-per-user-secret")
+	if err != nil {
+		t.Fatalf("ExchangeWithCredentials: %v", err)
+	}
+	assert.Equal(t, "test@example.com", email)
+
+	// Verify old key was marked as replaced
+	oldEntry, found := regStore.GetByAPIKeyAnyStatus("old-key")
+	if found {
+		assert.Equal(t, registry.StatusReplaced, oldEntry.Status)
+	}
+}
+
+func TestExchangeRequestToken_Success_RegistryUpdate(t *testing.T) {
+	t.Parallel()
+	mockServer := mockKiteAPIServer(t)
+	defer mockServer.Close()
+
+	regStore := registry.New()
+	_ = regStore.Register(&registry.AppRegistration{
+		ID:     "global-reg",
+		APIKey: "test-api-key",
+		Status: registry.StatusActive,
+		Source: registry.SourceAdmin,
+	})
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "test-api-key",
+		apiSecret:       "test-api-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		registryStore:   regStore,
+		logger:          testLogger(),
+		kiteBaseURI:     mockServer.URL,
+	}
+
+	email, err := adapter.ExchangeRequestToken("test-request-token")
+	assert.NoError(t, err)
+	assert.Equal(t, "test@example.com", email)
+}
+
