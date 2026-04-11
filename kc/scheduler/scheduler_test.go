@@ -47,18 +47,34 @@ func TestStartStop(t *testing.T) {
 func TestTickSkipsWeekend(t *testing.T) {
 	s := New(testLogger())
 	var called atomic.Int32
-	s.Add(Task{Name: "weekend_test", Hour: 0, Minute: 0, Fn: func() { called.Add(1) }})
+	s.Add(Task{Name: "weekend_test", Hour: 10, Minute: 0, Fn: func() { called.Add(1) }})
+
+	// Inject Saturday 10:00 AM IST.
+	sat := time.Date(2026, 4, 4, 10, 0, 0, 0, kolkataLoc) // Saturday
+	s.SetClock(func() time.Time { return sat })
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+	if called.Load() != 0 {
+		t.Fatal("task should NOT run on Saturday")
+	}
+
+	// Inject Sunday 10:00 AM IST.
+	sun := time.Date(2026, 4, 5, 10, 0, 0, 0, kolkataLoc) // Sunday
+	s.SetClock(func() time.Time { return sun })
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+	if called.Load() != 0 {
+		t.Fatal("task should NOT run on Sunday")
+	}
 
 	// Verify the helper recognises weekends.
-	sat := time.Date(2026, 4, 4, 10, 0, 0, 0, kolkataLoc) // Saturday
-	sun := time.Date(2026, 4, 5, 10, 0, 0, 0, kolkataLoc) // Sunday
-	mon := time.Date(2026, 4, 6, 10, 0, 0, 0, kolkataLoc) // Monday
 	if !IsWeekend(sat) {
 		t.Error("Saturday should be weekend")
 	}
 	if !IsWeekend(sun) {
 		t.Error("Sunday should be weekend")
 	}
+	mon := time.Date(2026, 4, 6, 10, 0, 0, 0, kolkataLoc) // Monday
 	if IsWeekend(mon) {
 		t.Error("Monday should not be weekend")
 	}
@@ -67,20 +83,15 @@ func TestTickSkipsWeekend(t *testing.T) {
 func TestDeduplication(t *testing.T) {
 	s := New(testLogger())
 	var called atomic.Int32
-	now := time.Now().In(kolkataLoc)
 
-	// Only works on trading days. Skip on weekends and holidays.
-	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-		t.Skip("skipping on weekend")
-	}
-	if IsMarketHoliday(now) {
-		t.Skip("skipping on market holiday")
-	}
+	// Wednesday 2026-04-08 10:30 IST — a known trading day.
+	wed := time.Date(2026, 4, 8, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return wed })
 
 	s.Add(Task{
 		Name:   "dedup",
-		Hour:   now.Hour(),
-		Minute: now.Minute(),
+		Hour:   10,
+		Minute: 30,
 		Fn:     func() { called.Add(1) },
 	})
 
@@ -101,18 +112,15 @@ func TestDeduplication(t *testing.T) {
 
 func TestTaskPanicRecovery(t *testing.T) {
 	s := New(testLogger())
-	now := time.Now().In(kolkataLoc)
-	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-		t.Skip("skipping on weekend")
-	}
-	if IsMarketHoliday(now) {
-		t.Skip("skipping on market holiday")
-	}
+
+	// Wednesday 2026-04-08 10:30 IST — a known trading day.
+	wed := time.Date(2026, 4, 8, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return wed })
 
 	s.Add(Task{
 		Name:   "panicker",
-		Hour:   now.Hour(),
-		Minute: now.Minute(),
+		Hour:   10,
+		Minute: 30,
 		Fn:     func() { panic("boom") },
 	})
 
@@ -320,5 +328,127 @@ func TestAllNSEHolidays(t *testing.T) {
 		if !IsMarketHoliday(ist) {
 			t.Errorf("expected %s to be a holiday", ds)
 		}
+	}
+}
+
+// --- Deterministic tick() tests using injected clock ---
+
+func TestTick_Weekday_TaskRuns(t *testing.T) {
+	s := New(testLogger())
+	var ran atomic.Int32
+
+	// Wednesday 2026-04-08 10:30 IST — a known trading day.
+	wednesday := time.Date(2026, 4, 8, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return wednesday })
+
+	s.Add(Task{Name: "weekday_test", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+
+	if ran.Load() != 1 {
+		t.Fatalf("task should run on weekday at matching time; ran %d times", ran.Load())
+	}
+}
+
+func TestTick_Weekend_NoExecution(t *testing.T) {
+	s := New(testLogger())
+	var ran atomic.Int32
+
+	// Saturday 2026-04-11 10:30 IST.
+	saturday := time.Date(2026, 4, 11, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return saturday })
+
+	s.Add(Task{Name: "weekend_noop", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+
+	if ran.Load() != 0 {
+		t.Fatal("task should NOT run on weekend")
+	}
+}
+
+func TestTick_Holiday_NoExecution(t *testing.T) {
+	s := New(testLogger())
+	var ran atomic.Int32
+
+	// Republic Day 2026-01-26 (Monday) 10:30 IST — NSE holiday.
+	holiday := time.Date(2026, 1, 26, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return holiday })
+
+	s.Add(Task{Name: "holiday_noop", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+
+	if ran.Load() != 0 {
+		t.Fatal("task should NOT run on market holiday")
+	}
+}
+
+func TestTick_WrongTime_NoExecution(t *testing.T) {
+	s := New(testLogger())
+	var ran atomic.Int32
+
+	// Wednesday 2026-04-08 08:00 IST — trading day but task is at 10:30.
+	early := time.Date(2026, 4, 8, 8, 0, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return early })
+
+	s.Add(Task{Name: "wrong_time", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+
+	if ran.Load() != 0 {
+		t.Fatal("task should NOT run when current time does not match task time")
+	}
+}
+
+func TestTick_MultipleTasksSameTime(t *testing.T) {
+	s := New(testLogger())
+	var countA, countB atomic.Int32
+
+	wednesday := time.Date(2026, 4, 8, 9, 15, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return wednesday })
+
+	s.Add(Task{Name: "task_a", Hour: 9, Minute: 15, Fn: func() { countA.Add(1) }})
+	s.Add(Task{Name: "task_b", Hour: 9, Minute: 15, Fn: func() { countB.Add(1) }})
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+
+	if countA.Load() != 1 {
+		t.Fatalf("task_a should run once, ran %d", countA.Load())
+	}
+	if countB.Load() != 1 {
+		t.Fatalf("task_b should run once, ran %d", countB.Load())
+	}
+}
+
+func TestTick_Dedup_AcrossTicks(t *testing.T) {
+	s := New(testLogger())
+	var ran atomic.Int32
+
+	wednesday := time.Date(2026, 4, 8, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return wednesday })
+
+	s.Add(Task{Name: "dedup_clock", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
+
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+	if ran.Load() != 1 {
+		t.Fatalf("first tick: expected 1, got %d", ran.Load())
+	}
+
+	// Same time, second tick — should be deduped.
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+	if ran.Load() != 1 {
+		t.Fatalf("second tick: expected still 1, got %d", ran.Load())
+	}
+
+	// Advance to next day (Thursday) — should run again.
+	thursday := time.Date(2026, 4, 9, 10, 30, 0, 0, kolkataLoc)
+	s.SetClock(func() time.Time { return thursday })
+	s.tick()
+	time.Sleep(20 * time.Millisecond)
+	if ran.Load() != 2 {
+		t.Fatalf("next day tick: expected 2, got %d", ran.Load())
 	}
 }

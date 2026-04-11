@@ -22,6 +22,10 @@ type Task struct {
 	Fn     func() // the work to perform
 }
 
+// Clock returns the current time. Defaults to time.Now.
+// Override in tests via SetClock to control time.
+type Clock func() time.Time
+
 // Scheduler checks every minute whether any registered task should fire.
 // Tasks only run on weekdays (Mon-Fri) and at most once per calendar day.
 type Scheduler struct {
@@ -30,6 +34,7 @@ type Scheduler struct {
 	lastRun map[string]string // task name -> "2006-01-02" of last execution
 	done    chan struct{}
 	logger  *slog.Logger
+	clock   Clock
 }
 
 // New creates a new Scheduler.
@@ -38,8 +43,12 @@ func New(logger *slog.Logger) *Scheduler {
 		lastRun: make(map[string]string),
 		done:    make(chan struct{}),
 		logger:  logger,
+		clock:   time.Now,
 	}
 }
+
+// SetClock overrides the time source (for testing).
+func (s *Scheduler) SetClock(c Clock) { s.clock = c }
 
 // Add registers a task. Must be called before Start.
 func (s *Scheduler) Add(task Task) {
@@ -114,7 +123,7 @@ func IsTradingDay(t time.Time) bool {
 
 // tick evaluates all tasks against the current IST time.
 func (s *Scheduler) tick() {
-	now := time.Now().In(kolkataLoc)
+	now := s.clock().In(kolkataLoc)
 
 	// Skip weekends and market holidays.
 	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
