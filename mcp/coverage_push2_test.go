@@ -258,6 +258,7 @@ func TestSimulateTrades_NoSignals(t *testing.T) {
 }
 
 func TestSimulateTrades_PositionSizing(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper([]float64{100, 110}, time.Now())
 	signals := make([]*backtestSignal, 2)
 	signals[0] = &backtestSignal{action: "BUY", reason: "entry"}
@@ -270,6 +271,7 @@ func TestSimulateTrades_PositionSizing(t *testing.T) {
 }
 
 func TestSimulateTrades_SellWithoutPosition(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper([]float64{100, 105}, time.Now())
 	signals := make([]*backtestSignal, 2)
 	signals[0] = &backtestSignal{action: "SELL", reason: "premature sell"}
@@ -278,6 +280,7 @@ func TestSimulateTrades_SellWithoutPosition(t *testing.T) {
 }
 
 func TestSimulateTrades_MultipleBuysSameSignal(t *testing.T) {
+	t.Parallel()
 	// Second BUY while already in position should be ignored
 	candles := makeCandlesHelper([]float64{100, 105, 110, 115, 120}, time.Now())
 	signals := make([]*backtestSignal, 5)
@@ -293,6 +296,7 @@ func TestSimulateTrades_MultipleBuysSameSignal(t *testing.T) {
 // ===========================================================================
 
 func TestComputeMaxDrawdown_SingleLoss(t *testing.T) {
+	t.Parallel()
 	trades := []BacktestTrade{{PnL: -5000}}
 	dd := computeMaxDrawdown(trades, 100000)
 	assert.InDelta(t, 5.0, dd, 0.01)
@@ -303,6 +307,7 @@ func TestComputeMaxDrawdown_SingleLoss(t *testing.T) {
 // ===========================================================================
 
 func TestComputeSharpeRatio_MixedReturns(t *testing.T) {
+	t.Parallel()
 	trades := []BacktestTrade{
 		{PnLPct: 10},
 		{PnLPct: -5},
@@ -321,6 +326,7 @@ func TestComputeSharpeRatio_MixedReturns(t *testing.T) {
 // ===========================================================================
 
 func TestGenerateSignals_AllStrategiesDispatch(t *testing.T) {
+	t.Parallel()
 	closes := make([]float64, 60)
 	highs := make([]float64, 60)
 	lows := make([]float64, 60)
@@ -337,6 +343,7 @@ func TestGenerateSignals_AllStrategiesDispatch(t *testing.T) {
 }
 
 func TestGenerateSignals_UnknownStrategy(t *testing.T) {
+	t.Parallel()
 	closes := []float64{100, 101, 102}
 	signals := generateSignals("unknown", closes, closes, closes, 10, 20)
 	for _, s := range signals {
@@ -349,6 +356,7 @@ func TestGenerateSignals_UnknownStrategy(t *testing.T) {
 // ===========================================================================
 
 func TestRunBacktest_RSIReversalIntegration(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeOscillatingPricesHelper(150), time.Now().AddDate(0, 0, -150))
 	result := runBacktest(candles, "rsi_reversal", "NSE", "RELIANCE", 500000, 100, 14, 70)
 	assert.Equal(t, "rsi_reversal", result.Strategy)
@@ -356,12 +364,14 @@ func TestRunBacktest_RSIReversalIntegration(t *testing.T) {
 }
 
 func TestRunBacktest_BreakoutIntegration(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeTrendingPricesHelper(200, 100), time.Now().AddDate(0, 0, -200))
 	result := runBacktest(candles, "breakout", "NSE", "TCS", 1000000, 100, 20, 10)
 	assert.Equal(t, "breakout", result.Strategy)
 }
 
 func TestRunBacktest_MeanReversionIntegration(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeOscillatingPricesHelper(150), time.Now().AddDate(0, 0, -150))
 	result := runBacktest(candles, "mean_reversion", "BSE", "WIPRO", 1000000, 100, 20, 2.0)
 	assert.Equal(t, "mean_reversion", result.Strategy)
@@ -369,12 +379,14 @@ func TestRunBacktest_MeanReversionIntegration(t *testing.T) {
 }
 
 func TestRunBacktest_TradeLogCapped(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeOscillatingPricesHelper(500), time.Now().AddDate(0, 0, -500))
 	result := runBacktest(candles, "sma_crossover", "NSE", "TEST", 1000000, 100, 3, 10)
 	assert.LessOrEqual(t, len(result.TradeLog), 50, "trade log should be capped at 50")
 }
 
 func TestRunBacktest_WinLossStats(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeOscillatingPricesHelper(200), time.Now().AddDate(0, 0, -200))
 	result := runBacktest(candles, "sma_crossover", "NSE", "TEST", 1000000, 100, 5, 15)
 	if result.TotalTrades > 0 {
@@ -385,6 +397,7 @@ func TestRunBacktest_WinLossStats(t *testing.T) {
 }
 
 func TestRunBacktest_BuyAndHoldComputed(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeTrendingPricesHelper(100, 100), time.Now().AddDate(0, 0, -100))
 	result := runBacktest(candles, "sma_crossover", "NSE", "TEST", 1000000, 100, 5, 20)
 	assert.False(t, math.IsNaN(result.BuyAndHold))
@@ -396,6 +409,7 @@ func TestRunBacktest_BuyAndHoldComputed(t *testing.T) {
 // ===========================================================================
 
 func TestComputeTaxHarvest_EmptyHoldings(t *testing.T) {
+	t.Parallel()
 	resp := computeTaxHarvest([]broker.Holding{}, 0)
 	assert.NotNil(t, resp)
 	assert.Equal(t, 0, resp.Summary.HoldingsCount)
@@ -403,6 +417,7 @@ func TestComputeTaxHarvest_EmptyHoldings(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_STCGWithLoss(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{
 			Tradingsymbol: "INFY",
@@ -424,6 +439,7 @@ func TestComputeTaxHarvest_STCGWithLoss(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_STCGWithGain(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{
 			Tradingsymbol: "RELIANCE",
@@ -441,6 +457,7 @@ func TestComputeTaxHarvest_STCGWithGain(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_LTCGClassification(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{
 			Tradingsymbol: "TCS",
@@ -457,6 +474,7 @@ func TestComputeTaxHarvest_LTCGClassification(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_LTCGExemption(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{
 			Tradingsymbol: "TCS",
@@ -471,6 +489,7 @@ func TestComputeTaxHarvest_LTCGExemption(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_LTCGAboveExemption(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{
 			Tradingsymbol: "TCS",
@@ -486,6 +505,7 @@ func TestComputeTaxHarvest_LTCGAboveExemption(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_ApproachingLTCG(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "HDFC", Exchange: "NSE", Quantity: 50, AveragePrice: 1500, LastPrice: 1600},
 	}
@@ -496,6 +516,7 @@ func TestComputeTaxHarvest_ApproachingLTCG(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_NotApproachingLTCG(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "HDFC", Exchange: "NSE", Quantity: 50, AveragePrice: 1500, LastPrice: 1600},
 	}
@@ -504,6 +525,7 @@ func TestComputeTaxHarvest_NotApproachingLTCG(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_MixedHoldings(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "INFY", Quantity: 100, AveragePrice: 1500, LastPrice: 1300},
 		{Tradingsymbol: "TCS", Quantity: 50, AveragePrice: 3000, LastPrice: 3500},
@@ -518,6 +540,7 @@ func TestComputeTaxHarvest_MixedHoldings(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_HoldingPeriodNote(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{{Tradingsymbol: "X", Quantity: 1, AveragePrice: 100, LastPrice: 100}}
 
 	resp := computeTaxHarvest(holdings, 0)
@@ -528,6 +551,7 @@ func TestComputeTaxHarvest_HoldingPeriodNote(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_ZeroPricePnl(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "FLAT", Quantity: 100, AveragePrice: 100, LastPrice: 100},
 	}
@@ -539,6 +563,7 @@ func TestComputeTaxHarvest_ZeroPricePnl(t *testing.T) {
 }
 
 func TestComputeTaxHarvest_LTCGWithLoss(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "ITC", Quantity: 1000, AveragePrice: 400, LastPrice: 350},
 	}
@@ -554,6 +579,7 @@ func TestComputeTaxHarvest_LTCGWithLoss(t *testing.T) {
 // ===========================================================================
 
 func TestBuildOrderConfirmMessage_PlaceOrder_Market(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_order", map[string]any{
 		"transaction_type": "BUY",
 		"quantity":         float64(100),
@@ -569,6 +595,7 @@ func TestBuildOrderConfirmMessage_PlaceOrder_Market(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceOrder_Limit(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_order", map[string]any{
 		"transaction_type": "SELL",
 		"quantity":         float64(50),
@@ -583,6 +610,7 @@ func TestBuildOrderConfirmMessage_PlaceOrder_Limit(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceOrder_SL(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_order", map[string]any{
 		"transaction_type": "BUY",
 		"quantity":         float64(10),
@@ -596,6 +624,7 @@ func TestBuildOrderConfirmMessage_PlaceOrder_SL(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceOrder_SLM(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_order", map[string]any{
 		"transaction_type": "BUY",
 		"quantity":         float64(10),
@@ -610,6 +639,7 @@ func TestBuildOrderConfirmMessage_PlaceOrder_SLM(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_ModifyOrder_WithTrigger(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("modify_order", map[string]any{
 		"order_id":      "ORD123",
 		"order_type":    "LIMIT",
@@ -624,6 +654,7 @@ func TestBuildOrderConfirmMessage_ModifyOrder_WithTrigger(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_CloseAllPositions(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("close_all_positions", map[string]any{
 		"product": "MIS",
 	})
@@ -632,6 +663,7 @@ func TestBuildOrderConfirmMessage_CloseAllPositions(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_ClosePosition_NoProduct(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("close_position", map[string]any{
 		"instrument": "NSE:HDFC",
 	})
@@ -640,6 +672,7 @@ func TestBuildOrderConfirmMessage_ClosePosition_NoProduct(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceGTT(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_gtt_order", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
@@ -655,6 +688,7 @@ func TestBuildOrderConfirmMessage_PlaceGTT(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceMFOrder_Amount(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_mf_order", map[string]any{
 		"tradingsymbol":    "INF740K01DP8",
 		"transaction_type": "BUY",
@@ -665,6 +699,7 @@ func TestBuildOrderConfirmMessage_PlaceMFOrder_Amount(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceMFOrder_Quantity(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_mf_order", map[string]any{
 		"tradingsymbol":    "INF740K01DP8",
 		"transaction_type": "SELL",
@@ -674,6 +709,7 @@ func TestBuildOrderConfirmMessage_PlaceMFOrder_Quantity(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceMFSIP(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_mf_sip", map[string]any{
 		"tradingsymbol": "INF740K01DP8",
 		"amount":        float64(5000),
@@ -687,6 +723,7 @@ func TestBuildOrderConfirmMessage_PlaceMFSIP(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceNativeAlert_InstrumentRHS(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_native_alert", map[string]any{
 		"name":              "Cross alert",
 		"type":              "simple",
@@ -701,6 +738,7 @@ func TestBuildOrderConfirmMessage_PlaceNativeAlert_InstrumentRHS(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_PlaceNativeAlert_ConstantRHS(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("place_native_alert", map[string]any{
 		"name":          "Price alert",
 		"type":          "simple",
@@ -714,6 +752,7 @@ func TestBuildOrderConfirmMessage_PlaceNativeAlert_ConstantRHS(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_ModifyNativeAlert_Details(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("modify_native_alert", map[string]any{
 		"uuid":          "test-uuid-123",
 		"name":          "Modified alert",
@@ -728,6 +767,7 @@ func TestBuildOrderConfirmMessage_ModifyNativeAlert_Details(t *testing.T) {
 }
 
 func TestBuildOrderConfirmMessage_Default(t *testing.T) {
+	t.Parallel()
 	msg := buildOrderConfirmMessage("unknown_tool", map[string]any{})
 	assert.Contains(t, msg, "Execute unknown_tool")
 }
@@ -737,6 +777,7 @@ func TestBuildOrderConfirmMessage_Default(t *testing.T) {
 // ===========================================================================
 
 func TestInjectData_NilData(t *testing.T) {
+	t.Parallel()
 	html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
 	result := injectData(html, nil)
 	assert.Contains(t, result, "null")
@@ -744,6 +785,7 @@ func TestInjectData_NilData(t *testing.T) {
 }
 
 func TestInjectData_MapData(t *testing.T) {
+	t.Parallel()
 	html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
 	data := map[string]any{"key": "value", "count": 42}
 	result := injectData(html, data)
@@ -753,6 +795,7 @@ func TestInjectData_MapData(t *testing.T) {
 }
 
 func TestInjectData_UnmarshalableData(t *testing.T) {
+	t.Parallel()
 	html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
 	data := make(chan int)
 	result := injectData(html, data)
@@ -760,6 +803,7 @@ func TestInjectData_UnmarshalableData(t *testing.T) {
 }
 
 func TestInjectData_NoPlaceholder(t *testing.T) {
+	t.Parallel()
 	html := `<script>window.__DATA__ = "something";</script>`
 	data := map[string]any{"key": "value"}
 	result := injectData(html, data)
@@ -767,6 +811,7 @@ func TestInjectData_NoPlaceholder(t *testing.T) {
 }
 
 func TestInjectData_XSSEscaping(t *testing.T) {
+	t.Parallel()
 	html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
 	// Data containing potential XSS sequence
 	data := map[string]any{"text": "</script><script>alert(1)</script>"}
@@ -780,6 +825,7 @@ func TestInjectData_XSSEscaping(t *testing.T) {
 // ===========================================================================
 
 func TestWithAppUI_SetsResourceURI(t *testing.T) {
+	t.Parallel()
 	tool := gomcp.NewTool("test_tool", gomcp.WithDescription("A test tool"))
 	result := withAppUI(tool, "ui://kite-mcp/portfolio")
 	assert.NotNil(t, result.Meta)
@@ -787,6 +833,7 @@ func TestWithAppUI_SetsResourceURI(t *testing.T) {
 }
 
 func TestWithAppUI_EmptyURI(t *testing.T) {
+	t.Parallel()
 	tool := gomcp.NewTool("test_tool", gomcp.WithDescription("A test tool"))
 	result := withAppUI(tool, "")
 	assert.Nil(t, result.Meta, "empty URI should not set meta")
@@ -797,31 +844,37 @@ func TestWithAppUI_EmptyURI(t *testing.T) {
 // ===========================================================================
 
 func TestResourceURIForTool_MappedTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("get_holdings")
 	assert.Equal(t, "ui://kite-mcp/portfolio", uri)
 }
 
 func TestResourceURIForTool_UnmappedTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("nonexistent_tool")
 	assert.Empty(t, uri)
 }
 
 func TestResourceURIForTool_OrderTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("get_orders")
 	assert.Equal(t, "ui://kite-mcp/orders", uri)
 }
 
 func TestResourceURIForTool_AlertTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("list_alerts")
 	assert.Equal(t, "ui://kite-mcp/alerts", uri)
 }
 
 func TestResourceURIForTool_PaperTradingTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("paper_trading_toggle")
 	assert.Equal(t, "ui://kite-mcp/paper", uri)
 }
 
 func TestResourceURIForTool_WatchlistTool(t *testing.T) {
+	t.Parallel()
 	uri := resourceURIForTool("list_watchlists")
 	assert.Equal(t, "ui://kite-mcp/watchlist", uri)
 }
@@ -831,6 +884,7 @@ func TestResourceURIForTool_WatchlistTool(t *testing.T) {
 // ===========================================================================
 
 func TestMorningBriefHandler_ReturnsValidPrompt(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := morningBriefHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -847,6 +901,7 @@ func TestMorningBriefHandler_ReturnsValidPrompt(t *testing.T) {
 }
 
 func TestTradeCheckHandler_WithSymbol(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := tradeCheckHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -867,6 +922,7 @@ func TestTradeCheckHandler_WithSymbol(t *testing.T) {
 }
 
 func TestTradeCheckHandler_DefaultAction(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := tradeCheckHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -879,6 +935,7 @@ func TestTradeCheckHandler_DefaultAction(t *testing.T) {
 }
 
 func TestTradeCheckHandler_NoQuantity(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := tradeCheckHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -893,6 +950,7 @@ func TestTradeCheckHandler_NoQuantity(t *testing.T) {
 }
 
 func TestEodReviewHandler_ReturnsValidPrompt(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := eodReviewHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -907,6 +965,7 @@ func TestEodReviewHandler_ReturnsValidPrompt(t *testing.T) {
 }
 
 func TestEodReviewHandler_ContainsTimingNote(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := eodReviewHandler(mgr)
 	req := gomcp.GetPromptRequest{}
@@ -923,11 +982,13 @@ func TestEodReviewHandler_ContainsTimingNote(t *testing.T) {
 // ===========================================================================
 
 func TestComputeRSI_InsufficientData(t *testing.T) {
+	t.Parallel()
 	result := computeRSI([]float64{100, 101}, 14)
 	assert.Nil(t, result)
 }
 
 func TestComputeRSI_AllUp(t *testing.T) {
+	t.Parallel()
 	prices := make([]float64, 30)
 	for i := range prices {
 		prices[i] = float64(100 + i)
@@ -938,6 +999,7 @@ func TestComputeRSI_AllUp(t *testing.T) {
 }
 
 func TestComputeRSI_BoundsCheck(t *testing.T) {
+	t.Parallel()
 	prices := make([]float64, 30)
 	for i := range prices {
 		if i%2 == 0 {
@@ -959,11 +1021,13 @@ func TestComputeRSI_BoundsCheck(t *testing.T) {
 // ===========================================================================
 
 func TestComputeSMA_InsufficientData(t *testing.T) {
+	t.Parallel()
 	result := computeSMA([]float64{100, 101}, 5)
 	assert.Nil(t, result)
 }
 
 func TestComputeSMA_ExactPeriod(t *testing.T) {
+	t.Parallel()
 	prices := []float64{10, 20, 30, 40, 50}
 	result := computeSMA(prices, 5)
 	assert.NotNil(t, result)
@@ -971,6 +1035,7 @@ func TestComputeSMA_ExactPeriod(t *testing.T) {
 }
 
 func TestComputeSMA_RollingWindow(t *testing.T) {
+	t.Parallel()
 	prices := []float64{10, 20, 30, 40, 50, 60}
 	result := computeSMA(prices, 3)
 	assert.NotNil(t, result)
@@ -985,11 +1050,13 @@ func TestComputeSMA_RollingWindow(t *testing.T) {
 // ===========================================================================
 
 func TestComputeEMA_InsufficientData(t *testing.T) {
+	t.Parallel()
 	result := computeEMA([]float64{100}, 5)
 	assert.Nil(t, result)
 }
 
 func TestComputeEMA_FirstValueIsSMA(t *testing.T) {
+	t.Parallel()
 	prices := []float64{10, 20, 30, 40, 50}
 	result := computeEMA(prices, 5)
 	assert.NotNil(t, result)
@@ -997,6 +1064,7 @@ func TestComputeEMA_FirstValueIsSMA(t *testing.T) {
 }
 
 func TestComputeEMA_ResponsivenessToJump(t *testing.T) {
+	t.Parallel()
 	prices := []float64{10, 10, 10, 10, 10, 100}
 	result := computeEMA(prices, 5)
 	assert.NotNil(t, result)
@@ -1009,6 +1077,7 @@ func TestComputeEMA_ResponsivenessToJump(t *testing.T) {
 // ===========================================================================
 
 func TestComputeBollingerBands_InsufficientData(t *testing.T) {
+	t.Parallel()
 	u, m, l := computeBollingerBands([]float64{100}, 5, 2.0)
 	assert.Nil(t, u)
 	assert.Nil(t, m)
@@ -1016,6 +1085,7 @@ func TestComputeBollingerBands_InsufficientData(t *testing.T) {
 }
 
 func TestComputeBollingerBands_ConstantPrices(t *testing.T) {
+	t.Parallel()
 	prices := []float64{100, 100, 100, 100, 100}
 	u, m, l := computeBollingerBands(prices, 5, 2.0)
 	assert.NotNil(t, u)
@@ -1025,6 +1095,7 @@ func TestComputeBollingerBands_ConstantPrices(t *testing.T) {
 }
 
 func TestComputeBollingerBands_UpperAboveLower(t *testing.T) {
+	t.Parallel()
 	prices := []float64{95, 100, 105, 100, 95, 100, 105}
 	u, m, l := computeBollingerBands(prices, 5, 2.0)
 	assert.NotNil(t, u)
@@ -1039,6 +1110,7 @@ func TestComputeBollingerBands_UpperAboveLower(t *testing.T) {
 // ===========================================================================
 
 func TestBlackScholesPrice_CallPutParity(t *testing.T) {
+	t.Parallel()
 	S, K, T, r, sigma := 100.0, 100.0, 1.0, 0.05, 0.2
 	callPrice := blackScholesPrice(S, K, T, r, sigma, true)
 	putPrice := blackScholesPrice(S, K, T, r, sigma, false)
@@ -1048,43 +1120,51 @@ func TestBlackScholesPrice_CallPutParity(t *testing.T) {
 }
 
 func TestBlackScholesPrice_DeepITMCall(t *testing.T) {
+	t.Parallel()
 	price := blackScholesPrice(200, 100, 0.01, 0.05, 0.2, true)
 	assert.Greater(t, price, 99.0)
 }
 
 func TestBlackScholesPrice_DeepOTMPut(t *testing.T) {
+	t.Parallel()
 	price := blackScholesPrice(200, 100, 0.01, 0.05, 0.2, false)
 	assert.Less(t, price, 1.0)
 }
 
 func TestBsDelta_CallBounds(t *testing.T) {
+	t.Parallel()
 	delta := bsDelta(100, 100, 1, 0.05, 0.2, true)
 	assert.Greater(t, delta, 0.0)
 	assert.Less(t, delta, 1.0)
 }
 
 func TestBsDelta_PutBounds(t *testing.T) {
+	t.Parallel()
 	delta := bsDelta(100, 100, 1, 0.05, 0.2, false)
 	assert.Less(t, delta, 0.0)
 	assert.Greater(t, delta, -1.0)
 }
 
 func TestBsGamma_Positive(t *testing.T) {
+	t.Parallel()
 	gamma := bsGamma(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, gamma, 0.0)
 }
 
 func TestBsGamma_ZeroTimeReturnsZero(t *testing.T) {
+	t.Parallel()
 	gamma := bsGamma(100, 100, 0, 0.05, 0.2)
 	assert.Equal(t, 0.0, gamma)
 }
 
 func TestBsVega_Positive(t *testing.T) {
+	t.Parallel()
 	vega := bsVega(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, vega, 0.0)
 }
 
 func TestBsVega_ZeroTimeReturnsZero(t *testing.T) {
+	t.Parallel()
 	vega := bsVega(100, 100, 0, 0.05, 0.2)
 	assert.Equal(t, 0.0, vega)
 }
@@ -1094,6 +1174,7 @@ func TestBsVega_ZeroTimeReturnsZero(t *testing.T) {
 // ===========================================================================
 
 func TestNormalCDF_KnownValues(t *testing.T) {
+	t.Parallel()
 	assert.InDelta(t, 0.5, normalCDF(0), 0.01)
 	assert.InDelta(t, 0.8413, normalCDF(1), 0.01)
 	assert.InDelta(t, 0.1587, normalCDF(-1), 0.01)
@@ -1101,11 +1182,13 @@ func TestNormalCDF_KnownValues(t *testing.T) {
 }
 
 func TestNormalPDF_KnownValues(t *testing.T) {
+	t.Parallel()
 	assert.InDelta(t, 0.3989, normalPDF(0), 0.001)
 	assert.InDelta(t, normalPDF(1), normalPDF(-1), 0.0001)
 }
 
 func TestBsD1_ATM(t *testing.T) {
+	t.Parallel()
 	d1 := bsD1(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, d1, 0.0)
 }
@@ -1115,6 +1198,7 @@ func TestBsD1_ATM(t *testing.T) {
 // ===========================================================================
 
 func TestAppResources_AllHaveRequiredFields(t *testing.T) {
+	t.Parallel()
 	for _, res := range appResources {
 		assert.NotEmpty(t, res.URI)
 		assert.NotEmpty(t, res.Name)
@@ -1124,6 +1208,7 @@ func TestAppResources_AllHaveRequiredFields(t *testing.T) {
 }
 
 func TestPagePathToResourceURI_AllStartWithUIPrefix(t *testing.T) {
+	t.Parallel()
 	for path, uri := range pagePathToResourceURI {
 		assert.True(t, len(uri) > 5 && uri[:5] == "ui://",
 			"path %s should map to URI starting with ui://, got %s", path, uri)
@@ -1135,6 +1220,7 @@ func TestPagePathToResourceURI_AllStartWithUIPrefix(t *testing.T) {
 // ===========================================================================
 
 func TestBacktestDefaults_PartialOverride(t *testing.T) {
+	t.Parallel()
 	args := map[string]interface{}{
 		"param1": float64(7),
 		// param2 not set — should use default
@@ -1199,6 +1285,7 @@ func containsAnyStr(s string, substrs ...string) bool {
 // ===========================================================================
 
 func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 1500},
@@ -1248,6 +1335,7 @@ func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_EmptyData(t *testing.T) {
+	t.Parallel()
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0,
 		map[string]any{}, nil)
 	assert.Equal(t, "INFY", resp.Symbol)
@@ -1256,6 +1344,7 @@ func TestBuildPreTradeResponse_EmptyData(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_InsufficientMargin(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 1500},
@@ -1273,6 +1362,7 @@ func TestBuildPreTradeResponse_InsufficientMargin(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_HighMarginUtilization(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 100},
@@ -1289,6 +1379,7 @@ func TestBuildPreTradeResponse_HighMarginUtilization(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_OverConcentration(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 5000},
@@ -1316,6 +1407,7 @@ func TestBuildPreTradeResponse_OverConcentration(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_SellStopLoss(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 1500},
@@ -1328,6 +1420,7 @@ func TestBuildPreTradeResponse_SellStopLoss(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_WithLimitPrice(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 1500},
@@ -1339,6 +1432,7 @@ func TestBuildPreTradeResponse_WithLimitPrice(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_WithAPIErrors(t *testing.T) {
+	t.Parallel()
 	apiErrors := map[string]string{
 		"ltp":    "API error: rate limited",
 		"margins": "timeout",
@@ -1358,6 +1452,7 @@ func TestBuildPreTradeResponse_WithAPIErrors(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_NoExistingPosition(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
 			Net: []kiteconnect.Position{
@@ -1370,6 +1465,7 @@ func TestBuildPreTradeResponse_NoExistingPosition(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_FallbackMargin(t *testing.T) {
+	t.Parallel()
 	// When GetOrderMargins fails, margin falls back to order value
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
@@ -1390,6 +1486,7 @@ func TestBuildPreTradeResponse_FallbackMargin(t *testing.T) {
 // ===========================================================================
 
 func TestBuildTradingContext_AllDataPresent(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"margins": kiteconnect.AllMargins{
@@ -1450,6 +1547,7 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 }
 
 func TestBuildTradingContext_EmptyData(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	tc := buildTradingContext(map[string]any{}, nil, mgr, "test@example.com")
 	assert.NotNil(t, tc)
@@ -1460,6 +1558,7 @@ func TestBuildTradingContext_EmptyData(t *testing.T) {
 }
 
 func TestBuildTradingContext_WithAPIErrors(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	errs := map[string]string{"margins": "timeout", "positions": "auth failed"}
 	tc := buildTradingContext(map[string]any{}, errs, mgr, "test@example.com")
@@ -1469,6 +1568,7 @@ func TestBuildTradingContext_WithAPIErrors(t *testing.T) {
 }
 
 func TestBuildTradingContext_HighMarginUtilization(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"margins": kiteconnect.AllMargins{
@@ -1490,6 +1590,7 @@ func TestBuildTradingContext_HighMarginUtilization(t *testing.T) {
 }
 
 func TestBuildTradingContext_ManyRejectedOrders(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	orders := make(kiteconnect.Orders, 5)
 	for i := range orders {
@@ -1508,6 +1609,7 @@ func TestBuildTradingContext_ManyRejectedOrders(t *testing.T) {
 }
 
 func TestBuildTradingContext_OrderStatuses(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"orders": kiteconnect.Orders{
@@ -1525,6 +1627,7 @@ func TestBuildTradingContext_OrderStatuses(t *testing.T) {
 }
 
 func TestBuildTradingContext_PositionPnLPct(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
@@ -1550,6 +1653,7 @@ func TestBuildTradingContext_PositionPnLPct(t *testing.T) {
 }
 
 func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
@@ -1569,16 +1673,19 @@ func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
 // ===========================================================================
 
 func TestChartData_ReturnsNil(t *testing.T) {
+	t.Parallel()
 	result := chartData(nil, nil, "")
 	assert.Nil(t, result)
 }
 
 func TestOptionsChainData_ReturnsNil(t *testing.T) {
+	t.Parallel()
 	result := optionsChainData(nil, nil, "")
 	assert.Nil(t, result)
 }
 
 func TestOrderFormData_WithManager(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := orderFormData(mgr, nil, "test@example.com")
 	assert.NotNil(t, result)
@@ -1588,6 +1695,7 @@ func TestOrderFormData_WithManager(t *testing.T) {
 }
 
 func TestWatchlistData_NoStore(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := watchlistData(mgr, nil, "test@example.com")
 	// watchlist store may be nil in test manager
@@ -1595,6 +1703,7 @@ func TestWatchlistData_NoStore(t *testing.T) {
 }
 
 func TestSafetyData_WithRiskGuard(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := safetyData(mgr, nil, "test@example.com")
 	assert.NotNil(t, result)
@@ -1613,6 +1722,7 @@ func TestSafetyData_WithRiskGuard(t *testing.T) {
 }
 
 func TestSafetyData_WithAuditStore(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	// Use a non-nil audit.Store placeholder (it won't be nil-checked)
 	result := safetyData(mgr, &audit.Store{}, "test@example.com")
@@ -1622,6 +1732,7 @@ func TestSafetyData_WithAuditStore(t *testing.T) {
 }
 
 func TestPaperData_NoPaperEngine(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := paperData(mgr, nil, "test@example.com")
 	assert.NotNil(t, result)
@@ -1633,6 +1744,7 @@ func TestPaperData_NoPaperEngine(t *testing.T) {
 }
 
 func TestAlertsData_NoAlertStore(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := alertsData(mgr, nil, "test@example.com")
 	// With no alert store, should return nil or basic data
@@ -1640,6 +1752,7 @@ func TestAlertsData_NoAlertStore(t *testing.T) {
 }
 
 func TestHubData_WithManager(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := hubData(mgr, nil, "test@example.com")
 	assert.NotNil(t, result)
@@ -1655,11 +1768,13 @@ func TestHubData_WithManager(t *testing.T) {
 }
 
 func TestActivityData_NoAuditStore(t *testing.T) {
+	t.Parallel()
 	result := activityData(nil, nil, "test@example.com")
 	assert.Nil(t, result, "should return nil when audit store is nil")
 }
 
 func TestPortfolioData_NoSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := portfolioData(mgr, nil, "test@example.com")
 	// Without a valid Kite client, should return nil or error data
@@ -1667,6 +1782,7 @@ func TestPortfolioData_NoSession(t *testing.T) {
 }
 
 func TestOrdersData_NoAuditStore(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := ordersData(mgr, nil, "test@example.com")
 	// Without audit store, should still return some data
@@ -1684,6 +1800,7 @@ func TestOrdersData_NoAuditStore(t *testing.T) {
 // ===========================================================================
 
 func TestBacktestStrategy_InvalidStrategy2(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
 		"strategy":       "invalid_strategy",
@@ -1695,6 +1812,7 @@ func TestBacktestStrategy_InvalidStrategy2(t *testing.T) {
 }
 
 func TestPreTradeCheck_MissingRequiredFields(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
 		"exchange":       "NSE",
@@ -1705,6 +1823,7 @@ func TestPreTradeCheck_MissingRequiredFields(t *testing.T) {
 }
 
 func TestPreTradeCheck_ZeroQty(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -1719,6 +1838,7 @@ func TestPreTradeCheck_ZeroQty(t *testing.T) {
 }
 
 func TestPreTradeCheck_LimitOrderNoPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -1735,6 +1855,7 @@ func TestPreTradeCheck_LimitOrderNoPrice(t *testing.T) {
 
 // TestTaxHarvestTool_ToolDefinition verifies the tax harvest tool schema.
 func TestTaxHarvestTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
 	tool := (&TaxHarvestTool{}).Tool()
 	assert.Equal(t, "tax_harvest_analysis", tool.Name)
 	assert.NotEmpty(t, tool.Description)
@@ -1743,6 +1864,7 @@ func TestTaxHarvestTool_ToolDefinition(t *testing.T) {
 }
 
 func TestPortfolioRebalance_ValueModeNegative(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
 		"targets": `{"INFY": -50000}`,
@@ -1754,6 +1876,7 @@ func TestPortfolioRebalance_ValueModeNegative(t *testing.T) {
 
 // TestTradingContextTool_ToolDefinition verifies the tool schema.
 func TestTradingContextTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
 	tool := (&TradingContextTool{}).Tool()
 	assert.Equal(t, "trading_context", tool.Name)
 	assert.NotEmpty(t, tool.Description)
@@ -1762,6 +1885,7 @@ func TestTradingContextTool_ToolDefinition(t *testing.T) {
 }
 
 func TestGetPnLJournal_NoAuth(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_pnl_journal", "", map[string]any{})
 	assert.True(t, result.IsError)
@@ -1773,6 +1897,7 @@ func TestGetPnLJournal_NoAuth(t *testing.T) {
 // ===========================================================================
 
 func TestRequestConfirmation_InterfaceNotServer(t *testing.T) {
+	t.Parallel()
 	err := requestConfirmation(context.Background(), 42, "confirm?")
 	assert.NoError(t, err, "non-server type should fail open")
 }
@@ -1782,6 +1907,7 @@ func TestRequestConfirmation_InterfaceNotServer(t *testing.T) {
 // ===========================================================================
 
 func TestDividendCalendarTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
 	tool := (&DividendCalendarTool{}).Tool()
 	assert.Equal(t, "dividend_calendar", tool.Name)
 	assert.NotEmpty(t, tool.Description)
@@ -1793,6 +1919,7 @@ func TestDividendCalendarTool_ToolDefinition(t *testing.T) {
 // ===========================================================================
 
 func TestGetOrderMargins_LimitNoPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_order_margins", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -1808,6 +1935,7 @@ func TestGetOrderMargins_LimitNoPrice(t *testing.T) {
 }
 
 func TestGetOrderMargins_SLNoTriggerPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_order_margins", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -1823,6 +1951,7 @@ func TestGetOrderMargins_SLNoTriggerPrice(t *testing.T) {
 }
 
 func TestGetOrderMargins_SLMNoTriggerPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_order_margins", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -1885,6 +2014,7 @@ func TestGetOrderMargins_SLMNoTriggerPrice(t *testing.T) {
 // ===========================================================================
 
 func TestBuildPreTradeResponse_EmptyPositions(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
 			Net: []kiteconnect.Position{},
@@ -1895,6 +2025,7 @@ func TestBuildPreTradeResponse_EmptyPositions(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_EmptyHoldings(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"holdings": kiteconnect.Holdings{},
 	}
@@ -1903,6 +2034,7 @@ func TestBuildPreTradeResponse_EmptyHoldings(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_ModerateConcentration(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 100},
@@ -1922,6 +2054,7 @@ func TestBuildPreTradeResponse_ModerateConcentration(t *testing.T) {
 // ===========================================================================
 
 func TestBuildTradingContext_NoPositionDetails(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
@@ -1934,6 +2067,7 @@ func TestBuildTradingContext_NoPositionDetails(t *testing.T) {
 }
 
 func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"positions": kiteconnect.Positions{
@@ -1953,6 +2087,7 @@ func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
 // ===========================================================================
 
 func TestBsTheta_Exists(t *testing.T) {
+	t.Parallel()
 	// bsTheta is computed via -(S*normalPDF(d1)*sigma/(2*sqrt(T))) adjusted for r
 	// Just verify it returns non-zero for ATM option
 	S, K, T, r, sigma := 100.0, 100.0, 1.0, 0.05, 0.2
@@ -1965,6 +2100,7 @@ func TestBsTheta_Exists(t *testing.T) {
 // ===========================================================================
 
 func TestAllToolsDefinitions_Categories(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	names := make(map[string]bool)
 	for _, td := range tools {
@@ -1990,6 +2126,7 @@ func TestAllToolsDefinitions_Categories(t *testing.T) {
 // ===========================================================================
 
 func TestRunBacktest_ResultFields(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper(makeTrendingPricesHelper(100, 100), time.Now().AddDate(0, 0, -100))
 	result := runBacktest(candles, "sma_crossover", "NSE", "TEST", 500000, 50, 5, 20)
 	// Verify all fields are populated
@@ -2011,6 +2148,7 @@ func TestRunBacktest_ResultFields(t *testing.T) {
 // ===========================================================================
 
 func TestWithViewerBlock_NoEmail(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	ctx := context.Background() // no email in context
@@ -2019,6 +2157,7 @@ func TestWithViewerBlock_NoEmail(t *testing.T) {
 }
 
 func TestWithViewerBlock_NonWriteTool(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	ctx := oauth.ContextWithEmail(context.Background(), "viewer@example.com")
@@ -2027,6 +2166,7 @@ func TestWithViewerBlock_NonWriteTool(t *testing.T) {
 }
 
 func TestWithViewerBlock_ViewerBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	// Register user as viewer
 	if uStore := mgr.UserStoreConcrete(); uStore != nil {
@@ -2040,6 +2180,7 @@ func TestWithViewerBlock_ViewerBlocked(t *testing.T) {
 }
 
 func TestWithViewerBlock_TraderAllowed(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	if uStore := mgr.UserStoreConcrete(); uStore != nil {
 		_ = uStore.Create(&users.User{Email: "trader2@example.com", Role: users.RoleTrader, Status: "active"})
@@ -2055,6 +2196,7 @@ func TestWithViewerBlock_TraderAllowed(t *testing.T) {
 // ===========================================================================
 
 func TestCallWithNilKiteGuard_NormalExecution(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	result, err := handler.callWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
@@ -2065,6 +2207,7 @@ func TestCallWithNilKiteGuard_NormalExecution(t *testing.T) {
 }
 
 func TestCallWithNilKiteGuard_PanicRecovery(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	result, err := handler.callWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
@@ -2080,6 +2223,7 @@ func TestCallWithNilKiteGuard_PanicRecovery(t *testing.T) {
 // ===========================================================================
 
 func TestWithTokenRefresh_NoEmail(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	ctx := context.Background()
@@ -2088,6 +2232,7 @@ func TestWithTokenRefresh_NoEmail(t *testing.T) {
 }
 
 func TestWithTokenRefresh_NoToken(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	ctx := context.Background()
@@ -2100,6 +2245,7 @@ func TestWithTokenRefresh_NoToken(t *testing.T) {
 // ===========================================================================
 
 func TestSignalsSMACrossover_NoCrossover(t *testing.T) {
+	t.Parallel()
 	// Perfectly flat prices — no crossover
 	closes := make([]float64, 60)
 	for i := range closes {
@@ -2116,6 +2262,7 @@ func TestSignalsSMACrossover_NoCrossover(t *testing.T) {
 // ===========================================================================
 
 func TestSignalsMeanReversion_AboveUpperBand(t *testing.T) {
+	t.Parallel()
 	closes := make([]float64, 40)
 	for i := 0; i < 30; i++ {
 		closes[i] = 100 + float64(i%5)
@@ -2141,6 +2288,7 @@ func TestSignalsMeanReversion_AboveUpperBand(t *testing.T) {
 // ===========================================================================
 
 func TestSimulateTrades_BuyWithVeryHighPrice(t *testing.T) {
+	t.Parallel()
 	candles := makeCandlesHelper([]float64{1000000}, time.Now())
 	signals := make([]*backtestSignal, 1)
 	signals[0] = &backtestSignal{action: "BUY", reason: "entry"}
@@ -2154,6 +2302,7 @@ func TestSimulateTrades_BuyWithVeryHighPrice(t *testing.T) {
 // ===========================================================================
 
 func TestBuildTradingContext_ZeroMargin(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
 		"margins": kiteconnect.AllMargins{
@@ -2168,6 +2317,7 @@ func TestBuildTradingContext_ZeroMargin(t *testing.T) {
 }
 
 func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	positions := make([]kiteconnect.Position, 5)
 	for i := range positions {
@@ -2191,6 +2341,7 @@ func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 // ===========================================================================
 
 func TestBuildPreTradeResponse_HighConcentrationLevel(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 1000},
@@ -2210,6 +2361,7 @@ func TestBuildPreTradeResponse_HighConcentrationLevel(t *testing.T) {
 // ===========================================================================
 
 func TestGetHoldings_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_holdings", "trader@example.com", map[string]any{})
 	// Should fail with login required (no real Kite client), not panic
@@ -2218,6 +2370,7 @@ func TestGetHoldings_WithSession(t *testing.T) {
 }
 
 func TestGetPositions_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_positions", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -2225,6 +2378,7 @@ func TestGetPositions_WithSession(t *testing.T) {
 }
 
 func TestGetMargins_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_margins", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -2232,6 +2386,7 @@ func TestGetMargins_WithSession(t *testing.T) {
 }
 
 func TestGetProfile_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_profile", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -2239,6 +2394,7 @@ func TestGetProfile_WithSession(t *testing.T) {
 }
 
 func TestGetOrders_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_orders", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -2246,6 +2402,7 @@ func TestGetOrders_WithSession(t *testing.T) {
 }
 
 func TestGetTrades_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_trades", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -2253,24 +2410,28 @@ func TestGetTrades_WithSession(t *testing.T) {
 }
 
 func TestPortfolioSummary_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "portfolio_summary", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestPortfolioConcentration_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "portfolio_concentration", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestPositionAnalysis_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "position_analysis", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestGetLTP_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_ltp", "trader@example.com", map[string]any{
 		"instruments": []interface{}{"NSE:INFY"},
@@ -2279,6 +2440,7 @@ func TestGetLTP_WithSession(t *testing.T) {
 }
 
 func TestGetOHLC_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_ohlc", "trader@example.com", map[string]any{
 		"instruments": []interface{}{"NSE:INFY"},
@@ -2287,6 +2449,7 @@ func TestGetOHLC_WithSession(t *testing.T) {
 }
 
 func TestGetQuotes_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_quotes", "trader@example.com", map[string]any{
 		"instruments": []interface{}{"NSE:INFY"},
@@ -2295,6 +2458,7 @@ func TestGetQuotes_WithSession(t *testing.T) {
 }
 
 func TestSearchInstruments_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "search_instruments", "trader@example.com", map[string]any{
 		"query": "RELIANCE",
@@ -2305,18 +2469,21 @@ func TestSearchInstruments_WithSession(t *testing.T) {
 }
 
 func TestSEBICompliance_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "sebi_compliance_status", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestTradingContext_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "trading_context", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestPreTradeCheck_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -2330,6 +2497,7 @@ func TestPreTradeCheck_WithSession(t *testing.T) {
 }
 
 func TestBacktestStrategy_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
 		"strategy":       "sma_crossover",
@@ -2340,12 +2508,14 @@ func TestBacktestStrategy_WithSession(t *testing.T) {
 }
 
 func TestTaxHarvest_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "tax_harvest_analysis", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestPortfolioRebalance_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
 		"targets": `{"INFY": 50, "TCS": 50}`,
@@ -2354,18 +2524,21 @@ func TestPortfolioRebalance_WithSession(t *testing.T) {
 }
 
 func TestDividendCalendar_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "dividend_calendar", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestSectorExposure_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "sector_exposure", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestServerMetrics_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "server_metrics", "trader@example.com", map[string]any{})
 	// server_metrics may succeed without a Kite client
@@ -2373,6 +2546,7 @@ func TestServerMetrics_WithSession(t *testing.T) {
 }
 
 func TestTechnicalIndicators_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "technical_indicators", "trader@example.com", map[string]any{
 		"instrument_token": float64(256265),
@@ -2382,6 +2556,7 @@ func TestTechnicalIndicators_WithSession(t *testing.T) {
 }
 
 func TestGetHistoricalData_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_historical_data", "trader@example.com", map[string]any{
 		"instrument_token": float64(256265),
@@ -2393,6 +2568,7 @@ func TestGetHistoricalData_WithSession(t *testing.T) {
 }
 
 func TestPlaceOrder_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "place_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -2406,6 +2582,7 @@ func TestPlaceOrder_WithSession(t *testing.T) {
 }
 
 func TestModifyOrder_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "modify_order", "trader@example.com", map[string]any{
 		"variety":    "regular",
@@ -2416,6 +2593,7 @@ func TestModifyOrder_WithSession(t *testing.T) {
 }
 
 func TestCancelOrder_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "cancel_order", "trader@example.com", map[string]any{
 		"variety":  "regular",
@@ -2425,6 +2603,7 @@ func TestCancelOrder_WithSession(t *testing.T) {
 }
 
 func TestClosePosition_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "close_position", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
@@ -2433,6 +2612,7 @@ func TestClosePosition_WithSession(t *testing.T) {
 }
 
 func TestGetOrderMargins_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_order_margins", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -2446,6 +2626,7 @@ func TestGetOrderMargins_WithSession(t *testing.T) {
 }
 
 func TestListAlerts_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "list_alerts", "trader@example.com", map[string]any{})
 	// list_alerts may succeed if alert store is available
@@ -2453,6 +2634,7 @@ func TestListAlerts_WithSession(t *testing.T) {
 }
 
 func TestSetAlert_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "set_alert", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
@@ -2463,24 +2645,28 @@ func TestSetAlert_WithSession(t *testing.T) {
 }
 
 func TestGetMFHoldings_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_mf_holdings", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestGetMFSIPs_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_mf_sips", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestGetGTTs_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_gtts", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestOptionsGreeks_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "options_greeks", "trader@example.com", map[string]any{
 		"exchange":      "NFO",
@@ -2493,6 +2679,7 @@ func TestOptionsGreeks_WithSession(t *testing.T) {
 }
 
 func TestGetOptionChain_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_option_chain", "trader@example.com", map[string]any{
 		"underlying": "NIFTY",
@@ -2501,18 +2688,21 @@ func TestGetOptionChain_WithSession(t *testing.T) {
 }
 
 func TestListWatchlists_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "list_watchlists", "trader@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
 func TestPaperTradingStatus_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "paper_trading_status", "trader@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
 func TestCloseAllPositions_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "close_all_positions", "trader@example.com", map[string]any{
 		"confirm": true,
@@ -2521,6 +2711,7 @@ func TestCloseAllPositions_WithSession(t *testing.T) {
 }
 
 func TestPlaceGTT_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -2537,6 +2728,7 @@ func TestPlaceGTT_WithSession(t *testing.T) {
 }
 
 func TestModifyGTT_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "modify_gtt_order", "trader@example.com", map[string]any{
 		"trigger_id":       float64(12345),
@@ -2554,6 +2746,7 @@ func TestModifyGTT_WithSession(t *testing.T) {
 }
 
 func TestDeleteGTT_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "delete_gtt_order", "trader@example.com", map[string]any{
 		"trigger_id": float64(12345),
@@ -2562,6 +2755,7 @@ func TestDeleteGTT_WithSession(t *testing.T) {
 }
 
 func TestConvertPosition_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "convert_position", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -2575,6 +2769,7 @@ func TestConvertPosition_WithSession(t *testing.T) {
 }
 
 func TestGetOrderHistory_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_order_history", "trader@example.com", map[string]any{
 		"order_id": "123456",
@@ -2583,6 +2778,7 @@ func TestGetOrderHistory_WithSession(t *testing.T) {
 }
 
 func TestGetOrderTrades_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_order_trades", "trader@example.com", map[string]any{
 		"order_id": "123456",
@@ -2591,6 +2787,7 @@ func TestGetOrderTrades_WithSession(t *testing.T) {
 }
 
 func TestPlaceNativeAlert_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "place_native_alert", "trader@example.com", map[string]any{
 		"name":          "Test alert",
@@ -2606,12 +2803,14 @@ func TestPlaceNativeAlert_WithSession(t *testing.T) {
 }
 
 func TestListNativeAlerts_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "list_native_alerts", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestGetNativeAlertHistory_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_native_alert_history", "trader@example.com", map[string]any{
 		"uuid": "test-uuid",
@@ -2620,6 +2819,7 @@ func TestGetNativeAlertHistory_WithSession(t *testing.T) {
 }
 
 func TestDeleteNativeAlert_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "delete_native_alert", "trader@example.com", map[string]any{
 		"uuid": "test-uuid-123",
@@ -2628,6 +2828,7 @@ func TestDeleteNativeAlert_WithSession(t *testing.T) {
 }
 
 func TestPlaceMFOrder_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
 		"tradingsymbol":    "INF740K01DP8",
@@ -2638,6 +2839,7 @@ func TestPlaceMFOrder_WithSession(t *testing.T) {
 }
 
 func TestGetBasketMargins_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_basket_margins", "trader@example.com", map[string]any{
 		"orders": `[{"exchange":"NSE","tradingsymbol":"INFY","transaction_type":"BUY","quantity":10,"product":"CNC","order_type":"MARKET"}]`,
@@ -2646,6 +2848,7 @@ func TestGetBasketMargins_WithSession(t *testing.T) {
 }
 
 func TestGetOrderCharges_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_order_charges", "trader@example.com", map[string]any{
 		"orders": `[{"exchange":"NSE","tradingsymbol":"INFY","transaction_type":"BUY","quantity":10,"product":"CNC","order_type":"MARKET","average_price":1500}]`,
@@ -2654,6 +2857,7 @@ func TestGetOrderCharges_WithSession(t *testing.T) {
 }
 
 func TestOptionsStrategy_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "options_strategy", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
@@ -2666,6 +2870,7 @@ func TestOptionsStrategy_WithSession(t *testing.T) {
 }
 
 func TestSetTrailingStop_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
 		"instrument":   "NSE:INFY",
@@ -2677,12 +2882,14 @@ func TestSetTrailingStop_WithSession(t *testing.T) {
 }
 
 func TestListTrailingStops_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "list_trailing_stops", "trader@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
 func TestCancelTrailingStop_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "cancel_trailing_stop", "trader@example.com", map[string]any{
 		"trailing_stop_id": "ts-123",
@@ -2691,6 +2898,7 @@ func TestCancelTrailingStop_WithSession(t *testing.T) {
 }
 
 func TestGetWatchlist_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_watchlist", "trader@example.com", map[string]any{
 		"name": "My Watchlist",
@@ -2699,6 +2907,7 @@ func TestGetWatchlist_WithSession(t *testing.T) {
 }
 
 func TestCreateWatchlist_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "create_watchlist", "trader@example.com", map[string]any{
 		"name": "Test Watchlist",
@@ -2707,6 +2916,7 @@ func TestCreateWatchlist_WithSession(t *testing.T) {
 }
 
 func TestDeleteWatchlist_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "delete_watchlist", "trader@example.com", map[string]any{
 		"name": "Test Watchlist",
@@ -2715,6 +2925,7 @@ func TestDeleteWatchlist_WithSession(t *testing.T) {
 }
 
 func TestAddToWatchlist_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "add_to_watchlist", "trader@example.com", map[string]any{
 		"name":        "Test Watchlist",
@@ -2724,6 +2935,7 @@ func TestAddToWatchlist_WithSession(t *testing.T) {
 }
 
 func TestRemoveFromWatchlist_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "remove_from_watchlist", "trader@example.com", map[string]any{
 		"name":        "Test Watchlist",
@@ -2733,6 +2945,7 @@ func TestRemoveFromWatchlist_WithSession(t *testing.T) {
 }
 
 func TestDeleteAlert_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "delete_alert", "trader@example.com", map[string]any{
 		"alert_id": "alert-123",
@@ -2741,6 +2954,7 @@ func TestDeleteAlert_WithSession(t *testing.T) {
 }
 
 func TestPlaceMFSIP_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "place_mf_sip", "trader@example.com", map[string]any{
 		"tradingsymbol": "INF740K01DP8",
@@ -2752,6 +2966,7 @@ func TestPlaceMFSIP_WithSession(t *testing.T) {
 }
 
 func TestCancelMFOrder_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "cancel_mf_order", "trader@example.com", map[string]any{
 		"order_id": "mf-order-123",
@@ -2760,6 +2975,7 @@ func TestCancelMFOrder_WithSession(t *testing.T) {
 }
 
 func TestCancelMFSIP_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "cancel_mf_sip", "trader@example.com", map[string]any{
 		"sip_id": "sip-123",
@@ -2768,12 +2984,14 @@ func TestCancelMFSIP_WithSession(t *testing.T) {
 }
 
 func TestGetMFOrders_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_mf_orders", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
 func TestSubscribeInstruments_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "subscribe_instruments", "trader@example.com", map[string]any{
 		"instruments": []interface{}{"NSE:INFY"},
@@ -2782,6 +3000,7 @@ func TestSubscribeInstruments_WithSession(t *testing.T) {
 }
 
 func TestUnsubscribeInstruments_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "unsubscribe_instruments", "trader@example.com", map[string]any{
 		"instruments": []interface{}{"NSE:INFY"},
@@ -2790,18 +3009,21 @@ func TestUnsubscribeInstruments_WithSession(t *testing.T) {
 }
 
 func TestStopTicker_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "stop_ticker", "trader@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
 func TestTickerStatus_WithSession(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "ticker_status", "trader@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
 func TestServerMetrics_WithSession2(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "server_metrics", "trader@example.com", map[string]any{
 		"period": "1h",
@@ -2814,6 +3036,7 @@ func TestServerMetrics_WithSession2(t *testing.T) {
 // ===========================================================================
 
 func TestDoSetTrailingStop_WithAmount(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result, err := doSetTrailingStop(mgr, "test@example.com", "NSE", "INFY", 256265,
 		"order123", "regular", "long", 20, 0, 1480, 1500)
@@ -2824,6 +3047,7 @@ func TestDoSetTrailingStop_WithAmount(t *testing.T) {
 }
 
 func TestDoSetTrailingStop_WithPct(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result, err := doSetTrailingStop(mgr, "test2@example.com", "NSE", "RELIANCE", 408065,
 		"order456", "regular", "short", 0, 2.5, 2550, 2500)
@@ -2834,6 +3058,7 @@ func TestDoSetTrailingStop_WithPct(t *testing.T) {
 }
 
 func TestBuildPreTradeResponse_ModerateConcentrationLevel(t *testing.T) {
+	t.Parallel()
 	data := map[string]any{
 		"ltp": kiteconnect.QuoteLTP{
 			"NSE:INFY": {LastPrice: 100},
