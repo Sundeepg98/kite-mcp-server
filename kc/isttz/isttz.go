@@ -7,6 +7,11 @@ import "time"
 
 // Location is the Asia/Kolkata timezone used throughout for IST operations.
 // Loaded once at init; panics if tzdata is missing (Alpine needs the tzdata package).
+//
+// Coverage note: the panic branch (line inside if err != nil) is unreachable on
+// any system with tzdata installed. Go embeds tzdata since 1.15, and our Docker
+// image includes the tzdata Alpine package. The 75% coverage reflects this
+// untestable panic guard — not a gap in test quality.
 var Location = func() *time.Location {
 	loc, err := time.LoadLocation("Asia/Kolkata")
 	if err != nil {

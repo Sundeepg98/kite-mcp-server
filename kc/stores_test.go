@@ -1519,3 +1519,276 @@ func (m *mockCredentialStoreWithRaw) GetSecretByAPIKey(apiKey string) (string, b
 }
 
 func (m *mockCredentialStoreWithRaw) Count() int { return len(m.entries) }
+
+// ===========================================================================
+// Coverage boost: CredentialStore edge cases, TokenStore edge cases
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// KiteCredentialStore — Delete with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestKiteCredentialStore_Delete_WithDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	if err := store.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	// Set a credential
+	store.Set("del-db@test.com", &KiteCredentialEntry{
+		APIKey:    "key-to-delete",
+		APISecret: "secret-to-delete",
+	})
+
+	// Verify it exists
+	_, ok := store.Get("del-db@test.com")
+	if !ok {
+		t.Fatal("credential should exist after Set")
+	}
+
+	// Delete it
+	store.Delete("del-db@test.com")
+
+	// Verify it's gone
+	_, ok = store.Get("del-db@test.com")
+	if ok {
+		t.Error("credential should be deleted")
+	}
+}
+
+func TestKiteCredentialStore_Delete_NonExistent(t *testing.T) {
+	t.Parallel()
+	store := NewKiteCredentialStore()
+	// Should not panic
+	store.Delete("nonexistent@test.com")
+}
+
+func TestKiteCredentialStore_Delete_WithDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	_ = store.LoadFromDB()
+
+	store.Set("closed-db@test.com", &KiteCredentialEntry{
+		APIKey:    "key",
+		APISecret: "secret",
+	})
+
+	// Close DB to trigger error path
+	db.Close()
+
+	// Delete should log error but not panic
+	store.Delete("closed-db@test.com")
+}
+
+// ---------------------------------------------------------------------------
+// KiteCredentialStore — LoadFromDB error path
+// ---------------------------------------------------------------------------
+
+func TestKiteCredentialStore_LoadFromDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	db.Close()
+
+	err = store.LoadFromDB()
+	if err == nil {
+		t.Error("Expected error loading from closed DB")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// KiteTokenStore — Delete with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestKiteTokenStore_Delete_WithDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	if err := store.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	store.Set("del-tok@test.com", &KiteTokenEntry{
+		AccessToken: "tok-to-delete",
+	})
+
+	_, ok := store.Get("del-tok@test.com")
+	if !ok {
+		t.Fatal("token should exist after Set")
+	}
+
+	store.Delete("del-tok@test.com")
+
+	_, ok = store.Get("del-tok@test.com")
+	if ok {
+		t.Error("token should be deleted")
+	}
+}
+
+func TestKiteTokenStore_Delete_WithDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	_ = store.LoadFromDB()
+
+	store.Set("closed-tok@test.com", &KiteTokenEntry{AccessToken: "tok"})
+	db.Close()
+
+	// Delete should log error but not panic
+	store.Delete("closed-tok@test.com")
+}
+
+func TestKiteTokenStore_LoadFromDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	db.Close()
+
+	err = store.LoadFromDB()
+	if err == nil {
+		t.Error("Expected error loading from closed DB")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// KiteTokenStore — Set with DB persistence + change callback
+// ---------------------------------------------------------------------------
+
+func TestKiteTokenStore_Set_WithDB_TriggersCallback(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	_ = store.LoadFromDB()
+
+	var callbackEmail string
+	store.OnChange(func(email string, entry *KiteTokenEntry) {
+		callbackEmail = email
+	})
+
+	store.Set("cb@test.com", &KiteTokenEntry{AccessToken: "tok"})
+
+	if callbackEmail != "cb@test.com" {
+		t.Errorf("OnChange callback email = %q, want %q", callbackEmail, "cb@test.com")
+	}
+}
+
+func TestKiteTokenStore_Set_WithDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	_ = store.LoadFromDB()
+
+	db.Close()
+
+	// Set should log error but not panic
+	store.Set("closed@test.com", &KiteTokenEntry{AccessToken: "tok"})
+}
+
+// ---------------------------------------------------------------------------
+// KiteCredentialStore — Set with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestKiteCredentialStore_Set_WithDB_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+	_ = store.LoadFromDB()
+
+	db.Close()
+
+	// Set should log error but not panic
+	store.Set("closed-cred@test.com", &KiteCredentialEntry{
+		APIKey:    "key",
+		APISecret: "secret",
+	})
+}
+
+// ---------------------------------------------------------------------------
+// KiteCredentialStore — OnTokenInvalidate
+// ---------------------------------------------------------------------------
+
+func TestKiteCredentialStore_OnTokenInvalidate_CalledOnKeyChange(t *testing.T) {
+	t.Parallel()
+	store := NewKiteCredentialStore()
+
+	var invalidatedEmail string
+	store.OnTokenInvalidate(func(email string) {
+		invalidatedEmail = email
+	})
+
+	// First Set: no invalidation (new credential)
+	store.Set("inv@test.com", &KiteCredentialEntry{
+		APIKey:    "key-1",
+		APISecret: "secret-1",
+	})
+	if invalidatedEmail != "" {
+		t.Error("OnTokenInvalidate should not be called on first Set")
+	}
+
+	// Second Set with different key: should trigger invalidation
+	store.Set("inv@test.com", &KiteCredentialEntry{
+		APIKey:    "key-2",
+		APISecret: "secret-2",
+	})
+	if invalidatedEmail != "inv@test.com" {
+		t.Errorf("OnTokenInvalidate email = %q, want %q", invalidatedEmail, "inv@test.com")
+	}
+}
