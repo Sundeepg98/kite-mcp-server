@@ -1,5 +1,6 @@
 package alerts
 
+
 import (
 	"encoding/json"
 	"log/slog"
@@ -9,10 +10,11 @@ import (
 	"sync"
 	"testing"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
+
 
 // fakeTelegramServer creates a httptest.Server that mimics the Telegram Bot API.
 // It handles getMe and sendMessage endpoints. The returned server URL can be used
@@ -519,4 +521,46 @@ func TestNotify_DropPct_ZeroReferencePrice(t *testing.T) {
 
 	alerts = notifier.store.List("user@test.com")
 	assert.False(t, alerts[0].NotificationSentAt.IsZero())
+}
+
+
+// ===========================================================================
+// Merged from coverage_test.go
+// ===========================================================================
+
+func TestTelegramNotifier_Accessors(t *testing.T) {
+	t.Parallel()
+	s := newTestStore()
+	logger := defaultTestLogger()
+
+	// Non-nil notifier with nil bot — test Store() and Logger() accessors
+	tn := &TelegramNotifier{store: s, logger: logger}
+	assert.Equal(t, s, tn.Store())
+	assert.Equal(t, logger, tn.Logger())
+}
+
+// ===========================================================================
+// PnL Journal
+// ===========================================================================
+
+func TestStore_DBPersistence_TelegramChatID(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	s := NewStore(nil)
+	s.SetDB(db)
+	s.SetLogger(defaultTestLogger())
+
+	s.SetTelegramChatID("user@example.com", 123456789)
+
+	// Load into a new store
+	s2 := NewStore(nil)
+	s2.SetDB(db)
+	s2.SetLogger(defaultTestLogger())
+	err := s2.LoadFromDB()
+	require.NoError(t, err)
+
+	chatID, ok := s2.GetTelegramChatID("user@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, int64(123456789), chatID)
 }
