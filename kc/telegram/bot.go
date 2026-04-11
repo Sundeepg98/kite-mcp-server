@@ -122,7 +122,7 @@ func (h *BotHandler) runCleanup(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticker.C: // COVERAGE: unreachable in tests — requires 2-minute ticker wait; cleanupStaleEntries is tested directly
 			h.cleanupStaleEntries()
 		}
 	}

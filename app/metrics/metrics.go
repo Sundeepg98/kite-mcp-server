@@ -191,7 +191,7 @@ func (m *Manager) startCleanupRoutine() {
 			delay := next.Sub(now)
 
 			select {
-			case <-time.After(delay):
+			case <-time.After(delay): // COVERAGE: unreachable in tests — requires waiting until Saturday 3 AM UTC; no time injection available
 				_ = m.CleanupOldData()
 			case <-m.cleanupStop:
 				return

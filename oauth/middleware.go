@@ -123,7 +123,7 @@ const dashboardTokenExpiry = 7 * 24 * time.Hour
 func (h *Handler) SetAuthCookie(w http.ResponseWriter, email string) error {
 	token, err := h.jwt.GenerateTokenWithExpiry(email, "dashboard", dashboardTokenExpiry)
 	if err != nil {
-		return err
+		return err // COVERAGE: unreachable — HS256 SignedString with []byte key never fails
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,

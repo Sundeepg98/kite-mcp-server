@@ -3,10 +3,12 @@ package telegram
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 )
 
@@ -272,7 +275,194 @@ func TestHandleSetAlert_InvalidFormat(t *testing.T) {
 // for the 2-minute cleanupInterval constant to elapse. This is not feasible
 // in a fast unit test without refactoring to inject the interval. The branch
 // simply calls cleanupStaleEntries(), which is thoroughly tested via CleanupNow().
-// This is documented as genuinely unreachable in fast unit tests.
+// COVERAGE CEILING: goroutine-only branch with 2-minute timer.
+
+// -----------------------------------------------------------------------
+// ServeHTTP: /status dispatch (bot.go:264-265)
+// -----------------------------------------------------------------------
+
+func TestServeHTTP_StatusCommand(t *testing.T) {
+	mgr := newMockKiteManager()
+	mgr.tgStore.(*mockTelegramLookup).emails[222] = "user@test.com"
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.apiKeys["user@test.com"] = "apikey1234"
+	mgr.accessTokens["user@test.com"] = "tok"
+	mgr.tokenValid["user@test.com"] = true
+
+	h, mockHTTP := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			MessageID: 1,
+			Chat:      &tgbotapi.Chat{ID: 222, Type: "private"},
+			From:      &tgbotapi.User{ID: 222},
+			Text:      "/status",
+			Entities: []tgbotapi.MessageEntity{
+				{Type: "bot_command", Offset: 0, Length: 7},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(update)
+	r := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mockHTTP.bodyCount() == 0 {
+		t.Error("expected a status reply")
+	}
+}
+
+// -----------------------------------------------------------------------
+// handlePortfolio: shown >= 5 break (commands.go:169-170)
+// -----------------------------------------------------------------------
+
+func TestHandlePortfolio_MoreThan5TopMovers(t *testing.T) {
+	fakeAPI := newFakeKiteAPI()
+	defer fakeAPI.server.Close()
+
+	mgr := newMockKiteManager()
+	mgr.apiKeys["user@test.com"] = "apikey"
+	mgr.accessTokens["user@test.com"] = "token"
+	mgr.tokenValid["user@test.com"] = true
+
+	h, _ := newTestBotHandler(mgr)
+	h.kiteBaseURI = fakeAPI.server.URL
+	defer h.Shutdown()
+
+	// Create 8 holdings, all with non-zero day change, to trigger the break at shown >= 5.
+	holdings := make([]map[string]interface{}, 8)
+	for i := 0; i < 8; i++ {
+		holdings[i] = map[string]interface{}{
+			"tradingsymbol":         fmt.Sprintf("STOCK%d", i),
+			"quantity":              10,
+			"average_price":         1000.0,
+			"last_price":            float64(1000 + (i+1)*10),
+			"day_change":            float64((i + 1) * 10),
+			"day_change_percentage": float64(i+1) * 1.0,
+		}
+	}
+
+	fakeAPI.responses["/portfolio/holdings"] = holdings
+
+	reply := h.handlePortfolio(111, "user@test.com")
+	if !strings.Contains(reply, "8 stocks") {
+		t.Errorf("expected '8 stocks', got: %s", reply)
+	}
+	if !strings.Contains(reply, "Top movers") {
+		t.Errorf("expected 'Top movers' section, got: %s", reply)
+	}
+	// Should show exactly 5 movers (the break triggers on the 6th)
+	moverCount := strings.Count(reply, "+")
+	if moverCount < 5 {
+		t.Errorf("expected at least 5 movers shown, got reply: %s", reply)
+	}
+}
+
+// -----------------------------------------------------------------------
+// executeConfirmedOrder: paper order fail (trading_commands.go:229-231)
+// -----------------------------------------------------------------------
+
+func TestExecuteConfirmedOrder_PaperOrderFail(t *testing.T) {
+	email := "user@test.com"
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dbPath := filepath.Join(t.TempDir(), "paper_fail.db")
+	paperDB, err := alerts.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+
+	ptStore := papertrading.NewStore(paperDB, logger)
+	ptStore.InitTables()
+	pe := papertrading.NewEngine(ptStore, logger)
+	pe.Enable(email, 10_00_000)
+
+	// Close DB so PlaceOrder fails on GetAccount
+	paperDB.Close()
+
+	mgr := newMockKiteManager()
+	mgr.paperEngine = pe
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        10,
+		Price:           1500,
+		OrderType:       "LIMIT",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-paper-fail",
+		Message: &tgbotapi.Message{
+			MessageID: 400,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	// This should hit the paper order error path (line 229-231)
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// -----------------------------------------------------------------------
+// handleSetAlert: Add returns error (trading_commands.go:355-357)
+// -----------------------------------------------------------------------
+
+func TestHandleSetAlert_MaxAlertsReached(t *testing.T) {
+	mgr := newMockKiteManager()
+
+	alertStore := alerts.NewStore(nil)
+	mgr.alertStore = alertStore
+
+	// Set up instruments manager.
+	testInstruments := map[uint32]*instruments.Instrument{
+		256265: {
+			ID:              "NSE:INFY",
+			InstrumentToken: 256265,
+			Tradingsymbol:   "INFY",
+			Exchange:        "NSE",
+			Name:            "INFOSYS",
+		},
+	}
+	instrCfg := instruments.Config{
+		TestData: testInstruments,
+		Logger:   testLogger(),
+	}
+	instrMgr, err := instruments.New(instrCfg)
+	if err != nil {
+		t.Fatalf("instruments.New failed: %v", err)
+	}
+	defer instrMgr.Shutdown()
+	mgr.instrMgr = instrMgr
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	// Fill up 100 alerts for this user to hit MaxAlertsPerUser.
+	for i := 0; i < alerts.MaxAlertsPerUser; i++ {
+		_, err := alertStore.Add("user@test.com", "INFY", "NSE", 256265, float64(1000+i), alerts.DirectionAbove)
+		if err != nil {
+			t.Fatalf("Add alert %d failed: %v", i, err)
+		}
+	}
+
+	// Now handleSetAlert should get an error from Add.
+	reply := h.handleSetAlert(111, "user@test.com", "INFY above 2000")
+	if !strings.Contains(reply, "Failed to set alert") {
+		t.Errorf("expected 'Failed to set alert', got: %s", reply)
+	}
+}
 
 // -----------------------------------------------------------------------
 // Helper

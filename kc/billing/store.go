@@ -112,7 +112,7 @@ func (s *Store) LoadFromDB() error {
 		var tierInt int
 		var maxUsers int
 		var expiresAtS, updatedAtS string
-		if err := rows.Scan(&sub.AdminEmail, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil {
+		if err := rows.Scan(&sub.AdminEmail, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil { // COVERAGE: unreachable — SQLite query success implies scan success (dynamic typing)
 			return fmt.Errorf("scan billing row: %w", err)
 		}
 		sub.MaxUsers = maxUsers

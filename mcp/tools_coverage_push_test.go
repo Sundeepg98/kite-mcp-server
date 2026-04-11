@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -1665,4 +1666,824 @@ func TestSetupTelegram_ZeroChatID_Push(t *testing.T) {
 	assert.True(t, result.IsError)
 	// TelegramNotifier is nil, so returns "not configured" before chatID check
 	assert.Contains(t, resultText(t, result), "not configured")
+}
+
+// ===========================================================================
+// Additional coverage push tests — targeting sub-90% functions
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// options_strategy: branch coverage for bear_call_spread, bull_put_spread,
+// straddle, strangle, unknown strategy, invalid expiry, bad strike ordering
+// ---------------------------------------------------------------------------
+
+func TestOptionsStrategy_BearCallSpread_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bear_call_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+		"strike2":    float64(17600),
+	})
+	assert.NotNil(t, result)
+}
+
+func TestOptionsStrategy_BullPutSpread_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bull_put_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+		"strike2":    float64(17600),
+	})
+	assert.NotNil(t, result)
+}
+
+func TestOptionsStrategy_Straddle_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "straddle",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+	})
+	assert.NotNil(t, result)
+}
+
+func TestOptionsStrategy_Strangle_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "strangle",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+		"strike2":    float64(18500),
+	})
+	assert.NotNil(t, result)
+}
+
+func TestOptionsStrategy_UnknownStrategy_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "zigzag",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "Unknown strategy")
+}
+
+func TestOptionsStrategy_InvalidExpiry_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "straddle",
+		"underlying": "NIFTY",
+		"expiry":     "not-a-date",
+		"strike1":    float64(18000),
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "YYYY-MM-DD")
+}
+
+func TestOptionsStrategy_BullCallSpread_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bull_call_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17000), // wrong order
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "strike2 > strike1")
+}
+
+func TestOptionsStrategy_BearPutSpread_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bear_put_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17000),
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "strike2 > strike1")
+}
+
+func TestOptionsStrategy_BearCallSpread_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bear_call_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17000),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_BullPutSpread_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "bull_put_spread",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17000),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_Strangle_NoStrike2_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "strangle",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "strike2")
+}
+
+func TestOptionsStrategy_IronCondor_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "iron_condor",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17500),
+		"strike3":    float64(18500),
+		"strike4":    float64(19000),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_IronCondor_MissingStrikes_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "iron_condor",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_Butterfly_BadOrder_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "butterfly",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"strike2":    float64(17500), // bad order
+		"strike3":    float64(18500),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_Butterfly_MissingStrikes_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "butterfly",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(17500),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestOptionsStrategy_LotsOverride_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
+	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+		"strategy":   "straddle",
+		"underlying": "NIFTY",
+		"expiry":     futureExpiry,
+		"strike1":    float64(18000),
+		"lots":       float64(2),
+		"lot_size":   float64(25),
+	})
+	assert.NotNil(t, result)
+}
+
+// ---------------------------------------------------------------------------
+// options_greeks: validation branches
+// ---------------------------------------------------------------------------
+
+func TestOptionsGreeks_InvalidOptionType_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	result := callToolNFODevMode(t, mgr, "options_greeks", "dev@example.com", map[string]any{
+		"exchange":       "NFO",
+		"tradingsymbol":  "NIFTY2641018000CE",
+		"strike_price":   float64(18000),
+		"expiry_date":    time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
+		"option_type":    "XX", // invalid
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "CE or PE")
+}
+
+func TestOptionsGreeks_NegativeStrike_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	result := callToolNFODevMode(t, mgr, "options_greeks", "dev@example.com", map[string]any{
+		"exchange":       "NFO",
+		"tradingsymbol":  "NIFTY2641018000CE",
+		"strike_price":   float64(-100),
+		"expiry_date":    time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
+		"option_type":    "CE",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "positive")
+}
+
+func TestOptionsGreeks_InvalidExpiry_Push(t *testing.T) {
+	t.Parallel()
+	mgr := newNFODevModeManager(t)
+	result := callToolNFODevMode(t, mgr, "options_greeks", "dev@example.com", map[string]any{
+		"exchange":       "NFO",
+		"tradingsymbol":  "NIFTY2641018000CE",
+		"strike_price":   float64(18000),
+		"expiry_date":    "bad-date",
+		"option_type":    "CE",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "YYYY-MM-DD")
+}
+
+// ---------------------------------------------------------------------------
+// close_all_positions: confirm=false safety check
+// ---------------------------------------------------------------------------
+
+func TestCloseAllPositions_ConfirmFalse_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "close_all_positions", "dev@example.com", map[string]any{
+		"confirm": false,
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "confirm")
+}
+
+// ---------------------------------------------------------------------------
+// set_trailing_stop: no email branch
+// ---------------------------------------------------------------------------
+
+func TestSetTrailingStop_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "set_trailing_stop", "", map[string]any{
+		"instrument": "NSE:INFY",
+		"order_id":   "ORDER123",
+		"direction":  "long",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "Email")
+}
+
+// ---------------------------------------------------------------------------
+// list_trailing_stops: no email
+// ---------------------------------------------------------------------------
+
+func TestListTrailingStops_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "list_trailing_stops", "", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "Email")
+}
+
+// ---------------------------------------------------------------------------
+// cancel_trailing_stop: no email + missing id
+// ---------------------------------------------------------------------------
+
+func TestCancelTrailingStop_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "cancel_trailing_stop", "", map[string]any{
+		"trailing_stop_id": "ts-123",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "Email")
+}
+
+func TestCancelTrailingStop_MissingID_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "cancel_trailing_stop", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// close_position: validation branches
+// ---------------------------------------------------------------------------
+
+func TestClosePosition_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "close_position", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// setup_telegram: no email + NaN chatID + missing chat_id
+// ---------------------------------------------------------------------------
+
+func TestSetupTelegram_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "setup_telegram", "", map[string]any{
+		"chat_id": float64(12345),
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestSetupTelegram_MissingChatID_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "setup_telegram", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+// ---------------------------------------------------------------------------
+// set_alert: various validation branches
+// ---------------------------------------------------------------------------
+
+func TestSetAlert_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "set_alert", "", map[string]any{
+		"instrument": "NSE:INFY",
+		"price":      float64(1500),
+		"direction":  "above",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "Email")
+}
+
+// ---------------------------------------------------------------------------
+// get_option_chain: validation branches
+// ---------------------------------------------------------------------------
+
+func TestGetOptionChain_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "get_option_chain", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// watchlist_tools: delete watchlist, rename validation branches
+// ---------------------------------------------------------------------------
+
+func TestDeleteWatchlist_MissingName_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "delete_watchlist", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestDeleteWatchlist_NoEmail_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "delete_watchlist", "", map[string]any{
+		"name": "test",
+	})
+	assert.True(t, result.IsError)
+}
+
+// ---------------------------------------------------------------------------
+// admin_tools: various validation branches
+// ---------------------------------------------------------------------------
+
+func TestAdminFreezeUser_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_freeze_user", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminUnfreezeUser_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_unfreeze_user", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminListUsers_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_list_users", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminSuspendUser_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_suspend_user", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminActivateUser_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_activate_user", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminGetRiskStatus_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_get_risk_status", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminChangeRole_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_change_role", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+		"role":  "viewer",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminFreezeGlobal_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_freeze_global", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminUnfreezeGlobal_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_unfreeze_global", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminInviteFamily_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_invite_family_member", "nonadmin@example.com", map[string]any{
+		"email": "family@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminListFamily_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_list_family", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminRemoveFamily_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_remove_family_member", "nonadmin@example.com", map[string]any{
+		"email": "family@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminGetUser_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_get_user", "nonadmin@example.com", map[string]any{
+		"email": "target@example.com",
+	})
+	assert.True(t, result.IsError)
+}
+
+func TestAdminServerStatus_NotAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_server_status", "nonadmin@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+}
+
+// ---------------------------------------------------------------------------
+// dividend_calendar: missing instrument
+// ---------------------------------------------------------------------------
+
+func TestDividendCalendar_MissingInstrument_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "dividend_calendar", "dev@example.com", map[string]any{})
+	// dividend_calendar uses portfolio, not a required instrument - different path
+	assert.NotNil(t, result)
+}
+
+// ---------------------------------------------------------------------------
+// portfolio_rebalance: missing params
+// ---------------------------------------------------------------------------
+
+func TestPortfolioRebalance_MissingTargets_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// observability: server_metrics tool
+// ---------------------------------------------------------------------------
+
+func TestServerMetrics_IncludeSystem_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "server_metrics", "dev@example.com", map[string]any{
+		"include_system": true,
+	})
+	assert.NotNil(t, result)
+}
+
+// ---------------------------------------------------------------------------
+// admin_tools: SUCCESS paths (with admin@example.com)
+// ---------------------------------------------------------------------------
+
+func TestAdminListUsers_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_list_users", "admin@example.com", map[string]any{})
+	assert.False(t, result.IsError)
+}
+
+func TestAdminGetUser_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_get_user", "admin@example.com", map[string]any{
+		"target_email": "admin@example.com",
+	})
+	assert.False(t, result.IsError)
+}
+
+func TestAdminGetUser_NotFound_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_get_user", "admin@example.com", map[string]any{
+		"target_email": "nonexistent@example.com",
+	})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "not found")
+}
+
+func TestAdminServerStatus_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_server_status", "admin@example.com", map[string]any{})
+	assert.False(t, result.IsError)
+}
+
+func TestAdminGetRiskStatus_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_get_risk_status", "admin@example.com", map[string]any{
+		"target_email": "admin@example.com",
+	})
+	assert.False(t, result.IsError)
+}
+
+func TestAdminSuspendUser_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	// Create a user to suspend
+	uStore := mgr.UserStoreConcrete()
+	require.NotNil(t, uStore)
+	_ = uStore.Create(&users.User{
+		ID: "u_target", Email: "target@example.com",
+		Role: users.RoleTrader, Status: users.StatusActive,
+	})
+	result := callToolDevMode(t, mgr, "admin_suspend_user", "admin@example.com", map[string]any{
+		"email":  "target@example.com",
+		"reason": "test suspension",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminActivateUser_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	uStore := mgr.UserStoreConcrete()
+	require.NotNil(t, uStore)
+	_ = uStore.Create(&users.User{
+		ID: "u_suspended", Email: "suspended@example.com",
+		Role: users.RoleTrader, Status: users.StatusSuspended,
+	})
+	result := callToolDevMode(t, mgr, "admin_activate_user", "admin@example.com", map[string]any{
+		"email": "suspended@example.com",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminChangeRole_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	uStore := mgr.UserStoreConcrete()
+	require.NotNil(t, uStore)
+	_ = uStore.Create(&users.User{
+		ID: "u_role", Email: "rolechange@example.com",
+		Role: users.RoleTrader, Status: users.StatusActive,
+	})
+	result := callToolDevMode(t, mgr, "admin_change_role", "admin@example.com", map[string]any{
+		"email": "rolechange@example.com",
+		"role":  "viewer",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminFreezeUser_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_freeze_user", "admin@example.com", map[string]any{
+		"email":  "admin@example.com",
+		"reason": "test freeze",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminUnfreezeUser_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_unfreeze_user", "admin@example.com", map[string]any{
+		"email": "admin@example.com",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminFreezeGlobal_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_freeze_global", "admin@example.com", map[string]any{
+		"reason": "test global freeze",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminUnfreezeGlobal_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_unfreeze_global", "admin@example.com", map[string]any{})
+	assert.NotNil(t, result)
+}
+
+func TestAdminInviteFamily_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_invite_family_member", "admin@example.com", map[string]any{
+		"email": "family@example.com",
+	})
+	assert.NotNil(t, result)
+}
+
+func TestAdminListFamily_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_list_family", "admin@example.com", map[string]any{})
+	assert.NotNil(t, result)
+}
+
+func TestAdminRemoveFamily_AsAdmin_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "admin_remove_family_member", "admin@example.com", map[string]any{
+		"email": "family@example.com",
+	})
+	assert.NotNil(t, result)
+}
+
+// ---------------------------------------------------------------------------
+// native_alert_tools: validation branches
+// ---------------------------------------------------------------------------
+
+func TestPlaceNativeAlert_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "place_native_alert", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestModifyNativeAlert_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "modify_native_alert", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestDeleteNativeAlert_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "delete_native_alert", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// post_tools: more validation branches
+// ---------------------------------------------------------------------------
+
+func TestModifyOrder_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "modify_order", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestCancelOrder_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "cancel_order", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestModifyGTT_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "modify_gtt_order", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestDeleteGTT_MissingParams_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "delete_gtt_order", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+// ---------------------------------------------------------------------------
+// ticker_tools: validation branches
+// ---------------------------------------------------------------------------
+
+func TestSubscribeInstruments_MissingInstrument_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "subscribe_instruments", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
+}
+
+func TestUnsubscribeInstruments_MissingInstrument_Push(t *testing.T) {
+	t.Parallel()
+	mgr, _ := newFullDevModeManager(t)
+	result := callToolDevMode(t, mgr, "unsubscribe_instruments", "dev@example.com", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, resultText(t, result), "required")
 }

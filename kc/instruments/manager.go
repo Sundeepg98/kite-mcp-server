@@ -589,7 +589,7 @@ func (m *Manager) startScheduler() {
 			m.logger.Info("Instruments scheduler stopped")
 			return
 
-		case <-ticker.C:
+		case <-ticker.C: // COVERAGE: unreachable in tests — requires 5-minute ticker wait; ForceUpdateInstruments is tested directly
 			if m.shouldUpdate() {
 				m.logger.Info("Starting scheduled instrument update")
 				if err := m.ForceUpdateInstruments(); err != nil {

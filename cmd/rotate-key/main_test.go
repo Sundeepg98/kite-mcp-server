@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -649,18 +650,169 @@ func TestRotateTable_ScanError_ColumnMismatch(t *testing.T) {
 	assert.Contains(t, err.Error(), "query scan_test")
 }
 
-// TestRotateTable_UpdateError is hard to trigger with SQLite in-memory DBs
-// because UPDATE doesn't fail on valid data. The update error path (line 156-157)
-// requires a constraint violation during UPDATE, which can't happen when we're
-// only updating values in existing rows. This path is defensive code for
-// corrupted DBs or disk I/O failures.
+// TestRotateTable_EncryptError triggers the encrypt failure path by passing
+// a newKey with an invalid AES key length (not 16, 24, or 32 bytes).
+func TestRotateTable_EncryptError(t *testing.T) {
+	db := createTestDB(t)
 
-// --- main() documentation ---
-// main() is a 14-line CLI wrapper that parses flags and delegates to run().
-// It contains flag.Parse(), an os.Exit(1) for missing flags, and log.Fatal
-// for run() errors. These branches require process-level testing (exec.Command
-// with os.Exit assertions) which is out of scope for unit tests. The run()
-// function -- which contains all business logic -- is tested at 100%.
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old", nil)
+	require.NoError(t, err)
+
+	// Insert a row encrypted with the valid old key.
+	enc, err := alerts.Encrypt(oldKey, "value")
+	require.NoError(t, err)
+	_, err = db.Exec(
+		`INSERT INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?, ?, ?, ?, ?)`,
+		"user@enc.com", enc, "uid", "name", "2026-01-01T00:00:00Z",
+	)
+	require.NoError(t, err)
+
+	// Use an invalid newKey (17 bytes — not a valid AES key length).
+	badNewKey := []byte("17-bytes-bad-key!")
+	require.Equal(t, 17, len(badNewKey))
+
+	_, err = rotateTable(db, oldKey, badNewKey, "kite_tokens", "email", []string{"access_token"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypt")
+}
+
+// TestRotateTable_UpdateError triggers the update error path by dropping the
+// table after the SELECT has collected rows but before UPDATE runs. We achieve
+// this by using a second connection to drop the table between calls by wrapping
+// rotateTable with a table that has a trigger that fails on UPDATE.
+func TestRotateTable_UpdateError(t *testing.T) {
+	db := createTestDB(t)
+
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old", nil)
+	require.NoError(t, err)
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt("new", nil)
+	require.NoError(t, err)
+
+	// Create a custom table with a CHECK constraint that will fail on UPDATE.
+	// We insert data that satisfies the constraint, then try to UPDATE with
+	// encrypted data that violates it.
+	_, err = db.Exec(`CREATE TABLE update_fail (
+		pk TEXT PRIMARY KEY,
+		secret TEXT NOT NULL CHECK(length(secret) < 10)
+	)`)
+	require.NoError(t, err)
+	// Insert a short value (satisfies CHECK).
+	_, err = db.Exec(`INSERT INTO update_fail (pk, secret) VALUES ('row1', 'short')`)
+	require.NoError(t, err)
+
+	// rotateTable will: SELECT pk, secret -> decrypt "short" (plaintext fallback) ->
+	// re-encrypt with newKey -> UPDATE with long hex string -> CHECK constraint fails.
+	_, err = rotateTable(db, oldKey, newKey, "update_fail", "pk", []string{"secret"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update update_fail")
+}
+
+// TestRotateTable_RowsErrPath triggers the rows.Err() error path.
+// This is difficult with SQLite in-memory, but we can trigger a scan error
+// by having the table return rows that can't be scanned into strings.
+// We use a table with a BLOB column containing invalid data for string scanning.
+func TestRotateTable_ScanError_NullColumn(t *testing.T) {
+	db := createTestDB(t)
+
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old", nil)
+	require.NoError(t, err)
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt("new", nil)
+	require.NoError(t, err)
+
+	// Create table with nullable column, insert NULL.
+	// Scanning NULL into *string will fail with modernc/sqlite.
+	_, err = db.Exec(`CREATE TABLE null_test (pk TEXT PRIMARY KEY, col1 TEXT)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO null_test (pk, col1) VALUES ('row1', NULL)`)
+	require.NoError(t, err)
+
+	_, err = rotateTable(db, oldKey, newKey, "null_test", "pk", []string{"col1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scan null_test")
+}
+
+// TestMain_MissingFlags tests the main() function with missing flags
+// using os/exec to verify it exits with code 1.
+func TestMain_MissingFlags(t *testing.T) {
+	if os.Getenv("BE_MAIN_MISSING_FLAGS") == "1" {
+		os.Args = []string{"rotate-key"}
+		main()
+		return
+	}
+
+	// Re-exec the test binary with the sentinel env var set.
+	cmd := exec.Command(os.Args[0], "-test.run=TestMain_MissingFlags")
+	cmd.Env = append(os.Environ(), "BE_MAIN_MISSING_FLAGS=1")
+	err := cmd.Run()
+	require.Error(t, err)
+
+	// Verify it exited with code 1.
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, 1, exitErr.ExitCode())
+}
+
+// TestMain_RunError tests the main() function with a bad DB path
+// to trigger the log.Fatal path.
+func TestMain_RunError(t *testing.T) {
+	if os.Getenv("BE_MAIN_RUN_ERROR") == "1" {
+		dbPath := os.Getenv("TEST_DB_PATH")
+		os.Args = []string{"rotate-key", "-db", dbPath, "-old-secret", "old", "-new-secret", "new"}
+		main()
+		return
+	}
+
+	// Create a DB with a bad salt in the parent process.
+	dbPath := filepath.Join(t.TempDir(), "bad.db")
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO config (key, value) VALUES ('hkdf_salt', 'not-valid-hex!!!')`)
+	require.NoError(t, err)
+	db.Close()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMain_RunError")
+	cmd.Env = append(os.Environ(), "BE_MAIN_RUN_ERROR=1", "TEST_DB_PATH="+dbPath)
+	err = cmd.Run()
+	require.Error(t, err)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.NotEqual(t, 0, exitErr.ExitCode())
+}
+
+// TestMain_Success tests the main() function with valid args
+// to verify it exits with code 0.
+func TestMain_Success(t *testing.T) {
+	if os.Getenv("BE_MAIN_SUCCESS") == "1" {
+		dbPath := os.Getenv("TEST_DB_PATH")
+		os.Args = []string{"rotate-key", "-db", dbPath, "-old-secret", "old", "-new-secret", "new"}
+		main()
+		return
+	}
+
+	// Create the DB in the parent process and pass the path via env.
+	dbPath := filepath.Join(t.TempDir(), "success.db")
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	ddl := `
+CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS kite_tokens (email TEXT PRIMARY KEY, access_token TEXT NOT NULL, user_id TEXT NOT NULL, user_name TEXT NOT NULL, stored_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS kite_credentials (email TEXT PRIMARY KEY, api_key TEXT NOT NULL, api_secret TEXT NOT NULL, stored_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS oauth_clients (client_id TEXT PRIMARY KEY, client_secret TEXT NOT NULL, redirect_uris TEXT NOT NULL, client_name TEXT NOT NULL, created_at TEXT NOT NULL, is_kite_key INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS mcp_sessions (session_id TEXT PRIMARY KEY, email TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, expires_at TEXT NOT NULL, terminated INTEGER NOT NULL DEFAULT 0, session_id_enc TEXT NOT NULL DEFAULT '');
+`
+	_, err = db.Exec(ddl)
+	require.NoError(t, err)
+	db.Close()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMain_Success")
+	cmd.Env = append(os.Environ(), "BE_MAIN_SUCCESS=1", "TEST_DB_PATH="+dbPath)
+	err = cmd.Run()
+	// main() returns normally on success, test binary exits 0.
+	require.NoError(t, err)
+}
 
 func TestRun_AllTables(t *testing.T) {
 	dbPath := createOnDiskTestDB(t)

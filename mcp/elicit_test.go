@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -128,4 +130,32 @@ func TestParseElicitationError(t *testing.T) {
 		err := errors.New("order cancelled by user")
 		assert.Contains(t, err.Error(), "cancelled")
 	})
+}
+
+// ---------------------------------------------------------------------------
+// requestConfirmation: direct unit tests covering all branches
+// ---------------------------------------------------------------------------
+
+func TestRequestConfirmation_NilServerRef(t *testing.T) {
+	err := requestConfirmation(context.Background(), nil, "test")
+	assert.NoError(t, err, "nil server should fail open")
+}
+
+func TestRequestConfirmation_NonMCPServerType(t *testing.T) {
+	err := requestConfirmation(context.Background(), "not-a-server", "test")
+	assert.NoError(t, err, "non-MCPServer should fail open")
+}
+
+func TestRequestConfirmation_NoActiveSession(t *testing.T) {
+	// MCPServer with no active session → ErrNoActiveSession → fail open
+	srv := server.NewMCPServer("test", "1.0", server.WithElicitation())
+	err := requestConfirmation(context.Background(), srv, "Confirm order?")
+	assert.NoError(t, err, "no active session should fail open")
+}
+
+func TestRequestConfirmation_ElicitationNotEnabled(t *testing.T) {
+	// MCPServer without elicitation support → ErrElicitationNotSupported → fail open
+	srv := server.NewMCPServer("test", "1.0") // no WithElicitation
+	err := requestConfirmation(context.Background(), srv, "Confirm order?")
+	assert.NoError(t, err, "elicitation not supported should fail open")
 }

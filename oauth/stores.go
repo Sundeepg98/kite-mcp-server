@@ -56,7 +56,7 @@ var ErrAuthCodeStoreFull = errors.New("auth code store is full")
 func (s *AuthCodeStore) Generate(entry *AuthCodeEntry) (string, error) {
 	code, err := randomHex(32)
 	if err != nil {
-		return "", err
+		return "", err // COVERAGE: unreachable — crypto/rand.Read is fatal in Go 1.24+ (never returns error)
 	}
 	entry.ExpiresAt = time.Now().Add(10 * time.Minute)
 	s.mu.Lock()
@@ -82,6 +82,10 @@ func (s *AuthCodeStore) Consume(code string) (*AuthCodeEntry, bool) {
 	return entry, true
 }
 
+// cleanup runs in a background goroutine, removing expired auth codes every 5 minutes.
+// COVERAGE: The ticker branch (case <-ticker.C) requires a 5-minute wall-clock wait.
+// The cleanup logic is tested directly in TestAuthCodeStore_CleanupTickRemovesExpired
+// which simulates the inner loop body. The done-channel path is tested by Close().
 func (s *AuthCodeStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -345,7 +349,7 @@ func (s *ClientStore) AddRedirectURI(clientID, uri string) {
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", err // COVERAGE: unreachable — crypto/rand.Read is fatal in Go 1.24+ (never returns error)
 	}
 	return hex.EncodeToString(b), nil
 }

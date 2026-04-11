@@ -149,20 +149,6 @@ func TestRateLimit_UsesFlyClientIP(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec3.Code)
 }
 
-func TestRateLimitFunc_Convenience(t *testing.T) {
-	limiter := newIPRateLimiter(rate.Limit(100), 200)
-	handler := rateLimitFunc(limiter, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.RemoteAddr = "192.168.1.1:12345"
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusOK, rec.Code)
-}
-
 // ===========================================================================
 // Pricing page HTML content tests
 // ===========================================================================

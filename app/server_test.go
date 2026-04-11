@@ -5640,3 +5640,261 @@ func TestExchangeRequestToken_Success_RegistryUpdate(t *testing.T) {
 	assert.Equal(t, "test@example.com", email)
 }
 
+// ===========================================================================
+// setupGracefulShutdown — signal-based test
+// ===========================================================================
+
+func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
+	if os.Getenv("CI") == "" {
+		// On Windows, os.Interrupt cannot be sent via p.Signal().
+		// On Linux CI this test works. Skip locally to avoid flakes.
+		// The setupGracefulShutdown goroutine body is covered via the
+		// existing TestSetupGracefulShutdown_ShutdownSequence test.
+		t.Skip("skipping signal test on local machine (os.Interrupt not portable)")
+	}
+
+	mgr := newTestManagerWithDB(t)
+	app := NewApp(testLogger())
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	listener.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	serverDone := make(chan struct{})
+	go func() {
+		if sErr := srv.ListenAndServe(); sErr != nil && sErr != http.ErrServerClosed {
+			t.Logf("server error: %v", sErr)
+		}
+		close(serverDone)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	app.setupGracefulShutdown(srv, mgr)
+
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(os.Interrupt)
+
+	select {
+	case <-serverDone:
+		// success
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not shut down within timeout")
+	}
+}
+
+// ===========================================================================
+// GetLTP (paperLTPAdapter) — exercise all branches
+// ===========================================================================
+
+func TestPaperLTPAdapter_NoSessions(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+	adapter := &paperLTPAdapter{manager: mgr}
+
+	_, err := adapter.GetLTP("NSE:RELIANCE")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no active Kite sessions")
+}
+
+func TestPaperLTPAdapter_SessionWithNilData(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	// Generate a session to have at least one active session, but with no KiteSessionData.
+	sess := mgr.SessionManager()
+	_ = sess.GenerateWithData(nil)
+
+	adapter := &paperLTPAdapter{manager: mgr}
+	_, err := adapter.GetLTP("NSE:RELIANCE")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no Kite client available")
+}
+
+// ===========================================================================
+// registerTelegramWebhook — early return paths
+// ===========================================================================
+
+func TestRegisterTelegramWebhook_NilNotifier(t *testing.T) {
+	app := NewApp(testLogger())
+	app.Config.OAuthJWTSecret = "test-secret"
+	app.Config.ExternalURL = "https://test.example.com"
+
+	mgr := newTestManagerWithDB(t)
+	mux := http.NewServeMux()
+
+	// TelegramNotifier() returns nil for a manager without TELEGRAM_BOT_TOKEN.
+	// Should return early without panic.
+	app.registerTelegramWebhook(mux, mgr)
+}
+
+func TestRegisterTelegramWebhook_MissingSecret(t *testing.T) {
+	app := NewApp(testLogger())
+	app.Config.OAuthJWTSecret = ""
+	app.Config.ExternalURL = ""
+
+	mgr := newTestManagerWithDB(t)
+	mux := http.NewServeMux()
+
+	app.registerTelegramWebhook(mux, mgr)
+}
+
+// ===========================================================================
+// initScheduler — no-tasks path
+// ===========================================================================
+
+func TestInitScheduler_NoTasks_Minimal(t *testing.T) {
+	// Use a manager WITHOUT AlertDB so no PnL snapshot task is added.
+	mgr, err := kc.New(kc.Config{
+		APIKey:    "test_key",
+		APISecret: "test_secret",
+		Logger:    testLogger(),
+		DevMode:   true,
+	})
+	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
+
+	app := NewApp(testLogger())
+	app.initScheduler(mgr)
+	assert.Nil(t, app.scheduler)
+}
+
+func TestInitScheduler_WithAuditStore_Minimal(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	mgr := newTestManagerWithDB(t)
+	app := NewApp(testLogger())
+	app.auditStore = audit.New(db)
+	require.NoError(t, app.auditStore.InitTable())
+
+	app.initScheduler(mgr)
+
+	// Scheduler should be started (audit_cleanup task was added).
+	assert.NotNil(t, app.scheduler)
+	app.scheduler.Stop()
+}
+
+// ===========================================================================
+// newRateLimiters — basic coverage
+// ===========================================================================
+
+func TestNewRateLimiters_Basic(t *testing.T) {
+	rl := newRateLimiters()
+	assert.NotNil(t, rl)
+	assert.NotNil(t, rl.auth)
+	assert.NotNil(t, rl.token)
+	assert.NotNil(t, rl.mcp)
+	rl.Stop()
+}
+
+// ===========================================================================
+// initializeServices — exercising the deeper branches with more config
+// ===========================================================================
+
+func TestInitializeServices_WithAdminEmails(t *testing.T) {
+	app := NewApp(testLogger())
+	app.Config = &Config{
+		KiteAPIKey:     "test-key",
+		KiteAPISecret:  "test-secret",
+		OAuthJWTSecret: "jwt-secret-that-is-at-least-32-chars-long",
+		ExternalURL:    "https://test.example.com",
+		AppMode:        ModeHTTP,
+		AppPort:        "0",
+		AdminEmails:    "admin@test.com,admin2@test.com",
+	}
+
+	mgr, mcpSrv, err := app.initializeServices()
+	require.NoError(t, err)
+	assert.NotNil(t, mgr)
+	assert.NotNil(t, mcpSrv)
+	mgr.Shutdown()
+}
+
+func TestInitializeServices_DevMode(t *testing.T) {
+	app := NewApp(testLogger())
+	app.DevMode = true
+	app.Config = &Config{
+		KiteAPIKey:    "test-key",
+		KiteAPISecret: "test-secret",
+		AppMode:       ModeHTTP,
+		AppPort:       "0",
+	}
+
+	mgr, mcpSrv, err := app.initializeServices()
+	require.NoError(t, err)
+	assert.NotNil(t, mgr)
+	assert.NotNil(t, mcpSrv)
+	mgr.Shutdown()
+}
+
+// ===========================================================================
+// serveLegalPages — exercise the various paths
+// ===========================================================================
+
+func TestServeLegalPages_Terms(t *testing.T) {
+	app := NewApp(testLogger())
+	require.NoError(t, app.initStatusPageTemplate())
+	mux := http.NewServeMux()
+	app.serveLegalPages(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/terms", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html")
+}
+
+func TestServeLegalPages_Privacy(t *testing.T) {
+	app := NewApp(testLogger())
+	require.NoError(t, app.initStatusPageTemplate())
+	mux := http.NewServeMux()
+	app.serveLegalPages(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/privacy", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+
+// ===========================================================================
+// serveStatusPage — exercise with various config
+// ===========================================================================
+
+func TestServeStatusPage_WithConfig(t *testing.T) {
+	app := NewApp(testLogger())
+	app.Config.ExternalURL = "https://test.example.com"
+	app.Config.KiteAPIKey = "test-key"
+	app.Config.OAuthJWTSecret = "jwt-secret"
+	require.NoError(t, app.initStatusPageTemplate())
+
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestServeStatusPage_NotFoundPath(t *testing.T) {
+	app := NewApp(testLogger())
+	require.NoError(t, app.initStatusPageTemplate())
+
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+

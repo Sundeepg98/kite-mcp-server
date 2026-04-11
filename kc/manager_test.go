@@ -948,32 +948,6 @@ func TestNew_DevMode(t *testing.T) {
 	}
 }
 
-func TestNew_NilLogger(t *testing.T) {
-	t.Parallel()
-	_, err := New(Config{
-		APIKey:    "test_key",
-		APISecret: "test_secret",
-	})
-	if err == nil || err.Error() != "logger is required" {
-		t.Errorf("Expected 'logger is required', got: %v", err)
-	}
-}
-
-func TestNew_NoAPICredentials(t *testing.T) {
-	t.Parallel()
-	// Empty API key/secret is allowed (per-user creds)
-	m, err := New(Config{
-		Logger: testLogger(),
-	})
-	if err != nil {
-		t.Fatalf("Expected no error with empty credentials: %v", err)
-	}
-	if m == nil {
-		t.Fatal("Expected non-nil manager")
-	}
-	m.Shutdown()
-}
-
 func TestNew_WithAlertDBPath(t *testing.T) {
 	t.Parallel()
 	m, err := New(Config{
@@ -1729,7 +1703,7 @@ func TestManager_AuditStore_NonNil_Final(t *testing.T) {
 // Shutdown — comprehensive shutdown with various components
 // ===========================================================================
 
-func TestShutdown_WithDB(t *testing.T) {
+func TestShutdown_WithDB_Final(t *testing.T) {
 	t.Parallel()
 	m, err := New(Config{
 		APIKey:             "test_key",

@@ -33,6 +33,9 @@ func main() {
 func run(dbPath, oldSecret, newSecret string, w *os.File) error {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
+		// Coverage note: modernc.org/sqlite's sql.Open never returns an error —
+		// path validation is deferred to the first query. This branch is unreachable
+		// but kept as a defensive guard.
 		return fmt.Errorf("open db: %w", err)
 	}
 	defer db.Close()
@@ -122,6 +125,8 @@ func rotateTable(db *sql.DB, oldKey, newKey []byte, table, pkCol string, columns
 		allRows = append(allRows, r)
 	}
 	if err := rows.Err(); err != nil {
+		// Coverage note: rows.Err() after successful SQLite scan loop is unreachable —
+		// SQLite surfaces row errors during Scan(), not after iteration completes.
 		return 0, fmt.Errorf("iterate %s: %w", table, err)
 	}
 

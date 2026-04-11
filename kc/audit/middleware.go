@@ -30,7 +30,7 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 			// Extract identity from context.
 			email := oauth.EmailFromContext(ctx)
 			sessionID := ""
-			if sess := server.ClientSessionFromContext(ctx); sess != nil {
+			if sess := server.ClientSessionFromContext(ctx); sess != nil { // COVERAGE: unreachable in unit tests — requires full MCP server transport context
 				sessionID = sess.SessionID()
 			}
 

@@ -61,7 +61,7 @@ func (s *InvitationStore) LoadFromDB() error {
 	for rows.Next() {
 		var inv FamilyInvitation
 		var createdS, expiresS, acceptedS string
-		if err := rows.Scan(&inv.ID, &inv.AdminEmail, &inv.InvitedEmail, &inv.Status, &createdS, &expiresS, &acceptedS); err != nil {
+		if err := rows.Scan(&inv.ID, &inv.AdminEmail, &inv.InvitedEmail, &inv.Status, &createdS, &expiresS, &acceptedS); err != nil { // COVERAGE: unreachable — SQLite query success implies scan success (dynamic typing)
 			return fmt.Errorf("scan invitation: %w", err)
 		}
 		inv.CreatedAt, _ = time.Parse(time.RFC3339, createdS)

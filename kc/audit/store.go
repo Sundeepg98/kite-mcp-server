@@ -379,7 +379,7 @@ func scanToolCall(rows *sql.Rows, encKey []byte) (*ToolCall, error) {
 		&isErr, &errorMessage, &errorType, &orderID,
 		&emailEncrypted, &prevHash, &entryHash,
 		&startedAtS, &completedAtS, &tc.DurationMs,
-	); err != nil {
+	); err != nil { // COVERAGE: unreachable — SQLite driver returns correct column count for well-formed SELECT
 		return nil, fmt.Errorf("audit: scan tool call: %w", err)
 	}
 

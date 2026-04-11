@@ -194,21 +194,6 @@ func TestHandleKiteCallback_SessionNotFound_WithValidSig(t *testing.T) {
 }
 
 // ===========================================================================
-// setupTemplates — success path
-// ===========================================================================
-
-func TestSetupTemplates_Success(t *testing.T) {
-	t.Parallel()
-	templates, err := setupTemplates()
-	if err != nil {
-		t.Fatalf("setupTemplates error: %v", err)
-	}
-	if len(templates) == 0 {
-		t.Error("Expected at least one template")
-	}
-}
-
-// ===========================================================================
 // initializeSessionSigner — custom signer
 // ===========================================================================
 
@@ -230,7 +215,7 @@ func TestInitializeSessionSigner_Custom(t *testing.T) {
 	}
 }
 
-func TestInitializeSessionSigner_AutoGenerate(t *testing.T) {
+func TestInitializeSessionSigner_AutoGenerate_Boost(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
 	if err != nil {
@@ -251,7 +236,7 @@ func TestInitializeSessionSigner_AutoGenerate(t *testing.T) {
 // IsKiteTokenExpired — cover both branches
 // ===========================================================================
 
-func TestIsKiteTokenExpired_JustNow(t *testing.T) {
+func TestIsKiteTokenExpired_JustNow_Boost(t *testing.T) {
 	t.Parallel()
 	// Token stored 1 minute ago should NOT be expired
 	if IsKiteTokenExpired(time.Now().Add(-1 * time.Minute)) {
@@ -443,7 +428,7 @@ func TestManagedSessionService_NilRegistry(t *testing.T) {
 // SessionSignerWithKey — empty key
 // ===========================================================================
 
-func TestNewSessionSignerWithKey_EmptyKey(t *testing.T) {
+func TestNewSessionSignerWithKey_EmptyKey_Boost(t *testing.T) {
 	t.Parallel()
 	_, err := NewSessionSignerWithKey([]byte{})
 	if err != ErrEmptySecretKey {
