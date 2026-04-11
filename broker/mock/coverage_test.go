@@ -3,6 +3,7 @@ package mock
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
 )
@@ -436,6 +437,155 @@ func TestNewDemoClient(t *testing.T) {
 	}
 	if ltp["NSE:RELIANCE"].LastPrice != 2812.50 {
 		t.Errorf("RELIANCE LTP = %f, want 2812.50", ltp["NSE:RELIANCE"].LastPrice)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PlaceOrder: MARKET order with no LTP set (falls back to params.Price)
+// ---------------------------------------------------------------------------
+
+func TestPlaceOrder_MarketNoLTP(t *testing.T) {
+	c := New()
+	// No prices set — MARKET order should fall back to params.Price.
+	resp, err := c.PlaceOrder(broker.OrderParams{
+		Exchange:        "NSE",
+		Tradingsymbol:   "UNLISTED",
+		TransactionType: "BUY",
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		Quantity:        3,
+		Price:           999.50,
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder() error: %v", err)
+	}
+	if resp.OrderID == "" {
+		t.Fatal("expected non-empty order ID")
+	}
+
+	orders := c.Orders()
+	if len(orders) != 1 {
+		t.Fatalf("len(orders) = %d, want 1", len(orders))
+	}
+	if orders[0].Status != "COMPLETE" {
+		t.Errorf("status = %q, want COMPLETE", orders[0].Status)
+	}
+	if orders[0].AveragePrice != 999.50 {
+		t.Errorf("avg_price = %f, want 999.50", orders[0].AveragePrice)
+	}
+	if orders[0].FilledQuantity != 3 {
+		t.Errorf("filled_qty = %d, want 3", orders[0].FilledQuantity)
+	}
+
+	// Trade should also be created at the fallback price.
+	trades := c.Trades()
+	if len(trades) != 1 {
+		t.Fatalf("len(trades) = %d, want 1", len(trades))
+	}
+	if trades[0].Price != 999.50 {
+		t.Errorf("trade.Price = %f, want 999.50", trades[0].Price)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ModifyOrder: cover TriggerPrice and OrderType branches
+// ---------------------------------------------------------------------------
+
+func TestModifyOrder_TriggerPriceAndOrderType(t *testing.T) {
+	c := New()
+	resp, _ := c.PlaceOrder(broker.OrderParams{
+		Exchange:      "NSE",
+		Tradingsymbol: "RELIANCE",
+		TransactionType: "BUY",
+		OrderType:     "LIMIT",
+		Product:       "CNC",
+		Quantity:      10,
+		Price:         2400,
+		TriggerPrice:  2380,
+	})
+
+	// Modify trigger price and order type.
+	_, err := c.ModifyOrder(resp.OrderID, broker.OrderParams{
+		TriggerPrice: 2390,
+		OrderType:    "SL",
+	})
+	if err != nil {
+		t.Fatalf("ModifyOrder() error: %v", err)
+	}
+
+	orders := c.Orders()
+	if orders[0].TriggerPrice != 2390 {
+		t.Errorf("TriggerPrice = %f, want 2390", orders[0].TriggerPrice)
+	}
+	if orders[0].OrderType != "SL" {
+		t.Errorf("OrderType = %q, want SL", orders[0].OrderType)
+	}
+}
+
+func TestModifyOrder_QuantityOnly(t *testing.T) {
+	c := New()
+	resp, _ := c.PlaceOrder(broker.OrderParams{
+		Exchange:      "NSE",
+		Tradingsymbol: "TCS",
+		TransactionType: "BUY",
+		OrderType:     "LIMIT",
+		Product:       "CNC",
+		Quantity:      10,
+		Price:         3500,
+	})
+
+	// Modify only quantity.
+	_, err := c.ModifyOrder(resp.OrderID, broker.OrderParams{
+		Quantity: 20,
+	})
+	if err != nil {
+		t.Fatalf("ModifyOrder() error: %v", err)
+	}
+
+	orders := c.Orders()
+	if orders[0].Quantity != 20 {
+		t.Errorf("Quantity = %d, want 20", orders[0].Quantity)
+	}
+	// Price should remain unchanged.
+	if orders[0].Price != 3500 {
+		t.Errorf("Price = %f, want 3500 (should be unchanged)", orders[0].Price)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetHistoricalData: cover 15minute and 60minute intervals
+// ---------------------------------------------------------------------------
+
+func TestGetHistoricalData_15Minute(t *testing.T) {
+	c := New()
+	from := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC) // 1 hour = 4 fifteen-minute candles + 1 (inclusive) = 5
+
+	candles, err := c.GetHistoricalData(200, "15minute", from, to)
+	if err != nil {
+		t.Fatalf("GetHistoricalData(15minute) error: %v", err)
+	}
+	if len(candles) != 5 { // 9:00, 9:15, 9:30, 9:45, 10:00
+		t.Errorf("len(candles) = %d, want 5", len(candles))
+	}
+	for _, c := range candles {
+		if c.High < c.Low {
+			t.Errorf("candle has High %f < Low %f", c.High, c.Low)
+		}
+	}
+}
+
+func TestGetHistoricalData_60Minute(t *testing.T) {
+	c := New()
+	from := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC) // 3 hours = 3 hourly candles + 1 (inclusive) = 4
+
+	candles, err := c.GetHistoricalData(300, "60minute", from, to)
+	if err != nil {
+		t.Fatalf("GetHistoricalData(60minute) error: %v", err)
+	}
+	if len(candles) != 4 { // 9:00, 10:00, 11:00, 12:00
+		t.Errorf("len(candles) = %d, want 4", len(candles))
 	}
 }
 

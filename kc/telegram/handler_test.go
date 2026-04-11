@@ -8,6 +8,8 @@ package telegram
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +18,10 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"path/filepath"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -1274,5 +1280,1288 @@ func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 	}
 	if mock.bodyCount() == 0 {
 		t.Error("expected mywatchlist message to be sent")
+	}
+}
+
+// ===========================================================================
+// sendHTML / sendHTMLWithKeyboard / answerCallback / editMessage error paths
+// ===========================================================================
+
+func TestSendHTML_BotError(t *testing.T) {
+	mgr := newMockKiteManager()
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	// Make the mock return an API error so bot.Send() fails.
+	mock.mu.Lock()
+	mock.responseObj = tgbotapi.APIResponse{
+		Ok:          false,
+		ErrorCode:   400,
+		Description: "Bad Request: chat not found",
+	}
+	mock.mu.Unlock()
+
+	// Should not panic — the error is just logged.
+	h.sendHTML(42, "test message")
+}
+
+func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
+	mgr := newMockKiteManager()
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	mock.mu.Lock()
+	mock.responseObj = tgbotapi.APIResponse{
+		Ok:          false,
+		ErrorCode:   403,
+		Description: "Forbidden: bot was blocked by the user",
+	}
+	mock.mu.Unlock()
+
+	kb := confirmKeyboard()
+	h.sendHTMLWithKeyboard(42, "test", kb)
+}
+
+func TestAnswerCallback_BotError(t *testing.T) {
+	mgr := newMockKiteManager()
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	mock.mu.Lock()
+	mock.responseObj = tgbotapi.APIResponse{
+		Ok:          false,
+		ErrorCode:   400,
+		Description: "Bad Request",
+	}
+	mock.mu.Unlock()
+
+	h.answerCallback("cb-err", "error test")
+}
+
+func TestEditMessage_BotError(t *testing.T) {
+	mgr := newMockKiteManager()
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	mock.mu.Lock()
+	mock.responseObj = tgbotapi.APIResponse{
+		Ok:          false,
+		ErrorCode:   400,
+		Description: "Bad Request",
+	}
+	mock.mu.Unlock()
+
+	h.editMessage(42, 100, "new text")
+}
+
+// ===========================================================================
+// Helper: create an instruments.Manager with test data
+// ===========================================================================
+
+func newTestInstrumentsManager(t *testing.T) *instruments.Manager {
+	t.Helper()
+	testData := map[uint32]*instruments.Instrument{
+		256265: {
+			ID:              "NSE:RELIANCE",
+			InstrumentToken: 256265,
+			Tradingsymbol:   "RELIANCE",
+			Exchange:        "NSE",
+			Name:            "Reliance Industries",
+		},
+		408065: {
+			ID:              "NSE:INFY",
+			InstrumentToken: 408065,
+			Tradingsymbol:   "INFY",
+			Exchange:        "NSE",
+			Name:            "Infosys",
+		},
+		779521: {
+			ID:              "NSE:NIFTY 50",
+			InstrumentToken: 779521,
+			Tradingsymbol:   "NIFTY 50",
+			Exchange:        "NSE",
+			Name:            "Nifty 50",
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mgr, err := instruments.New(instruments.Config{
+		TestData: testData,
+		Logger:   logger,
+	})
+	if err != nil {
+		t.Fatalf("instruments.New failed: %v", err)
+	}
+	return mgr
+}
+
+// ===========================================================================
+// executeConfirmedOrder — riskguard blocking
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_RiskguardBlocks(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	// Set up riskguard with a global freeze.
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	guard := riskguard.NewGuard(logger)
+	guard.FreezeGlobal("admin", "circuit breaker")
+	mgr := h.manager.(*mockKiteManager)
+	mgr.guard = guard
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        10,
+		Price:           0,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-rg",
+		Message: &tgbotapi.Message{
+			MessageID: 200,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+	// The order should be blocked; no error/panic expected.
+}
+
+// ===========================================================================
+// executeConfirmedOrder — riskguard blocks + nil message
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_RiskguardBlocksNilMessage(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	guard := riskguard.NewGuard(logger)
+	guard.FreezeGlobal("admin", "test freeze")
+	mgr := h.manager.(*mockKiteManager)
+	mgr.guard = guard
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        5,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID:      "cb-rg-nil",
+		Message: nil,
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — paper trading success
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_PaperTradingSuccess(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dbPath := filepath.Join(t.TempDir(), "paper.db")
+	paperDB, err := alerts.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	t.Cleanup(func() { paperDB.Close() })
+	ptStore := papertrading.NewStore(paperDB, logger)
+	if err := ptStore.InitTables(); err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+	pe := papertrading.NewEngine(ptStore, logger)
+	pe.Enable(email, 10_00_000)
+
+	mgr := h.manager.(*mockKiteManager)
+	mgr.paperEngine = pe
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        1,
+		Price:           2500,
+		OrderType:       "LIMIT",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-paper",
+		Message: &tgbotapi.Message{
+			MessageID: 300,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — real order failure (Kite API error)
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_RealOrderAPIFailure(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	// No /orders/regular configured → Kite API returns error.
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        10,
+		Price:           0,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-fail",
+		Message: &tgbotapi.Message{
+			MessageID: 400,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — real order success with riskguard recording
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_RealOrderWithRiskguard(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	guard := riskguard.NewGuard(logger)
+	mgr := h.manager.(*mockKiteManager)
+	mgr.guard = guard
+
+	fakeAPI.responses["/orders/regular"] = map[string]interface{}{
+		"order_id": "ORD-RG-123",
+	}
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        5,
+		Price:           0,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-rg-success",
+		Message: &tgbotapi.Message{
+			MessageID: 500,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — no kite client (expired token)
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
+	// No API key set → newKiteClient returns nil.
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           "user@test.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        5,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-noclient",
+		Message: &tgbotapi.Message{
+			MessageID: 600,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.executeConfirmedOrder(42, "user@test.com", cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — no kite client + nil message
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           "user@test.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        5,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID:      "cb-noclient-nil",
+		Message: nil,
+	}
+
+	h.executeConfirmedOrder(42, "user@test.com", cq)
+}
+
+// ===========================================================================
+// executeConfirmedOrder — real order success + nil message
+// ===========================================================================
+
+func TestExecuteConfirmedOrder_SuccessNilMessage(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	fakeAPI.responses["/orders/regular"] = map[string]interface{}{
+		"order_id": "ORD-NM-123",
+	}
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        3,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID:      "cb-success-nil",
+		Message: nil,
+	}
+
+	h.executeConfirmedOrder(42, email, cq)
+}
+
+// ===========================================================================
+// handleSetAlert — full coverage
+// ===========================================================================
+
+func TestHandleSetAlert_Success(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, email, "RELIANCE above 2700")
+	if !strings.Contains(result, "Alert set") {
+		t.Errorf("expected 'Alert set', got: %s", result)
+	}
+	if !strings.Contains(result, "RELIANCE") {
+		t.Errorf("expected 'RELIANCE', got: %s", result)
+	}
+	if !strings.Contains(result, "above") {
+		t.Errorf("expected 'above', got: %s", result)
+	}
+	if !strings.Contains(result, "2700.00") {
+		t.Errorf("expected '2700.00', got: %s", result)
+	}
+}
+
+func TestHandleSetAlert_InstrumentNotFound(t *testing.T) {
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, "user@test.com", "NOSUCHSYMBOL above 100")
+	if !strings.Contains(result, "not found") {
+		t.Errorf("expected 'not found', got: %s", result)
+	}
+}
+
+func TestHandleSetAlert_BelowDirection(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, email, "INFY below 1300")
+	if !strings.Contains(result, "Alert set") {
+		t.Errorf("expected 'Alert set', got: %s", result)
+	}
+	if !strings.Contains(result, "below") {
+		t.Errorf("expected 'below', got: %s", result)
+	}
+}
+
+// ===========================================================================
+// handleAlerts — percentage direction display
+// ===========================================================================
+
+func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
+	email := "user@test.com"
+	store := alerts.NewStore(nil)
+	store.Add(email, "RELIANCE", "NSE", 256265, 5.0, alerts.DirectionDropPct)
+
+	mgr := newMockKiteManager()
+	mgr.alertStore = store
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleAlerts(42, email)
+	if !strings.Contains(result, "Active Alerts") {
+		t.Errorf("expected 'Active Alerts', got: %s", result)
+	}
+	if !strings.Contains(result, "drop_pct") {
+		t.Errorf("expected 'drop_pct' direction, got: %s", result)
+	}
+	if !strings.Contains(result, "5.00%") {
+		t.Errorf("expected '5.00%%', got: %s", result)
+	}
+}
+
+func TestHandleAlerts_MixedDirections(t *testing.T) {
+	email := "user@test.com"
+	store := alerts.NewStore(nil)
+	store.Add(email, "RELIANCE", "NSE", 256265, 2700, alerts.DirectionAbove)
+	store.Add(email, "INFY", "NSE", 408065, 3.5, alerts.DirectionRisePct)
+
+	mgr := newMockKiteManager()
+	mgr.alertStore = store
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleAlerts(42, email)
+	if !strings.Contains(result, "2700.00") {
+		t.Errorf("expected '2700.00', got: %s", result)
+	}
+	if !strings.Contains(result, "3.50%") {
+		t.Errorf("expected '3.50%%', got: %s", result)
+	}
+}
+
+func TestHandleAlerts_NoAlerts(t *testing.T) {
+	email := "user@test.com"
+	store := alerts.NewStore(nil)
+
+	mgr := newMockKiteManager()
+	mgr.alertStore = store
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleAlerts(42, email)
+	if !strings.Contains(result, "No active alerts") {
+		t.Errorf("expected 'No active alerts', got: %s", result)
+	}
+}
+
+// ===========================================================================
+// handleQuick — edge cases
+// ===========================================================================
+
+func TestHandleQuick_LimitBadPrice2(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleQuick(42, email, "RELIANCE 10 SELL LIMIT -50")
+}
+
+func TestHandleQuick_InvalidQuantity2(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleQuick(42, email, "RELIANCE abc BUY MARKET")
+}
+
+func TestHandleSell_LimitSuccess2(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleSell(42, email, "INFY 5 1600")
+}
+
+func TestHandleBuy_NegativePrice2(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleBuy(42, email, "RELIANCE 10 -500")
+}
+
+// ===========================================================================
+// ServeHTTP — callback query path
+// ===========================================================================
+
+func TestServeHTTP_CallbackQuery(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:   "cb-serv",
+			Data: "cancel_order",
+			Message: &tgbotapi.Message{
+				MessageID: 999,
+				Chat:      &tgbotapi.Chat{ID: 42},
+			},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:   "cb-unk",
+			Data: "unknown_action",
+			Message: &tgbotapi.Message{
+				MessageID: 998,
+				Chat:      &tgbotapi.Chat{ID: 42},
+			},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
+	mgr := newMockKiteManager()
+	// No registered users.
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:   "cb-unreg",
+			Data: "confirm_order",
+			Message: &tgbotapi.Message{
+				MessageID: 997,
+				Chat:      &tgbotapi.Chat{ID: 999},
+			},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:      "cb-nil",
+			Data:    "confirm_order",
+			Message: nil,
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// ===========================================================================
+// ServeHTTP — empty text message
+// ===========================================================================
+
+func TestServeHTTP_EmptyTextMessage(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	// No message should be sent for empty text.
+	if mock.bodyCount() > 0 {
+		t.Error("should not send message for empty text")
+	}
+}
+
+// ===========================================================================
+// ServeHTTP — rate limit exceeded
+// ===========================================================================
+
+func TestServeHTTP_RateLimitExceeded(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+	mgr.alertStore = alerts.NewStore(nil)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	// Fill up rate limit.
+	for i := 0; i < maxCommandsPerMinute; i++ {
+		h.allowCommand(42)
+	}
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/help",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// ===========================================================================
+// ServeHTTP — unknown command
+// ===========================================================================
+
+func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/start",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected help/start message to be sent")
+	}
+}
+
+// ===========================================================================
+// ServeHTTP — /watchlist command (backward compat for /prices)
+// ===========================================================================
+
+func TestServeHTTP_WatchlistCommand(t *testing.T) {
+	email := "user@test.com"
+	fakeAPI := newFakeKiteAPI()
+	defer fakeAPI.close()
+
+	fakeAPI.responses["/quote"] = map[string]interface{}{
+		"NSE:INFY": map[string]interface{}{
+			"last_price": 1500.0,
+			"ohlc": map[string]interface{}{
+				"open": 0.0, "high": 0.0, "low": 0.0, "close": 1480.0,
+			},
+		},
+	}
+
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+	mgr.apiKeys[email] = "key"
+	mgr.accessTokens[email] = "token"
+	mgr.tokenValid[email] = true
+
+	h, mock := newTestBotHandler(mgr)
+	h.kiteBaseURI = fakeAPI.server.URL
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/watchlist INFY",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected watchlist/prices message to be sent")
+	}
+}
+
+// ===========================================================================
+// handlePrices — edge cases
+// ===========================================================================
+
+func TestHandlePrices_AllWhitespace2(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	result := h.handlePrices(42, email, "  ,  ,  ")
+	if !strings.Contains(result, "No valid symbols") {
+		t.Errorf("expected 'No valid symbols', got: %s", result)
+	}
+}
+
+// ===========================================================================
+// cancelPendingOrder path
+// ===========================================================================
+
+func TestCancelPendingOrder(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:     email,
+		CreatedAt: time.Now(),
+	})
+
+	cq := &tgbotapi.CallbackQuery{
+		ID: "cb-cancel",
+		Message: &tgbotapi.Message{
+			MessageID: 800,
+			Chat:      &tgbotapi.Chat{ID: 42},
+		},
+	}
+
+	h.cancelPendingOrder(42, cq)
+
+	// Verify order was consumed.
+	if got := h.popPendingOrder(42); got != nil {
+		t.Error("expected pending order to be consumed after cancel")
+	}
+}
+
+func TestCancelPendingOrder_NilMessage(t *testing.T) {
+	mgr := newMockKiteManager()
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	cq := &tgbotapi.CallbackQuery{
+		ID:      "cb-cancel-nil",
+		Message: nil,
+	}
+
+	// Should not panic.
+	h.cancelPendingOrder(42, cq)
+}
+
+// ===========================================================================
+// handleSetAlert — percentage direction > 100% rejection
+// ===========================================================================
+
+func TestHandleSetAlert_PercentageOver100(t *testing.T) {
+	mgr := newMockKiteManager()
+	mgr.instrMgr = newTestInstrumentsManager(t)
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, "user@test.com", "RELIANCE drop_pct 150")
+	if !strings.Contains(result, "exceed 100%") {
+		t.Errorf("expected '100%%' error, got: %s", result)
+	}
+}
+
+func TestHandleSetAlert_PercentageValid(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, email, "RELIANCE rise_pct 5")
+	if !strings.Contains(result, "Alert set") {
+		t.Errorf("expected 'Alert set', got: %s", result)
+	}
+	if !strings.Contains(result, "5.00%") {
+		t.Errorf("expected '5.00%%', got: %s", result)
+	}
+	if !strings.Contains(result, "rise_pct") {
+		t.Errorf("expected 'rise_pct', got: %s", result)
+	}
+}
+
+// ===========================================================================
+// handleSetAlert — drop_pct direction with percentage display
+// ===========================================================================
+
+func TestHandleSetAlert_DropPct(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, email, "INFY drop_pct 3")
+	if !strings.Contains(result, "Alert set") {
+		t.Errorf("expected 'Alert set', got: %s", result)
+	}
+	if !strings.Contains(result, "3.00%") {
+		t.Errorf("expected '3.00%%', got: %s", result)
+	}
+}
+
+// ===========================================================================
+// handleSetAlert — BSE fallback path
+// ===========================================================================
+
+func TestHandleSetAlert_BSEFallback(t *testing.T) {
+	email := "user@test.com"
+	// Create instruments manager with only BSE instrument.
+	bseData := map[uint32]*instruments.Instrument{
+		500325: {
+			ID:              "BSE:RELIANCE",
+			InstrumentToken: 500325,
+			Tradingsymbol:   "RELIANCE",
+			Exchange:        "BSE",
+			Name:            "Reliance Industries",
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	im, err := instruments.New(instruments.Config{
+		TestData: bseData,
+		Logger:   logger,
+	})
+	if err != nil {
+		t.Fatalf("instruments.New failed: %v", err)
+	}
+
+	mgr := newMockKiteManager()
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = im
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	result := h.handleSetAlert(42, email, "RELIANCE above 2800")
+	if !strings.Contains(result, "Alert set") {
+		t.Errorf("expected 'Alert set', got: %s", result)
+	}
+	if !strings.Contains(result, "BSE") {
+		t.Errorf("expected 'BSE' in result (fallback), got: %s", result)
+	}
+}
+
+// ===========================================================================
+// handleMyWatchlist — items with target entry/exit and valid LTP
+// ===========================================================================
+
+func TestHandleMyWatchlist_WithTargets(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	store := watchlist.NewStore()
+	wlID, err := store.CreateWatchlist(email, "Targets WL")
+	if err != nil {
+		t.Fatalf("failed to create watchlist: %v", err)
+	}
+	_ = store.AddItem(email, wlID, &watchlist.WatchlistItem{
+		Exchange:      "NSE",
+		Tradingsymbol: "RELIANCE",
+		TargetEntry:   2600.0,
+		TargetExit:    3000.0,
+	})
+
+	// GetLTP in gokiteconnect v4.4.0 uses /quote endpoint (not /quote/ltp).
+	fakeAPI.responses["/quote"] = map[string]interface{}{
+		"NSE:RELIANCE": map[string]interface{}{
+			"last_price": 2800.0,
+		},
+	}
+
+	mgr := h.manager.(*mockKiteManager)
+	mgr.watchlistStore = store
+
+	result := h.handleMyWatchlist(42, email)
+	if !strings.Contains(result, "RELIANCE") {
+		t.Errorf("expected 'RELIANCE', got: %s", result)
+	}
+	if !strings.Contains(result, "2800.00") {
+		t.Errorf("expected LTP '2800.00', got: %s", result)
+	}
+	if !strings.Contains(result, "entry") {
+		t.Errorf("expected 'entry' target, got: %s", result)
+	}
+	if !strings.Contains(result, "exit") {
+		t.Errorf("expected 'exit' target, got: %s", result)
+	}
+}
+
+// ===========================================================================
+// ServeHTTP — /buy and /sell command integration (covers the nil-reply path)
+// ===========================================================================
+
+func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/buy RELIANCE 10",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected confirmation message to be sent")
+	}
+}
+
+func TestServeHTTP_SellCommandIntegration(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/sell INFY 5 1500",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected confirmation message to be sent")
+	}
+}
+
+func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/quick RELIANCE 10 BUY MARKET",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected confirmation message to be sent")
+	}
+}
+
+func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
+	email := "user@test.com"
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+	mgr.alertStore = alerts.NewStore(nil)
+	mgr.instrMgr = newTestInstrumentsManager(t)
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/setalert RELIANCE above 2700",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected alert set message to be sent")
+	}
+}
+
+func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
+	email := "user@test.com"
+	store := alerts.NewStore(nil)
+	store.Add(email, "RELIANCE", "NSE", 256265, 2700, alerts.DirectionAbove)
+
+	mgr := newMockKiteManager()
+	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
+	mgr.alertStore = store
+
+	h, mock := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Text: "/alerts",
+			Chat: &tgbotapi.Chat{ID: 42, Type: "private"},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if mock.bodyCount() == 0 {
+		t.Error("expected alerts message to be sent")
+	}
+}
+
+// ===========================================================================
+// handleOrderCommand — paper trading mode label in confirmation
+// ===========================================================================
+
+func TestHandleBuy_PaperTradingMode(t *testing.T) {
+	email := "user@test.com"
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dbPath := filepath.Join(t.TempDir(), "paper2.db")
+	paperDB, err := alerts.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	t.Cleanup(func() { paperDB.Close() })
+	ptStore := papertrading.NewStore(paperDB, logger)
+	ptStore.InitTables()
+	pe := papertrading.NewEngine(ptStore, logger)
+	pe.Enable(email, 10_00_000)
+
+	mgr := newMockKiteManager()
+	mgr.paperEngine = pe
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleBuy(42, email, "RELIANCE 10")
+}
+
+func TestHandleQuick_PaperTradingMode(t *testing.T) {
+	email := "user@test.com"
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dbPath := filepath.Join(t.TempDir(), "paper3.db")
+	paperDB, err := alerts.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	t.Cleanup(func() { paperDB.Close() })
+	ptStore := papertrading.NewStore(paperDB, logger)
+	ptStore.InitTables()
+	pe := papertrading.NewEngine(ptStore, logger)
+	pe.Enable(email, 10_00_000)
+
+	mgr := newMockKiteManager()
+	mgr.paperEngine = pe
+
+	h, _ := newTestBotHandler(mgr)
+	defer h.Shutdown()
+
+	h.handleQuick(42, email, "INFY 5 BUY LIMIT 1500")
+}
+
+// ===========================================================================
+// ServeHTTP — confirm_order callback integration
+// ===========================================================================
+
+func TestServeHTTP_ConfirmOrderCallback(t *testing.T) {
+	email := "user@test.com"
+	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
+	defer h.Shutdown()
+	defer fakeAPI.close()
+
+	fakeAPI.responses["/orders/regular"] = map[string]interface{}{
+		"order_id": "ORD-CB-INT",
+	}
+
+	h.setPendingOrder(42, &pendingOrder{
+		Email:           email,
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        5,
+		OrderType:       "MARKET",
+		Product:         "CNC",
+		CreatedAt:       time.Now(),
+	})
+
+	update := tgbotapi.Update{
+		CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:   "cb-confirm-int",
+			Data: "confirm_order",
+			From: &tgbotapi.User{ID: 42},
+			Message: &tgbotapi.Message{
+				MessageID: 1001,
+				Chat:      &tgbotapi.Chat{ID: 42},
+			},
+		},
+	}
+	body, _ := json.Marshal(update)
+	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
 	}
 }

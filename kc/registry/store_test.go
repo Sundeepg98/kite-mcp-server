@@ -2,8 +2,12 @@ package registry
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 )
 
 func TestRegisterAndGet(t *testing.T) {
@@ -550,4 +554,534 @@ func TestRegisterNormalizesEmail(t *testing.T) {
 	if got.AssignedTo != "user@example.com" {
 		t.Errorf("AssignedTo = %q, want %q", got.AssignedTo, "user@example.com")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Helper: create a temp DB for persistence tests.
+// ---------------------------------------------------------------------------
+
+func openTestDB(t *testing.T) *alerts.DB {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := alerts.OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// ---------------------------------------------------------------------------
+// LoadFromDB — full path (non-nil DB with data)
+// ---------------------------------------------------------------------------
+
+func TestLoadFromDB_WithData(t *testing.T) {
+	db := openTestDB(t)
+
+	// Persist entries via DB directly.
+	now := time.Now().Truncate(time.Second)
+	lastUsed := now.Add(-time.Hour)
+	if err := db.SaveRegistryEntry(&alerts.RegistryDBEntry{
+		ID:           "app-load-1",
+		APIKey:       "load_key_1",
+		APISecret:    "load_secret_1",
+		AssignedTo:   "loader@example.com",
+		Label:        "Loaded App",
+		Status:       StatusActive,
+		RegisteredBy: "admin@example.com",
+		Source:       SourceAdmin,
+		LastUsedAt:   &lastUsed,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("SaveRegistryEntry failed: %v", err)
+	}
+
+	if err := db.SaveRegistryEntry(&alerts.RegistryDBEntry{
+		ID:         "app-load-2",
+		APIKey:     "load_key_2",
+		APISecret:  "load_secret_2",
+		AssignedTo: "loader2@example.com",
+		Label:      "Loaded App 2",
+		Status:     StatusDisabled,
+		Source:     SourceSelfProvisioned,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("SaveRegistryEntry failed: %v", err)
+	}
+
+	// Create a fresh store and load from DB.
+	s := New()
+	s.SetDB(db)
+	if err := s.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB failed: %v", err)
+	}
+
+	if s.Count() != 2 {
+		t.Fatalf("Count = %d, want 2", s.Count())
+	}
+
+	got, ok := s.Get("app-load-1")
+	if !ok {
+		t.Fatal("app-load-1 not found after LoadFromDB")
+	}
+	if got.APIKey != "load_key_1" {
+		t.Errorf("APIKey = %q, want %q", got.APIKey, "load_key_1")
+	}
+	if got.AssignedTo != "loader@example.com" {
+		t.Errorf("AssignedTo = %q, want %q", got.AssignedTo, "loader@example.com")
+	}
+	if got.Label != "Loaded App" {
+		t.Errorf("Label = %q, want %q", got.Label, "Loaded App")
+	}
+	if got.Status != StatusActive {
+		t.Errorf("Status = %q, want %q", got.Status, StatusActive)
+	}
+	if got.Source != SourceAdmin {
+		t.Errorf("Source = %q, want %q", got.Source, SourceAdmin)
+	}
+	if got.LastUsedAt == nil {
+		t.Error("LastUsedAt should be set")
+	}
+
+	got2, ok := s.Get("app-load-2")
+	if !ok {
+		t.Fatal("app-load-2 not found after LoadFromDB")
+	}
+	if got2.Status != StatusDisabled {
+		t.Errorf("Status = %q, want %q", got2.Status, StatusDisabled)
+	}
+}
+
+func TestLoadFromDB_EmptyDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	if err := s.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB on empty DB should not fail: %v", err)
+	}
+	if s.Count() != 0 {
+		t.Errorf("Count = %d, want 0", s.Count())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Register — with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestRegister_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	reg := &AppRegistration{
+		ID:           "app-persist",
+		APIKey:       "persist_key_abc",
+		APISecret:    "persist_secret_xyz",
+		AssignedTo:   "persist@example.com",
+		Label:        "Persisted",
+		RegisteredBy: "admin@example.com",
+		Source:       SourceSelfProvisioned,
+	}
+	if err := s.Register(reg); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	// Verify it was persisted by loading from DB into a new store.
+	s2 := New()
+	s2.SetDB(db)
+	if err := s2.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB failed: %v", err)
+	}
+	got, ok := s2.Get("app-persist")
+	if !ok {
+		t.Fatal("app-persist not found in DB")
+	}
+	if got.APIKey != "persist_key_abc" {
+		t.Errorf("APIKey = %q, want %q", got.APIKey, "persist_key_abc")
+	}
+	if got.Source != SourceSelfProvisioned {
+		t.Errorf("Source = %q, want %q", got.Source, SourceSelfProvisioned)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Register — with explicit status/source (no defaults)
+// ---------------------------------------------------------------------------
+
+func TestRegister_ExplicitStatusAndSource(t *testing.T) {
+	s := New()
+	reg := &AppRegistration{
+		ID:        "app-explicit",
+		APIKey:    "key1",
+		APISecret: "secret1",
+		Status:    StatusDisabled,
+		Source:    SourceMigrated,
+	}
+	if err := s.Register(reg); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	got, _ := s.Get("app-explicit")
+	if got.Status != StatusDisabled {
+		t.Errorf("Status = %q, want %q", got.Status, StatusDisabled)
+	}
+	if got.Source != SourceMigrated {
+		t.Errorf("Source = %q, want %q", got.Source, SourceMigrated)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Update — with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestUpdate_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	s.Register(&AppRegistration{
+		ID: "app-upd", APIKey: "upd_key", APISecret: "upd_secret",
+	})
+
+	if err := s.Update("app-upd", "updated@example.com", "Updated Label", StatusActive); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Verify in DB.
+	s2 := New()
+	s2.SetDB(db)
+	s2.LoadFromDB()
+	got, _ := s2.Get("app-upd")
+	if got.AssignedTo != "updated@example.com" {
+		t.Errorf("AssignedTo = %q, want %q", got.AssignedTo, "updated@example.com")
+	}
+	if got.Label != "Updated Label" {
+		t.Errorf("Label = %q, want %q", got.Label, "Updated Label")
+	}
+}
+
+func TestUpdate_EmptyFieldsNoChange(t *testing.T) {
+	s := New()
+	s.Register(&AppRegistration{
+		ID: "app-noop", APIKey: "k", APISecret: "s",
+		AssignedTo: "orig@example.com", Label: "Original", Status: StatusActive,
+	})
+
+	// Passing empty fields should not change anything except UpdatedAt.
+	if err := s.Update("app-noop", "", "", ""); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	got, _ := s.Get("app-noop")
+	if got.AssignedTo != "orig@example.com" {
+		t.Errorf("AssignedTo = %q, want %q (should not change)", got.AssignedTo, "orig@example.com")
+	}
+	if got.Label != "Original" {
+		t.Errorf("Label = %q, want %q (should not change)", got.Label, "Original")
+	}
+	if got.Status != StatusActive {
+		t.Errorf("Status = %q, want %q (should not change)", got.Status, StatusActive)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UpdateLastUsedAt — with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestUpdateLastUsedAt_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	s.Register(&AppRegistration{
+		ID: "app-lu", APIKey: "lu_key", APISecret: "lu_secret",
+	})
+
+	s.UpdateLastUsedAt("lu_key")
+
+	// Verify in DB.
+	s2 := New()
+	s2.SetDB(db)
+	s2.LoadFromDB()
+	got, _ := s2.Get("app-lu")
+	if got.LastUsedAt == nil {
+		t.Error("LastUsedAt should be set in DB after UpdateLastUsedAt")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MarkStatus — with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestMarkStatus_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	s.Register(&AppRegistration{
+		ID: "app-ms", APIKey: "ms_key", APISecret: "ms_secret",
+	})
+
+	s.MarkStatus("ms_key", StatusInvalid)
+
+	// Verify in DB.
+	s2 := New()
+	s2.SetDB(db)
+	s2.LoadFromDB()
+	got, _ := s2.Get("app-ms")
+	if got.Status != StatusInvalid {
+		t.Errorf("Status = %q, want %q", got.Status, StatusInvalid)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Delete — with DB persistence
+// ---------------------------------------------------------------------------
+
+func TestDelete_PersistsToDB(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.Default())
+
+	s.Register(&AppRegistration{
+		ID: "app-del", APIKey: "del_key", APISecret: "del_secret",
+	})
+
+	if err := s.Delete("app-del"); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	// Verify in DB.
+	s2 := New()
+	s2.SetDB(db)
+	s2.LoadFromDB()
+	if s2.Count() != 0 {
+		t.Errorf("Count = %d, want 0 after delete", s2.Count())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetByEmail — multiple entries, picks most recent UpdatedAt
+// ---------------------------------------------------------------------------
+
+func TestGetByEmail_PicksMostRecentUpdate(t *testing.T) {
+	s := New()
+
+	// Register two entries for the same email. The second one will have a later UpdatedAt.
+	s.Register(&AppRegistration{
+		ID: "app-old", APIKey: "key_old", APISecret: "secret_old",
+		AssignedTo: "multi@example.com", Label: "Old One",
+	})
+	// Small sleep to ensure different timestamps.
+	time.Sleep(2 * time.Millisecond)
+	s.Register(&AppRegistration{
+		ID: "app-new", APIKey: "key_new", APISecret: "secret_new",
+		AssignedTo: "multi@example.com", Label: "New One",
+	})
+
+	got, ok := s.GetByEmail("multi@example.com")
+	if !ok {
+		t.Fatal("GetByEmail returned not found")
+	}
+	if got.ID != "app-new" {
+		t.Errorf("ID = %q, want %q (should pick most recent)", got.ID, "app-new")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DB error logging (logger nil path — no logger set, db operations fail silently)
+// ---------------------------------------------------------------------------
+
+func TestRegister_DBErrorNoLogger(t *testing.T) {
+	db := openTestDB(t)
+	// Close the DB to force errors.
+	db.Close()
+
+	s := New()
+	s.SetDB(db)
+	// No logger set — should not panic even when DB operations fail.
+
+	reg := &AppRegistration{
+		ID: "app-dberr", APIKey: "k", APISecret: "s",
+	}
+	// Register should succeed in-memory even if DB fails.
+	if err := s.Register(reg); err != nil {
+		t.Fatalf("Register should succeed in-memory: %v", err)
+	}
+	if s.Count() != 1 {
+		t.Errorf("Count = %d, want 1", s.Count())
+	}
+}
+
+func TestUpdate_DBErrorNoLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.Register(&AppRegistration{
+		ID: "app-dberr2", APIKey: "k", APISecret: "s",
+	})
+	db.Close()
+	// No logger set — Update should not panic when DB fails.
+	if err := s.Update("app-dberr2", "new@example.com", "", ""); err != nil {
+		t.Fatalf("Update should succeed in-memory: %v", err)
+	}
+}
+
+func TestUpdateLastUsedAt_DBErrorNoLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.Register(&AppRegistration{
+		ID: "app-dberr3", APIKey: "k3", APISecret: "s",
+	})
+	db.Close()
+	// Should not panic.
+	s.UpdateLastUsedAt("k3")
+}
+
+func TestMarkStatus_DBErrorNoLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.Register(&AppRegistration{
+		ID: "app-dberr4", APIKey: "k4", APISecret: "s",
+	})
+	db.Close()
+	// Should not panic.
+	s.MarkStatus("k4", StatusInvalid)
+}
+
+func TestDelete_DBErrorNoLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.Register(&AppRegistration{
+		ID: "app-dberr5", APIKey: "k5", APISecret: "s",
+	})
+	db.Close()
+	// Should not panic — in-memory delete should still succeed.
+	if err := s.Delete("app-dberr5"); err != nil {
+		t.Fatalf("Delete should succeed in-memory: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DB error with logger (errors logged but not returned)
+// ---------------------------------------------------------------------------
+
+func TestRegister_DBErrorWithLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	// Close DB to force write failure.
+	db.Close()
+
+	// Should succeed in-memory, logging the DB error.
+	reg := &AppRegistration{
+		ID: "app-dblog", APIKey: "k", APISecret: "s",
+	}
+	if err := s.Register(reg); err != nil {
+		t.Fatalf("Register should succeed in-memory: %v", err)
+	}
+}
+
+func TestDelete_DBErrorWithLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	s.Register(&AppRegistration{
+		ID: "app-dblog2", APIKey: "k", APISecret: "s",
+	})
+	db.Close()
+
+	// Should succeed in-memory, logging the DB error.
+	if err := s.Delete("app-dblog2"); err != nil {
+		t.Fatalf("Delete should succeed in-memory: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// LoadFromDB — DB error path
+// ---------------------------------------------------------------------------
+
+func TestLoadFromDB_DBError(t *testing.T) {
+	db := openTestDB(t)
+	db.Close() // Close to force errors.
+
+	s := New()
+	s.SetDB(db)
+	err := s.LoadFromDB()
+	if err == nil {
+		t.Fatal("LoadFromDB should return error with closed DB")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Update — DB error with logger (exercises the logging branch)
+// ---------------------------------------------------------------------------
+
+func TestUpdate_DBErrorWithLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	s.Register(&AppRegistration{
+		ID: "app-uplog", APIKey: "k", APISecret: "s",
+	})
+	db.Close()
+
+	// Should succeed in-memory, logging the DB error.
+	if err := s.Update("app-uplog", "new@example.com", "", ""); err != nil {
+		t.Fatalf("Update should succeed in-memory: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UpdateLastUsedAt — DB error with logger
+// ---------------------------------------------------------------------------
+
+func TestUpdateLastUsedAt_DBErrorWithLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	s.Register(&AppRegistration{
+		ID: "app-lulog", APIKey: "lulog_key", APISecret: "s",
+	})
+	db.Close()
+
+	// Should not panic.
+	s.UpdateLastUsedAt("lulog_key")
+}
+
+// ---------------------------------------------------------------------------
+// MarkStatus — DB error with logger
+// ---------------------------------------------------------------------------
+
+func TestMarkStatus_DBErrorWithLogger(t *testing.T) {
+	db := openTestDB(t)
+	s := New()
+	s.SetDB(db)
+	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
+	s.Register(&AppRegistration{
+		ID: "app-mslog", APIKey: "mslog_key", APISecret: "s",
+	})
+	db.Close()
+
+	// Should not panic.
+	s.MarkStatus("mslog_key", StatusInvalid)
 }
