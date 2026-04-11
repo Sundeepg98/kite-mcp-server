@@ -3,10 +3,19 @@ package app
 import (
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
 // testLogger creates a discard logger for tests
@@ -201,4 +210,409 @@ func TestDeriveAggregateID(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ===========================================================================
+// initStatusPageTemplate tests
+// ===========================================================================
+
+func TestInitStatusPageTemplate_Success(t *testing.T) {
+	app := NewApp(testLogger())
+	err := app.initStatusPageTemplate()
+	// Should succeed since templates are embedded
+	assert.NoError(t, err)
+	assert.NotNil(t, app.statusTemplate)
+	assert.NotNil(t, app.landingTemplate)
+	assert.NotNil(t, app.legalTemplate)
+}
+
+// ===========================================================================
+// serveLegalPages tests
+// ===========================================================================
+
+func TestServeLegalPages_NilTemplate(t *testing.T) {
+	app := NewApp(testLogger())
+	app.legalTemplate = nil
+	mux := http.NewServeMux()
+	// Should not panic
+	app.serveLegalPages(mux)
+	// /terms should not be registered
+	req := httptest.NewRequest(http.MethodGet, "/terms", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestServeLegalPages_WithTemplate(t *testing.T) {
+	app := NewApp(testLogger())
+	err := app.initStatusPageTemplate()
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	app.serveLegalPages(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/terms", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), "Terms of Service")
+
+	req2 := httptest.NewRequest(http.MethodGet, "/privacy", nil)
+	rec2 := httptest.NewRecorder()
+	mux.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusOK, rec2.Code)
+	assert.Contains(t, rec2.Body.String(), "Privacy Policy")
+}
+
+// ===========================================================================
+// serveStatusPage tests
+// ===========================================================================
+
+func TestServeStatusPage_NonRootPath(t *testing.T) {
+	app := NewApp(testLogger())
+	_ = app.initStatusPageTemplate()
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Page Not Found")
+}
+
+func TestServeStatusPage_Root_NoTemplates(t *testing.T) {
+	app := NewApp(testLogger())
+	app.landingTemplate = nil
+	app.statusTemplate = nil
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Kite MCP Server")
+}
+
+func TestServeStatusPage_Root_WithLandingTemplate(t *testing.T) {
+	app := NewApp(testLogger())
+	err := app.initStatusPageTemplate()
+	require.NoError(t, err)
+	app.Config.AppMode = "http"
+	app.Version = "v1.2.3"
+
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+}
+
+// ===========================================================================
+// provisionUser adapter tests
+// ===========================================================================
+
+func TestProvisionUser_NilUserStore(t *testing.T) {
+	adapter := &kiteExchangerAdapter{
+		userStore: nil,
+		logger:    testLogger(),
+	}
+	err := adapter.provisionUser("test@example.com", "UID123", "Test User")
+	assert.NoError(t, err)
+}
+
+func TestProvisionUser_SuspendedUser(t *testing.T) {
+	store := users.NewStore()
+	store.EnsureUser("suspended@example.com", "", "", "self")
+	_ = store.UpdateStatus("suspended@example.com", users.StatusSuspended)
+
+	adapter := &kiteExchangerAdapter{
+		userStore: store,
+		logger:    testLogger(),
+	}
+	err := adapter.provisionUser("suspended@example.com", "", "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "suspended")
+}
+
+func TestProvisionUser_OffboardedUser(t *testing.T) {
+	store := users.NewStore()
+	store.EnsureUser("offboarded@example.com", "", "", "self")
+	_ = store.UpdateStatus("offboarded@example.com", users.StatusOffboarded)
+
+	adapter := &kiteExchangerAdapter{
+		userStore: store,
+		logger:    testLogger(),
+	}
+	err := adapter.provisionUser("offboarded@example.com", "", "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "offboarded")
+}
+
+func TestProvisionUser_NewUser(t *testing.T) {
+	store := users.NewStore()
+	adapter := &kiteExchangerAdapter{
+		userStore: store,
+		logger:    testLogger(),
+	}
+	err := adapter.provisionUser("new@example.com", "UID789", "New User")
+	assert.NoError(t, err)
+
+	u, ok := store.Get("new@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "new@example.com", u.Email)
+	assert.Equal(t, "UID789", u.KiteUID)
+}
+
+// ===========================================================================
+// GetCredentials adapter tests
+// ===========================================================================
+
+func TestGetCredentials_FromCredentialStore(t *testing.T) {
+	credStore := kc.NewKiteCredentialStore()
+	credStore.Set("user@example.com", &kc.KiteCredentialEntry{
+		APIKey:    "per-user-key",
+		APISecret: "per-user-secret",
+	})
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		credentialStore: credStore,
+		logger:          testLogger(),
+	}
+	key, secret, ok := adapter.GetCredentials("user@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "per-user-key", key)
+	assert.Equal(t, "per-user-secret", secret)
+}
+
+func TestGetCredentials_FallbackToGlobal(t *testing.T) {
+	credStore := kc.NewKiteCredentialStore()
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		credentialStore: credStore,
+		logger:          testLogger(),
+	}
+	key, secret, ok := adapter.GetCredentials("unknown@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "global-key", key)
+	assert.Equal(t, "global-secret", secret)
+}
+
+func TestGetCredentials_NoCredentials(t *testing.T) {
+	credStore := kc.NewKiteCredentialStore()
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "",
+		apiSecret:       "",
+		credentialStore: credStore,
+		logger:          testLogger(),
+	}
+	_, _, ok := adapter.GetCredentials("unknown@example.com")
+	assert.False(t, ok)
+}
+
+// ===========================================================================
+// GetSecretByAPIKey adapter tests
+// ===========================================================================
+
+func TestGetSecretByAPIKey_Found(t *testing.T) {
+	credStore := kc.NewKiteCredentialStore()
+	credStore.Set("user@example.com", &kc.KiteCredentialEntry{
+		APIKey:    "mykey",
+		APISecret: "mysecret",
+	})
+	adapter := &kiteExchangerAdapter{
+		credentialStore: credStore,
+		logger:          testLogger(),
+	}
+	secret, ok := adapter.GetSecretByAPIKey("mykey")
+	assert.True(t, ok)
+	assert.Equal(t, "mysecret", secret)
+}
+
+func TestGetSecretByAPIKey_NotFound(t *testing.T) {
+	credStore := kc.NewKiteCredentialStore()
+	adapter := &kiteExchangerAdapter{
+		credentialStore: credStore,
+		logger:          testLogger(),
+	}
+	_, ok := adapter.GetSecretByAPIKey("nonexistent")
+	assert.False(t, ok)
+}
+
+// ===========================================================================
+// registryAdapter tests
+// ===========================================================================
+
+func TestRegistryAdapter_HasEntries_Empty(t *testing.T) {
+	store := registry.New()
+	adapter := &registryAdapter{store: store}
+	assert.False(t, adapter.HasEntries())
+}
+
+func TestRegistryAdapter_HasEntries_WithData(t *testing.T) {
+	store := registry.New()
+	_ = store.Register(&registry.AppRegistration{
+		ID:        "test-1",
+		APIKey:    "key123",
+		APISecret: "secret123",
+	})
+	adapter := &registryAdapter{store: store}
+	assert.True(t, adapter.HasEntries())
+}
+
+func TestRegistryAdapter_GetByEmail_NotFound(t *testing.T) {
+	store := registry.New()
+	adapter := &registryAdapter{store: store}
+	_, found := adapter.GetByEmail("nobody@example.com")
+	assert.False(t, found)
+}
+
+func TestRegistryAdapter_GetByEmail_Found(t *testing.T) {
+	store := registry.New()
+	_ = store.Register(&registry.AppRegistration{
+		ID:           "test-1",
+		APIKey:       "key123",
+		APISecret:    "secret123",
+		AssignedTo:   "user@example.com",
+		RegisteredBy: "admin@example.com",
+	})
+	adapter := &registryAdapter{store: store}
+	entry, found := adapter.GetByEmail("user@example.com")
+	assert.True(t, found)
+	assert.Equal(t, "key123", entry.APIKey)
+	assert.Equal(t, "secret123", entry.APISecret)
+	assert.Equal(t, "admin@example.com", entry.RegisteredBy)
+}
+
+func TestRegistryAdapter_GetSecretByAPIKey_NotFound(t *testing.T) {
+	store := registry.New()
+	adapter := &registryAdapter{store: store}
+	_, ok := adapter.GetSecretByAPIKey("nonexistent")
+	assert.False(t, ok)
+}
+
+func TestRegistryAdapter_GetSecretByAPIKey_Found(t *testing.T) {
+	store := registry.New()
+	_ = store.Register(&registry.AppRegistration{
+		ID:        "test-1",
+		APIKey:    "key123",
+		APISecret: "secret123",
+	})
+	adapter := &registryAdapter{store: store}
+	secret, ok := adapter.GetSecretByAPIKey("key123")
+	assert.True(t, ok)
+	assert.Equal(t, "secret123", secret)
+}
+
+// ===========================================================================
+// signerAdapter tests
+// ===========================================================================
+
+func TestSignerAdapter_RoundTrip(t *testing.T) {
+	signer, err := kc.NewSessionSigner()
+	require.NoError(t, err)
+	adapter := &signerAdapter{signer: signer}
+
+	signed := adapter.Sign("test-data")
+	assert.NotEmpty(t, signed)
+	assert.NotEqual(t, "test-data", signed)
+
+	original, err := adapter.Verify(signed)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-data", original)
+}
+
+func TestSignerAdapter_VerifyInvalid(t *testing.T) {
+	signer, err := kc.NewSessionSigner()
+	require.NoError(t, err)
+	adapter := &signerAdapter{signer: signer}
+
+	_, err = adapter.Verify("invalid-signed-data")
+	assert.Error(t, err)
+}
+
+// ===========================================================================
+// briefingTokenAdapter tests
+// ===========================================================================
+
+func TestBriefingTokenAdapter_GetToken_NotFound(t *testing.T) {
+	store := kc.NewKiteTokenStore()
+	adapter := &briefingTokenAdapter{store: store}
+
+	_, _, ok := adapter.GetToken("nobody@example.com")
+	assert.False(t, ok)
+}
+
+func TestBriefingTokenAdapter_GetToken_Found(t *testing.T) {
+	store := kc.NewKiteTokenStore()
+	store.Set("user@example.com", &kc.KiteTokenEntry{
+		AccessToken: "test-token",
+		UserID:      "UID123",
+	})
+	adapter := &briefingTokenAdapter{store: store}
+
+	token, storedAt, ok := adapter.GetToken("user@example.com")
+	assert.True(t, ok)
+	assert.Equal(t, "test-token", token)
+	assert.False(t, storedAt.IsZero())
+}
+
+func TestBriefingTokenAdapter_IsExpired(t *testing.T) {
+	store := kc.NewKiteTokenStore()
+	adapter := &briefingTokenAdapter{store: store}
+
+	// A recently stored token should not be expired
+	assert.False(t, adapter.IsExpired(time.Now()))
+}
+
+// ===========================================================================
+// briefingCredAdapter tests
+// ===========================================================================
+
+func TestBriefingCredAdapter_GetAPIKey(t *testing.T) {
+	instrMgr, err := instruments.New(instruments.Config{
+		Logger:   testLogger(),
+		TestData: map[uint32]*instruments.Instrument{},
+	})
+	require.NoError(t, err)
+
+	mgr, err := kc.New(kc.Config{
+		APIKey:             "test_key",
+		APISecret:          "test_secret",
+		Logger:             testLogger(),
+		DevMode:            true,
+		InstrumentsManager: instrMgr,
+	})
+	require.NoError(t, err)
+	defer mgr.Shutdown()
+
+	adapter := &briefingCredAdapter{manager: mgr}
+	// For a user with no per-user credentials, returns the global key
+	key := adapter.GetAPIKey("someone@example.com")
+	assert.Equal(t, "test_key", key)
+}
+
+// ===========================================================================
+// instrumentsFreezeAdapter tests
+// ===========================================================================
+
+func TestInstrumentsFreezeAdapter_NotFound(t *testing.T) {
+	instrMgr, err := instruments.New(instruments.Config{
+		Logger:   testLogger(),
+		TestData: map[uint32]*instruments.Instrument{},
+	})
+	require.NoError(t, err)
+
+	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
+	_, ok := adapter.GetFreezeQuantity("NSE", "RELIANCE")
+	assert.False(t, ok)
 }
