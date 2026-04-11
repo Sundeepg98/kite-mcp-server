@@ -1161,7 +1161,8 @@ func (m *Manager) extractCallbackParams(r *http.Request) (kiteRequestToken, mcpS
 
 // TemplateData holds data for template rendering
 type TemplateData struct {
-	Title string
+	Title       string
+	RedirectURL string // optional: used by login_success.html for auto-redirect
 }
 
 // renderSuccessTemplate renders the success page template
