@@ -112,6 +112,7 @@ type Guard struct {
 	db                  *alerts.DB
 	logger              *slog.Logger
 	autoFreezeNotifier  AutoFreezeNotifier
+	clock               func() time.Time // defaults to time.Now
 	// Global trading freeze — blocks ALL users from placing orders.
 	globalFrozen   bool
 	globalFrozenBy string
@@ -125,8 +126,12 @@ func NewGuard(logger *slog.Logger) *Guard {
 		trackers: make(map[string]*UserTracker),
 		limits:   make(map[string]*UserLimits),
 		logger:   logger,
+		clock:    time.Now,
 	}
 }
+
+// SetClock overrides the time source (for testing).
+func (g *Guard) SetClock(c func() time.Time) { g.clock = c }
 
 // SetDB sets the SQLite database for persisting risk limits.
 func (g *Guard) SetDB(db *alerts.DB) { g.db = db }
@@ -619,7 +624,7 @@ func (g *Guard) getOrCreateLimits(email string) *UserLimits {
 // maybeResetDay resets the daily counter if we've crossed 9:15 AM IST since last reset.
 func (g *Guard) maybeResetDay(t *UserTracker) {
 	ist, _ := time.LoadLocation("Asia/Kolkata")
-	now := time.Now().In(ist)
+	now := g.clock().In(ist)
 	resetTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
 	// If before 9:15 today, use yesterday's 9:15
 	if now.Before(resetTime) {

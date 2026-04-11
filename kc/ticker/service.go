@@ -116,73 +116,95 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 	return nil
 }
 
+// tickerSubscriber is the subset of kiteticker.Ticker used by onConnect to
+// resubscribe tokens after a WebSocket reconnection. Extracted as an interface
+// so callback logic can be unit-tested without a real WebSocket.
+type tickerSubscriber interface {
+	Subscribe(tokens []uint32) error
+	SetMode(mode kiteticker.Mode, tokens []uint32) error
+}
+
 // wireCallbacks sets up all WebSocket event handlers (OnConnect, OnClose,
 // OnError, OnTick, OnReconnect, OnNoReconnect) on the given kiteticker.Ticker,
 // binding them to the provided UserTicker. This is shared between Start and
 // UpdateToken to eliminate callback-wiring duplication.
 func (s *Service) wireCallbacks(ut *UserTicker, t *kiteticker.Ticker) {
+	t.OnConnect(func() { s.onConnect(ut, t) })
+	t.OnTick(func(tick models.Tick) { s.onTickReceived(ut.Email, tick) })
+	t.OnError(func(err error) { s.onError(ut.Email, err) })
+	t.OnClose(func(code int, reason string) { s.onClose(ut, code, reason) })
+	t.OnReconnect(func(attempt int, delay time.Duration) { s.onReconnect(ut.Email, attempt, delay) })
+	t.OnNoReconnect(func(attempt int) { s.onNoReconnect(ut, attempt) })
+}
+
+// onConnect handles the WebSocket connected event: marks the UserTicker as
+// connected and resubscribes any previously subscribed tokens.
+func (s *Service) onConnect(ut *UserTicker, sub tickerSubscriber) {
 	email := ut.Email
 
-	t.OnConnect(func() {
-		ut.mu.Lock()
-		ut.Connected = true
-		ut.mu.Unlock()
-		s.logger.Info("Ticker connected", "email", email)
+	ut.mu.Lock()
+	ut.Connected = true
+	ut.mu.Unlock()
+	s.logger.Info("Ticker connected", "email", email)
 
-		// Resubscribe to previously subscribed tokens on reconnect
+	// Resubscribe to previously subscribed tokens on reconnect
+	ut.mu.RLock()
+	tokens := make([]uint32, 0, len(ut.Subscribed))
+	for token := range ut.Subscribed {
+		tokens = append(tokens, token)
+	}
+	ut.mu.RUnlock()
+
+	if len(tokens) > 0 {
+		if err := sub.Subscribe(tokens); err != nil {
+			s.logger.Error("Failed to resubscribe on connect", "email", email, "error", err)
+		}
+		// Restore modes per-token group
+		modeTokens := make(map[kiteticker.Mode][]uint32)
 		ut.mu.RLock()
-		tokens := make([]uint32, 0, len(ut.Subscribed))
-		for token := range ut.Subscribed {
-			tokens = append(tokens, token)
+		for token, mode := range ut.Subscribed {
+			modeTokens[mode] = append(modeTokens[mode], token)
 		}
 		ut.mu.RUnlock()
-
-		if len(tokens) > 0 {
-			if err := t.Subscribe(tokens); err != nil {
-				s.logger.Error("Failed to resubscribe on connect", "email", email, "error", err)
-			}
-			// Restore modes per-token group
-			modeTokens := make(map[kiteticker.Mode][]uint32)
-			ut.mu.RLock()
-			for token, mode := range ut.Subscribed {
-				modeTokens[mode] = append(modeTokens[mode], token)
-			}
-			ut.mu.RUnlock()
-			for mode, toks := range modeTokens {
-				if err := t.SetMode(mode, toks); err != nil {
-					s.logger.Error("Failed to restore mode on connect", "email", email, "mode", mode, "error", err)
-				}
+		for mode, toks := range modeTokens {
+			if err := sub.SetMode(mode, toks); err != nil {
+				s.logger.Error("Failed to restore mode on connect", "email", email, "mode", mode, "error", err)
 			}
 		}
-	})
+	}
+}
 
-	t.OnTick(func(tick models.Tick) {
-		if s.onTick != nil {
-			s.onTick(email, tick)
-		}
-	})
+// onTickReceived dispatches an incoming tick to the global OnTick callback.
+func (s *Service) onTickReceived(email string, tick models.Tick) {
+	if s.onTick != nil {
+		s.onTick(email, tick)
+	}
+}
 
-	t.OnError(func(err error) {
-		s.logger.Error("Ticker error", "email", email, "error", err)
-	})
+// onError logs a WebSocket error.
+func (s *Service) onError(email string, err error) {
+	s.logger.Error("Ticker error", "email", email, "error", err)
+}
 
-	t.OnClose(func(code int, reason string) {
-		ut.mu.Lock()
-		ut.Connected = false
-		ut.mu.Unlock()
-		s.logger.Info("Ticker closed", "email", email, "code", code, "reason", reason)
-	})
+// onClose handles the WebSocket closed event.
+func (s *Service) onClose(ut *UserTicker, code int, reason string) {
+	ut.mu.Lock()
+	ut.Connected = false
+	ut.mu.Unlock()
+	s.logger.Info("Ticker closed", "email", ut.Email, "code", code, "reason", reason)
+}
 
-	t.OnReconnect(func(attempt int, delay time.Duration) {
-		s.logger.Info("Ticker reconnecting", "email", email, "attempt", attempt, "delay", delay)
-	})
+// onReconnect logs a WebSocket reconnection attempt.
+func (s *Service) onReconnect(email string, attempt int, delay time.Duration) {
+	s.logger.Info("Ticker reconnecting", "email", email, "attempt", attempt, "delay", delay)
+}
 
-	t.OnNoReconnect(func(attempt int) {
-		s.logger.Warn("Ticker gave up reconnecting", "email", email, "attempts", attempt)
-		ut.mu.Lock()
-		ut.Connected = false
-		ut.mu.Unlock()
-	})
+// onNoReconnect handles the event when the ticker gives up reconnecting.
+func (s *Service) onNoReconnect(ut *UserTicker, attempt int) {
+	s.logger.Warn("Ticker gave up reconnecting", "email", ut.Email, "attempts", attempt)
+	ut.mu.Lock()
+	ut.Connected = false
+	ut.mu.Unlock()
 }
 
 // Stop stops the ticker for the given user.

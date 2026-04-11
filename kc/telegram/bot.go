@@ -161,6 +161,11 @@ func (h *BotHandler) cleanupStaleEntries() {
 	h.pendingMu.Unlock()
 }
 
+// CleanupNow triggers an immediate cleanup of stale rate-limit and
+// pending-order entries. Exposed for testing the cleanup logic without
+// waiting for the background ticker.
+func (h *BotHandler) CleanupNow() { h.cleanupStaleEntries() }
+
 // Shutdown stops the background cleanup goroutine. It is safe to call
 // multiple times.
 func (h *BotHandler) Shutdown() {
