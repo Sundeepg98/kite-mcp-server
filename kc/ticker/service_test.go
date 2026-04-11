@@ -125,13 +125,16 @@ func TestTickerService_UpdateTokenNoTicker(t *testing.T) {
 // newTestUserTicker creates a UserTicker with a no-op cancel for testing.
 // The Ticker field uses a real kiteticker.New (required for wireCallbacks)
 // but we never call ServeWithContext so no WebSocket is opened.
+// The conn field defaults to the real ticker (same as production Start).
 func newTestUserTicker(email, apiKey, accessToken string, subs map[uint32]kiteticker.Mode) *UserTicker {
 	_, cancel := context.WithCancel(context.Background())
+	t := kiteticker.New(apiKey, accessToken)
 	return &UserTicker{
 		Email:       email,
 		APIKey:      apiKey,
 		AccessToken: accessToken,
-		Ticker:      kiteticker.New(apiKey, accessToken),
+		Ticker:      t,
+		conn:        t,
 		Cancel:      cancel,
 		StartedAt:   time.Now(),
 		Subscribed:  subs,

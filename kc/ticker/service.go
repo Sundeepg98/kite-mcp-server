@@ -40,6 +40,7 @@ type UserTicker struct {
 	Connected   bool
 	StartedAt   time.Time
 	Subscribed  map[uint32]kiteticker.Mode // token -> mode
+	conn        tickerConn                 // mockable subscribe/unsubscribe/setmode ops
 	mu          sync.RWMutex
 }
 
@@ -96,6 +97,7 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 		APIKey:      apiKey,
 		AccessToken: accessToken,
 		Ticker:      t,
+		conn:        t,
 		Cancel:      cancel,
 		StartedAt:   time.Now(),
 		Subscribed:  make(map[uint32]kiteticker.Mode),
@@ -124,12 +126,32 @@ type tickerSubscriber interface {
 	SetMode(mode kiteticker.Mode, tokens []uint32) error
 }
 
+// tickerConn abstracts the subscribe/unsubscribe/mode operations on a ticker
+// connection. The real *kiteticker.Ticker satisfies this. Stored on UserTicker
+// so tests can inject a mock without a WebSocket.
+type tickerConn interface {
+	Subscribe(tokens []uint32) error
+	Unsubscribe(tokens []uint32) error
+	SetMode(mode kiteticker.Mode, tokens []uint32) error
+}
+
+// callbackRegistrar abstracts the On* methods used by wireCallbacks to register
+// event handlers. The real *kiteticker.Ticker satisfies this interface.
+type callbackRegistrar interface {
+	OnConnect(f func())
+	OnTick(f func(models.Tick))
+	OnError(f func(error))
+	OnClose(f func(int, string))
+	OnReconnect(f func(int, time.Duration))
+	OnNoReconnect(f func(int))
+}
+
 // wireCallbacks sets up all WebSocket event handlers (OnConnect, OnClose,
-// OnError, OnTick, OnReconnect, OnNoReconnect) on the given kiteticker.Ticker,
+// OnError, OnTick, OnReconnect, OnNoReconnect) on the given callbackRegistrar,
 // binding them to the provided UserTicker. This is shared between Start and
 // UpdateToken to eliminate callback-wiring duplication.
-func (s *Service) wireCallbacks(ut *UserTicker, t *kiteticker.Ticker) {
-	t.OnConnect(func() { s.onConnect(ut, t) })
+func (s *Service) wireCallbacks(ut *UserTicker, t callbackRegistrar) {
+	t.OnConnect(func() { s.onConnect(ut, ut.conn) })
 	t.OnTick(func(tick models.Tick) { s.onTickReceived(ut.Email, tick) })
 	t.OnError(func(err error) { s.onError(ut.Email, err) })
 	t.OnClose(func(code int, reason string) { s.onClose(ut, code, reason) })
@@ -261,6 +283,7 @@ func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 		APIKey:      apiKey,
 		AccessToken: accessToken,
 		Ticker:      t,
+		conn:        t,
 		Cancel:      cancel,
 		StartedAt:   time.Now(),
 		Subscribed:  subs, // Set subscriptions BEFORE wiring OnConnect
@@ -305,10 +328,10 @@ func (s *Service) Subscribe(email string, tokens []uint32, mode kiteticker.Mode)
 	ut.mu.RUnlock()
 
 	if connected {
-		if err := ut.Ticker.Subscribe(tokens); err != nil {
+		if err := ut.conn.Subscribe(tokens); err != nil {
 			return fmt.Errorf("subscribe failed: %w", err)
 		}
-		if err := ut.Ticker.SetMode(mode, tokens); err != nil {
+		if err := ut.conn.SetMode(mode, tokens); err != nil {
 			return fmt.Errorf("set mode failed: %w", err)
 		}
 	}
@@ -341,7 +364,7 @@ func (s *Service) Unsubscribe(email string, tokens []uint32) error {
 	ut.mu.RUnlock()
 
 	if connected {
-		if err := ut.Ticker.Unsubscribe(tokens); err != nil {
+		if err := ut.conn.Unsubscribe(tokens); err != nil {
 			return fmt.Errorf("unsubscribe failed: %w", err)
 		}
 	}
