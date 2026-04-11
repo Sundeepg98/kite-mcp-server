@@ -24,6 +24,12 @@ type TelegramNotifier struct {
 	logger *slog.Logger
 }
 
+// newBotFunc is the function used to create a BotAPI instance.
+// It defaults to tgbotapi.NewBotAPI and can be overridden in tests.
+var newBotFunc = func(token string) (*tgbotapi.BotAPI, error) {
+	return tgbotapi.NewBotAPI(token)
+}
+
 // NewTelegramNotifier creates a new Telegram notifier.
 // Returns nil if botToken is empty (Telegram notifications disabled).
 func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*TelegramNotifier, error) {
@@ -32,7 +38,7 @@ func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*T
 		return nil, nil
 	}
 
-	bot, err := tgbotapi.NewBotAPI(botToken)
+	bot, err := newBotFunc(botToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Telegram bot: %w", err)
 	}
