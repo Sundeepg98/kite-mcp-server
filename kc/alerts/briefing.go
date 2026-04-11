@@ -13,6 +13,47 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
+// BrokerDataProvider abstracts broker API calls for testability.
+// When set on BriefingService via SetBrokerProvider, these methods are used
+// instead of creating kiteconnect.Client directly.
+type BrokerDataProvider interface {
+	// GetHoldings returns holdings for the user.
+	GetHoldings(apiKey, accessToken string) ([]kiteconnect.Holding, error)
+	// GetPositions returns positions for the user.
+	GetPositions(apiKey, accessToken string) (kiteconnect.Positions, error)
+	// GetUserMargins returns margin info for the user.
+	GetUserMargins(apiKey, accessToken string) (kiteconnect.AllMargins, error)
+	// GetLTP returns last traded prices for the given instruments.
+	GetLTP(apiKey, accessToken string, instruments ...string) (kiteconnect.QuoteLTP, error)
+}
+
+// defaultBrokerProvider uses the real kiteconnect client.
+type defaultBrokerProvider struct{}
+
+func (d *defaultBrokerProvider) GetHoldings(apiKey, accessToken string) ([]kiteconnect.Holding, error) {
+	client := kiteconnect.New(apiKey)
+	client.SetAccessToken(accessToken)
+	return client.GetHoldings()
+}
+
+func (d *defaultBrokerProvider) GetPositions(apiKey, accessToken string) (kiteconnect.Positions, error) {
+	client := kiteconnect.New(apiKey)
+	client.SetAccessToken(accessToken)
+	return client.GetPositions()
+}
+
+func (d *defaultBrokerProvider) GetUserMargins(apiKey, accessToken string) (kiteconnect.AllMargins, error) {
+	client := kiteconnect.New(apiKey)
+	client.SetAccessToken(accessToken)
+	return client.GetUserMargins()
+}
+
+func (d *defaultBrokerProvider) GetLTP(apiKey, accessToken string, instruments ...string) (kiteconnect.QuoteLTP, error) {
+	client := kiteconnect.New(apiKey)
+	client.SetAccessToken(accessToken)
+	return client.GetLTP(instruments...)
+}
+
 // kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
 var kolkataLoc = isttz.Location
 
@@ -34,11 +75,12 @@ type CredentialGetter interface {
 // BriefingService generates and sends morning briefings and daily P&L summaries
 // via Telegram for users who have a registered chat ID and valid Kite token.
 type BriefingService struct {
-	notifier   *TelegramNotifier
-	alertStore *Store
-	tokens     TokenChecker
-	creds      CredentialGetter
-	logger     *slog.Logger
+	notifier       *TelegramNotifier
+	alertStore     *Store
+	tokens         TokenChecker
+	creds          CredentialGetter
+	logger         *slog.Logger
+	brokerProvider BrokerDataProvider // nil = use default (real kiteconnect)
 }
 
 // NewBriefingService creates a BriefingService. Returns nil if notifier is nil.
@@ -59,6 +101,21 @@ func NewBriefingService(
 		creds:      creds,
 		logger:     logger,
 	}
+}
+
+// SetBrokerProvider overrides the default Kite API client with a custom provider (for testing).
+func (b *BriefingService) SetBrokerProvider(p BrokerDataProvider) {
+	if b != nil {
+		b.brokerProvider = p
+	}
+}
+
+// broker returns the BrokerDataProvider, defaulting to the real kiteconnect client.
+func (b *BriefingService) broker() BrokerDataProvider {
+	if b.brokerProvider != nil {
+		return b.brokerProvider
+	}
+	return &defaultBrokerProvider{}
 }
 
 // SendMorningBriefings sends a morning briefing to every user with a Telegram chat ID.
@@ -89,15 +146,96 @@ func (b *BriefingService) SendMorningBriefings() {
 
 // buildMorningBriefing generates the morning briefing message for one user.
 func (b *BriefingService) buildMorningBriefing(email, dateStr string, now time.Time) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\U0001F305 <b>Morning Briefing — %s</b>\n\n", html.EscapeString(dateStr)))
-
 	// Triggered alerts since yesterday's close (3:30 PM IST previous trading day).
 	prevClose := previousTradingDayClose(now)
 	triggered := b.recentlyTriggeredAlerts(email, prevClose)
-	if len(triggered) > 0 {
-		sb.WriteString(fmt.Sprintf("Alerts triggered overnight: %d\n", len(triggered)))
-		for _, a := range triggered {
+
+	// Token status
+	_, storedAt, hasToken := b.tokens.GetToken(email)
+	tokenValid := hasToken && !b.tokens.IsExpired(storedAt)
+	tokenStatus := "not_found"
+	if hasToken && tokenValid {
+		tokenStatus = "valid"
+	} else if hasToken {
+		tokenStatus = "expired"
+	}
+
+	// Fetch portfolio data if token is valid
+	var data morningBriefingData
+	data.DateStr = dateStr
+	data.Triggered = triggered
+	data.TokenStatus = tokenStatus
+	data.Now = now
+
+	accessToken, storedAt, hasToken := b.tokens.GetToken(email)
+	if hasToken && !b.tokens.IsExpired(storedAt) {
+		apiKey := b.creds.GetAPIKey(email)
+		if apiKey != "" {
+			bp := b.broker()
+
+			// Portfolio day P&L from holdings
+			holdings, err := bp.GetHoldings(apiKey, accessToken)
+			if err == nil && len(holdings) > 0 {
+				var dayPnL float64
+				for _, h := range holdings {
+					dayPnL += h.DayChange
+				}
+				data.HoldingsDayPnL = dayPnL
+				data.HoldingsCount = len(holdings)
+				data.HasHoldings = true
+			}
+
+			// Margin available
+			margins, err := bp.GetUserMargins(apiKey, accessToken)
+			if err == nil {
+				data.MarginAvailable = margins.Equity.Net
+				data.HasMargin = true
+			}
+
+			// Index levels (NIFTY 50, BANK NIFTY)
+			ltpResp, err := bp.GetLTP(apiKey, accessToken, "NSE:NIFTY 50", "NSE:NIFTY BANK")
+			if err == nil {
+				if nifty, ok := ltpResp["NSE:NIFTY 50"]; ok {
+					data.NiftyLTP = nifty.LastPrice
+					data.HasNifty = true
+				}
+				if bankNifty, ok := ltpResp["NSE:NIFTY BANK"]; ok {
+					data.BankNiftyLTP = bankNifty.LastPrice
+					data.HasBankNifty = true
+				}
+			}
+		}
+	}
+
+	return formatMorningBriefing(data)
+}
+
+// morningBriefingData holds pre-fetched data for morning briefing formatting.
+type morningBriefingData struct {
+	DateStr        string
+	Triggered      []*Alert
+	TokenStatus    string // "valid", "expired", "not_found"
+	Now            time.Time
+	HasHoldings    bool
+	HoldingsDayPnL float64
+	HoldingsCount  int
+	HasMargin      bool
+	MarginAvailable float64
+	HasNifty       bool
+	NiftyLTP       float64
+	HasBankNifty   bool
+	BankNiftyLTP   float64
+}
+
+// formatMorningBriefing formats a morning briefing from pre-fetched data. Pure function, testable.
+func formatMorningBriefing(data morningBriefingData) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\U0001F305 <b>Morning Briefing — %s</b>\n\n", html.EscapeString(data.DateStr)))
+
+	// Triggered alerts
+	if len(data.Triggered) > 0 {
+		sb.WriteString(fmt.Sprintf("Alerts triggered overnight: %d\n", len(data.Triggered)))
+		for _, a := range data.Triggered {
 			sb.WriteString(fmt.Sprintf("  \u2022 %s crossed \u20B9%.2f (%s) at %s\n",
 				html.EscapeString(a.Tradingsymbol),
 				a.TriggeredPrice,
@@ -110,55 +248,35 @@ func (b *BriefingService) buildMorningBriefing(email, dateStr string, now time.T
 	sb.WriteString("\n")
 
 	// Token status
-	_, storedAt, hasToken := b.tokens.GetToken(email)
-	if hasToken && !b.tokens.IsExpired(storedAt) {
+	switch data.TokenStatus {
+	case "valid":
 		sb.WriteString("Token status: Valid \u2713\n")
-	} else if hasToken {
+	case "expired":
 		sb.WriteString("Token status: <b>Expired</b> \u2717 (re-login required)\n")
-	} else {
+	default:
 		sb.WriteString("Token status: <b>Not found</b> \u2717\n")
 	}
 
-	// Portfolio day P&L, margin available, and index levels (if token valid)
-	accessToken, storedAt, hasToken := b.tokens.GetToken(email)
-	if hasToken && !b.tokens.IsExpired(storedAt) {
-		apiKey := b.creds.GetAPIKey(email)
-		if apiKey != "" {
-			client := kiteconnect.New(apiKey)
-			client.SetAccessToken(accessToken)
-
-			// Portfolio day P&L from holdings
-			holdings, err := client.GetHoldings()
-			if err == nil && len(holdings) > 0 {
-				var dayPnL float64
-				for _, h := range holdings {
-					dayPnL += h.DayChange
-				}
-				sb.WriteString(fmt.Sprintf("\nPortfolio: %s day P&amp;L (%d stocks)\n", formatRupee(dayPnL), len(holdings)))
-			}
-
-			// Margin available
-			margins, err := client.GetUserMargins()
-			if err == nil {
-				sb.WriteString(fmt.Sprintf("Margin available: \u20B9%.0f\n", margins.Equity.Net))
-			}
-
-			// Index levels (NIFTY 50, BANK NIFTY)
-			ltpResp, err := client.GetLTP("NSE:NIFTY 50", "NSE:NIFTY BANK")
-			if err == nil {
-				sb.WriteString("\n<b>Indices:</b>\n")
-				if nifty, ok := ltpResp["NSE:NIFTY 50"]; ok {
-					sb.WriteString(fmt.Sprintf("  NIFTY 50: \u20B9%.2f\n", nifty.LastPrice))
-				}
-				if bankNifty, ok := ltpResp["NSE:NIFTY BANK"]; ok {
-					sb.WriteString(fmt.Sprintf("  BANK NIFTY: \u20B9%.2f\n", bankNifty.LastPrice))
-				}
-			}
+	// Portfolio data
+	if data.HasHoldings {
+		sb.WriteString(fmt.Sprintf("\nPortfolio: %s day P&amp;L (%d stocks)\n", formatRupee(data.HoldingsDayPnL), data.HoldingsCount))
+	}
+	if data.HasMargin {
+		sb.WriteString(fmt.Sprintf("Margin available: \u20B9%.0f\n", data.MarginAvailable))
+	}
+	if data.HasNifty || data.HasBankNifty {
+		sb.WriteString("\n<b>Indices:</b>\n")
+		if data.HasNifty {
+			sb.WriteString(fmt.Sprintf("  NIFTY 50: \u20B9%.2f\n", data.NiftyLTP))
+		}
+		if data.HasBankNifty {
+			sb.WriteString(fmt.Sprintf("  BANK NIFTY: \u20B9%.2f\n", data.BankNiftyLTP))
 		}
 	}
 	sb.WriteString("\n")
 
 	// Market timing
+	now := data.Now
 	marketOpen := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, kolkataLoc)
 	if now.Before(marketOpen) {
 		diff := marketOpen.Sub(now)
@@ -215,57 +333,80 @@ func (b *BriefingService) SendDailySummaries() {
 
 // buildDailySummary generates the daily P&L summary for one user.
 func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr string) string {
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
+	bp := b.broker()
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\U0001F4CA <b>Daily Summary — %s</b>\n\n", html.EscapeString(dateStr)))
+	var data dailySummaryData
+	data.DateStr = dateStr
 
-	var holdingsDayPnL float64
-	var holdingsCount int
-	var changes []stockChange
-
-	holdings, err := client.GetHoldings()
+	holdings, err := bp.GetHoldings(apiKey, accessToken)
 	if err != nil {
 		b.logger.Error("Briefing: failed to fetch holdings", "email", email, "error", err)
-		sb.WriteString("Holdings P&amp;L: <i>unavailable</i>\n")
+		data.HoldingsErr = true
 	} else {
-		holdingsCount = len(holdings)
+		data.HoldingsCount = len(holdings)
 		for _, h := range holdings {
-			holdingsDayPnL += h.DayChange
+			data.HoldingsDayPnL += h.DayChange
 			if h.DayChangePercentage != 0 {
-				changes = append(changes, stockChange{Symbol: h.Tradingsymbol, Percent: h.DayChangePercentage})
+				data.Changes = append(data.Changes, stockChange{Symbol: h.Tradingsymbol, Percent: h.DayChangePercentage})
 			}
 		}
-		sb.WriteString(fmt.Sprintf("Holdings P&amp;L: %s (%d stocks)\n",
-			formatRupee(holdingsDayPnL), holdingsCount))
 	}
 
-	var positionsPnL float64
-	var positionsCount int
-	positions, err := client.GetPositions()
+	positions, err := bp.GetPositions(apiKey, accessToken)
 	if err != nil {
 		b.logger.Error("Briefing: failed to fetch positions", "email", email, "error", err)
-		sb.WriteString("Positions P&amp;L: <i>unavailable</i>\n")
+		data.PositionsErr = true
 	} else {
-		positionsCount = len(positions.Day)
+		data.PositionsCount = len(positions.Day)
 		for _, p := range positions.Day {
-			positionsPnL += p.PnL
+			data.PositionsPnL += p.PnL
 		}
-		sb.WriteString(fmt.Sprintf("Positions P&amp;L: %s (%d positions)\n",
-			formatRupee(positionsPnL), positionsCount))
 	}
 
-	netPnL := holdingsDayPnL + positionsPnL
+	return formatDailySummary(data)
+}
+
+// dailySummaryData holds pre-fetched data for daily summary formatting.
+type dailySummaryData struct {
+	DateStr        string
+	HoldingsErr    bool
+	HoldingsDayPnL float64
+	HoldingsCount  int
+	Changes        []stockChange
+	PositionsErr   bool
+	PositionsPnL   float64
+	PositionsCount int
+}
+
+// formatDailySummary formats a daily P&L summary from pre-fetched data. Pure function, testable.
+func formatDailySummary(data dailySummaryData) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\U0001F4CA <b>Daily Summary — %s</b>\n\n", html.EscapeString(data.DateStr)))
+
+	if data.HoldingsErr {
+		sb.WriteString("Holdings P&amp;L: <i>unavailable</i>\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("Holdings P&amp;L: %s (%d stocks)\n",
+			formatRupee(data.HoldingsDayPnL), data.HoldingsCount))
+	}
+
+	if data.PositionsErr {
+		sb.WriteString("Positions P&amp;L: <i>unavailable</i>\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("Positions P&amp;L: %s (%d positions)\n",
+			formatRupee(data.PositionsPnL), data.PositionsCount))
+	}
+
+	netPnL := data.HoldingsDayPnL + data.PositionsPnL
 	sb.WriteString(fmt.Sprintf("<b>Net Day P&amp;L: %s</b>\n", formatRupee(netPnL)))
 
 	// Top gainers and losers from holdings.
-	if len(changes) > 0 {
-		sort.Slice(changes, func(i, j int) bool { return changes[i].Percent > changes[j].Percent })
+	if len(data.Changes) > 0 {
+		sort.Slice(data.Changes, func(i, j int) bool { return data.Changes[i].Percent > data.Changes[j].Percent })
 		sb.WriteString("\n")
 
 		// Top gainers (up to 3)
-		gainers := filterPositiveChanges(changes, 3)
+		gainers := filterPositiveChanges(data.Changes, 3)
 		if len(gainers) > 0 {
 			sb.WriteString("Top Gainers: ")
 			parts := make([]string, len(gainers))
@@ -277,7 +418,7 @@ func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr 
 		}
 
 		// Top losers (up to 3)
-		losers := filterNegativeChanges(changes, 3)
+		losers := filterNegativeChanges(data.Changes, 3)
 		if len(losers) > 0 {
 			sb.WriteString("Top Losers: ")
 			parts := make([]string, len(losers))
@@ -362,6 +503,45 @@ func filterNegativeChanges(changes []stockChange, n int) []stockChange {
 	return negatives
 }
 
+// misPosition holds a single MIS position for formatting.
+type misPosition struct {
+	Symbol   string
+	Quantity int
+	PnL      float64
+}
+
+// filterMISPositions extracts open MIS positions from a Kite Positions response.
+func filterMISPositions(positions kiteconnect.Positions) []misPosition {
+	var open []misPosition
+	for _, p := range positions.Net {
+		if p.Quantity != 0 && strings.ToUpper(p.Product) == "MIS" {
+			open = append(open, misPosition{Symbol: p.Tradingsymbol, Quantity: p.Quantity, PnL: p.PnL})
+		}
+	}
+	return open
+}
+
+// formatMISWarning formats a MIS square-off warning message. Pure function, testable.
+func formatMISWarning(open []misPosition) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\u26A0\uFE0F <b>MIS Square-Off Warning</b>\n\n"))
+	sb.WriteString(fmt.Sprintf("You have <b>%d open MIS position(s)</b> that will be auto-squared off around 3:15-3:20 PM IST.\n\n", len(open)))
+
+	var totalPnL float64
+	for _, p := range open {
+		direction := "LONG"
+		if p.Quantity < 0 {
+			direction = "SHORT"
+		}
+		sb.WriteString(fmt.Sprintf("  \u2022 %s: %s %d @ %s\n",
+			html.EscapeString(p.Symbol), direction, abs(p.Quantity), formatRupee(p.PnL)))
+		totalPnL += p.PnL
+	}
+	sb.WriteString(fmt.Sprintf("\nMIS P&amp;L: <b>%s</b>\n", formatRupee(totalPnL)))
+	sb.WriteString("\nAction: Close manually or convert to CNC/NRML to carry overnight.")
+	return sb.String()
+}
+
 // SendMISWarnings sends a Telegram warning to users who have open MIS positions.
 // Intended to run at 2:30 PM IST, giving ~45 minutes before auto square-off.
 func (b *BriefingService) SendMISWarnings() {
@@ -375,6 +555,8 @@ func (b *BriefingService) SendMISWarnings() {
 		return
 	}
 
+	bp := b.broker()
+
 	for email, chatID := range chatIDs {
 		accessToken, storedAt, hasToken := b.tokens.GetToken(email)
 		if !hasToken || b.tokens.IsExpired(storedAt) {
@@ -386,51 +568,19 @@ func (b *BriefingService) SendMISWarnings() {
 			continue
 		}
 
-		client := kiteconnect.New(apiKey)
-		client.SetAccessToken(accessToken)
-
-		positions, err := client.GetPositions()
+		positions, err := bp.GetPositions(apiKey, accessToken)
 		if err != nil {
 			b.logger.Error("MIS warning: failed to fetch positions", "email", email, "error", err)
 			continue
 		}
 
-		// Filter MIS positions with non-zero quantity
-		type misPos struct {
-			Symbol   string
-			Quantity int
-			PnL      float64
-		}
-		var open []misPos
-		for _, p := range positions.Net {
-			if p.Quantity != 0 && strings.ToUpper(p.Product) == "MIS" {
-				open = append(open, misPos{Symbol: p.Tradingsymbol, Quantity: p.Quantity, PnL: p.PnL})
-			}
-		}
-
+		open := filterMISPositions(positions)
 		if len(open) == 0 {
 			continue
 		}
 
-		// Build warning message
-		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("\u26A0\uFE0F <b>MIS Square-Off Warning</b>\n\n"))
-		sb.WriteString(fmt.Sprintf("You have <b>%d open MIS position(s)</b> that will be auto-squared off around 3:15-3:20 PM IST.\n\n", len(open)))
-
-		var totalPnL float64
-		for _, p := range open {
-			direction := "LONG"
-			if p.Quantity < 0 {
-				direction = "SHORT"
-			}
-			sb.WriteString(fmt.Sprintf("  \u2022 %s: %s %d @ %s\n",
-				html.EscapeString(p.Symbol), direction, abs(p.Quantity), formatRupee(p.PnL)))
-			totalPnL += p.PnL
-		}
-		sb.WriteString(fmt.Sprintf("\nMIS P&amp;L: <b>%s</b>\n", formatRupee(totalPnL)))
-		sb.WriteString("\nAction: Close manually or convert to CNC/NRML to carry overnight.")
-
-		if err := b.notifier.SendHTMLMessage(chatID, sb.String()); err != nil {
+		msg := formatMISWarning(open)
+		if err := b.notifier.SendHTMLMessage(chatID, msg); err != nil {
 			b.logger.Error("MIS warning: failed to send", "email", email, "error", err)
 		} else {
 			b.logger.Info("MIS warning: sent", "email", email, "open_mis", len(open))

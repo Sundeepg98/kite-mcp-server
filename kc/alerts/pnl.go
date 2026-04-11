@@ -25,10 +25,11 @@ type PnLJournalResult struct {
 
 // PnLSnapshotService takes daily P&L snapshots and provides journal queries.
 type PnLSnapshotService struct {
-	db     *DB
-	tokens TokenChecker
-	creds  CredentialGetter
-	logger *slog.Logger
+	db             *DB
+	tokens         TokenChecker
+	creds          CredentialGetter
+	logger         *slog.Logger
+	brokerProvider BrokerDataProvider // nil = use default (real kiteconnect)
 }
 
 // NewPnLSnapshotService creates a new P&L snapshot service.
@@ -43,6 +44,46 @@ func NewPnLSnapshotService(db *DB, tokens TokenChecker, creds CredentialGetter, 
 		creds:  creds,
 		logger: logger,
 	}
+}
+
+// SetBrokerProvider overrides the default Kite API client (for testing).
+func (s *PnLSnapshotService) SetBrokerProvider(p BrokerDataProvider) {
+	if s != nil {
+		s.brokerProvider = p
+	}
+}
+
+// broker returns the BrokerDataProvider, defaulting to the real kiteconnect client.
+func (s *PnLSnapshotService) broker() BrokerDataProvider {
+	if s.brokerProvider != nil {
+		return s.brokerProvider
+	}
+	return &defaultBrokerProvider{}
+}
+
+// buildPnLEntry builds a DailyPnLEntry from broker data. Pure logic, testable.
+func buildPnLEntry(date, email string, holdings []kiteconnect.Holding, holdingsErr error,
+	positions kiteconnect.Positions, positionsErr error) *DailyPnLEntry {
+	entry := &DailyPnLEntry{
+		Date:  date,
+		Email: email,
+	}
+	if holdingsErr == nil {
+		entry.HoldingsCount = len(holdings)
+		for _, h := range holdings {
+			entry.HoldingsPnL += h.DayChange
+		}
+	}
+	if positionsErr == nil {
+		for _, p := range positions.Day {
+			entry.PositionsPnL += p.PnL
+			if p.Quantity != 0 || p.DayBuyQuantity > 0 || p.DaySellQuantity > 0 {
+				entry.TradesCount++
+			}
+		}
+	}
+	entry.NetPnL = entry.HoldingsPnL + entry.PositionsPnL
+	return entry
 }
 
 // TakeSnapshots captures daily P&L for all users with valid Kite tokens.
@@ -70,6 +111,7 @@ func (s *PnLSnapshotService) TakeSnapshots() {
 		emails[t.Email] = true
 	}
 
+	bp := s.broker()
 	today := time.Now().In(kolkataLoc).Format("2006-01-02")
 	snapshotCount := 0
 
@@ -84,39 +126,17 @@ func (s *PnLSnapshotService) TakeSnapshots() {
 			continue
 		}
 
-		client := kiteconnect.New(apiKey)
-		client.SetAccessToken(accessToken)
-
-		entry := &DailyPnLEntry{
-			Date:  today,
-			Email: email,
+		holdings, holdingsErr := bp.GetHoldings(apiKey, accessToken)
+		if holdingsErr != nil {
+			s.logger.Warn("Failed to fetch holdings for P&L snapshot", "email", email, "error", holdingsErr)
 		}
 
-		// Fetch holdings P&L
-		holdings, err := client.GetHoldings()
-		if err != nil {
-			s.logger.Warn("Failed to fetch holdings for P&L snapshot", "email", email, "error", err)
-		} else {
-			entry.HoldingsCount = len(holdings)
-			for _, h := range holdings {
-				entry.HoldingsPnL += h.DayChange
-			}
+		positions, positionsErr := bp.GetPositions(apiKey, accessToken)
+		if positionsErr != nil {
+			s.logger.Warn("Failed to fetch positions for P&L snapshot", "email", email, "error", positionsErr)
 		}
 
-		// Fetch positions P&L
-		positions, err := client.GetPositions()
-		if err != nil {
-			s.logger.Warn("Failed to fetch positions for P&L snapshot", "email", email, "error", err)
-		} else {
-			for _, p := range positions.Day {
-				entry.PositionsPnL += p.PnL
-				if p.Quantity != 0 || p.DayBuyQuantity > 0 || p.DaySellQuantity > 0 {
-					entry.TradesCount++
-				}
-			}
-		}
-
-		entry.NetPnL = entry.HoldingsPnL + entry.PositionsPnL
+		entry := buildPnLEntry(today, email, holdings, holdingsErr, positions, positionsErr)
 
 		if err := s.db.SaveDailyPnL(entry); err != nil {
 			s.logger.Error("Failed to save P&L snapshot", "email", email, "error", err)
