@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -99,6 +100,12 @@ func rateLimit(limiter *ipRateLimiter) func(http.Handler) http.Handler {
 			// Fly.io sets Fly-Client-IP header with the real client IP
 			if flyIP := r.Header.Get("Fly-Client-IP"); flyIP != "" {
 				ip = flyIP
+			} else {
+				// Strip port from RemoteAddr (e.g. "127.0.0.1:12345" → "127.0.0.1")
+				// so all connections from the same IP share one limiter.
+				if host, _, err := net.SplitHostPort(ip); err == nil {
+					ip = host
+				}
 			}
 			if !limiter.getLimiter(ip).Allow() {
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)

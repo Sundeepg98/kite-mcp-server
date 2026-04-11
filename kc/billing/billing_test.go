@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	stripe "github.com/stripe/stripe-go/v82"
+	stripewebhook "github.com/stripe/stripe-go/v82/webhook"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -1732,4 +1733,351 @@ func TestMiddleware_GetTierForUser_WithAdminEmailFn(t *testing.T) {
 	result, err := handler(ctx, req)
 	require.NoError(t, err)
 	assert.False(t, result.IsError, "Family member of Premium admin should access Premium tools")
+}
+
+// ---------------------------------------------------------------------------
+// WebhookHandler HTTP integration tests (mock-signed Stripe payloads)
+// ---------------------------------------------------------------------------
+
+// signTestPayload creates a valid Stripe webhook signature header for the given
+// payload and secret using the SDK's own GenerateTestSignedPayload helper.
+func signTestPayload(payload []byte, secret string) string {
+	sp := stripewebhook.GenerateTestSignedPayload(&stripewebhook.UnsignedPayload{
+		Payload: payload,
+		Secret:  secret,
+	})
+	return sp.Header
+}
+
+// makeCheckoutPayload builds a checkout.session.completed event JSON with the
+// required api_version field matching the Stripe SDK release train.
+func makeCheckoutPayload(eventID, email, customerID, subID string) []byte {
+	evt := map[string]interface{}{
+		"id":          eventID,
+		"object":      "event",
+		"type":        "checkout.session.completed",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"object":           "checkout.session",
+				"customer_details": map[string]interface{}{"email": email},
+				"customer":         customerID,
+				"subscription":     subID,
+			},
+		},
+	}
+	b, _ := json.Marshal(evt)
+	return b
+}
+
+func TestWebhookHandler_ValidSignature_CheckoutCompleted(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	secret := "whsec_test_secret"
+	var upgradedEmail string
+	adminUpgrade := func(email string) { upgradedEmail = email }
+	handler := WebhookHandler(store, secret, logger, adminUpgrade)
+
+	payload := makeCheckoutPayload("evt_checkout_001", "buyer@example.com", "cus_abc", "sub_xyz")
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Verify subscription was created.
+	sub := store.GetSubscription("buyer@example.com")
+	require.NotNil(t, sub, "subscription should exist after checkout.session.completed")
+	assert.Equal(t, "buyer@example.com", sub.AdminEmail)
+	assert.Equal(t, StatusActive, sub.Status)
+	assert.Equal(t, "cus_abc", sub.StripeCustomerID)
+	assert.Equal(t, "sub_xyz", sub.StripeSubID)
+
+	// Verify adminUpgrade callback was invoked.
+	assert.Equal(t, "buyer@example.com", upgradedEmail)
+
+	// Verify event was marked processed.
+	assert.True(t, store.IsEventProcessed("evt_checkout_001"))
+}
+
+func TestWebhookHandler_WrongSecret_Rejected(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	secret := "whsec_test_secret"
+	handler := WebhookHandler(store, secret, logger, nil)
+
+	payload := makeCheckoutPayload("evt_bad_sig", "attacker@example.com", "cus_evil", "sub_evil")
+	// Sign with wrong secret.
+	sig := signTestPayload(payload, "whsec_WRONG_secret")
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "invalid signature")
+
+	// Subscription must NOT be created.
+	assert.Nil(t, store.GetSubscription("attacker@example.com"))
+}
+
+func TestWebhookHandler_DuplicateEvent(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	secret := "whsec_test_secret"
+	callCount := 0
+	adminUpgrade := func(email string) { callCount++ }
+	handler := WebhookHandler(store, secret, logger, adminUpgrade)
+
+	payload := makeCheckoutPayload("evt_dup_001", "dup@example.com", "cus_dup", "sub_dup")
+
+	// First request — should process.
+	sig1 := signTestPayload(payload, secret)
+	req1 := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req1.Header.Set("Stripe-Signature", sig1)
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	assert.Equal(t, http.StatusOK, rr1.Code)
+	assert.Equal(t, 1, callCount, "adminUpgrade should be called once on first delivery")
+
+	// Second request with same event ID — should return 200 but not reprocess.
+	sig2 := signTestPayload(payload, secret)
+	req2 := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req2.Header.Set("Stripe-Signature", sig2)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusOK, rr2.Code)
+	assert.Equal(t, 1, callCount, "adminUpgrade should NOT be called again on duplicate event")
+}
+
+func TestWebhookHandler_MissingSignatureHeader(t *testing.T) {
+	store := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := WebhookHandler(store, "whsec_test", logger, nil)
+
+	payload := makeCheckoutPayload("evt_no_sig", "user@example.com", "cus_1", "sub_1")
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	// No Stripe-Signature header set.
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestWebhookHandler_SubscriptionDeleted(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	// Pre-create an active subscription with a known customer ID.
+	require.NoError(t, store.SetSubscription(&Subscription{
+		AdminEmail:       "canceled@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_cancel",
+		StripeSubID:      "sub_cancel",
+		Status:           StatusActive,
+	}))
+
+	secret := "whsec_test_secret"
+	handler := WebhookHandler(store, secret, logger, nil)
+
+	// Build customer.subscription.deleted event.
+	evt := map[string]interface{}{
+		"id":          "evt_del_001",
+		"object":      "event",
+		"type":        "customer.subscription.deleted",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"id":       "sub_cancel",
+				"object":   "subscription",
+				"customer": "cus_cancel",
+				"status":   "canceled",
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Verify subscription was downgraded to Free and canceled.
+	sub := store.GetSubscription("canceled@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, TierFree, sub.Tier)
+	assert.Equal(t, StatusCanceled, sub.Status)
+}
+
+func TestWebhookHandler_PaymentFailed(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	// Pre-create an active subscription.
+	require.NoError(t, store.SetSubscription(&Subscription{
+		AdminEmail:       "pastdue@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_pastdue",
+		StripeSubID:      "sub_pastdue",
+		Status:           StatusActive,
+	}))
+
+	secret := "whsec_test_secret"
+	handler := WebhookHandler(store, secret, logger, nil)
+
+	// Build invoice.payment_failed event.
+	evt := map[string]interface{}{
+		"id":          "evt_fail_001",
+		"object":      "event",
+		"type":        "invoice.payment_failed",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"id":       "inv_fail",
+				"object":   "invoice",
+				"customer": "cus_pastdue",
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Verify subscription was marked past_due.
+	sub := store.GetSubscription("pastdue@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, StatusPastDue, sub.Status)
+	// Tier should remain unchanged.
+	assert.Equal(t, TierPro, sub.Tier)
+}
+
+func TestWebhookHandler_SubscriptionUpdated(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	// Pre-create a subscription so the customer ID is mapped.
+	require.NoError(t, store.SetSubscription(&Subscription{
+		AdminEmail:       "updated@example.com",
+		Tier:             TierPro,
+		StripeCustomerID: "cus_upd",
+		StripeSubID:      "sub_upd",
+		Status:           StatusActive,
+	}))
+
+	secret := "whsec_test_secret"
+	handler := WebhookHandler(store, secret, logger, nil)
+
+	// Build customer.subscription.updated event (e.g., status changed to past_due).
+	evt := map[string]interface{}{
+		"id":          "evt_upd_001",
+		"object":      "event",
+		"type":        "customer.subscription.updated",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"id":       "sub_upd",
+				"object":   "subscription",
+				"customer": "cus_upd",
+				"status":   "active",
+				"items": map[string]interface{}{
+					"object": "list",
+					"data": []interface{}{
+						map[string]interface{}{
+							"price": map[string]interface{}{
+								"id": "price_unknown_tier",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Verify subscription was updated.
+	sub := store.GetSubscription("updated@example.com")
+	require.NotNil(t, sub)
+	assert.Equal(t, StatusActive, sub.Status)
+	// Unknown price ID defaults to TierPro.
+	assert.Equal(t, TierPro, sub.Tier)
+}
+
+func TestWebhookHandler_UnhandledEventType(t *testing.T) {
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	secret := "whsec_test_secret"
+	handler := WebhookHandler(store, secret, logger, nil)
+
+	// Send an event type that the handler doesn't explicitly handle.
+	evt := map[string]interface{}{
+		"id":          "evt_unhandled_001",
+		"object":      "event",
+		"type":        "charge.succeeded",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"id":     "ch_test",
+				"object": "charge",
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	// Even unhandled events should be marked as processed (idempotency).
+	assert.True(t, store.IsEventProcessed("evt_unhandled_001"))
 }
