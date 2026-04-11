@@ -875,3 +875,133 @@ func TestExternalSessionIDFormat(t *testing.T) {
 		t.Errorf("Expected internal data['test'] to be 'data', got: %v", retrievedData2["test"])
 	}
 }
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// SessionRegistry — TerminateByEmail, UpdateSessionField
+// ===========================================================================
+
+func TestSessionRegistry_TerminateByEmail(t *testing.T) {
+	m, err := newTestManager("test_key", "test_secret")
+	if err != nil {
+		t.Fatalf("newTestManager error: %v", err)
+	}
+	defer m.Shutdown()
+
+	sm := m.SessionManager()
+
+	// Create sessions and set email data
+	id1 := sm.Generate()
+	id2 := sm.Generate()
+	id3 := sm.Generate()
+
+	// Set email on sessions via GetOrCreateSessionData
+	sm.GetOrCreateSessionData(id1, func() any {
+		kd := &KiteSessionData{Email: "user@example.com"}
+		kd.Kite = NewKiteConnect("test_key")
+		return kd
+	})
+	sm.GetOrCreateSessionData(id2, func() any {
+		kd := &KiteSessionData{Email: "user@example.com"}
+		kd.Kite = NewKiteConnect("test_key")
+		return kd
+	})
+	sm.GetOrCreateSessionData(id3, func() any {
+		kd := &KiteSessionData{Email: "other@example.com"}
+		kd.Kite = NewKiteConnect("test_key")
+		return kd
+	})
+
+	count := sm.TerminateByEmail("user@example.com")
+	if count != 2 {
+		t.Errorf("TerminateByEmail returned %d, want 2", count)
+	}
+
+	// user@example.com sessions should be terminated
+	isTerminated1, err1 := sm.Validate(id1)
+	if err1 != nil {
+		t.Errorf("Validate(id1) unexpected error: %v", err1)
+	}
+	if !isTerminated1 {
+		t.Error("Session id1 should be terminated")
+	}
+
+	// other@example.com should still be valid (not terminated)
+	isTerminated3, err3 := sm.Validate(id3)
+	if err3 != nil {
+		t.Errorf("Validate(id3) unexpected error: %v", err3)
+	}
+	if isTerminated3 {
+		t.Error("Session id3 should not be terminated")
+	}
+}
+
+func TestSessionRegistry_UpdateSessionField(t *testing.T) {
+	m, err := newTestManager("test_key", "test_secret")
+	if err != nil {
+		t.Fatalf("newTestManager error: %v", err)
+	}
+	defer m.Shutdown()
+
+	sm := m.SessionManager()
+	id := sm.Generate()
+
+	// Set initial data
+	sm.GetOrCreateSessionData(id, func() any {
+		return &KiteSessionData{Email: "user@example.com"}
+	})
+
+	// Update a field
+	err = sm.UpdateSessionField(id, func(data any) {
+		if kd, ok := data.(*KiteSessionData); ok {
+			kd.Email = "updated@example.com"
+		}
+	})
+	if err != nil {
+		t.Fatalf("UpdateSessionField error: %v", err)
+	}
+
+	// Verify update
+	data, err := sm.GetSessionData(id)
+	if err != nil {
+		t.Fatalf("GetSessionData error: %v", err)
+	}
+	kd := data.(*KiteSessionData)
+	if kd.Email != "updated@example.com" {
+		t.Errorf("Email = %q, want %q", kd.Email, "updated@example.com")
+	}
+
+	// UpdateSessionField on nonexistent session
+	err = sm.UpdateSessionField("nonexistent", func(data any) {})
+	if err == nil {
+		t.Error("Expected error for nonexistent session")
+	}
+}
+
+// ===========================================================================
+// LoadSessions — with DB but no sessions
+// ===========================================================================
+
+func TestLoadSessions_EmptyDB(t *testing.T) {
+	t.Parallel()
+	m, err := New(Config{
+		APIKey:             "test_key",
+		APISecret:          "test_secret",
+		InstrumentsManager: newTestInstrumentsManager(),
+		Logger:             testLogger(),
+		AlertDBPath:        ":memory:",
+	})
+	if err != nil {
+		t.Fatalf("New error: %v", err)
+	}
+	defer m.Shutdown()
+
+	// LoadSessions should succeed (already called during New, but verify no panic)
+	err = m.sessionManager.LoadFromDB()
+	if err != nil {
+		t.Errorf("LoadFromDB error: %v", err)
+	}
+}

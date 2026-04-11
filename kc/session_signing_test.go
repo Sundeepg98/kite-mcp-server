@@ -413,3 +413,161 @@ func BenchmarkVerifySessionID(b *testing.B) {
 		signer.VerifySessionID(signed)
 	}
 }
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// SessionSigner — SetSignatureExpiry, VerifySessionID, VerifyRedirectParams, getSecretKey
+// ===========================================================================
+
+func TestSessionSigner_SetSignatureExpiry(t *testing.T) {
+	t.Parallel()
+	signer, err := NewSessionSigner()
+	if err != nil {
+		t.Fatalf("NewSessionSigner error: %v", err)
+	}
+
+	signer.SetSignatureExpiry(1 * time.Hour)
+
+	// Sign and verify should still work
+	signed := signer.SignSessionID("test-session-123")
+	sessionID, err := signer.VerifySessionID(signed)
+	if err != nil {
+		t.Fatalf("VerifySessionID error: %v", err)
+	}
+	if sessionID != "test-session-123" {
+		t.Errorf("sessionID = %q, want %q", sessionID, "test-session-123")
+	}
+}
+
+func TestSessionSigner_VerifySessionID_InvalidFormat(t *testing.T) {
+	t.Parallel()
+	signer, _ := NewSessionSigner()
+
+	// No dot separator
+	_, err := signer.VerifySessionID("noseparator")
+	if err == nil {
+		t.Error("Expected error for invalid format")
+	}
+
+	// Invalid base64
+	_, err = signer.VerifySessionID("payload.!!!invalid-base64!!!")
+	if err == nil {
+		t.Error("Expected error for invalid base64")
+	}
+
+	// Tampered signature
+	signed := signer.SignSessionID("test-session")
+	tampered := signed[:len(signed)-5] + "XXXXX"
+	_, err = signer.VerifySessionID(tampered)
+	if err == nil {
+		t.Error("Expected error for tampered signature")
+	}
+}
+
+func TestSessionSigner_VerifyRedirectParams(t *testing.T) {
+	t.Parallel()
+	signer, _ := NewSessionSigner()
+
+	// Invalid format (no session_id= prefix)
+	_, err := signer.VerifyRedirectParams("invalid=xxx")
+	if err == nil {
+		t.Error("Expected error for missing session_id= prefix")
+	}
+
+	// Empty value
+	_, err = signer.VerifyRedirectParams("session_id=")
+	if err == nil {
+		t.Error("Expected error for empty session_id value")
+	}
+}
+
+func TestSessionSigner_GetSecretKey(t *testing.T) {
+	t.Parallel()
+	signer, _ := NewSessionSigner()
+
+	key := signer.getSecretKey()
+	if len(key) != 32 {
+		t.Errorf("key length = %d, want 32", len(key))
+	}
+
+	// Should return a copy (modifying it should not affect the signer)
+	key[0] = 0xFF
+	key2 := signer.getSecretKey()
+	if key[0] == key2[0] {
+		t.Error("getSecretKey should return a copy")
+	}
+}
+
+// ===========================================================================
+// SessionSigner — NewSessionSignerWithKey
+// ===========================================================================
+
+func TestNewSessionSignerWithKey_Final(t *testing.T) {
+	t.Parallel()
+
+	// Valid key
+	signer, err := NewSessionSignerWithKey([]byte("test-secret-key-32-bytes-long!!"))
+	if err != nil {
+		t.Fatalf("NewSessionSignerWithKey error: %v", err)
+	}
+
+	signed := signer.SignSessionID("test-session")
+	sid, err := signer.VerifySessionID(signed)
+	if err != nil {
+		t.Fatalf("VerifySessionID error: %v", err)
+	}
+	if sid != "test-session" {
+		t.Errorf("VerifySessionID = %q, want 'test-session'", sid)
+	}
+}
+
+func TestNewSessionSignerWithKey_EmptyKey(t *testing.T) {
+	t.Parallel()
+	_, err := NewSessionSignerWithKey([]byte{})
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+}
+
+// ===========================================================================
+// SessionSigner — SignRedirectParams and VerifyRedirectParams
+// ===========================================================================
+
+func TestSessionSigner_SignAndVerifyRedirectParams_Final(t *testing.T) {
+	t.Parallel()
+	signer, _ := NewSessionSigner()
+
+	// Generate a valid session ID first
+	sessionID := signer.SignSessionID("test-session-id")
+	verifiedID, err := signer.VerifySessionID(sessionID)
+	if err != nil {
+		t.Fatalf("VerifySessionID error: %v", err)
+	}
+	if verifiedID != "test-session-id" {
+		t.Errorf("VerifySessionID = %q, want 'test-session-id'", verifiedID)
+	}
+
+	// Test SignRedirectParams with a valid session ID from Generate
+	m, mErr := newTestManager("test_key", "test_secret")
+	if mErr != nil {
+		t.Fatalf("newTestManager error: %v", mErr)
+	}
+	defer m.Shutdown()
+
+	genID := m.GenerateSession()
+	params, pErr := m.SessionSigner().SignRedirectParams(genID)
+	if pErr != nil {
+		t.Fatalf("SignRedirectParams error: %v", pErr)
+	}
+
+	resultID, vErr := m.SessionSigner().VerifyRedirectParams(params)
+	if vErr != nil {
+		t.Fatalf("VerifyRedirectParams error: %v", vErr)
+	}
+	if resultID != genID {
+		t.Errorf("VerifyRedirectParams = %q, want %q", resultID, genID)
+	}
+}

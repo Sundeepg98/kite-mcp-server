@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 )
 
 // ---------------------------------------------------------------------------
@@ -515,9 +516,9 @@ func TestKiteCredentialStore_MaskSecret(t *testing.T) {
 	}{
 		// Strings with length > 7: first 4 + "****" + last 3
 		{"abcdefghij", "abcd****hij"},       // len=10
-		{"12345678", "1234****678"},          // len=8, exactly > 7
+		{"12345678", "1234****678"},         // len=8, exactly > 7
 		{"abcdefghijklmnop", "abcd****nop"}, // len=16
-		{"secretkey123", "secr****123"},      // len=12
+		{"secretkey123", "secr****123"},     // len=12
 
 		// Strings with length <= 7: fully masked
 		{"", "****"},
@@ -760,3 +761,761 @@ func TestKiteCredentialStore_OnTokenInvalidate_NoCallback(t *testing.T) {
 	})
 	// If we get here without panic, test passes.
 }
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// CredentialService — full coverage
+// ===========================================================================
+
+// mockCredentialStore implements CredentialStoreInterface for testing.
+type mockCredentialStore struct {
+	entries map[string]*KiteCredentialEntry
+}
+
+func (m *mockCredentialStore) Get(email string) (*KiteCredentialEntry, bool) {
+	e, ok := m.entries[email]
+	return e, ok
+}
+
+func (m *mockCredentialStore) Set(email string, entry *KiteCredentialEntry) {
+	m.entries[email] = entry
+}
+
+func (m *mockCredentialStore) Delete(email string) { delete(m.entries, email) }
+
+func (m *mockCredentialStore) ListAll() []KiteCredentialSummary { return nil }
+
+func (m *mockCredentialStore) ListAllRaw() []RawCredentialEntry { return nil }
+
+func (m *mockCredentialStore) GetSecretByAPIKey(apiKey string) (string, bool) { return "", false }
+
+func (m *mockCredentialStore) Count() int { return len(m.entries) }
+
+// mockTokenStore implements TokenStoreInterface for testing.
+type mockTokenStore struct {
+	entries map[string]*KiteTokenEntry
+}
+
+func (m *mockTokenStore) Get(email string) (*KiteTokenEntry, bool) {
+	e, ok := m.entries[email]
+	return e, ok
+}
+
+func (m *mockTokenStore) Set(email string, entry *KiteTokenEntry) {
+	m.entries[email] = entry
+}
+
+func (m *mockTokenStore) Delete(email string) { delete(m.entries, email) }
+
+func (m *mockTokenStore) OnChange(cb TokenChangeCallback) {}
+
+func (m *mockTokenStore) ListAll() []KiteTokenSummary { return nil }
+
+func (m *mockTokenStore) Count() int { return len(m.entries) }
+
+// ===========================================================================
+// KiteTokenStore — SetDB, SetLogger, LoadFromDB
+// ===========================================================================
+
+func TestKiteTokenStore_SetDBAndLoadFromDB(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	// Save a token via the DB directly
+	err = db.SaveToken("user@example.com", "access_token_123", "UID01", "User One", time.Now())
+	if err != nil {
+		t.Fatalf("SaveToken error: %v", err)
+	}
+
+	// Load from DB
+	err = store.LoadFromDB()
+	if err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	got, ok := store.Get("user@example.com")
+	if !ok {
+		t.Fatal("Expected token to be loaded from DB")
+	}
+	if got.AccessToken != "access_token_123" {
+		t.Errorf("AccessToken = %q, want %q", got.AccessToken, "access_token_123")
+	}
+}
+
+func TestKiteTokenStore_LoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
+	store := NewKiteTokenStore()
+	// Should return nil (no-op)
+	err := store.LoadFromDB()
+	if err != nil {
+		t.Errorf("LoadFromDB with nil DB should return nil, got: %v", err)
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore — SetLogger
+// ===========================================================================
+
+func TestKiteCredentialStore_SetLogger(t *testing.T) {
+	t.Parallel()
+	store := NewKiteCredentialStore()
+	// Should not panic
+	store.SetLogger(testLogger())
+}
+
+// ---------------------------------------------------------------------------
+// BackfillRegistryFromCredentials — edge cases
+// ---------------------------------------------------------------------------
+
+// mockRegistryStore implements RegistryStoreInterface for testing.
+type mockRegistryStore struct {
+	regs map[string]*registry.AppRegistration
+}
+
+func (m *mockRegistryStore) Register(reg *registry.AppRegistration) error {
+	m.regs[reg.ID] = reg
+	return nil
+}
+
+func (m *mockRegistryStore) Get(id string) (*registry.AppRegistration, bool) {
+	r, ok := m.regs[id]
+	return r, ok
+}
+
+func (m *mockRegistryStore) GetByAPIKey(apiKey string) (*registry.AppRegistration, bool) {
+	for _, r := range m.regs {
+		if r.APIKey == apiKey && r.Status == registry.StatusActive {
+			return r, true
+		}
+	}
+	return nil, false
+}
+
+func (m *mockRegistryStore) GetByAPIKeyAnyStatus(apiKey string) (*registry.AppRegistration, bool) {
+	for _, r := range m.regs {
+		if r.APIKey == apiKey {
+			return r, true
+		}
+	}
+	return nil, false
+}
+
+func (m *mockRegistryStore) GetByEmail(email string) (*registry.AppRegistration, bool) {
+	return nil, false
+}
+
+func (m *mockRegistryStore) List() []registry.AppRegistrationSummary { return nil }
+
+func (m *mockRegistryStore) Update(id, assignedTo, label, status string) error {
+	return nil
+}
+
+func (m *mockRegistryStore) UpdateLastUsedAt(apiKey string) {}
+
+func (m *mockRegistryStore) MarkStatus(apiKey, status string) {}
+
+func (m *mockRegistryStore) Delete(id string) error { return nil }
+
+func (m *mockRegistryStore) Count() int { return len(m.regs) }
+
+func (m *mockRegistryStore) HasEntries() bool { return len(m.regs) > 0 }
+
+func TestBackfillRegistryFromCredentials_NilRegistry(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{
+		"user@example.com": {APIKey: "key", APISecret: "secret"},
+	}}
+	tokenStore := &mockTokenStore{entries: map[string]*KiteTokenEntry{}}
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      tokenStore,
+		Logger:          testLogger(),
+		// RegistryStore is nil
+	})
+
+	// Should not panic
+	svc.BackfillRegistryFromCredentials()
+}
+
+func TestBackfillRegistryFromCredentials_EmptyCredentials(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{}}
+	tokenStore := &mockTokenStore{entries: map[string]*KiteTokenEntry{}}
+	regStore := &mockRegistryStore{regs: map[string]*registry.AppRegistration{}}
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      tokenStore,
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	svc.BackfillRegistryFromCredentials()
+	if len(regStore.regs) != 0 {
+		t.Errorf("Expected 0 registrations, got %d", len(regStore.regs))
+	}
+}
+
+func TestBackfillRegistryFromCredentials_AlreadyInRegistry(t *testing.T) {
+	t.Parallel()
+
+	// The mockCredentialStore.ListAllRaw returns nil by default,
+	// so we need a store that actually returns raw entries.
+	// Use the real KiteCredentialStore for this test.
+	credStore := NewKiteCredentialStore()
+	credStore.Set("user@example.com", &KiteCredentialEntry{APIKey: "existing_key", APISecret: "secret"})
+
+	regStore := &mockRegistryStore{regs: map[string]*registry.AppRegistration{
+		"existing": {ID: "existing", APIKey: "existing_key", Status: registry.StatusActive},
+	}}
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	svc.BackfillRegistryFromCredentials()
+	// Should not create a new registration since it already exists
+	if len(regStore.regs) != 1 {
+		t.Errorf("Expected 1 registration (no new), got %d", len(regStore.regs))
+	}
+}
+
+func TestBackfillRegistryFromCredentials_NewEntry(t *testing.T) {
+	t.Parallel()
+
+	credStore := NewKiteCredentialStore()
+	credStore.Set("new@example.com", &KiteCredentialEntry{APIKey: "new_key_12345678", APISecret: "new_secret"})
+
+	regStore := &mockRegistryStore{regs: map[string]*registry.AppRegistration{}}
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	svc.BackfillRegistryFromCredentials()
+	if len(regStore.regs) != 1 {
+		t.Errorf("Expected 1 new registration, got %d", len(regStore.regs))
+	}
+
+	// Verify the registration details
+	for _, reg := range regStore.regs {
+		if reg.APIKey != "new_key_12345678" {
+			t.Errorf("APIKey = %q, want new_key_12345678", reg.APIKey)
+		}
+		if reg.Status != registry.StatusActive {
+			t.Errorf("Status = %q, want active", reg.Status)
+		}
+		if reg.Source != registry.SourceMigrated {
+			t.Errorf("Source = %q, want migrated", reg.Source)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CredentialStore.Delete with DB + logger
+// ---------------------------------------------------------------------------
+
+func TestKiteCredentialStore_DeleteWithDB(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	// Set then delete
+	store.Set("del@example.com", &KiteCredentialEntry{APIKey: "key_del", APISecret: "secret_del"})
+
+	// Verify it exists
+	_, ok := store.Get("del@example.com")
+	if !ok {
+		t.Fatal("Expected entry to exist before delete")
+	}
+
+	// Delete with DB
+	store.Delete("del@example.com")
+
+	// Verify deleted from memory
+	_, ok = store.Get("del@example.com")
+	if ok {
+		t.Error("Entry should not exist after delete")
+	}
+
+	// Verify deleted from DB by loading into fresh store
+	store2 := NewKiteCredentialStore()
+	store2.SetDB(db)
+	if err := store2.LoadFromDB(); err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+	_, ok = store2.Get("del@example.com")
+	if ok {
+		t.Error("Entry should not exist in DB after delete")
+	}
+}
+
+func TestKiteCredentialStore_DeleteNonexistent(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	// Delete non-existent entry — should not panic
+	store.Delete("nonexistent@example.com")
+}
+
+func TestKiteCredentialStore_LoadFromDB_Error(t *testing.T) {
+	t.Parallel()
+
+	store := NewKiteCredentialStore()
+	// No DB set — LoadFromDB should return nil
+	err := store.LoadFromDB()
+	if err != nil {
+		t.Errorf("LoadFromDB with nil DB should return nil, got: %v", err)
+	}
+}
+
+func TestKiteCredentialStore_ListAllRaw(t *testing.T) {
+	t.Parallel()
+
+	store := NewKiteCredentialStore()
+	store.Set("a@example.com", &KiteCredentialEntry{APIKey: "key_a", APISecret: "secret_a"})
+	store.Set("b@example.com", &KiteCredentialEntry{APIKey: "key_b", APISecret: "secret_b"})
+
+	raw := store.ListAllRaw()
+	if len(raw) != 2 {
+		t.Errorf("ListAllRaw count = %d, want 2", len(raw))
+	}
+
+	// Verify entries contain unredacted secrets
+	byEmail := map[string]RawCredentialEntry{}
+	for _, r := range raw {
+		byEmail[r.Email] = r
+	}
+	if byEmail["a@example.com"].APISecret != "secret_a" {
+		t.Errorf("Expected unredacted secret, got %q", byEmail["a@example.com"].APISecret)
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.Delete — with DB persistence
+// ===========================================================================
+
+func TestKiteCredentialStore_DeleteWithDB_Final(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	// Save first
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "test-key-12345678",
+		APISecret: "test-secret-12345678",
+	})
+
+	// Now delete
+	store.Delete("user@example.com")
+
+	// Verify it's gone
+	_, ok := store.Get("user@example.com")
+	if ok {
+		t.Error("Credential should be deleted")
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.Delete — without DB (in-memory only)
+// ===========================================================================
+
+func TestKiteCredentialStore_DeleteWithoutDB(t *testing.T) {
+	t.Parallel()
+
+	store := NewKiteCredentialStore()
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "test-key",
+		APISecret: "test-secret",
+	})
+
+	store.Delete("user@example.com")
+
+	_, ok := store.Get("user@example.com")
+	if ok {
+		t.Error("Credential should be deleted")
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.Set — with DB and API key change triggers invalidation
+// ===========================================================================
+
+func TestKiteCredentialStore_Set_APIKeyChange_InvalidatesToken(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	var invalidatedEmail string
+	store.OnTokenInvalidate(func(email string) {
+		invalidatedEmail = email
+	})
+
+	// Store initial credentials
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "old-key-12345678",
+		APISecret: "old-secret-12345678",
+	})
+
+	// Change API key
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "new-key-12345678",
+		APISecret: "new-secret-12345678",
+	})
+
+	if invalidatedEmail != "user@example.com" {
+		t.Errorf("Expected token invalidation for 'user@example.com', got %q", invalidatedEmail)
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.Set — same API key doesn't trigger invalidation
+// ===========================================================================
+
+func TestKiteCredentialStore_Set_SameKey_NoInvalidation(t *testing.T) {
+	t.Parallel()
+
+	store := NewKiteCredentialStore()
+
+	invalidated := false
+	store.OnTokenInvalidate(func(email string) {
+		invalidated = true
+	})
+
+	// Store and re-store same key
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "same-key-12345678",
+		APISecret: "secret1",
+	})
+	store.Set("user@example.com", &KiteCredentialEntry{
+		APIKey:    "same-key-12345678",
+		APISecret: "secret2",
+	})
+
+	if invalidated {
+		t.Error("Should not invalidate when API key is unchanged")
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.LoadFromDB — with database
+// ===========================================================================
+
+func TestKiteCredentialStore_LoadFromDB_WithDB(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	// Save directly to DB
+	err = db.SaveCredential("user@example.com", "loaded-key-12345678", "loaded-secret-12345678", "loaded-key-12345678", time.Now())
+	if err != nil {
+		t.Fatalf("SaveCredential error: %v", err)
+	}
+
+	store := NewKiteCredentialStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	err = store.LoadFromDB()
+	if err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	entry, ok := store.Get("user@example.com")
+	if !ok {
+		t.Fatal("Credential should be loaded from DB")
+	}
+	if entry.APIKey != "loaded-key-12345678" {
+		t.Errorf("APIKey = %q, want 'loaded-key-12345678'", entry.APIKey)
+	}
+}
+
+// ===========================================================================
+// KiteCredentialStore.LoadFromDB — nil DB returns nil
+// ===========================================================================
+
+func TestKiteCredentialStore_LoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
+
+	store := NewKiteCredentialStore()
+	err := store.LoadFromDB()
+	if err != nil {
+		t.Errorf("LoadFromDB with nil DB should return nil, got: %v", err)
+	}
+}
+
+// ===========================================================================
+// KiteTokenStore.Delete — with DB persistence
+// ===========================================================================
+
+func TestKiteTokenStore_DeleteWithDB(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	store.Set("user@example.com", &KiteTokenEntry{
+		AccessToken: "token123",
+		UserID:      "UID01",
+		UserName:    "User",
+	})
+
+	store.Delete("user@example.com")
+
+	_, ok := store.Get("user@example.com")
+	if ok {
+		t.Error("Token should be deleted")
+	}
+}
+
+// ===========================================================================
+// KiteTokenStore.Set — with DB persistence and OnChange callbacks
+// ===========================================================================
+
+func TestKiteTokenStore_Set_WithDBAndCallback(t *testing.T) {
+	t.Parallel()
+
+	db, err := alerts.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB error: %v", err)
+	}
+	defer db.Close()
+
+	store := NewKiteTokenStore()
+	store.SetDB(db)
+	store.SetLogger(testLogger())
+
+	var callbackEmail string
+	store.OnChange(func(email string, entry *KiteTokenEntry) {
+		callbackEmail = email
+	})
+
+	store.Set("user@example.com", &KiteTokenEntry{
+		AccessToken: "tok",
+		UserID:      "UID01",
+		UserName:    "User",
+	})
+
+	if callbackEmail != "user@example.com" {
+		t.Errorf("Callback email = %q, want 'user@example.com'", callbackEmail)
+	}
+}
+
+// ===========================================================================
+// BackfillRegistryFromCredentials — no registry store
+// ===========================================================================
+
+func TestBackfillRegistryFromCredentials_NilRegistry_Final(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStore{entries: map[string]*KiteCredentialEntry{
+		"user@example.com": {APIKey: "key", APISecret: "secret"},
+	}}
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		Logger:          testLogger(),
+		// No RegistryStore
+	})
+
+	// Should not panic
+	svc.BackfillRegistryFromCredentials()
+}
+
+// ===========================================================================
+// BackfillRegistryFromCredentials — empty credentials
+// ===========================================================================
+
+func TestBackfillRegistryFromCredentials_EmptyCredentials_Final(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStoreWithRaw{
+		entries: map[string]*KiteCredentialEntry{},
+		raw:     []RawCredentialEntry{},
+	}
+	regStore := registry.New()
+	regStore.SetLogger(testLogger())
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	// Should not panic
+	svc.BackfillRegistryFromCredentials()
+}
+
+// ===========================================================================
+// BackfillRegistryFromCredentials — already in registry (skip)
+// ===========================================================================
+
+func TestBackfillRegistryFromCredentials_AlreadyInRegistry_Final(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStoreWithRaw{
+		entries: map[string]*KiteCredentialEntry{
+			"user@example.com": {APIKey: "existing-key", APISecret: "secret"},
+		},
+		raw: []RawCredentialEntry{
+			{Email: "user@example.com", APIKey: "existing-key", APISecret: "secret"},
+		},
+	}
+
+	regStore := registry.New()
+	regStore.SetLogger(testLogger())
+	// Pre-register this key
+	_ = regStore.Register(&registry.AppRegistration{
+		ID:           "pre-existing",
+		APIKey:       "existing-key",
+		APISecret:    "secret",
+		AssignedTo:   "user@example.com",
+		Status:       registry.StatusActive,
+		Source:       registry.SourceAdmin,
+		RegisteredBy: "admin@example.com",
+	})
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	svc.BackfillRegistryFromCredentials()
+
+	// Should still just have 1 entry (not duplicated)
+	if regStore.Count() != 1 {
+		t.Errorf("Registry count = %d, want 1 (no duplicate)", regStore.Count())
+	}
+}
+
+// ===========================================================================
+// BackfillRegistryFromCredentials — new entry migrated
+// ===========================================================================
+
+func TestBackfillRegistryFromCredentials_NewMigrated(t *testing.T) {
+	t.Parallel()
+
+	credStore := &mockCredentialStoreWithRaw{
+		entries: map[string]*KiteCredentialEntry{
+			"user@example.com": {APIKey: "new-key-12345678", APISecret: "new-secret"},
+		},
+		raw: []RawCredentialEntry{
+			{Email: "user@example.com", APIKey: "new-key-12345678", APISecret: "new-secret"},
+		},
+	}
+
+	regStore := registry.New()
+	regStore.SetLogger(testLogger())
+
+	svc := NewCredentialService(CredentialServiceConfig{
+		CredentialStore: credStore,
+		TokenStore:      &mockTokenStore{entries: map[string]*KiteTokenEntry{}},
+		RegistryStore:   regStore,
+		Logger:          testLogger(),
+	})
+
+	svc.BackfillRegistryFromCredentials()
+
+	if regStore.Count() != 1 {
+		t.Errorf("Registry count = %d, want 1 (migrated entry)", regStore.Count())
+	}
+}
+
+// ===========================================================================
+// mockCredentialStoreWithRaw — supports ListAllRaw for BackfillRegistryFromCredentials
+// ===========================================================================
+
+type mockCredentialStoreWithRaw struct {
+	entries map[string]*KiteCredentialEntry
+	raw     []RawCredentialEntry
+}
+
+func (m *mockCredentialStoreWithRaw) Get(email string) (*KiteCredentialEntry, bool) {
+	e, ok := m.entries[email]
+	return e, ok
+}
+
+func (m *mockCredentialStoreWithRaw) Set(email string, entry *KiteCredentialEntry) {
+	m.entries[email] = entry
+}
+
+func (m *mockCredentialStoreWithRaw) Delete(email string) { delete(m.entries, email) }
+
+func (m *mockCredentialStoreWithRaw) ListAll() []KiteCredentialSummary { return nil }
+
+func (m *mockCredentialStoreWithRaw) ListAllRaw() []RawCredentialEntry { return m.raw }
+
+func (m *mockCredentialStoreWithRaw) GetSecretByAPIKey(apiKey string) (string, bool) {
+	return "", false
+}
+
+func (m *mockCredentialStoreWithRaw) Count() int { return len(m.entries) }

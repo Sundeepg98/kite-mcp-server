@@ -23,10 +23,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Open DB directly
-	db, err := sql.Open("sqlite", *dbPath)
+	if err := run(*dbPath, *oldSecret, *newSecret, os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run opens the database, reads the HKDF salt, derives keys, and re-encrypts
+// all sensitive columns from oldSecret to newSecret.
+func run(dbPath, oldSecret, newSecret string, w *os.File) error {
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		log.Fatal("open db: ", err)
+		return fmt.Errorf("open db: %w", err)
 	}
 	defer db.Close()
 
@@ -37,26 +44,23 @@ func main() {
 	if err == nil && saltHex != "" {
 		salt, err = hex.DecodeString(saltHex)
 		if err != nil {
-			log.Fatal("decode stored salt: ", err)
+			return fmt.Errorf("decode stored salt: %w", err)
 		}
-		fmt.Printf("Using HKDF salt from database (%d bytes)\n", len(salt))
+		fmt.Fprintf(w, "Using HKDF salt from database (%d bytes)\n", len(salt))
 	} else {
-		fmt.Println("No HKDF salt found in database, using nil salt (legacy)")
+		fmt.Fprintln(w, "No HKDF salt found in database, using nil salt (legacy)")
 	}
 
-	// Derive both keys with the same salt
-	oldKey, err := alerts.DeriveEncryptionKeyWithSalt(*oldSecret, salt)
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt(oldSecret, salt)
 	if err != nil {
-		log.Fatal("derive old key: ", err)
+		return fmt.Errorf("derive old key: %w", err)
 	}
-	newKey, err := alerts.DeriveEncryptionKeyWithSalt(*newSecret, salt)
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt(newSecret, salt)
 	if err != nil {
-		log.Fatal("derive new key: ", err)
+		return fmt.Errorf("derive new key: %w", err)
 	}
 
 	// Re-encrypt each table's sensitive columns
-	// Tables: kite_tokens (access_token), kite_credentials (api_key, api_secret),
-	// oauth_clients (client_secret), mcp_sessions (session_id_enc)
 	tables := []struct {
 		table   string
 		pkCol   string
@@ -73,11 +77,12 @@ func main() {
 		if err != nil {
 			log.Printf("ERROR rotating %s: %v", t.table, err)
 		} else {
-			fmt.Printf("Rotated %d rows in %s\n", count, t.table)
+			fmt.Fprintf(w, "Rotated %d rows in %s\n", count, t.table)
 		}
 	}
 
-	fmt.Println("Key rotation complete. Update OAUTH_JWT_SECRET on the server.")
+	fmt.Fprintln(w, "Key rotation complete. Update OAUTH_JWT_SECRET on the server.")
+	return nil
 }
 
 // rotateTable re-encrypts all encrypted columns in a table from oldKey to newKey.

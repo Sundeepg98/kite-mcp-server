@@ -631,3 +631,20 @@ func TestRequireAuth_NonBearerAuth(t *testing.T) {
 		t.Errorf("Status = %d, want 401 (non-Bearer auth should fail)", rr.Code)
 	}
 }
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// ContextWithEmail / EmailFromContext
+// ===========================================================================
+
+func TestEmailFromContext_NoEmail(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	email := EmailFromContext(req.Context())
+	if email != "" {
+		t.Errorf("EmailFromContext = %q, want empty string", email)
+	}
+}

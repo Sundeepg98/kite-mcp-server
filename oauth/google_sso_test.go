@@ -420,10 +420,10 @@ func TestHandleGoogleCallback_TokenExchangeFails(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 
@@ -466,11 +466,11 @@ func TestHandleGoogleCallback_UserInfoFails(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
-		UserInfoURL: userinfoSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 
@@ -515,11 +515,11 @@ func TestHandleGoogleCallback_EmptyEmail(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
-		UserInfoURL: userinfoSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 
@@ -570,11 +570,11 @@ func TestHandleGoogleCallback_SuspendedUser(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
-		UserInfoURL: userinfoSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 
@@ -710,11 +710,11 @@ func TestHandleGoogleCallback_NoUserStore(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
-		UserInfoURL: userinfoSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 	// Deliberately do NOT set a userStore
@@ -760,11 +760,11 @@ func TestHandleGoogleCallback_TraderRedirectToDashboard(t *testing.T) {
 	defer h.Close()
 
 	h.SetGoogleSSO(&GoogleSSOConfig{
-		ClientID:    "test-id",
+		ClientID:     "test-id",
 		ClientSecret: "test-secret",
-		RedirectURL: "https://test.example.com/auth/google/callback",
-		Endpoint:    tokenSrv.URL,
-		UserInfoURL: userinfoSrv.URL,
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
 	})
 	h.SetHTTPClient(tokenSrv.Client())
 
@@ -1772,7 +1772,6 @@ func TestHandleAdminLogin_POST_EmailCaseNormalization(t *testing.T) {
 	}
 }
 
-
 // ===========================================================================
 // HandleKiteOAuthCallback — error paths
 // ===========================================================================
@@ -1924,3 +1923,386 @@ func TestHandleKiteOAuthCallback_GlobalExchangeSuccess(t *testing.T) {
 
 // Ensure unused import is consumed.
 var _ = json.Marshal
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// GoogleSSOEnabled / SetGoogleSSO / SetUserStore
+// ===========================================================================
+
+func TestGoogleSSO_NotEnabled(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	if h.GoogleSSOEnabled() {
+		t.Error("GoogleSSO should not be enabled by default in tests")
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — GET
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_NoCSRF(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	form := url.Values{
+		"email":    {"admin@test.com"},
+		"password": {"test123"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// Should render the form again (CSRF failure)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (re-rendered form)", rr.Code)
+	}
+}
+
+func TestHandleGoogleCallback_OpenRedirectInCookie(t *testing.T) {
+	t.Parallel()
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "tok",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	}))
+	defer tokenSrv.Close()
+
+	userinfoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":          "admin@test.com",
+			"verified_email": true,
+		})
+	}))
+	defer userinfoSrv.Close()
+
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetGoogleSSO(&GoogleSSOConfig{
+		ClientID:     "id",
+		ClientSecret: "secret",
+		RedirectURL:  "https://test.example.com/auth/google/callback",
+		Endpoint:     tokenSrv.URL,
+		UserInfoURL:  userinfoSrv.URL,
+	})
+	h.SetHTTPClient(tokenSrv.Client())
+	h.SetUserStore(&mockAdminUserStore{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+	})
+
+	state := base64.URLEncoding.EncodeToString([]byte("mystate"))
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/callback?code=c&state="+state, nil)
+	req.AddCookie(&http.Cookie{Name: googleStateCookieName, Value: state + "|//evil.com"})
+	rr := httptest.NewRecorder()
+
+	h.HandleGoogleCallback(rr, req)
+
+	if rr.Code == http.StatusFound {
+		location := rr.Header().Get("Location")
+		if strings.Contains(location, "evil.com") {
+			t.Errorf("Open redirect should be blocked, got: %q", location)
+		}
+	}
+}
+
+func TestGoogleSSOConfig_UserInfoURL_Default(t *testing.T) {
+	t.Parallel()
+	cfg := &GoogleSSOConfig{}
+	u := cfg.userInfoURL()
+	if u != googleUserInfoURL {
+		t.Errorf("userInfoURL() = %q, want default %q", u, googleUserInfoURL)
+	}
+}
+
+func TestGoogleSSOConfig_UserInfoURL_Override(t *testing.T) {
+	t.Parallel()
+	cfg := &GoogleSSOConfig{UserInfoURL: "https://custom.example.com/userinfo"}
+	u := cfg.userInfoURL()
+	if u != "https://custom.example.com/userinfo" {
+		t.Errorf("userInfoURL() = %q, want override", u)
+	}
+}
+
+func TestGoogleSSOConfig_OAuthConfig_WithEndpoint(t *testing.T) {
+	t.Parallel()
+	cfg := &GoogleSSOConfig{
+		ClientID:     "id",
+		ClientSecret: "secret",
+		RedirectURL:  "https://test.example.com/cb",
+		Endpoint:     "https://custom-token-server.example.com",
+	}
+	oc := cfg.oauthConfig()
+	if oc.Endpoint.TokenURL != "https://custom-token-server.example.com/token" {
+		t.Errorf("TokenURL = %q, want custom endpoint /token", oc.Endpoint.TokenURL)
+	}
+	if oc.Endpoint.AuthURL != "https://custom-token-server.example.com/auth" {
+		t.Errorf("AuthURL = %q, want custom endpoint /auth", oc.Endpoint.AuthURL)
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — GET serves form
+// ===========================================================================
+
+func TestHandleAdminLogin_GET_ServesForm(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/admin-login", nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/html") {
+		t.Error("Expected HTML content type")
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST no user store
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_NoUserStore_Final(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	csrfToken := "csrf-admin"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"secret"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (form re-rendered with error)", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "not configured") {
+		t.Errorf("Body should contain 'not configured'")
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST CSRF mismatch
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_CSRFMismatch(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"secret"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {"form-csrf"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: "cookie-csrf"})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (form re-rendered)", rr.Code)
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST wrong password
+// ===========================================================================
+
+// mockAdminUserStoreFinal implements AdminUserStore for testing.
+type mockAdminUserStoreFinal struct {
+	roles    map[string]string
+	statuses map[string]string
+}
+
+func (m *mockAdminUserStoreFinal) GetRole(email string) string {
+	return m.roles[email]
+}
+
+func (m *mockAdminUserStoreFinal) GetStatus(email string) string {
+	return m.statuses[email]
+}
+
+func (m *mockAdminUserStoreFinal) VerifyPassword(email, password string) (bool, error) {
+	if email == "admin@test.com" && password == "correct-password" {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (m *mockAdminUserStoreFinal) EnsureGoogleUser(email string) {}
+
+func TestHandleAdminLogin_POST_WrongPassword_Final(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreFinal{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+	})
+
+	csrfToken := "csrf"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"wrong-password"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200 (form re-rendered)", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Invalid email or password") {
+		t.Errorf("Body should contain 'Invalid email or password'")
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST success
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_Success(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreFinal{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+	})
+
+	csrfToken := "csrf"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"correct-password"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302 (redirect on success)", rr.Code)
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST open redirect prevention
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_OpenRedirectPrevention_Final(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreFinal{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+	})
+
+	csrfToken := "csrf"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"correct-password"},
+		"redirect":   {"//evil.com"}, // open redirect attempt
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302", rr.Code)
+	}
+	location := rr.Header().Get("Location")
+	if strings.Contains(location, "evil.com") {
+		t.Errorf("Open redirect should be blocked, got: %q", location)
+	}
+}
+
+// ===========================================================================
+// HandleAdminLogin — POST with verify error
+// ===========================================================================
+
+func TestHandleAdminLogin_POST_VerifyError_Final(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreFinalWithError{})
+
+	csrfToken := "csrf"
+	form := url.Values{
+		"email":      {"admin@test.com"},
+		"password":   {"any"},
+		"redirect":   {"/admin/ops"},
+		"csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// Should show login form with error (verify error + !match)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want 200", rr.Code)
+	}
+}
+
+type mockAdminUserStoreFinalWithError struct{}
+
+func (m *mockAdminUserStoreFinalWithError) GetRole(email string) string { return "admin" }
+
+func (m *mockAdminUserStoreFinalWithError) GetStatus(email string) string { return "active" }
+
+func (m *mockAdminUserStoreFinalWithError) VerifyPassword(email, password string) (bool, error) {
+	return false, fmt.Errorf("bcrypt internal error")
+}
+
+func (m *mockAdminUserStoreFinalWithError) EnsureGoogleUser(email string) {}

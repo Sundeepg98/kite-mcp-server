@@ -610,3 +610,457 @@ func TestClientStore_LoadFromDB_NoPersister(t *testing.T) {
 	}
 }
 
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// AuthCodeStore — edge cases
+// ===========================================================================
+
+func TestAuthCodeStore_Close(t *testing.T) {
+	t.Parallel()
+	store := NewAuthCodeStore()
+	// Close should not panic
+	store.Close()
+}
+
+func TestAuthCodeStore_ConsumeAfterExpiry(t *testing.T) {
+	t.Parallel()
+	store := NewAuthCodeStore()
+
+	code, err := store.Generate(&AuthCodeEntry{
+		ClientID:      "client1",
+		CodeChallenge: "challenge",
+		RedirectURI:   "https://example.com/cb",
+		Email:         "user@test.com",
+	})
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	// Manually expire the code
+	store.mu.Lock()
+	if entry, ok := store.entries[code]; ok {
+		entry.ExpiresAt = time.Now().Add(-1 * time.Hour)
+	}
+	store.mu.Unlock()
+
+	_, ok := store.Consume(code)
+	if ok {
+		t.Error("Expected false for expired code")
+	}
+}
+
+func TestAuthCodeStore_DoubleConsume(t *testing.T) {
+	t.Parallel()
+	store := NewAuthCodeStore()
+
+	code, err := store.Generate(&AuthCodeEntry{
+		ClientID:      "client1",
+		CodeChallenge: "challenge",
+		RedirectURI:   "https://example.com/cb",
+		Email:         "user@test.com",
+	})
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	// First consume should succeed
+	_, ok := store.Consume(code)
+	if !ok {
+		t.Fatal("First Consume should succeed")
+	}
+
+	// Second consume should fail (already consumed)
+	_, ok = store.Consume(code)
+	if ok {
+		t.Error("Expected false for double consume")
+	}
+}
+
+// ===========================================================================
+// ClientStore — edge cases
+// ===========================================================================
+
+func TestClientStore_GetNonExistent(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+	_, ok := store.Get("nonexistent")
+	if ok {
+		t.Error("Expected false for nonexistent client")
+	}
+}
+
+func TestClientStore_IsKiteClient(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+
+	// Register a normal client
+	clientID, _, err := store.Register([]string{"https://example.com/cb"}, "test")
+	if err != nil {
+		t.Fatalf("Register error: %v", err)
+	}
+	if store.IsKiteClient(clientID) {
+		t.Error("Normally registered client should not be a Kite client")
+	}
+
+	// Kite clients are registered via auto-registration during authorize
+	// with the isKite flag set
+}
+
+// ===========================================================================
+// cleanup — stop via done channel
+// ===========================================================================
+
+func TestAuthCodeStore_CleanupStopsOnDone(t *testing.T) {
+	t.Parallel()
+	store := &AuthCodeStore{
+		entries: make(map[string]*AuthCodeEntry),
+		done:    make(chan struct{}),
+	}
+
+	store.mu.Lock()
+	store.entries["expired"] = &AuthCodeEntry{
+		ClientID:  "client",
+		ExpiresAt: time.Now().Add(-1 * time.Hour),
+	}
+	store.entries["valid"] = &AuthCodeEntry{
+		ClientID:  "client",
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	store.mu.Unlock()
+
+	go store.cleanup()
+	time.Sleep(10 * time.Millisecond)
+	store.Close()
+}
+
+// ===========================================================================
+// cleanup goroutine — tick path that actually cleans expired entries
+// ===========================================================================
+
+func TestAuthCodeStore_CleanupTickRemovesExpired(t *testing.T) {
+	t.Parallel()
+	store := &AuthCodeStore{
+		entries: make(map[string]*AuthCodeEntry),
+		done:    make(chan struct{}),
+	}
+
+	// Manually add an expired entry
+	store.mu.Lock()
+	store.entries["expired-code"] = &AuthCodeEntry{
+		ClientID:  "client",
+		ExpiresAt: time.Now().Add(-1 * time.Hour),
+	}
+	store.entries["valid-code"] = &AuthCodeEntry{
+		ClientID:  "client",
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	store.mu.Unlock()
+
+	// Run cleanup directly (bypass ticker by calling the inner logic)
+	// We can't easily trigger the ticker, so simulate the cleanup loop body.
+	store.mu.Lock()
+	now := time.Now()
+	for k, v := range store.entries {
+		if now.After(v.ExpiresAt) {
+			delete(store.entries, k)
+		}
+	}
+	store.mu.Unlock()
+
+	store.mu.RLock()
+	_, hasExpired := store.entries["expired-code"]
+	_, hasValid := store.entries["valid-code"]
+	store.mu.RUnlock()
+
+	if hasExpired {
+		t.Error("Expired entry should have been removed")
+	}
+	if !hasValid {
+		t.Error("Valid entry should still exist")
+	}
+	close(store.done)
+}
+
+// ===========================================================================
+// AuthCodeStore.Generate — store full path
+// ===========================================================================
+
+func TestAuthCodeStore_GenerateStoreFull(t *testing.T) {
+	t.Parallel()
+	store := &AuthCodeStore{
+		entries: make(map[string]*AuthCodeEntry),
+		done:    make(chan struct{}),
+	}
+	defer close(store.done)
+
+	// Fill to capacity
+	store.mu.Lock()
+	for i := 0; i < maxAuthCodes; i++ {
+		store.entries[fmt.Sprintf("code-%d", i)] = &AuthCodeEntry{
+			ClientID:  "client",
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		}
+	}
+	store.mu.Unlock()
+
+	_, err := store.Generate(&AuthCodeEntry{ClientID: "overflow"})
+	if err != ErrAuthCodeStoreFull {
+		t.Errorf("Expected ErrAuthCodeStoreFull, got: %v", err)
+	}
+}
+
+// ===========================================================================
+// ClientStore.LoadFromDB — bad JSON in redirect URIs
+// ===========================================================================
+
+func TestClientStore_LoadFromDB_BadJSON(t *testing.T) {
+	t.Parallel()
+
+	persister := &mockPersisterFinal{
+		clients: []*ClientLoadEntry{
+			{
+				ClientID:     "client1",
+				ClientSecret: "secret",
+				RedirectURIs: "not-json",
+				ClientName:   "test",
+				CreatedAt:    time.Now(),
+			},
+		},
+	}
+
+	store := NewClientStore()
+	store.SetPersister(persister)
+
+	err := store.LoadFromDB()
+	if err != nil {
+		t.Fatalf("LoadFromDB error: %v", err)
+	}
+
+	// Should load with nil/empty URIs since JSON was bad
+	entry, ok := store.Get("client1")
+	if !ok {
+		t.Fatal("Client should exist after LoadFromDB")
+	}
+	if len(entry.RedirectURIs) != 0 {
+		t.Errorf("RedirectURIs should be empty for bad JSON, got: %v", entry.RedirectURIs)
+	}
+}
+
+// ===========================================================================
+// ClientStore.LoadFromDB — persister returns error
+// ===========================================================================
+
+func TestClientStore_LoadFromDB_PersisterError(t *testing.T) {
+	t.Parallel()
+
+	persister := &mockPersisterFinal{
+		loadErr: fmt.Errorf("db read error"),
+	}
+
+	store := NewClientStore()
+	store.SetPersister(persister)
+
+	err := store.LoadFromDB()
+	if err == nil || err.Error() != "db read error" {
+		t.Errorf("Expected 'db read error', got: %v", err)
+	}
+}
+
+// ===========================================================================
+// ClientStore.Register — persist error path (with logger)
+// ===========================================================================
+
+func TestClientStore_Register_PersistError(t *testing.T) {
+	t.Parallel()
+
+	persister := &mockPersisterFinal{
+		saveErr: fmt.Errorf("save failed"),
+	}
+
+	store := NewClientStore()
+	store.SetPersister(persister)
+	store.SetLogger(testLogger())
+
+	// Should succeed despite persist error (best-effort persistence)
+	clientID, clientSecret, err := store.Register([]string{"https://example.com/cb"}, "test")
+	if err != nil {
+		t.Fatalf("Register error: %v", err)
+	}
+	if clientID == "" || clientSecret == "" {
+		t.Error("Expected non-empty client ID and secret")
+	}
+}
+
+// ===========================================================================
+// ClientStore.RegisterKiteClient — persist error path
+// ===========================================================================
+
+func TestClientStore_RegisterKiteClient_PersistError(t *testing.T) {
+	t.Parallel()
+
+	persister := &mockPersisterFinal{
+		saveErr: fmt.Errorf("save failed"),
+	}
+
+	store := NewClientStore()
+	store.SetPersister(persister)
+	store.SetLogger(testLogger())
+
+	// Should not panic despite persist error
+	store.RegisterKiteClient("kite-key-12345678", []string{"https://example.com/cb"})
+
+	entry, ok := store.Get("kite-key-12345678")
+	if !ok {
+		t.Fatal("Kite client should exist in memory despite persist error")
+	}
+	if !entry.IsKiteAPIKey {
+		t.Error("Should be marked as Kite API key client")
+	}
+}
+
+// ===========================================================================
+// ClientStore.RegisterKiteClient — short client ID name path
+// ===========================================================================
+
+func TestClientStore_RegisterKiteClient_ShortClientID(t *testing.T) {
+	t.Parallel()
+
+	store := NewClientStore()
+	store.RegisterKiteClient("abc", []string{"https://example.com/cb"})
+
+	entry, ok := store.Get("abc")
+	if !ok {
+		t.Fatal("Client should exist")
+	}
+	if entry.ClientName != "kite-user" {
+		t.Errorf("ClientName = %q, want 'kite-user' for short ID", entry.ClientName)
+	}
+}
+
+// ===========================================================================
+// ClientStore.RegisterKiteClient — already exists (no-op)
+// ===========================================================================
+
+func TestClientStore_RegisterKiteClient_AlreadyExists(t *testing.T) {
+	t.Parallel()
+
+	store := NewClientStore()
+	store.RegisterKiteClient("kite-key-12345678", []string{"https://old.example.com/cb"})
+	store.RegisterKiteClient("kite-key-12345678", []string{"https://new.example.com/cb"})
+
+	// Should still have old redirect URI (not updated)
+	entry, _ := store.Get("kite-key-12345678")
+	if len(entry.RedirectURIs) != 1 || entry.RedirectURIs[0] != "https://old.example.com/cb" {
+		t.Errorf("Existing client should not be updated, got URIs: %v", entry.RedirectURIs)
+	}
+}
+
+// ===========================================================================
+// ClientStore.AddRedirectURI — persist error + max URIs cap
+// ===========================================================================
+
+func TestClientStore_AddRedirectURI_MaxCap(t *testing.T) {
+	t.Parallel()
+
+	store := NewClientStore()
+	store.RegisterKiteClient("kite-maxuri-key", nil)
+
+	// Add URIs up to the max
+	for i := 0; i < maxRedirectURIs; i++ {
+		store.AddRedirectURI("kite-maxuri-key", fmt.Sprintf("https://example.com/cb/%d", i))
+	}
+
+	// Next one should be silently ignored
+	store.AddRedirectURI("kite-maxuri-key", "https://example.com/cb/overflow")
+
+	entry, _ := store.Get("kite-maxuri-key")
+	if len(entry.RedirectURIs) != maxRedirectURIs {
+		t.Errorf("RedirectURIs count = %d, want %d (capped)", len(entry.RedirectURIs), maxRedirectURIs)
+	}
+}
+
+func TestClientStore_AddRedirectURI_PersistError(t *testing.T) {
+	t.Parallel()
+
+	persister := &mockPersisterFinal{saveErr: fmt.Errorf("save failed")}
+	store := NewClientStore()
+	store.SetPersister(persister)
+	store.SetLogger(testLogger())
+
+	store.RegisterKiteClient("kite-persist-err", []string{"https://example.com/cb"})
+	// Should not panic despite persist error on add
+	store.AddRedirectURI("kite-persist-err", "https://example.com/cb2")
+}
+
+func TestClientStore_AddRedirectURI_ClientNotFound(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+	// Should not panic
+	store.AddRedirectURI("nonexistent", "https://example.com/cb")
+}
+
+func TestClientStore_AddRedirectURI_DuplicateURI(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+	store.RegisterKiteClient("dup-uri-key", []string{"https://example.com/cb"})
+	store.AddRedirectURI("dup-uri-key", "https://example.com/cb") // duplicate
+	entry, _ := store.Get("dup-uri-key")
+	if len(entry.RedirectURIs) != 1 {
+		t.Errorf("Duplicate URI should not be added, got %d URIs", len(entry.RedirectURIs))
+	}
+}
+
+// ===========================================================================
+// ClientStore.Register — eviction when full
+// ===========================================================================
+
+func TestClientStore_Register_EvictsOldest(t *testing.T) {
+	t.Parallel()
+	store := NewClientStore()
+
+	// Pre-fill to capacity
+	store.mu.Lock()
+	for i := 0; i < maxClients; i++ {
+		store.clients[fmt.Sprintf("client-%d", i)] = &ClientEntry{
+			ClientName: fmt.Sprintf("client-%d", i),
+			CreatedAt:  time.Now().Add(-time.Duration(maxClients-i) * time.Second),
+		}
+	}
+	store.mu.Unlock()
+
+	_, _, err := store.Register([]string{"https://example.com/cb"}, "new-client")
+	if err != nil {
+		t.Fatalf("Register should succeed after eviction: %v", err)
+	}
+}
+
+// ===========================================================================
+// mockPersisterFinal — test helper for ClientStore persistence tests
+// ===========================================================================
+
+type mockPersisterFinal struct {
+	clients []*ClientLoadEntry
+	loadErr error
+	saveErr error
+}
+
+func (m *mockPersisterFinal) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	return nil
+}
+
+func (m *mockPersisterFinal) LoadClients() ([]*ClientLoadEntry, error) {
+	if m.loadErr != nil {
+		return nil, m.loadErr
+	}
+	return m.clients, nil
+}
+
+func (m *mockPersisterFinal) DeleteClient(clientID string) error {
+	return nil
+}

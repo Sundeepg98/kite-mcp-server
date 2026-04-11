@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -384,4 +386,247 @@ func TestRotateTable_SameKey(t *testing.T) {
 	var newEnc string
 	db.QueryRow(`SELECT access_token FROM kite_tokens WHERE email = ?`, "same@example.com").Scan(&newEnc)
 	assert.Equal(t, "value", alerts.Decrypt(key, newEnc))
+}
+
+// ===========================================================================
+// run() — integration tests for the extracted main logic
+// ===========================================================================
+
+// createOnDiskTestDB creates a SQLite DB on disk (in t.TempDir) with the
+// standard schema, returning the file path.
+func createOnDiskTestDB(t *testing.T) string {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+
+	ddl := `
+CREATE TABLE IF NOT EXISTS config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kite_tokens (
+    email        TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    user_id      TEXT NOT NULL,
+    user_name    TEXT NOT NULL,
+    stored_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kite_credentials (
+    email      TEXT PRIMARY KEY,
+    api_key    TEXT NOT NULL,
+    api_secret TEXT NOT NULL,
+    stored_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id     TEXT PRIMARY KEY,
+    client_secret TEXT NOT NULL,
+    redirect_uris TEXT NOT NULL,
+    client_name   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    is_kite_key   INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS mcp_sessions (
+    session_id      TEXT PRIMARY KEY,
+    email           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    expires_at      TEXT NOT NULL,
+    terminated      INTEGER NOT NULL DEFAULT 0,
+    session_id_enc  TEXT NOT NULL DEFAULT ''
+);
+`
+	_, err = db.Exec(ddl)
+	require.NoError(t, err)
+	db.Close()
+	return dbPath
+}
+
+func TestRun_NoSalt(t *testing.T) {
+	dbPath := createOnDiskTestDB(t)
+
+	// Seed a row using old-secret derived key.
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old-secret", nil)
+	require.NoError(t, err)
+	enc, err := alerts.Encrypt(oldKey, "my-token")
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
+		"user@test.com", enc, "uid", "User", "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+	db.Close()
+
+	// Run rotation.
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	err = run(dbPath, "old-secret", "new-secret", devNull)
+	require.NoError(t, err)
+
+	// Verify with new key.
+	db2, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	defer db2.Close()
+
+	var newEnc string
+	err = db2.QueryRow(`SELECT access_token FROM kite_tokens WHERE email = ?`, "user@test.com").Scan(&newEnc)
+	require.NoError(t, err)
+
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt("new-secret", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "my-token", alerts.Decrypt(newKey, newEnc))
+}
+
+func TestRun_WithSalt(t *testing.T) {
+	dbPath := createOnDiskTestDB(t)
+
+	salt := []byte("test-salt-32-bytes-for-hkdf-key!")
+	saltHex := hex.EncodeToString(salt)
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+
+	// Store salt in config.
+	_, err = db.Exec(`INSERT INTO config (key, value) VALUES ('hkdf_salt', ?)`, saltHex)
+	require.NoError(t, err)
+
+	// Seed a row.
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old-secret", salt)
+	require.NoError(t, err)
+	enc, err := alerts.Encrypt(oldKey, "salted-value")
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
+		"user@test.com", enc, enc, "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+	db.Close()
+
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	err = run(dbPath, "old-secret", "new-secret", devNull)
+	require.NoError(t, err)
+
+	// Verify.
+	db2, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	defer db2.Close()
+
+	var apiKey, apiSecret string
+	err = db2.QueryRow(`SELECT api_key, api_secret FROM kite_credentials WHERE email = ?`, "user@test.com").
+		Scan(&apiKey, &apiSecret)
+	require.NoError(t, err)
+
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt("new-secret", salt)
+	require.NoError(t, err)
+	assert.Equal(t, "salted-value", alerts.Decrypt(newKey, apiKey))
+	assert.Equal(t, "salted-value", alerts.Decrypt(newKey, apiSecret))
+}
+
+func TestRun_InvalidDBPath(t *testing.T) {
+	// sql.Open succeeds lazily; the error surfaces at query time as a logged
+	// warning per table. run() itself doesn't return an error in that case
+	// (matching main()'s original behavior of log.Printf per table).
+	badPath := filepath.Join(t.TempDir(), "nonexistent", "deep", "test.db")
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	// Should not panic; errors are logged per-table.
+	err = run(badPath, "old", "new", devNull)
+	require.NoError(t, err)
+}
+
+func TestRun_BadSaltHex(t *testing.T) {
+	dbPath := createOnDiskTestDB(t)
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	// Store invalid hex in salt.
+	_, err = db.Exec(`INSERT INTO config (key, value) VALUES ('hkdf_salt', 'not-valid-hex!!!')`)
+	require.NoError(t, err)
+	db.Close()
+
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	err = run(dbPath, "old", "new", devNull)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode stored salt")
+}
+
+func TestRun_EmptyTables(t *testing.T) {
+	dbPath := createOnDiskTestDB(t)
+
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	err = run(dbPath, "old", "new", devNull)
+	require.NoError(t, err)
+}
+
+func TestRun_AllTables(t *testing.T) {
+	dbPath := createOnDiskTestDB(t)
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+
+	oldKey, err := alerts.DeriveEncryptionKeyWithSalt("old", nil)
+	require.NoError(t, err)
+
+	// Populate all 4 tables.
+	e1, _ := alerts.Encrypt(oldKey, "tok")
+	_, err = db.Exec(`INSERT INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
+		"u@t.com", e1, "uid", "n", "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	e2, _ := alerts.Encrypt(oldKey, "key")
+	e3, _ := alerts.Encrypt(oldKey, "secret")
+	_, err = db.Exec(`INSERT INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
+		"u@t.com", e2, e3, "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	e4, _ := alerts.Encrypt(oldKey, "csec")
+	_, err = db.Exec(`INSERT INTO oauth_clients (client_id, client_secret, redirect_uris, client_name, created_at) VALUES (?,?,?,?,?)`,
+		"c1", e4, "http://localhost", "C1", "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	e5, _ := alerts.Encrypt(oldKey, "sid")
+	_, err = db.Exec(`INSERT INTO mcp_sessions (session_id, email, created_at, expires_at, session_id_enc) VALUES (?,?,?,?,?)`,
+		"s1", "u@t.com", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", e5)
+	require.NoError(t, err)
+	db.Close()
+
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	require.NoError(t, err)
+	defer devNull.Close()
+
+	err = run(dbPath, "old", "new", devNull)
+	require.NoError(t, err)
+
+	// Verify with new key.
+	db2, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	defer db2.Close()
+
+	newKey, err := alerts.DeriveEncryptionKeyWithSalt("new", nil)
+	require.NoError(t, err)
+
+	var v string
+	db2.QueryRow(`SELECT access_token FROM kite_tokens WHERE email = ?`, "u@t.com").Scan(&v)
+	assert.Equal(t, "tok", alerts.Decrypt(newKey, v))
+
+	var k, s string
+	db2.QueryRow(`SELECT api_key, api_secret FROM kite_credentials WHERE email = ?`, "u@t.com").Scan(&k, &s)
+	assert.Equal(t, "key", alerts.Decrypt(newKey, k))
+	assert.Equal(t, "secret", alerts.Decrypt(newKey, s))
+
+	db2.QueryRow(`SELECT client_secret FROM oauth_clients WHERE client_id = ?`, "c1").Scan(&v)
+	assert.Equal(t, "csec", alerts.Decrypt(newKey, v))
+
+	db2.QueryRow(`SELECT session_id_enc FROM mcp_sessions WHERE session_id = ?`, "s1").Scan(&v)
+	assert.Equal(t, "sid", alerts.Decrypt(newKey, v))
 }

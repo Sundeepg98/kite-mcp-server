@@ -50,7 +50,7 @@ func TestGenerateToken_ClaimsContent(t *testing.T) {
 	// JWT timestamps are truncated to seconds, so truncate our bounds too
 	exp := claims.ExpiresAt.Time
 	beforeExp := before.Add(2 * time.Hour).Truncate(time.Second)
-	afterExp := after.Add(2*time.Hour).Truncate(time.Second).Add(time.Second)
+	afterExp := after.Add(2 * time.Hour).Truncate(time.Second).Add(time.Second)
 	if exp.Before(beforeExp) || exp.After(afterExp) {
 		t.Errorf("ExpiresAt = %v, expected between %v and %v", exp, beforeExp, afterExp)
 	}
@@ -250,5 +250,91 @@ func TestValidateToken_NoAudienceCheck(t *testing.T) {
 	}
 	if claims.Subject != "user@test.com" {
 		t.Errorf("Subject = %q, want %q", claims.Subject, "user@test.com")
+	}
+}
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// JWT edge cases
+// ===========================================================================
+
+func TestJWT_ExpiredToken(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Generate a token with 0 expiry (immediately expired)
+	token, err := h.jwt.GenerateTokenWithExpiry("user@test.com", "mcp", -1*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateTokenWithExpiry error: %v", err)
+	}
+
+	_, err = h.jwt.ValidateToken(token)
+	if err == nil {
+		t.Error("Expected error for expired token")
+	}
+}
+
+func TestJWT_MalformedToken(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	_, err := h.jwt.ValidateToken("not.a.valid.jwt")
+	if err == nil {
+		t.Error("Expected error for malformed token")
+	}
+}
+
+func TestJWT_WrongSecret(t *testing.T) {
+	t.Parallel()
+	jwt1 := NewJWTManager("secret-one", 4*time.Hour)
+	jwt2 := NewJWTManager("secret-two", 4*time.Hour)
+
+	token, err := jwt1.GenerateToken("user@test.com", "mcp")
+	if err != nil {
+		t.Fatalf("GenerateToken error: %v", err)
+	}
+
+	_, err = jwt2.ValidateToken(token)
+	if err == nil {
+		t.Error("Expected error when validating with different secret")
+	}
+}
+
+func TestJWT_GenerateTokenWithExpiry(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Long expiry token
+	token, err := h.jwt.GenerateTokenWithExpiry("user@test.com", "dashboard", 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateTokenWithExpiry error: %v", err)
+	}
+
+	claims, err := h.jwt.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken error: %v", err)
+	}
+	if claims.Subject != "user@test.com" {
+		t.Errorf("Subject = %q, want %q", claims.Subject, "user@test.com")
+	}
+}
+
+func TestJWTManager_Accessor(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	jwtMgr := h.JWTManager()
+	if jwtMgr == nil {
+		t.Error("JWTManager() should not return nil")
+	}
+	if jwtMgr != h.jwt {
+		t.Error("JWTManager() should return the same instance")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // echoEmailHandler is a simple handler that writes the email from context to the response.
@@ -363,8 +364,8 @@ func TestRequireAuthBrowser_OpenRedirectProtection(t *testing.T) {
 		wantPath string // expected redirect= query param value (URL-decoded)
 	}{
 		{"normal path", "/admin/ops", "/admin/ops"},
-		{"double slash", "//evil.com", "/dashboard"},    // should default to safe path
-		{"no leading slash", "evil.com", "/dashboard"},  // httptest builds Path="/evil.com" which starts with / but doesn't start with //
+		{"double slash", "//evil.com", "/dashboard"},   // should default to safe path
+		{"no leading slash", "evil.com", "/dashboard"}, // httptest builds Path="/evil.com" which starts with / but doesn't start with //
 	}
 
 	for _, tc := range tests {
@@ -389,5 +390,42 @@ func TestRequireAuthBrowser_OpenRedirectProtection(t *testing.T) {
 				t.Errorf("redirect param = %q, want %q (full Location: %q)", redirectParam, tc.wantPath, location)
 			}
 		})
+	}
+}
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+// ===========================================================================
+// SetAuthCookie
+// ===========================================================================
+
+func TestRequireAuthBrowser_ExpiredCookie(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	token, err := h.jwt.GenerateTokenWithExpiry("user@test.com", "dashboard", -1*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateToken error: %v", err)
+	}
+
+	innerCalled := false
+	handler := h.RequireAuthBrowser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		innerCalled = true
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req.AddCookie(&http.Cookie{Name: "kitemcp_auth", Value: token})
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if innerCalled {
+		t.Error("Inner handler should not be called with expired cookie")
+	}
+	if rr.Code != http.StatusFound {
+		t.Errorf("Status = %d, want 302", rr.Code)
 	}
 }

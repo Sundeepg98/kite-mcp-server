@@ -115,3 +115,16 @@ func pkceChallenge(verifier string) string {
 	hash := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
+
+// ===========================================================================
+// Consolidated from coverage_*.go files
+// ===========================================================================
+
+type devNull struct{}
+
+func (devNull) Write(p []byte) (int, error) { return len(p), nil }
+
+// testLogger returns a discard logger for tests.
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(devNull{}, nil))
+}
