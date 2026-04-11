@@ -18,6 +18,7 @@ import (
 // ===========================================================================
 
 func TestIsTransientError(t *testing.T) {
+	t.Parallel()
 	assert.True(t, isTransientError(errors.New("connection refused")))
 	assert.True(t, isTransientError(errors.New("request timeout")))
 	assert.True(t, isTransientError(errors.New("service temporarily unavailable")))
@@ -29,6 +30,7 @@ func TestIsTransientError(t *testing.T) {
 }
 
 func TestRetryBrokerCall_SuccessFirstTry(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	result, err := RetryBrokerCall(func() (string, error) {
 		calls++
@@ -40,6 +42,7 @@ func TestRetryBrokerCall_SuccessFirstTry(t *testing.T) {
 }
 
 func TestRetryBrokerCall_NonTransientFails(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := RetryBrokerCall(func() (string, error) {
 		calls++
@@ -50,6 +53,7 @@ func TestRetryBrokerCall_NonTransientFails(t *testing.T) {
 }
 
 func TestRetryBrokerCall_TransientRetries(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	result, err := RetryBrokerCall(func() (string, error) {
 		calls++
@@ -64,6 +68,7 @@ func TestRetryBrokerCall_TransientRetries(t *testing.T) {
 }
 
 func TestRetryBrokerCall_ExhaustsRetries(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := RetryBrokerCall(func() (int, error) {
 		calls++
@@ -75,6 +80,7 @@ func TestRetryBrokerCall_ExhaustsRetries(t *testing.T) {
 }
 
 func TestRetryBrokerCall_ZeroRetries(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := RetryBrokerCall(func() (string, error) {
 		calls++
@@ -89,6 +95,7 @@ func TestRetryBrokerCall_ZeroRetries(t *testing.T) {
 // ===========================================================================
 
 func TestNormalizeSymbol(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE"))
 	assert.Equal(t, "RELIANCE", normalizeSymbol("reliance"))
 	assert.Equal(t, "RELIANCE", normalizeSymbol(" RELIANCE "))
@@ -100,6 +107,7 @@ func TestNormalizeSymbol(t *testing.T) {
 }
 
 func TestFormatPct(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "50%", formatPct(50.0))
 	assert.Equal(t, "100%", formatPct(100.0))
 	assert.Equal(t, "0%", formatPct(0.0))
@@ -112,6 +120,7 @@ func TestFormatPct(t *testing.T) {
 // ===========================================================================
 
 func TestFormatINR(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "Rs 500", formatINR(500))
 	assert.Equal(t, "Rs 99999", formatINR(99999))
 	assert.Equal(t, "Rs 1,00,000", formatINR(100000))
@@ -127,6 +136,7 @@ func TestFormatINR(t *testing.T) {
 // ===========================================================================
 
 func TestFormatRHS_Constant(t *testing.T) {
+	t.Parallel()
 	params := kiteconnect.AlertParams{
 		RHSType:     "constant",
 		RHSConstant: 1500.50,
@@ -135,6 +145,7 @@ func TestFormatRHS_Constant(t *testing.T) {
 }
 
 func TestFormatRHS_Instrument(t *testing.T) {
+	t.Parallel()
 	params := kiteconnect.AlertParams{
 		RHSType:          "instrument",
 		RHSExchange:      "NSE",
@@ -145,6 +156,7 @@ func TestFormatRHS_Instrument(t *testing.T) {
 }
 
 func TestSplitAndTrim(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, []string{"a", "b", "c"}, splitAndTrim("a, b, c"))
 	assert.Equal(t, []string{"NSE:INFY"}, splitAndTrim("NSE:INFY"))
 	assert.Equal(t, []string{"a", "b"}, splitAndTrim("  a  ,  b  "))
@@ -160,6 +172,7 @@ func TestSplitAndTrim(t *testing.T) {
 // ===========================================================================
 
 func TestParseInstrumentList(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, []string{"NSE:INFY", "NSE:RELIANCE"}, parseInstrumentList("NSE:INFY, NSE:RELIANCE"))
 	assert.Equal(t, []string{"NSE:INFY"}, parseInstrumentList("NSE:INFY"))
 	result := parseInstrumentList("")
@@ -174,6 +187,7 @@ func TestParseInstrumentList(t *testing.T) {
 // ===========================================================================
 
 func TestRound4(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 3.1416, round4(3.14159265))
 	assert.Equal(t, 0.0, round4(0.0))
 	assert.Equal(t, 1.0, round4(1.0))
@@ -181,28 +195,33 @@ func TestRound4(t *testing.T) {
 }
 
 func TestRound6(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 3.141593, round6(3.14159265))
 	assert.Equal(t, 0.0, round6(0.0))
 	assert.Equal(t, 1.0, round6(1.0))
 }
 
 func TestBsRho_Call(t *testing.T) {
+	t.Parallel()
 	// S=100, K=100, T=1, r=0.05, sigma=0.2, isCall=true
 	rho := bsRho(100, 100, 1, 0.05, 0.2, true)
 	assert.Greater(t, rho, 0.0, "call rho should be positive")
 }
 
 func TestBsRho_Put(t *testing.T) {
+	t.Parallel()
 	rho := bsRho(100, 100, 1, 0.05, 0.2, false)
 	assert.Less(t, rho, 0.0, "put rho should be negative")
 }
 
 func TestBsRho_ZeroTime(t *testing.T) {
+	t.Parallel()
 	rho := bsRho(100, 100, 0, 0.05, 0.2, true)
 	assert.Equal(t, 0.0, rho, "rho with zero time should be 0")
 }
 
 func TestBsRho_ZeroVol(t *testing.T) {
+	t.Parallel()
 	rho := bsRho(100, 100, 1, 0.05, 0, true)
 	assert.Equal(t, 0.0, rho, "rho with zero vol should be 0")
 }
@@ -212,6 +231,7 @@ func TestBsRho_ZeroVol(t *testing.T) {
 // ===========================================================================
 
 func TestSafeLastValue_EdgeCases(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 0.0, safeLastValue([]float64{}))
 	assert.Equal(t, 0.0, safeLastValue(nil))
 	assert.Equal(t, 5.0, safeLastValue([]float64{1, 2, 3, 4, 5}))
@@ -220,6 +240,7 @@ func TestSafeLastValue_EdgeCases(t *testing.T) {
 }
 
 func TestSafeBBWidth(t *testing.T) {
+	t.Parallel()
 	// Normal case
 	upper := []float64{110}
 	lower := []float64{90}
@@ -238,6 +259,7 @@ func TestSafeBBWidth(t *testing.T) {
 // ===========================================================================
 
 func TestResolveTickerMode(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, ticker.ModeLTP, resolveTickerMode("ltp"))
 	assert.Equal(t, ticker.ModeQuote, resolveTickerMode("quote"))
 	assert.Equal(t, ticker.ModeFull, resolveTickerMode("full"))
@@ -273,6 +295,7 @@ func TestResolveInstrumentTokens_MultipleFailed(t *testing.T) {
 // ===========================================================================
 
 func TestRoundTo2(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 3.14, roundTo2(3.14159))
 	assert.Equal(t, 0.0, roundTo2(0.0))
 	assert.Equal(t, -1.23, roundTo2(-1.234))
@@ -284,6 +307,7 @@ func TestRoundTo2(t *testing.T) {
 // ===========================================================================
 
 func TestToolCache_Cleanup(t *testing.T) {
+	t.Parallel()
 	cache := &ToolCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     50 * time.Millisecond,
@@ -303,6 +327,7 @@ func TestToolCache_Cleanup(t *testing.T) {
 }
 
 func TestToolCache_CleanupKeepsValid(t *testing.T) {
+	t.Parallel()
 	cache := &ToolCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     1 * time.Second,
@@ -325,6 +350,7 @@ func TestToolCache_CleanupKeepsValid(t *testing.T) {
 }
 
 func TestToolCache_GetExpired(t *testing.T) {
+	t.Parallel()
 	cache := &ToolCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     1 * time.Millisecond,
@@ -441,6 +467,7 @@ func TestDashboardPageURL_NoBaseURL(t *testing.T) {
 // ===========================================================================
 
 func TestArgParser_RawReturnsOriginalMap(t *testing.T) {
+	t.Parallel()
 	args := map[string]interface{}{"key": "value"}
 	p := NewArgParser(args)
 	assert.Same(t, &args, &args) // sanity
@@ -484,6 +511,7 @@ func TestTrackToolError_NoMetrics(t *testing.T) {
 // ===========================================================================
 
 func TestValidateRequired_NumericZero(t *testing.T) {
+	t.Parallel()
 	// Numeric zero is a valid value (not nil, not empty string)
 	args := map[string]interface{}{"qty": float64(0)}
 	err := ValidateRequired(args, "qty")
@@ -491,6 +519,7 @@ func TestValidateRequired_NumericZero(t *testing.T) {
 }
 
 func TestValidateRequired_BoolFalse(t *testing.T) {
+	t.Parallel()
 	args := map[string]interface{}{"confirm": false}
 	err := ValidateRequired(args, "confirm")
 	assert.NoError(t, err, "bool false should be considered present")
@@ -554,6 +583,7 @@ func TestPlaceOrder_IcebergWithLegsButNoQty(t *testing.T) {
 // Login validation is tested via the isAlphanumeric helper tests instead.
 
 func TestIsAlphanumeric_LoginKeys(t *testing.T) {
+	t.Parallel()
 	// Valid API keys
 	assert.True(t, isAlphanumeric("4agbg2fm6szvmhon"))
 	assert.True(t, isAlphanumeric("ABC123def"))
@@ -667,12 +697,14 @@ func TestGetOHLC_TooManyInstruments(t *testing.T) {
 // ===========================================================================
 
 func TestApplyPagination_FromAtEnd(t *testing.T) {
+	t.Parallel()
 	data := []int{1, 2, 3}
 	result := ApplyPagination(data, PaginationParams{From: 3, Limit: 5})
 	assert.Empty(t, result)
 }
 
 func TestApplyPagination_FromNegativeWithLimit(t *testing.T) {
+	t.Parallel()
 	data := []string{"a", "b", "c"}
 	result := ApplyPagination(data, PaginationParams{From: -10, Limit: 2})
 	assert.Equal(t, []string{"a", "b"}, result)
@@ -683,12 +715,14 @@ func TestApplyPagination_FromNegativeWithLimit(t *testing.T) {
 // ===========================================================================
 
 func TestCreatePaginatedResponse_FromBeyondTotal(t *testing.T) {
+	t.Parallel()
 	resp := CreatePaginatedResponse(nil, nil, PaginationParams{From: 100, Limit: 10}, 5)
 	assert.Equal(t, 0, resp.Pagination.Returned)
 	assert.False(t, resp.Pagination.HasMore)
 }
 
 func TestCreatePaginatedResponse_NoLimit(t *testing.T) {
+	t.Parallel()
 	resp := CreatePaginatedResponse(nil, nil, PaginationParams{From: 2, Limit: 0}, 10)
 	assert.Equal(t, 8, resp.Pagination.Returned)
 	assert.False(t, resp.Pagination.HasMore)
@@ -699,6 +733,7 @@ func TestCreatePaginatedResponse_NoLimit(t *testing.T) {
 // ===========================================================================
 
 func TestSessionTypeConstants(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "sse", SessionTypeSSE)
 	assert.Equal(t, "mcp", SessionTypeMCP)
 	assert.Equal(t, "stdio", SessionTypeStdio)
@@ -710,21 +745,25 @@ func TestSessionTypeConstants(t *testing.T) {
 // ===========================================================================
 
 func TestSafeAssertFloat64_IntInput(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 42.0, SafeAssertFloat64(42, 0.0))
 }
 
 func TestSafeAssertFloat64_StringInput(t *testing.T) {
+	t.Parallel()
 	// String is not float — returns fallback
 	assert.Equal(t, 0.0, SafeAssertFloat64("not a number", 0.0))
 }
 
 func TestSafeAssertBool_IntInput(t *testing.T) {
+	t.Parallel()
 	// Integer is neither bool nor string — returns fallback
 	assert.True(t, SafeAssertBool(42, true))
 	assert.False(t, SafeAssertBool(42, false))
 }
 
 func TestSafeAssertStringArray_NonArrayNonString(t *testing.T) {
+	t.Parallel()
 	result := SafeAssertStringArray(42)
 	assert.Nil(t, result)
 }
@@ -757,11 +796,13 @@ func TestMarshalResponse_NilData(t *testing.T) {
 // ===========================================================================
 
 func TestCacheKey_Format(t *testing.T) {
+	t.Parallel()
 	key := CacheKey("get_ltp", "user@test.com", "NSE:INFY")
 	assert.Equal(t, "get_ltp:user@test.com:NSE:INFY", key)
 }
 
 func TestCacheKey_Empty(t *testing.T) {
+	t.Parallel()
 	key := CacheKey("", "", "")
 	assert.Equal(t, "::", key)
 }
@@ -771,6 +812,7 @@ func TestCacheKey_Empty(t *testing.T) {
 // ===========================================================================
 
 func TestConfirmableTools_Exhaustive(t *testing.T) {
+	t.Parallel()
 	confirmed := []string{
 		"place_order", "modify_order", "close_position",
 		"close_all_positions", "place_gtt_order", "modify_gtt_order",
@@ -796,6 +838,7 @@ func TestConfirmableTools_Exhaustive(t *testing.T) {
 // ===========================================================================
 
 func TestIsAlphanumeric_Unicode(t *testing.T) {
+	t.Parallel()
 	assert.False(t, isAlphanumeric("café"))
 	assert.False(t, isAlphanumeric("日本語"))
 	assert.True(t, isAlphanumeric("abc123XYZ"))
@@ -806,6 +849,7 @@ func TestIsAlphanumeric_Unicode(t *testing.T) {
 // ===========================================================================
 
 func TestPageRoutes_Count(t *testing.T) {
+	t.Parallel()
 	assert.GreaterOrEqual(t, len(pageRoutes), 9, "should have at least 9 page routes")
 }
 
@@ -828,6 +872,7 @@ func TestAllToolsHaveOpenWorldAnnotation(t *testing.T) {
 // ===========================================================================
 
 func TestComputeSignals_WithData(t *testing.T) {
+	t.Parallel()
 	closes := []float64{100, 102, 104, 106, 108}
 	rsi := []float64{75} // Overbought
 	sma20 := []float64{100}
@@ -852,6 +897,7 @@ func TestComputeSignals_WithData(t *testing.T) {
 }
 
 func TestComputeSignals_OversoldRSI(t *testing.T) {
+	t.Parallel()
 	closes := []float64{90, 88, 86, 84, 82}
 	rsi := []float64{25} // Oversold
 	signals := computeSignals(closes, rsi, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -865,6 +911,7 @@ func TestComputeSignals_OversoldRSI(t *testing.T) {
 }
 
 func TestComputeSignals_GoldenCross(t *testing.T) {
+	t.Parallel()
 	closes := []float64{100}
 	sma20 := []float64{105} // SMA20 > SMA50 = golden cross
 	sma50 := []float64{95}
@@ -873,6 +920,7 @@ func TestComputeSignals_GoldenCross(t *testing.T) {
 }
 
 func TestComputeSignals_NoSignals(t *testing.T) {
+	t.Parallel()
 	closes := []float64{100}
 	// Everything neutral
 	signals := computeSignals(closes, []float64{50}, []float64{100}, []float64{100}, nil, nil, nil, nil, nil, nil)

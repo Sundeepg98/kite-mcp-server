@@ -85,3 +85,6 @@ kite-mcp-server-*
 
 # Local files
 *.local**.out
+*.out
+tmp/
+*.html

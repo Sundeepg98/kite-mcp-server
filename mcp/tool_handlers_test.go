@@ -91,6 +91,7 @@ func callToolWithManager(t *testing.T, mgr *kc.Manager, toolName string, email s
 // ---------------------------------------------------------------------------
 
 func TestAllToolsRegistered(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	assert.GreaterOrEqual(t, len(tools), 60, "should have at least 60 built-in tools")
 
@@ -125,6 +126,7 @@ func TestAllToolsRegistered(t *testing.T) {
 }
 
 func TestAllToolsHaveUniqueNames(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	names := make(map[string]int)
 	for _, tool := range tools {
@@ -137,6 +139,7 @@ func TestAllToolsHaveUniqueNames(t *testing.T) {
 }
 
 func TestAllToolsHaveDescriptions(t *testing.T) {
+	t.Parallel()
 	for _, td := range GetAllTools() {
 		toolDef := td.Tool()
 		assert.NotEmpty(t, toolDef.Description, "tool %s should have a description", toolDef.Name)

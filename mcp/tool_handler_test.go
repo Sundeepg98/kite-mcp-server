@@ -21,32 +21,40 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestWriteToolsDerivation(t *testing.T) {
+	t.Parallel()
 	// writeTools is populated at init time from GetAllTools annotations.
 	t.Run("write tools populated", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, writeTools, "writeTools should be populated at init")
 	})
 
 	t.Run("place_order is a write tool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, writeTools["place_order"], "place_order should be a write tool")
 	})
 
 	t.Run("modify_order is a write tool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, writeTools["modify_order"], "modify_order should be a write tool")
 	})
 
 	t.Run("cancel_order is a write tool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, writeTools["cancel_order"], "cancel_order should be a write tool")
 	})
 
 	t.Run("close_position is a write tool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, writeTools["close_position"], "close_position should be a write tool")
 	})
 
 	t.Run("set_alert is a write tool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, writeTools["set_alert"], "set_alert should be a write tool")
 	})
 
 	t.Run("read-only tools not in writeTools", func(t *testing.T) {
+		t.Parallel()
 		// Tools explicitly annotated as ReadOnlyHint=true should NOT be in writeTools.
 		allTools := GetAllTools()
 		for _, toolDef := range allTools {
@@ -441,6 +449,7 @@ func TestMiddlewareChain_BillingBlocksBeforeRiskguard(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAllToolsHaveAnnotations(t *testing.T) {
+	t.Parallel()
 	allTools := GetAllTools()
 
 	for _, toolDef := range allTools {
@@ -453,6 +462,7 @@ func TestAllToolsHaveAnnotations(t *testing.T) {
 }
 
 func TestWriteToolsAreOrderToolsOrMore(t *testing.T) {
+	t.Parallel()
 	// Every riskguard order tool should be in writeTools too.
 	orderToolNames := []string{
 		"place_order", "modify_order",

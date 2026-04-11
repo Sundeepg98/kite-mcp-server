@@ -10,13 +10,16 @@ import (
 
 // TestSafeAssertFunctions tests all SafeAssert utility functions
 func TestSafeAssertFunctions(t *testing.T) {
+	t.Parallel()
 	t.Run("SafeAssertString", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, "test", SafeAssertString("test", "default"))
 		assert.Equal(t, "default", SafeAssertString(nil, "default"))
 		assert.Equal(t, "42", SafeAssertString(42, "default"))
 	})
 
 	t.Run("SafeAssertInt", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, 42, SafeAssertInt(42, 0))
 		assert.Equal(t, 42, SafeAssertInt(42.0, 0))
 		assert.Equal(t, 0, SafeAssertInt(nil, 0))
@@ -24,12 +27,14 @@ func TestSafeAssertFunctions(t *testing.T) {
 	})
 
 	t.Run("SafeAssertFloat64", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, 3.14, SafeAssertFloat64(3.14, 0.0))
 		assert.Equal(t, 42.0, SafeAssertFloat64(42, 0.0))
 		assert.Equal(t, 0.0, SafeAssertFloat64(nil, 0.0))
 	})
 
 	t.Run("SafeAssertBool", func(t *testing.T) {
+		t.Parallel()
 		// Test boolean values
 		assert.True(t, SafeAssertBool(true, false))
 		assert.False(t, SafeAssertBool(false, true))
@@ -51,6 +56,7 @@ func TestSafeAssertFunctions(t *testing.T) {
 	})
 
 	t.Run("SafeAssertStringArray", func(t *testing.T) {
+		t.Parallel()
 		// Valid array with mixed types
 		result := SafeAssertStringArray([]interface{}{"hello", "world", 42, nil, ""})
 		assert.Equal(t, []string{"hello", "world", "42"}, result)
@@ -75,6 +81,7 @@ func TestSafeAssertFunctions(t *testing.T) {
 
 // TestArgParser tests the declarative argument parser
 func TestArgParser(t *testing.T) {
+	t.Parallel()
 	args := map[string]interface{}{
 		"name":    "test",
 		"count":   42,
@@ -85,43 +92,52 @@ func TestArgParser(t *testing.T) {
 	p := NewArgParser(args)
 
 	t.Run("String", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, "test", p.String("name", ""))
 		assert.Equal(t, "default", p.String("missing", "default"))
 	})
 
 	t.Run("Int", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, 42, p.Int("count", 0))
 		assert.Equal(t, 99, p.Int("missing", 99))
 	})
 
 	t.Run("Float", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, 3.14, p.Float("price", 0.0))
 		assert.Equal(t, 1.0, p.Float("missing", 1.0))
 	})
 
 	t.Run("Bool", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, p.Bool("active", false))
 		assert.False(t, p.Bool("missing", false))
 	})
 
 	t.Run("StringArray", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, []string{"a", "b"}, p.StringArray("tags"))
 		assert.Nil(t, p.StringArray("missing"))
 	})
 
 	t.Run("Required", func(t *testing.T) {
+		t.Parallel()
 		assert.NoError(t, p.Required("name", "count"))
 		assert.Error(t, p.Required("name", "missing_key"))
 	})
 
 	t.Run("Raw", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, args, p.Raw())
 	})
 }
 
 // TestValidateRequired tests parameter validation
 func TestValidateRequired(t *testing.T) {
+	t.Parallel()
 	t.Run("valid parameters", func(t *testing.T) {
+		t.Parallel()
 		args := map[string]interface{}{
 			"param1": "value1",
 			"param2": []string{"item1", "item2"},
@@ -131,6 +147,7 @@ func TestValidateRequired(t *testing.T) {
 	})
 
 	t.Run("missing parameters", func(t *testing.T) {
+		t.Parallel()
 		args := map[string]interface{}{"param1": "value1"}
 		err := ValidateRequired(args, "param1", "missing")
 		assert.Error(t, err)
@@ -138,6 +155,7 @@ func TestValidateRequired(t *testing.T) {
 	})
 
 	t.Run("empty parameters", func(t *testing.T) {
+		t.Parallel()
 		testCases := []struct {
 			name  string
 			value interface{}
@@ -161,6 +179,7 @@ func TestValidateRequired(t *testing.T) {
 
 // TestPagination tests pagination functionality
 func TestPagination(t *testing.T) {
+	t.Parallel()
 	data := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
 	t.Run("ApplyPagination", func(t *testing.T) {
@@ -210,7 +229,9 @@ func TestPagination(t *testing.T) {
 
 // TestToolExclusion tests tool exclusion logic
 func TestToolExclusion(t *testing.T) {
+	t.Parallel()
 	t.Run("parseExcludedTools", func(t *testing.T) {
+		t.Parallel()
 		testCases := []struct {
 			input    string
 			expected map[string]bool
@@ -229,6 +250,7 @@ func TestToolExclusion(t *testing.T) {
 	})
 
 	t.Run("filterTools", func(t *testing.T) {
+		t.Parallel()
 		allTools := GetAllTools()
 
 		// No exclusions
@@ -254,6 +276,7 @@ func TestToolExclusion(t *testing.T) {
 	})
 
 	t.Run("GetAllTools integrity", func(t *testing.T) {
+		t.Parallel()
 		allTools := GetAllTools()
 		assert.Greater(t, len(allTools), 20)
 
@@ -277,7 +300,9 @@ func TestToolExclusion(t *testing.T) {
 
 // TestToolDashboardPage verifies the tool-to-dashboard-page mapping
 func TestToolDashboardPage(t *testing.T) {
+	t.Parallel()
 	t.Run("portfolio tools map to /dashboard", func(t *testing.T) {
+		t.Parallel()
 		portfolioTools := []string{
 			"get_holdings", "get_positions", "get_margins", "get_profile",
 			"portfolio_summary", "portfolio_concentration", "position_analysis",
@@ -292,6 +317,7 @@ func TestToolDashboardPage(t *testing.T) {
 	})
 
 	t.Run("order tools map to /dashboard/orders", func(t *testing.T) {
+		t.Parallel()
 		orderTools := []string{
 			"get_orders", "get_order_history", "get_order_trades", "get_trades",
 			"place_order", "modify_order", "cancel_order",
@@ -306,6 +332,7 @@ func TestToolDashboardPage(t *testing.T) {
 	})
 
 	t.Run("alert tools map to /dashboard/alerts", func(t *testing.T) {
+		t.Parallel()
 		alertTools := []string{
 			"list_alerts", "set_alert", "delete_alert",
 			"set_trailing_stop", "list_trailing_stops", "cancel_trailing_stop",
@@ -318,6 +345,7 @@ func TestToolDashboardPage(t *testing.T) {
 	})
 
 	t.Run("unmapped tools return empty", func(t *testing.T) {
+		t.Parallel()
 		unmappedTools := []string{
 			"login", "open_dashboard", "stop_ticker", "unsubscribe_instruments",
 			"delete_my_account", "update_my_credentials", "server_metrics",
@@ -337,6 +365,7 @@ func TestToolDashboardPage(t *testing.T) {
 	})
 
 	t.Run("all mapped tools exist in GetAllTools", func(t *testing.T) {
+		t.Parallel()
 		allTools := GetAllTools()
 		registeredNames := make(map[string]bool)
 		for _, tool := range allTools {
@@ -351,7 +380,9 @@ func TestToolDashboardPage(t *testing.T) {
 
 // TestRaceConditions tests thread safety
 func TestRaceConditions(t *testing.T) {
+	t.Parallel()
 	t.Run("SafeAssert functions", func(t *testing.T) {
+		t.Parallel()
 		var wg sync.WaitGroup
 		for i := 0; i < 100; i++ {
 			wg.Add(1)
@@ -366,6 +397,7 @@ func TestRaceConditions(t *testing.T) {
 	})
 
 	t.Run("pagination functions", func(t *testing.T) {
+		t.Parallel()
 		data := []int{1, 2, 3, 4, 5}
 		params := PaginationParams{From: 1, Limit: 2}
 
@@ -386,6 +418,7 @@ func TestRaceConditions(t *testing.T) {
 // has an explicit entry in the billing toolTiers map. This lives here (not in
 // kc/billing) to avoid an import cycle.
 func TestAllToolsHaveBillingTier(t *testing.T) {
+	t.Parallel()
 	allTools := GetAllTools()
 	for _, tool := range allTools {
 		name := tool.Tool().Name

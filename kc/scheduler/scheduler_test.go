@@ -186,3 +186,139 @@ func TestNowIST(t *testing.T) {
 		t.Fatalf("expected Asia/Kolkata, got %s", now.Location())
 	}
 }
+
+// --- MarketStatus ---
+
+func TestMarketStatus_Open(t *testing.T) {
+	t.Parallel()
+	// Wednesday 2026-04-08, 10:00 AM IST
+	tm := time.Date(2026, 4, 8, 4, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "open" {
+		t.Errorf("expected open, got %s", got)
+	}
+}
+
+func TestMarketStatus_PreOpen(t *testing.T) {
+	t.Parallel()
+	// Wednesday 2026-04-08, 9:05 AM IST
+	tm := time.Date(2026, 4, 8, 3, 35, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "pre_open" {
+		t.Errorf("expected pre_open, got %s", got)
+	}
+}
+
+func TestMarketStatus_ClosingSession(t *testing.T) {
+	t.Parallel()
+	// Wednesday 2026-04-08, 3:35 PM IST
+	tm := time.Date(2026, 4, 8, 10, 5, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closing_session" {
+		t.Errorf("expected closing_session, got %s", got)
+	}
+}
+
+func TestMarketStatus_Closed(t *testing.T) {
+	t.Parallel()
+	// Wednesday 2026-04-08, 5:00 PM IST
+	tm := time.Date(2026, 4, 8, 11, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed" {
+		t.Errorf("expected closed, got %s", got)
+	}
+}
+
+func TestMarketStatus_ClosedEarlyMorning(t *testing.T) {
+	t.Parallel()
+	// Wednesday 2026-04-08, 7:00 AM IST
+	tm := time.Date(2026, 4, 8, 1, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed" {
+		t.Errorf("expected closed, got %s", got)
+	}
+}
+
+func TestMarketStatus_Weekend(t *testing.T) {
+	t.Parallel()
+	// Saturday 2026-04-11
+	tm := time.Date(2026, 4, 11, 4, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed_weekend" {
+		t.Errorf("expected closed_weekend, got %s", got)
+	}
+}
+
+func TestMarketStatus_Sunday(t *testing.T) {
+	t.Parallel()
+	// Sunday 2026-04-12
+	tm := time.Date(2026, 4, 12, 4, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed_weekend" {
+		t.Errorf("expected closed_weekend, got %s", got)
+	}
+}
+
+func TestMarketStatus_Holiday(t *testing.T) {
+	t.Parallel()
+	// 2026-01-26 Republic Day (Monday)
+	tm := time.Date(2026, 1, 26, 4, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed_holiday" {
+		t.Errorf("expected closed_holiday, got %s", got)
+	}
+}
+
+func TestMarketStatus_PreOpenBoundary(t *testing.T) {
+	t.Parallel()
+	// Exactly 9:00 AM IST (540 minutes)
+	tm := time.Date(2026, 4, 8, 3, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "pre_open" {
+		t.Errorf("expected pre_open, got %s", got)
+	}
+}
+
+func TestMarketStatus_OpenBoundary(t *testing.T) {
+	t.Parallel()
+	// Exactly 9:15 AM IST (555 minutes)
+	tm := time.Date(2026, 4, 8, 3, 45, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "open" {
+		t.Errorf("expected open, got %s", got)
+	}
+}
+
+func TestMarketStatus_ClosingBoundary(t *testing.T) {
+	t.Parallel()
+	// Exactly 3:30 PM IST (930 minutes)
+	tm := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closing_session" {
+		t.Errorf("expected closing_session, got %s", got)
+	}
+}
+
+func TestMarketStatus_ClosedAfterClosing(t *testing.T) {
+	t.Parallel()
+	// 4:00 PM IST (960 minutes)
+	tm := time.Date(2026, 4, 8, 10, 30, 0, 0, time.UTC)
+	if got := MarketStatus(tm); got != "closed" {
+		t.Errorf("expected closed, got %s", got)
+	}
+}
+
+func TestIsWeekend_UTC(t *testing.T) {
+	t.Parallel()
+	// UTC Friday evening = IST Saturday morning
+	satUTC := time.Date(2026, 4, 10, 20, 0, 0, 0, time.UTC)
+	if !IsWeekend(satUTC) {
+		t.Error("expected IST Saturday to be weekend")
+	}
+}
+
+func TestAllNSEHolidays(t *testing.T) {
+	t.Parallel()
+	holidays := []string{
+		"2026-01-26", "2026-03-03", "2026-03-26", "2026-03-31",
+		"2026-04-03", "2026-04-14", "2026-05-01", "2026-05-28",
+		"2026-06-26", "2026-09-14", "2026-10-02", "2026-10-20",
+		"2026-11-10", "2026-11-24", "2026-12-25",
+	}
+	for _, ds := range holidays {
+		tm, _ := time.Parse("2006-01-02", ds)
+		ist := tm.In(kolkataLoc)
+		if !IsMarketHoliday(ist) {
+			t.Errorf("expected %s to be a holiday", ds)
+		}
+	}
+}

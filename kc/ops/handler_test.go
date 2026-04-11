@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -26,10 +27,19 @@ func newTestHandler(t *testing.T) *Handler {
 		devNull{},
 		&slog.HandlerOptions{Level: slog.LevelError},
 	))
+	// Create an instruments manager with test data to avoid hitting the real Kite API.
+	instrMgr, instrErr := instruments.New(instruments.Config{
+		Logger:   logger,
+		TestData: map[uint32]*instruments.Instrument{},
+	})
+	require.NoError(t, instrErr)
+
 	mgr, err := kc.New(kc.Config{
-		APIKey:    "test_api_key",
-		APISecret: "test_api_secret",
-		Logger:    logger,
+		APIKey:             "test_api_key",
+		APISecret:          "test_api_secret",
+		Logger:             logger,
+		DevMode:            true,
+		InstrumentsManager: instrMgr,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
@@ -345,6 +355,242 @@ func TestOpsHandler_ConcurrentOverview(t *testing.T) {
 			t.Fatal("timed out waiting for concurrent overview requests")
 		}
 	}
+}
+
+// --- Admin user management tests ---
+
+func TestOpsHandler_ListUsers(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	// Non-admin: forbidden
+	req := requestWithEmail(http.MethodGet, "/admin/ops/api/users", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_ListUsers_WrongMethod(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users", "admin@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestOpsHandler_SuspendUser_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/suspend?email=victim@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_SuspendUser_WrongMethod(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodGet, "/admin/ops/api/users/suspend", "admin@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestOpsHandler_ActivateUser_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/activate?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_OffboardUser_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/offboard?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_ChangeRole_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/users/role?email=target@test.com&role=admin", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// --- Freeze/unfreeze tests ---
+
+func TestOpsHandler_FreezeTrading_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/risk/freeze?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_UnfreezeTrading_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/risk/unfreeze?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_FreezeGlobal_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/risk/freeze-global", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestOpsHandler_UnfreezeGlobal_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/risk/unfreeze-global", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// --- Force reauth tests ---
+
+func TestOpsHandler_ForceReauth_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/force-reauth?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// --- Verify chain tests ---
+
+func TestOpsHandler_VerifyChain_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodGet, "/admin/ops/api/verify-chain?email=target@test.com", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// --- Metrics API tests ---
+
+func TestOpsHandler_MetricsAPI_WrongMethod(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodPost, "/admin/ops/api/metrics", "admin@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// --- Alerts endpoint tests ---
+
+func TestOpsHandler_Alerts(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/api/alerts", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestOpsHandler_Alerts_WrongMethod(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/ops/api/alerts", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// --- Registry handler tests ---
+
+func TestOpsHandler_Registry_NonAdmin(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := requestWithEmail(http.MethodGet, "/admin/ops/api/registry", "user@test.com", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// --- Ops page render test ---
+
+func TestOpsHandler_ServePage_NoAuth(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
 }
 
 // contextTimeout returns a channel that closes after the given duration.

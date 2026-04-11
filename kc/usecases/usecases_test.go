@@ -59,12 +59,28 @@ type mockBrokerClient struct {
 	modifyErr      error
 	cancelResp     broker.OrderResponse
 	cancelErr      error
+	quotesMap      map[string]broker.Quote
+	quotesErr      error
+	orderTrades    []broker.Trade
+	orderTradesErr error
+	gtts           []broker.GTTOrder
+	gttsErr        error
+	placeGTTResp   broker.GTTResponse
+	placeGTTErr    error
+	modifyGTTResp  broker.GTTResponse
+	modifyGTTErr   error
+	deleteGTTResp  broker.GTTResponse
+	deleteGTTErr   error
 
 	// Capture arguments for assertions.
 	lastModifyOrderID string
 	lastModifyParams  broker.OrderParams
 	lastCancelOrderID string
 	lastCancelVariety string
+	lastOrderTradesID string
+	lastGTTParams     broker.GTTParams
+	lastModifyGTTID   int
+	lastDeleteGTTID   int
 }
 
 func (m *mockBrokerClient) BrokerName() broker.Name { return "mock" }
@@ -115,22 +131,27 @@ func (m *mockBrokerClient) GetHistoricalData(instrumentToken int, interval strin
 	return m.historicalData, m.historicalErr
 }
 func (m *mockBrokerClient) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
-	return nil, nil
+	return m.quotesMap, m.quotesErr
 }
 func (m *mockBrokerClient) GetOrderTrades(orderID string) ([]broker.Trade, error) {
-	return nil, nil
+	m.lastOrderTradesID = orderID
+	return m.orderTrades, m.orderTradesErr
 }
 func (m *mockBrokerClient) GetGTTs() ([]broker.GTTOrder, error) {
-	return nil, nil
+	return m.gtts, m.gttsErr
 }
 func (m *mockBrokerClient) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
-	return broker.GTTResponse{TriggerID: 1}, nil
+	m.lastGTTParams = params
+	return m.placeGTTResp, m.placeGTTErr
 }
 func (m *mockBrokerClient) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTResponse, error) {
-	return broker.GTTResponse{TriggerID: triggerID}, nil
+	m.lastModifyGTTID = triggerID
+	m.lastGTTParams = params
+	return m.modifyGTTResp, m.modifyGTTErr
 }
 func (m *mockBrokerClient) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
-	return broker.GTTResponse{TriggerID: triggerID}, nil
+	m.lastDeleteGTTID = triggerID
+	return m.deleteGTTResp, m.deleteGTTErr
 }
 
 // mockAlertStore is a minimal in-memory alert store.
@@ -1363,4 +1384,366 @@ func TestGetHistoricalData_ResolveError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+// --- GetQuotesUseCase tests ---
+
+func TestGetQuotes_Success(t *testing.T) {
+	client := &mockBrokerClient{
+		quotesMap: map[string]broker.Quote{
+			"NSE:RELIANCE": {LastPrice: 2500.0, Volume: 100000},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetQuotesUseCase(resolver, testLogger())
+
+	quotes, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
+		Instruments: []string{"NSE:RELIANCE"},
+	})
+	require.NoError(t, err)
+	assert.Len(t, quotes, 1)
+	assert.Equal(t, 2500.0, quotes["NSE:RELIANCE"].LastPrice)
+}
+
+func TestGetQuotes_EmptyInstruments(t *testing.T) {
+	uc := NewGetQuotesUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one instrument")
+}
+
+func TestGetQuotes_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewGetQuotesUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
+		Instruments: []string{"NSE:INFY"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestGetQuotes_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{quotesErr: fmt.Errorf("rate limited")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetQuotesUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
+		Instruments: []string{"NSE:INFY"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get quotes")
+}
+
+// --- GetOrderTradesUseCase tests ---
+
+func TestGetOrderTrades_Success(t *testing.T) {
+	client := &mockBrokerClient{
+		orderTrades: []broker.Trade{
+			{TradeID: "T1", OrderID: "ORD-1", Tradingsymbol: "INFY", Quantity: 10, Price: 1500.0},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetOrderTradesUseCase(resolver, testLogger())
+
+	trades, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
+		Email:   "test@test.com",
+		OrderID: "ORD-1",
+	})
+	require.NoError(t, err)
+	assert.Len(t, trades, 1)
+	assert.Equal(t, "T1", trades[0].TradeID)
+	assert.Equal(t, "ORD-1", client.lastOrderTradesID)
+}
+
+func TestGetOrderTrades_EmptyEmail(t *testing.T) {
+	uc := NewGetOrderTradesUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{OrderID: "ORD-1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestGetOrderTrades_EmptyOrderID(t *testing.T) {
+	uc := NewGetOrderTradesUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "order_id is required")
+}
+
+func TestGetOrderTrades_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewGetOrderTradesUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
+		Email: "test@test.com", OrderID: "ORD-1",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestGetOrderTrades_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{orderTradesErr: fmt.Errorf("not found")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetOrderTradesUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
+		Email: "test@test.com", OrderID: "ORD-999",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get order trades")
+}
+
+// --- GetGTTsUseCase tests ---
+
+func TestGetGTTs_Success(t *testing.T) {
+	client := &mockBrokerClient{
+		gtts: []broker.GTTOrder{
+			{ID: 1, Type: "single", Status: "active"},
+			{ID: 2, Type: "two-leg", Status: "active"},
+		},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetGTTsUseCase(resolver, testLogger())
+
+	gtts, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
+	require.NoError(t, err)
+	assert.Len(t, gtts, 2)
+	assert.Equal(t, 1, gtts[0].ID)
+}
+
+func TestGetGTTs_EmptyEmail(t *testing.T) {
+	uc := NewGetGTTsUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestGetGTTs_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewGetGTTsUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestGetGTTs_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{gttsErr: fmt.Errorf("api error")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewGetGTTsUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get gtts")
+}
+
+// --- PlaceGTTUseCase tests ---
+
+func TestPlaceGTT_SingleLeg(t *testing.T) {
+	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 42}}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:           "test@test.com",
+		Tradingsymbol:   "RELIANCE",
+		Exchange:        "NSE",
+		LastPrice:       2500.0,
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    2400.0,
+		Quantity:        10,
+		LimitPrice:      2390.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 42, resp.TriggerID)
+	assert.Equal(t, 2400.0, client.lastGTTParams.TriggerValue)
+}
+
+func TestPlaceGTT_TwoLeg(t *testing.T) {
+	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 43}}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:             "test@test.com",
+		Tradingsymbol:     "INFY",
+		Exchange:          "NSE",
+		LastPrice:         1500.0,
+		TransactionType:   "SELL",
+		Product:           "CNC",
+		Type:              "two-leg",
+		UpperTriggerValue: 1600.0,
+		UpperQuantity:     5,
+		UpperLimitPrice:   1595.0,
+		LowerTriggerValue: 1400.0,
+		LowerQuantity:     5,
+		LowerLimitPrice:   1405.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 43, resp.TriggerID)
+}
+
+func TestPlaceGTT_EmptyEmail(t *testing.T) {
+	uc := NewPlaceGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Tradingsymbol: "INFY", Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestPlaceGTT_EmptyTradingsymbol(t *testing.T) {
+	uc := NewPlaceGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email: "test@test.com", Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tradingsymbol is required")
+}
+
+func TestPlaceGTT_InvalidType(t *testing.T) {
+	uc := NewPlaceGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email: "test@test.com", Tradingsymbol: "INFY", Type: "triple",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid GTT type")
+}
+
+func TestPlaceGTT_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email: "test@test.com", Tradingsymbol: "INFY", Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestPlaceGTT_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{placeGTTErr: fmt.Errorf("insufficient funds")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email: "test@test.com", Tradingsymbol: "INFY", Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "place gtt")
+}
+
+// --- ModifyGTTUseCase tests ---
+
+func TestModifyGTT_Success(t *testing.T) {
+	client := &mockBrokerClient{modifyGTTResp: broker.GTTResponse{TriggerID: 42}}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewModifyGTTUseCase(resolver, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email:         "test@test.com",
+		TriggerID:     42,
+		Tradingsymbol: "RELIANCE",
+		Type:          "single",
+		TriggerValue:  2450.0,
+		Quantity:       15,
+		LimitPrice:    2440.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 42, resp.TriggerID)
+	assert.Equal(t, 42, client.lastModifyGTTID)
+	assert.Equal(t, 2450.0, client.lastGTTParams.TriggerValue)
+}
+
+func TestModifyGTT_EmptyEmail(t *testing.T) {
+	uc := NewModifyGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		TriggerID: 1, Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestModifyGTT_ZeroTriggerID(t *testing.T) {
+	uc := NewModifyGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email: "test@test.com", Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "trigger_id is required")
+}
+
+func TestModifyGTT_InvalidType(t *testing.T) {
+	uc := NewModifyGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email: "test@test.com", TriggerID: 1, Type: "invalid",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid GTT type")
+}
+
+func TestModifyGTT_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewModifyGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email: "test@test.com", TriggerID: 1, Type: "single",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestModifyGTT_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{modifyGTTErr: fmt.Errorf("trigger not found")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewModifyGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email: "test@test.com", TriggerID: 99, Type: "two-leg",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "modify gtt")
+}
+
+// --- DeleteGTTUseCase tests ---
+
+func TestDeleteGTT_Success(t *testing.T) {
+	client := &mockBrokerClient{deleteGTTResp: broker.GTTResponse{TriggerID: 42}}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewDeleteGTTUseCase(resolver, testLogger())
+
+	resp, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
+		Email:     "test@test.com",
+		TriggerID: 42,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 42, resp.TriggerID)
+	assert.Equal(t, 42, client.lastDeleteGTTID)
+}
+
+func TestDeleteGTT_EmptyEmail(t *testing.T) {
+	uc := NewDeleteGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{TriggerID: 1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+func TestDeleteGTT_ZeroTriggerID(t *testing.T) {
+	uc := NewDeleteGTTUseCase(nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{Email: "test@test.com"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "trigger_id is required")
+}
+
+func TestDeleteGTT_ResolveError(t *testing.T) {
+	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
+	uc := NewDeleteGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
+		Email: "test@test.com", TriggerID: 1,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve broker")
+}
+
+func TestDeleteGTT_BrokerError(t *testing.T) {
+	client := &mockBrokerClient{deleteGTTErr: fmt.Errorf("trigger not found")}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewDeleteGTTUseCase(resolver, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
+		Email: "test@test.com", TriggerID: 999,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "delete gtt")
 }

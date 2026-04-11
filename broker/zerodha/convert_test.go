@@ -432,3 +432,292 @@ func TestBrokerName(t *testing.T) {
 		t.Errorf("BrokerName = %q, want %q", c.BrokerName(), broker.Zerodha)
 	}
 }
+
+func TestNew(t *testing.T) {
+	kite := kiteconnect.New("test-api-key")
+	c := New(kite)
+	if c == nil {
+		t.Fatal("New should return non-nil Client")
+	}
+	if c.kite != kite {
+		t.Error("kite field should point to the passed kiteconnect.Client")
+	}
+}
+
+func TestKite(t *testing.T) {
+	kite := kiteconnect.New("test-api-key")
+	c := New(kite)
+	if c.Kite() != kite {
+		t.Error("Kite() should return the underlying kiteconnect.Client")
+	}
+}
+
+func TestConvertMargins(t *testing.T) {
+	km := kiteconnect.AllMargins{
+		Equity: kiteconnect.Margins{
+			Available: kiteconnect.AvailableMargins{
+				Cash: 50000, Collateral: 10000, IntradayPayin: 0, OpeningBalance: 20000,
+			},
+			Used: kiteconnect.UsedMargins{
+				Debits: 5000, Exposure: 3000, Span: 2000, OptionPremium: 1000,
+			},
+		},
+		Commodity: kiteconnect.Margins{
+			Available: kiteconnect.AvailableMargins{
+				Cash: 10000, Collateral: 5000, IntradayPayin: 1000, OpeningBalance: 4000,
+			},
+			Used: kiteconnect.UsedMargins{
+				Debits: 1000, Exposure: 500, Span: 500, OptionPremium: 0,
+			},
+		},
+	}
+
+	m := convertMargins(km)
+
+	// Equity: Available = 50000 + 10000 + 0 + 20000 = 80000
+	if m.Equity.Available != 80000 {
+		t.Errorf("Equity Available = %f, want 80000", m.Equity.Available)
+	}
+	// Equity: Used = 5000 + 3000 + 2000 + 1000 = 11000
+	if m.Equity.Used != 11000 {
+		t.Errorf("Equity Used = %f, want 11000", m.Equity.Used)
+	}
+	// Equity: Total = 80000 + 11000 = 91000
+	if m.Equity.Total != 91000 {
+		t.Errorf("Equity Total = %f, want 91000", m.Equity.Total)
+	}
+
+	// Commodity: Available = 10000 + 5000 + 1000 + 4000 = 20000
+	if m.Commodity.Available != 20000 {
+		t.Errorf("Commodity Available = %f, want 20000", m.Commodity.Available)
+	}
+	// Commodity: Used = 1000 + 500 + 500 + 0 = 2000
+	if m.Commodity.Used != 2000 {
+		t.Errorf("Commodity Used = %f, want 2000", m.Commodity.Used)
+	}
+}
+
+func TestConvertQuotes(t *testing.T) {
+	kq := kiteconnect.Quote{
+		"NSE:RELIANCE": {
+			InstrumentToken:   738561,
+			LastPrice:         2500.0,
+			LastQuantity:      100,
+			AveragePrice:      2490.0,
+			Volume:            5000000,
+			BuyQuantity:       1000000,
+			SellQuantity:      800000,
+			NetChange:         25.0,
+			OI:                0,
+			OIDayHigh:         0,
+			OIDayLow:          0,
+			LowerCircuitLimit: 2000.0,
+			UpperCircuitLimit: 3000.0,
+			OHLC: models.OHLC{
+				Open:  2480.0,
+				High:  2510.0,
+				Low:   2475.0,
+				Close: 2475.0,
+			},
+			Depth: models.Depth{
+				Buy: [5]models.DepthItem{
+					{Price: 2499.0, Quantity: 100, Orders: 5},
+					{Price: 2498.0, Quantity: 200, Orders: 10},
+				},
+				Sell: [5]models.DepthItem{
+					{Price: 2501.0, Quantity: 150, Orders: 8},
+					{Price: 2502.0, Quantity: 300, Orders: 12},
+				},
+			},
+		},
+	}
+
+	quotes := convertQuotes(kq)
+
+	if len(quotes) != 1 {
+		t.Fatalf("len = %d, want 1", len(quotes))
+	}
+	q := quotes["NSE:RELIANCE"]
+	if q.InstrumentToken != 738561 {
+		t.Errorf("InstrumentToken = %d, want 738561", q.InstrumentToken)
+	}
+	if q.LastPrice != 2500.0 {
+		t.Errorf("LastPrice = %f, want 2500", q.LastPrice)
+	}
+	if q.Volume != 5000000 {
+		t.Errorf("Volume = %d, want 5000000", q.Volume)
+	}
+	if q.OHLC.Open != 2480.0 {
+		t.Errorf("OHLC.Open = %f, want 2480", q.OHLC.Open)
+	}
+	if q.LowerCircuitLimit != 2000.0 {
+		t.Errorf("LowerCircuitLimit = %f, want 2000", q.LowerCircuitLimit)
+	}
+	if q.UpperCircuitLimit != 3000.0 {
+		t.Errorf("UpperCircuitLimit = %f, want 3000", q.UpperCircuitLimit)
+	}
+	if q.NetChange != 25.0 {
+		t.Errorf("NetChange = %f, want 25", q.NetChange)
+	}
+	// Depth.
+	if q.Depth.Buy[0].Price != 2499.0 {
+		t.Errorf("Depth.Buy[0].Price = %f, want 2499", q.Depth.Buy[0].Price)
+	}
+	if q.Depth.Buy[0].Quantity != 100 {
+		t.Errorf("Depth.Buy[0].Quantity = %d, want 100", q.Depth.Buy[0].Quantity)
+	}
+	if q.Depth.Sell[0].Price != 2501.0 {
+		t.Errorf("Depth.Sell[0].Price = %f, want 2501", q.Depth.Sell[0].Price)
+	}
+	if q.Depth.Sell[1].Orders != 12 {
+		t.Errorf("Depth.Sell[1].Orders = %d, want 12", q.Depth.Sell[1].Orders)
+	}
+}
+
+func TestConvertQuotesEmpty(t *testing.T) {
+	quotes := convertQuotes(kiteconnect.Quote{})
+	if len(quotes) != 0 {
+		t.Errorf("len = %d, want 0", len(quotes))
+	}
+}
+
+func TestConvertGTTs(t *testing.T) {
+	ts := models.Time{Time: time.Date(2026, 4, 5, 10, 0, 0, 0, time.UTC)}
+	kgtts := kiteconnect.GTTs{
+		{
+			ID:     1001,
+			Type:   "single",
+			Status: "active",
+			Condition: kiteconnect.GTTCondition{
+				Exchange:      "NSE",
+				Tradingsymbol: "RELIANCE",
+				TriggerValues: []float64{2400.0},
+				LastPrice:     2500.0,
+			},
+			Orders: []kiteconnect.Order{
+				{
+					Exchange:        "NSE",
+					TradingSymbol:   "RELIANCE",
+					TransactionType: "BUY",
+					Quantity:        10,
+					OrderType:       "LIMIT",
+					Price:           2390.0,
+					Product:         "CNC",
+				},
+			},
+			CreatedAt: ts,
+			UpdatedAt: ts,
+			ExpiresAt: ts,
+		},
+	}
+
+	gtts := convertGTTs(kgtts)
+
+	if len(gtts) != 1 {
+		t.Fatalf("len = %d, want 1", len(gtts))
+	}
+	g := gtts[0]
+	if g.ID != 1001 {
+		t.Errorf("ID = %d, want 1001", g.ID)
+	}
+	if g.Type != "single" {
+		t.Errorf("Type = %q, want %q", g.Type, "single")
+	}
+	if g.Status != "active" {
+		t.Errorf("Status = %q, want %q", g.Status, "active")
+	}
+	if g.Condition.Exchange != "NSE" {
+		t.Errorf("Condition.Exchange = %q, want %q", g.Condition.Exchange, "NSE")
+	}
+	if g.Condition.Tradingsymbol != "RELIANCE" {
+		t.Errorf("Condition.Tradingsymbol = %q, want %q", g.Condition.Tradingsymbol, "RELIANCE")
+	}
+	if len(g.Condition.TriggerValues) != 1 || g.Condition.TriggerValues[0] != 2400.0 {
+		t.Errorf("TriggerValues = %v, want [2400]", g.Condition.TriggerValues)
+	}
+	if len(g.Orders) != 1 {
+		t.Fatalf("Orders len = %d, want 1", len(g.Orders))
+	}
+	if g.Orders[0].Tradingsymbol != "RELIANCE" {
+		t.Errorf("Order.Tradingsymbol = %q, want %q", g.Orders[0].Tradingsymbol, "RELIANCE")
+	}
+	if g.Orders[0].Quantity != 10 {
+		t.Errorf("Order.Quantity = %d, want 10", g.Orders[0].Quantity)
+	}
+}
+
+func TestConvertGTTsEmpty(t *testing.T) {
+	gtts := convertGTTs(kiteconnect.GTTs{})
+	if len(gtts) != 0 {
+		t.Errorf("len = %d, want 0", len(gtts))
+	}
+}
+
+func TestConvertGTTParamsToKite_Single(t *testing.T) {
+	bp := broker.GTTParams{
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		LastPrice:       1500.0,
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    1450.0,
+		Quantity:        10,
+		LimitPrice:      1445.0,
+	}
+
+	kp, err := convertGTTParamsToKite(bp)
+	if err != nil {
+		t.Fatalf("convertGTTParamsToKite error: %v", err)
+	}
+	if kp.Exchange != "NSE" {
+		t.Errorf("Exchange = %q, want %q", kp.Exchange, "NSE")
+	}
+	if kp.Tradingsymbol != "INFY" {
+		t.Errorf("Tradingsymbol = %q, want %q", kp.Tradingsymbol, "INFY")
+	}
+	if kp.LastPrice != 1500.0 {
+		t.Errorf("LastPrice = %f, want 1500", kp.LastPrice)
+	}
+	if kp.Trigger == nil {
+		t.Fatal("Trigger should not be nil")
+	}
+}
+
+func TestConvertGTTParamsToKite_TwoLeg(t *testing.T) {
+	bp := broker.GTTParams{
+		Exchange:          "NSE",
+		Tradingsymbol:     "RELIANCE",
+		LastPrice:         2500.0,
+		TransactionType:   "SELL",
+		Product:           "CNC",
+		Type:              "two-leg",
+		UpperTriggerValue: 2600.0,
+		UpperQuantity:     5,
+		UpperLimitPrice:   2595.0,
+		LowerTriggerValue: 2400.0,
+		LowerQuantity:     5,
+		LowerLimitPrice:   2405.0,
+	}
+
+	kp, err := convertGTTParamsToKite(bp)
+	if err != nil {
+		t.Fatalf("convertGTTParamsToKite error: %v", err)
+	}
+	if kp.Trigger == nil {
+		t.Fatal("Trigger should not be nil")
+	}
+}
+
+func TestConvertGTTParamsToKite_InvalidType(t *testing.T) {
+	bp := broker.GTTParams{
+		Exchange:      "NSE",
+		Tradingsymbol: "INFY",
+		Type:          "triple-leg",
+	}
+
+	_, err := convertGTTParamsToKite(bp)
+	if err == nil {
+		t.Fatal("Expected error for invalid GTT type")
+	}
+}

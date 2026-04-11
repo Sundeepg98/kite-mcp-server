@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -448,4 +449,252 @@ func TestListByAdminEmail(t *testing.T) {
 	// Unlinked user should not appear
 	members = s.ListByAdminEmail("nobody@example.com")
 	assert.Len(t, members, 0)
+}
+
+// --- Password hashing / verification ---
+
+func TestSetPasswordHash_Success(t *testing.T) {
+	t.Parallel()
+	s, _ := newTestStoreWithDB(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "alice@example.com"}))
+	hash, err := bcrypt.GenerateFromPassword([]byte("secret123"), bcrypt.MinCost)
+	require.NoError(t, err)
+	err = s.SetPasswordHash("alice@example.com", string(hash))
+	require.NoError(t, err)
+	u, ok := s.Get("alice@example.com")
+	require.True(t, ok)
+	assert.NotEmpty(t, u.PasswordHash)
+}
+
+func TestSetPasswordHash_UserNotFound(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	err := s.SetPasswordHash("nonexistent@example.com", "somehash")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "user not found")
+}
+
+func TestHasPassword(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "bob@example.com"}))
+	assert.False(t, s.HasPassword("bob@example.com"))
+	assert.False(t, s.HasPassword("nonexistent@example.com"))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("pass"), bcrypt.MinCost)
+	require.NoError(t, s.SetPasswordHash("bob@example.com", string(hash)))
+	assert.True(t, s.HasPassword("bob@example.com"))
+}
+
+func TestVerifyPassword_Match(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "carol@example.com"}))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	require.NoError(t, s.SetPasswordHash("carol@example.com", string(hash)))
+	ok, err := s.VerifyPassword("carol@example.com", "correct-password")
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestVerifyPassword_Mismatch(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "carol2@example.com"}))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	require.NoError(t, s.SetPasswordHash("carol2@example.com", string(hash)))
+	ok, err := s.VerifyPassword("carol2@example.com", "wrong-password")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestVerifyPassword_NoHash(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "dan@example.com"}))
+	ok, err := s.VerifyPassword("dan@example.com", "any-password")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestVerifyPassword_UnknownUser(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	ok, err := s.VerifyPassword("nobody@example.com", "any-password")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}
+
+// --- GetRole / SetLogger / EnsureGoogleUser ---
+
+func TestGetRole(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "admin2@example.com", Role: RoleAdmin}))
+	require.NoError(t, s.Create(&User{ID: "u_2", Email: "trader2@example.com", Role: RoleTrader}))
+	assert.Equal(t, RoleAdmin, s.GetRole("admin2@example.com"))
+	assert.Equal(t, RoleTrader, s.GetRole("trader2@example.com"))
+	assert.Equal(t, "", s.GetRole("nobody2@example.com"))
+}
+
+func TestSetLogger(t *testing.T) {
+	t.Parallel()
+	s := NewStore()
+	s.SetLogger(nil)
+}
+
+func TestEnsureGoogleUser_CreatesNew(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	s.EnsureGoogleUser("google@example.com")
+	u, ok := s.Get("google@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleTrader, u.Role)
+	assert.Equal(t, "google_sso", u.OnboardedBy)
+}
+
+func TestEnsureGoogleUser_ExistingUnchanged(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "existing_admin@example.com", Role: RoleAdmin, OnboardedBy: "env"}))
+	s.EnsureGoogleUser("existing_admin@example.com")
+	u, ok := s.Get("existing_admin@example.com")
+	require.True(t, ok)
+	assert.Equal(t, RoleAdmin, u.Role, "existing admin role should not be changed")
+}
+
+// --- Count ---
+
+func TestCount(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	assert.Equal(t, 0, s.Count())
+	require.NoError(t, s.Create(&User{ID: "u_1", Email: "c1@example.com"}))
+	assert.Equal(t, 1, s.Count())
+	require.NoError(t, s.Create(&User{ID: "u_2", Email: "c2@example.com"}))
+	assert.Equal(t, 2, s.Count())
+}
+
+// --- Password DB persistence round-trip ---
+
+func TestPasswordHash_DBRoundTrip(t *testing.T) {
+	t.Parallel()
+	s1, db := newTestStoreWithDB(t)
+	require.NoError(t, s1.Create(&User{
+		ID: "u_1", Email: "persist_pw@example.com", Role: RoleAdmin, Status: StatusActive,
+	}))
+	hash, _ := bcrypt.GenerateFromPassword([]byte("mypassword"), bcrypt.MinCost)
+	require.NoError(t, s1.SetPasswordHash("persist_pw@example.com", string(hash)))
+	s1.UpdateLastLogin("persist_pw@example.com")
+
+	s2 := NewStore()
+	s2.SetDB(db)
+	require.NoError(t, s2.InitTable())
+	require.NoError(t, s2.LoadFromDB())
+
+	u, ok := s2.Get("persist_pw@example.com")
+	require.True(t, ok)
+	assert.NotEmpty(t, u.PasswordHash)
+	assert.False(t, u.LastLogin.IsZero())
+	ok2, err := s2.VerifyPassword("persist_pw@example.com", "mypassword")
+	require.NoError(t, err)
+	assert.True(t, ok2)
+}
+
+// --- InvitationStore ---
+
+func newTestInvitationStore(t *testing.T) *InvitationStore {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "inv.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	is := NewInvitationStore(db)
+	require.NoError(t, is.InitTable())
+	return is
+}
+
+func TestNewInvitationStore(t *testing.T) {
+	t.Parallel()
+	is := NewInvitationStore(nil)
+	require.NotNil(t, is)
+	assert.NoError(t, is.InitTable())
+	assert.NoError(t, is.LoadFromDB())
+}
+
+func TestInvitationStore_CRUD(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+	inv := &FamilyInvitation{
+		ID:           "inv_1",
+		AdminEmail:   "Admin@Example.COM",
+		InvitedEmail: "User@Example.COM",
+		Status:       "pending",
+	}
+	inv.ExpiresAt = inv.CreatedAt.Add(24 * 7 * 3600e9)
+	require.NoError(t, is.Create(inv))
+	got := is.Get("inv_1")
+	require.NotNil(t, got)
+	assert.Equal(t, "admin@example.com", got.AdminEmail)
+	assert.Equal(t, "user@example.com", got.InvitedEmail)
+	assert.Nil(t, is.Get("inv_999"))
+	list := is.ListByAdmin("admin@example.com")
+	assert.Len(t, list, 1)
+	require.NoError(t, is.Accept("inv_1"))
+	got = is.Get("inv_1")
+	assert.Equal(t, "accepted", got.Status)
+	err := is.Accept("inv_999")
+	require.Error(t, err)
+}
+
+func TestInvitationStore_Revoke(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+	inv := &FamilyInvitation{ID: "inv_2", AdminEmail: "admin@example.com", InvitedEmail: "user2@example.com", Status: "pending"}
+	require.NoError(t, is.Create(inv))
+	require.NoError(t, is.Revoke("inv_2"))
+	got := is.Get("inv_2")
+	assert.Equal(t, "revoked", got.Status)
+	err := is.Revoke("inv_999")
+	require.Error(t, err)
+}
+
+func TestInvitationStore_CleanupExpired(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+	inv := &FamilyInvitation{ID: "inv_expired", AdminEmail: "admin@example.com", InvitedEmail: "expired@example.com", Status: "pending"}
+	require.NoError(t, is.Create(inv))
+	count := is.CleanupExpired()
+	assert.Equal(t, 1, count)
+	got := is.Get("inv_expired")
+	assert.Equal(t, "expired", got.Status)
+}
+
+func TestInvitationStore_GetByInvitedEmail(t *testing.T) {
+	t.Parallel()
+	is := newTestInvitationStore(t)
+	inv1 := &FamilyInvitation{ID: "inv_old", AdminEmail: "admin@example.com", InvitedEmail: "invited@example.com", Status: "pending"}
+	require.NoError(t, is.Create(inv1))
+	// ExpiresAt is zero (past), so won't match
+	got := is.GetByInvitedEmail("invited@example.com")
+	assert.Nil(t, got)
+	got = is.GetByInvitedEmail("nobody@example.com")
+	assert.Nil(t, got)
+}
+
+func TestInvitationStore_DBRoundTrip(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "inv_rt.db")
+	db, err := alerts.OpenDB(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	is1 := NewInvitationStore(db)
+	require.NoError(t, is1.InitTable())
+	inv := &FamilyInvitation{ID: "inv_rt", AdminEmail: "admin@example.com", InvitedEmail: "user@example.com", Status: "pending"}
+	require.NoError(t, is1.Create(inv))
+	is2 := NewInvitationStore(db)
+	require.NoError(t, is2.InitTable())
+	require.NoError(t, is2.LoadFromDB())
+	got := is2.Get("inv_rt")
+	require.NotNil(t, got)
+	assert.Equal(t, "admin@example.com", got.AdminEmail)
 }
