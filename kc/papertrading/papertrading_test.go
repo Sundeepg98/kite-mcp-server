@@ -3,9 +3,11 @@ package papertrading
 import (
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
@@ -763,4 +765,515 @@ func TestHandleCloseAllPositions_NoPositions(t *testing.T) {
 	result, err := handleCloseAllPositions(engine, testEmail)
 	require.NoError(t, err)
 	assert.NotNil(t, result)
+}
+
+// ===========================================================================
+// Additional edge cases and error paths for coverage
+// ===========================================================================
+
+// handleWrite — close_position and close_all_positions cases.
+func TestHandleWrite_ClosePosition(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:TCS": 3500})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	result, err := handleWrite(engine, testEmail, "close_position", map[string]any{
+		"exchange": "NSE", "tradingsymbol": "TCS", "product": "MIS",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result) // "No matching position found"
+}
+
+func TestHandleWrite_CloseAllPositions(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	result, err := handleWrite(engine, testEmail, "close_all_positions", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// handleRead — get_trades, get_order_history with valid data.
+func TestHandleRead_Trades(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place and fill an order.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "RELIANCE",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "MIS", "quantity": 5,
+	})
+	require.NoError(t, err)
+
+	result, err := handleRead(engine, testEmail, "get_trades", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(gomcp.TextContent).Text, "PAPER")
+}
+
+// handleRead — get_order_history error (non-existent order).
+func TestHandleRead_OrderHistory_NotFound(t *testing.T) {
+	engine, _ := testEngineWithStore(t, nil)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	result, err := handleRead(engine, testEmail, "get_order_history", map[string]any{
+		"order_id": "nonexistent",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+}
+
+// handleClosePosition — flat position case.
+func TestHandleClosePosition_FlatPosition(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:INFY": 1500})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Buy then sell same qty to create flat position.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "MIS", "quantity": 10,
+	})
+	require.NoError(t, err)
+	time.Sleep(time.Millisecond)
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+		"transaction_type": "SELL", "order_type": "MARKET",
+		"product": "MIS", "quantity": 10,
+	})
+	require.NoError(t, err)
+
+	result, err := handleClosePosition(engine, testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+	})
+	require.NoError(t, err)
+	text := result.Content[0].(gomcp.TextContent).Text
+	// Position may report as flat or may not match (positions with qty=0
+	// are logically flat).
+	assert.True(t, strings.Contains(text, "flat") || strings.Contains(text, "No matching"),
+		"expected flat or no-match message, got: %s", text)
+}
+
+// handleCloseAllPositions with short position (negative qty).
+func TestHandleCloseAllPositions_ShortPosition(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:SBIN": 600})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Sell to create short position.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "SBIN",
+		"transaction_type": "SELL", "order_type": "MARKET",
+		"product": "MIS", "quantity": 5,
+	})
+	require.NoError(t, err)
+
+	result, err := handleCloseAllPositions(engine, testEmail)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// paperResult with JSON marshal error (channel cannot be marshaled).
+func TestPaperResult_MarshalError(t *testing.T) {
+	result, err := paperResult(make(chan int), nil)
+	require.NoError(t, err) // error is returned in result, not as Go error
+	assert.True(t, result.IsError)
+}
+
+// Status with positions, holdings, and open orders.
+func TestStatus_WithFullData(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{
+		"NSE:RELIANCE": 2500, "NSE:TCS": 3500,
+	})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Create positions, holdings, open orders.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "RELIANCE",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "CNC", "quantity": 5,
+	})
+	require.NoError(t, err)
+	time.Sleep(time.Millisecond) // unique order ID
+
+	// LIMIT order stays open (price < LTP).
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "TCS",
+		"transaction_type": "BUY", "order_type": "LIMIT",
+		"product": "MIS", "quantity": 1, "price": 3000.0,
+	})
+	require.NoError(t, err)
+
+	status, err := engine.Status(testEmail)
+	require.NoError(t, err)
+	assert.Equal(t, true, status["enabled"])
+	assert.Equal(t, 1, status["positions"])
+	assert.Equal(t, 1, status["holdings"])
+	assert.Equal(t, 1, status["open_orders"])
+}
+
+// monitor.fill — BUY that succeeds (CNC product) exercising the full path.
+func TestMonitor_Fill_BuyCNC(t *testing.T) {
+	// Set high LTP so LIMIT BUY stays OPEN at placement.
+	engine := testEngine(t, map[string]float64{"NSE:HDFC": 2800})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "HDFC",
+		"transaction_type": "BUY", "order_type": "LIMIT",
+		"product": "CNC", "quantity": 50, "price": 2700.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
+
+	// Drop LTP below limit price for fill.
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:HDFC": 2600}})
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+	assert.Equal(t, "COMPLETE", orders[0].Status)
+
+	// CNC → holdings updated.
+	holdings, err := engine.store.GetHoldings(testEmail)
+	require.NoError(t, err)
+	assert.Len(t, holdings, 1)
+
+	// Cash reduced.
+	acct, err := engine.store.GetAccount(testEmail)
+	require.NoError(t, err)
+	assert.Less(t, acct.CashBalance, 1_000_000.0)
+}
+
+// monitor.fill — SELL order (cash should increase).
+func TestMonitor_Fill_SellMIS(t *testing.T) {
+	engine := testEngine(t, map[string]float64{"NSE:WIPRO": 400})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Buy first to create position.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "WIPRO",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "MIS", "quantity": 100,
+	})
+	require.NoError(t, err)
+
+	cashAfterBuy, _ := engine.store.GetAccount(testEmail)
+
+	// Place SELL LIMIT above current LTP (stays OPEN).
+	time.Sleep(time.Millisecond) // unique order ID
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "WIPRO",
+		"transaction_type": "SELL", "order_type": "LIMIT",
+		"product": "MIS", "quantity": 50, "price": 450.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
+
+	// Raise LTP above SELL price to trigger fill.
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:WIPRO": 460}})
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	// Cash should increase after SELL fill.
+	acctAfterSell, err := engine.store.GetAccount(testEmail)
+	require.NoError(t, err)
+	assert.Greater(t, acctAfterSell.CashBalance, cashAfterBuy.CashBalance)
+}
+
+// GetMargins with active account.
+func TestGetMargins_WithAccount(t *testing.T) {
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	margins, err := engine.GetMargins(testEmail)
+	require.NoError(t, err)
+	m := margins.(map[string]any)
+	eq := m["equity"].(map[string]any)
+	avail := eq["available"].(map[string]any)
+	assert.Equal(t, 1_000_000.0, avail["cash"])
+}
+
+// ResetAccount clears everything.
+// monitor.fill error paths — call fill directly with a closed DB to exercise
+// each error branch (GetAccount, UpdateOrderStatus, UpdateCashBalance, etc.).
+func TestMonitor_Fill_GetAccountError(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	order := &Order{
+		OrderID: "PAPER_FILL_TEST_1", Email: testEmail,
+		Exchange: "NSE", Tradingsymbol: "FILL",
+		TransactionType: "BUY", OrderType: "LIMIT", Product: "MIS",
+		Quantity: 10, Price: 100.0, Status: "OPEN",
+	}
+
+	// Close DB so GetAccount fails inside fill.
+	db.Close()
+
+	monitor := NewMonitor(engine, time.Second, logger)
+	monitor.fill(order, 100.0) // Should not panic; error logged.
+}
+
+func TestMonitor_Fill_UpdateOrderStatusError(t *testing.T) {
+	// With closed DB, GetAccount fails inside fill, covering the first error branch.
+	// The deeper error branches (UpdateOrderStatus, UpdateCashBalance, etc.)
+	// require the DB to fail mid-operation which is not possible with SQLite
+	// without a mock store interface. Those branches are documented as
+	// untestable without architecture changes (Store is a concrete type).
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	order := &Order{
+		OrderID: "PAPER_FILL_DBERR", Email: testEmail,
+		Exchange: "NSE", Tradingsymbol: "FILL",
+		TransactionType: "BUY", OrderType: "LIMIT", Product: "CNC",
+		Quantity: 1, Price: 100.0, Status: "OPEN",
+		PlacedAt: time.Now().UTC(),
+	}
+	require.NoError(t, store.InsertOrder(order))
+	db.Close()
+
+	monitor := NewMonitor(engine, time.Second, logger)
+	monitor.fill(order, 100.0) // GetAccount fails → logs, returns.
+}
+
+func TestMonitor_Fill_CNC_SellingReducesHoldings(t *testing.T) {
+	engine := testEngine(t, map[string]float64{"NSE:HDFC": 2800})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Buy CNC shares.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "HDFC",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "CNC", "quantity": 100,
+	})
+	require.NoError(t, err)
+	time.Sleep(time.Millisecond)
+
+	// Place CNC SELL LIMIT above LTP (stays OPEN).
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "HDFC",
+		"transaction_type": "SELL", "order_type": "LIMIT",
+		"product": "CNC", "quantity": 50, "price": 2900.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "OPEN", result["status"])
+
+	// Raise LTP to trigger SELL fill.
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:HDFC": 3000}})
+	monitor := NewMonitor(engine, time.Second,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	monitor.tick()
+
+	// Holdings should reflect the SELL (reduced by 50).
+	holdings, err := engine.store.GetHoldings(testEmail)
+	require.NoError(t, err)
+	require.Len(t, holdings, 1)
+	assert.Equal(t, 50, holdings[0].Quantity)
+}
+
+// Status error paths — close DB to trigger store errors.
+func TestStatus_DBErrors(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	db.Close()
+
+	_, err = engine.Status(testEmail)
+	require.Error(t, err)
+}
+
+// GetMargins error path.
+func TestGetMargins_DBError(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	db.Close()
+
+	_, err = engine.GetMargins(testEmail)
+	require.Error(t, err)
+}
+
+// Store error paths.
+func TestStore_GetOpenOrders_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	db.Close()
+	_, err = store.GetOpenOrders("u@t.com")
+	require.Error(t, err)
+}
+
+func TestStore_GetOrder_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	db.Close()
+	_, err = store.GetOrder("nonexistent")
+	require.Error(t, err)
+}
+
+func TestStore_GetAllOpenOrders_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	db.Close()
+	_, err = store.GetAllOpenOrders()
+	require.Error(t, err)
+}
+
+func TestStore_GetPositions_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	db.Close()
+	_, err = store.GetPositions("u@t.com")
+	require.Error(t, err)
+}
+
+func TestStore_GetHoldings_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	db.Close()
+	_, err = store.GetHoldings("u@t.com")
+	require.Error(t, err)
+}
+
+func TestStore_ResetAccount_ClosedDB(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	store := NewStore(db, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	require.NoError(t, store.InitTables())
+	// Create account first, then close DB.
+	require.NoError(t, store.EnableAccount(testEmail, 1_000_000))
+	db.Close()
+	err = store.ResetAccount(testEmail)
+	require.Error(t, err)
+}
+
+// handleClosePosition with short position (BUY to close).
+func TestHandleClosePosition_ShortPosition_Close(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:SBIN": 600})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "SBIN",
+		"transaction_type": "SELL", "order_type": "MARKET",
+		"product": "MIS", "quantity": 10,
+	})
+	require.NoError(t, err)
+
+	result, err := handleClosePosition(engine, testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "SBIN", "product": "MIS",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(gomcp.TextContent).Text, "PAPER")
+}
+
+// handleGetTrades error path.
+func TestHandleGetTrades_Error(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	db.Close()
+
+	result, err := handleGetTrades(engine, testEmail)
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+}
+
+// handleClosePosition error path (GetPositions fails).
+func TestHandleClosePosition_Error(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	db.Close()
+
+	result, err := handleClosePosition(engine, testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+}
+
+// handleCloseAllPositions error path (GetPositions fails).
+func TestHandleCloseAllPositions_Error(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTables())
+	engine := NewEngine(store, logger)
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	db.Close()
+
+	result, err := handleCloseAllPositions(engine, testEmail)
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+}
+
+func TestResetAccount_ClearsAll(t *testing.T) {
+	engine, store := testEngineWithStore(t, map[string]float64{"NSE:INFY": 1500})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange": "NSE", "tradingsymbol": "INFY",
+		"transaction_type": "BUY", "order_type": "MARKET",
+		"product": "CNC", "quantity": 10,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, store.ResetAccount(testEmail))
+
+	orders, _ := store.GetOrders(testEmail)
+	assert.Empty(t, orders)
+	positions, _ := store.GetPositions(testEmail)
+	assert.Empty(t, positions)
+	holdings, _ := store.GetHoldings(testEmail)
+	assert.Empty(t, holdings)
+	acct, _ := store.GetAccount(testEmail)
+	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
 }

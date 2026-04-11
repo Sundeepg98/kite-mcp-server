@@ -176,3 +176,56 @@ func TestEnsureEncryptionSaltEmptySecret(t *testing.T) {
 	_, err := EnsureEncryptionSalt(db, "")
 	assert.Error(t, err)
 }
+
+// encrypt/decrypt edge cases for coverage.
+
+func TestEncrypt_InvalidKeyLength(t *testing.T) {
+	// AES requires 16, 24, or 32 byte keys. A 5-byte key triggers aes.NewCipher error.
+	_, err := encrypt([]byte("short"), "plaintext")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "aes cipher")
+}
+
+func TestDecrypt_InvalidKeyLength(t *testing.T) {
+	// Valid hex but wrong-length AES key.
+	result := decrypt([]byte("short"), "4142434445464748") // valid hex
+	// Returns hex-as-is since aes.NewCipher fails (plaintext fallback).
+	assert.Equal(t, "4142434445464748", result)
+}
+
+func TestDecrypt_TooShortData(t *testing.T) {
+	key, _ := DeriveEncryptionKey("s")
+	// Valid hex that decodes to less than nonce-size bytes (12 for AES-256-GCM).
+	result := decrypt(key, "aabb")
+	assert.Equal(t, "aabb", result) // Falls back to returning hex string
+}
+
+func TestEncrypt_NilKey(t *testing.T) {
+	_, err := encrypt(nil, "plaintext")
+	require.Error(t, err)
+}
+
+func TestEnsureEncryptionSalt_CorruptSaltInDB(t *testing.T) {
+	db := openTestDB(t)
+	// Store invalid hex as salt.
+	require.NoError(t, db.SetConfig(hkdfSaltConfigKey, "not-valid-hex!!!"))
+
+	_, err := EnsureEncryptionSalt(db, "test-secret")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode stored salt")
+}
+
+func TestReEncryptTable_EmptyValues(t *testing.T) {
+	db := openTestDB(t)
+	key1, _ := DeriveEncryptionKey("old")
+	key2, _ := DeriveEncryptionKey("new")
+
+	// Insert a credential with empty api_secret to hit the empty-value branch.
+	_, err := db.db.Exec(`INSERT INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?, '', '', ?)`,
+		"empty@test.com", time.Now().Format(time.RFC3339))
+	require.NoError(t, err)
+
+	// reEncryptTable should skip empty values without error.
+	err = reEncryptTable(db, key1, key2, "kite_credentials", "email", []string{"api_key", "api_secret"})
+	require.NoError(t, err)
+}

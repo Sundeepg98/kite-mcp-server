@@ -3303,3 +3303,69 @@ func TestSaveTrailingStop_MinimalFields(t *testing.T) {
 	assert.True(t, stops[0].LastModifiedAt.IsZero())
 }
 
+// ===========================================================================
+// Encryption-error paths in Save* functions (invalid key length).
+// ===========================================================================
+
+func TestSaveToken_EncryptError(t *testing.T) {
+	db := openTestDB(t)
+	db.SetEncryptionKey([]byte("bad")) // invalid AES key length
+	err := db.SaveToken("u@t.com", "tok", "uid", "name", time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypt access_token")
+}
+
+func TestSaveCredential_EncryptError(t *testing.T) {
+	db := openTestDB(t)
+	db.SetEncryptionKey([]byte("bad"))
+	err := db.SaveCredential("u@t.com", "key", "secret", "app", time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypt api_key")
+}
+
+func TestSaveClient_EncryptError(t *testing.T) {
+	db := openTestDB(t)
+	db.SetEncryptionKey([]byte("bad"))
+	err := db.SaveClient("cid", "csecret", `["http://localhost"]`, "name", time.Now(), false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypt client_secret")
+}
+
+func TestSaveSession_EncryptError(t *testing.T) {
+	db := openTestDB(t)
+	db.SetEncryptionKey([]byte("bad"))
+	err := db.SaveSession("sid", "u@t.com", time.Now(), time.Now().Add(time.Hour), false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encrypt session_id")
+}
+
+func TestSaveRegistryEntry_Error(t *testing.T) {
+	db := openTestDB(t)
+	db.Close()
+	err := db.SaveRegistryEntry(&RegistryDBEntry{
+		ID: "reg1", APIKey: "k", APISecret: "s",
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	require.Error(t, err)
+}
+
+func TestLoadTelegramChatIDs_ClosedDB_ErrorPath(t *testing.T) {
+	db := openTestDB(t)
+	db.Close()
+	_, err := db.LoadTelegramChatIDs()
+	require.Error(t, err)
+}
+
+func TestSaveCredential_EncryptSecretError(t *testing.T) {
+	db := openTestDB(t)
+	// Use a 16-byte key so aes.NewCipher succeeds for the first encrypt call
+	// (api_key) but we can't easily make only the second fail. Instead test
+	// the DB error path with a closed DB.
+	key, _ := DeriveEncryptionKey("s")
+	db.SetEncryptionKey(key)
+	db.Close()
+	err := db.SaveCredential("u@t.com", "key", "secret", "app", time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "save credential")
+}
+

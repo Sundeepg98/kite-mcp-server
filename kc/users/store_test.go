@@ -1267,35 +1267,34 @@ func TestStore_EnsureUser_EmptyEmail(t *testing.T) {
 }
 
 func TestStore_EnsureUser_CreateFail_ConcurrentFallback(t *testing.T) {
-	// Test the concurrent creation fallback in EnsureUser by manually
-	// injecting a user after the existence check but before Create.
-	s, _ := newTestStoreWithDB(t)
+	// Exercise EnsureUser's Create-error fallback (lines 474-483) by
+	// running many concurrent EnsureUser calls on the same email.
+	// At least one pair will race: goroutine A passes the "exists" check,
+	// goroutine B also passes, B's Create succeeds, A's Create fails
+	// (user already in map), A falls back to re-reading from map.
+	for attempt := 0; attempt < 20; attempt++ {
+		s := newTestStore(t)
+		email := fmt.Sprintf("race-%d@example.com", attempt)
 
-	// Create a user directly so Create() will fail with duplicate.
-	require.NoError(t, s.Create(&User{
-		ID:        "pre-existing-id",
-		Email:     "concurrent@example.com",
-		Role:      RoleTrader,
-		Status:    StatusActive,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}))
+		var wg sync.WaitGroup
+		const n = 10
+		results := make([]*User, n)
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func(idx int) {
+				defer wg.Done()
+				results[idx] = s.EnsureUser(email, fmt.Sprintf("uid%d", idx), "name", "test")
+			}(i)
+		}
+		wg.Wait()
 
-	// Clear the in-memory map so EnsureUser thinks it doesn't exist.
-	s.mu.Lock()
-	delete(s.users, "concurrent@example.com")
-	s.mu.Unlock()
-
-	// EnsureUser should try Create, get duplicate error, then re-read from map.
-	// But the map was cleared AND the DB insert failed, so it reads from map again.
-	// Since the user still exists in the original map from Create, we need to be
-	// more careful. Let's just test EnsureUser returns a user for existing.
-	result := s.EnsureUser("concurrent@example.com", "uid", "name", "test")
-	// After Create fails, it re-locks and reads from map. Since we deleted from
-	// map above, and Create failed (DB duplicate), it should return nil.
-	// Actually, the Create WILL succeed in memory and fail in DB only.
-	// Let me just test the happy path creates correctly.
-	assert.NotNil(t, result)
+		// Every goroutine must get a non-nil result (either from Create
+		// success or from the fallback re-read).
+		for i, u := range results {
+			assert.NotNilf(t, u, "attempt %d: goroutine %d got nil", attempt, i)
+		}
+		assert.Equal(t, 1, s.Count())
+	}
 }
 
 func TestStore_EnsureUser_NewUserWithDB(t *testing.T) {
@@ -1697,4 +1696,102 @@ func TestInvitationStore_Revoke_ClosedDB(t *testing.T) {
 	db.Close()
 	err = is.Revoke("inv_rev")
 	require.Error(t, err)
+}
+
+// Nil-DB invitation paths (in-memory only, no DB writes).
+
+func TestInvitationStore_Create_NilDB(t *testing.T) {
+	is := NewInvitationStore(nil) // nil DB
+	err := is.Create(&FamilyInvitation{
+		ID: "inv_nil", AdminEmail: "admin@test.com",
+		InvitedEmail: "user@test.com", Status: "pending",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, is.Get("inv_nil"))
+}
+
+func TestInvitationStore_Accept_NilDB(t *testing.T) {
+	is := NewInvitationStore(nil)
+	require.NoError(t, is.Create(&FamilyInvitation{
+		ID: "inv_acc_nil", AdminEmail: "admin@test.com",
+		InvitedEmail: "user@test.com", Status: "pending",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+	err := is.Accept("inv_acc_nil")
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", is.Get("inv_acc_nil").Status)
+}
+
+func TestInvitationStore_Revoke_NilDB(t *testing.T) {
+	is := NewInvitationStore(nil)
+	require.NoError(t, is.Create(&FamilyInvitation{
+		ID: "inv_rev_nil", AdminEmail: "admin@test.com",
+		InvitedEmail: "user@test.com", Status: "pending",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+	err := is.Revoke("inv_rev_nil")
+	require.NoError(t, err)
+	assert.Equal(t, "revoked", is.Get("inv_rev_nil").Status)
+}
+
+func TestInvitationStore_LoadFromDB_NilDB(t *testing.T) {
+	is := NewInvitationStore(nil)
+	err := is.LoadFromDB()
+	require.NoError(t, err) // no-op when DB is nil
+}
+
+// Store InitTable with nil DB (no-op path).
+func TestStore_InitTable_NilDB(t *testing.T) {
+	s := NewStore()
+	err := s.InitTable()
+	require.NoError(t, err)
+}
+
+// Store LoadFromDB with nil DB (no-op path).
+func TestStore_LoadFromDB_NilDB(t *testing.T) {
+	s := NewStore()
+	err := s.LoadFromDB()
+	require.NoError(t, err)
+}
+
+// EnsureAdmin with DB-backed store exercises the Create fallback when
+// Create fails due to concurrent insertion.
+func TestStore_EnsureAdmin_ConcurrentRace_Tight(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		s := newTestStore(t)
+		email := fmt.Sprintf("adminrace-%d@example.com", attempt)
+
+		var wg sync.WaitGroup
+		const n = 10
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func() {
+				defer wg.Done()
+				s.EnsureAdmin(email)
+			}()
+		}
+		wg.Wait()
+
+		u, ok := s.GetByEmail(email)
+		require.True(t, ok)
+		assert.Equal(t, RoleAdmin, u.Role)
+		assert.Equal(t, 1, s.Count())
+	}
+}
+
+// VerifyPassword — wrong password path.
+func TestStore_VerifyPassword_WrongPassword(t *testing.T) {
+	s := newTestStore(t)
+	require.NoError(t, s.Create(&User{
+		ID: "vp1", Email: "vp@example.com", Role: RoleAdmin, Status: StatusActive,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct"), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	require.NoError(t, s.SetPasswordHash("vp@example.com", string(hash)))
+
+	ok, err := s.VerifyPassword("vp@example.com", "wrong")
+	require.NoError(t, err)
+	assert.False(t, ok)
 }

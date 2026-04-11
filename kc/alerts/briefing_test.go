@@ -1873,3 +1873,36 @@ func (p *perEmailBrokerProvider) GetLTP(apiKey, accessToken string, instruments 
 	return nil, nil
 }
 
+// ===========================================================================
+// defaultBrokerProvider — exercises the real Kite wrappers (network calls fail
+// with auth/connection errors, but all code paths are covered).
+// ===========================================================================
+
+func TestDefaultBrokerProvider_GetHoldings(t *testing.T) {
+	t.Parallel()
+	p := &defaultBrokerProvider{}
+	_, err := p.GetHoldings("fake-api-key", "fake-token")
+	require.Error(t, err, "expected error with invalid credentials")
+}
+
+func TestDefaultBrokerProvider_GetPositions(t *testing.T) {
+	t.Parallel()
+	p := &defaultBrokerProvider{}
+	_, err := p.GetPositions("fake-api-key", "fake-token")
+	require.Error(t, err, "expected error with invalid credentials")
+}
+
+func TestDefaultBrokerProvider_GetUserMargins(t *testing.T) {
+	t.Parallel()
+	p := &defaultBrokerProvider{}
+	_, err := p.GetUserMargins("fake-api-key", "fake-token")
+	require.Error(t, err, "expected error with invalid credentials")
+}
+
+func TestDefaultBrokerProvider_GetLTP(t *testing.T) {
+	t.Parallel()
+	p := &defaultBrokerProvider{}
+	_, err := p.GetLTP("fake-api-key", "fake-token", "NSE:RELIANCE")
+	require.Error(t, err, "expected error with invalid credentials")
+}
+
