@@ -713,6 +713,7 @@ func TestHandleClosePosition(t *testing.T) {
 		"product": "MIS", "quantity": 10,
 	})
 	require.NoError(t, err)
+	time.Sleep(time.Millisecond) // avoid order ID collision on Windows
 
 	result, err := handleClosePosition(engine, testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE", "product": "MIS",
@@ -748,6 +749,7 @@ func TestHandleCloseAllPositions(t *testing.T) {
 		"transaction_type": "BUY", "order_type": "MARKET",
 		"product": "MIS", "quantity": 10,
 	})
+	time.Sleep(time.Millisecond) // avoid order ID collision on Windows
 
 	result, err := handleCloseAllPositions(engine, testEmail)
 	require.NoError(t, err)
