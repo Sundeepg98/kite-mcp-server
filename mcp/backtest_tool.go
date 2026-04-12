@@ -11,7 +11,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // BacktestStrategyTool backtests trading strategies against historical data.
@@ -155,8 +154,8 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			// Fetch daily historical data
 			now := time.Now()
 			from := now.AddDate(0, 0, -days)
-			uc := usecases.NewGetHistoricalDataUseCase(manager.SessionSvc(), manager.Logger)
-			candles, err := uc.Execute(ctx, session.Email, cqrs.GetHistoricalDataQuery{
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
+				Email:           session.Email,
 				InstrumentToken: token,
 				Interval:        "day",
 				From:            from,
@@ -165,6 +164,7 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch historical data: %s", err.Error())), nil
 			}
+			candles := raw.([]broker.HistoricalCandle)
 
 			if len(candles) < 50 {
 				return mcp.NewToolResultError(fmt.Sprintf("Insufficient data: got %d candles, need at least 50 for backtesting", len(candles))), nil

@@ -10,6 +10,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
@@ -166,12 +167,12 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			// Fetch LTP for symbols not in holdings via use case
 			ltpMap := make(map[string]float64) // symbol -> lastPrice
 			if len(ltpNeeded) > 0 {
-				ltpUC := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
-				ltpResp, ltpErr := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: ltpNeeded})
+				raw, ltpErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: ltpNeeded})
 				if ltpErr != nil {
 					handler.trackToolError(ctx, "portfolio_rebalance", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil
 				}
+				ltpResp := raw.(map[string]broker.LTP)
 				for key, data := range ltpResp {
 					// key is "NSE:SYMBOL", extract symbol
 					parts := strings.SplitN(key, ":", 2)

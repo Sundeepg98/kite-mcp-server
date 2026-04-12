@@ -424,6 +424,56 @@ func (m *Manager) registerCQRSHandlers() {
 		return orderTradesUC.Execute(ctx, msg.(cqrs.GetOrderTradesQuery))
 	})
 
+	// GetProfileQuery -> GetProfileUseCase
+	profileUC := usecases.NewGetProfileUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return profileUC.Execute(ctx, msg.(cqrs.GetProfileQuery))
+	})
+
+	// GetMarginsQuery -> GetMarginsUseCase
+	marginsUC := usecases.NewGetMarginsUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return marginsUC.Execute(ctx, msg.(cqrs.GetMarginsQuery))
+	})
+
+	// GetTradesQuery -> GetTradesUseCase
+	tradesUC := usecases.NewGetTradesUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetTradesQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return tradesUC.Execute(ctx, msg.(cqrs.GetTradesQuery))
+	})
+
+	// GetGTTsQuery -> GetGTTsUseCase
+	gttsUC := usecases.NewGetGTTsUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetGTTsQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return gttsUC.Execute(ctx, msg.(cqrs.GetGTTsQuery))
+	})
+
+	// Market data queries take an email alongside the query (per usecase signature).
+	// We carry email via a dedicated envelope type so the bus can dispatch uniformly.
+	ltpUC := usecases.NewGetLTPUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetLTPQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetLTPQuery)
+		return ltpUC.Execute(ctx, q.Email, q)
+	})
+
+	ohlcUC := usecases.NewGetOHLCUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOHLCQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetOHLCQuery)
+		return ohlcUC.Execute(ctx, q.Email, q)
+	})
+
+	quotesUC := usecases.NewGetQuotesUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetQuotesQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetQuotesQuery)
+		return quotesUC.Execute(ctx, q.Email, q)
+	})
+
+	histUC := usecases.NewGetHistoricalDataUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetHistoricalDataQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetHistoricalDataQuery)
+		return histUC.Execute(ctx, q.Email, q)
+	})
+
 	// --- Family CQRS wiring (first real CommandBus dispatch) ---
 	// FamilyService is assigned via SetFamilyService() after wire.go builds it,
 	// so it's nil at this point. Handlers resolve m.familyService lazily per

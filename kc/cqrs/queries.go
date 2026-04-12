@@ -48,16 +48,19 @@ type GetAlertsQuery struct {
 
 // GetLTPQuery requests the last traded price for instruments.
 type GetLTPQuery struct {
+	Email       string   `json:"email"`
 	Instruments []string `json:"instruments"` // "EXCHANGE:SYMBOL" format
 }
 
 // GetOHLCQuery requests OHLC data for instruments.
 type GetOHLCQuery struct {
+	Email       string   `json:"email"`
 	Instruments []string `json:"instruments"`
 }
 
 // GetQuotesQuery requests full market quotes for instruments.
 type GetQuotesQuery struct {
+	Email       string   `json:"email"`
 	Instruments []string `json:"instruments"` // "EXCHANGE:SYMBOL" format
 }
 
@@ -69,6 +72,7 @@ type GetOrderTradesQuery struct {
 
 // GetHistoricalDataQuery requests historical candle data.
 type GetHistoricalDataQuery struct {
+	Email           string    `json:"email"`
 	InstrumentToken int       `json:"instrument_token"`
 	Interval        string    `json:"interval"` // minute, 5minute, day, etc.
 	From            time.Time `json:"from"`

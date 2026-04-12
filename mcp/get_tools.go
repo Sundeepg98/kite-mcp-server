@@ -26,8 +26,7 @@ func (*ProfileTool) Tool() mcp.Tool {
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (interface{}, error) {
-		uc := usecases.NewGetProfileUseCase(manager.SessionSvc(), manager.Logger)
-		return uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
+		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
 	})
 }
 
@@ -45,8 +44,7 @@ func (*MarginsTool) Tool() mcp.Tool {
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (interface{}, error) {
-		uc := usecases.NewGetMarginsUseCase(manager.SessionSvc(), manager.Logger)
-		return uc.Execute(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
+		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
 	})
 }
 
@@ -156,13 +154,12 @@ func (*TradesTool) Tool() mcp.Tool {
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetTradesUseCase(manager.SessionSvc(), manager.Logger)
-		trades, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		trades := raw.([]broker.Trade)
 
-		// Convert to []interface{} for generic pagination
 		result := make([]interface{}, len(trades))
 		for i, trade := range trades {
 			result[i] = trade
@@ -225,13 +222,12 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetGTTsUseCase(manager.SessionSvc(), manager.Logger)
-		gtts, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		gtts := raw.([]broker.GTTOrder)
 
-		// Convert to []interface{} for generic pagination
 		result := make([]interface{}, len(gtts))
 		for i, gtt := range gtts {
 			result[i] = gtt

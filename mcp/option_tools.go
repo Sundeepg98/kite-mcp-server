@@ -9,10 +9,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type OptionChainTool struct{}
@@ -169,9 +169,8 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// For indices like NIFTY, BANKNIFTY the spot is on NSE as an index
-			ltpUC := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
-			ltpResp, err := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: spotKeys})
-			if err == nil {
+			if raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
+				ltpResp := raw.(map[string]broker.LTP)
 				for _, key := range spotKeys {
 					if q, ok := ltpResp[key]; ok && q.LastPrice > 0 {
 						spotPrice = q.LastPrice
@@ -229,11 +228,11 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Step 8: Batch get quotes
-			quotesUC := usecases.NewGetQuotesUseCase(manager.SessionSvc(), manager.Logger)
-			quotes, err := quotesUC.Execute(ctx, session.Email, cqrs.GetQuotesQuery{Instruments: instrumentKeys})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instrumentKeys})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch option quotes: %s", err.Error())), nil
 			}
+			quotes := raw.(map[string]broker.Quote)
 
 			// Step 9: Build the chain
 			chain := make([]optionChainEntry, 0, len(selectedStrikes))

@@ -8,10 +8,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // ltpCache caches LTP responses for 30 seconds to reduce API calls.
@@ -56,11 +56,11 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_quotes", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetQuotesUseCase(manager.SessionSvc(), manager.Logger)
-			quotes, err := uc.Execute(ctx, session.Email, cqrs.GetQuotesQuery{Instruments: instruments})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get quotes: %s", err.Error())), nil
 			}
+			quotes := raw.(map[string]broker.Quote)
 
 			return handler.MarshalResponse(quotes, "get_quotes")
 		})
@@ -253,8 +253,8 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// expose them. They are silently ignored for now.
 
 		return handler.WithSession(ctx, "get_historical_data", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetHistoricalDataUseCase(manager.SessionSvc(), manager.Logger)
-			historicalData, err := uc.Execute(ctx, session.Email, cqrs.GetHistoricalDataQuery{
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
+				Email:           session.Email,
 				InstrumentToken: instrumentToken,
 				Interval:        interval,
 				From:            fromDate,
@@ -263,6 +263,7 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get historical data: %s", err.Error())), nil
 			}
+			historicalData := raw.([]broker.HistoricalCandle)
 
 			return handler.MarshalResponse(historicalData, "get_historical_data")
 		})
@@ -313,11 +314,11 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return handler.MarshalResponse(cached, "get_ltp")
 			}
 
-			uc := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
-			ltp, err := uc.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: instruments})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest trading prices: %s", err.Error())), nil
 			}
+			ltp := raw.(map[string]broker.LTP)
 
 			ltpCache.Set(cacheKey, ltp)
 			return handler.MarshalResponse(ltp, "get_ltp")
@@ -364,11 +365,11 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ohlc", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOHLCUseCase(manager.SessionSvc(), manager.Logger)
-			ohlc, err := uc.Execute(ctx, session.Email, cqrs.GetOHLCQuery{Instruments: instruments})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOHLCQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get OHLC data: %s", err.Error())), nil
 			}
+			ohlc := raw.(map[string]broker.OHLC)
 
 			return handler.MarshalResponse(ohlc, "get_ohlc")
 		})

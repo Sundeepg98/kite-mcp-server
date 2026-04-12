@@ -9,10 +9,10 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // ---------------------------------------------------------------------------
@@ -276,11 +276,11 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "options_greeks", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 			// Fetch option LTP
 			optionKey := exchange + ":" + tradingsymbol
-			ltpUC := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
-			ltpResp, err := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: []string{optionKey}})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: []string{optionKey}})
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option LTP for %s: %s", optionKey, err.Error())), nil
 			}
+			ltpResp := raw.(map[string]broker.LTP)
 			optionPrice := 0.0
 			if q, ok := ltpResp[optionKey]; ok {
 				optionPrice = q.LastPrice
@@ -297,8 +297,8 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					"NSE:" + underlying,
 					"NSE:" + underlying + "-EQ",
 				}
-				spotResp, err := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: spotKeys})
-				if err == nil {
+				if spotRaw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
+					spotResp := spotRaw.(map[string]broker.LTP)
 					for _, key := range spotKeys {
 						if q, ok := spotResp[key]; ok && q.LastPrice > 0 {
 							underlyingPrice = q.LastPrice
@@ -602,11 +602,11 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			if len(instrumentKeys) > 500 {
 				instrumentKeys = instrumentKeys[:500]
 			}
-			ltpUC := usecases.NewGetLTPUseCase(manager.SessionSvc(), manager.Logger)
-			ltpResp, err := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{Instruments: instrumentKeys})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instrumentKeys})
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option premiums: %s", err.Error())), nil
 			}
+			ltpResp := raw.(map[string]broker.LTP)
 
 			netPremium := 0.0 // positive = net credit, negative = net debit
 			for i, spec := range specs {

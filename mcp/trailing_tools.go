@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
@@ -134,13 +135,14 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				}
 
 				if referencePrice <= 0 {
-					ltpUC := usecases.NewGetLTPUseCase(resolver, manager.Logger)
-					ltpResp, ltpErr := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{
+					raw, ltpErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{
+						Email:       session.Email,
 						Instruments: []string{instrumentID},
 					})
 					if ltpErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch LTP: %s. Please provide reference_price manually.", ltpErr)), nil
 					}
+					ltpResp := raw.(map[string]broker.LTP)
 					ltpData, ok := ltpResp[instrumentID]
 					if !ok || ltpData.LastPrice <= 0 {
 						return mcp.NewToolResultError("No LTP available. Please provide reference_price manually."), nil
