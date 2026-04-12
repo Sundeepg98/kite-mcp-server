@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -57,7 +58,8 @@ func init() {
 
 // ToolHandler provides common functionality for all MCP tools
 type ToolHandler struct {
-	manager *kc.Manager
+	manager          *kc.Manager
+	IsTokenExpiredFn func(storedAt time.Time) bool // injectable for testing; nil = kc.IsKiteTokenExpired
 }
 
 // NewToolHandler creates a new tool handler with the given manager
@@ -105,7 +107,11 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 		return nil
 	}
 	entry, ok := h.manager.TokenStore().Get(email)
-	if !ok || !kc.IsKiteTokenExpired(entry.StoredAt) {
+	isExpired := kc.IsKiteTokenExpired
+	if h.IsTokenExpiredFn != nil {
+		isExpired = h.IsTokenExpiredFn
+	}
+	if !ok || !isExpired(entry.StoredAt) {
 		return nil
 	}
 	if _, err := session.Broker.GetProfile(); err != nil {
