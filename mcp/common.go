@@ -2,10 +2,7 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -56,106 +53,6 @@ func init() {
 		if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
 			writeTools[tool.Name] = true
 		}
-	}
-}
-
-// ToolHandlerDeps holds the injected services for ToolHandler, replacing
-// the service-locator pattern of reaching into *kc.Manager for each call.
-//
-// Consumers should depend on the narrowest Provider interface they need.
-// *kc.Manager satisfies every Provider, so call sites can continue passing
-// a Manager, but individual tool Handler functions must reach through these
-// typed Provider fields rather than invoking accessors on *kc.Manager.
-type ToolHandlerDeps struct {
-	Logger      *slog.Logger
-	TokenStore  kc.TokenStoreInterface
-	UserStore   kc.UserStoreInterface // may be nil
-	Sessions    kc.SessionProvider
-	Credentials kc.CredentialResolver
-	Metrics     kc.MetricsRecorder
-	Config      kc.AppConfigProvider
-
-	// Narrow store-provider interfaces (ISP). Each is a one-method accessor
-	// onto the underlying store; consumers invoke e.g. `Tokens.TokenStore()`
-	// at the point of use. Providers are preferred over raw store interfaces
-	// because they can return nil when a subsystem is disabled without the
-	// caller needing to know the disable semantics up front.
-	Tokens      kc.TokenStoreProvider
-	CredStore   kc.CredentialStoreProvider
-	Alerts      kc.AlertStoreProvider
-	Telegram    kc.TelegramStoreProvider
-	Watchlist   kc.WatchlistStoreProvider
-	Users       kc.UserStoreProvider
-	Registry    kc.RegistryStoreProvider
-	Audit       kc.AuditStoreProvider
-	Billing     kc.BillingStoreProvider
-	Ticker      kc.TickerServiceProvider
-	Paper       kc.PaperEngineProvider
-	Instruments kc.InstrumentsManagerProvider
-	AlertDB     kc.AlertDBProvider
-	RiskGuard   kc.RiskGuardProvider
-	MCPServer   kc.MCPServerProvider
-}
-
-// ToolHandler provides common functionality for all MCP tools.
-// It holds focused service interfaces instead of the full Manager.
-// The manager field is retained for backward compatibility while individual
-// tool Handler methods are migrated incrementally.
-type ToolHandler struct {
-	manager          *kc.Manager                   // retained for tool-level backward compat
-	deps             ToolHandlerDeps               // injected services for common.go
-	IsTokenExpiredFn func(storedAt time.Time) bool // injectable for testing; nil = kc.IsKiteTokenExpired
-}
-
-// NewToolHandler creates a new tool handler, extracting focused interfaces
-// from the given manager. Individual tool files can still access h.manager
-// until they are migrated.
-func NewToolHandler(manager *kc.Manager) *ToolHandler {
-	return &ToolHandler{
-		manager: manager,
-		deps: ToolHandlerDeps{
-			Logger:      manager.Logger,
-			TokenStore:  manager.TokenStore(),
-			UserStore:   manager.UserStore(),
-			Sessions:    manager,
-			Credentials: manager,
-			Metrics:     manager,
-			Config:      manager,
-			// Narrow providers — *kc.Manager satisfies every one.
-			Tokens:      manager,
-			CredStore:   manager,
-			Alerts:      manager,
-			Telegram:    manager,
-			Watchlist:   manager,
-			Users:       manager,
-			Registry:    manager,
-			Audit:       manager,
-			Billing:     manager,
-			Ticker:      manager,
-			Paper:       manager,
-			Instruments: manager,
-			AlertDB:     manager,
-			RiskGuard:   manager,
-			MCPServer:   manager,
-		},
-	}
-}
-
-// trackToolCall increments the daily tool usage counter with optional context for session type
-func (h *ToolHandler) trackToolCall(ctx context.Context, toolName string) {
-	if h.deps.Metrics.HasMetrics() {
-		sessionType := SessionTypeFromContext(ctx)
-		metricName := fmt.Sprintf("tool_calls_%s_%s", toolName, sessionType)
-		h.deps.Metrics.IncrementDailyMetric(metricName)
-	}
-}
-
-// trackToolError increments the daily tool error counter with error type and optional context for session type
-func (h *ToolHandler) trackToolError(ctx context.Context, toolName, errorType string) {
-	if h.deps.Metrics.HasMetrics() {
-		sessionType := SessionTypeFromContext(ctx)
-		metricName := fmt.Sprintf("tool_errors_%s_%s_%s", toolName, errorType, sessionType)
-		h.deps.Metrics.IncrementDailyMetric(metricName)
 	}
 }
 
@@ -277,31 +174,6 @@ func (h *ToolHandler) callWithNilKiteGuard(toolName string, session *kc.KiteSess
 		}
 	}()
 	return fn(session)
-}
-
-// MarshalResponse marshals data to JSON and returns an MCP text result
-func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.CallToolResult, error) {
-	v, err := json.Marshal(data)
-	if err != nil {
-		h.deps.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to process response data: %s", err.Error())), nil
-	}
-
-	h.deps.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
-	return mcp.NewToolResultStructured(data, string(v)), nil
-}
-
-// HandleAPICall wraps common API call pattern with error handling and response marshalling
-func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(*kc.KiteSessionData) (interface{}, error)) (*mcp.CallToolResult, error) {
-	return h.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-		data, err := apiCall(session)
-		if err != nil {
-			h.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
-		}
-
-		return h.MarshalResponse(data, toolName)
-	})
 }
 
 // ValidationError represents a parameter validation error
