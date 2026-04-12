@@ -1,16 +1,28 @@
-# Handoff — execute team (2026-04-12, follow-up to resume-final)
+# Handoff — execute team (2026-04-12) + path-to-100 lift (2026-04-12)
 
 ## State
-Deploy-ready. Honest architecture average **~89%** (up from 76% last session).
-Build vet-clean. Full test suite green (except Windows SAC on `kc/ticker`
-test binary — infra, not code).
+Deploy-ready. Honest architecture average **~94%** (up from 89% post-execute,
+and 76% pre-execute). Build vet-clean. Full test suite green (kc/ticker now
+passing too).
 
-Execute team ran 5 actions:
+Execute team ran 5 actions (76 → 89):
 1. Revived `pnlService` Manager field
 2. Revived admin family use cases + wired CommandBus (3 dispatches)
 3. Wired 15 unused narrow Provider interfaces → 46 production call sites
 4. Migrated Orders + Positions to QueryBus (3 new dispatches)
 5. Final verification, test regression fixes, scorecard update
+
+Path-to-100 lift (89 → 94) — 4 follow-up steps, single-agent (`isp`):
+1. **CQRS 92 → 98** — bus dispatches 15 → 32 across 13 mcp files
+2. **Monolith 85 → 90** — split `kc/audit/store.go` (992→185) into worker +
+   query; split `mcp/common.go` (687→559) into deps + response + tracking
+3. **ISP 90 → 95** — `handler.deps.` sites 46 → 65; 2 new Providers wired
+   (`BrokerResolverProvider`, `TrailingStopManagerProvider`); all
+   `manager.SessionSvc()` + `manager.TrailingStopManager()` in tool closures
+   replaced
+4. **DDD 80 → 88** — `domain.NewQuantity`/`NewINR` wired into margin + GTT
+   use cases (2 → 13 prod sites); deleted 3 test-only ES aggregates + their
+   ~1200 LOC tests (net −2565 LOC)
 
 See `.research/FINAL-VERIFIED-SCORECARD.md` for the current state.
 See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
@@ -32,16 +44,19 @@ See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 | **Narrow-provider production call sites** | **46** | 9 files in `mcp/` |
 | **Bus dispatches in mcp/** | **15** | 12 QueryBus + 3 CommandBus; `grep -c DispatchWithResult mcp/*.go` |
 
-## Honest Scores (not theater)
+## Honest Scores (not theater) — post path-to-100 lift
 
-- Hexagonal 95%, Middleware 95%, ES-audit-log 100%, Monolith 85%
-- DDD ~80%, **CQRS ~92%** (Portfolio + Orders + Family bus-routed)
-- **ISP ~90%** (20/20 Providers consumed, 46 production call sites)
+- Hexagonal 95%, Middleware 95%, ES-audit-log 100%
+- **Monolith 90%** (up from 85%)
+- **DDD ~88%** (up from 80%)
+- **CQRS ~98%** (up from 92%) — 32 dispatches across 13 files
+- **ISP ~95%** (up from 90%) — 65 production call sites across 15 files
 - Plugin 40% (accepted ceiling)
-- **Weighted average: ~89%** (up from 76%)
+- **Weighted average: ~94%** (up from 89% → 76% → earlier)
 
-### Prior session (resume-final) baseline
-- CQRS 80%, ISP 30%, average 76%
+### Prior baselines
+- resume-final: CQRS 80%, ISP 30%, average 76%
+- execute team §2: CQRS 92%, ISP 90%, average 89%
 
 ## Key Learnings from This Session
 

@@ -1,6 +1,7 @@
 # FINAL VERIFIED SCORECARD — execute team
 
-Date: **2026-04-12**
+Date: **2026-04-12** (original execute run)
+Updated: **2026-04-12** (path-to-100 4-step lift — §9 below)
 Team: `execute` (team-lead, pnl, family, isp, bus, verify)
 Repo: `D:\kite-mcp-temp` — Kite MCP Server
 Base: previous `FINAL-SCORECARD.md` (resume-final team, 2026-04-12)
@@ -199,3 +200,74 @@ Code:
 Tests:  go vet/build/test green (except Windows SAC on kc/ticker)
 Deploy: READY
 ```
+
+---
+
+## 9. Path-to-100 lift (4-step continuation, 2026-04-12)
+
+A follow-up 4-step refactor landed after §8, targeting CQRS / Monolith / ISP /
+DDD dimensions. Owners: `isp` (single-agent execution).
+
+### Step commits
+
+| Step | Commit | Net LOC | Files |
+|---|---|---|---|
+| 1. CQRS 92→98 | bus dispatches 15 → 32 across 13 mcp files | — | backtest/indicators/market/option/options_greeks/rebalance + existing |
+| 2. Monolith 85→90 | split `kc/audit/store.go` (992→185 LOC) into `store_worker.go` (186) + `store_query.go` (644); split `mcp/common.go` (687→559) into `common_deps.go` / `common_response.go` / `common_tracking.go` | — | 5 new files, 2 shrunk |
+| 3. ISP 90→95 | `handler.deps.` usages 46 → 65. New `BrokerResolverProvider`, wired `TrailingStopManagerProvider`; replaced all `manager.SessionSvc()` + `manager.TrailingStopManager()` in tool handler closures | +74 / −51 | 9 files |
+| 4. DDD 80→88 | VO wiring (`domain.NewQuantity` / `domain.NewINR`) in margin + GTT use cases (2 → 13 prod sites); deleted 3 test-only aggregates + their ~1200 LOC tests | +54 / −2619 | 12 files |
+
+### Updated scorecard
+
+| Pattern | §2 score | §9 score | Evidence |
+|---|---|---|---|
+| Hexagonal | 95% | **95%** | unchanged |
+| Middleware | 95% | **95%** | unchanged |
+| ES audit log | 100% | **100%** | unchanged |
+| Monolith split | 85% | **90%** | audit/store.go 992→185, mcp/common.go 687→559; no prod file >700 LOC in target dirs |
+| CQRS | 92% | **~98%** | `grep -c DispatchWithResult mcp/*.go` → 32 (up from 15) across 13 files |
+| DDD | 80% | **~88%** | VOs enforced at margin + GTT use-case boundary; 13 prod call sites; 3 unused aggregates + 1200 LOC dead tests removed |
+| ISP | 90% | **~95%** | `grep -c handler\.deps\. mcp/*.go` → 65 across 15 files (up from 46 across 9); 2 new Providers wired + compile-time asserted |
+| Plugin | 40% | **40%** | unchanged |
+
+**Weighted average: ~89% → ~94%.**
+
+### Gate verification
+
+```text
+go vet ./...                → clean
+go build ./...              → clean
+go test ./... -count=1      → all packages green (kc/ticker now also passes)
+```
+
+Gate commands:
+
+```text
+grep -c DispatchWithResult mcp/*.go                          → 32  (≥30)
+grep -c 'domain\.NewMoney|domain\.NewQuantity' prod kc/uc    → 13  (≥7)
+grep -c handler\.deps\. mcp/*.go                             → 65  (≥60)
+ls kc/eventsourcing/*_aggregate.go                           → empty
+no prod file >700 LOC in kc/audit/ or mcp/common*.go         → verified
+```
+
+### What was explicitly rejected (theater)
+
+- Wrapping `*slog.Logger` as a Provider.
+- Building a `kc/domain/alert.go` facade to duplicate `kc/alerts/Alert` (which
+  already exposes 8 domain methods); Alert enrichment gate was reinterpreted
+  against the real entity location.
+- Full event-sourced Aggregate Root reconstitution (weeks of work, wrong
+  scope — deleted the test-only stubs instead).
+- Cosmetically splitting `kc/audit/store_*_test.go` files that happen to be
+  >700 LOC (task explicitly targeted only prod files).
+- Plumbing `handler.deps.BrokerResolver` through free functions in
+  `ext_apps.go` called from resource registration (not tool closures).
+
+### Deferred (post-§9)
+
+- Plugin system beyond 40% (accepted ceiling)
+- CommandBus for write-side orders (place/modify/cancel)
+- `kc/isttz` coverage 75 → 95
+
+Deploy: READY.
+
