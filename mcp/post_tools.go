@@ -7,7 +7,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
@@ -128,7 +127,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Price:            p.Float("price", 0.0),
 			TriggerPrice:     p.Float("trigger_price", 0.0),
 			Tag:              p.String("tag", "mcp"),
-			MarketProtection: p.Float("market_protection", kiteconnect.MarketProtectionAuto),
+			MarketProtection: p.Float("market_protection", broker.MarketProtectionAuto),
 			Variety:          variety,
 		}
 
@@ -280,7 +279,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			TriggerPrice:     p.Float("trigger_price", 0.0),
 			Validity:         p.String("validity", ""),
 			DisclosedQty:     p.Int("disclosed_quantity", 0),
-			MarketProtection: p.Float("market_protection", kiteconnect.MarketProtectionAuto),
+			MarketProtection: p.Float("market_protection", broker.MarketProtectionAuto),
 			Variety:          variety,
 		}
 

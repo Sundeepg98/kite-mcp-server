@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // --- Pre-Trade Check Tool ---
@@ -133,82 +134,46 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("price must be greater than 0 for LIMIT orders"), nil
 		}
 
-		instrumentKey := exchange + ":" + tradingsymbol
-
 		return handler.WithSession(ctx, "pre_trade_check", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// NOTE: Pre-trade check uses session.Kite.Client directly for 5 parallel
-			// Kite-specific calls (GetLTP, GetUserMargins, GetPositions, GetHoldings,
-			// GetOrderMargins). GetUserMargins and GetOrderMargins are Kite-specific,
-			// not abstracted in broker.Client. See broker/broker.go.
-			client := session.Kite.Client
+			// Route data gathering through use case
+			uc := usecases.NewPreTradeCheckUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				manager.Logger,
+			)
+			ucResult, err := uc.Execute(ctx, cqrs.PreTradeCheckQuery{
+				Email:           session.Email,
+				Exchange:        exchange,
+				Tradingsymbol:   tradingsymbol,
+				TransactionType: transactionType,
+				Quantity:        quantity,
+				Product:         product,
+				OrderType:       orderType,
+				Price:           price,
+			})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 
-			// 5 parallel API calls
-			ch := make(chan apiResult, 5)
-			var wg sync.WaitGroup
-			wg.Add(5)
-
-			// 1. GetLTP
-			go func() {
-				defer wg.Done()
-				ltp, err := client.GetLTP(instrumentKey)
-				ch <- apiResult{"ltp", ltp, err}
-			}()
-
-			// 2. GetUserMargins
-			go func() {
-				defer wg.Done()
-				margins, err := client.GetUserMargins()
-				ch <- apiResult{"margins", margins, err}
-			}()
-
-			// 3. GetPositions
-			go func() {
-				defer wg.Done()
-				positions, err := client.GetPositions()
-				ch <- apiResult{"positions", positions, err}
-			}()
-
-			// 4. GetHoldings
-			go func() {
-				defer wg.Done()
-				holdings, err := client.GetHoldings()
-				ch <- apiResult{"holdings", holdings, err}
-			}()
-
-			// 5. GetOrderMargins
-			go func() {
-				defer wg.Done()
-				orderMarginPrice := price
-				// For MARKET orders, price is 0 — the API handles it
-				resp, err := client.GetOrderMargins(kiteconnect.GetMarginParams{
-					OrderParams: []kiteconnect.OrderMarginParam{{
-						Exchange:        exchange,
-						Tradingsymbol:   tradingsymbol,
-						TransactionType: transactionType,
-						Variety:         "regular",
-						Product:         product,
-						OrderType:       orderType,
-						Quantity:        quantity,
-						Price:           orderMarginPrice,
-					}},
-				})
-				ch <- apiResult{"order_margins", resp, err}
-			}()
-
-			go func() {
-				wg.Wait()
-				close(ch)
-			}()
-
-			// Collect results
+			// Convert use case result to legacy data/errs maps for buildPreTradeResponse
 			data := make(map[string]any)
 			errs := make(map[string]string)
-			for r := range ch {
-				if r.err != nil {
-					errs[r.key] = r.err.Error()
-				} else {
-					data[r.key] = r.val
-				}
+			if ucResult.LTP != nil {
+				data["ltp"] = ucResult.LTP
+			}
+			if ucResult.Margins != nil {
+				data["margins"] = *ucResult.Margins
+			}
+			if ucResult.Positions != nil {
+				data["positions"] = *ucResult.Positions
+			}
+			if ucResult.Holdings != nil {
+				data["holdings"] = ucResult.Holdings
+			}
+			if ucResult.OrderMargins != nil {
+				data["order_margins"] = ucResult.OrderMargins
+			}
+			if ucResult.Errors != nil {
+				errs = ucResult.Errors
 			}
 
 			resp := buildPreTradeResponse(
@@ -245,7 +210,7 @@ func buildPreTradeResponse(
 	var currentPrice float64
 	instrumentKey := exchange + ":" + tradingsymbol
 	if ltpRaw, ok := data["ltp"]; ok {
-		ltpMap := ltpRaw.(kiteconnect.QuoteLTP)
+		ltpMap := ltpRaw.(map[string]broker.LTP)
 		if ltpData, ok := ltpMap[instrumentKey]; ok {
 			currentPrice = ltpData.LastPrice
 		}
@@ -263,20 +228,18 @@ func buildPreTradeResponse(
 	// --- Margin from GetOrderMargins (exact) ---
 	var marginRequired float64
 	if omRaw, ok := data["order_margins"]; ok {
-		orderMargins := omRaw.([]kiteconnect.OrderMargins)
-		if len(orderMargins) > 0 {
-			marginRequired = orderMargins[0].Total
-		}
+		// GetOrderMargins returns any — try to extract total from the response.
+		marginRequired = extractMarginTotal(omRaw, orderValue)
 	} else {
 		// Fallback estimate if GetOrderMargins failed
 		marginRequired = orderValue
 	}
 
-	// --- Available margin from GetUserMargins ---
+	// --- Available margin from GetMargins (broker-agnostic) ---
 	var marginAvailable float64
 	if marginsRaw, ok := data["margins"]; ok {
-		margins := marginsRaw.(kiteconnect.AllMargins)
-		marginAvailable = margins.Equity.Net
+		margins := marginsRaw.(broker.Margins)
+		marginAvailable = margins.Equity.Available
 	}
 
 	utilizationAfter := 0.0
@@ -293,7 +256,7 @@ func buildPreTradeResponse(
 	// --- Portfolio concentration from holdings ---
 	var totalPortfolioValue float64
 	if holdingsRaw, ok := data["holdings"]; ok {
-		holdings := holdingsRaw.(kiteconnect.Holdings)
+		holdings := holdingsRaw.([]broker.Holding)
 		for _, h := range holdings {
 			totalPortfolioValue += h.LastPrice * float64(h.Quantity)
 		}
@@ -319,7 +282,7 @@ func buildPreTradeResponse(
 
 	// --- Existing position check ---
 	if positionsRaw, ok := data["positions"]; ok {
-		positions := positionsRaw.(kiteconnect.Positions)
+		positions := positionsRaw.(broker.Positions)
 		for _, p := range positions.Net {
 			if strings.EqualFold(p.Tradingsymbol, tradingsymbol) &&
 				strings.EqualFold(p.Exchange, exchange) &&
@@ -384,4 +347,25 @@ func buildPreTradeResponse(
 	}
 
 	return resp
+}
+
+// extractMarginTotal attempts to extract a margin total from the raw GetOrderMargins response.
+// GetOrderMargins returns any — the underlying structure varies by broker.
+// Falls back to the provided fallback value if extraction fails.
+func extractMarginTotal(raw any, fallback float64) float64 {
+	// Try map with "total" key (mock broker and some raw returns)
+	if m, ok := raw.(map[string]any); ok {
+		if total, ok := m["total"].(float64); ok {
+			return total
+		}
+	}
+	// Try slice of maps (Zerodha returns []OrderMargins via broker adapter as any)
+	if slice, ok := raw.([]any); ok && len(slice) > 0 {
+		if m, ok := slice[0].(map[string]any); ok {
+			if total, ok := m["total"].(float64); ok {
+				return total
+			}
+		}
+	}
+	return fallback
 }

@@ -434,3 +434,57 @@ func (c *Client) GetOrderCharges(orders []broker.OrderChargesParam) (any, error)
 		OrderParams: kiteParams,
 	})
 }
+
+// ---------------------------------------------------------------------------
+// NativeAlertCapable implementation — server-side Zerodha alerts
+// ---------------------------------------------------------------------------
+
+// compile-time proof that *Client satisfies broker.NativeAlertCapable.
+var _ broker.NativeAlertCapable = (*Client)(nil)
+
+// CreateNativeAlert creates a server-side alert at Zerodha.
+func (c *Client) CreateNativeAlert(params broker.NativeAlertParams) (broker.NativeAlert, error) {
+	kp := convertNativeAlertParamsToKite(params)
+	alert, err := c.kite.CreateAlert(kp)
+	if err != nil {
+		return broker.NativeAlert{}, err
+	}
+	return convertNativeAlert(alert), nil
+}
+
+// GetNativeAlerts retrieves all native alerts, optionally filtered.
+func (c *Client) GetNativeAlerts(filters map[string]string) ([]broker.NativeAlert, error) {
+	return retryOnTransient(func() ([]broker.NativeAlert, error) {
+		alerts, err := c.kite.GetAlerts(filters)
+		if err != nil {
+			return nil, err
+		}
+		return convertNativeAlerts(alerts), nil
+	}, 2)
+}
+
+// ModifyNativeAlert modifies an existing native alert by UUID.
+func (c *Client) ModifyNativeAlert(uuid string, params broker.NativeAlertParams) (broker.NativeAlert, error) {
+	kp := convertNativeAlertParamsToKite(params)
+	alert, err := c.kite.ModifyAlert(uuid, kp)
+	if err != nil {
+		return broker.NativeAlert{}, err
+	}
+	return convertNativeAlert(alert), nil
+}
+
+// DeleteNativeAlerts deletes one or more native alerts by UUID.
+func (c *Client) DeleteNativeAlerts(uuids ...string) error {
+	return c.kite.DeleteAlerts(uuids...)
+}
+
+// GetNativeAlertHistory retrieves the trigger history for an alert.
+func (c *Client) GetNativeAlertHistory(uuid string) ([]broker.NativeAlertHistoryEntry, error) {
+	return retryOnTransient(func() ([]broker.NativeAlertHistoryEntry, error) {
+		history, err := c.kite.GetAlertHistory(uuid)
+		if err != nil {
+			return nil, err
+		}
+		return convertNativeAlertHistory(history), nil
+	}, 2)
+}

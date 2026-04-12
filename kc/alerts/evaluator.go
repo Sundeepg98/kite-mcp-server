@@ -29,7 +29,7 @@ func (e *Evaluator) Evaluate(email string, tick models.Tick) {
 
 	for _, alert := range alerts {
 		if alert.ShouldTrigger(tick.LastPrice) {
-			if !e.store.MarkTriggered(alert.ID, tick.LastPrice) {
+			if !e.store.MarkTriggered(alert.ID, tick.LastPrice) { // COVERAGE: unreachable without race — GetByToken filters triggered alerts; only reachable if another goroutine triggers between GetByToken and MarkTriggered
 				continue
 			}
 

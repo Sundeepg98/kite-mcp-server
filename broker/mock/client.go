@@ -14,8 +14,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 )
 
-// compile-time proof that *Client satisfies broker.Client.
+// compile-time proof that *Client satisfies broker.Client and broker.NativeAlertCapable.
 var _ broker.Client = (*Client)(nil)
+var _ broker.NativeAlertCapable = (*Client)(nil)
 
 // Client is an in-memory mock implementation of broker.Client.
 // Use New() to create one, then configure it with Set* methods
@@ -79,9 +80,18 @@ type Client struct {
 	CancelMFOrderErr    error
 	PlaceMFSIPErr       error
 	CancelMFSIPErr      error
-	GetOrderMarginsErr  error
-	GetBasketMarginsErr error
-	GetOrderChargesErr  error
+	GetOrderMarginsErr       error
+	GetBasketMarginsErr      error
+	GetOrderChargesErr       error
+	CreateNativeAlertErr     error
+	GetNativeAlertsErr       error
+	ModifyNativeAlertErr     error
+	DeleteNativeAlertsErr    error
+	GetNativeAlertHistoryErr error
+
+	// Native alert state
+	nativeAlerts      []broker.NativeAlert
+	nextNativeAlertID atomic.Int64
 }
 
 // New creates a ready-to-use mock Client with sensible defaults.
@@ -111,6 +121,7 @@ func New() *Client {
 	c.nextTriggerID.Store(300000)
 	c.nextMFOrderID.Store(400000)
 	c.nextMFSIPID.Store(500000)
+	c.nextNativeAlertID.Store(600000)
 	return c
 }
 
@@ -846,5 +857,115 @@ func (c *Client) GetOrderCharges(_ []broker.OrderChargesParam) (any, error) {
 	return map[string]any{
 		"total_charges": 50.0,
 		"source":        "mock",
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// NativeAlertCapable implementation
+// ---------------------------------------------------------------------------
+
+// SetNativeAlerts replaces all native alerts in the mock.
+func (c *Client) SetNativeAlerts(alerts []broker.NativeAlert) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nativeAlerts = alerts
+}
+
+// CreateNativeAlert creates a mock native alert and returns it.
+func (c *Client) CreateNativeAlert(params broker.NativeAlertParams) (broker.NativeAlert, error) {
+	if c.CreateNativeAlertErr != nil {
+		return broker.NativeAlert{}, c.CreateNativeAlertErr
+	}
+	id := c.nextNativeAlertID.Add(1)
+	alert := broker.NativeAlert{
+		UUID:             fmt.Sprintf("mock-alert-%d", id),
+		Name:             params.Name,
+		Type:             params.Type,
+		Status:           "enabled",
+		LHSExchange:      params.LHSExchange,
+		LHSTradingSymbol: params.LHSTradingSymbol,
+		LHSAttribute:     params.LHSAttribute,
+		Operator:         params.Operator,
+		RHSType:          params.RHSType,
+		RHSConstant:      params.RHSConstant,
+		RHSExchange:      params.RHSExchange,
+		RHSTradingSymbol: params.RHSTradingSymbol,
+		RHSAttribute:     params.RHSAttribute,
+	}
+	c.mu.Lock()
+	c.nativeAlerts = append(c.nativeAlerts, alert)
+	c.mu.Unlock()
+	return alert, nil
+}
+
+// GetNativeAlerts returns mock native alerts, optionally filtered.
+func (c *Client) GetNativeAlerts(filters map[string]string) ([]broker.NativeAlert, error) {
+	if c.GetNativeAlertsErr != nil {
+		return nil, c.GetNativeAlertsErr
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if status, ok := filters["status"]; ok {
+		var filtered []broker.NativeAlert
+		for _, a := range c.nativeAlerts {
+			if a.Status == status {
+				filtered = append(filtered, a)
+			}
+		}
+		return filtered, nil
+	}
+
+	out := make([]broker.NativeAlert, len(c.nativeAlerts))
+	copy(out, c.nativeAlerts)
+	return out, nil
+}
+
+// ModifyNativeAlert modifies a mock native alert by UUID.
+func (c *Client) ModifyNativeAlert(uuid string, params broker.NativeAlertParams) (broker.NativeAlert, error) {
+	if c.ModifyNativeAlertErr != nil {
+		return broker.NativeAlert{}, c.ModifyNativeAlertErr
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.nativeAlerts {
+		if c.nativeAlerts[i].UUID == uuid {
+			c.nativeAlerts[i].Name = params.Name
+			c.nativeAlerts[i].Type = params.Type
+			c.nativeAlerts[i].Operator = params.Operator
+			return c.nativeAlerts[i], nil
+		}
+	}
+	return broker.NativeAlert{}, fmt.Errorf("native alert %s not found", uuid)
+}
+
+// DeleteNativeAlerts removes native alerts by UUID.
+func (c *Client) DeleteNativeAlerts(uuids ...string) error {
+	if c.DeleteNativeAlertsErr != nil {
+		return c.DeleteNativeAlertsErr
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	uuidSet := make(map[string]bool, len(uuids))
+	for _, u := range uuids {
+		uuidSet[u] = true
+	}
+	var remaining []broker.NativeAlert
+	for _, a := range c.nativeAlerts {
+		if !uuidSet[a.UUID] {
+			remaining = append(remaining, a)
+		}
+	}
+	c.nativeAlerts = remaining
+	return nil
+}
+
+// GetNativeAlertHistory returns mock alert history entries.
+func (c *Client) GetNativeAlertHistory(uuid string) ([]broker.NativeAlertHistoryEntry, error) {
+	if c.GetNativeAlertHistoryErr != nil {
+		return nil, c.GetNativeAlertHistoryErr
+	}
+	return []broker.NativeAlertHistoryEntry{
+		{UUID: uuid, Type: "simple", Condition: "triggered", CreatedAt: "2026-01-01 10:00:00"},
 	}, nil
 }

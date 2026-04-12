@@ -11,6 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // --- Server Metrics Tool ---
@@ -85,41 +88,23 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return errResult, nil
 		}
 
-		// Parse period.
-		args := request.GetArguments()
-		period := NewArgParser(args).String("period", "24h")
-		var since time.Time
-		now := time.Now()
-		switch period {
-		case "1h":
-			since = now.Add(-1 * time.Hour)
-		case "24h":
-			since = now.Add(-24 * time.Hour)
-		case "7d":
-			since = now.AddDate(0, 0, -7)
-		case "30d":
-			since = now.AddDate(0, 0, -30)
-		default:
-			since = now.Add(-24 * time.Hour)
-			period = "24h"
-		}
-
 		auditStore := manager.AuditStore()
 		if auditStore == nil {
 			return mcp.NewToolResultError("Audit store not available (requires database persistence)"), nil
 		}
 
-		// Fetch global aggregate stats.
-		stats, err := auditStore.GetGlobalStats(since)
+		// Parse period and route through use case for audit data.
+		args := request.GetArguments()
+		period := NewArgParser(args).String("period", "24h")
+		adminEmail := oauth.EmailFromContext(ctx)
+
+		uc := usecases.NewServerMetricsUseCase(auditStore, manager.Logger)
+		ucResult, err := uc.Execute(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get global stats: %s", err.Error())), nil
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		// Fetch per-tool metrics.
-		toolMetrics, err := auditStore.GetToolMetrics(since)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get tool metrics: %s", err.Error())), nil
-		}
+		stats := ucResult.Stats
 
 		// Compute error rate.
 		var errorRate string
@@ -130,14 +115,13 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			errorRate = "0.0%"
 		}
 
-		// Runtime metrics: memory, goroutines, GC pause.
+		// Runtime metrics: memory, goroutines, GC pause (process-level, not business logic).
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
 		heapAllocMB := float64(memStats.HeapAlloc) / 1024 / 1024
 		goroutines := runtime.NumGoroutine()
 		var gcPauseMs float64
 		if memStats.NumGC > 0 {
-			// Last GC pause in milliseconds.
 			gcPauseMs = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
 		}
 
@@ -149,10 +133,9 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		// Per-user error breakdown (top 5).
-		topErrorUsers, _ := auditStore.GetTopErrorUsers(since, 5)
+		// Map use case error users to response type.
 		var userErrors []UserErrorCount
-		for _, ue := range topErrorUsers {
+		for _, ue := range ucResult.TopErrorUsers {
 			userErrors = append(userErrors, UserErrorCount{Email: ue.Email, ErrorCount: ue.ErrorCount})
 		}
 
@@ -165,14 +148,14 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			GCPauseMs:      gcPauseMs,
 			DBSizeMB:       dbSizeMB,
 			ActiveSessions: manager.GetActiveSessionCount(),
-			Period:         period,
+			Period:         ucResult.Period,
 			TotalCalls:     stats.TotalCalls,
 			ErrorCount:     stats.ErrorCount,
 			ErrorRate:      errorRate,
 			AvgLatencyMs:   stats.AvgLatencyMs,
 			TopTool:        stats.TopTool,
 			TopToolCount:   stats.TopToolCount,
-			ToolMetrics:    toolMetrics,
+			ToolMetrics:    ucResult.ToolMetrics,
 			TopErrorUsers:  userErrors,
 		}
 

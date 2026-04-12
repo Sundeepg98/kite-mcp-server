@@ -502,9 +502,10 @@ func TestActivityData_WithAuditStore_P7(t *testing.T) {
 func TestPortfolioData_NoCreds(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	// No credentials stored → should return nil
+	// In DevMode, GetBrokerForEmail returns a mock client for all emails,
+	// so portfolioData always returns data even without stored credentials.
 	data := portfolioData(mgr, nil, "admin@example.com")
-	assert.Nil(t, data)
+	assert.NotNil(t, data)
 }
 
 func TestPaperData_NoCreds(t *testing.T) {

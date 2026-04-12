@@ -434,11 +434,21 @@ func validateSessionID(sessionID string) error {
 	return nil
 }
 
-// GetBrokerForEmail resolves a broker.Client for the given email using cached credentials.
-// In DevMode, returns a mock broker. Otherwise, returns an error if no access token is available.
+// GetBrokerForEmail resolves a broker.Client for the given email.
+// It first checks for an active session with a broker (preserves custom base URI
+// and avoids creating redundant clients). In DevMode, returns a mock broker.
+// Otherwise, falls back to creating a new client from cached credentials.
 func (ss *SessionService) GetBrokerForEmail(email string) (broker.Client, error) {
 	if ss.devMode {
 		return mock.NewDemoClient(), nil
+	}
+	// Try to reuse an existing session's broker for this email.
+	if ss.sessionManager != nil {
+		for _, s := range ss.sessionManager.ListActiveSessions() {
+			if kd, ok := s.Data.(*KiteSessionData); ok && kd != nil && kd.Email == email && kd.Broker != nil {
+				return kd.Broker, nil
+			}
+		}
 	}
 	apiKey := ss.credentialSvc.GetAPIKeyForEmail(email)
 	accessToken := ss.credentialSvc.GetAccessTokenForEmail(email)

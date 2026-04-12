@@ -3,11 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -38,16 +38,16 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		enable, _ := args["enable"].(bool)
 		initialCash := NewArgParser(args).Float("initial_cash", 10000000)
 
-		if enable {
-			if err := engine.Enable(email, initialCash); err != nil {
-				return gomcp.NewToolResultError("Failed to enable: " + err.Error()), nil
-			}
-			return gomcp.NewToolResultText(fmt.Sprintf("Paper trading ENABLED. Virtual cash: Rs %.0f. All orders now execute against your virtual portfolio.", initialCash)), nil
+		uc := usecases.NewPaperTradingToggleUseCase(engine, manager.Logger)
+		msg, err := uc.Execute(ctx, cqrs.PaperTradingToggleCommand{
+			Email:       email,
+			Enable:      enable,
+			InitialCash: initialCash,
+		})
+		if err != nil {
+			return gomcp.NewToolResultError(err.Error()), nil
 		}
-		if err := engine.Disable(email); err != nil {
-			return gomcp.NewToolResultError("Failed to disable: " + err.Error()), nil
-		}
-		return gomcp.NewToolResultText("Paper trading DISABLED. Orders now execute against the real Kite API."), nil
+		return gomcp.NewToolResultText(msg), nil
 	}
 }
 
@@ -72,9 +72,11 @@ func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		if engine == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
-		status, err := engine.Status(email)
+
+		uc := usecases.NewPaperTradingStatusUseCase(engine, manager.Logger)
+		status, err := uc.Execute(ctx, cqrs.PaperTradingStatusQuery{Email: email})
 		if err != nil {
-			return gomcp.NewToolResultError("Failed to get status: " + err.Error()), nil
+			return gomcp.NewToolResultError(err.Error()), nil
 		}
 		jsonBytes, err := json.Marshal(status)
 		if err != nil {
@@ -105,8 +107,10 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		if engine == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
-		if err := engine.Reset(email); err != nil {
-			return gomcp.NewToolResultError("Failed to reset: " + err.Error()), nil
+
+		uc := usecases.NewPaperTradingResetUseCase(engine, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.PaperTradingResetCommand{Email: email}); err != nil {
+			return gomcp.NewToolResultError(err.Error()), nil
 		}
 		return gomcp.NewToolResultText("Paper trading portfolio RESET. All positions, holdings, and orders cleared. Cash restored to initial amount."), nil
 	}

@@ -12,6 +12,10 @@ const (
 	Upstox   Name = "upstox"
 )
 
+// MarketProtectionAuto is the default value for MarketProtection in OrderParams,
+// meaning the broker applies its own default protection percentage.
+const MarketProtectionAuto float64 = -1
+
 // Profile contains the authenticated user's broker profile.
 type Profile struct {
 	UserID    string   `json:"user_id"`
@@ -495,4 +499,75 @@ type Client interface {
 
 	// GetOrderCharges calculates brokerage, taxes, and charges for orders.
 	GetOrderCharges(orders []OrderChargesParam) (any, error)
+}
+
+// ---------------------------------------------------------------------------
+// Native alert types — broker-agnostic representations of server-side alerts.
+// Only Zerodha implements these currently; other brokers may not support them.
+// ---------------------------------------------------------------------------
+
+// NativeAlertParams contains parameters for creating or modifying a server-side alert.
+type NativeAlertParams struct {
+	Name             string          `json:"name"`
+	Type             string          `json:"type"` // "simple" or "ato"
+	LHSExchange      string          `json:"lhs_exchange"`
+	LHSTradingSymbol string          `json:"lhs_tradingsymbol"`
+	LHSAttribute     string          `json:"lhs_attribute"`
+	Operator         string          `json:"operator"` // "<=", ">=", "<", ">", "=="
+	RHSType          string          `json:"rhs_type"` // "constant" or "instrument"
+	RHSConstant      float64         `json:"rhs_constant,omitempty"`
+	RHSExchange      string          `json:"rhs_exchange,omitempty"`
+	RHSTradingSymbol string          `json:"rhs_tradingsymbol,omitempty"`
+	RHSAttribute     string          `json:"rhs_attribute,omitempty"`
+	BasketJSON       string          `json:"basket_json,omitempty"` // raw JSON for ATO basket
+}
+
+// NativeAlert represents a server-side alert returned by the broker.
+type NativeAlert struct {
+	UUID             string  `json:"uuid"`
+	Name             string  `json:"name"`
+	Type             string  `json:"type"`
+	Status           string  `json:"status"`
+	LHSExchange      string  `json:"lhs_exchange"`
+	LHSTradingSymbol string  `json:"lhs_tradingsymbol"`
+	LHSAttribute     string  `json:"lhs_attribute"`
+	Operator         string  `json:"operator"`
+	RHSType          string  `json:"rhs_type"`
+	RHSConstant      float64 `json:"rhs_constant,omitempty"`
+	RHSExchange      string  `json:"rhs_exchange,omitempty"`
+	RHSTradingSymbol string  `json:"rhs_tradingsymbol,omitempty"`
+	RHSAttribute     string  `json:"rhs_attribute,omitempty"`
+	AlertCount       int     `json:"alert_count"`
+	CreatedAt        string  `json:"created_at,omitempty"`
+	UpdatedAt        string  `json:"updated_at,omitempty"`
+}
+
+// NativeAlertHistoryEntry represents a single trigger event in an alert's history.
+type NativeAlertHistoryEntry struct {
+	UUID      string `json:"uuid"`
+	Type      string `json:"type"`
+	Condition string `json:"condition"`
+	CreatedAt string `json:"created_at,omitempty"`
+	Meta      any    `json:"meta,omitempty"`
+	OrderMeta any    `json:"order_meta,omitempty"`
+}
+
+// NativeAlertCapable is an optional sub-interface implemented by brokers
+// that support server-side alerts (e.g., Zerodha). Use a type assertion
+// to check: if nac, ok := client.(broker.NativeAlertCapable); ok { ... }
+type NativeAlertCapable interface {
+	// CreateNativeAlert creates a server-side alert.
+	CreateNativeAlert(params NativeAlertParams) (NativeAlert, error)
+
+	// GetNativeAlerts retrieves all native alerts, optionally filtered.
+	GetNativeAlerts(filters map[string]string) ([]NativeAlert, error)
+
+	// ModifyNativeAlert modifies an existing native alert by UUID.
+	ModifyNativeAlert(uuid string, params NativeAlertParams) (NativeAlert, error)
+
+	// DeleteNativeAlerts deletes one or more native alerts by UUID.
+	DeleteNativeAlerts(uuids ...string) error
+
+	// GetNativeAlertHistory retrieves the trigger history for an alert.
+	GetNativeAlertHistory(uuid string) ([]NativeAlertHistoryEntry, error)
 }

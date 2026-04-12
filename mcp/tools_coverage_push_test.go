@@ -116,7 +116,7 @@ func TestLogin_OnlyApiKey(t *testing.T) {
 	})
 	assert.NotNil(t, result)
 	assert.True(t, result.IsError)
-	assert.Contains(t, resultText(t, result), "Both")
+	assert.Contains(t, resultText(t, result), "api_key and api_secret are required")
 }
 
 func TestLogin_InvalidApiKeyChars(t *testing.T) {

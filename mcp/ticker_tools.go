@@ -7,7 +7,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -46,9 +48,10 @@ func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("No access token — please login first"), nil
 			}
 
-			if err := manager.TickerService().Start(email, apiKey, accessToken); err != nil {
+			uc := usecases.NewStartTickerUseCase(manager.TickerService(), manager.Logger)
+			if err := uc.Execute(ctx, cqrs.StartTickerCommand{Email: email, APIKey: apiKey, AccessToken: accessToken}); err != nil {
 				handler.trackToolError(ctx, "start_ticker", "start_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to start ticker: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText("Ticker started. Use subscribe_instruments to add instruments for live data."), nil
@@ -83,9 +86,10 @@ func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			if err := manager.TickerService().Stop(email); err != nil {
+			uc := usecases.NewStopTickerUseCase(manager.TickerService(), manager.Logger)
+			if err := uc.Execute(ctx, cqrs.StopTickerCommand{Email: email}); err != nil {
 				handler.trackToolError(ctx, "stop_ticker", "stop_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to stop ticker: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return mcp.NewToolResultText("Ticker stopped."), nil
@@ -120,10 +124,11 @@ func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			status, err := manager.TickerService().GetStatus(email)
+			uc := usecases.NewTickerStatusUseCase(manager.TickerService(), manager.Logger)
+			status, err := uc.Execute(ctx, cqrs.TickerStatusQuery{Email: email})
 			if err != nil {
 				handler.trackToolError(ctx, "ticker_status", "status_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to get ticker status: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return handler.MarshalResponse(status, "ticker_status")
@@ -186,12 +191,10 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			// Map mode string to ticker mode
-			mode := resolveTickerMode(modeStr)
-
-			if err := manager.TickerService().Subscribe(email, tokens, mode); err != nil {
+			uc := usecases.NewSubscribeInstrumentsUseCase(manager.TickerService(), manager.Logger)
+			if err := uc.Execute(ctx, cqrs.SubscribeInstrumentsCommand{Email: email, Tokens: tokens, Mode: modeStr}); err != nil {
 				handler.trackToolError(ctx, "subscribe_instruments", "subscribe_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to subscribe: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			result := fmt.Sprintf("Subscribed to %d instruments in '%s' mode.", len(tokens), modeStr)
@@ -250,9 +253,10 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			if err := manager.TickerService().Unsubscribe(email, tokens); err != nil {
+			uc := usecases.NewUnsubscribeInstrumentsUseCase(manager.TickerService(), manager.Logger)
+			if err := uc.Execute(ctx, cqrs.UnsubscribeInstrumentsCommand{Email: email, Tokens: tokens}); err != nil {
 				handler.trackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to unsubscribe: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			result := fmt.Sprintf("Unsubscribed from %d instruments.", len(tokens))

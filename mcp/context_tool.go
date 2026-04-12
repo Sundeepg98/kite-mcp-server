@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -102,53 +103,36 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "trading_context")
 
 		return handler.WithSession(ctx, "trading_context", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			client := session.Kite.Client
+			email := oauth.EmailFromContext(ctx)
 
-			ch := make(chan apiResult, 4)
-			var wg sync.WaitGroup
-			wg.Add(4)
-
-			// Parallel API calls
-			go func() {
-				defer wg.Done()
-				margins, err := client.GetUserMargins()
-				ch <- apiResult{"margins", margins, err}
-			}()
-			go func() {
-				defer wg.Done()
-				positions, err := client.GetPositions()
-				ch <- apiResult{"positions", positions, err}
-			}()
-			go func() {
-				defer wg.Done()
-				orders, err := client.GetOrders()
-				ch <- apiResult{"orders", orders, err}
-			}()
-			go func() {
-				defer wg.Done()
-				holdings, err := client.GetHoldings()
-				ch <- apiResult{"holdings", holdings, err}
-			}()
-
-			// Close channel once all goroutines complete
-			go func() {
-				wg.Wait()
-				close(ch)
-			}()
-
-			// Collect results
-			data := make(map[string]any)
-			errs := make(map[string]string)
-			for r := range ch {
-				if r.err != nil {
-					errs[r.key] = r.err.Error()
-				} else {
-					data[r.key] = r.val
-				}
+			// Route data gathering through use case
+			uc := usecases.NewTradingContextUseCase(
+				&sessionBrokerResolver{client: session.Broker},
+				manager.Logger,
+			)
+			ucResult, err := uc.Execute(ctx, cqrs.TradingContextQuery{Email: email})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			// Get alerts from the alert store
-			email := oauth.EmailFromContext(ctx)
+			// Convert use case result to the legacy data/errs maps for buildTradingContext
+			data := make(map[string]any)
+			errs := make(map[string]string)
+			if ucResult.Margins != nil {
+				data["margins"] = *ucResult.Margins
+			}
+			if ucResult.Positions != nil {
+				data["positions"] = *ucResult.Positions
+			}
+			if ucResult.Orders != nil {
+				data["orders"] = ucResult.Orders
+			}
+			if ucResult.Holdings != nil {
+				data["holdings"] = ucResult.Holdings
+			}
+			if ucResult.Errors != nil {
+				errs = ucResult.Errors
+			}
 
 			tradingCtx := buildTradingContext(data, errs, manager, email)
 			return handler.MarshalResponse(tradingCtx, "trading_context")
@@ -182,15 +166,15 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		tc.Errors = apiErrors
 	}
 
-	// Process margins
+	// Process margins (broker-agnostic)
 	if marginsRaw, ok := data["margins"]; ok {
-		margins := marginsRaw.(kiteconnect.AllMargins)
-		eqAvail := margins.Equity.Net
-		eqUsed := margins.Equity.Used.Debits
+		margins := marginsRaw.(broker.Margins)
+		eqAvail := margins.Equity.Available
+		eqUsed := margins.Equity.Used
 		tc.MarginAvailable = roundTo2(eqAvail)
 		tc.MarginUsed = roundTo2(eqUsed)
 
-		total := eqAvail + eqUsed
+		total := margins.Equity.Total
 		if total > 0 {
 			tc.MarginUtilization = roundTo2(eqUsed / total * 100)
 		}
@@ -203,7 +187,7 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 
 	// Process positions
 	if positionsRaw, ok := data["positions"]; ok {
-		positions := positionsRaw.(kiteconnect.Positions)
+		positions := positionsRaw.(broker.Positions)
 		var totalPnL float64
 		var misCount, nrmlCount, openCount int
 		var details []positionDetail
@@ -267,7 +251,7 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 
 	// Process orders
 	if ordersRaw, ok := data["orders"]; ok {
-		orders := ordersRaw.(kiteconnect.Orders)
+		orders := ordersRaw.([]broker.Order)
 		var pending, executed, rejected int
 
 		for _, o := range orders {
@@ -293,12 +277,12 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 
 	// Process holdings
 	if holdingsRaw, ok := data["holdings"]; ok {
-		holdings := holdingsRaw.(kiteconnect.Holdings)
+		holdings := holdingsRaw.([]broker.Holding)
 		tc.HoldingsCount = len(holdings)
 
 		var dayPnL float64
 		for _, h := range holdings {
-			dayPnL += h.DayChange
+			dayPnL += h.PnL
 		}
 		tc.HoldingsDayPnL = roundTo2(dayPnL)
 	}

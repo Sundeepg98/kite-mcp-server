@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -89,9 +91,14 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid 'to' date format: %s (expected YYYY-MM-DD)", toDate)), nil
 		}
 
-		result, err := pnlService.GetJournal(email, fromDate, toDate)
+		uc := usecases.NewGetPnLJournalUseCase(pnlService, manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.GetPnLJournalQuery{
+			Email:    email,
+			FromDate: fromDate,
+			ToDate:   toDate,
+		})
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get P&L journal: %s", err)), nil
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		if result.TotalDays == 0 {

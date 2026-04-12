@@ -13,7 +13,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -198,22 +197,22 @@ func TestFormatINR(t *testing.T) {
 
 func TestFormatRHS_Constant(t *testing.T) {
 	t.Parallel()
-	params := kiteconnect.AlertParams{
+	params := broker.NativeAlertParams{
 		RHSType:     "constant",
 		RHSConstant: 1500.50,
 	}
-	assert.Equal(t, "1500.50", formatRHS(params))
+	assert.Equal(t, "1500.50", formatNativeAlertRHS(params))
 }
 
 func TestFormatRHS_Instrument(t *testing.T) {
 	t.Parallel()
-	params := kiteconnect.AlertParams{
+	params := broker.NativeAlertParams{
 		RHSType:          "instrument",
 		RHSExchange:      "NSE",
 		RHSTradingSymbol: "INFY",
 		RHSAttribute:     "last_price",
 	}
-	assert.Equal(t, "NSE:INFY (last_price)", formatRHS(params))
+	assert.Equal(t, "NSE:INFY (last_price)", formatNativeAlertRHS(params))
 }
 
 func TestSplitAndTrim(t *testing.T) {
@@ -1755,20 +1754,15 @@ func TestBacktestDefaults_PartialOverride(t *testing.T) {
 func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1500},
 		},
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{
-				Net:  500000,
-				Used: kiteconnect.UsedMargins{Debits: 100000},
-			},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 500000, Used: 100000, Total: 600000},
 		},
-		"order_margins": []kiteconnect.OrderMargins{
-			{Total: 75000},
-		},
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"order_margins": map[string]any{"total": float64(75000)},
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{
 					Tradingsymbol: "INFY",
 					Exchange:      "NSE",
@@ -1779,7 +1773,7 @@ func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 				},
 			},
 		},
-		"holdings": kiteconnect.Holdings{
+		"holdings": []broker.Holding{
 			{Tradingsymbol: "RELIANCE", Quantity: 100, LastPrice: 2500},
 			{Tradingsymbol: "TCS", Quantity: 50, LastPrice: 3500},
 		},
@@ -1814,15 +1808,13 @@ func TestBuildPreTradeResponse_EmptyData(t *testing.T) {
 func TestBuildPreTradeResponse_InsufficientMargin(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1500},
 		},
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{Net: 10000},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 10000, Used: 0, Total: 10000},
 		},
-		"order_margins": []kiteconnect.OrderMargins{
-			{Total: 50000},
-		},
+		"order_margins": map[string]any{"total": float64(50000)},
 	}
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 100, "CNC", 0, data, nil)
 	assert.Equal(t, "BLOCKED", resp.Recommendation)
@@ -1832,15 +1824,13 @@ func TestBuildPreTradeResponse_InsufficientMargin(t *testing.T) {
 func TestBuildPreTradeResponse_HighMarginUtilization(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 100},
 		},
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{Net: 10000},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 10000, Used: 0, Total: 10000},
 		},
-		"order_margins": []kiteconnect.OrderMargins{
-			{Total: 8000}, // 80% utilization
-		},
+		"order_margins": map[string]any{"total": float64(8000)}, // 80% utilization
 	}
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Contains(t, resp.Recommendation, "CAUTION")
@@ -1849,16 +1839,14 @@ func TestBuildPreTradeResponse_HighMarginUtilization(t *testing.T) {
 func TestBuildPreTradeResponse_OverConcentration(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 5000},
 		},
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{Net: 1000000},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 1000000, Used: 0, Total: 1000000},
 		},
-		"order_margins": []kiteconnect.OrderMargins{
-			{Total: 50000},
-		},
-		"holdings": kiteconnect.Holdings{
+		"order_margins": map[string]any{"total": float64(50000)},
+		"holdings": []broker.Holding{
 			{Tradingsymbol: "TCS", Quantity: 10, LastPrice: 3500},
 		},
 	}
@@ -1877,7 +1865,7 @@ func TestBuildPreTradeResponse_OverConcentration(t *testing.T) {
 func TestBuildPreTradeResponse_SellStopLoss(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1500},
 		},
 	}
@@ -1890,7 +1878,7 @@ func TestBuildPreTradeResponse_SellStopLoss(t *testing.T) {
 func TestBuildPreTradeResponse_WithLimitPrice(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1500},
 		},
 	}
@@ -1922,8 +1910,8 @@ func TestBuildPreTradeResponse_WithAPIErrors(t *testing.T) {
 func TestBuildPreTradeResponse_NoExistingPosition(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 50},
 			},
 		},
@@ -1936,11 +1924,11 @@ func TestBuildPreTradeResponse_FallbackMargin(t *testing.T) {
 	t.Parallel()
 	// When GetOrderMargins fails, margin falls back to order value
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1000},
 		},
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{Net: 500000},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 500000, Used: 0, Total: 500000},
 		},
 		// No "order_margins" key — fallback
 	}
@@ -1953,14 +1941,11 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{
-				Net:  500000,
-				Used: kiteconnect.UsedMargins{Debits: 100000},
-			},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 500000, Used: 100000, Total: 600000},
 		},
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{
 					Tradingsymbol: "INFY",
 					Exchange:      "NSE",
@@ -1981,15 +1966,15 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 				},
 			},
 		},
-		"orders": kiteconnect.Orders{
+		"orders": []broker.Order{
 			{Status: "COMPLETE"},
 			{Status: "COMPLETE"},
 			{Status: "REJECTED"},
 			{Status: "OPEN"},
 		},
-		"holdings": kiteconnect.Holdings{
-			{Tradingsymbol: "RELIANCE", Quantity: 100, DayChange: 500},
-			{Tradingsymbol: "HDFC", Quantity: 50, DayChange: -200},
+		"holdings": []broker.Holding{
+			{Tradingsymbol: "RELIANCE", Quantity: 100, PnL: 500},
+			{Tradingsymbol: "HDFC", Quantity: 50, PnL: -200},
 		},
 	}
 
@@ -2035,11 +2020,8 @@ func TestBuildTradingContext_HighMarginUtilization(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{
-				Net:  100000,
-				Used: kiteconnect.UsedMargins{Debits: 500000},
-			},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 100000, Used: 500000, Total: 600000},
 		},
 	}
 	tc := buildTradingContext(data, nil, mgr, "test@example.com")
@@ -2056,9 +2038,9 @@ func TestBuildTradingContext_HighMarginUtilization(t *testing.T) {
 func TestBuildTradingContext_ManyRejectedOrders(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	orders := make(kiteconnect.Orders, 5)
+	orders := make([]broker.Order, 5)
 	for i := range orders {
-		orders[i] = kiteconnect.Order{Status: "REJECTED"}
+		orders[i] = broker.Order{Status: "REJECTED"}
 	}
 	data := map[string]any{"orders": orders}
 	tc := buildTradingContext(data, nil, mgr, "test@example.com")
@@ -2076,7 +2058,7 @@ func TestBuildTradingContext_OrderStatuses(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"orders": kiteconnect.Orders{
+		"orders": []broker.Order{
 			{Status: "COMPLETE"},
 			{Status: "TRIGGER PENDING"},
 			{Status: "AMO REQ RECEIVED"},
@@ -2094,8 +2076,8 @@ func TestBuildTradingContext_PositionPnLPct(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{
 					Tradingsymbol: "INFY",
 					Exchange:      "NSE",
@@ -2120,8 +2102,8 @@ func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{Tradingsymbol: "INFY", Quantity: 0, PnL: 500},  // closed
 				{Tradingsymbol: "TCS", Quantity: 10, PnL: 1000}, // open
 			},
@@ -2135,8 +2117,8 @@ func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
 func TestBuildPreTradeResponse_EmptyPositions(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{},
+		"positions": broker.Positions{
+			Net: []broker.Position{},
 		},
 	}
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
@@ -2146,7 +2128,7 @@ func TestBuildPreTradeResponse_EmptyPositions(t *testing.T) {
 func TestBuildPreTradeResponse_EmptyHoldings(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"holdings": kiteconnect.Holdings{},
+		"holdings": []broker.Holding{},
 	}
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Equal(t, "low", resp.PortfolioImpact.ConcentrationAfter)
@@ -2155,10 +2137,10 @@ func TestBuildPreTradeResponse_EmptyHoldings(t *testing.T) {
 func TestBuildPreTradeResponse_ModerateConcentration(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 100},
 		},
-		"holdings": kiteconnect.Holdings{
+		"holdings": []broker.Holding{
 			{Tradingsymbol: "TCS", Quantity: 100, LastPrice: 1000},
 		},
 	}
@@ -2172,8 +2154,8 @@ func TestBuildTradingContext_NoPositionDetails(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{}, // no open positions
+		"positions": broker.Positions{
+			Net: []broker.Position{}, // no open positions
 		},
 	}
 	tc := buildTradingContext(data, nil, mgr, "test@example.com")
@@ -2185,8 +2167,8 @@ func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"positions": kiteconnect.Positions{
-			Net: []kiteconnect.Position{
+		"positions": broker.Positions{
+			Net: []broker.Position{
 				{Tradingsymbol: "INFY", Quantity: 10, AveragePrice: 0, PnL: 100},
 			},
 		},
@@ -2273,11 +2255,8 @@ func TestBuildTradingContext_ZeroMargin(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := map[string]any{
-		"margins": kiteconnect.AllMargins{
-			Equity: kiteconnect.Margins{
-				Net:  0,
-				Used: kiteconnect.UsedMargins{Debits: 0},
-			},
+		"margins": broker.Margins{
+			Equity: broker.SegmentMargin{Available: 0, Used: 0, Total: 0},
 		},
 	}
 	tc := buildTradingContext(data, nil, mgr, "")
@@ -2287,9 +2266,9 @@ func TestBuildTradingContext_ZeroMargin(t *testing.T) {
 func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	positions := make([]kiteconnect.Position, 5)
+	positions := make([]broker.Position, 5)
 	for i := range positions {
-		positions[i] = kiteconnect.Position{
+		positions[i] = broker.Position{
 			Tradingsymbol: "STOCK" + string(rune('A'+i)),
 			Product:       "MIS",
 			Quantity:      10,
@@ -2297,7 +2276,7 @@ func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 		}
 	}
 	data := map[string]any{
-		"positions": kiteconnect.Positions{Net: positions},
+		"positions": broker.Positions{Net: positions},
 	}
 	tc := buildTradingContext(data, nil, mgr, "")
 	assert.Equal(t, 5, tc.OpenPositions)
@@ -2307,10 +2286,10 @@ func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 func TestBuildPreTradeResponse_HighConcentrationLevel(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 1000},
 		},
-		"holdings": kiteconnect.Holdings{
+		"holdings": []broker.Holding{
 			{Tradingsymbol: "TCS", Quantity: 10, LastPrice: 100}, // portfolio = 1000
 		},
 	}
@@ -2345,10 +2324,10 @@ func TestDoSetTrailingStop_WithPct(t *testing.T) {
 func TestBuildPreTradeResponse_ModerateConcentrationLevel(t *testing.T) {
 	t.Parallel()
 	data := map[string]any{
-		"ltp": kiteconnect.QuoteLTP{
+		"ltp": map[string]broker.LTP{
 			"NSE:INFY": {LastPrice: 100},
 		},
-		"holdings": kiteconnect.Holdings{
+		"holdings": []broker.Holding{
 			{Tradingsymbol: "TCS", Quantity: 100, LastPrice: 300}, // portfolio = 30000
 		},
 	}

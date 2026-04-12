@@ -153,3 +153,20 @@ func TestLoggingMiddleware(t *testing.T) {
 		t.Fatalf("unexpected result: %v", result)
 	}
 }
+
+func TestLoggingMiddleware_ErrorPath(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	bus := NewInMemoryBus(LoggingMiddleware(logger))
+
+	bus.Register(reflect.TypeOf(PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+		return nil, errors.New("order failed")
+	})
+
+	_, err := bus.DispatchWithResult(context.Background(), PlaceOrderCommand{Email: "test@example.com"})
+	if err == nil {
+		t.Fatal("expected error from handler")
+	}
+	if err.Error() != "order failed" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

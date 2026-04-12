@@ -8,6 +8,8 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -44,40 +46,20 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return gomcp.NewToolResultError("This permanently deletes ALL your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading). Set confirm: true to proceed."), nil
 		}
 
-		// Delete all user data across stores
-		manager.CredentialStore().Delete(email)
-		manager.TokenStore().Delete(email)
+		uc := usecases.NewDeleteMyAccountUseCase(usecases.AccountDependencies{
+			CredentialStore: manager.CredentialStore(),
+			TokenStore:      manager.TokenStore(),
+			AlertDeleter:    manager.AlertStore(),
+			WatchlistStore:  manager.WatchlistStore(),
+			TrailingStops:   manager.TrailingStopManager(),
+			PaperEngine:     manager.PaperEngine(),
+			UserStore:       manager.UserStore(),
+			Sessions:        manager.SessionManager(),
+		}, manager.Logger)
 
-		if sm := manager.SessionManager(); sm != nil {
-			sm.TerminateByEmail(email)
+		if err := uc.Execute(ctx, cqrs.DeleteMyAccountCommand{Email: email}); err != nil {
+			return gomcp.NewToolResultError(err.Error()), nil
 		}
-
-		manager.AlertStore().DeleteByEmail(email)
-
-		if ws := manager.WatchlistStore(); ws != nil {
-			ws.DeleteByEmail(email)
-		}
-
-		if tsm := manager.TrailingStopManager(); tsm != nil {
-			tsm.CancelByEmail(email)
-		}
-
-		if pe := manager.PaperEngine(); pe != nil {
-			if err := pe.Reset(email); err != nil {
-				manager.Logger.Error("Failed to reset paper trading during account delete", "email", email, "error", err)
-			}
-			if err := pe.Disable(email); err != nil {
-				manager.Logger.Error("Failed to disable paper trading during account delete", "email", email, "error", err)
-			}
-		}
-
-		if us := manager.UserStore(); us != nil {
-			if err := us.UpdateStatus(email, "offboarded"); err != nil {
-				manager.Logger.Error("Failed to update user status during account delete", "email", email, "error", err)
-			}
-		}
-
-		manager.Logger.Info("User self-deleted account via MCP", "email", email)
 
 		return gomcp.NewToolResultText("Account deleted. All your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading) has been permanently removed."), nil
 	}
@@ -127,12 +109,16 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError("Both api_key and api_secret must be non-empty"), nil
 		}
 
+		uc := usecases.NewUpdateMyCredentialsUseCase(manager.CredentialStore(), manager.TokenStore(), manager.Logger)
+		if err := uc.Execute(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
+			return gomcp.NewToolResultError(err.Error()), nil
+		}
+
+		// Persist the actual credentials via the manager (use case validates, manager persists)
 		manager.CredentialStore().Set(email, &kc.KiteCredentialEntry{
 			APIKey:    apiKey,
 			APISecret: apiSecret,
 		})
-
-		manager.Logger.Info("User updated credentials via MCP", "email", email)
 
 		return gomcp.NewToolResultText(fmt.Sprintf("Credentials updated successfully. Your cached Kite token has been cleared. Please use the login tool to re-authenticate with the new credentials.")), nil
 	}

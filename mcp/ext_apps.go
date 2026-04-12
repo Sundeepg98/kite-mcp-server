@@ -15,7 +15,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
@@ -341,14 +341,14 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 
 // portfolioData fetches holdings + positions in parallel for the portfolio widget.
 func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
-	client := kiteClientForEmail(manager, email)
+	client := brokerClientForEmail(manager, email)
 	if client == nil {
 		return nil
 	}
 
 	// Parallel API calls to reduce latency.
-	var holdings kiteconnect.Holdings
-	var positions kiteconnect.Positions
+	var holdings []broker.Holding
+	var positions broker.Positions
 	var holdingsErr, positionsErr error
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -388,7 +388,7 @@ func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
 		hItems = append(hItems, holdingItem{
 			Symbol: h.Tradingsymbol, Exchange: h.Exchange, Quantity: h.Quantity,
 			AvgPrice: h.AveragePrice, LastPrice: h.LastPrice, PnL: h.PnL,
-			DayChgPct: h.DayChangePercentage,
+			DayChgPct: h.DayChangePct,
 		})
 		totalInvested += h.AveragePrice * float64(h.Quantity)
 		totalCurrent += h.LastPrice * float64(h.Quantity)
@@ -457,7 +457,7 @@ func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 		return nil
 	}
 
-	client := kiteClientForEmail(manager, email)
+	client := brokerClientForEmail(manager, email)
 
 	type orderEntry struct {
 		OrderID        string  `json:"order_id"`
@@ -474,7 +474,7 @@ func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 	}
 
 	// Fetch all orders in a single API call (instead of N GetOrderHistory calls).
-	orderStatusMap := make(map[string]kiteconnect.Order)
+	orderStatusMap := make(map[string]broker.Order)
 	if client != nil {
 		if allOrders, oErr := client.GetOrders(); oErr == nil {
 			for _, o := range allOrders {
@@ -502,7 +502,7 @@ func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 			oe.Status = o.Status
 			oe.FilledQuantity = float64(o.FilledQuantity)
 			oe.AveragePrice = o.AveragePrice
-			if oe.Symbol == "" { oe.Symbol = o.TradingSymbol }
+			if oe.Symbol == "" { oe.Symbol = o.Tradingsymbol }
 			if oe.Exchange == "" { oe.Exchange = o.Exchange }
 			if oe.Side == "" { oe.Side = o.TransactionType }
 			if oe.Quantity == 0 { oe.Quantity = float64(o.Quantity) }
@@ -542,7 +542,7 @@ func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
 		return nil
 	}
 	allAlerts := manager.AlertStore().List(email)
-	client := kiteClientForEmail(manager, email)
+	client := brokerClientForEmail(manager, email)
 
 	type alertItem struct {
 		ID          string  `json:"id"`
@@ -779,7 +779,7 @@ func watchlistData(manager *kc.Manager, _ *audit.Store, email string) any {
 
 	// Batch LTP fetch (max 50 per call, same pattern as alertsData).
 	ltpMap := make(map[string]float64)
-	client := kiteClientForEmail(manager, email)
+	client := brokerClientForEmail(manager, email)
 	if client != nil && len(allInstruments) > 0 {
 		const batchSize = 50
 		for i := 0; i < len(allInstruments); i += batchSize {
@@ -890,15 +890,12 @@ func chartData(_ *kc.Manager, _ *audit.Store, _ string) any {
 	return nil
 }
 
-// kiteClientForEmail creates a kiteconnect.Client for the given email,
+// brokerClientForEmail resolves a broker.Client for the given email,
 // or nil if credentials/token are not available.
-func kiteClientForEmail(manager *kc.Manager, email string) *kiteconnect.Client {
-	credEntry, hasCreds := manager.CredentialStore().Get(email)
-	tokenEntry, hasToken := manager.TokenStore().Get(email)
-	if !hasCreds || !hasToken {
+func brokerClientForEmail(manager *kc.Manager, email string) broker.Client {
+	client, err := manager.SessionSvc().GetBrokerForEmail(email)
+	if err != nil {
 		return nil
 	}
-	client := kiteconnect.New(credEntry.APIKey)
-	client.SetAccessToken(tokenEntry.AccessToken)
 	return client
 }

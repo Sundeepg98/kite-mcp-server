@@ -1,6 +1,7 @@
 package zerodha
 
 import (
+	"encoding/json"
 	"fmt"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
@@ -390,4 +391,73 @@ func convertGTTParamsToKite(p broker.GTTParams) (kiteconnect.GTTParams, error) {
 	}
 
 	return kp, nil
+}
+
+// --- Native Alerts ---
+
+func convertNativeAlertParamsToKite(p broker.NativeAlertParams) kiteconnect.AlertParams {
+	kp := kiteconnect.AlertParams{
+		Name:             p.Name,
+		Type:             kiteconnect.AlertType(p.Type),
+		LHSExchange:      p.LHSExchange,
+		LHSTradingSymbol: p.LHSTradingSymbol,
+		LHSAttribute:     p.LHSAttribute,
+		Operator:         kiteconnect.AlertOperator(p.Operator),
+		RHSType:          p.RHSType,
+		RHSConstant:      p.RHSConstant,
+		RHSExchange:      p.RHSExchange,
+		RHSTradingSymbol: p.RHSTradingSymbol,
+		RHSAttribute:     p.RHSAttribute,
+	}
+	if p.BasketJSON != "" {
+		var basket kiteconnect.Basket
+		if err := json.Unmarshal([]byte(p.BasketJSON), &basket); err == nil {
+			kp.Basket = &basket
+		}
+	}
+	return kp
+}
+
+func convertNativeAlert(a kiteconnect.Alert) broker.NativeAlert {
+	return broker.NativeAlert{
+		UUID:             a.UUID,
+		Name:             a.Name,
+		Type:             string(a.Type),
+		Status:           string(a.Status),
+		LHSExchange:      a.LHSExchange,
+		LHSTradingSymbol: a.LHSTradingSymbol,
+		LHSAttribute:     a.LHSAttribute,
+		Operator:         string(a.Operator),
+		RHSType:          a.RHSType,
+		RHSConstant:      a.RHSConstant,
+		RHSExchange:      a.RHSExchange,
+		RHSTradingSymbol: a.RHSTradingSymbol,
+		RHSAttribute:     a.RHSAttribute,
+		AlertCount:       a.AlertCount,
+		CreatedAt:        a.CreatedAt.Time.Format("2006-01-02 15:04:05"),
+		UpdatedAt:        a.UpdatedAt.Time.Format("2006-01-02 15:04:05"),
+	}
+}
+
+func convertNativeAlerts(alerts []kiteconnect.Alert) []broker.NativeAlert {
+	out := make([]broker.NativeAlert, len(alerts))
+	for i, a := range alerts {
+		out[i] = convertNativeAlert(a)
+	}
+	return out
+}
+
+func convertNativeAlertHistory(history []kiteconnect.AlertHistory) []broker.NativeAlertHistoryEntry {
+	out := make([]broker.NativeAlertHistoryEntry, len(history))
+	for i, h := range history {
+		out[i] = broker.NativeAlertHistoryEntry{
+			UUID:      h.UUID,
+			Type:      string(h.Type),
+			Condition: h.Condition,
+			CreatedAt: h.CreatedAt.Time.Format("2006-01-02 15:04:05"),
+			Meta:      h.Meta,
+			OrderMeta: h.OrderMeta,
+		}
+	}
+	return out
 }

@@ -8,8 +8,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -156,23 +157,22 @@ func doSetTrailingStop(manager *kc.Manager, email, exchange, tradingsymbol strin
 		return mcp.NewToolResultError("Trailing stop manager not available (requires database persistence)"), nil
 	}
 
-	ts := &alerts.TrailingStop{
+	uc := usecases.NewSetTrailingStopUseCase(tsManager, manager.Logger)
+	id, err := uc.Execute(context.Background(), cqrs.SetTrailingStopCommand{
 		Email:           email,
 		Exchange:        exchange,
 		Tradingsymbol:   tradingsymbol,
 		InstrumentToken: instrumentToken,
 		OrderID:         orderID,
 		Variety:         variety,
+		Direction:       direction,
 		TrailAmount:     trailAmount,
 		TrailPct:        trailPct,
-		Direction:       direction,
-		HighWaterMark:   referencePrice,
 		CurrentStop:     currentStop,
-	}
-
-	id, err := tsManager.Add(ts)
+		ReferencePrice:  referencePrice,
+	})
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to set trailing stop: %s", err)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	var trailDesc string
@@ -246,7 +246,12 @@ func (*ListTrailingStopsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
 
-		stops := tsManager.List(email)
+		uc := usecases.NewListTrailingStopsUseCase(tsManager, manager.Logger)
+		stops, err := uc.Execute(ctx, cqrs.ListTrailingStopsQuery{Email: email})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		if len(stops) == 0 {
 			return mcp.NewToolResultText("No trailing stops configured. Use set_trailing_stop to create one."), nil
 		}
@@ -293,8 +298,9 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
 
-		if err := tsManager.Cancel(email, tsID); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel trailing stop: %s", err)), nil
+		uc := usecases.NewCancelTrailingStopUseCase(tsManager, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.CancelTrailingStopCommand{Email: email, TrailingStopID: tsID}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Trailing stop %s cancelled. The underlying SL order remains in place.", tsID)), nil

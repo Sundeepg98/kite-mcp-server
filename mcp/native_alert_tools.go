@@ -2,15 +2,44 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// nativeAlertAdapter bridges broker.NativeAlertCapable to usecases.NativeAlertClient.
+type nativeAlertAdapter struct {
+	nac broker.NativeAlertCapable
+}
+
+func (a *nativeAlertAdapter) CreateAlert(params any) (any, error) {
+	p := params.(broker.NativeAlertParams)
+	return a.nac.CreateNativeAlert(p)
+}
+
+func (a *nativeAlertAdapter) ModifyAlert(uuid string, params any) (any, error) {
+	p := params.(broker.NativeAlertParams)
+	return a.nac.ModifyNativeAlert(uuid, p)
+}
+
+func (a *nativeAlertAdapter) DeleteAlerts(uuids ...string) error {
+	return a.nac.DeleteNativeAlerts(uuids...)
+}
+
+func (a *nativeAlertAdapter) GetAlerts(filters map[string]string) (any, error) {
+	return a.nac.GetNativeAlerts(filters)
+}
+
+func (a *nativeAlertAdapter) GetAlertHistory(uuid string) (any, error) {
+	return a.nac.GetNativeAlertHistory(uuid)
+}
 
 // --- Place Native Alert ---
 
@@ -104,7 +133,7 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		p := NewArgParser(args)
-		alertType := kiteconnect.AlertType(p.String("type", "simple"))
+		alertType := p.String("type", "simple")
 		rhsType := p.String("rhs_type", "constant")
 
 		// Validate RHS params
@@ -118,13 +147,13 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 		}
 
-		params := kiteconnect.AlertParams{
+		params := broker.NativeAlertParams{
 			Name:             p.String("name", ""),
 			Type:             alertType,
 			LHSExchange:      p.String("exchange", ""),
 			LHSTradingSymbol: p.String("tradingsymbol", ""),
 			LHSAttribute:     p.String("lhs_attribute", "last_price"),
-			Operator:         kiteconnect.AlertOperator(p.String("operator", ">=")),
+			Operator:         p.String("operator", ">="),
 			RHSType:          rhsType,
 			RHSConstant:      p.Float("rhs_constant", 0),
 			RHSExchange:      p.String("rhs_exchange", ""),
@@ -132,28 +161,21 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			RHSAttribute:     p.String("rhs_attribute", ""),
 		}
 
-		// Parse basket JSON for ATO alerts
-		if alertType == kiteconnect.AlertTypeATO {
+		// Validate and attach basket JSON for ATO alerts
+		if alertType == "ato" {
 			basketJSON := p.String("basket_json", "")
 			if basketJSON == "" {
 				return mcp.NewToolResultError("basket_json is required when type='ato'"), nil
 			}
-			var basket kiteconnect.Basket
-			if err := json.Unmarshal([]byte(basketJSON), &basket); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Invalid basket_json: %s", err)), nil
-			}
-			if len(basket.Items) == 0 {
-				return mcp.NewToolResultError("basket must contain at least one item"), nil
-			}
-			params.Basket = &basket
+			params.BasketJSON = basketJSON
 		}
 
 		// Request user confirmation for ATO alerts (they place real orders)
-		if alertType == kiteconnect.AlertTypeATO {
+		if alertType == "ato" {
 			if srv := manager.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Create ATO alert '%s' — %s:%s %s %s → auto-order on trigger",
 					params.Name, params.LHSExchange, params.LHSTradingSymbol,
-					string(params.Operator), formatRHS(params))
+					params.Operator, formatNativeAlertRHS(params))
 				if err := requestConfirmation(ctx, srv, msg); err != nil {
 					handler.trackToolError(ctx, "place_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
@@ -162,10 +184,17 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		return handler.WithSession(ctx, "place_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			alert, err := session.Kite.Client.CreateAlert(params)
+			nac, ok := session.Broker.(broker.NativeAlertCapable)
+			if !ok {
+				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
+			}
+
+			email := oauth.EmailFromContext(ctx)
+			adapter := &nativeAlertAdapter{nac: nac}
+			uc := usecases.NewPlaceNativeAlertUseCase(manager.Logger)
+			alert, err := uc.Execute(ctx, adapter, cqrs.PlaceNativeAlertCommand{Email: email, Params: params})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to create native alert", "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to create native alert: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return handler.MarshalResponse(alert, "place_native_alert")
@@ -201,6 +230,11 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "list_native_alerts")
 
 		return handler.WithSession(ctx, "list_native_alerts", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+			nac, ok := session.Broker.(broker.NativeAlertCapable)
+			if !ok {
+				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
+			}
+
 			args := request.GetArguments()
 			p := NewArgParser(args)
 			filters := make(map[string]string)
@@ -208,19 +242,22 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 				filters["status"] = status
 			}
 
-			alerts, err := session.Kite.Client.GetAlerts(filters)
+			email := oauth.EmailFromContext(ctx)
+			adapter := &nativeAlertAdapter{nac: nac}
+			uc := usecases.NewListNativeAlertsUseCase(manager.Logger)
+			alertsRaw, err := uc.Execute(ctx, adapter, cqrs.ListNativeAlertsQuery{Email: email, Filters: filters})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to list native alerts", "error", err)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to list native alerts: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			if len(alerts) == 0 {
+			// Check if empty
+			alerts, ok := alertsRaw.([]broker.NativeAlert)
+			if ok && len(alerts) == 0 {
 				return mcp.NewToolResultText("No native alerts found. Use place_native_alert to create one."), nil
 			}
 
 			return handler.MarshalResponse(map[string]interface{}{
-				"alerts": alerts,
-				"count":  len(alerts),
+				"alerts": alertsRaw,
 			}, "list_native_alerts")
 		})
 	}
@@ -314,7 +351,7 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		p := NewArgParser(args)
 		uuid := p.String("uuid", "")
-		alertType := kiteconnect.AlertType(p.String("type", "simple"))
+		alertType := p.String("type", "simple")
 		rhsType := p.String("rhs_type", "constant")
 
 		if rhsType == "constant" {
@@ -327,13 +364,13 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		params := kiteconnect.AlertParams{
+		params := broker.NativeAlertParams{
 			Name:             p.String("name", ""),
 			Type:             alertType,
 			LHSExchange:      p.String("exchange", ""),
 			LHSTradingSymbol: p.String("tradingsymbol", ""),
 			LHSAttribute:     p.String("lhs_attribute", "last_price"),
-			Operator:         kiteconnect.AlertOperator(p.String("operator", ">=")),
+			Operator:         p.String("operator", ">="),
 			RHSType:          rhsType,
 			RHSConstant:      p.Float("rhs_constant", 0),
 			RHSExchange:      p.String("rhs_exchange", ""),
@@ -341,27 +378,20 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			RHSAttribute:     p.String("rhs_attribute", ""),
 		}
 
-		if alertType == kiteconnect.AlertTypeATO {
+		if alertType == "ato" {
 			basketJSON := p.String("basket_json", "")
 			if basketJSON == "" {
 				return mcp.NewToolResultError("basket_json is required when type='ato'"), nil
 			}
-			var basket kiteconnect.Basket
-			if err := json.Unmarshal([]byte(basketJSON), &basket); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("Invalid basket_json: %s", err)), nil
-			}
-			if len(basket.Items) == 0 {
-				return mcp.NewToolResultError("basket must contain at least one item"), nil
-			}
-			params.Basket = &basket
+			params.BasketJSON = basketJSON
 		}
 
 		// Confirm ATO modifications
-		if alertType == kiteconnect.AlertTypeATO {
+		if alertType == "ato" {
 			if srv := manager.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Modify ATO alert %s → %s:%s %s %s",
 					uuid, params.LHSExchange, params.LHSTradingSymbol,
-					string(params.Operator), formatRHS(params))
+					params.Operator, formatNativeAlertRHS(params))
 				if err := requestConfirmation(ctx, srv, msg); err != nil {
 					handler.trackToolError(ctx, "modify_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
@@ -370,10 +400,17 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		return handler.WithSession(ctx, "modify_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			alert, err := session.Kite.Client.ModifyAlert(uuid, params)
+			nac, ok := session.Broker.(broker.NativeAlertCapable)
+			if !ok {
+				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
+			}
+
+			email := oauth.EmailFromContext(ctx)
+			adapter := &nativeAlertAdapter{nac: nac}
+			uc := usecases.NewModifyNativeAlertUseCase(manager.Logger)
+			alert, err := uc.Execute(ctx, adapter, cqrs.ModifyNativeAlertCommand{Email: email, UUID: uuid, Params: params})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to modify native alert", "error", err, "uuid", uuid)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify native alert: %s", err)), nil
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			return handler.MarshalResponse(alert, "modify_native_alert")
@@ -424,10 +461,16 @@ func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		return handler.WithSession(ctx, "delete_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			err := session.Kite.Client.DeleteAlerts(uuids...)
-			if err != nil {
-				handler.manager.Logger.Error("Failed to delete native alert(s)", "error", err, "uuids", uuids)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete native alert(s): %s", err)), nil
+			nac, ok := session.Broker.(broker.NativeAlertCapable)
+			if !ok {
+				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
+			}
+
+			email := oauth.EmailFromContext(ctx)
+			adapter := &nativeAlertAdapter{nac: nac}
+			uc := usecases.NewDeleteNativeAlertUseCase(manager.Logger)
+			if err := uc.Execute(ctx, adapter, cqrs.DeleteNativeAlertCommand{Email: email, UUIDs: uuids}); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			if len(uuids) == 1 {
@@ -472,20 +515,27 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 		uuid := NewArgParser(args).String("uuid", "")
 
 		return handler.WithSession(ctx, "get_native_alert_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			history, err := session.Kite.Client.GetAlertHistory(uuid)
-			if err != nil {
-				handler.manager.Logger.Error("Failed to get native alert history", "error", err, "uuid", uuid)
-				return mcp.NewToolResultError(fmt.Sprintf("Failed to get alert history: %s", err)), nil
+			nac, ok := session.Broker.(broker.NativeAlertCapable)
+			if !ok {
+				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
 			}
 
-			if len(history) == 0 {
+			email := oauth.EmailFromContext(ctx)
+			adapter := &nativeAlertAdapter{nac: nac}
+			uc := usecases.NewGetNativeAlertHistoryUseCase(manager.Logger)
+			historyRaw, err := uc.Execute(ctx, adapter, cqrs.GetNativeAlertHistoryQuery{Email: email, UUID: uuid})
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			history, ok := historyRaw.([]broker.NativeAlertHistoryEntry)
+			if ok && len(history) == 0 {
 				return mcp.NewToolResultText(fmt.Sprintf("No trigger history for alert %s.", uuid)), nil
 			}
 
 			return handler.MarshalResponse(map[string]interface{}{
 				"uuid":    uuid,
-				"history": history,
-				"count":   len(history),
+				"history": historyRaw,
 			}, "get_native_alert_history")
 		})
 	}
@@ -493,8 +543,8 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 
 // --- Helpers ---
 
-// formatRHS returns a human-readable string for the right-hand side of an alert condition.
-func formatRHS(params kiteconnect.AlertParams) string {
+// formatNativeAlertRHS returns a human-readable string for the right-hand side of an alert condition.
+func formatNativeAlertRHS(params broker.NativeAlertParams) string {
 	if params.RHSType == "constant" {
 		return fmt.Sprintf("%.2f", params.RHSConstant)
 	}

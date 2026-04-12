@@ -8,6 +8,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
@@ -253,7 +254,7 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 			Quantity:         order.Quantity,
 			Price:            order.Price,
 			Validity:         "DAY",
-			MarketProtection: kiteconnect.MarketProtectionAuto,
+			MarketProtection: broker.MarketProtectionAuto,
 		}
 
 		resp, err := client.PlaceOrder("regular", orderParams)

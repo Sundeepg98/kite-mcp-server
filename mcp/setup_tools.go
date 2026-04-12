@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -260,12 +262,10 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		apiKey := p.String("api_key", "")
 		apiSecret := p.String("api_secret", "")
 
-		// Validate that api_key and api_secret contain only alphanumeric characters
-		if apiKey != "" && !isAlphanumeric(apiKey) {
-			return mcp.NewToolResultError("Invalid api_key: must contain only alphanumeric characters (letters and digits)."), nil
-		}
-		if apiSecret != "" && !isAlphanumeric(apiSecret) {
-			return mcp.NewToolResultError("Invalid api_secret: must contain only alphanumeric characters (letters and digits)."), nil
+		// Validate credentials through use case
+		loginUC := usecases.NewLoginUseCase(manager.Logger)
+		if err := loginUC.Validate(ctx, cqrs.LoginCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		if apiKey != "" && apiSecret != "" {
@@ -283,8 +283,6 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				manager.Logger.Warn("Failed to clear session data after credential registration", "error", err)
 			}
 			manager.Logger.Info("Stored per-user Kite credentials via login tool", "email", email)
-		} else if apiKey != "" || apiSecret != "" {
-			return mcp.NewToolResultError("Both api_key and api_secret are required. Provide both or neither."), nil
 		}
 
 		// Check if credentials are configured (global or per-user)
@@ -434,6 +432,18 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler := NewToolHandler(manager)
 		handler.trackToolCall(ctx, "open_dashboard")
 
+		// Parse page and validate through use case
+		args := request.GetArguments()
+		page := NewArgParser(args).String("page", "portfolio")
+
+		dashUC := usecases.NewOpenDashboardUseCase(manager.Logger)
+		if err := dashUC.Validate(ctx, cqrs.OpenDashboardQuery{
+			Email: oauth.EmailFromContext(ctx),
+			Page:  page,
+		}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		// Build base URL
 		var baseURL string
 		if manager.IsLocalMode() {
@@ -445,10 +455,8 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		// Parse page parameter
-		args := request.GetArguments()
+		// Resolve page path
 		p := NewArgParser(args)
-		page := p.String("page", "portfolio")
 		pagePath, ok := pageRoutes[page]
 		if !ok {
 			pagePath = pageRoutes["portfolio"]

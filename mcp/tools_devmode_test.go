@@ -1420,7 +1420,7 @@ func TestLogin_NonAlphanumericAPIKey(t *testing.T) {
 		"api_secret": "validsecret123",
 	})
 	assert.True(t, result.IsError)
-	assertResultContains(t, result, "Invalid api_key")
+	assertResultContains(t, result, "invalid api_key")
 }
 
 func TestLogin_NonAlphanumericAPISecret(t *testing.T) {
@@ -1431,7 +1431,7 @@ func TestLogin_NonAlphanumericAPISecret(t *testing.T) {
 		"api_secret": "secret!@#",
 	})
 	assert.True(t, result.IsError)
-	assertResultContains(t, result, "Invalid api_secret")
+	assertResultContains(t, result, "invalid api_secret")
 }
 
 func TestLogin_PartialCredentials_KeyOnly(t *testing.T) {
@@ -1441,7 +1441,7 @@ func TestLogin_PartialCredentials_KeyOnly(t *testing.T) {
 		"api_key": "validkey123",
 	})
 	assert.True(t, result.IsError)
-	assertResultContains(t, result, "Both api_key and api_secret are required")
+	assertResultContains(t, result, "api_key and api_secret are required")
 }
 
 func TestLogin_PartialCredentials_SecretOnly(t *testing.T) {
@@ -1451,7 +1451,7 @@ func TestLogin_PartialCredentials_SecretOnly(t *testing.T) {
 		"api_secret": "validsecret123",
 	})
 	assert.True(t, result.IsError)
-	assertResultContains(t, result, "Both api_key and api_secret are required")
+	assertResultContains(t, result, "api_key and api_secret are required")
 }
 
 func TestLogin_DevMode_NoExtraCredentials(t *testing.T) {
@@ -2353,7 +2353,7 @@ func TestDevMode_GetOrderCharges_RequiresOrdersParam(t *testing.T) {
 	assert.False(t, result.IsError, "GetOrderCharges should succeed via mock broker in DEV_MODE")
 }
 
-func TestDevMode_PlaceNativeAlert_ReturnsAPIError(t *testing.T) {
+func TestDevMode_PlaceNativeAlert_SucceedsViaMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "place_native_alert", "dev@example.com", map[string]any{
@@ -2367,22 +2367,23 @@ func TestDevMode_PlaceNativeAlert_ReturnsAPIError(t *testing.T) {
 		"rhs_constant":  float64(1500),
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	// Mock broker implements NativeAlertCapable — native alerts succeed in DevMode
+	assert.False(t, result.IsError, resultText(t, result))
 }
 
-func TestDevMode_ListNativeAlerts_ReturnsAPIError(t *testing.T) {
+func TestDevMode_ListNativeAlerts_SucceedsViaMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "list_native_alerts", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, resultText(t, result))
 }
 
-func TestDevMode_ModifyNativeAlert_ReturnsAPIError(t *testing.T) {
+func TestDevMode_ModifyNativeAlert_SucceedsViaMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
+	// In DevMode, each GetBrokerForEmail call creates a fresh mock with no alerts,
+	// so modifying a non-existent UUID returns an error.
 	result := callToolDevMode(t, mgr, "modify_native_alert", "dev@example.com", map[string]any{
 		"uuid":          "test-uuid",
 		"name":          "Modified alert",
@@ -2395,30 +2396,27 @@ func TestDevMode_ModifyNativeAlert_ReturnsAPIError(t *testing.T) {
 		"rhs_constant":  float64(1600),
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.True(t, result.IsError, "fresh mock has no alerts to modify")
 }
 
-func TestDevMode_DeleteNativeAlert_ReturnsAPIError(t *testing.T) {
+func TestDevMode_DeleteNativeAlert_SucceedsViaMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "delete_native_alert", "dev@example.com", map[string]any{
 		"uuid": "test-uuid",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, resultText(t, result))
 }
 
-func TestDevMode_GetNativeAlertHistory_ReturnsAPIError(t *testing.T) {
+func TestDevMode_GetNativeAlertHistory_SucceedsViaMock(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_native_alert_history", "dev@example.com", map[string]any{
 		"uuid": "test-uuid",
 	})
 	assert.NotNil(t, result)
-	assert.True(t, result.IsError, "expected error from stub Kite client")
-	assertResultNotContains(t, result, "not available in DEV_MODE")
+	assert.False(t, result.IsError, resultText(t, result))
 }
 
 func TestDevMode_TradingContext_ReturnsResult(t *testing.T) {

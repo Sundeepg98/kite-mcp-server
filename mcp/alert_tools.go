@@ -75,8 +75,10 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
-		manager.TelegramStore().SetTelegramChatID(email, chatID)
-		manager.Logger.Debug("Telegram chat ID registered", "email", email, "chat_id", chatID)
+		uc := usecases.NewSetupTelegramUseCase(manager.TelegramStore(), manager.Logger)
+		if err := uc.Execute(ctx, cqrs.SetupTelegramCommand{Email: email, ChatID: chatID}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Telegram notifications configured for %s. You'll receive alerts at chat ID %d.", email, chatID)), nil
 	}
@@ -262,7 +264,11 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		alertList := manager.AlertStore().List(email)
+		uc := usecases.NewListAlertsUseCase(manager.AlertStore(), manager.Logger)
+		alertList, err := uc.Execute(ctx, cqrs.GetAlertsQuery{Email: email})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		if len(alertList) == 0 {
 			return mcp.NewToolResultText("No alerts configured. Use set_alert to create one."), nil
 		}
@@ -306,9 +312,11 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		alertID := NewArgParser(args).String("alert_id", "")
-		if err := manager.AlertStore().Delete(email, alertID); err != nil {
+
+		uc := usecases.NewDeleteAlertUseCase(manager.AlertStore(), manager.Logger)
+		if err := uc.Execute(ctx, cqrs.DeleteAlertCommand{Email: email, AlertID: alertID}); err != nil {
 			handler.trackToolError(ctx, "delete_alert", "delete_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete alert: %s", err)), nil
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Alert %s deleted.", alertID)), nil

@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -50,18 +52,14 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
 		}
 
-		// Check for duplicate name
-		if existing := manager.WatchlistStore().FindWatchlistByName(email, name); existing != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q already exists (ID: %s)", name, existing.ID)), nil
-		}
-
-		id, err := manager.WatchlistStore().CreateWatchlist(email, name)
+		uc := usecases.NewCreateWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
 		if err != nil {
 			handler.trackToolError(ctx, "create_watchlist", "create_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to create watchlist: %s", err)), nil
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", name, id)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", result.Name, result.ID)), nil
 	}
 }
 
@@ -103,13 +101,14 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		itemCount := manager.WatchlistStore().ItemCount(wl.ID)
-		if err := manager.WatchlistStore().DeleteWatchlist(email, wl.ID); err != nil {
+		uc := usecases.NewDeleteWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
+		if err != nil {
 			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete watchlist: %s", err)), nil
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", wl.Name, itemCount)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", result.Name, result.ItemCount)), nil
 	}
 }
 
@@ -175,6 +174,8 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("No valid instruments provided. Use exchange:symbol format (e.g. 'NSE:RELIANCE')."), nil
 		}
 
+		uc := usecases.NewAddToWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+
 		var added, failed []string
 		for _, instID := range instruments {
 			parts := strings.SplitN(instID, ":", 2)
@@ -183,7 +184,6 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				continue
 			}
 			exchange := parts[0]
-			symbol := parts[1]
 
 			// Resolve instrument to get token
 			inst, err := manager.Instruments.GetByID(instID)
@@ -192,17 +192,16 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				continue
 			}
 
-			item := &watchlist.WatchlistItem{
+			if err := uc.Execute(ctx, cqrs.AddToWatchlistCommand{
+				Email:           email,
+				WatchlistID:     wl.ID,
 				Exchange:        exchange,
 				Tradingsymbol:   inst.Tradingsymbol,
 				InstrumentToken: inst.InstrumentToken,
 				Notes:           notes,
 				TargetEntry:     targetEntry,
 				TargetExit:      targetExit,
-			}
-			_ = symbol // already resolved via GetByID
-
-			if err := manager.WatchlistStore().AddItem(email, wl.ID, item); err != nil {
+			}); err != nil {
 				failed = append(failed, fmt.Sprintf("%s (%s)", instID, err))
 				continue
 			}
@@ -279,6 +278,8 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError("No items specified"), nil
 		}
 
+		uc := usecases.NewRemoveFromWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+
 		var removed, failed []string
 		for _, ref := range refs {
 			itemID := ref
@@ -296,7 +297,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 				}
 			}
 
-			if err := manager.WatchlistStore().RemoveItem(email, wl.ID, itemID); err != nil {
+			if err := uc.Execute(ctx, cqrs.RemoveFromWatchlistCommand{Email: email, WatchlistID: wl.ID, ItemID: itemID}); err != nil {
 				failed = append(failed, fmt.Sprintf("%s (%s)", ref, err))
 				continue
 			}
@@ -367,7 +368,12 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		items := manager.WatchlistStore().GetItems(wl.ID)
+		uc := usecases.NewGetWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		items, err := uc.Execute(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
+		if err != nil {
+			handler.trackToolError(ctx, "get_watchlist", "get_error")
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		if len(items) == 0 {
 			return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q is empty. Use add_to_watchlist to add instruments.", wl.Name)), nil
 		}
@@ -495,26 +501,14 @@ func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		watchlists := manager.WatchlistStore().ListWatchlists(email)
-		if len(watchlists) == 0 {
+		uc := usecases.NewListWatchlistsUseCase(manager.WatchlistStore(), manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.ListWatchlistsQuery{Email: email})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		if len(result) == 0 {
 			return mcp.NewToolResultText("No watchlists. Use create_watchlist to create one."), nil
-		}
-
-		type watchlistInfo struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			ItemCount int    `json:"item_count"`
-			UpdatedAt string `json:"updated_at"`
-		}
-
-		result := make([]watchlistInfo, 0, len(watchlists))
-		for _, wl := range watchlists {
-			result = append(result, watchlistInfo{
-				ID:        wl.ID,
-				Name:      wl.Name,
-				ItemCount: manager.WatchlistStore().ItemCount(wl.ID),
-				UpdatedAt: wl.UpdatedAt.Format("2006-01-02 15:04"),
-			})
 		}
 
 		return handler.MarshalResponse(result, "list_watchlists")

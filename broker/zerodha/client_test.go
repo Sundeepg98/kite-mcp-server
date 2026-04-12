@@ -1158,6 +1158,644 @@ func TestClient_DeleteGTT_Error(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ConvertPosition
+// ---------------------------------------------------------------------------
+
+func TestClient_ConvertPosition(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/portfolio/positions" && r.Method == "PUT" {
+			fmt.Fprint(w, `{"status":"success","data":true}`)
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	ok, err := c.ConvertPosition(broker.ConvertPositionParams{
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        10,
+		OldProduct:      "MIS",
+		NewProduct:      "CNC",
+		PositionType:    "day",
+	})
+	if err != nil {
+		t.Fatalf("ConvertPosition error: %v", err)
+	}
+	if !ok {
+		t.Error("ConvertPosition returned false, want true")
+	}
+}
+
+func TestClient_ConvertPosition_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid params"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.ConvertPosition(broker.ConvertPositionParams{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetMFOrders
+// ---------------------------------------------------------------------------
+
+func TestClient_GetMFOrders(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mf/orders" && r.Method == "GET" {
+			fmt.Fprint(w, jsonEnvelope(t, []map[string]interface{}{
+				{
+					"order_id":          "MF001",
+					"tradingsymbol":     "INF846K01DP8",
+					"fund":             "Axis Bluechip Fund",
+					"transaction_type":  "BUY",
+					"status":           "COMPLETE",
+					"amount":           5000.0,
+					"quantity":          123.456,
+					"folio":            "1234567890",
+					"order_timestamp":  "2026-04-10 09:30:00",
+					"exchange_timestamp": "2026-04-10 09:30:05",
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	orders, err := c.GetMFOrders()
+	if err != nil {
+		t.Fatalf("GetMFOrders error: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("len = %d, want 1", len(orders))
+	}
+	if orders[0].OrderID != "MF001" {
+		t.Errorf("OrderID = %q, want MF001", orders[0].OrderID)
+	}
+	if orders[0].Tradingsymbol != "INF846K01DP8" {
+		t.Errorf("Tradingsymbol = %q, want INF846K01DP8", orders[0].Tradingsymbol)
+	}
+	if orders[0].Amount != 5000.0 {
+		t.Errorf("Amount = %f, want 5000", orders[0].Amount)
+	}
+}
+
+func TestClient_GetMFOrders_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		fmt.Fprint(w, `{"status":"error","error_type":"TokenException","message":"expired"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetMFOrders()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetMFSIPs
+// ---------------------------------------------------------------------------
+
+func TestClient_GetMFSIPs(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mf/sips" && r.Method == "GET" {
+			fmt.Fprint(w, jsonEnvelope(t, []map[string]interface{}{
+				{
+					"sip_id":            "SIP001",
+					"tradingsymbol":     "INF846K01DP8",
+					"fund_name":         "Axis Bluechip Fund",
+					"frequency":         "monthly",
+					"instalment_amount": 5000.0,
+					"instalments":       120,
+					"status":           "ACTIVE",
+					"step_up":          map[string]interface{}{},
+					"tag":              "auto",
+					"created":          "2026-01-01 09:00:00",
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	sips, err := c.GetMFSIPs()
+	if err != nil {
+		t.Fatalf("GetMFSIPs error: %v", err)
+	}
+	if len(sips) != 1 {
+		t.Fatalf("len = %d, want 1", len(sips))
+	}
+	if sips[0].SIPID != "SIP001" {
+		t.Errorf("SIPID = %q, want SIP001", sips[0].SIPID)
+	}
+	if sips[0].Frequency != "monthly" {
+		t.Errorf("Frequency = %q, want monthly", sips[0].Frequency)
+	}
+	if sips[0].Amount != 5000.0 {
+		t.Errorf("Amount = %f, want 5000", sips[0].Amount)
+	}
+}
+
+func TestClient_GetMFSIPs_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		fmt.Fprint(w, `{"status":"error","error_type":"TokenException","message":"expired"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetMFSIPs()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetMFHoldings
+// ---------------------------------------------------------------------------
+
+func TestClient_GetMFHoldings(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mf/holdings" && r.Method == "GET" {
+			fmt.Fprint(w, jsonEnvelope(t, []map[string]interface{}{
+				{
+					"tradingsymbol": "INF846K01DP8",
+					"folio":         "1234567890",
+					"fund":          "Axis Bluechip Fund",
+					"quantity":      1234.567,
+					"average_price": 45.50,
+					"last_price":    48.25,
+					"pnl":           3393.56,
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	holdings, err := c.GetMFHoldings()
+	if err != nil {
+		t.Fatalf("GetMFHoldings error: %v", err)
+	}
+	if len(holdings) != 1 {
+		t.Fatalf("len = %d, want 1", len(holdings))
+	}
+	if holdings[0].Tradingsymbol != "INF846K01DP8" {
+		t.Errorf("Tradingsymbol = %q, want INF846K01DP8", holdings[0].Tradingsymbol)
+	}
+	if holdings[0].PnL != 3393.56 {
+		t.Errorf("PnL = %f, want 3393.56", holdings[0].PnL)
+	}
+}
+
+func TestClient_GetMFHoldings_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		fmt.Fprint(w, `{"status":"error","error_type":"GeneralException","message":"internal error"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetMFHoldings()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PlaceMFOrder
+// ---------------------------------------------------------------------------
+
+func TestClient_PlaceMFOrder(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mf/orders" && r.Method == "POST" {
+			fmt.Fprint(w, jsonEnvelope(t, map[string]interface{}{
+				"order_id": "MF002",
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	resp, err := c.PlaceMFOrder(broker.MFOrderParams{
+		Tradingsymbol:   "INF846K01DP8",
+		TransactionType: "BUY",
+		Amount:          10000,
+		Tag:             "auto",
+	})
+	if err != nil {
+		t.Fatalf("PlaceMFOrder error: %v", err)
+	}
+	if resp.OrderID != "MF002" {
+		t.Errorf("OrderID = %q, want MF002", resp.OrderID)
+	}
+}
+
+func TestClient_PlaceMFOrder_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid fund"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.PlaceMFOrder(broker.MFOrderParams{Tradingsymbol: "INVALID"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CancelMFOrder
+// ---------------------------------------------------------------------------
+
+func TestClient_CancelMFOrder(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/mf/orders/") && r.Method == "DELETE" {
+			fmt.Fprint(w, jsonEnvelope(t, map[string]interface{}{
+				"order_id": "MF001",
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	resp, err := c.CancelMFOrder("MF001")
+	if err != nil {
+		t.Fatalf("CancelMFOrder error: %v", err)
+	}
+	if resp.OrderID != "MF001" {
+		t.Errorf("OrderID = %q, want MF001", resp.OrderID)
+	}
+}
+
+func TestClient_CancelMFOrder_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"OrderException","message":"order not found"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.CancelMFOrder("NONEXISTENT")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PlaceMFSIP
+// ---------------------------------------------------------------------------
+
+func TestClient_PlaceMFSIP(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mf/sips" && r.Method == "POST" {
+			fmt.Fprint(w, jsonEnvelope(t, map[string]interface{}{
+				"sip_id": "SIP002",
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	resp, err := c.PlaceMFSIP(broker.MFSIPParams{
+		Tradingsymbol: "INF846K01DP8",
+		Amount:        5000,
+		Frequency:     "monthly",
+		Instalments:   120,
+		InstalmentDay: 1,
+	})
+	if err != nil {
+		t.Fatalf("PlaceMFSIP error: %v", err)
+	}
+	if resp.SIPID != "SIP002" {
+		t.Errorf("SIPID = %q, want SIP002", resp.SIPID)
+	}
+}
+
+func TestClient_PlaceMFSIP_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid SIP params"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.PlaceMFSIP(broker.MFSIPParams{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CancelMFSIP
+// ---------------------------------------------------------------------------
+
+func TestClient_CancelMFSIP(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/mf/sips/") && r.Method == "DELETE" {
+			fmt.Fprint(w, jsonEnvelope(t, map[string]interface{}{
+				"sip_id": "SIP001",
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	resp, err := c.CancelMFSIP("SIP001")
+	if err != nil {
+		t.Fatalf("CancelMFSIP error: %v", err)
+	}
+	if resp.SIPID != "SIP001" {
+		t.Errorf("SIPID = %q, want SIP001", resp.SIPID)
+	}
+}
+
+func TestClient_CancelMFSIP_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"OrderException","message":"SIP not found"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.CancelMFSIP("NONEXISTENT")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetOrderMargins
+// ---------------------------------------------------------------------------
+
+func TestClient_GetOrderMargins(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/margins/orders" && r.Method == "POST" {
+			fmt.Fprint(w, jsonEnvelope(t, []map[string]interface{}{
+				{
+					"type":    "equity",
+					"var":     1234.56,
+					"span":    5678.90,
+					"total":   6913.46,
+					"charges": map[string]interface{}{"total": 15.0},
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	result, err := c.GetOrderMargins([]broker.OrderMarginParam{
+		{
+			Exchange:        "NSE",
+			Tradingsymbol:   "INFY",
+			TransactionType: "BUY",
+			Variety:         "regular",
+			Product:         "CNC",
+			OrderType:       "MARKET",
+			Quantity:        10,
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetOrderMargins error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+func TestClient_GetOrderMargins_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid order params"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetOrderMargins([]broker.OrderMarginParam{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetBasketMargins
+// ---------------------------------------------------------------------------
+
+func TestClient_GetBasketMargins(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/margins/basket" && r.Method == "POST" {
+			fmt.Fprint(w, jsonEnvelope(t, map[string]interface{}{
+				"initial": map[string]interface{}{
+					"type": "equity", "total": 15000.0,
+				},
+				"final": map[string]interface{}{
+					"type": "equity", "total": 12000.0,
+				},
+				"orders": []map[string]interface{}{
+					{"type": "equity", "total": 7500.0},
+					{"type": "equity", "total": 7500.0},
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	result, err := c.GetBasketMargins([]broker.OrderMarginParam{
+		{
+			Exchange:        "NSE",
+			Tradingsymbol:   "INFY",
+			TransactionType: "BUY",
+			Variety:         "regular",
+			Product:         "CNC",
+			OrderType:       "LIMIT",
+			Quantity:        10,
+			Price:           1500,
+		},
+		{
+			Exchange:        "NSE",
+			Tradingsymbol:   "RELIANCE",
+			TransactionType: "BUY",
+			Variety:         "regular",
+			Product:         "CNC",
+			OrderType:       "LIMIT",
+			Quantity:        5,
+			Price:           2500,
+		},
+	}, true)
+	if err != nil {
+		t.Fatalf("GetBasketMargins error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+func TestClient_GetBasketMargins_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid basket"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetBasketMargins([]broker.OrderMarginParam{}, false)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetOrderCharges
+// ---------------------------------------------------------------------------
+
+func TestClient_GetOrderCharges(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/charges/orders" && r.Method == "POST" {
+			fmt.Fprint(w, jsonEnvelope(t, []map[string]interface{}{
+				{
+					"transaction_tax":       12.50,
+					"total_charges":         25.75,
+					"gst":                   map[string]interface{}{"total": 4.63},
+					"exchange_turnover_charge": 3.50,
+					"sebi_turnover_charge":  0.02,
+					"stamp_duty":            1.50,
+				},
+			}))
+			return
+		}
+		http.Error(w, `{"status":"error","message":"not found"}`, 404)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	result, err := c.GetOrderCharges([]broker.OrderChargesParam{
+		{
+			OrderID:         "ORD001",
+			Exchange:        "NSE",
+			Tradingsymbol:   "INFY",
+			TransactionType: "BUY",
+			Quantity:        10,
+			AveragePrice:    1500.50,
+			Product:         "CNC",
+			OrderType:       "MARKET",
+			Variety:         "regular",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GetOrderCharges error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+}
+
+func TestClient_GetOrderCharges_Error(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		fmt.Fprint(w, `{"status":"error","error_type":"InputException","message":"invalid charges params"}`)
+	}))
+	defer ts.Close()
+
+	c := New(newTestKiteClient(ts))
+	_, err := c.GetOrderCharges([]broker.OrderChargesParam{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+func TestFactory_BrokerName(t *testing.T) {
+	f := NewFactory()
+	if f.BrokerName() != broker.Zerodha {
+		t.Errorf("BrokerName = %q, want %q", f.BrokerName(), broker.Zerodha)
+	}
+}
+
+func TestFactory_Create(t *testing.T) {
+	f := NewFactory()
+	c, err := f.Create("test_api_key")
+	if err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+	if c == nil {
+		t.Fatal("client is nil")
+	}
+}
+
+func TestFactory_CreateWithToken(t *testing.T) {
+	f := NewFactory()
+	c, err := f.CreateWithToken("test_api_key", "test_access_token")
+	if err != nil {
+		t.Fatalf("CreateWithToken error: %v", err)
+	}
+	if c == nil {
+		t.Fatal("client is nil")
+	}
+}
+
+func TestAuth_GetLoginURL(t *testing.T) {
+	a := NewAuth()
+	url := a.GetLoginURL("test_api_key")
+	if url == "" {
+		t.Fatal("GetLoginURL returned empty string")
+	}
+	if !strings.Contains(url, "test_api_key") {
+		t.Errorf("URL = %q, want to contain api_key", url)
+	}
+}
+
+func TestAuth_ExchangeToken_Error(t *testing.T) {
+	// ExchangeToken with invalid credentials should fail (no real server)
+	a := NewAuth()
+	_, err := a.ExchangeToken("bad_key", "bad_secret", "bad_token")
+	if err == nil {
+		t.Fatal("expected error from ExchangeToken with invalid credentials")
+	}
+}
+
+func TestAuth_InvalidateToken_Error(t *testing.T) {
+	// InvalidateToken with invalid credentials should fail
+	a := NewAuth()
+	err := a.InvalidateToken("bad_key", "bad_token")
+	if err == nil {
+		t.Fatal("expected error from InvalidateToken with invalid credentials")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

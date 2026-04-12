@@ -168,3 +168,91 @@ type GetAuditTrailQuery struct {
 	Since      time.Time `json:"since,omitempty"`
 	OnlyErrors bool      `json:"only_errors,omitempty"`
 }
+
+// --- Watchlist queries ---
+
+// ListWatchlistsQuery requests all watchlists for a user.
+type ListWatchlistsQuery struct {
+	Email string `json:"email"`
+}
+
+// GetWatchlistQuery requests items in a specific watchlist.
+type GetWatchlistQuery struct {
+	Email       string `json:"email"`
+	WatchlistID string `json:"watchlist_id"`
+}
+
+// --- Paper trading queries ---
+
+// PaperTradingStatusQuery requests the paper trading status.
+type PaperTradingStatusQuery struct {
+	Email string `json:"email"`
+}
+
+// --- Trailing stop queries ---
+
+// ListTrailingStopsQuery requests all trailing stops for a user.
+type ListTrailingStopsQuery struct {
+	Email string `json:"email"`
+}
+
+// --- PnL queries ---
+
+// GetPnLJournalQuery requests P&L journal data.
+type GetPnLJournalQuery struct {
+	Email    string `json:"email"`
+	FromDate string `json:"from_date"`
+	ToDate   string `json:"to_date"`
+}
+
+// --- Native alert queries ---
+
+// ListNativeAlertsQuery requests native alerts from Zerodha.
+type ListNativeAlertsQuery struct {
+	Email   string            `json:"email"`
+	Filters map[string]string `json:"filters,omitempty"`
+}
+
+// GetNativeAlertHistoryQuery requests trigger history for a native alert.
+type GetNativeAlertHistoryQuery struct {
+	Email string `json:"email"`
+	UUID  string `json:"uuid"`
+}
+
+// --- Ticker queries ---
+
+// TickerStatusQuery requests the ticker connection status.
+type TickerStatusQuery struct {
+	Email string `json:"email"`
+}
+
+// --- Admin queries ---
+
+// AdminListUsersQuery requests a paginated list of users.
+type AdminListUsersQuery struct {
+	AdminEmail string `json:"admin_email"`
+	From       int    `json:"from"`
+	Limit      int    `json:"limit"`
+}
+
+// AdminGetUserQuery requests detailed user information.
+type AdminGetUserQuery struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
+// AdminServerStatusQuery requests server health overview.
+type AdminServerStatusQuery struct {
+	AdminEmail string `json:"admin_email"`
+}
+
+// AdminGetRiskStatusQuery requests a user's risk status.
+type AdminGetRiskStatusQuery struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
+// AdminListFamilyQuery requests the family member list.
+type AdminListFamilyQuery struct {
+	AdminEmail string `json:"admin_email"`
+}

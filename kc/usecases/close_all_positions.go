@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
@@ -151,7 +150,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 			Product:          p.Product,
 			OrderType:        "MARKET",
 			Validity:         "DAY",
-			MarketProtection: kiteconnect.MarketProtectionAuto,
+			MarketProtection: broker.MarketProtectionAuto,
 			Variety:          "regular",
 		}
 

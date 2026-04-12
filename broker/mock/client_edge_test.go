@@ -609,3 +609,357 @@ func TestGTTs_ReturnsCopy(t *testing.T) {
 		t.Error("GTTs() should return a copy, but store was mutated")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ConvertPosition
+// ---------------------------------------------------------------------------
+
+func TestConvertPosition(t *testing.T) {
+	c := New()
+	ok, err := c.ConvertPosition(broker.ConvertPositionParams{
+		Exchange:        "NSE",
+		Tradingsymbol:   "INFY",
+		TransactionType: "BUY",
+		Quantity:        10,
+		OldProduct:      "MIS",
+		NewProduct:      "CNC",
+		PositionType:    "day",
+	})
+	if err != nil {
+		t.Fatalf("ConvertPosition() error: %v", err)
+	}
+	if !ok {
+		t.Error("ConvertPosition() returned false, want true")
+	}
+}
+
+func TestConvertPosition_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("convert position error")
+	c.ConvertPositionErr = injected
+	ok, err := c.ConvertPosition(broker.ConvertPositionParams{})
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+	if ok {
+		t.Error("expected false on error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MF Orders
+// ---------------------------------------------------------------------------
+
+func TestSetAndGetMFOrders(t *testing.T) {
+	c := New()
+	want := []broker.MFOrder{
+		{OrderID: "MF1", Tradingsymbol: "INF846K01DP8", Status: "COMPLETE", Amount: 5000},
+		{OrderID: "MF2", Tradingsymbol: "INF174K01LS2", Status: "OPEN", Amount: 10000},
+	}
+	c.SetMFOrders(want)
+	got, err := c.GetMFOrders()
+	if err != nil {
+		t.Fatalf("GetMFOrders() error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[0].OrderID != "MF1" || got[1].OrderID != "MF2" {
+		t.Errorf("unexpected order IDs: %q, %q", got[0].OrderID, got[1].OrderID)
+	}
+}
+
+func TestGetMFOrders_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("mf orders error")
+	c.GetMFOrdersErr = injected
+	_, err := c.GetMFOrders()
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestPlaceMFOrder(t *testing.T) {
+	c := New()
+	resp, err := c.PlaceMFOrder(broker.MFOrderParams{
+		Tradingsymbol:   "INF846K01DP8",
+		TransactionType: "BUY",
+		Amount:          5000,
+		Tag:             "auto",
+	})
+	if err != nil {
+		t.Fatalf("PlaceMFOrder() error: %v", err)
+	}
+	if resp.OrderID == "" {
+		t.Fatal("expected non-empty order ID")
+	}
+	orders, _ := c.GetMFOrders()
+	if len(orders) != 1 {
+		t.Fatalf("len = %d, want 1", len(orders))
+	}
+	if orders[0].Status != "OPEN" {
+		t.Errorf("status = %q, want OPEN", orders[0].Status)
+	}
+}
+
+func TestPlaceMFOrder_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("place mf error")
+	c.PlaceMFOrderErr = injected
+	_, err := c.PlaceMFOrder(broker.MFOrderParams{})
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestCancelMFOrder(t *testing.T) {
+	c := New()
+	placed, _ := c.PlaceMFOrder(broker.MFOrderParams{
+		Tradingsymbol:   "INF846K01DP8",
+		TransactionType: "BUY",
+		Amount:          5000,
+	})
+	resp, err := c.CancelMFOrder(placed.OrderID)
+	if err != nil {
+		t.Fatalf("CancelMFOrder() error: %v", err)
+	}
+	if resp.OrderID != placed.OrderID {
+		t.Errorf("OrderID = %q, want %q", resp.OrderID, placed.OrderID)
+	}
+	orders, _ := c.GetMFOrders()
+	if orders[0].Status != "CANCELLED" {
+		t.Errorf("status = %q, want CANCELLED", orders[0].Status)
+	}
+}
+
+func TestCancelMFOrder_NotFound(t *testing.T) {
+	c := New()
+	_, err := c.CancelMFOrder("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent MF order")
+	}
+}
+
+func TestCancelMFOrder_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("cancel mf error")
+	c.CancelMFOrderErr = injected
+	_, err := c.CancelMFOrder("MF1")
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MF SIPs
+// ---------------------------------------------------------------------------
+
+func TestSetAndGetMFSIPs(t *testing.T) {
+	c := New()
+	want := []broker.MFSIP{
+		{SIPID: "SIP1", Tradingsymbol: "INF846K01DP8", Frequency: "monthly", Status: "ACTIVE"},
+	}
+	c.SetMFSIPs(want)
+	got, err := c.GetMFSIPs()
+	if err != nil {
+		t.Fatalf("GetMFSIPs() error: %v", err)
+	}
+	if len(got) != 1 || got[0].SIPID != "SIP1" {
+		t.Errorf("unexpected SIPs: %+v", got)
+	}
+}
+
+func TestGetMFSIPs_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("mf sips error")
+	c.GetMFSIPsErr = injected
+	_, err := c.GetMFSIPs()
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestPlaceMFSIP(t *testing.T) {
+	c := New()
+	resp, err := c.PlaceMFSIP(broker.MFSIPParams{
+		Tradingsymbol: "INF846K01DP8",
+		Amount:        5000,
+		Frequency:     "monthly",
+		Instalments:   120,
+		InstalmentDay: 1,
+	})
+	if err != nil {
+		t.Fatalf("PlaceMFSIP() error: %v", err)
+	}
+	if resp.SIPID == "" {
+		t.Fatal("expected non-empty SIP ID")
+	}
+	sips, _ := c.GetMFSIPs()
+	if len(sips) != 1 || sips[0].Status != "ACTIVE" {
+		t.Errorf("unexpected SIPs: %+v", sips)
+	}
+}
+
+func TestPlaceMFSIP_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("place sip error")
+	c.PlaceMFSIPErr = injected
+	_, err := c.PlaceMFSIP(broker.MFSIPParams{})
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestCancelMFSIP(t *testing.T) {
+	c := New()
+	placed, _ := c.PlaceMFSIP(broker.MFSIPParams{
+		Tradingsymbol: "INF846K01DP8",
+		Amount:        5000,
+		Frequency:     "monthly",
+		Instalments:   120,
+	})
+	resp, err := c.CancelMFSIP(placed.SIPID)
+	if err != nil {
+		t.Fatalf("CancelMFSIP() error: %v", err)
+	}
+	if resp.SIPID != placed.SIPID {
+		t.Errorf("SIPID = %q, want %q", resp.SIPID, placed.SIPID)
+	}
+	sips, _ := c.GetMFSIPs()
+	if sips[0].Status != "CANCELLED" {
+		t.Errorf("status = %q, want CANCELLED", sips[0].Status)
+	}
+}
+
+func TestCancelMFSIP_NotFound(t *testing.T) {
+	c := New()
+	_, err := c.CancelMFSIP("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent MF SIP")
+	}
+}
+
+func TestCancelMFSIP_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("cancel sip error")
+	c.CancelMFSIPErr = injected
+	_, err := c.CancelMFSIP("SIP1")
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MF Holdings
+// ---------------------------------------------------------------------------
+
+func TestSetAndGetMFHoldings(t *testing.T) {
+	c := New()
+	want := []broker.MFHolding{
+		{Tradingsymbol: "INF846K01DP8", Folio: "123", Quantity: 100.5, PnL: 500.25},
+	}
+	c.SetMFHoldings(want)
+	got, err := c.GetMFHoldings()
+	if err != nil {
+		t.Fatalf("GetMFHoldings() error: %v", err)
+	}
+	if len(got) != 1 || got[0].PnL != 500.25 {
+		t.Errorf("unexpected holdings: %+v", got)
+	}
+}
+
+func TestGetMFHoldings_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("mf holdings error")
+	c.GetMFHoldingsErr = injected
+	_, err := c.GetMFHoldings()
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Margin calculations
+// ---------------------------------------------------------------------------
+
+func TestGetOrderMargins(t *testing.T) {
+	c := New()
+	result, err := c.GetOrderMargins([]broker.OrderMarginParam{
+		{Exchange: "NSE", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: 10},
+	})
+	if err != nil {
+		t.Fatalf("GetOrderMargins() error: %v", err)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", result)
+	}
+	if m["source"] != "mock" {
+		t.Errorf("source = %v, want mock", m["source"])
+	}
+}
+
+func TestGetOrderMargins_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("order margins error")
+	c.GetOrderMarginsErr = injected
+	_, err := c.GetOrderMargins(nil)
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestGetBasketMargins(t *testing.T) {
+	c := New()
+	result, err := c.GetBasketMargins([]broker.OrderMarginParam{
+		{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10},
+		{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 5},
+	}, true)
+	if err != nil {
+		t.Fatalf("GetBasketMargins() error: %v", err)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", result)
+	}
+	if m["type"] != "basket" {
+		t.Errorf("type = %v, want basket", m["type"])
+	}
+}
+
+func TestGetBasketMargins_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("basket margins error")
+	c.GetBasketMarginsErr = injected
+	_, err := c.GetBasketMargins(nil, false)
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}
+
+func TestGetOrderCharges(t *testing.T) {
+	c := New()
+	result, err := c.GetOrderCharges([]broker.OrderChargesParam{
+		{OrderID: "ORD1", Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10, AveragePrice: 1500},
+	})
+	if err != nil {
+		t.Fatalf("GetOrderCharges() error: %v", err)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", result)
+	}
+	if m["source"] != "mock" {
+		t.Errorf("source = %v, want mock", m["source"])
+	}
+}
+
+func TestGetOrderCharges_ErrorInjection(t *testing.T) {
+	c := New()
+	injected := errors.New("order charges error")
+	c.GetOrderChargesErr = injected
+	_, err := c.GetOrderCharges(nil)
+	if !errors.Is(err, injected) {
+		t.Errorf("got err %v, want %v", err, injected)
+	}
+}

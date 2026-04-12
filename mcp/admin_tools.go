@@ -11,8 +11,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -88,30 +90,20 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		p := NewArgParser(args)
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 100)
-		if from < 0 {
-			from = 0
-		}
-		if limit <= 0 || limit > 500 {
-			limit = 100
-		}
 
 		uStore := manager.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
-		allUsers := uStore.List()
 
-		// Apply pagination.
-		end := from + limit
-		if from > len(allUsers) {
-			from = len(allUsers)
-		}
-		if end > len(allUsers) {
-			end = len(allUsers)
+		uc := usecases.NewAdminListUsersUseCase(uStore, manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		entries := make([]adminUserEntry, 0, end-from)
-		for _, u := range allUsers[from:end] {
+		entries := make([]adminUserEntry, 0, len(result.Users))
+		for _, u := range result.Users {
 			var lastLogin string
 			if !u.LastLogin.IsZero() {
 				lastLogin = u.LastLogin.Format(time.RFC3339)
@@ -127,9 +119,9 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.MarshalResponse(&adminListUsersResponse{
-			Total: len(allUsers),
-			From:  from,
-			Limit: limit,
+			Total: result.Total,
+			From:  result.From,
+			Limit: result.Limit,
 			Users: entries,
 		}, "admin_list_users")
 	})
@@ -190,11 +182,14 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
-		user, found := uStore.Get(targetEmail)
-		if !found {
-			return mcp.NewToolResultError(fmt.Sprintf("User not found: %s", targetEmail)), nil
+
+		uc := usecases.NewAdminGetUserUseCase(uStore, manager.RiskGuard(), manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		user := result.User
 		var lastLogin string
 		if !user.LastLogin.IsZero() {
 			lastLogin = user.LastLogin.Format(time.RFC3339)
@@ -208,16 +203,16 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			OnboardedBy: user.OnboardedBy,
 		}
 
-		if rg := manager.RiskGuard(); rg != nil {
-			status := rg.GetUserStatus(targetEmail)
-			resp.RiskStatus = &status
-			limits := rg.GetEffectiveLimits(targetEmail)
+		if result.RiskStatus != nil {
+			resp.RiskStatus = result.RiskStatus
+		}
+		if result.EffectiveLimits != nil {
 			resp.EffectiveLimits = &adminEffectiveLimits{
-				MaxSingleOrderINR:   limits.MaxSingleOrderINR,
-				MaxOrdersPerDay:     limits.MaxOrdersPerDay,
-				MaxOrdersPerMinute:  limits.MaxOrdersPerMinute,
-				DuplicateWindowSecs: limits.DuplicateWindowSecs,
-				MaxDailyValueINR:    limits.MaxDailyValueINR,
+				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR,
+				MaxOrdersPerDay:     result.EffectiveLimits.MaxOrdersPerDay,
+				MaxOrdersPerMinute:  result.EffectiveLimits.MaxOrdersPerMinute,
+				DuplicateWindowSecs: result.EffectiveLimits.DuplicateWindowSecs,
+				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR,
 			}
 		}
 
@@ -329,25 +324,24 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		status := rg.GetUserStatus(targetEmail)
-		limits := rg.GetEffectiveLimits(targetEmail)
-		headroom := limits.MaxDailyValueINR - status.DailyPlacedValue
-		if headroom < 0 {
-			headroom = 0
+		uc := usecases.NewAdminGetRiskStatusUseCase(rg, manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return handler.MarshalResponse(&adminGetRiskStatusResponse{
-			TargetEmail:    targetEmail,
-			GloballyFrozen: rg.IsGloballyFrozen(),
-			UserStatus:     status,
+			TargetEmail:    result.TargetEmail,
+			GloballyFrozen: result.GloballyFrozen,
+			UserStatus:     result.UserStatus,
 			EffectiveLimits: adminEffectiveLimits{
-				MaxSingleOrderINR:   limits.MaxSingleOrderINR,
-				MaxOrdersPerDay:     limits.MaxOrdersPerDay,
-				MaxOrdersPerMinute:  limits.MaxOrdersPerMinute,
-				DuplicateWindowSecs: limits.DuplicateWindowSecs,
-				MaxDailyValueINR:    limits.MaxDailyValueINR,
+				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR,
+				MaxOrdersPerDay:     result.EffectiveLimits.MaxOrdersPerDay,
+				MaxOrdersPerMinute:  result.EffectiveLimits.MaxOrdersPerMinute,
+				DuplicateWindowSecs: result.EffectiveLimits.DuplicateWindowSecs,
+				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR,
 			},
-			OrderHeadroom: headroom,
+			OrderHeadroom: result.OrderHeadroom,
 		}, "admin_get_risk_status")
 	}
 }
@@ -401,21 +395,7 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		// Last-admin guard: don't suspend the last active admin.
-		target, ok := uStore.Get(targetEmail)
-		if ok && target.Role == users.RoleAdmin && target.Status == users.StatusActive {
-			activeAdmins := 0
-			for _, u := range uStore.List() {
-				if u.Role == users.RoleAdmin && u.Status == users.StatusActive {
-					activeAdmins++
-				}
-			}
-			if activeAdmins <= 1 {
-				return mcp.NewToolResultError("Cannot suspend the last active admin."), nil
-			}
-		}
-
-		// Elicitation confirmation.
+		// Elicitation confirmation (transport concern — stays in handler).
 		if srv := manager.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Suspend user %s? This will freeze trading, mark as suspended, and terminate all active sessions.", targetEmail)
 			if reason != "" {
@@ -426,28 +406,16 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 		}
 
-		// Execute: Freeze → UpdateStatus → TerminateByEmail.
-		if guard := manager.RiskGuard(); guard != nil {
-			guard.Freeze(targetEmail, adminEmail, reason)
-		}
-		if err := uStore.UpdateStatus(targetEmail, users.StatusSuspended); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to suspend user: %s", err.Error())), nil
-		}
-		terminated := manager.SessionManager().TerminateByEmail(targetEmail)
-
-		if ed := manager.EventDispatcher(); ed != nil {
-			ed.Dispatch(domain.UserSuspendedEvent{
-				Email:     targetEmail,
-				By:        adminEmail,
-				Reason:    reason,
-				Timestamp: time.Now(),
-			})
+		uc := usecases.NewAdminSuspendUserUseCase(uStore, manager.RiskGuard(), manager.SessionManager(), manager.EventDispatcher(), manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.AdminSuspendUserCommand{AdminEmail: adminEmail, TargetEmail: targetEmail, Reason: reason})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return handler.MarshalResponse(map[string]any{
-			"status":               "suspended",
-			"email":                targetEmail,
-			"sessions_terminated":  terminated,
+			"status":               result.Status,
+			"email":                result.Email,
+			"sessions_terminated":  result.SessionsTerminated,
 		}, "admin_suspend_user")
 	}
 }
@@ -485,8 +453,10 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
-		if err := uStore.UpdateStatus(targetEmail, users.StatusActive); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to activate user: %s", err.Error())), nil
+
+		uc := usecases.NewAdminActivateUserUseCase(uStore, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.AdminActivateUserCommand{TargetEmail: targetEmail}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return handler.MarshalResponse(map[string]string{
@@ -536,24 +506,13 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		// Last-admin guard.
+		// Fetch current role for elicitation message.
 		target, ok := uStore.Get(targetEmail)
 		if !ok {
 			return mcp.NewToolResultError(fmt.Sprintf("User not found: %s", targetEmail)), nil
 		}
-		if target.Role == users.RoleAdmin && newRole != users.RoleAdmin {
-			activeAdmins := 0
-			for _, u := range uStore.List() {
-				if u.Role == users.RoleAdmin && u.Status == users.StatusActive {
-					activeAdmins++
-				}
-			}
-			if activeAdmins <= 1 {
-				return mcp.NewToolResultError("Cannot demote the last active admin."), nil
-			}
-		}
 
-		// Elicitation confirmation.
+		// Elicitation confirmation (transport concern — stays in handler).
 		if srv := manager.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Change %s role from %s to %s?", targetEmail, target.Role, newRole)
 			if strings.EqualFold(targetEmail, adminEmail) {
@@ -564,14 +523,16 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		if err := uStore.UpdateRole(targetEmail, newRole); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to change role: %s", err.Error())), nil
+		uc := usecases.NewAdminChangeRoleUseCase(uStore, manager.Logger)
+		result, err := uc.Execute(ctx, cqrs.AdminChangeRoleCommand{TargetEmail: targetEmail, NewRole: newRole})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		return handler.MarshalResponse(map[string]string{
-			"email":     targetEmail,
-			"old_role":  target.Role,
-			"new_role":  newRole,
+			"email":     result.Email,
+			"old_role":  result.OldRole,
+			"new_role":  result.NewRole,
 		}, "admin_change_role")
 	}
 }
@@ -625,7 +586,7 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		// Elicitation confirmation.
+		// Elicitation confirmation (transport concern — stays in handler).
 		if srv := manager.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Freeze trading for %s? Reason: %s", targetEmail, reason)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
@@ -633,9 +594,12 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		guard.Freeze(targetEmail, adminEmail, reason)
+		uc := usecases.NewAdminFreezeUserUseCase(guard, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.AdminFreezeUserCommand{AdminEmail: adminEmail, TargetEmail: targetEmail, Reason: reason}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
-		// Dispatch domain event so subscribers (audit, notifications) are notified.
+		// Dispatch domain event (transport concern — stays in handler).
 		if ed := manager.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.UserFrozenEvent{
 				Email:    targetEmail,
@@ -687,7 +651,10 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		guard.Unfreeze(targetEmail)
+		uc := usecases.NewAdminUnfreezeUserUseCase(guard, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.AdminUnfreezeUserCommand{TargetEmail: targetEmail}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		return handler.MarshalResponse(map[string]string{
 			"status": "unfrozen",
@@ -760,7 +727,10 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		guard.FreezeGlobal(adminEmail, reason)
+		uc := usecases.NewAdminFreezeGlobalUseCase(guard, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.AdminFreezeGlobalCommand{AdminEmail: adminEmail, Reason: reason}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		if ed := manager.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.GlobalFreezeEvent{
@@ -806,7 +776,10 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
-		guard.UnfreezeGlobal()
+		uc := usecases.NewAdminUnfreezeGlobalUseCase(guard, manager.Logger)
+		if err := uc.Execute(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		return handler.MarshalResponse(map[string]string{
 			"status": "global_freeze_lifted",
 		}, "admin_unfreeze_global")

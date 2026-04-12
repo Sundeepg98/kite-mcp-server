@@ -112,6 +112,14 @@ type DeleteAlertCommand struct {
 	AlertID string `json:"alert_id"`
 }
 
+// --- Telegram commands ---
+
+// SetupTelegramCommand requests registering a user's Telegram chat ID.
+type SetupTelegramCommand struct {
+	Email  string `json:"email"`
+	ChatID int64  `json:"chat_id"`
+}
+
 // --- Session commands ---
 
 // FreezeUserCommand requests freezing a user's trading.
@@ -186,8 +194,193 @@ type CreateWatchlistCommand struct {
 
 // AddToWatchlistCommand requests adding an instrument to a watchlist.
 type AddToWatchlistCommand struct {
-	Email         string `json:"email"`
-	WatchlistID   string `json:"watchlist_id"`
-	Exchange      string `json:"exchange"`
-	Tradingsymbol string `json:"tradingsymbol"`
+	Email           string  `json:"email"`
+	WatchlistID     string  `json:"watchlist_id"`
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	InstrumentToken uint32  `json:"instrument_token"`
+	Notes           string  `json:"notes,omitempty"`
+	TargetEntry     float64 `json:"target_entry,omitempty"`
+	TargetExit      float64 `json:"target_exit,omitempty"`
+}
+
+// DeleteWatchlistCommand requests deleting a watchlist and all its items.
+type DeleteWatchlistCommand struct {
+	Email       string `json:"email"`
+	WatchlistID string `json:"watchlist_id"`
+}
+
+// RemoveFromWatchlistCommand requests removing an instrument from a watchlist.
+type RemoveFromWatchlistCommand struct {
+	Email       string `json:"email"`
+	WatchlistID string `json:"watchlist_id"`
+	ItemID      string `json:"item_id"`
+}
+
+// --- Paper trading commands ---
+
+// PaperTradingToggleCommand requests enabling or disabling paper trading.
+type PaperTradingToggleCommand struct {
+	Email       string  `json:"email"`
+	Enable      bool    `json:"enable"`
+	InitialCash float64 `json:"initial_cash,omitempty"`
+}
+
+// PaperTradingResetCommand requests resetting the virtual portfolio.
+type PaperTradingResetCommand struct {
+	Email string `json:"email"`
+}
+
+// --- Trailing stop commands ---
+
+// SetTrailingStopCommand requests creating a trailing stop-loss.
+type SetTrailingStopCommand struct {
+	Email           string  `json:"email"`
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	InstrumentToken uint32  `json:"instrument_token"`
+	OrderID         string  `json:"order_id"`
+	Variety         string  `json:"variety"`
+	Direction       string  `json:"direction"`
+	TrailAmount     float64 `json:"trail_amount,omitempty"`
+	TrailPct        float64 `json:"trail_pct,omitempty"`
+	CurrentStop     float64 `json:"current_stop"`
+	ReferencePrice  float64 `json:"reference_price"`
+}
+
+// CancelTrailingStopCommand requests cancelling a trailing stop.
+type CancelTrailingStopCommand struct {
+	Email          string `json:"email"`
+	TrailingStopID string `json:"trailing_stop_id"`
+}
+
+// --- Native alert commands ---
+
+// PlaceNativeAlertCommand requests creating a server-side alert at Zerodha.
+type PlaceNativeAlertCommand struct {
+	Email  string `json:"email"`
+	Params any    `json:"params"` // kiteconnect.AlertParams
+}
+
+// ModifyNativeAlertCommand requests modifying a native alert.
+type ModifyNativeAlertCommand struct {
+	Email  string `json:"email"`
+	UUID   string `json:"uuid"`
+	Params any    `json:"params"` // kiteconnect.AlertParams
+}
+
+// DeleteNativeAlertCommand requests deleting native alert(s).
+type DeleteNativeAlertCommand struct {
+	Email string   `json:"email"`
+	UUIDs []string `json:"uuids"`
+}
+
+// --- Ticker commands ---
+
+// StartTickerCommand requests starting a WebSocket ticker.
+type StartTickerCommand struct {
+	Email       string `json:"email"`
+	APIKey      string `json:"api_key"`
+	AccessToken string `json:"access_token"`
+}
+
+// StopTickerCommand requests stopping a WebSocket ticker.
+type StopTickerCommand struct {
+	Email string `json:"email"`
+}
+
+// SubscribeInstrumentsCommand requests subscribing to live tick data.
+type SubscribeInstrumentsCommand struct {
+	Email  string   `json:"email"`
+	Tokens []uint32 `json:"tokens"`
+	Mode   string   `json:"mode"` // "ltp", "quote", "full"
+}
+
+// UnsubscribeInstrumentsCommand requests removing instrument subscriptions.
+type UnsubscribeInstrumentsCommand struct {
+	Email  string   `json:"email"`
+	Tokens []uint32 `json:"tokens"`
+}
+
+// --- Admin commands ---
+
+// AdminSuspendUserCommand requests suspending a user account.
+type AdminSuspendUserCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+	Reason      string `json:"reason"`
+}
+
+// AdminActivateUserCommand requests reactivating a user account.
+type AdminActivateUserCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
+// AdminChangeRoleCommand requests changing a user's role.
+type AdminChangeRoleCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+	NewRole     string `json:"new_role"`
+}
+
+// AdminFreezeUserCommand requests freezing a user's trading.
+type AdminFreezeUserCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+	Reason      string `json:"reason"`
+}
+
+// AdminUnfreezeUserCommand requests unfreezing a user's trading.
+type AdminUnfreezeUserCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
+// AdminFreezeGlobalCommand requests freezing all trading globally.
+type AdminFreezeGlobalCommand struct {
+	AdminEmail string `json:"admin_email"`
+	Reason     string `json:"reason"`
+}
+
+// AdminUnfreezeGlobalCommand requests unfreezing global trading.
+type AdminUnfreezeGlobalCommand struct {
+	AdminEmail string `json:"admin_email"`
+}
+
+// AdminInviteFamilyMemberCommand requests inviting a family member.
+type AdminInviteFamilyMemberCommand struct {
+	AdminEmail string `json:"admin_email"`
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	Role       string `json:"role"`
+}
+
+// AdminRemoveFamilyMemberCommand requests removing a family member.
+type AdminRemoveFamilyMemberCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
+// --- Setup commands ---
+
+// LoginCommand requests generating a Kite login URL for the user.
+type LoginCommand struct {
+	Email     string `json:"email"`
+	APIKey    string `json:"api_key,omitempty"`
+	APISecret string `json:"api_secret,omitempty"`
+}
+
+// --- Account commands ---
+
+// DeleteMyAccountCommand requests deleting the authenticated user's account.
+type DeleteMyAccountCommand struct {
+	Email string `json:"email"`
+}
+
+// UpdateMyCredentialsCommand requests updating the user's Kite credentials.
+type UpdateMyCredentialsCommand struct {
+	Email     string `json:"email"`
+	APIKey    string `json:"api_key"`
+	APISecret string `json:"api_secret"`
 }

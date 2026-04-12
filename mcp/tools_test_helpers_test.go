@@ -191,7 +191,7 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 // newFullDevModeManager creates a DevMode Manager with ALL stores wired up:
 // AuditStore, PaperEngine, PnLService, admin user, and test credentials+tokens.
 // This enables testing handlers that depend on PaperEngine, PnLService,
-// or ext_apps data functions that need kiteClientForEmail to return non-nil.
+// or ext_apps data functions that need brokerClientForEmail to return non-nil.
 func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -248,7 +248,7 @@ func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 		Role: users.RoleAdmin, Status: users.StatusActive,
 	}))
 
-	// Seed test credentials + token so kiteClientForEmail returns non-nil
+	// Seed test credentials + token so brokerClientForEmail returns non-nil
 	mgr.CredentialStore().Set("cred@example.com", &kc.KiteCredentialEntry{
 		APIKey:    "test_api_key",
 		APISecret: "test_api_secret",

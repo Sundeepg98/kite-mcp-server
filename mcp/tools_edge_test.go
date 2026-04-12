@@ -150,7 +150,7 @@ func TestPnLJournal_DefaultPeriod_FullManager(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ext_apps data functions with credentials (kiteClientForEmail returns non-nil)
+// ext_apps data functions with credentials (brokerClientForEmail returns non-nil)
 // ---------------------------------------------------------------------------
 
 func TestPortfolioData_WithCredentials(t *testing.T) {
@@ -158,7 +158,7 @@ func TestPortfolioData_WithCredentials(t *testing.T) {
 	mgr, _ := newFullDevModeManager(t)
 	// cred@example.com has credentials+token seeded in newFullDevModeManager
 	data := portfolioData(mgr, nil, "cred@example.com")
-	// kiteClientForEmail returns non-nil, but API calls fail (stub endpoint)
+	// brokerClientForEmail returns non-nil, but API calls fail (stub endpoint)
 	// so data should be an error map
 	assert.NotNil(t, data)
 }
@@ -223,21 +223,23 @@ func TestOrderFormData_WithCredentials(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// kiteClientForEmail directly
+// brokerClientForEmail directly
 // ---------------------------------------------------------------------------
 
 func TestKiteClientForEmail_WithCreds(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	client := kiteClientForEmail(mgr, "cred@example.com")
+	client := brokerClientForEmail(mgr, "cred@example.com")
 	assert.NotNil(t, client, "should return non-nil client when creds+token exist")
 }
 
 func TestKiteClientForEmail_NoCreds_Push(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	client := kiteClientForEmail(mgr, "nobody@example.com")
-	assert.Nil(t, client, "should return nil when no creds")
+	// In DevMode, GetBrokerForEmail returns a mock client for all emails,
+	// even without stored credentials.
+	client := brokerClientForEmail(mgr, "nobody@example.com")
+	assert.NotNil(t, client, "DevMode returns mock client for all emails")
 }
 
 // ---------------------------------------------------------------------------
