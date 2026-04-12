@@ -93,7 +93,8 @@ func formatDuration(d time.Duration) string {
 }
 
 // ordersAPI returns order entries with P&L enrichment from the Kite API.
-func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
+func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -289,7 +290,8 @@ func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 
 // orderAttributionAPI returns the tool call sequence that led to a specific order.
 // Query params: order_id (required)
-func (d *DashboardHandler) orderAttributionAPI(w http.ResponseWriter, r *http.Request) {
+func (h *OrdersHandler) orderAttributionAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

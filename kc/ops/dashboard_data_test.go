@@ -282,7 +282,7 @@ func TestComputeTaxAnalysis_MixedSorted(t *testing.T) {
 func TestBuildOrderSummary_Empty(t *testing.T) {
 	t.Parallel()
 	d := newTestDashboard(t)
-	summary := d.buildOrderSummary(nil)
+	summary := d.orders.buildOrderSummary(nil)
 	assert.Equal(t, 0, summary.TotalOrders)
 	assert.Nil(t, summary.TotalPnL)
 }
@@ -299,7 +299,7 @@ func TestBuildOrderSummary_WithEntries(t *testing.T) {
 		{Status: "REJECTED"},
 	}
 
-	summary := d.buildOrderSummary(entries)
+	summary := d.orders.buildOrderSummary(entries)
 
 	assert.Equal(t, 3, summary.TotalOrders)
 	assert.Equal(t, 2, summary.Completed)
@@ -316,7 +316,7 @@ func TestBuildOrderSummary_WithEntries(t *testing.T) {
 func TestBuildOrderEntries_NilToolCalls(t *testing.T) {
 	t.Parallel()
 	d := newTestDashboardWithAudit(t)
-	entries := d.buildOrderEntries(nil, "user@test.com")
+	entries := d.orders.buildOrderEntries(nil, "user@test.com")
 	assert.Empty(t, entries)
 }
 
@@ -339,7 +339,7 @@ func TestBuildOrderEntries_WithToolCalls(t *testing.T) {
 		},
 	}
 
-	entries := d.buildOrderEntries(toolCalls, "user@test.com")
+	entries := d.orders.buildOrderEntries(toolCalls, "user@test.com")
 
 	assert.Len(t, entries, 2)
 	assert.Equal(t, "ORD-001", entries[0].OrderID)

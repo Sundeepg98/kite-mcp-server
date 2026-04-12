@@ -61,6 +61,50 @@ func (u *User) HasPassword() bool {
 	return u.PasswordHash != ""
 }
 
+// IsSuspended returns true if the user's account is suspended.
+func (u *User) IsSuspended() bool {
+	return u.Status == StatusSuspended
+}
+
+// IsOffboarded returns true if the user's account has been offboarded.
+func (u *User) IsOffboarded() bool {
+	return u.Status == StatusOffboarded
+}
+
+// IsViewer returns true if the user is restricted to read-only access.
+func (u *User) IsViewer() bool {
+	return u.Role == RoleViewer
+}
+
+// IsTrader returns true if the user has the trader role (not admin, not viewer).
+func (u *User) IsTrader() bool {
+	return u.Role == RoleTrader
+}
+
+// IsFamilyMember returns true if the user belongs to a family billing group
+// (has an admin email set) and is therefore not the billing owner.
+func (u *User) IsFamilyMember() bool {
+	return u.AdminEmail != ""
+}
+
+// IsBillingOwner returns true if the user is their own billing owner
+// (either an admin or a self-onboarded user with no parent admin).
+func (u *User) IsBillingOwner() bool {
+	return u.AdminEmail == ""
+}
+
+// BelongsToAdmin returns true if the user is linked to the given admin email
+// as a family member.
+func (u *User) BelongsToAdmin(adminEmail string) bool {
+	return u.AdminEmail != "" && strings.EqualFold(u.AdminEmail, adminEmail)
+}
+
+// CanBeOnboardedByGoogleSSO returns true if the user was auto-provisioned
+// via Google SSO (vs. invited or seeded from env).
+func (u *User) CanBeOnboardedByGoogleSSO() bool {
+	return u.OnboardedBy == "google_sso"
+}
+
 // Store is a thread-safe in-memory user store backed by SQLite.
 type Store struct {
 	mu     sync.RWMutex

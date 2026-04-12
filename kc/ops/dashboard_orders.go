@@ -12,7 +12,8 @@ import (
 )
 
 // serveOrdersPageSSR renders the user orders page.
-func (d *DashboardHandler) serveOrdersPageSSR(w http.ResponseWriter, r *http.Request) {
+func (h *OrdersHandler) serveOrdersPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.ordersTmpl == nil {
 		d.servePageFallback(w, "orders.html")
 		return
@@ -29,8 +30,8 @@ func (d *DashboardHandler) serveOrdersPageSSR(w http.ResponseWriter, r *http.Req
 	if d.auditStore != nil && email != "" {
 		since := time.Now().Truncate(24 * time.Hour)
 		toolCalls, _ := d.auditStore.ListOrders(email, since)
-		entries := d.buildOrderEntries(toolCalls, email)
-		summary := d.buildOrderSummary(entries)
+		entries := h.buildOrderEntries(toolCalls, email)
+		summary := h.buildOrderSummary(entries)
 
 		data.Stats = ordersToStatsData(summary)
 		data.Orders = ordersToTableData(entries)
@@ -45,7 +46,8 @@ func (d *DashboardHandler) serveOrdersPageSSR(w http.ResponseWriter, r *http.Req
 }
 
 // buildOrderEntries constructs order entries from audit tool calls, optionally enriching with Kite API.
-func (d *DashboardHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email string) []orderEntry {
+func (h *OrdersHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email string) []orderEntry {
+	d := h.core
 	entries := make([]orderEntry, 0, len(toolCalls))
 	for _, tc := range toolCalls {
 		if tc == nil {
@@ -63,14 +65,14 @@ func (d *DashboardHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email 
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
 		client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
-		d.enrichOrdersWithKite(client, entries)
+		h.enrichOrdersWithKite(client, entries)
 	}
 
 	return entries
 }
 
 // enrichOrdersWithKite enriches order entries with fill details and current prices from Kite API.
-func (d *DashboardHandler) enrichOrdersWithKite(client *kiteconnect.Client, entries []orderEntry) {
+func (h *OrdersHandler) enrichOrdersWithKite(client *kiteconnect.Client, entries []orderEntry) {
 	type ltpKey struct {
 		exchange string
 		symbol   string
@@ -155,7 +157,7 @@ func (d *DashboardHandler) enrichOrdersWithKite(client *kiteconnect.Client, entr
 }
 
 // buildOrderSummary computes order summary from entries.
-func (d *DashboardHandler) buildOrderSummary(entries []orderEntry) ordersSummary {
+func (h *OrdersHandler) buildOrderSummary(entries []orderEntry) ordersSummary {
 	summary := ordersSummary{TotalOrders: len(entries)}
 	var totalPnL float64
 	hasPnL := false

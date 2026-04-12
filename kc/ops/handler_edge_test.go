@@ -975,7 +975,7 @@ func TestPush100_BuildOrderSummary_MixedEntries(t *testing.T) {
 		{Status: "OPEN"},
 		{Status: "REJECTED"},
 	}
-	summary := d.buildOrderSummary(entries)
+	summary := d.orders.buildOrderSummary(entries)
 	assert.Equal(t, 4, summary.TotalOrders)
 	assert.Equal(t, 2, summary.Completed)
 	assert.Equal(t, 1, summary.WinningTrades)
@@ -991,7 +991,7 @@ func TestPush100_BuildOrderSummary_NoPnLEntries(t *testing.T) {
 		{Status: "OPEN"},
 		{Status: "OPEN"},
 	}
-	summary := d.buildOrderSummary(entries)
+	summary := d.orders.buildOrderSummary(entries)
 	assert.Equal(t, 2, summary.TotalOrders)
 	assert.Nil(t, summary.TotalPnL)
 }
@@ -1008,7 +1008,7 @@ func TestPush100_BuildOrderEntries_NilToolCall(t *testing.T) {
 		{OrderID: "order-1", StartedAt: time.Now(), InputParams: `{}`},
 		nil,
 	}
-	entries := d.buildOrderEntries(toolCalls, "test@example.com")
+	entries := d.orders.buildOrderEntries(toolCalls, "test@example.com")
 	assert.Len(t, entries, 1) // nils skipped
 	assert.Equal(t, "order-1", entries[0].OrderID)
 }

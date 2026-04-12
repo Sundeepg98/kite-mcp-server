@@ -39,6 +39,7 @@ type DashboardHandler struct {
 
 	// Focused sub-handlers (composition root pattern).
 	activity *ActivityHandler
+	orders   *OrdersHandler
 }
 
 // billingStoreIface is the subset of billing.Store used by the dashboard.
@@ -56,6 +57,7 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 	}
 	d.InitTemplates()
 	d.activity = newActivityHandler(d)
+	d.orders = newOrdersHandler(d)
 	return d
 }
 
@@ -77,14 +79,14 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/activity", wrap(d.activity.activityAPI))
 	mux.Handle("/dashboard/api/activity/stream", wrap(d.activity.activityStreamSSE))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activity.activityExport))
-	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPageSSR))
+	mux.Handle("/dashboard/orders", wrap(d.orders.serveOrdersPageSSR))
 	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPageSSR))
-	mux.Handle("/dashboard/api/orders", wrap(d.ordersAPI))
+	mux.Handle("/dashboard/api/orders", wrap(d.orders.ordersAPI))
 	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
 	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
 	mux.Handle("/dashboard/api/alerts-enriched", wrap(d.alertsEnrichedAPI))
 	mux.Handle("/dashboard/api/pnl-chart", wrap(d.pnlChartAPI))
-	mux.Handle("/dashboard/api/order-attribution", wrap(d.orderAttributionAPI))
+	mux.Handle("/dashboard/api/order-attribution", wrap(d.orders.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
 	mux.Handle("/dashboard/api/market-indices", wrap(d.marketIndices))
 	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPageSSR))

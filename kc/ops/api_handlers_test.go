@@ -1258,7 +1258,7 @@ func TestEnrichOrdersWithKite_Success(t *testing.T) {
 		},
 	}
 
-	d.enrichOrdersWithKite(client, entries)
+	d.orders.enrichOrdersWithKite(client, entries)
 
 	// Order should be enriched with status, fill price, current price, and P&L
 	require.Len(t, entries, 1)
@@ -1286,7 +1286,7 @@ func TestEnrichOrdersWithKite_SELLDirection(t *testing.T) {
 		},
 	}
 
-	d.enrichOrdersWithKite(client, entries)
+	d.orders.enrichOrdersWithKite(client, entries)
 
 	assert.Equal(t, "COMPLETE", entries[0].Status)
 	assert.Equal(t, "INFY", entries[0].Symbol, "symbol should be filled from history")
@@ -1318,7 +1318,7 @@ func TestEnrichOrdersWithKite_NoFillPrice(t *testing.T) {
 	defer ts.Close()
 
 	client := newMockKiteClient(ts.URL)
-	d.enrichOrdersWithKite(client, entries)
+	d.orders.enrichOrdersWithKite(client, entries)
 
 	assert.Equal(t, "OPEN", entries[0].Status)
 	assert.Nil(t, entries[0].FillPrice, "non-COMPLETE order should have nil FillPrice")
@@ -1338,7 +1338,7 @@ func TestEnrichOrdersWithKite_MultipleOrders(t *testing.T) {
 		{OrderID: "ORD-002", Symbol: "RELIANCE", Exchange: "NSE", Side: "SELL"},
 	}
 
-	d.enrichOrdersWithKite(client, entries)
+	d.orders.enrichOrdersWithKite(client, entries)
 
 	// Both should be enriched
 	for i, e := range entries {
@@ -1372,7 +1372,7 @@ func TestBuildOrderEntries_WithMockKite(t *testing.T) {
 		},
 	}
 
-	entries := d.buildOrderEntries(toolCalls, "mockuser@test.com")
+	entries := d.orders.buildOrderEntries(toolCalls, "mockuser@test.com")
 	require.Len(t, entries, 1)
 	assert.Equal(t, "ORD-001", entries[0].OrderID)
 	assert.Equal(t, "INFY", entries[0].Symbol)
@@ -1396,7 +1396,7 @@ func TestBuildOrderSummary_WithPnL(t *testing.T) {
 		{Status: "REJECTED"},
 	}
 
-	summary := d.buildOrderSummary(entries)
+	summary := d.orders.buildOrderSummary(entries)
 	assert.Equal(t, 4, summary.TotalOrders)
 	assert.Equal(t, 3, summary.Completed)
 	assert.Equal(t, 1, summary.WinningTrades)
