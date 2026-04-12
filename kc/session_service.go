@@ -87,6 +87,12 @@ func (ss *SessionService) SetAuditStore(store AuditStoreInterface) {
 	ss.auditStore = store
 }
 
+// SetBrokerFactory overrides the broker factory used by GetBrokerForEmail.
+// Intended for tests that need to inject a mock broker.Factory.
+func (ss *SessionService) SetBrokerFactory(f broker.Factory) {
+	ss.brokerFactory = f
+}
+
 // createKiteSessionData creates new KiteSessionData for a session.
 // If email is provided and a cached token exists, it is applied automatically.
 // In DevMode, a mock broker is injected and no real Kite client is created.
