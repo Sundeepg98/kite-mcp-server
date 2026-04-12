@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
 // ===========================================================================
@@ -709,4 +710,70 @@ func TestPlaceOrder_CQRS_BrokerErr(t *testing.T) {
 		TransactionType: "BUY", Quantity: 10,
 	})
 	assert.ErrorContains(t, err, "place order")
+}
+
+// ---------------------------------------------------------------------------
+// watchlist_usecases.go — AddToWatchlist, GetWatchlist
+// ---------------------------------------------------------------------------
+
+func TestAddToWatchlist_Success(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{}
+	uc := NewAddToWatchlistUseCase(store, testLogger())
+	err := uc.Execute(context.Background(), cqrs.AddToWatchlistCommand{
+		Email: "u@t.com", WatchlistID: "wl1",
+		Exchange: "NSE", Tradingsymbol: "INFY",
+	})
+	assert.NoError(t, err)
+}
+
+func TestAddToWatchlist_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	uc := NewAddToWatchlistUseCase(&mockWatchlistStore{}, testLogger())
+	err := uc.Execute(context.Background(), cqrs.AddToWatchlistCommand{WatchlistID: "wl1"})
+	assert.ErrorContains(t, err, "email is required")
+}
+
+func TestAddToWatchlist_EmptyWatchlistID(t *testing.T) {
+	t.Parallel()
+	uc := NewAddToWatchlistUseCase(&mockWatchlistStore{}, testLogger())
+	err := uc.Execute(context.Background(), cqrs.AddToWatchlistCommand{Email: "u@t.com"})
+	assert.ErrorContains(t, err, "watchlist_id is required")
+}
+
+func TestAddToWatchlist_StoreError(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{addItemErr: errors.New("full")}
+	uc := NewAddToWatchlistUseCase(store, testLogger())
+	err := uc.Execute(context.Background(), cqrs.AddToWatchlistCommand{
+		Email: "u@t.com", WatchlistID: "wl1",
+	})
+	assert.ErrorContains(t, err, "add to watchlist")
+}
+
+func TestGetWatchlist_Success(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{
+		items: []*watchlist.WatchlistItem{{Tradingsymbol: "INFY"}},
+	}
+	uc := NewGetWatchlistUseCase(store, testLogger())
+	items, err := uc.Execute(context.Background(), cqrs.GetWatchlistQuery{
+		Email: "u@t.com", WatchlistID: "wl1",
+	})
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+}
+
+func TestGetWatchlist_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	uc := NewGetWatchlistUseCase(&mockWatchlistStore{}, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetWatchlistQuery{WatchlistID: "wl1"})
+	assert.ErrorContains(t, err, "email is required")
+}
+
+func TestGetWatchlist_EmptyID(t *testing.T) {
+	t.Parallel()
+	uc := NewGetWatchlistUseCase(&mockWatchlistStore{}, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.GetWatchlistQuery{Email: "u@t.com"})
+	assert.ErrorContains(t, err, "watchlist_id is required")
 }
