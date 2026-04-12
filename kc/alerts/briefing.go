@@ -27,31 +27,39 @@ type BrokerDataProvider interface {
 	GetLTP(apiKey, accessToken string, instruments ...string) (kiteconnect.QuoteLTP, error)
 }
 
-// defaultBrokerProvider uses the real kiteconnect client.
-type defaultBrokerProvider struct{}
+// defaultBrokerProvider uses the KiteClientFactory to create clients.
+type defaultBrokerProvider struct {
+	factory KiteClientFactory
+}
+
+// KiteClientFactory creates Kite API clients (mirrors kc.KiteClientFactory for briefing use).
+type KiteClientFactory interface {
+	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
+}
+
+func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) *kiteconnect.Client {
+	if d.factory != nil {
+		return d.factory.NewClientWithToken(apiKey, accessToken)
+	}
+	c := kiteconnect.New(apiKey)
+	c.SetAccessToken(accessToken)
+	return c
+}
 
 func (d *defaultBrokerProvider) GetHoldings(apiKey, accessToken string) ([]kiteconnect.Holding, error) {
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
-	return client.GetHoldings()
+	return d.newClient(apiKey, accessToken).GetHoldings()
 }
 
 func (d *defaultBrokerProvider) GetPositions(apiKey, accessToken string) (kiteconnect.Positions, error) {
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
-	return client.GetPositions()
+	return d.newClient(apiKey, accessToken).GetPositions()
 }
 
 func (d *defaultBrokerProvider) GetUserMargins(apiKey, accessToken string) (kiteconnect.AllMargins, error) {
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
-	return client.GetUserMargins()
+	return d.newClient(apiKey, accessToken).GetUserMargins()
 }
 
 func (d *defaultBrokerProvider) GetLTP(apiKey, accessToken string, instruments ...string) (kiteconnect.QuoteLTP, error) {
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
-	return client.GetLTP(instruments...)
+	return d.newClient(apiKey, accessToken).GetLTP(instruments...)
 }
 
 // kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
@@ -75,12 +83,13 @@ type CredentialGetter interface {
 // BriefingService generates and sends morning briefings and daily P&L summaries
 // via Telegram for users who have a registered chat ID and valid Kite token.
 type BriefingService struct {
-	notifier       *TelegramNotifier
-	alertStore     *Store
-	tokens         TokenChecker
-	creds          CredentialGetter
-	logger         *slog.Logger
-	brokerProvider BrokerDataProvider // nil = use default (real kiteconnect)
+	notifier          *TelegramNotifier
+	alertStore        *Store
+	tokens            TokenChecker
+	creds             CredentialGetter
+	logger            *slog.Logger
+	brokerProvider    BrokerDataProvider // nil = use default via kiteClientFactory
+	kiteClientFactory KiteClientFactory  // nil = use kiteconnect.New directly
 }
 
 // NewBriefingService creates a BriefingService. Returns nil if notifier is nil.
@@ -115,7 +124,7 @@ func (b *BriefingService) broker() BrokerDataProvider {
 	if b.brokerProvider != nil {
 		return b.brokerProvider
 	}
-	return &defaultBrokerProvider{}
+	return &defaultBrokerProvider{factory: b.kiteClientFactory}
 }
 
 // SendMorningBriefings sends a morning briefing to every user with a Telegram chat ID.
