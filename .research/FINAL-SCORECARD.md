@@ -22,7 +22,7 @@ Scores below are reconciled from Phase 2 verification metrics (`resume-phase2-me
 | Pattern | Score | Ceiling reason | Verified by |
 |---|---|---|---|
 | **Hexagonal (SDK containment)** | **95%** | 0 production `kiteconnect.New()` leaks; 5 calls in `broker/zerodha/factory.go` + 2 in `kc/kite_client.go` are the factory itself | `grep kiteconnect\.New` → 0 non-factory, non-test sites |
-| **CQRS** | **~75%** | Command/Query DTOs used everywhere (28 use-case files). CQRS bus is now **live for 1 query** (`GetPortfolioQuery` via `manager.QueryBus().DispatchWithResult` at `mcp/get_tools.go:74,114`). Remaining ~29 tools still invoke use cases directly. CommandBus side never dispatched. | `grep "QueryBus().Dispatch"` → 2 sites, was 0 |
+| **CQRS** | **~80%** | Command/Query DTOs used everywhere (28 use-case files). **`GetPortfolioQuery` is 100% bus-routed across every portfolio read in production** — 10 `manager.QueryBus().DispatchWithResult` call sites in 8 portfolio tools (`get_tools.go`, `analytics_tools.go` ×3, `dividend_tool.go`, `rebalance_tool.go`, `sector_tool.go`, `tax_tools.go`, plus `ext_apps` widget). Only non-test `NewGetPortfolioUseCase` call is the bus handler registration at `kc/manager.go:405`. Every portfolio read flows through the bus with LoggingMiddleware. Remaining read domains (orders, positions, trades, profile, margins, quotes, GTTs) still call use cases directly. CommandBus side never dispatched. | `grep "QueryBus().Dispatch"` → 10 sites; `grep "NewGetPortfolioUseCase"` (non-test) → only `kc/manager.go:405` |
 | **DDD** | **~80%** | VOs (`Money`, `Quantity`, `InstrumentKey`) wired into Place/Modify/GTT commands. `OrderSpec`+`QuantitySpec`+`PriceSpec` wired into `PlaceOrderUseCase`/`ModifyOrderUseCase`. 15 domain event types defined. Alert entity enriched with 5 methods this session (Task #13 replaced the FALSE claim with real code). Aggregate Root pattern still test-only. | `kc/domain/events.go` has 15 event types; `kc/usecases/place_order.go` imports `NewOrderSpec` |
 | **Middleware** | **95%** | 10 layers wired in `app/wire.go:181–263` in order: Correlation → Timeout(30s) → Audit → Hook → CircuitBreaker(5,30s) → Riskguard → RateLimit → Billing(opt) → PaperTrading(opt) → DashboardURL | Source-verified call order |
 | **Event Sourcing (as audit log)** | **100%** | `makeEventPersister` wires `kc/eventsourcing` store via `app/adapters.go:380`. Domain events dispatched from manager (`AlertTriggeredEvent`) + use cases. Aggregates remain test-only — scoped correctly, not state reconstitution | Live producer: `kc/manager.go:120`; store wired |
@@ -30,13 +30,13 @@ Scores below are reconciled from Phase 2 verification metrics (`resume-phase2-me
 | **Monolith split** | **85%** | Manager: 25 methods (target <35 ✓). DashboardHandler: 11 methods across `kc/ops/*.go` (target <15 ✓, down from 39). 0 non-test files >1000 LOC. `kc/manager.go` now 728 LOC (was 1194). `mcp/ext_apps.go` 682 LOC (was 901). `kc/ops/dashboard.go` 169 LOC (was 2284). | `grep -cE '^func \(m \*Manager\)'` = 25; `grep -cE 'DashboardHandler\)' kc/ops/*.go` = 11; `find ... | wc -l` 0 files >1000 |
 | **Plugin pattern** | **40%** | `HookMiddleware` + `HookRegistry` in `mcp/registry.go` exist and are wired. No production plugin consumers. External `kite-trading` plugin uses the skill system, not the in-process hook API. Accepted ceiling — full plugin system is months of work. | `mcp/registry.go` exists; 0 production plugin registrations |
 
-**Overall honest architecture score: ~75%** (weighted average, discounting Plugin which is intentionally accepted at 40%).
+**Overall honest architecture score: ~76%** (weighted average, discounting Plugin which is intentionally accepted at 40%).
 
 **Deltas vs. prior agent-claimed reports:**
 
 | Pattern | Prior claim | Honest score | Delta |
 |---|---|---|---|
-| CQRS | 100% / 95% | 75% | −20 |
+| CQRS | 100% / 95% | 80% | −15 |
 | Hexagonal | 100% / 90% | 95% | +5 (prior 90% was pessimistic — 0 leaks actually verified) |
 | DDD | 100% / 95% | 80% | −15 |
 | ISP | 100% | 30% | −70 (biggest theater gap) |
@@ -96,7 +96,7 @@ Scores below are reconciled from Phase 2 verification metrics (`resume-phase2-me
 | 2 | Task #11 — H1: audit init silent failure | `app/wire.go` / audit init path | Fixed |
 | 3 | Task #11 — H2: riskguard `LoadLimits` silent fallback (could wipe kill switch) | `kc/riskguard/*.go` | **Fixed — production safety issue** |
 | 4 | Task #11 — H3: audit `Enqueue` drop on sync fallback | `kc/audit/store.go` | Fixed |
-| 5 | Task #12 — CQRS bus beachhead: `HoldingsTool` dispatches `GetPortfolioQuery` via `QueryBus` | `mcp/get_tools.go:74,114` | Wired |
+| 5 | Task #12 — CQRS query bus: **all 8 portfolio tools** dispatch `GetPortfolioQuery` via `QueryBus`. 10 dispatch sites, 1 handler registration at `kc/manager.go:405`. Full GetPortfolio query-domain migration. | `mcp/get_tools.go:74,114`, `analytics_tools.go:58,220,376`, `dividend_tool.go:139`, `rebalance_tool.go:130`, `sector_tool.go:65`, `tax_tools.go:121` | Wired |
 | 6 | Task #12 — `RetryBrokerCall` wraps 3 LTP call sites (was 0) | `mcp/alert_tools.go:177`, `mcp/ext_apps.go:572`, `mcp/watchlist_tools.go:396` | Wired |
 | 7 | Task #12 — dead code removal: `pnlService` field, 3 duplicate family use cases | `kc/manager.go`, `kc/usecases/` | Removed (~250 LOC) |
 | 8 | Task #13 — FALSE Alert enrichment claim replaced with REAL 5-method enrichment + tests | `kc/domain/alert.go` (or similar) | Real code + tests |
@@ -134,7 +134,7 @@ Per Phase 2f (`resume-deploy-readiness.md`) + Phase 3 verification:
 ## 6. Known Production Issues (non-blocking)
 
 1. **Test suite cross-package state leak** — `TestFullChain_ReadOnlyToolPassesForAnyUser` was flaky; Task #14 isolated audit-buffer state. Monitor CI for regressions.
-2. **CQRS dispatch is a beachhead, not a full migration** — 1 query routes via bus, ~29 other read tools and all write tools still call use cases directly. Works correctly; just means the bus-level middleware (future audit/retry/cache layer) only covers 1 path.
+2. **CQRS dispatch is query-side only, portfolio-domain only** — `GetPortfolioQuery` is fully bus-routed (10 dispatch sites across 8 portfolio tools; `NewGetPortfolioUseCase` only called at `kc/manager.go:405` for handler registration). Other read domains (Orders, Positions, Trades, Profile, Margins, Quotes, GTTs) still call use cases directly. CommandBus side never dispatched — writes are direct use-case invocations.
 3. **~2,050 LOC of accepted dead code** (2,300 minus ~250 removed): CQRS `bus.go`/`handler.go` infrastructure beyond the wired beachhead, most test-only Event Sourcing aggregates, 15 unused Provider interfaces. All compile-clean. Cleanup deferred.
 4. **DashboardHandler decomposed but not fully receiver-type-split** — 11 methods across 13 files, sharing the `DashboardHandler` receiver. Works; further split is cosmetic.
 5. **Plugin system at 40%** — hooks work, no production consumers. Accepted ceiling.
@@ -147,7 +147,7 @@ Per Phase 2f (`resume-deploy-readiness.md`) + Phase 3 verification:
 
 Accepted by team-lead — not blocking deploy, tracked for next session:
 
-- Migrate 29 remaining read tools to CQRS bus (wrap each `session.Broker.Get*` call in a `Get*Query` handler)
+- Migrate remaining read domains to CQRS bus. GetPortfolioQuery is 100% bus-routed (8 portfolio tools, 10 dispatch sites). Still direct: Orders, Positions, Trades, Profile, Margins, Quotes, GTTs, Historical, Option chain — ~20 tools across these domains
 - Wire CommandBus for `PlaceOrderCommand` dispatch (currently use-cases are invoked directly)
 - Add `get_order_event_history` ES tool (surface the audit log as a tool)
 - Expand ISP consumer count: make tool handlers depend on narrow interfaces (`UserReader`, `AlertReader`, etc.) instead of `*Manager`
@@ -174,15 +174,16 @@ Accepted by team-lead — not blocking deploy, tracked for next session:
 
 **Watch out for:**
 - Research reports from earlier in this project lifecycle over-claimed scores based on file counts and interface definitions. Always verify by counting actual *dispatch / instantiation / consumer* sites.
-- `kc/cqrs` package shows 100% coverage but most of it was dead code until this session's beachhead.
+- `kc/cqrs` package shows 100% coverage. After this session, the GetPortfolioQuery path is fully bus-routed (10 dispatch sites, 1 handler registration). The other query/command types in `kc/cqrs/` remain dead pending further migration.
 - The Provider interface tree in `kc/manager_interfaces.go` is largely aspirational. Don't assume a Provider has consumers just because it exists.
 - Windows SAC blocks freshly-compiled test binaries in the default temp dir — use `GOTMPDIR=D:/kite-mcp-temp/.gotmp`.
 - Kite API rate limits (429) cause flaky `app/` and `kc/` tests that hit `api.kite.trade/instruments.json`. Not a code bug.
 
 **Highest-ROI next-session work:**
-1. Wire 5–10 more read tools through `QueryBus` — each is ~15 lines of code. Turns CQRS score from ~75% to ~85%.
+1. Migrate the next query domain — Orders (GetOrdersQuery/GetOrderHistoryQuery) — fully through the bus. The GetPortfolio pattern proved out; cloning it for Orders is ~1 afternoon and takes CQRS from ~80% to ~85%.
 2. Delete the 15 dead `*StoreProvider` interfaces (or wire them as narrow consumer dependencies). Turns ISP score from ~30% to ~50% with the same effort either way.
-3. Split dashboard_templates.go receiver to further decompose DashboardHandler below 10 methods.
+3. Wire `PlaceOrderCommand` through a CommandBus — first command-side dispatch. This is the harder half of CQRS.
+4. Split dashboard_templates.go receiver to further decompose DashboardHandler below 10 methods (cosmetic).
 
 **Do not trust:**
 - `arch-reaudit.md` (stale — claims 3 SDK leaks, actual 0)
@@ -210,12 +211,14 @@ Architecture:
   Middleware:   95%  (10 layers wired in order)
   ES audit log: 100% (scoped correctly, 1 prod producer + use-case dispatches)
   Monolith:     85%  (Manager 25, DashboardHandler 11, 0 files >1000 LOC)
+  CQRS:        ~80%  (GetPortfolioQuery 100% bus-routed: 10 dispatch sites
+                      across 8 portfolio tools; other read domains + all
+                      commands still direct)
   DDD:         ~80%  (VOs+specs+events wired, aggregates test-only)
-  CQRS:        ~75%  (1 bus beachhead + 28 use-case files, CommandBus deferred)
   Plugin:       40%  (accepted ceiling)
-  ISP:         ~30%  (20 Providers defined, 5 consumed)
+  ISP:         ~30%  (20 Providers defined, ~5 consumed)
 
-  Weighted average: ~75%
+  Weighted average: ~76%
 
 Code:
   93 MCP tools, 28 use-case files, 15 domain events, 10 middleware
