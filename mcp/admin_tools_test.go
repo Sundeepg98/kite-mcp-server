@@ -50,6 +50,13 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 	// Wire up a RiskGuard so freeze-related tools work.
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
+	// Wire FamilyService so admin_family_tools that dispatch via CommandBus/QueryBus
+	// return real results instead of "family service not configured".
+	invStore := users.NewInvitationStore(nil)
+	mgr.SetInvitationStore(invStore)
+	famSvc := kc.NewFamilyService(mgr.UserStore(), mgr.BillingStore(), invStore)
+	mgr.SetFamilyService(famSvc)
+
 	return mgr
 }
 

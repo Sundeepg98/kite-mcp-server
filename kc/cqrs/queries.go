@@ -252,6 +252,14 @@ type AdminGetRiskStatusQuery struct {
 	TargetEmail string `json:"target_email"`
 }
 
+// AdminListFamilyQuery requests the list of family members linked to an admin's
+// billing plan, with pagination.
+type AdminListFamilyQuery struct {
+	AdminEmail string `json:"admin_email"`
+	From       int    `json:"from"`
+	Limit      int    `json:"limit"`
+}
+
 // --- Widget queries ---
 
 // GetWidgetPortfolioQuery requests portfolio data formatted for the widget.

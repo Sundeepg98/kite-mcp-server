@@ -88,7 +88,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return errResult, nil
 		}
 
-		auditStore := manager.AuditStore()
+		auditStore := handler.deps.Audit.AuditStore()
 		if auditStore == nil {
 			return mcp.NewToolResultError("Audit store not available (requires database persistence)"), nil
 		}

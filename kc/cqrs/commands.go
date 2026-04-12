@@ -352,6 +352,22 @@ type AdminUnfreezeGlobalCommand struct {
 	AdminEmail string `json:"admin_email"`
 }
 
+// --- Family commands ---
+
+// AdminInviteFamilyMemberCommand requests inviting a family member to share
+// an admin's billing plan. The invited user inherits the admin's tier.
+type AdminInviteFamilyMemberCommand struct {
+	AdminEmail   string `json:"admin_email"`
+	InvitedEmail string `json:"invited_email"`
+}
+
+// AdminRemoveFamilyMemberCommand requests unlinking a family member from
+// the admin's billing plan. The member loses inherited tier access.
+type AdminRemoveFamilyMemberCommand struct {
+	AdminEmail  string `json:"admin_email"`
+	TargetEmail string `json:"target_email"`
+}
+
 // --- Setup commands ---
 
 // LoginCommand requests generating a Kite login URL for the user.

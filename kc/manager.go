@@ -405,6 +405,52 @@ func (m *Manager) registerCQRSHandlers() {
 	m.queryBus.Register(reflect.TypeOf(cqrs.GetPortfolioQuery{}), func(ctx context.Context, msg any) (any, error) {
 		return portfolioUC.Execute(ctx, msg.(cqrs.GetPortfolioQuery))
 	})
+
+	// GetOrdersQuery -> GetOrdersUseCase
+	ordersUC := usecases.NewGetOrdersUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrdersQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return ordersUC.Execute(ctx, msg.(cqrs.GetOrdersQuery))
+	})
+
+	// GetOrderHistoryQuery -> GetOrderHistoryUseCase
+	orderHistoryUC := usecases.NewGetOrderHistoryUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderHistoryQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return orderHistoryUC.Execute(ctx, msg.(cqrs.GetOrderHistoryQuery))
+	})
+
+	// GetOrderTradesQuery -> GetOrderTradesUseCase
+	orderTradesUC := usecases.NewGetOrderTradesUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderTradesQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return orderTradesUC.Execute(ctx, msg.(cqrs.GetOrderTradesQuery))
+	})
+
+	// --- Family CQRS wiring (first real CommandBus dispatch) ---
+	// FamilyService is assigned via SetFamilyService() after wire.go builds it,
+	// so it's nil at this point. Handlers resolve m.familyService lazily per
+	// dispatch, returning an error when the service is still unconfigured.
+	m.queryBus.Register(reflect.TypeOf(cqrs.AdminListFamilyQuery{}), func(ctx context.Context, msg any) (any, error) {
+		if m.familyService == nil {
+			return nil, fmt.Errorf("cqrs: family service not configured")
+		}
+		uc := usecases.NewAdminListFamilyUseCase(m.familyService, m.invitationStore, m.Logger)
+		return uc.Execute(ctx, msg.(cqrs.AdminListFamilyQuery))
+	})
+
+	m.commandBus.Register(reflect.TypeOf(cqrs.AdminInviteFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+		if m.familyService == nil {
+			return nil, fmt.Errorf("cqrs: family service not configured")
+		}
+		uc := usecases.NewAdminInviteFamilyMemberUseCase(m.familyService, m.invitationStore, m.eventing.Dispatcher(), m.Logger)
+		return uc.Execute(ctx, msg.(cqrs.AdminInviteFamilyMemberCommand))
+	})
+
+	m.commandBus.Register(reflect.TypeOf(cqrs.AdminRemoveFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+		if m.familyService == nil {
+			return nil, fmt.Errorf("cqrs: family service not configured")
+		}
+		uc := usecases.NewAdminRemoveFamilyMemberUseCase(m.familyService, m.eventing.Dispatcher(), m.Logger)
+		return uc.Execute(ctx, msg.(cqrs.AdminRemoveFamilyMemberCommand))
+	})
 }
 
 // KiteConnect wraps the Kite Connect client

@@ -190,6 +190,17 @@ type FamilyInvitedEvent struct {
 func (e FamilyInvitedEvent) EventType() string    { return "family.invited" }
 func (e FamilyInvitedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// FamilyMemberRemovedEvent is emitted when an admin unlinks a family member
+// from their billing plan.
+type FamilyMemberRemovedEvent struct {
+	AdminEmail   string
+	RemovedEmail string
+	Timestamp    time.Time
+}
+
+func (e FamilyMemberRemovedEvent) EventType() string    { return "family.member_removed" }
+func (e FamilyMemberRemovedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

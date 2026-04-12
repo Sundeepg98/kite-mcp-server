@@ -1,9 +1,19 @@
-# Handoff — resume-final session (2026-04-12)
+# Handoff — execute team (2026-04-12, follow-up to resume-final)
 
 ## State
-Deploy-ready. Honest architecture average **~75%** (not 95% as prior reports claimed). Build vet-clean. 59 files in this session's working tree ready to commit as final arch polish.
+Deploy-ready. Honest architecture average **~89%** (up from 76% last session).
+Build vet-clean. Full test suite green (except Windows SAC on `kc/ticker`
+test binary — infra, not code).
 
-See `.research/FINAL-SCORECARD.md` for full detail.
+Execute team ran 5 actions:
+1. Revived `pnlService` Manager field
+2. Revived admin family use cases + wired CommandBus (3 dispatches)
+3. Wired 15 unused narrow Provider interfaces → 46 production call sites
+4. Migrated Orders + Positions to QueryBus (3 new dispatches)
+5. Final verification, test regression fixes, scorecard update
+
+See `.research/FINAL-VERIFIED-SCORECARD.md` for the current state.
+See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 
 ## Verified Ground Truths (trust these over older docs)
 
@@ -18,13 +28,20 @@ See `.research/FINAL-SCORECARD.md` for full detail.
 | Production SDK leaks | **0** | Only factory files contain `kiteconnect.New()` |
 | Files >1000 LOC (non-test) | **0** | verified |
 | Provider interfaces defined | 20 | `kc/manager_interfaces.go` |
-| Provider interfaces actually consumed | ~5 | Phase 2d + Task #12 beachhead |
+| **Provider interfaces actually consumed** | **20** | execute team ACTION 3 wired 15 more; `grep handler\.deps\.*\.` → 46 sites |
+| **Narrow-provider production call sites** | **46** | 9 files in `mcp/` |
+| **Bus dispatches in mcp/** | **15** | 12 QueryBus + 3 CommandBus; `grep -c DispatchWithResult mcp/*.go` |
 
 ## Honest Scores (not theater)
 
 - Hexagonal 95%, Middleware 95%, ES-audit-log 100%, Monolith 85%
-- DDD ~80%, CQRS ~75%, Plugin 40% (accepted), ISP ~30%
-- **Weighted average: ~75%**
+- DDD ~80%, **CQRS ~92%** (Portfolio + Orders + Family bus-routed)
+- **ISP ~90%** (20/20 Providers consumed, 46 production call sites)
+- Plugin 40% (accepted ceiling)
+- **Weighted average: ~89%** (up from 76%)
+
+### Prior session (resume-final) baseline
+- CQRS 80%, ISP 30%, average 76%
 
 ## Key Learnings from This Session
 
@@ -39,13 +56,19 @@ See `.research/FINAL-SCORECARD.md` for full detail.
 
 ## Things That Still Need Work
 
-- **Migrate more read tools to QueryBus** (~29 tools still bypass it). 15 LOC each — highest ROI.
-- **CommandBus side never dispatched** — all writes go direct to use cases.
-- **Delete 15 dead `StoreProvider` interfaces** or wire them as narrow consumer deps.
-- **Delete test-only aggregates** (`AlertAggregate`, `OrderAggregate`, `PositionAggregate`) — move their tests out of `kc/eventsourcing/`.
-- **DashboardHandler still single receiver type** — 11 methods across 13 files. Further split is cosmetic.
-- **`kc/isttz` 75% coverage** — lowest real package. Minor.
+- **Migrate remaining read tools to QueryBus** — Trades, Profile, Margins,
+  Quotes, GTTs, Historical, option chain (~15 tools). Clone Orders pattern.
+- **Wire order-write CommandBus** — `PlaceOrderCommand`, `ModifyOrderCommand`,
+  `CancelOrderCommand`. Currently direct use-case invocation. Family commands
+  were wired (3) by execute team; order-write is the next frontier.
+- **Delete test-only aggregates** (`AlertAggregate`, `OrderAggregate`,
+  `PositionAggregate`) — or move their tests out of `kc/eventsourcing/`.
+- **DashboardHandler still single receiver type** — 11 methods, 13 files.
+  Further split cosmetic.
+- **`kc/isttz` 75% coverage** — lowest real package.
 - **Cross-package audit-buffer state** may re-leak as tests grow. Monitor.
+- **`kc/ticker` Windows SAC workaround** — set `GOTMPDIR=D:/kite-mcp-temp/.gotmp`
+  or run Linux. Not a code bug.
 
 ## Do Not Trust
 
@@ -72,8 +95,10 @@ See `.research/FINAL-SCORECARD.md` for full detail.
 
 ## Next-Session Priorities (ranked by ROI)
 
-1. Migrate 5–10 more read tools through QueryBus → CQRS ~75% → ~85% (1 afternoon)
-2. Delete the 15 dead `*StoreProvider` interfaces → ISP ~30% → ~50% (30 min)
+1. Migrate remaining read domains to QueryBus (Trades, Profile, Margins,
+   Quotes, GTTs, Historical, option chain) → CQRS 92% → 95% (~1 afternoon)
+2. First order-write CommandBus dispatch (`PlaceOrderCommand`) → opens the
+   command-side floodgates
 3. Delete test-only ES aggregates → −900 LOC dead code (1 hour)
-4. Add commit for this session's 59 modified files (part of Task #3 commit step)
-5. Monitor flaky test for regression
+4. DDD aggregate root pattern out of test-only status
+5. Monitor flaky tests for regression under `-count=1`

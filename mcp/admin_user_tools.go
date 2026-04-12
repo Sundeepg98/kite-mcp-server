@@ -58,7 +58,7 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 100)
 
-		uStore := manager.UserStore()
+		uStore := handler.deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -145,12 +145,12 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		uStore := manager.UserStore()
+		uStore := handler.deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		uc := usecases.NewAdminGetUserUseCase(uStore, manager.RiskGuard(), manager.Logger)
+		uc := usecases.NewAdminGetUserUseCase(uStore, handler.deps.RiskGuard.RiskGuard(), manager.Logger)
 		result, err := uc.Execute(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -231,13 +231,13 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
-		uStore := manager.UserStore()
+		uStore := handler.deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Suspend user %s? This will freeze trading, mark as suspended, and terminate all active sessions.", targetEmail)
 			if reason != "" {
 				msg += fmt.Sprintf(" Reason: %s", reason)
@@ -247,7 +247,7 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 		}
 
-		uc := usecases.NewAdminSuspendUserUseCase(uStore, manager.RiskGuard(), manager.SessionManager(), manager.EventDispatcher(), manager.Logger)
+		uc := usecases.NewAdminSuspendUserUseCase(uStore, handler.deps.RiskGuard.RiskGuard(), manager.SessionManager(), manager.EventDispatcher(), manager.Logger)
 		result, err := uc.Execute(ctx, cqrs.AdminSuspendUserCommand{AdminEmail: adminEmail, TargetEmail: targetEmail, Reason: reason})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -290,7 +290,7 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		uStore := manager.UserStore()
+		uStore := handler.deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -342,7 +342,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("target_email and role are required."), nil
 		}
 
-		uStore := manager.UserStore()
+		uStore := handler.deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -354,7 +354,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Change %s role from %s to %s?", targetEmail, target.Role, newRole)
 			if strings.EqualFold(targetEmail, adminEmail) {
 				msg += " WARNING: You are changing your own role."

@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -10,8 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/domain"
-	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,78 +45,33 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		if invitedEmail == "" {
 			return mcp.NewToolResultError("invited_email is required."), nil
 		}
-		if strings.EqualFold(invitedEmail, adminEmail) {
-			return mcp.NewToolResultError(ErrSelfAction), nil
-		}
 
-		// Check max_users
-		uStore := manager.UserStore()
-		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+		bus := manager.CommandBus()
+		if bus == nil {
+			return mcp.NewToolResultError("command bus not available"), nil
 		}
-		currentFamily := uStore.ListByAdminEmail(adminEmail)
-
-		bs := manager.BillingStore()
-		maxUsers := 1
-		if bs != nil {
-			if sub := bs.GetSubscription(adminEmail); sub != nil {
-				maxUsers = sub.MaxUsers
-				if maxUsers < 1 {
-					maxUsers = 1
-				}
-			}
-		}
-		if len(currentFamily) >= maxUsers {
-			return mcp.NewToolResultError(fmt.Sprintf("You already have %d family members (max %d for your plan). Upgrade or remove someone first.", len(currentFamily), maxUsers)), nil
-		}
-
-		// Check if already linked
-		for _, u := range currentFamily {
-			if strings.EqualFold(u.Email, invitedEmail) {
-				return mcp.NewToolResultError(fmt.Sprintf("%s is already in your family.", invitedEmail)), nil
-			}
-		}
-
-		// Create invitation
-		invStore := manager.InvitationStore()
-		if invStore == nil {
-			return mcp.NewToolResultError(ErrInvitationStoreNA), nil
-		}
-
-		invID := fmt.Sprintf("inv_%d", time.Now().UnixNano())
-		inv := &users.FamilyInvitation{
-			ID:           invID,
+		raw, err := bus.DispatchWithResult(ctx, cqrs.AdminInviteFamilyMemberCommand{
 			AdminEmail:   adminEmail,
 			InvitedEmail: invitedEmail,
-			Status:       "pending",
-			CreatedAt:    time.Now(),
-			ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
+		})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
-		if err := invStore.Create(inv); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to create invitation: %s", err.Error())), nil
-		}
-
-		if ed := manager.EventDispatcher(); ed != nil {
-			ed.Dispatch(domain.FamilyInvitedEvent{
-				AdminEmail:   adminEmail,
-				InvitedEmail: invitedEmail,
-				Timestamp:    time.Now(),
-			})
-		}
+		result := raw.(*usecases.AdminInviteFamilyMemberResult)
 
 		acceptURL := ""
 		if extURL := os.Getenv("EXTERNAL_URL"); extURL != "" {
-			acceptURL = extURL + "/auth/accept-invite?token=" + invID
+			acceptURL = extURL + "/auth/accept-invite?token=" + result.InvitationID
 		}
 
 		return handler.MarshalResponse(map[string]any{
 			"status":         "invited",
-			"invitation_id":  invID,
-			"invited_email":  invitedEmail,
+			"invitation_id":  result.InvitationID,
+			"invited_email":  result.InvitedEmail,
 			"acceptance_url": acceptURL,
-			"expires_at":     inv.ExpiresAt.Format(time.RFC3339),
-			"slots_used":     len(currentFamily) + 1,
-			"slots_max":      maxUsers,
+			"expires_at":     result.ExpiresAt.Format(time.RFC3339),
+			"slots_used":     result.SlotsUsed,
+			"slots_max":      result.SlotsMax,
 		}, "admin_invite_family_member")
 	}
 }
@@ -149,23 +103,23 @@ func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := NewArgParser(request.GetArguments())
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 50)
-		if from < 0 {
-			from = 0
-		}
-		if limit <= 0 || limit > 500 {
-			limit = 50
-		}
 
-		uStore := manager.UserStore()
-		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+		bus := manager.QueryBus()
+		if bus == nil {
+			return mcp.NewToolResultError("query bus not available"), nil
 		}
-
-		members := uStore.ListByAdminEmail(adminEmail)
+		raw, err := bus.DispatchWithResult(ctx, cqrs.AdminListFamilyQuery{
+			AdminEmail: adminEmail,
+			From:       from,
+			Limit:      limit,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result := raw.(*usecases.AdminListFamilyResult)
 
 		type memberEntry struct {
 			Email     string `json:"email"`
@@ -173,61 +127,40 @@ func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			Status    string `json:"status"`
 			LastLogin string `json:"last_login,omitempty"`
 		}
-		entries := make([]memberEntry, 0, len(members))
-		for _, u := range members {
+		entries := make([]memberEntry, 0, len(result.Members))
+		for _, m := range result.Members {
 			var ll string
-			if !u.LastLogin.IsZero() {
-				ll = u.LastLogin.Format(time.RFC3339)
+			if !m.LastLogin.IsZero() {
+				ll = m.LastLogin.Format(time.RFC3339)
 			}
 			entries = append(entries, memberEntry{
-				Email: u.Email, Role: u.Role, Status: u.Status, LastLogin: ll,
+				Email: m.Email, Role: m.Role, Status: m.Status, LastLogin: ll,
 			})
 		}
 
-		// Apply pagination to members.
-		total := len(entries)
-		end := from + limit
-		if from > total {
-			from = total
-		}
-		if end > total {
-			end = total
-		}
-		entries = entries[from:end]
-
-		// Pending invitations
 		type invEntry struct {
 			ID           string `json:"id"`
 			InvitedEmail string `json:"invited_email"`
 			Status       string `json:"status"`
 			ExpiresAt    string `json:"expires_at"`
 		}
-		var pending []invEntry
-		if invStore := manager.InvitationStore(); invStore != nil {
-			for _, inv := range invStore.ListByAdmin(adminEmail) {
-				if inv.Status == "pending" && time.Now().Before(inv.ExpiresAt) {
-					pending = append(pending, invEntry{
-						ID: inv.ID, InvitedEmail: inv.InvitedEmail,
-						Status: inv.Status, ExpiresAt: inv.ExpiresAt.Format(time.RFC3339),
-					})
-				}
-			}
-		}
-
-		maxUsers := 1
-		if bs := manager.BillingStore(); bs != nil {
-			if sub := bs.GetSubscription(adminEmail); sub != nil {
-				maxUsers = sub.MaxUsers
-			}
+		pending := make([]invEntry, 0, len(result.Pending))
+		for _, inv := range result.Pending {
+			pending = append(pending, invEntry{
+				ID:           inv.ID,
+				InvitedEmail: inv.InvitedEmail,
+				Status:       inv.Status,
+				ExpiresAt:    inv.ExpiresAt.Format(time.RFC3339),
+			})
 		}
 
 		return handler.MarshalResponse(map[string]any{
-			"admin_email":  adminEmail,
-			"max_users":    maxUsers,
-			"total":        total,
-			"from":         from,
-			"limit":        limit,
-			"member_count": len(entries),
+			"admin_email":  result.AdminEmail,
+			"max_users":    result.MaxUsers,
+			"total":        result.Total,
+			"from":         result.From,
+			"limit":        result.Limit,
+			"member_count": result.MemberCount,
 			"members":      entries,
 			"pending":      pending,
 		}, "admin_list_family")
@@ -262,8 +195,7 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 			return errResult, nil
 		}
 
-		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := NewArgParser(request.GetArguments())
 		targetEmail := strings.ToLower(p.String("target_email", ""))
 		confirmed := p.Bool("confirm", false)
 		if targetEmail == "" {
@@ -272,30 +204,23 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		if !confirmed {
 			return mcp.NewToolResultError("confirm must be true. Member will lose tier access."), nil
 		}
-		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError(ErrSelfAction), nil
-		}
 
-		uStore := manager.UserStore()
-		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+		bus := manager.CommandBus()
+		if bus == nil {
+			return mcp.NewToolResultError("command bus not available"), nil
 		}
-
-		u, ok := uStore.Get(targetEmail)
-		if !ok {
-			return mcp.NewToolResultError(fmt.Sprintf("User not found: %s", targetEmail)), nil
+		raw, err := bus.DispatchWithResult(ctx, cqrs.AdminRemoveFamilyMemberCommand{
+			AdminEmail:  adminEmail,
+			TargetEmail: targetEmail,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
-		if !strings.EqualFold(u.AdminEmail, adminEmail) {
-			return mcp.NewToolResultError(fmt.Sprintf("%s is not in your family.", targetEmail)), nil
-		}
-
-		if err := uStore.SetAdminEmail(targetEmail, ""); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to remove: %s", err.Error())), nil
-		}
+		result := raw.(*usecases.AdminRemoveFamilyMemberResult)
 
 		return handler.MarshalResponse(map[string]string{
 			"status": "removed",
-			"email":  targetEmail,
+			"email":  result.RemovedEmail,
 		}, "admin_remove_family_member")
 	}
 }

@@ -28,14 +28,16 @@ func (*AdminServerStatusTool) Tool() mcp.Tool {
 }
 
 type adminServerStatusResponse struct {
-	GlobalFreeze   riskguard.GlobalFreezeStatus `json:"global_freeze"`
-	ActiveSessions int                          `json:"active_sessions"`
-	TotalUsers     int                          `json:"total_users"`
-	Uptime         string                       `json:"uptime"`
-	GoVersion      string                       `json:"go_version"`
-	HeapAllocMB    float64                      `json:"heap_alloc_mb"`
-	Goroutines     int                          `json:"goroutines"`
-	GCPauseMs      float64                      `json:"gc_pause_ms"`
+	GlobalFreeze       riskguard.GlobalFreezeStatus `json:"global_freeze"`
+	ActiveSessions     int                          `json:"active_sessions"`
+	TotalUsers         int                          `json:"total_users"`
+	RegisteredKeys     int                          `json:"registered_keys"`
+	PersistenceEnabled bool                         `json:"persistence_enabled"`
+	Uptime             string                       `json:"uptime"`
+	GoVersion          string                       `json:"go_version"`
+	HeapAllocMB        float64                      `json:"heap_alloc_mb"`
+	Goroutines         int                          `json:"goroutines"`
+	GCPauseMs          float64                      `json:"gc_pause_ms"`
 }
 
 func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
@@ -53,11 +55,17 @@ func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			Goroutines:     runtime.NumGoroutine(),
 		}
 
-		if uStore := manager.UserStore(); uStore != nil {
+		if uStore := handler.deps.Users.UserStore(); uStore != nil {
 			resp.TotalUsers = uStore.Count()
 		}
-		if rg := manager.RiskGuard(); rg != nil {
+		if rg := handler.deps.RiskGuard.RiskGuard(); rg != nil {
 			resp.GlobalFreeze = rg.GetGlobalFreezeStatus()
+		}
+		if reg := handler.deps.Registry.RegistryStore(); reg != nil {
+			resp.RegisteredKeys = len(reg.List())
+		}
+		if db := handler.deps.AlertDB.AlertDB(); db != nil {
+			resp.PersistenceEnabled = true
 		}
 
 		var memStats runtime.MemStats

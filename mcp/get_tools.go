@@ -191,13 +191,12 @@ func (*OrdersTool) Tool() mcp.Tool {
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetOrdersUseCase(manager.SessionSvc(), manager.Logger)
-		orders, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		orders := raw.([]broker.Order)
 
-		// Convert to []interface{} for generic pagination
 		result := make([]interface{}, len(orders))
 		for i, order := range orders {
 			result[i] = order
@@ -271,11 +270,11 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderTradesUseCase(manager.SessionSvc(), manager.Logger)
-			orderTrades, err := uc.Execute(ctx, cqrs.GetOrderTradesQuery{Email: session.Email, OrderID: orderID})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderTradesQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order trades: %s", err.Error())), nil
 			}
+			orderTrades := raw.([]broker.Trade)
 
 			return handler.MarshalResponse(orderTrades, "get_order_trades")
 		})
@@ -312,11 +311,11 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderHistoryUseCase(manager.SessionSvc(), manager.Logger)
-			orderHistory, err := uc.Execute(ctx, cqrs.GetOrderHistoryQuery{Email: session.Email, OrderID: orderID})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order history: %s", err.Error())), nil
 			}
+			orderHistory := raw.([]broker.Order)
 
 			return handler.MarshalResponse(orderHistory, "get_order_history")
 		})

@@ -47,13 +47,13 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		uc := usecases.NewDeleteMyAccountUseCase(usecases.AccountDependencies{
-			CredentialStore: manager.CredentialStore(),
-			TokenStore:      manager.TokenStore(),
-			AlertDeleter:    manager.AlertStore(),
-			WatchlistStore:  manager.WatchlistStore(),
+			CredentialStore: handler.deps.CredStore.CredentialStore(),
+			TokenStore:      handler.deps.Tokens.TokenStore(),
+			AlertDeleter:    handler.deps.Alerts.AlertStore(),
+			WatchlistStore:  handler.deps.Watchlist.WatchlistStore(),
 			TrailingStops:   manager.TrailingStopManager(),
-			PaperEngine:     manager.PaperEngine(),
-			UserStore:       manager.UserStore(),
+			PaperEngine:     handler.deps.Paper.PaperEngine(),
+			UserStore:       handler.deps.Users.UserStore(),
 			Sessions:        manager.SessionManager(),
 		}, manager.Logger)
 
@@ -109,13 +109,13 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError("Both api_key and api_secret must be non-empty"), nil
 		}
 
-		uc := usecases.NewUpdateMyCredentialsUseCase(manager.CredentialStore(), manager.TokenStore(), manager.Logger)
+		uc := usecases.NewUpdateMyCredentialsUseCase(handler.deps.CredStore.CredentialStore(), handler.deps.Tokens.TokenStore(), manager.Logger)
 		if err := uc.Execute(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Persist the actual credentials via the manager (use case validates, manager persists)
-		manager.CredentialStore().Set(email, &kc.KiteCredentialEntry{
+		handler.deps.CredStore.CredentialStore().Set(email, &kc.KiteCredentialEntry{
 			APIKey:    apiKey,
 			APISecret: apiSecret,
 		})

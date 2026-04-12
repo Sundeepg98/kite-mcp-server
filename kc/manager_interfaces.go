@@ -254,4 +254,23 @@ var (
 	_ AppConfigProvider  = (*Manager)(nil)
 	_ MetricsRecorder    = (*Manager)(nil)
 	_ ManagerLifecycle   = (*Manager)(nil)
+
+	// Narrow provider assertions — each Provider is a real production dependency
+	// in mcp.ToolHandlerDeps. Keeping them here prevents accidental removal if
+	// consumers are refactored.
+	_ TokenStoreProvider         = (*Manager)(nil)
+	_ CredentialStoreProvider    = (*Manager)(nil)
+	_ AlertStoreProvider         = (*Manager)(nil)
+	_ TelegramStoreProvider      = (*Manager)(nil)
+	_ WatchlistStoreProvider     = (*Manager)(nil)
+	_ UserStoreProvider          = (*Manager)(nil)
+	_ RegistryStoreProvider      = (*Manager)(nil)
+	_ AuditStoreProvider         = (*Manager)(nil)
+	_ BillingStoreProvider       = (*Manager)(nil)
+	_ TickerServiceProvider      = (*Manager)(nil)
+	_ PaperEngineProvider        = (*Manager)(nil)
+	_ InstrumentsManagerProvider = (*Manager)(nil)
+	_ AlertDBProvider            = (*Manager)(nil)
+	_ RiskGuardProvider          = (*Manager)(nil)
+	_ MCPServerProvider          = (*Manager)(nil)
 )

@@ -193,6 +193,13 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 		Status: users.StatusActive,
 	}))
 
+	// Wire FamilyService so admin_family_tools that dispatch via CommandBus/QueryBus
+	// return real results instead of "family service not configured".
+	invStore := users.NewInvitationStore(nil)
+	mgr.SetInvitationStore(invStore)
+	famSvc := kc.NewFamilyService(mgr.UserStore(), mgr.BillingStore(), invStore)
+	mgr.SetFamilyService(famSvc)
+
 	t.Cleanup(func() { db.Close() })
 
 	return mgr, auditStore

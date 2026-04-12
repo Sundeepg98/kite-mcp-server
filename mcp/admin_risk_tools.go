@@ -237,7 +237,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Solo Pro users (max_users=1) shouldn't use global freeze — it only
 		// affects themselves. Require a Family (Pro) or Premium plan.
-		if bs := manager.BillingStore(); bs != nil {
+		if bs := handler.deps.Billing.BillingStore(); bs != nil {
 			if sub := bs.GetSubscription(adminEmail); sub != nil && sub.MaxUsers <= 1 {
 				return mcp.NewToolResultError("Global freeze requires a Family or Premium plan."), nil
 			}

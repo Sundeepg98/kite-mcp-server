@@ -76,7 +76,7 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
-		uc := usecases.NewSetupTelegramUseCase(manager.TelegramStore(), manager.Logger)
+		uc := usecases.NewSetupTelegramUseCase(handler.deps.Telegram.TelegramStore(), manager.Logger)
 		if err := uc.Execute(ctx, cqrs.SetupTelegramCommand{Email: email, ChatID: chatID}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -153,7 +153,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Resolve instrument to get token, exchange, and tradingsymbol
-		inst, err := manager.Instruments.GetByID(instrumentID)
+		inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instrumentID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Instrument not found: %s", instrumentID)), nil
 		}
@@ -188,7 +188,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		uc := usecases.NewCreateAlertUseCase(
-			manager.AlertStore(),
+			handler.deps.Alerts.AlertStore(),
 			&instrumentResolverAdapter{mgr: manager.Instruments},
 			manager.Logger,
 		)
@@ -205,19 +205,20 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Auto-start ticker and subscribe instrument
+		tickerSvc := handler.deps.Ticker.TickerService()
 		tickerMsg := ""
-		if !manager.TickerService().IsRunning(email) {
-			apiKey := manager.GetAPIKeyForEmail(email)
-			if entry, ok := manager.TokenStore().Get(email); ok {
-				if startErr := manager.TickerService().Start(email, apiKey, entry.AccessToken); startErr != nil {
+		if !tickerSvc.IsRunning(email) {
+			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
+			if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
+				if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
 					manager.Logger.Warn("Failed to auto-start ticker for alert", "email", email, "error", startErr)
 				} else {
 					tickerMsg = "\nTicker auto-started."
 				}
 			}
 		}
-		if manager.TickerService().IsRunning(email) {
-			if subErr := manager.TickerService().Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr != nil {
+		if tickerSvc.IsRunning(email) {
+			if subErr := tickerSvc.Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr != nil {
 				manager.Logger.Warn("Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
 			} else {
 				tickerMsg += fmt.Sprintf("\nSubscribed %s for real-time alerts.", instrumentID)
@@ -236,7 +237,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check if Telegram is configured
-		if _, ok := manager.TelegramStore().GetTelegramChatID(email); !ok {
+		if _, ok := handler.deps.Telegram.TelegramStore().GetTelegramChatID(email); !ok {
 			result += "\n\nNote: Telegram not configured. Use setup_telegram to receive notifications."
 		}
 
@@ -267,7 +268,7 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		uc := usecases.NewListAlertsUseCase(manager.AlertStore(), manager.Logger)
+		uc := usecases.NewListAlertsUseCase(handler.deps.Alerts.AlertStore(), manager.Logger)
 		alertList, err := uc.Execute(ctx, cqrs.GetAlertsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -316,7 +317,7 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		alertID := NewArgParser(args).String("alert_id", "")
 
-		uc := usecases.NewDeleteAlertUseCase(manager.AlertStore(), manager.Logger)
+		uc := usecases.NewDeleteAlertUseCase(handler.deps.Alerts.AlertStore(), manager.Logger)
 		if err := uc.Execute(ctx, cqrs.DeleteAlertCommand{Email: email, AlertID: alertID}); err != nil {
 			handler.trackToolError(ctx, "delete_alert", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil

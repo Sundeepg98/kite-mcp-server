@@ -25,12 +25,13 @@ func (*PaperTradingToggleTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
 			return gomcp.NewToolResultError("Not authenticated"), nil
 		}
-		engine := manager.PaperEngine()
+		engine := handler.deps.Paper.PaperEngine()
 		if engine == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
@@ -63,12 +64,13 @@ func (*PaperTradingStatusTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
 			return gomcp.NewToolResultError("Not authenticated"), nil
 		}
-		engine := manager.PaperEngine()
+		engine := handler.deps.Paper.PaperEngine()
 		if engine == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
@@ -98,12 +100,13 @@ func (*PaperTradingResetTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
 			return gomcp.NewToolResultError("Not authenticated"), nil
 		}
-		engine := manager.PaperEngine()
+		engine := handler.deps.Paper.PaperEngine()
 		if engine == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}

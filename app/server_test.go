@@ -2598,15 +2598,14 @@ func TestInitializeServices_Error(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 	t.Setenv("ADMIN_EMAILS", "")
+	t.Setenv("ALERT_DB_PATH", "")
 
 	app := NewApp(testLogger())
 	app.DevMode = false
 
 	_, _, err := app.initializeServices()
-	// Without credentials and without DevMode, kc.New should fail
-	if err != nil {
-		assert.Contains(t, err.Error(), "failed to create Kite Connect manager")
-	}
+	// Without credentials/audit DB in production, initializeServices must fail.
+	require.Error(t, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -3395,8 +3394,8 @@ func TestInitializeServices_ProdMode(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "test_secret")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
+	t.Setenv("ALERT_DB_PATH", ":memory:")
+	t.Setenv("OAUTH_JWT_SECRET", "jwt-secret-that-is-at-least-32-chars-long")
 
 	app := NewApp(testLogger())
 	app.DevMode = false
@@ -5748,6 +5747,7 @@ func TestInitializeServices_WithAdminEmails(t *testing.T) {
 		AppMode:        ModeHTTP,
 		AppPort:        "0",
 		AdminEmails:    "admin@test.com,admin2@test.com",
+		AlertDBPath:    ":memory:",
 	}
 
 	mgr, mcpSrv, err := app.initializeServices()

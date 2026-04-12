@@ -53,7 +53,7 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
 		}
 
-		uc := usecases.NewCreateWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewCreateWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 		result, err := uc.Execute(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
 		if err != nil {
 			handler.trackToolError(ctx, "create_watchlist", "create_error")
@@ -102,7 +102,7 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		uc := usecases.NewDeleteWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewDeleteWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 		result, err := uc.Execute(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
@@ -175,7 +175,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("No valid instruments provided. Use exchange:symbol format (e.g. 'NSE:RELIANCE')."), nil
 		}
 
-		uc := usecases.NewAddToWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewAddToWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 
 		var added, failed []string
 		for _, instID := range instruments {
@@ -279,7 +279,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError("No items specified"), nil
 		}
 
-		uc := usecases.NewRemoveFromWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewRemoveFromWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 
 		var removed, failed []string
 		for _, ref := range refs {
@@ -288,7 +288,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			if strings.Contains(ref, ":") {
 				parts := strings.SplitN(ref, ":", 2)
 				if len(parts) == 2 {
-					found := manager.WatchlistStore().FindItemBySymbol(wl.ID, parts[0], parts[1])
+					found := handler.deps.Watchlist.WatchlistStore().FindItemBySymbol(wl.ID, parts[0], parts[1])
 					if found != nil {
 						itemID = found.ID
 					} else {
@@ -369,7 +369,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		uc := usecases.NewGetWatchlistUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewGetWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 		items, err := uc.Execute(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "get_watchlist", "get_error")
@@ -504,7 +504,7 @@ func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		uc := usecases.NewListWatchlistsUseCase(manager.WatchlistStore(), manager.Logger)
+		uc := usecases.NewListWatchlistsUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
 		result, err := uc.Execute(ctx, cqrs.ListWatchlistsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
