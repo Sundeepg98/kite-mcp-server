@@ -48,6 +48,9 @@ package papertrading
 //   Covered by TestHandleCloseAllPositions_ShortPositions (coverage_push_test.go).
 // Lines 175: `qty == 0` continue path.
 //   Covered by TestHandleCloseAllPositions_SkipsZeroQuantity (push100_test.go).
+// Lines 186-191: `PlaceOrder err` during close-all.
+//   Covered by TestHandleCloseAllPositions_DisabledAccount (push100_test.go).
+//   Disables account after creating position → PlaceOrder fails with "not enabled".
 //
 // ===========================================================================
 // monitor.go:147 — fill (83.3%)
@@ -86,7 +89,7 @@ package papertrading
 //
 // Uncovered lines fall into:
 //   1. DB failure paths in sequential operations (engine, monitor, store)
-//      - engine.go:206-208 InsertOrder error (OPEN LIMIT)
+//      - engine.go:257-259 UpdateCashBalance error (fillOrder)
 //      - engine.go:466-468 UpdateOrderStatus error (ModifyOrder fill)
 //      - engine.go:479-481 ExecInsert UPDATE error (ModifyOrder)
 //      - engine.go:498-500 UpdateOrderStatus error (CancelOrder)

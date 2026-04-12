@@ -179,3 +179,36 @@ func TestHandleCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 	// Should have results (for the RELIANCE close), but the SBIN zero-qty was skipped
 	assert.NotNil(t, result)
 }
+
+// ---------------------------------------------------------------------------
+// handleCloseAllPositions — PlaceOrder error from disabled account (line 186)
+//
+// Create a real position, then disable the account. handleCloseAllPositions
+// still finds positions via GetPositions, but PlaceOrder fails with
+// "paper trading is not enabled" → hits the error branch at line 186.
+// ---------------------------------------------------------------------------
+
+func TestHandleCloseAllPositions_DisabledAccount(t *testing.T) {
+	engine := newTestEngine(t, map[string]float64{"NSE:SBIN": 500})
+	require.NoError(t, engine.Enable(push100Email, 1_000_000))
+
+	// Create a real position
+	_, err := engine.PlaceOrder(push100Email, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "SBIN",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	// Disable the account — positions remain in DB, but PlaceOrder will fail
+	require.NoError(t, engine.Disable(push100Email))
+
+	result, err := handleCloseAllPositions(engine, push100Email)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	// Result should contain error entries for each position
+	assert.False(t, result.IsError) // wrapper succeeds, individual errors inside
+}

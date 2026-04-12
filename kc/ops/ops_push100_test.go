@@ -1860,3 +1860,1713 @@ func TestPush100_RenderUserFragment_AlertsActive(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, result, "TCS")
 }
+
+// ===========================================================================
+// DashboardHandler helpers for push100 tests
+// ===========================================================================
+
+// newPush100Dashboard creates a DashboardHandler with audit store for API tests.
+func newPush100Dashboard(t *testing.T) (*DashboardHandler, *kc.Manager) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(devNull{}, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	instrMgr, err := instruments.New(instruments.Config{
+		Logger:   logger,
+		TestData: map[uint32]*instruments.Instrument{},
+	})
+	require.NoError(t, err)
+
+	mgr, err := kc.New(kc.Config{
+		APIKey:             "test_api_key",
+		APISecret:          "test_api_secret",
+		Logger:             logger,
+		DevMode:            true,
+		InstrumentsManager: instrMgr,
+		AlertDBPath:        ":memory:",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { mgr.Shutdown() })
+
+	auditStore := audit.New(mgr.AlertDB())
+	auditStore.SetLogger(logger)
+	_ = auditStore.InitTable()
+
+	d := NewDashboardHandler(mgr, logger, auditStore)
+	d.SetAdminCheck(func(email string) bool { return email == "admin@test.com" })
+	return d, mgr
+}
+
+func push100DashReq(method, target, email string) *http.Request {
+	req := httptest.NewRequest(method, target, nil)
+	if email != "" {
+		req = req.WithContext(oauth.ContextWithEmail(req.Context(), email))
+	}
+	return req
+}
+
+func push100DashReqBody(method, target, email, body string) *http.Request {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if email != "" {
+		req = req.WithContext(oauth.ContextWithEmail(req.Context(), email))
+	}
+	return req
+}
+
+// ===========================================================================
+// dashboard.go: activityAPI — method not allowed, no email, no audit store,
+// full success with filters
+// ===========================================================================
+
+func TestPush100_ActivityAPI_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/activity", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_ActivityAPI_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_ActivityAPI_WithFilters(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Insert test audit entries
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "c1",
+		Email:        "user@test.com",
+		ToolName:     "get_holdings",
+		ToolCategory: "portfolio",
+		StartedAt:    time.Now().Add(-1 * time.Hour),
+		CompletedAt:  time.Now().Add(-1 * time.Hour),
+	})
+
+	since := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	until := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	req := push100DashReq(http.MethodGet,
+		"/dashboard/api/activity?category=portfolio&errors=true&since="+since+"&until="+until+"&limit=5&offset=0",
+		"user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+func TestPush100_ActivityAPI_NoAuditStore(t *testing.T) {
+	t.Parallel()
+	d := newTestDashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: activityExport — CSV, JSON, no email/auditStore
+// ===========================================================================
+
+func TestPush100_ActivityExport_CSV(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "ex1",
+		Email:        "user@test.com",
+		ToolName:     "place_order",
+		ToolCategory: "trading",
+		StartedAt:    time.Now(),
+		CompletedAt:  time.Now(),
+		IsError:      true,
+		ErrorMessage: "rate limited",
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity/export?format=csv", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/csv")
+	assert.Contains(t, rec.Body.String(), "place_order")
+}
+
+func TestPush100_ActivityExport_JSON(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity/export?format=json", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+func TestPush100_ActivityExport_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity/export", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPush100_ActivityExport_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/activity/export", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_ActivityExport_WithTimeRange(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	since := time.Now().Add(-48 * time.Hour).Format(time.RFC3339)
+	until := time.Now().Format(time.RFC3339)
+	req := push100DashReq(http.MethodGet,
+		"/dashboard/api/activity/export?since="+since+"&until="+until+"&category=admin&errors=true",
+		"user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: activityStreamSSE — no email, no audit store
+// ===========================================================================
+
+func TestPush100_ActivityStreamSSE_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/activity/stream", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_ActivityStreamSSE_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity/stream", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_ActivityStreamSSE_NoAuditStore(t *testing.T) {
+	t.Parallel()
+	d := newTestDashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/activity/stream", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_ActivityStreamSSE_CancelledContext(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = oauth.ContextWithEmail(ctx, "user@test.com")
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/api/activity/stream", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(rec, req)
+		close(done)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+	assert.Contains(t, rec.Body.String(), ": connected")
+}
+
+// ===========================================================================
+// dashboard.go: marketIndices — no email, no creds, no token
+// ===========================================================================
+
+func TestPush100_MarketIndices_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/market-indices", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_MarketIndices_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/market-indices", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_MarketIndices_NoCreds(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/market-indices", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "no_credentials")
+}
+
+func TestPush100_MarketIndices_NoToken(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{APIKey: "k", APISecret: "s", StoredAt: time.Now()})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/market-indices", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "no_session")
+}
+
+// ===========================================================================
+// dashboard.go: portfolio — no email, no creds, no token
+// ===========================================================================
+
+func TestPush100_Portfolio_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/portfolio", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_Portfolio_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/portfolio", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_Portfolio_NoCreds(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/portfolio", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_Portfolio_NoToken(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{APIKey: "k", APISecret: "s", StoredAt: time.Now()})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/portfolio", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: ordersAPI — method not allowed, no email, no audit store,
+// with since param, with audit data
+// ===========================================================================
+
+func TestPush100_OrdersAPI_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/orders", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_OrdersAPI_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/orders", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_OrdersAPI_NoAuditStore(t *testing.T) {
+	t.Parallel()
+	d := newTestDashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/orders", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestPush100_OrdersAPI_WithSinceParam(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	since := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	req := push100DashReq(http.MethodGet, "/dashboard/api/orders?since="+since, "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestPush100_OrdersAPI_WithAuditData(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "ord1",
+		Email:        "user@test.com",
+		ToolName:     "place_order",
+		ToolCategory: "trading",
+		OrderID:      "ORD-100",
+		InputParams:  `{"tradingsymbol":"INFY","exchange":"NSE","transaction_type":"BUY","order_type":"MARKET","quantity":10}`,
+		StartedAt:    time.Now(),
+		CompletedAt:  time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/orders", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "INFY")
+}
+
+// ===========================================================================
+// dashboard.go: pnlChartAPI — no alertDB, with data, period clamping
+// ===========================================================================
+
+func TestPush100_PnlChartAPI_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/pnl-chart", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_PnlChartAPI_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/pnl-chart", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_PnlChartAPI_SuccessEmpty(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/pnl-chart?period=30", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "points")
+}
+
+func TestPush100_PnlChartAPI_PeriodClamp(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Period > 365 gets clamped
+	req := push100DashReq(http.MethodGet, "/dashboard/api/pnl-chart?period=999", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	assert.LessOrEqual(t, resp["period"], float64(365))
+}
+
+// ===========================================================================
+// dashboard.go: orderAttributionAPI — missing order_id, no audit store, success
+// ===========================================================================
+
+func TestPush100_OrderAttribution_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/order-attribution?order_id=ORD-1", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_OrderAttribution_MissingOrderID(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/order-attribution", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPush100_OrderAttribution_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/order-attribution?order_id=ORD-1", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_OrderAttribution_Success(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Record an attribution
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "attr1",
+		Email:        "user@test.com",
+		ToolName:     "place_order",
+		ToolCategory: "trading",
+		OrderID:      "ORD-99",
+		StartedAt:    time.Now(),
+		CompletedAt:  time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/order-attribution?order_id=ORD-99", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ORD-99")
+}
+
+// ===========================================================================
+// dashboard.go: alertsEnrichedAPI — DELETE, GET
+// ===========================================================================
+
+func TestPush100_AlertsEnriched_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/alerts-enriched", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_AlertsEnriched_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/alerts-enriched", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_AlertsEnriched_DeleteNoAlertID(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodDelete, "/dashboard/api/alerts-enriched", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPush100_AlertsEnriched_DeleteSuccess(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	alertID, _ := mgr.AlertStore().Add("user@test.com", "INFY", "NSE", 256265, 1600, alerts.DirectionAbove)
+
+	req := push100DashReq(http.MethodDelete, "/dashboard/api/alerts-enriched?alert_id="+alertID, "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ok")
+}
+
+func TestPush100_AlertsEnriched_GetWithAlerts(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	_, _ = mgr.AlertStore().Add("user@test.com", "RELIANCE", "NSE", 408065, 2500, alerts.DirectionAbove)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/alerts-enriched", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "RELIANCE")
+}
+
+// ===========================================================================
+// dashboard.go: paper endpoints — no engine, success
+// ===========================================================================
+
+func TestPush100_PaperStatus_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/paper/status", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_PaperStatus_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/status", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_PaperStatus_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/status", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_PaperStatus_Success(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	paperStore := papertrading.NewStore(mgr.AlertDB(), slog.Default())
+	require.NoError(t, paperStore.InitTables())
+	pe := papertrading.NewEngine(paperStore, slog.Default())
+	mgr.SetPaperEngine(pe)
+	_ = pe.Enable("user@test.com", 10000000)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/status", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestPush100_PaperHoldings_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/holdings", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_PaperHoldings_Success(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	paperStore := papertrading.NewStore(mgr.AlertDB(), slog.Default())
+	require.NoError(t, paperStore.InitTables())
+	pe := papertrading.NewEngine(paperStore, slog.Default())
+	mgr.SetPaperEngine(pe)
+	_ = pe.Enable("user@test.com", 10000000)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/holdings", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestPush100_PaperPositions_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/positions", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_PaperOrders_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/orders", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_PaperReset_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper/reset", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_PaperReset_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/paper/reset", "user@test.com", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestPush100_PaperReset_Success(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	paperStore := papertrading.NewStore(mgr.AlertDB(), slog.Default())
+	require.NoError(t, paperStore.InitTables())
+	pe := papertrading.NewEngine(paperStore, slog.Default())
+	mgr.SetPaperEngine(pe)
+	_ = pe.Enable("user@test.com", 10000000)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/paper/reset", "user@test.com", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ok")
+}
+
+// ===========================================================================
+// dashboard.go: selfDeleteAccount — method not allowed, no confirm, success
+// ===========================================================================
+
+func TestPush100_SelfDeleteAccount_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/account/delete", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_SelfDeleteAccount_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/account/delete", "", `{"confirm":true}`)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_SelfDeleteAccount_NoConfirm(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/account/delete", "user@test.com", `{"confirm":false}`)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPush100_SelfDeleteAccount_Success(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Seed some data
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{APIKey: "k", APISecret: "s", StoredAt: time.Now()})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{AccessToken: "t", StoredAt: time.Now()})
+	_, _ = mgr.AlertStore().Add("user@test.com", "INFY", "NSE", 256265, 1600, alerts.DirectionAbove)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/account/delete", "user@test.com", `{"confirm":true}`)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Account deleted")
+
+	// Verify data was cleaned up
+	_, hasCreds := mgr.CredentialStore().Get("user@test.com")
+	assert.False(t, hasCreds)
+	_, hasToken := mgr.TokenStore().Get("user@test.com")
+	assert.False(t, hasToken)
+}
+
+func TestPush100_SelfDeleteAccount_WithPaperEngine(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	paperStore := papertrading.NewStore(mgr.AlertDB(), slog.Default())
+	require.NoError(t, paperStore.InitTables())
+	pe := papertrading.NewEngine(paperStore, slog.Default())
+	mgr.SetPaperEngine(pe)
+	_ = pe.Enable("user@test.com", 10000000)
+
+	req := push100DashReqBody(http.MethodPost, "/dashboard/api/account/delete", "user@test.com", `{"confirm":true}`)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: sectorExposureAPI — no email, no creds, no token
+// ===========================================================================
+
+func TestPush100_SectorExposure_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/sector-exposure", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_SectorExposure_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/sector-exposure", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_SectorExposure_NoCreds(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/sector-exposure", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: taxAnalysisAPI — no email, no creds, no token
+// ===========================================================================
+
+func TestPush100_TaxAnalysis_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/tax-analysis", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_TaxAnalysis_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/tax-analysis", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush100_TaxAnalysis_NoCreds(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/tax-analysis", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: alerts API — method not allowed, no email, success
+// ===========================================================================
+
+func TestPush100_AlertsAPI_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/alerts", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_AlertsAPI_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/alerts", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: status API
+// ===========================================================================
+
+func TestPush100_StatusAPI_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodPost, "/dashboard/api/status", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: verifyChain — success, no audit store, method not allowed
+// ===========================================================================
+
+func TestPush100_VerifyChain_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/verify-chain", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_VerifyChain_NoAuditStore(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandler(t) // nil audit store
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodGet, "/admin/ops/api/verify-chain", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	// Will get 403 because nil userStore means isAdmin returns false
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestPush100_VerifyChain_Success(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodGet, "/admin/ops/api/verify-chain", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: listUsers — success
+// ===========================================================================
+
+func TestPush100_ListUsers_Success(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodGet, "/admin/ops/api/users", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "admin@test.com")
+}
+
+func TestPush100_ListUsers_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/users", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: suspendUser/activateUser — success paths
+// ===========================================================================
+
+func TestPush100_SuspendUser_Success(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	h.userStore.EnsureUser("target@test.com", "", "", "")
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/users/suspend?email=target@test.com", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ok")
+}
+
+func TestPush100_ActivateUser_Success(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	h.userStore.EnsureUser("target@test.com", "", "", "")
+	_ = h.userStore.UpdateStatus("target@test.com", "suspended")
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/users/activate?email=target@test.com", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ok")
+}
+
+func TestPush100_SuspendUser_SelfSuspend(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/users/suspend?email=admin@test.com", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPush100_SuspendUser_NoEmail(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/users/suspend", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: metricsFragment — all period variants
+// ===========================================================================
+
+func TestPush100_MetricsFragment_1hPeriod(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodGet, "/admin/ops/api/metrics-fragment?period=1h", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+}
+
+func TestPush100_MetricsFragment_DefaultPeriod(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodGet, "/admin/ops/api/metrics-fragment", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestPush100_MetricsFragment_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/metrics-fragment", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: logStream — backfill, keepalive, cancel
+// ===========================================================================
+
+func TestPush100_LogStream_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	req := push100AdminReq(http.MethodPost, "/admin/ops/api/logs", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestPush100_LogStream_Backfill(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	// Add some log entries to the buffer
+	h.logBuffer.Add(LogEntry{Time: time.Now(), Level: "INFO", Message: "test entry"})
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = oauth.ContextWithEmail(ctx, "admin@test.com")
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/api/logs", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(rec, req)
+		close(done)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+}
+
+// ===========================================================================
+// handler.go: logAdminAction — nil audit store path
+// ===========================================================================
+
+func TestPush100_LogAdminAction_NilAuditStore(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandler(t) // nil audit store
+	// Just call directly — should not panic
+	h.logAdminAction("admin@test.com", "test_action", "target@test.com")
+}
+
+// ===========================================================================
+// handler.go: overviewStream — cancel context
+// ===========================================================================
+
+func TestPush100_OverviewStream_Cancel(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, noopAuth)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = oauth.ContextWithEmail(ctx, "admin@test.com")
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/api/overview-stream", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(rec, req)
+		close(done)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+	// Should have sent at least one event
+	body := rec.Body.String()
+	assert.Contains(t, body, "event:")
+}
+
+// ===========================================================================
+// dashboard.go: RegisterRoutes — static file serving and billing no-store branch
+// ===========================================================================
+
+func TestPush100_StaticCSS(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/dashboard-base.css", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/css")
+}
+
+func TestPush100_StaticHTMX(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/htmx.min.js", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "javascript")
+}
+
+// ===========================================================================
+// dashboard.go: writeJSON encode error path
+// ===========================================================================
+
+func TestPush100_WriteJSON_EncodeError(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	rec := httptest.NewRecorder()
+	// func() is not JSON-encodable, triggers the error path
+	d.writeJSON(rec, map[string]interface{}{"fn": func() {}})
+	// Should still set Content-Type even on error
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+// ===========================================================================
+// data.go: buildOverview — per-user view with tokens and credentials
+// ===========================================================================
+
+func TestPush100_BuildOverviewForUser(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	// Seed user data
+	h.manager.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{APIKey: "k", APISecret: "s", StoredAt: time.Now()})
+	h.manager.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{AccessToken: "t", StoredAt: time.Now()})
+	_, _ = h.manager.AlertStore().Add("user@test.com", "INFY", "NSE", 256265, 1600, alerts.DirectionAbove)
+
+	overview := h.buildOverviewForUser("user@test.com")
+	assert.Equal(t, 1, overview.CachedTokens)
+	assert.Equal(t, 1, overview.PerUserCredentials)
+	assert.Equal(t, 1, overview.TotalAlerts)
+	assert.Equal(t, 1, overview.ActiveAlerts)
+}
+
+// ===========================================================================
+// dashboard_templates.go: serveActivityPageSSR — with audit data
+// ===========================================================================
+
+func TestPush100_ServeActivityPageSSR_WithData(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "act1",
+		Email:        "user@test.com",
+		ToolName:     "get_holdings",
+		ToolCategory: "portfolio",
+		StartedAt:    time.Now(),
+		CompletedAt:  time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/activity", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard_templates.go: serveAlertsPageSSR — with triggered alerts
+// ===========================================================================
+
+func TestPush100_ServeAlertsPageSSR_WithTriggered(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	alertID, _ := mgr.AlertStore().Add("user@test.com", "TCS", "NSE", 0, 3500, alerts.DirectionAbove)
+	_ = mgr.AlertStore().MarkTriggered(alertID, 3550)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/alerts", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard_templates.go: servePortfolioPage — no email redirect
+// ===========================================================================
+
+func TestPush100_ServePortfolioPage_NoEmail(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard", "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	// Renders a page even with empty email (status card data will be empty)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard_templates.go: servePaperFragment — various branches
+// ===========================================================================
+
+func TestPush100_ServePaperFragment_NoEngine(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/paper-fragment", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard_templates.go: servePortfolioFragment — without creds
+// ===========================================================================
+
+func TestPush100_ServePortfolioFragment_NoCreds(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/portfolio-fragment", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// dashboard_templates.go: serveSafetyFragment
+// ===========================================================================
+
+// ===========================================================================
+// dashboard.go: ordersAPI — with creds/tokens (Kite client created, API fails)
+// ===========================================================================
+
+func TestPush100_OrdersAPI_WithCredsButKiteFails(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Record an order in audit trail
+	_ = d.auditStore.Record(&audit.ToolCall{
+		CallID:       "kiteord1",
+		Email:        "user@test.com",
+		ToolName:     "place_order",
+		ToolCategory: "trading",
+		OrderID:      "ORD-200",
+		InputParams:  `{"tradingsymbol":"TCS","exchange":"NSE","transaction_type":"BUY","order_type":"LIMIT","quantity":5}`,
+		StartedAt:    time.Now(),
+		CompletedAt:  time.Now(),
+	})
+
+	// Set up creds+token so the handler creates a Kite client (which will fail since no real API)
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/orders", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	// Should still return 200 (order entries with error field set)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "TCS")
+}
+
+// ===========================================================================
+// dashboard.go: portfolio — with creds+token (Kite fails)
+// ===========================================================================
+
+func TestPush100_Portfolio_WithCredsKiteFails(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/portfolio", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	// Kite API returns error — handler returns 502
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: marketIndices — with creds+token (Kite fails)
+// ===========================================================================
+
+func TestPush100_MarketIndices_WithCredsKiteFails(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/market-indices", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: sectorExposureAPI — with creds+token (Kite fails)
+// ===========================================================================
+
+func TestPush100_SectorExposure_WithCredsKiteFails(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/sector-exposure", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: taxAnalysisAPI — with creds+token (Kite fails)
+// ===========================================================================
+
+func TestPush100_TaxAnalysis_WithCredsKiteFails(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/tax-analysis", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+// ===========================================================================
+// dashboard.go: alertsEnrichedAPI — with creds (Kite LTP fails gracefully)
+// ===========================================================================
+
+func TestPush100_AlertsEnriched_WithCredsAndAlerts(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.CredentialStore().Set("user@test.com", &kc.KiteCredentialEntry{
+		APIKey: "test_key", APISecret: "test_secret", StoredAt: time.Now(),
+	})
+	mgr.TokenStore().Set("user@test.com", &kc.KiteTokenEntry{
+		AccessToken: "test_token", StoredAt: time.Now(),
+	})
+
+	// Add active and triggered alerts
+	_, _ = mgr.AlertStore().Add("user@test.com", "INFY", "NSE", 256265, 1600, alerts.DirectionAbove)
+	alertID2, _ := mgr.AlertStore().Add("user@test.com", "TCS", "NSE", 0, 3500, alerts.DirectionAbove)
+	_ = mgr.AlertStore().MarkTriggered(alertID2, 3550)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/alerts-enriched", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "INFY")
+	assert.Contains(t, rec.Body.String(), "TCS")
+}
+
+// ===========================================================================
+// dashboard.go: alerts — with data
+// ===========================================================================
+
+func TestPush100_AlertsAPI_WithAlerts(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	_, _ = mgr.AlertStore().Add("user@test.com", "RELIANCE", "NSE", 0, 2500, alerts.DirectionAbove)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/alerts", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "RELIANCE")
+}
+
+// ===========================================================================
+// dashboard.go: status — success
+// ===========================================================================
+
+func TestPush100_StatusAPI_Success(t *testing.T) {
+	t.Parallel()
+	d, _ := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/status", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ===========================================================================
+// handler.go: writeJSON and writeJSONError encode error path
+// ===========================================================================
+
+func TestPush100_Handler_WriteJSON_EncodeError(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	rec := httptest.NewRecorder()
+	h.writeJSON(rec, map[string]interface{}{"fn": func() {}})
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+func TestPush100_Handler_WriteJSONError(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+	rec := httptest.NewRecorder()
+	h.writeJSONError(rec, http.StatusBadRequest, "test error msg")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "test error msg")
+}
+
+// ===========================================================================
+// data.go: buildOverview — admin sees global counts
+// ===========================================================================
+
+func TestPush100_BuildOverview_Admin(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	// Seed alerts
+	_, _ = h.manager.AlertStore().Add("user@test.com", "INFY", "NSE", 256265, 1600, alerts.DirectionAbove)
+
+	overview := h.buildOverview()
+	assert.Equal(t, "test-v1", overview.Version)
+	assert.GreaterOrEqual(t, overview.TotalAlerts, 1)
+}
+
+// ===========================================================================
+// data.go: buildSessions — with real sessions containing KiteSessionData
+// ===========================================================================
+
+func TestPush100_BuildSessions_WithData(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	// Create sessions with KiteSessionData
+	sm := h.manager.SessionManager()
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "user1@test.com"})
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "user2@test.com"})
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: ""}) // orphan session — should be skipped
+
+	sessions := h.buildSessions()
+	assert.Equal(t, 2, len(sessions))
+	emails := map[string]bool{}
+	for _, s := range sessions {
+		emails[s.Email] = true
+	}
+	assert.True(t, emails["user1@test.com"])
+	assert.True(t, emails["user2@test.com"])
+}
+
+func TestPush100_BuildSessionsForUser(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	sm := h.manager.SessionManager()
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "target@test.com"})
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "other@test.com"})
+
+	sessions := h.buildSessionsForUser("target@test.com")
+	assert.Equal(t, 1, len(sessions))
+	assert.Equal(t, "target@test.com", sessions[0].Email)
+}
+
+func TestPush100_BuildTickersForUser(t *testing.T) {
+	t.Parallel()
+	h := newPush100OpsHandlerFull(t)
+
+	tickers := h.buildTickersForUser("user@test.com")
+	assert.Equal(t, 0, len(tickers.Tickers))
+}
+
+func TestPush100_ServeSafetyFragment(t *testing.T) {
+	t.Parallel()
+	d, mgr := newPush100Dashboard(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	mgr.SetRiskGuard(riskguard.NewGuard(slog.Default()))
+
+	req := push100DashReq(http.MethodGet, "/dashboard/api/safety-fragment", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}

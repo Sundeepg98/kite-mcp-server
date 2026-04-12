@@ -1,7 +1,7 @@
 # app/ Coverage Progress
 
 ## Starting: 80.4% (77.8% if counting the hanging test)
-## Current: 82.2%
+## Current: 83.4%
 
 ## New test file: `app/app_push100_test.go`
 
@@ -14,6 +14,14 @@ Added ~40 tests targeting uncovered lines in:
 - `ExchangeWithCredentials` (registry key replacement, key assignment)
 - `KiteTokenChecker` (all paths: empty email, valid token, expired+creds, suspended, offboarded)
 - Various small functions and adapters
+
+## Test fixes applied (session 2)
+- Fixed 4 tests that called `initializeServices()` hitting real Kite API (429 rate limit)
+- `TestSetupMux_StripeWebhookBillingStore_Push100`: now uses `p100Manager(t)` + manual billing store
+- `TestInitializeServices_TemplateInitSuccess_Push100`: now tests `initStatusPageTemplate()` directly
+- `TestInitializeServices_DomainEvents_Push100`: now uses `p100Manager(t)` + manual event wiring
+- `TestInitializeServices_FamilyInvitation_Push100`: now uses `p100Manager(t)` + manual invitation store
+- All 35 Push100 tests pass (10.8s total)
 
 ## Build fixes applied
 - `mcp/paper_tools.go`: removed unused `fmt` import

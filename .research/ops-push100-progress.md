@@ -1,87 +1,61 @@
 # ops-push100 Coverage Push Progress
 
-## Status: COMPLETE (go vet clean)
+## Status: COMPLETE (go vet clean, all tests pass, 90.0% coverage)
+
+## Coverage: 89.4% -> 90.0%
 
 ## File Created
-- `kc/ops/ops_push100_test.go` — 101 test functions, ~1850 lines
+- `kc/ops/ops_push100_test.go` — 205 test functions, ~3572 lines
 
-## Coverage Targets Hit
+## What was tested (second pass)
 
-### handler.go
-- freezeTradingGlobal success path (line 697-732)
-- freezeTradingGlobal empty reason defaulted
-- Nil userStore returns 403 (dead code path — isAdmin blocks first)
-- OffboardUser admin success with full cleanup
-- OffboardUser invalid JSON
-- ChangeRole invalid JSON
-- ChangeRole user not found
-- Credentials POST auto-register new key
-- Credentials GET long secret truncation
-- truncKey short/exact length
+### dashboard.go API handlers (all error/guard branches)
+- activityAPI: method not allowed, no email, no audit store, with filters
+- activityExport: CSV, JSON, no email, method not allowed, with time range
+- activityStreamSSE: method not allowed, no email, no audit store, cancelled context
+- marketIndices: method not allowed, no email, no creds, no token, with creds (Kite API fails -> 502)
+- portfolio: method not allowed, no email, no creds, no token, with creds (Kite fails)
+- ordersAPI: method not allowed, no email, no audit store, with since param, with audit data, with creds
+- pnlChartAPI: method not allowed, no email, success empty, period clamp
+- orderAttributionAPI: no email, missing order_id, method not allowed, success with audit data
+- alertsEnrichedAPI: no email, method not allowed, DELETE no alert_id/success, GET with alerts, GET with creds+alerts
+- alerts: method not allowed, no email, with alerts data
+- status: method not allowed, success
+- paper endpoints: method not allowed, no email, no engine, success with engine
+- sectorExposure/taxAnalysis: method not allowed, no email, no creds, with creds (Kite fails)
+- selfDeleteAccount: method not allowed, no email, no confirm, success, with paper engine
+- RegisterRoutes: static CSS, htmx static files
+- writeJSON/writeJSONError encode error paths
 
-### user_render.go
-- ordersToStatsData: no P&L, win rate, negative P&L
-- ordersToTableData: sell side, nil optionals, trigger pending, rejected, cancelled, unknown status
-- alertsToStatsData: nil nearest, with nearest, empty avg time
-- alertsToActiveData: with distance, high distance
-- alertsToTriggeredData: with notification, empty notification
-- marketIndicesToBarData: negative change
-- portfolioToStatsData: ticker running, zero current value
-- pnlDisplayClass: zero value
-- fmtINR: exact 3 digits, 4 digits, negative small, zero, negative large
-- fmtINRShort: exactly lakh, exactly thousand, below thousand, negative lakh
-- fmtTimeDDMon, fmtTimeHMS: non-zero
-- barClass/distanceClass: all boundaries
-- boolClass: true/false
-- Fragment templates: orders table, alerts active
-- usersToTemplateData: suspended and offboarded users
+### handler.go admin handlers
+- verifyChain: success, method not allowed, no audit store
+- listUsers: success, method not allowed
+- suspendUser/activateUser: success, self-suspend, no email
+- metricsFragment: 1h/default/method not allowed periods
+- logStream: method not allowed, backfill with cancel
+- logAdminAction: nil audit store
+- overviewStream: cancel context
 
-### admin_render.go
-- metricsToTemplateData: nil stats, zero total calls
-- formatInt: small, with commas
-- formatFloat: decimal
-- getCatColor: all known categories
-- getCatLabel: all known categories
+### data.go builders
+- buildSessions: with KiteSessionData, orphan sessions skipped
+- buildSessionsForUser: filtered by email
+- buildTickersForUser: empty result
+- buildOverview: admin global counts
+- buildOverviewForUser: with creds/tokens/alerts
 
-### dashboard.go / dashboard_templates.go
-- serveBillingPage: Pro/Premium/PastDue/Canceled/Free/FamilyMember
-- tierDisplayName: all tiers
-- serveSafetyPageSSR: with RiskGuard
-- servePaperPageSSR: with engine
-- serveAlertsPageSSR: with alerts, no email
-- serveOrdersPageSSR: with audit data, no audit store
-- servePageFallback: valid + non-existent
-- paperStatusToBanner: not enabled
-- paperStatusToStats: all zero
-- paperDataToTables: with orders, cancelled, open
-- buildOrderSummary: mixed entries, no P&L
-- buildOrderEntries: nil tool call
-- parseOrderParamsJSON: all fields
-- toFloat: valid string
-- toInt: float64
-- servePage: with full data
+## Coverage Ceiling Analysis (90% -> ceiling)
+Remaining ~10% uncovered is:
+- **Kite API success paths** — ordersAPI enrichment, portfolio response, market indices computation, sector exposure, tax analysis. Dashboard handlers create internal `kiteconnect.New()` with default base URIs; mock injection impossible without refactoring.
+- **Paper engine error paths** from Status/GetHoldings/etc returning errors
+- **JSON encoding error paths** requiring unencodable data through handler paths
+- **Template initialization error paths** (templates are embedded, can't fail in tests)
 
-### overview_sse.go
-- sendAllAdminEvents: with populated data
-- logStream: cancelled during stream
-
-### logbuffer.go
-- TeeHandler: WithAttrs, WithGroup, Handle
-- LogBuffer: multiple listeners, ring buffer wrap around
-
-### safety render
-- safetyToFreezeData: frozen, frozen zero time, disabled with custom message
-- safetyToLimitsData: full utilization, low utilization, zero limits
-- safetyToSEBIData: mixed bools
-
-### metrics API
-- 30d period
-- 7d period
-
-## Dead Code Identified
-- Nil userStore guards inside suspendUser/activateUser/offboardUser/changeRole (lines ~540, ~570, ~610, ~670 in handler.go) are unreachable because `isAdmin()` returns false when userStore is nil (line 83-84), blocking execution before reaching those guards. Tests verify the 403 Forbidden response instead.
+## Dead Code
+Nil userStore guards inside suspendUser/activateUser/offboardUser/changeRole are unreachable — `isAdmin()` returns false when userStore is nil.
 
 ## Helpers
 - `newPush100OpsHandler(t)` — minimal handler with nil userStore
-- `newPush100OpsHandlerFull(t)` — full handler with userStore, auditStore, alertStore, riskguard, papertrading engine
-- `push100AdminReq(method, path, body)` — creates request with admin email in OAuth context
+- `newPush100OpsHandlerFull(t)` — full handler with all stores
+- `newPush100Dashboard(t)` — DashboardHandler with audit store
+- `push100AdminReq(method, path, body)` — admin OAuth context
+- `push100DashReq(method, target, email)` — dashboard OAuth context

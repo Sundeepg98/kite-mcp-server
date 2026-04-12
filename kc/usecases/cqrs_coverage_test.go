@@ -10,6 +10,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -776,4 +778,51 @@ func TestGetWatchlist_EmptyID(t *testing.T) {
 	uc := NewGetWatchlistUseCase(&mockWatchlistStore{}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWatchlistQuery{Email: "u@t.com"})
 	assert.ErrorContains(t, err, "watchlist_id is required")
+}
+
+// ---------------------------------------------------------------------------
+// pretrade_usecases.go — API error path (lines 91-94)
+// ---------------------------------------------------------------------------
+
+func TestPreTradeCheck_APIErrors(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{
+		ltpErr:     errors.New("ltp fail"),
+		marginsErr: errors.New("margins fail"),
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewPreTradeCheckUseCase(resolver, testLogger())
+	result, err := uc.Execute(context.Background(), cqrs.PreTradeCheckQuery{
+		Email: "u@t.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		TransactionType: "BUY", Product: "CNC", OrderType: "LIMIT",
+		Quantity: 10, Price: 1500,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result.Errors)
+	assert.Contains(t, result.Errors["ltp"], "ltp fail")
+	assert.Contains(t, result.Errors["margins"], "margins fail")
+}
+
+// ---------------------------------------------------------------------------
+// admin_usecases.go — event dispatch path (lines 273-280)
+// ---------------------------------------------------------------------------
+
+func TestAdminSuspendUser_WithEvents(t *testing.T) {
+	t.Parallel()
+	store := newMockUserStore(
+		&users.User{Email: "admin@test.com", Role: users.RoleAdmin, Status: users.StatusActive},
+		&users.User{Email: "trader@test.com", Role: users.RoleTrader, Status: users.StatusActive},
+	)
+	events := domain.NewEventDispatcher()
+	dispatched := false
+	events.Subscribe("user.suspended", func(e domain.Event) {
+		dispatched = true
+	})
+	uc := NewAdminSuspendUserUseCase(store, nil, nil, events, testLogger())
+	result, err := uc.Execute(context.Background(), cqrs.AdminSuspendUserCommand{
+		AdminEmail: "admin@test.com", TargetEmail: "trader@test.com", Reason: "policy",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "suspended", result.Status)
+	assert.True(t, dispatched, "event should have been dispatched")
 }

@@ -1,7 +1,7 @@
 package oauth
 
 // ceil_test.go — coverage ceiling documentation for oauth.
-// Current: 90.6%. Ceiling: ~90.6%.
+// Current: 92.4%. Ceiling: ~92.4%.
 //
 // The oauth package has extensive handler logic for Google SSO, Kite OAuth,
 // browser login forms, admin login, and MCP OAuth token exchange. Many uncovered
@@ -167,5 +167,6 @@ package oauth
 //   6. Multi-audience JWT validation mismatch (logically impossible)
 //   7. Handler state combinations requiring specific browser cookie state
 //
-// Ceiling: ~90.6% (~50 unreachable lines across handlers.go, stores.go,
+// Ceiling: ~92.4% (~39 unreachable blocks across handlers.go, stores.go,
 //   jwt.go, google_sso.go, middleware.go).
+// Improved from 90.6% by push100_test.go and cov_push_test.go.
