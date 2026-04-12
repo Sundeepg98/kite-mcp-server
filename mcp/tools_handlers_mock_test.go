@@ -1,8 +1,8 @@
 package mcp
 
-// tools_push100_test.go — Push mcp/ coverage toward 100% by exercising
-// handler SUCCESS paths (via mock Kite HTTP server), pure functions,
-// prompt handlers, and validation edge cases not yet covered.
+// tools_handlers_mock_test.go — Tests exercising handler SUCCESS paths via
+// a mock Kite HTTP server, pure functions, prompt handlers, and validation
+// edge cases.
 
 import (
 	"context"

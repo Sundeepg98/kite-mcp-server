@@ -892,6 +892,7 @@ func TestExchangeRequestToken_Error(t *testing.T) {
 		credentialStore: credStore,
 		registryStore:   regStore,
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session: fake token rejected"),
 	}
 	_, err := adapter.ExchangeRequestToken("fake-request-token")
 	assert.Error(t, err)
@@ -914,6 +915,7 @@ func TestExchangeWithCredentials_Error(t *testing.T) {
 		credentialStore: credStore,
 		registryStore:   regStore,
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session: fake token rejected"),
 	}
 	_, err := adapter.ExchangeWithCredentials("fake-request-token", "per-user-key", "per-user-secret")
 	assert.Error(t, err)
@@ -1816,6 +1818,7 @@ func TestExchangeRequestToken_EmptyKey(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session: empty key"),
 	}
 	_, err := adapter.ExchangeRequestToken("token")
 	assert.Error(t, err)
@@ -1830,6 +1833,7 @@ func TestExchangeWithCredentials_BadToken(t *testing.T) {
 		registryStore:   registry.New(),
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	_, err := adapter.ExchangeWithCredentials("bad", "pk", "ps")
 	assert.Error(t, err)
@@ -2247,6 +2251,7 @@ func TestExchangeRequestToken_WithUserStore_OffboardedUser(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		userStore:       store,
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session: bad token"),
 	}
 	// Kite API call fails first, but the adapter construction is exercised
 	_, err := adapter.ExchangeRequestToken("bad-token")
@@ -2262,6 +2267,7 @@ func TestExchangeRequestToken_AllFieldsPopulated(t *testing.T) {
 		registryStore:   registry.New(),
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session: bad token"),
 	}
 	_, err := adapter.ExchangeRequestToken("token-with-all-stores")
 	assert.Error(t, err)
@@ -2292,6 +2298,7 @@ func TestExchangeWithCredentials_AllFieldsPopulated(t *testing.T) {
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	// Will fail at Kite API, but exercises the full adapter setup
 	_, err := adapter.ExchangeWithCredentials("bad-token", "per-key-abc", "per-secret")
@@ -2307,6 +2314,7 @@ func TestExchangeWithCredentials_NilRegistryStore(t *testing.T) {
 		registryStore:   nil,
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	_, err := adapter.ExchangeWithCredentials("token", "key", "sec")
 	assert.Error(t, err)

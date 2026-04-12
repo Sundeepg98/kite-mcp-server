@@ -388,12 +388,17 @@ type KiteConnect struct {
 	Client *kiteconnect.Client
 }
 
-// NewKiteConnect creates a new KiteConnect instance
-func NewKiteConnect(apiKey string) *KiteConnect {
-	client := kiteconnect.New(apiKey)
-
+// NewKiteConnect creates a new KiteConnect instance.
+// All SDK instantiation routes through the KiteClientFactory interface.
+func NewKiteConnect(apiKey string, factory ...KiteClientFactory) *KiteConnect {
+	var f KiteClientFactory
+	if len(factory) > 0 && factory[0] != nil {
+		f = factory[0]
+	} else {
+		f = &defaultKiteClientFactory{}
+	}
 	return &KiteConnect{
-		Client: client,
+		Client: f.NewClient(apiKey),
 	}
 }
 

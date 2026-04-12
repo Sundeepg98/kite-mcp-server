@@ -41,6 +41,7 @@ func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) *kiteconne
 	if d.factory != nil {
 		return d.factory.NewClientWithToken(apiKey, accessToken)
 	}
+	// Fallback: create client via SDK directly (same as defaultKiteClientFactory).
 	c := kiteconnect.New(apiKey)
 	c.SetAccessToken(accessToken)
 	return c
