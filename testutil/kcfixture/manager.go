@@ -1,33 +1,36 @@
-package testutil
+// Package kcfixture provides a shared factory for building *kc.Manager
+// instances in tests. It lives in its own package so packages inside kc/ (and
+// its subpackages) can import the base testutil package without creating an
+// import cycle — only packages OUTSIDE the kc tree should import kcfixture.
+package kcfixture
 
 import (
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/testutil"
 )
 
 // Option configures a test Manager.
 type Option func(*managerOpts)
 
 type managerOpts struct {
-	mockKite   *MockKiteServer
-	devMode    bool
-	riskGuard  bool
-	alertDB    string
-	apiKey     string
-	apiSecret  string
-	testData   map[uint32]*instruments.Instrument
+	mockKite  *testutil.MockKiteServer
+	devMode   bool
+	riskGuard bool
+	alertDB   string
+	apiKey    string
+	apiSecret string
+	testData  map[uint32]*instruments.Instrument
 }
 
 // WithMockKite injects a MockKiteServer whose URL will be used as the Kite
 // base URI. Tests that need to exercise real HTTP round-trips through the
 // kiteconnect SDK should use this option.
-func WithMockKite(s *MockKiteServer) Option {
+func WithMockKite(s *testutil.MockKiteServer) Option {
 	return func(o *managerOpts) { o.mockKite = s }
 }
 
@@ -95,11 +98,6 @@ func DefaultTestData() map[uint32]*instruments.Instrument {
 	}
 }
 
-// DiscardLogger returns a slog.Logger that discards all output.
-func DiscardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
 // NewTestManager creates a kc.Manager suitable for tests. It never makes real
 // HTTP calls (instruments are injected via TestData). The manager is
 // automatically shut down when the test finishes.
@@ -119,7 +117,7 @@ func NewTestManager(t *testing.T, opts ...Option) *kc.Manager {
 		td = DefaultTestData()
 	}
 
-	logger := DiscardLogger()
+	logger := testutil.DiscardLogger()
 
 	instCfg := instruments.DefaultUpdateConfig()
 	instCfg.EnableScheduler = false

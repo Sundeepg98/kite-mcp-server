@@ -12,15 +12,31 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
-// UserStore abstracts user persistence for admin use cases.
-type UserStore interface {
+// UserReader provides read-only access to user data (ISP-narrowed).
+type UserReader interface {
 	List() []*users.User
 	Get(email string) (*users.User, bool)
 	Count() int
-	IsAdmin(email string) bool
+}
+
+// UserWriter provides write operations on user data (ISP-narrowed).
+type UserWriter interface {
 	UpdateStatus(email, status string) error
 	UpdateRole(email, role string) error
 	Create(u *users.User) error
+}
+
+// UserAuthChecker provides authentication/authorization checks (ISP-narrowed).
+type UserAuthChecker interface {
+	IsAdmin(email string) bool
+}
+
+// UserStore is the composite interface for use cases that need both reads and writes.
+// Prefer UserReader or UserWriter directly when possible (Interface Segregation Principle).
+type UserStore interface {
+	UserReader
+	UserWriter
+	UserAuthChecker
 }
 
 // RiskGuardService abstracts riskguard for admin use cases.
@@ -44,12 +60,12 @@ type SessionTerminator interface {
 
 // AdminListUsersUseCase retrieves a paginated list of users.
 type AdminListUsersUseCase struct {
-	userStore UserStore
+	userStore UserReader
 	logger    *slog.Logger
 }
 
 // NewAdminListUsersUseCase creates an AdminListUsersUseCase with dependencies injected.
-func NewAdminListUsersUseCase(store UserStore, logger *slog.Logger) *AdminListUsersUseCase {
+func NewAdminListUsersUseCase(store UserReader, logger *slog.Logger) *AdminListUsersUseCase {
 	return &AdminListUsersUseCase{userStore: store, logger: logger}
 }
 
@@ -94,13 +110,13 @@ func (uc *AdminListUsersUseCase) Execute(ctx context.Context, query cqrs.AdminLi
 
 // AdminGetUserUseCase retrieves detailed user information.
 type AdminGetUserUseCase struct {
-	userStore UserStore
+	userStore UserReader
 	riskguard RiskGuardService
 	logger    *slog.Logger
 }
 
 // NewAdminGetUserUseCase creates an AdminGetUserUseCase with dependencies injected.
-func NewAdminGetUserUseCase(store UserStore, rg RiskGuardService, logger *slog.Logger) *AdminGetUserUseCase {
+func NewAdminGetUserUseCase(store UserReader, rg RiskGuardService, logger *slog.Logger) *AdminGetUserUseCase {
 	return &AdminGetUserUseCase{userStore: store, riskguard: rg, logger: logger}
 }
 
@@ -138,12 +154,12 @@ func (uc *AdminGetUserUseCase) Execute(ctx context.Context, query cqrs.AdminGetU
 
 // AdminListFamilyUseCase retrieves all family members.
 type AdminListFamilyUseCase struct {
-	userStore UserStore
+	userStore UserReader
 	logger    *slog.Logger
 }
 
 // NewAdminListFamilyUseCase creates an AdminListFamilyUseCase with dependencies injected.
-func NewAdminListFamilyUseCase(store UserStore, logger *slog.Logger) *AdminListFamilyUseCase {
+func NewAdminListFamilyUseCase(store UserReader, logger *slog.Logger) *AdminListFamilyUseCase {
 	return &AdminListFamilyUseCase{userStore: store, logger: logger}
 }
 
@@ -290,12 +306,12 @@ func (uc *AdminSuspendUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminSu
 
 // AdminActivateUserUseCase reactivates a user account.
 type AdminActivateUserUseCase struct {
-	userStore UserStore
+	userStore UserWriter
 	logger    *slog.Logger
 }
 
 // NewAdminActivateUserUseCase creates an AdminActivateUserUseCase with dependencies injected.
-func NewAdminActivateUserUseCase(store UserStore, logger *slog.Logger) *AdminActivateUserUseCase {
+func NewAdminActivateUserUseCase(store UserWriter, logger *slog.Logger) *AdminActivateUserUseCase {
 	return &AdminActivateUserUseCase{userStore: store, logger: logger}
 }
 

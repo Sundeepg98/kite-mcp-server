@@ -322,6 +322,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 		credAdapter := &briefingCredAdapter{manager: kcManager}
 		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
 		if briefingSvc != nil {
+			briefingSvc.SetKiteClientFactory(kcManager.KiteClientFactory())
 			sched.Add(scheduler.Task{
 				Name:   "morning_briefing",
 				Hour:   9,
@@ -372,6 +373,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 		credAdapter := &briefingCredAdapter{manager: kcManager}
 		pnlService := alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
 		if pnlService != nil {
+			pnlService.SetKiteClientFactory(kcManager.KiteClientFactory())
 			kcManager.SetPnLService(pnlService)
 			sched.Add(scheduler.Task{
 				Name:   "pnl_snapshot",

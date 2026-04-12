@@ -1,12 +1,10 @@
 package kc
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os/exec"
 	"runtime"
@@ -22,8 +20,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
@@ -89,6 +87,14 @@ func New(cfg Config) (*Manager, error) {
 		tokenStore:        NewKiteTokenStore(),
 		credentialStore:   NewKiteCredentialStore(),
 	}
+
+	// Initialize the decomposed facades. They hold a back-pointer to Manager,
+	// so each accessor reads the current field value (no stale snapshot).
+	m.stores = newStoreRegistry(m)
+	m.eventing = newEventingService(m)
+	m.brokers = newBrokerServices(m)
+	m.scheduling = newSchedulingService(m)
+	m.sessionLifecycle = newSessionLifecycleService(m)
 
 	// Initialize alert system: store → notifier → evaluator → ticker
 	m.alertStore = alerts.NewStore(func(alert *alerts.Alert, currentPrice float64) {
@@ -249,8 +255,8 @@ func New(cfg Config) (*Manager, error) {
 
 	// Wire the order modifier: creates a Kite client from cached tokens
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
-		apiKey := m.GetAPIKeyForEmail(email)
-		accessToken := m.GetAccessTokenForEmail(email)
+		apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
+		accessToken := m.credentialSvc.GetAccessTokenForEmail(email)
 		if accessToken == "" {
 			return nil, fmt.Errorf("no Kite access token for %s", email)
 		}
@@ -326,7 +332,7 @@ func New(cfg Config) (*Manager, error) {
 	}
 
 	m.Instruments = instrumentsManager
-	m.initializeSessionManager()
+	m.scheduling.initialize()
 
 	// Initialize session service (uses credential service + session manager)
 	var metricsImpl metricsTracker
@@ -369,7 +375,7 @@ func New(cfg Config) (*Manager, error) {
 	// Wire token rotation observer: when a user's token changes, update their ticker
 	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
 		if m.tickerService.IsRunning(email) {
-			apiKey := m.GetAPIKeyForEmail(email)
+			apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
 			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
 				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
 			} else {
@@ -441,34 +447,41 @@ type Manager struct {
 	alertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
 	familyService     *FamilyService         // family billing (invite, remove, list, tier resolution)
 
-	Instruments    *instruments.Manager
-	sessionManager *SessionRegistry
-	sessionSigner  *SessionSigner
-	tokenStore         *KiteTokenStore           // per-email Kite token cache
-	credentialStore    *KiteCredentialStore      // per-email Kite developer app credentials
-	tickerService      *ticker.Service                // per-user WebSocket ticker connections
-	alertStore         *alerts.Store                  // per-user price alerts
-	alertEvaluator     *alerts.Evaluator              // tick-to-alert matcher
-	trailingStopMgr    *alerts.TrailingStopManager    // trailing stop-loss manager
-	pnlService         *alerts.PnLSnapshotService     // daily P&L snapshots
-	watchlistStore     *watchlist.Store               // per-user watchlists
-	userStore          *users.Store                   // registered users (RBAC, lifecycle)
-	registryStore      *registry.Store                // pre-registered Kite app credentials (key registry)
-	telegramNotifier   *alerts.TelegramNotifier       // Telegram alert sender
-	alertDB            *alerts.DB                     // optional: SQLite persistence for alerts
-	auditStore         *audit.Store                   // optional: audit trail for synthetic events
-	riskGuard          *riskguard.Guard               // optional: financial safety controls
-	paperEngine        *papertrading.PaperEngine      // optional: virtual trading engine
-	billingStore       *billing.Store                 // optional: billing tier enforcement
-	invitationStore    *users.InvitationStore         // optional: family invitation management
-	eventDispatcher    *domain.EventDispatcher        // optional: domain event pub/sub
-	eventStore         *eventsourcing.EventStore      // optional: domain audit log (append-only, not used for state reconstitution)
-	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
-	kiteClientFactory  KiteClientFactory              // creates kiteconnect.Client instances; mockable in tests
-	appMode            string
-	externalURL        string
-	adminSecretPath    string
-	devMode            bool
+	// Decomposed facades over the raw fields below (Task 7 — Manager decomposition)
+	stores           *StoreRegistry           // all persistence stores
+	eventing         *EventingService         // domain event dispatcher + append-only store
+	brokers          *BrokerServices          // kite factory, instruments, ticker, paper, riskguard
+	scheduling       *SchedulingService       // cleanup routines, session cleanup hooks, metrics recording
+	sessionLifecycle *SessionLifecycleService // MCP session lifecycle facade (get/create/clear/complete)
+
+	Instruments       *instruments.Manager
+	sessionManager    *SessionRegistry
+	sessionSigner     *SessionSigner
+	tokenStore        *KiteTokenStore             // per-email Kite token cache
+	credentialStore   *KiteCredentialStore        // per-email Kite developer app credentials
+	tickerService     *ticker.Service             // per-user WebSocket ticker connections
+	alertStore        *alerts.Store               // per-user price alerts
+	alertEvaluator    *alerts.Evaluator           // tick-to-alert matcher
+	trailingStopMgr   *alerts.TrailingStopManager // trailing stop-loss manager
+	pnlService        *alerts.PnLSnapshotService  // daily P&L snapshots
+	watchlistStore    *watchlist.Store            // per-user watchlists
+	userStore         *users.Store                // registered users (RBAC, lifecycle)
+	registryStore     *registry.Store             // pre-registered Kite app credentials (key registry)
+	telegramNotifier  *alerts.TelegramNotifier    // Telegram alert sender
+	alertDB           *alerts.DB                  // optional: SQLite persistence for alerts
+	auditStore        *audit.Store                // optional: audit trail for synthetic events
+	riskGuard         *riskguard.Guard            // optional: financial safety controls
+	paperEngine       *papertrading.PaperEngine   // optional: virtual trading engine
+	billingStore      *billing.Store              // optional: billing tier enforcement
+	invitationStore   *users.InvitationStore      // optional: family invitation management
+	eventDispatcher   *domain.EventDispatcher     // optional: domain event pub/sub
+	eventStore        *eventsourcing.EventStore   // optional: domain audit log (append-only, not used for state reconstitution)
+	mcpServer         any                         // *server.MCPServer — stored as any to avoid circular import
+	kiteClientFactory KiteClientFactory           // creates kiteconnect.Client instances; mockable in tests
+	appMode           string
+	externalURL       string
+	adminSecretPath   string
+	devMode           bool
 }
 
 // NewManager creates a new manager with default configuration.
@@ -587,154 +600,14 @@ func (m *Manager) initializeSessionSigner(customSigner *SessionSigner) error {
 	return nil
 }
 
-// initializeSessionManager sets up the session manager with cleanup hooks
-// initializeSessionManager creates and configures the session manager
-func (m *Manager) initializeSessionManager() {
-	sessionManager := NewSessionRegistry(m.Logger)
-
-	// Add cleanup hook for Kite sessions
-	sessionManager.AddCleanupHook(m.kiteSessionCleanupHook)
-
-	// Start cleanup routine
-	sessionManager.StartCleanupRoutine(context.Background())
-
-	m.sessionManager = sessionManager
-}
-
-// kiteSessionCleanupHook handles cleanup of Kite sessions
-func (m *Manager) kiteSessionCleanupHook(session *MCPSession) {
-	if kiteData, ok := session.Data.(*KiteSessionData); ok && kiteData != nil && kiteData.Kite != nil {
-		m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
-		if _, err := kiteData.Kite.Client.InvalidateAccessToken(); err != nil {
-			m.Logger.Warn("Failed to invalidate access token", "session_id", session.ID, "error", err)
-		}
-	}
-}
-
-// HasPreAuth returns true if the manager has a pre-set access token.
-// Delegates to CredentialService.
-func (m *Manager) HasPreAuth() bool {
-	return m.credentialSvc.HasPreAuth()
-}
-
 // DevMode returns true if the server is running in development mode with mock broker.
 func (m *Manager) DevMode() bool {
 	return m.devMode
 }
 
-// KiteClientFactory returns the factory used to create kiteconnect.Client instances.
-// Callers should use this instead of calling kiteconnect.New() directly so that
-// tests can inject a mock factory that points clients at an httptest server.
-func (m *Manager) KiteClientFactory() KiteClientFactory {
-	return m.kiteClientFactory
-}
-
-// SetKiteClientFactory overrides the default factory. Intended for tests.
-func (m *Manager) SetKiteClientFactory(f KiteClientFactory) {
-	m.kiteClientFactory = f
-}
-
-// HasCachedToken returns true if there's a cached Kite token for the given email.
-// Delegates to CredentialService.
-func (m *Manager) HasCachedToken(email string) bool {
-	return m.credentialSvc.HasCachedToken(email)
-}
-
-// TokenStore returns the per-email token store.
-func (m *Manager) TokenStore() TokenStoreInterface {
-	return m.tokenStore
-}
-
-// TokenStoreConcrete returns the concrete token store (for internal wiring).
-func (m *Manager) TokenStoreConcrete() *KiteTokenStore {
-	return m.tokenStore
-}
-
-// TelegramStore returns the per-user Telegram chat ID store.
-// The underlying alerts.Store satisfies both AlertStoreInterface and TelegramStoreInterface.
-// Delegates to AlertService.
-func (m *Manager) TelegramStore() TelegramStoreInterface {
-	return m.alertSvc.AlertStore()
-}
-
-
-// HasGlobalCredentials returns true if global API key/secret are configured (from env vars).
-// Delegates to CredentialService.
-func (m *Manager) HasGlobalCredentials() bool {
-	return m.credentialSvc.HasGlobalCredentials()
-}
-
-// TickerService returns the per-user WebSocket ticker service.
-func (m *Manager) TickerService() TickerServiceInterface {
-	return m.tickerService
-}
-
-// TickerServiceConcrete returns the concrete ticker service (for internal wiring).
-func (m *Manager) TickerServiceConcrete() *ticker.Service {
-	return m.tickerService
-}
-
-// AlertStore returns the per-user alert store (alert CRUD).
-// Delegates to AlertService.
-func (m *Manager) AlertStore() AlertStoreInterface {
-	return m.alertSvc.AlertStore()
-}
-
-// AlertStoreConcrete returns the concrete alert store (for internal wiring).
-// Delegates to AlertService.
-func (m *Manager) AlertStoreConcrete() *alerts.Store {
-	return m.alertSvc.AlertStore()
-}
-
-// WatchlistStore returns the per-user watchlist store.
-func (m *Manager) WatchlistStore() WatchlistStoreInterface {
-	return m.watchlistStore
-}
-
-// WatchlistStoreConcrete returns the concrete watchlist store (for internal wiring).
-func (m *Manager) WatchlistStoreConcrete() *watchlist.Store {
-	return m.watchlistStore
-}
-
 // APIKey returns the global Kite API key.
 func (m *Manager) APIKey() string {
 	return m.apiKey
-}
-
-// CredentialStore returns the per-email Kite credential store.
-func (m *Manager) CredentialStore() CredentialStoreInterface {
-	return m.credentialStore
-}
-
-// CredentialStoreConcrete returns the concrete credential store (for internal wiring).
-func (m *Manager) CredentialStoreConcrete() *KiteCredentialStore {
-	return m.credentialStore
-}
-
-// UserStore returns the user identity store (RBAC, lifecycle).
-func (m *Manager) UserStore() UserStoreInterface {
-	return m.userStore
-}
-
-// UserStoreConcrete returns the concrete user store (for internal wiring).
-func (m *Manager) UserStoreConcrete() *users.Store {
-	return m.userStore
-}
-
-// RegistryStore returns the key registry store for zero-config onboarding.
-func (m *Manager) RegistryStore() RegistryStoreInterface {
-	return m.registryStore
-}
-
-// RegistryStoreConcrete returns the concrete registry store (for internal wiring).
-func (m *Manager) RegistryStoreConcrete() *registry.Store {
-	return m.registryStore
-}
-
-// AlertDB returns the optional SQLite database used for persistence.
-// Returns nil if no database path was configured.
-func (m *Manager) AlertDB() *alerts.DB {
-	return m.alertDB
 }
 
 // SetMCPServer stores a reference to the MCP server for elicitation support.
@@ -753,262 +626,6 @@ func truncKey(s string, n int) string {
 		return s
 	}
 	return s[:n]
-}
-
-
-// TelegramNotifier returns the Telegram notifier (nil if not configured).
-// Delegates to AlertService.
-func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
-	return m.alertSvc.TelegramNotifier()
-}
-
-// InstrumentsManager returns the instruments manager.
-func (m *Manager) InstrumentsManager() InstrumentManagerInterface {
-	return m.Instruments
-}
-
-// InstrumentsManagerConcrete returns the concrete instruments manager (for internal wiring).
-func (m *Manager) InstrumentsManagerConcrete() *instruments.Manager {
-	return m.Instruments
-}
-
-// IsTokenValid returns true if the user has a cached Kite token that has not expired.
-// Delegates to CredentialService.
-func (m *Manager) IsTokenValid(email string) bool {
-	return m.credentialSvc.IsTokenValid(email)
-}
-
-// TrailingStopManager returns the trailing stop manager (nil if not initialized).
-// Delegates to AlertService.
-func (m *Manager) TrailingStopManager() *alerts.TrailingStopManager {
-	return m.alertSvc.TrailingStopManager()
-}
-
-// PnLService returns the P&L snapshot service (nil if not initialized).
-// Delegates to AlertService.
-func (m *Manager) PnLService() *alerts.PnLSnapshotService {
-	return m.alertSvc.PnLService()
-}
-
-// SetPnLService sets the P&L snapshot service (called from app layer after initialization).
-// Delegates to AlertService.
-func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
-	m.alertSvc.SetPnLService(svc)
-}
-
-// AuditStore returns the audit trail store, or nil if not configured.
-func (m *Manager) AuditStore() AuditStoreInterface {
-	if m.auditStore == nil {
-		return nil
-	}
-	return m.auditStore
-}
-
-// AuditStoreConcrete returns the concrete audit store (for internal wiring).
-func (m *Manager) AuditStoreConcrete() *audit.Store {
-	return m.auditStore
-}
-
-// SetAuditStore wires the audit store into alert trigger and trailing stop
-// modification callbacks so that these events appear in the SSE activity stream.
-func (m *Manager) SetAuditStore(store *audit.Store) {
-	m.auditStore = store
-}
-
-// SetRiskGuard sets the riskguard for financial safety controls.
-func (m *Manager) SetRiskGuard(guard *riskguard.Guard) {
-	m.riskGuard = guard
-}
-
-// RiskGuard returns the riskguard instance, or nil if not configured.
-func (m *Manager) RiskGuard() *riskguard.Guard {
-	return m.riskGuard
-}
-
-// SetPaperEngine sets the paper trading engine.
-func (m *Manager) SetPaperEngine(e *papertrading.PaperEngine) {
-	m.paperEngine = e
-}
-
-// PaperEngine returns the paper trading engine, or nil if not configured.
-func (m *Manager) PaperEngine() PaperEngineInterface {
-	if m.paperEngine == nil {
-		return nil
-	}
-	return m.paperEngine
-}
-
-// PaperEngineConcrete returns the concrete paper engine (for internal wiring).
-func (m *Manager) PaperEngineConcrete() *papertrading.PaperEngine {
-	return m.paperEngine
-}
-
-// SetBillingStore sets the billing store for tier enforcement.
-func (m *Manager) SetBillingStore(store *billing.Store) {
-	m.billingStore = store
-}
-
-// BillingStore returns the billing store, or nil if not configured.
-func (m *Manager) BillingStore() BillingStoreInterface {
-	if m.billingStore == nil {
-		return nil
-	}
-	return m.billingStore
-}
-
-// BillingStoreConcrete returns the concrete billing store (for internal wiring).
-func (m *Manager) BillingStoreConcrete() *billing.Store {
-	return m.billingStore
-}
-
-// SetInvitationStore sets the invitation store for family invite management.
-func (m *Manager) SetInvitationStore(store *users.InvitationStore) {
-	m.invitationStore = store
-}
-
-// InvitationStore returns the invitation store, or nil if not configured.
-func (m *Manager) InvitationStore() *users.InvitationStore {
-	return m.invitationStore
-}
-
-// SetEventDispatcher sets the domain event dispatcher.
-func (m *Manager) SetEventDispatcher(d *domain.EventDispatcher) {
-	m.eventDispatcher = d
-}
-
-// EventDispatcher returns the domain event dispatcher, or nil if not configured.
-func (m *Manager) EventDispatcher() *domain.EventDispatcher {
-	return m.eventDispatcher
-}
-
-// SetEventStore sets the domain audit log (append-only event store).
-func (m *Manager) SetEventStore(s *eventsourcing.EventStore) {
-	m.eventStore = s
-}
-
-// EventStoreConcrete returns the domain audit log, or nil if not configured.
-// Events are written by makeEventPersister but never read for state reconstitution.
-func (m *Manager) EventStoreConcrete() *eventsourcing.EventStore {
-	return m.eventStore
-}
-
-// HasUserCredentials returns true if per-user Kite credentials exist for the given email.
-// Delegates to CredentialService.
-func (m *Manager) HasUserCredentials(email string) bool {
-	return m.credentialSvc.HasUserCredentials(email)
-}
-
-// GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
-// Delegates to CredentialService.
-func (m *Manager) GetAPIKeyForEmail(email string) string {
-	return m.credentialSvc.GetAPIKeyForEmail(email)
-}
-
-// GetAPISecretForEmail returns the API secret: per-user if registered, otherwise global.
-// Delegates to CredentialService.
-func (m *Manager) GetAPISecretForEmail(email string) string {
-	return m.credentialSvc.GetAPISecretForEmail(email)
-}
-
-// GetAccessTokenForEmail returns the cached access token for a given email.
-// Delegates to CredentialService.
-func (m *Manager) GetAccessTokenForEmail(email string) string {
-	return m.credentialSvc.GetAccessTokenForEmail(email)
-}
-
-
-// GetOrCreateSession retrieves an existing Kite session or creates a new one atomically.
-// Delegates to SessionService.
-func (m *Manager) GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error) {
-	return m.sessionSvc.GetOrCreateSession(mcpSessionID)
-}
-
-// GetOrCreateSessionWithEmail retrieves or creates a Kite session with email context.
-// Delegates to SessionService.
-func (m *Manager) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*KiteSessionData, bool, error) {
-	return m.sessionSvc.GetOrCreateSessionWithEmail(mcpSessionID, email)
-}
-
-// GetSession retrieves an existing Kite session by MCP session ID.
-// Delegates to SessionService.
-func (m *Manager) GetSession(mcpSessionID string) (*KiteSessionData, error) {
-	return m.sessionSvc.GetSession(mcpSessionID)
-}
-
-// ClearSession terminates a session, triggering cleanup hooks.
-// Delegates to SessionService.
-func (m *Manager) ClearSession(sessionID string) {
-	m.sessionSvc.ClearSession(sessionID)
-}
-
-// ClearSessionData clears the session data without terminating the session.
-// Delegates to SessionService.
-func (m *Manager) ClearSessionData(sessionID string) error {
-	return m.sessionSvc.ClearSessionData(sessionID)
-}
-
-// GenerateSession creates a new MCP session with Kite data and returns the session ID.
-// Delegates to SessionService.
-func (m *Manager) GenerateSession() string {
-	return m.sessionSvc.GenerateSession()
-}
-
-// SessionLoginURL returns the Kite login URL for the given session.
-// Delegates to SessionService.
-func (m *Manager) SessionLoginURL(mcpSessionID string) (string, error) {
-	return m.sessionSvc.SessionLoginURL(mcpSessionID)
-}
-
-// CompleteSession completes Kite authentication using the request token.
-// Delegates to SessionService.
-func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
-	return m.sessionSvc.CompleteSession(mcpSessionID, kiteRequestToken)
-}
-
-// Session management utility methods
-
-// GetActiveSessionCount returns the number of active sessions.
-// Delegates to SessionService.
-func (m *Manager) GetActiveSessionCount() int {
-	return m.sessionSvc.GetActiveSessionCount()
-}
-
-// CleanupExpiredSessions manually triggers cleanup of expired MCP sessions.
-// Delegates to SessionService.
-func (m *Manager) CleanupExpiredSessions() int {
-	return m.sessionSvc.CleanupExpiredSessions()
-}
-
-// StopCleanupRoutine stops the background cleanup routine.
-// Delegates to SessionService.
-func (m *Manager) StopCleanupRoutine() {
-	m.sessionSvc.StopCleanupRoutine()
-}
-
-// HasMetrics returns true if metrics manager is available
-func (m *Manager) HasMetrics() bool {
-	return m.metrics != nil
-}
-
-// IncrementMetric increments a metric counter by 1
-func (m *Manager) IncrementMetric(key string) {
-	if m.metrics != nil {
-		m.metrics.Increment(key)
-	}
-}
-
-// TrackDailyUser records a unique user interaction for today's counter
-func (m *Manager) TrackDailyUser(userID string) {
-	if m.metrics != nil {
-		m.metrics.TrackDailyUser(userID)
-	}
-}
-
-// IncrementDailyMetric increments a daily metric counter by 1
-func (m *Manager) IncrementDailyMetric(key string) {
-	if m.metrics != nil {
-		m.metrics.IncrementDaily(key)
-	}
 }
 
 // sessionDBAdapter bridges alerts.DB to the SessionDB interface expected by SessionRegistry.
@@ -1070,21 +687,6 @@ func (m *Manager) Shutdown() {
 	m.Logger.Info("Kite manager shutdown complete")
 }
 
-// GetInstrumentsStats returns current instruments update statistics
-func (m *Manager) GetInstrumentsStats() instruments.UpdateStats {
-	return m.Instruments.GetUpdateStats()
-}
-
-// UpdateInstrumentsConfig updates the instruments manager configuration
-func (m *Manager) UpdateInstrumentsConfig(config *instruments.UpdateConfig) {
-	m.Instruments.UpdateConfig(config)
-}
-
-// ForceInstrumentsUpdate forces an immediate instruments update
-func (m *Manager) ForceInstrumentsUpdate() error {
-	return m.Instruments.ForceUpdateInstruments()
-}
-
 // SessionManager returns the MCP session manager instance
 func (m *Manager) SessionManager() *SessionRegistry {
 	return m.sessionManager
@@ -1122,78 +724,5 @@ func setupTemplates() (map[string]*template.Template, error) {
 	return out, nil
 }
 
-// handleCallbackError handles error responses for callback processing.
-// keyvals must be slog-style key-value pairs (e.g. "key", value, "key2", value2).
-func (m *Manager) handleCallbackError(w http.ResponseWriter, message string, statusCode int, logMessage string, keyvals ...any) {
-	m.Logger.Error(logMessage, keyvals...)
-	http.Error(w, message, statusCode)
-}
-
-// HandleKiteCallback returns an HTTP handler for Kite authentication callbacks
-func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		m.Logger.Debug("Received Kite callback request", "url", r.URL.String())
-		requestToken, mcpSessionID, err := m.extractCallbackParams(r)
-		if err != nil {
-			m.handleCallbackError(w, missingParamsMessage, http.StatusBadRequest, "Invalid callback parameters", "error", err)
-			return
-		}
-
-		m.Logger.Debug("Processing Kite callback for MCP session ID", "session_id", mcpSessionID, "request_token", requestToken)
-
-		if err := m.CompleteSession(mcpSessionID, requestToken); err != nil {
-			m.handleCallbackError(w, sessionErrorMessage, http.StatusInternalServerError, "Error completing Kite session", "session_id", mcpSessionID, "error", err)
-			return
-		}
-
-		m.Logger.Info("Kite session completed successfully", "session_id", mcpSessionID)
-
-		if err := m.renderSuccessTemplate(w); err != nil {
-			m.Logger.Error("Template failed to load - this is a fatal error", "error", err)
-			http.Error(w, "Internal server error: template not available", http.StatusInternalServerError)
-			return
-		}
-
-		m.Logger.Info("Kite callback completed successfully", "session_id", mcpSessionID)
-	}
-}
-
-// extractCallbackParams extracts and validates callback parameters with signature verification
-func (m *Manager) extractCallbackParams(r *http.Request) (kiteRequestToken, mcpSessionID string, err error) {
-	qVals := r.URL.Query()
-	kiteRequestToken = qVals.Get("request_token")
-	signedSessionID := qVals.Get("session_id")
-
-	if signedSessionID == "" || kiteRequestToken == "" {
-		return "", "", errors.New("missing required parameters (MCP session_id or Kite request_token)")
-	}
-
-	// Verify the signed session ID
-	mcpSessionID, err = m.sessionSigner.VerifySessionID(signedSessionID)
-	if err != nil {
-		m.Logger.Error("Failed to verify session signature", "error", err)
-		return "", "", fmt.Errorf("invalid or tampered session parameter: %w", err)
-	}
-
-	return kiteRequestToken, mcpSessionID, nil
-}
-
-// TemplateData holds data for template rendering
-type TemplateData struct {
-	Title       string
-	RedirectURL string // optional: used by login_success.html for auto-redirect
-}
-
-// renderSuccessTemplate renders the success page template
-func (m *Manager) renderSuccessTemplate(w http.ResponseWriter) error {
-	templ, ok := m.templates[indexTemplate]
-	if !ok {
-		return errors.New(templateNotFoundError)
-	}
-
-	data := TemplateData{
-		Title: "Login Successful",
-	}
-
-	return templ.ExecuteTemplate(w, "base", data)
-}
+// HandleKiteCallback, handleCallbackError, extractCallbackParams,
+// renderSuccessTemplate, and TemplateData live in callback_handler.go.

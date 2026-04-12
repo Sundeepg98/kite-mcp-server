@@ -62,3 +62,27 @@ func (as *AlertService) PnLService() *alerts.PnLSnapshotService {
 func (as *AlertService) SetPnLService(svc *alerts.PnLSnapshotService) {
 	as.pnlService = svc
 }
+
+// ---------------------------------------------------------------------------
+// Manager-level delegators (thin pass-throughs to m.alertSvc)
+// ---------------------------------------------------------------------------
+
+// TelegramNotifier returns the Telegram alert sender (nil if not configured).
+func (m *Manager) TelegramNotifier() *alerts.TelegramNotifier {
+	return m.alertSvc.TelegramNotifier()
+}
+
+// TrailingStopManager returns the trailing stop-loss manager.
+func (m *Manager) TrailingStopManager() *alerts.TrailingStopManager {
+	return m.alertSvc.TrailingStopManager()
+}
+
+// PnLService returns the P&L snapshot service (nil if not initialized).
+func (m *Manager) PnLService() *alerts.PnLSnapshotService {
+	return m.alertSvc.PnLService()
+}
+
+// SetPnLService sets the P&L snapshot service.
+func (m *Manager) SetPnLService(svc *alerts.PnLSnapshotService) {
+	m.alertSvc.SetPnLService(svc)
+}

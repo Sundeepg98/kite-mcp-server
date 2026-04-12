@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -74,8 +76,8 @@ type ToolHandlerDeps struct {
 // The manager field is retained for backward compatibility while individual
 // tool Handler methods are migrated incrementally.
 type ToolHandler struct {
-	manager          *kc.Manager        // retained for tool-level backward compat
-	deps             ToolHandlerDeps    // injected services for common.go
+	manager          *kc.Manager                   // retained for tool-level backward compat
+	deps             ToolHandlerDeps               // injected services for common.go
 	IsTokenExpiredFn func(storedAt time.Time) bool // injectable for testing; nil = kc.IsKiteTokenExpired
 }
 
@@ -144,7 +146,11 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 	if !ok || !isExpired(entry.StoredAt) {
 		return nil
 	}
-	if _, err := session.Broker.GetProfile(); err != nil {
+	profileUC := usecases.NewGetProfileUseCase(
+		&sessionBrokerResolver{client: session.Broker},
+		h.deps.Logger,
+	)
+	if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
 		h.deps.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
 		h.deps.TokenStore.Delete(email)
 		h.trackToolError(ctx, toolName, "token_expired")

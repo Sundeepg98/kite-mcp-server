@@ -14,11 +14,6 @@ import (
 )
 
 
-// newTestStore creates a Store with no notify callback (suitable for most tests).
-func newTestStore() *Store {
-	return NewStore(nil)
-}
-
 func TestStore_AddAndList(t *testing.T) {
 	s := newTestStore()
 

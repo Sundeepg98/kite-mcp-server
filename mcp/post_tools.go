@@ -190,16 +190,23 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Brief delay then check fill status for immediate feedback
 			if orderID != "" {
 				time.Sleep(1500 * time.Millisecond)
-				history, histErr := session.Broker.GetOrderHistory(orderID)
+				historyUC := usecases.NewGetOrderHistoryUseCase(
+					&sessionBrokerResolver{client: session.Broker},
+					manager.Logger,
+				)
+				history, histErr := historyUC.Execute(ctx, cqrs.GetOrderHistoryQuery{
+					Email:   session.Email,
+					OrderID: orderID,
+				})
 				if histErr == nil && len(history) > 0 {
 					latest := history[len(history)-1]
 					enriched := map[string]any{
 						"order_id":         orderID,
 						"status":           latest.Status,
-						"filled_quantity":   latest.FilledQuantity,
-						"average_price":     latest.AveragePrice,
-						"pending_quantity":  latest.Quantity - latest.FilledQuantity,
-						"status_message":    latest.StatusMessage,
+						"filled_quantity":  latest.FilledQuantity,
+						"average_price":    latest.AveragePrice,
+						"pending_quantity": latest.Quantity - latest.FilledQuantity,
+						"status_message":   latest.StatusMessage,
 					}
 					return handler.MarshalResponse(enriched, "place_order")
 				}

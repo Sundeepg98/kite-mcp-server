@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -20,6 +21,21 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
+
+// testKiteClientFactory is a trivial factory used by tests; it mirrors the
+// behavior of kc.defaultKiteClientFactory without importing the parent kc
+// package (which would create an import cycle).
+type testKiteClientFactory struct{}
+
+func (testKiteClientFactory) NewClient(apiKey string) *kiteconnect.Client {
+	return kiteconnect.New(apiKey)
+}
+
+func (testKiteClientFactory) NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client {
+	c := kiteconnect.New(apiKey)
+	c.SetAccessToken(accessToken)
+	return c
+}
 
 // ---------------------------------------------------------------------------
 // Mock HTTP client for the Telegram BotAPI — returns a canned "ok" response
@@ -143,7 +159,7 @@ func newTestBotHandler(mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
 	bot, _ := tgbotapi.NewBotAPIWithClient("fake-token", "https://api.telegram.org/bot%s/%s", mockClient)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewBotHandler(bot, "test-secret", mgr, logger, nil)
+	h := NewBotHandler(bot, "test-secret", mgr, logger, testKiteClientFactory{})
 	// Reset baseline: NewBotAPIWithClient makes a getMe call that we don't want to count.
 	mockClient.setBaseline()
 	return h, mockClient

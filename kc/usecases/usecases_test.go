@@ -3,234 +3,20 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
-// --- Mock implementations ---
-
-// mockBrokerResolver resolves a mock broker client.
-type mockBrokerResolver struct {
-	client    broker.Client
-	resolveErr error
-}
-
-func (m *mockBrokerResolver) GetBrokerForEmail(email string) (broker.Client, error) {
-	if m.resolveErr != nil {
-		return nil, m.resolveErr
-	}
-	return m.client, nil
-}
-
-// mockBrokerClient is a minimal in-memory broker for testing.
-type mockBrokerClient struct {
-	placedOrders []broker.OrderParams
-	orders       []broker.Order
-	holdings     []broker.Holding
-	positions    broker.Positions
-	placeErr     error
-
-	// Configurable return values for all broker methods.
-	profile        broker.Profile
-	profileErr     error
-	margins        broker.Margins
-	marginsErr     error
-	trades         []broker.Trade
-	tradesErr      error
-	orderHistory   []broker.Order
-	orderHistoryErr error
-	positionsErr   error
-	ltpMap         map[string]broker.LTP
-	ltpErr         error
-	ohlcMap        map[string]broker.OHLC
-	ohlcErr        error
-	historicalData []broker.HistoricalCandle
-	historicalErr  error
-	modifyResp     broker.OrderResponse
-	modifyErr      error
-	cancelResp     broker.OrderResponse
-	cancelErr      error
-	quotesMap      map[string]broker.Quote
-	quotesErr      error
-	orderTrades    []broker.Trade
-	orderTradesErr error
-	gtts           []broker.GTTOrder
-	gttsErr        error
-	placeGTTResp   broker.GTTResponse
-	placeGTTErr    error
-	modifyGTTResp  broker.GTTResponse
-	modifyGTTErr   error
-	deleteGTTResp  broker.GTTResponse
-	deleteGTTErr   error
-
-	// Capture arguments for assertions.
-	lastModifyOrderID string
-	lastModifyParams  broker.OrderParams
-	lastCancelOrderID string
-	lastCancelVariety string
-	lastOrderTradesID string
-	lastGTTParams     broker.GTTParams
-	lastModifyGTTID   int
-	lastDeleteGTTID   int
-}
-
-func (m *mockBrokerClient) BrokerName() broker.Name { return "mock" }
-func (m *mockBrokerClient) GetProfile() (broker.Profile, error) {
-	return m.profile, m.profileErr
-}
-func (m *mockBrokerClient) GetMargins() (broker.Margins, error) {
-	return m.margins, m.marginsErr
-}
-func (m *mockBrokerClient) GetHoldings() ([]broker.Holding, error) { return m.holdings, nil }
-func (m *mockBrokerClient) GetPositions() (broker.Positions, error) {
-	if m.positionsErr != nil {
-		return broker.Positions{}, m.positionsErr
-	}
-	return m.positions, nil
-}
-func (m *mockBrokerClient) GetOrders() ([]broker.Order, error) { return m.orders, nil }
-func (m *mockBrokerClient) GetOrderHistory(orderID string) ([]broker.Order, error) {
-	return m.orderHistory, m.orderHistoryErr
-}
-func (m *mockBrokerClient) GetTrades() ([]broker.Trade, error) {
-	return m.trades, m.tradesErr
-}
-func (m *mockBrokerClient) PlaceOrder(params broker.OrderParams) (broker.OrderResponse, error) {
-	if m.placeErr != nil {
-		return broker.OrderResponse{}, m.placeErr
-	}
-	m.placedOrders = append(m.placedOrders, params)
-	return broker.OrderResponse{OrderID: fmt.Sprintf("ORD-%d", len(m.placedOrders))}, nil
-}
-func (m *mockBrokerClient) ModifyOrder(orderID string, params broker.OrderParams) (broker.OrderResponse, error) {
-	m.lastModifyOrderID = orderID
-	m.lastModifyParams = params
-	return m.modifyResp, m.modifyErr
-}
-func (m *mockBrokerClient) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
-	m.lastCancelOrderID = orderID
-	m.lastCancelVariety = variety
-	return m.cancelResp, m.cancelErr
-}
-func (m *mockBrokerClient) GetLTP(instruments ...string) (map[string]broker.LTP, error) {
-	return m.ltpMap, m.ltpErr
-}
-func (m *mockBrokerClient) GetOHLC(instruments ...string) (map[string]broker.OHLC, error) {
-	return m.ohlcMap, m.ohlcErr
-}
-func (m *mockBrokerClient) GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]broker.HistoricalCandle, error) {
-	return m.historicalData, m.historicalErr
-}
-func (m *mockBrokerClient) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
-	return m.quotesMap, m.quotesErr
-}
-func (m *mockBrokerClient) GetOrderTrades(orderID string) ([]broker.Trade, error) {
-	m.lastOrderTradesID = orderID
-	return m.orderTrades, m.orderTradesErr
-}
-func (m *mockBrokerClient) GetGTTs() ([]broker.GTTOrder, error) {
-	return m.gtts, m.gttsErr
-}
-func (m *mockBrokerClient) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
-	m.lastGTTParams = params
-	return m.placeGTTResp, m.placeGTTErr
-}
-func (m *mockBrokerClient) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTResponse, error) {
-	m.lastModifyGTTID = triggerID
-	m.lastGTTParams = params
-	return m.modifyGTTResp, m.modifyGTTErr
-}
-func (m *mockBrokerClient) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
-	m.lastDeleteGTTID = triggerID
-	return m.deleteGTTResp, m.deleteGTTErr
-}
-func (m *mockBrokerClient) ConvertPosition(_ broker.ConvertPositionParams) (bool, error) {
-	return true, nil
-}
-func (m *mockBrokerClient) GetMFOrders() ([]broker.MFOrder, error)   { return nil, nil }
-func (m *mockBrokerClient) GetMFSIPs() ([]broker.MFSIP, error)       { return nil, nil }
-func (m *mockBrokerClient) GetMFHoldings() ([]broker.MFHolding, error) { return nil, nil }
-func (m *mockBrokerClient) PlaceMFOrder(_ broker.MFOrderParams) (broker.MFOrderResponse, error) {
-	return broker.MFOrderResponse{}, nil
-}
-func (m *mockBrokerClient) CancelMFOrder(_ string) (broker.MFOrderResponse, error) {
-	return broker.MFOrderResponse{}, nil
-}
-func (m *mockBrokerClient) PlaceMFSIP(_ broker.MFSIPParams) (broker.MFSIPResponse, error) {
-	return broker.MFSIPResponse{}, nil
-}
-func (m *mockBrokerClient) CancelMFSIP(_ string) (broker.MFSIPResponse, error) {
-	return broker.MFSIPResponse{}, nil
-}
-func (m *mockBrokerClient) GetOrderMargins(_ []broker.OrderMarginParam) (any, error) {
-	return nil, nil
-}
-func (m *mockBrokerClient) GetBasketMargins(_ []broker.OrderMarginParam, _ bool) (any, error) {
-	return nil, nil
-}
-func (m *mockBrokerClient) GetOrderCharges(_ []broker.OrderChargesParam) (any, error) {
-	return nil, nil
-}
-
-// mockAlertStore is a minimal in-memory alert store.
-type mockAlertStore struct {
-	alerts map[string]string // alertID -> tradingsymbol
-	addErr error
-}
-
-func (m *mockAlertStore) Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction) (string, error) {
-	if m.addErr != nil {
-		return "", m.addErr
-	}
-	id := fmt.Sprintf("ALT-%d", len(m.alerts)+1)
-	m.alerts[id] = tradingsymbol
-	return id, nil
-}
-
-func (m *mockAlertStore) AddWithReferencePrice(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction, referencePrice float64) (string, error) {
-	return m.Add(email, tradingsymbol, exchange, instrumentToken, targetPrice, direction)
-}
-
-// mockInstrumentResolver returns a fixed token.
-type mockInstrumentResolver struct {
-	token uint32
-	err   error
-}
-
-func (m *mockInstrumentResolver) GetInstrumentToken(exchange, tradingsymbol string) (uint32, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	return m.token, nil
-}
-
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-}
-
-// testPlaceCmd builds a PlaceOrderCommand from raw values for test convenience.
-func testPlaceCmd(email, exchange, symbol, txnType, orderType, product string, qty int, price float64) cqrs.PlaceOrderCommand {
-	q, _ := domain.NewQuantity(qty)
-	return cqrs.PlaceOrderCommand{
-		Email:           email,
-		Instrument:      domain.NewInstrumentKey(exchange, symbol),
-		TransactionType: txnType,
-		Qty:             q,
-		Price:           domain.NewINR(price),
-		OrderType:       orderType,
-		Product:         product,
-	}
-}
+// Shared mocks (mockBrokerResolver, mockBrokerClient, mockAlertStore,
+// mockInstrumentResolver) and test helpers (testLogger, testPlaceCmd) now
+// live in mocks_test.go.
 
 // --- PlaceOrderUseCase tests ---
 
@@ -2031,15 +1817,6 @@ func TestCloseAllPositions_EmptyProductFilter(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Total) // Both products included with empty filter
 	assert.Equal(t, "ALL", result.ProductFilter)
-}
-
-// holdingsErrClient is a broker client that returns an error on GetHoldings.
-type holdingsErrClient struct {
-	mockBrokerClient
-}
-
-func (c *holdingsErrClient) GetHoldings() ([]broker.Holding, error) {
-	return nil, fmt.Errorf("holdings API error")
 }
 
 // ordersErrClient is a broker client that returns an error on GetOrders.

@@ -1077,62 +1077,7 @@ func TestManagedSessionService(t *testing.T) {
 // FamilyService — full coverage of all branches
 // ---------------------------------------------------------------------------
 
-// mockUserStoreForFamily implements FamilyUserStore (3 methods) for testing.
-// ISP benefit: mock only needs the methods FamilyService actually uses.
-type mockUserStoreForFamily struct {
-	users map[string]*users.User
-}
-
-func (m *mockUserStoreForFamily) Get(email string) (*users.User, bool) {
-	u, ok := m.users[email]
-	return u, ok
-}
-
-func (m *mockUserStoreForFamily) SetAdminEmail(email, adminEmail string) error {
-	if u, ok := m.users[email]; ok {
-		u.AdminEmail = adminEmail
-		return nil
-	}
-	return nil
-}
-
-func (m *mockUserStoreForFamily) ListByAdminEmail(adminEmail string) []*users.User {
-	var out []*users.User
-	for _, u := range m.users {
-		if u.AdminEmail == adminEmail {
-			out = append(out, u)
-		}
-	}
-	return out
-}
-
-// mockBillingStore implements BillingStoreInterface for testing.
-type mockBillingStoreForFamily struct {
-	subs map[string]*billing.Subscription
-}
-
-func (m *mockBillingStoreForFamily) GetTier(email string) billing.Tier { return billing.TierFree }
-
-func (m *mockBillingStoreForFamily) SetSubscription(sub *billing.Subscription) error {
-	m.subs[sub.AdminEmail] = sub
-	return nil
-}
-
-func (m *mockBillingStoreForFamily) GetSubscription(email string) *billing.Subscription {
-	return m.subs[email]
-}
-
-func (m *mockBillingStoreForFamily) GetEmailByCustomerID(customerID string) string { return "" }
-
-func (m *mockBillingStoreForFamily) IsEventProcessed(eventID string) bool { return false }
-
-func (m *mockBillingStoreForFamily) MarkEventProcessed(eventID, eventType string) error {
-	return nil
-}
-
-func (m *mockBillingStoreForFamily) GetTierForUser(email string, adminEmailFn func(string) string) billing.Tier {
-	return billing.TierFree
-}
+// mockUserStoreForFamily and mockBillingStoreForFamily live in mocks_test.go.
 
 func TestFamilyService_AdminEmailFn_WithStore(t *testing.T) {
 	t.Parallel()

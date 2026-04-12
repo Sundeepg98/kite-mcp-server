@@ -3,6 +3,7 @@ package alerts
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,18 @@ import (
 
 	"golang.org/x/crypto/hkdf"
 )
+
+// hashSessionID returns HMAC-SHA256(encryptionKey, sessionID) as a hex string.
+// If no encryption key is configured, the session ID is returned as-is (fallback).
+// Used by the mcp_sessions PK so plaintext session IDs never appear in the DB.
+func (d *DB) hashSessionID(sessionID string) string {
+	if d.encryptionKey == nil {
+		return sessionID
+	}
+	mac := hmac.New(sha256.New, d.encryptionKey)
+	mac.Write([]byte(sessionID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 // DeriveEncryptionKey derives a 32-byte AES-256 key from a secret using HKDF-SHA256
 // with a nil salt (legacy). Retained for backward compatibility during migration.

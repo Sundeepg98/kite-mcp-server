@@ -615,39 +615,7 @@ func TestSessionExpiration(t *testing.T) {
 	}
 }
 
-// mockSessionDB is a test double for SessionDB that records all calls.
-type mockSessionDB struct {
-	sessions map[string]*SessionLoadEntry
-}
-
-func newMockSessionDB() *mockSessionDB {
-	return &mockSessionDB{sessions: make(map[string]*SessionLoadEntry)}
-}
-
-func (m *mockSessionDB) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
-	m.sessions[sessionID] = &SessionLoadEntry{
-		SessionID:  sessionID,
-		Email:      email,
-		CreatedAt:  createdAt,
-		ExpiresAt:  expiresAt,
-		Terminated: terminated,
-	}
-	return nil
-}
-
-func (m *mockSessionDB) LoadSessions() ([]*SessionLoadEntry, error) {
-	var out []*SessionLoadEntry
-	for _, s := range m.sessions {
-		cp := *s
-		out = append(out, &cp)
-	}
-	return out, nil
-}
-
-func (m *mockSessionDB) DeleteSession(sessionID string) error {
-	delete(m.sessions, sessionID)
-	return nil
-}
+// mockSessionDB and newMockSessionDB live in mocks_test.go.
 
 func TestGenerateWithDataPersists(t *testing.T) {
 	db := newMockSessionDB()

@@ -770,51 +770,7 @@ func TestKiteCredentialStore_OnTokenInvalidate_NoCallback(t *testing.T) {
 // CredentialService — full coverage
 // ===========================================================================
 
-// mockCredentialStore implements CredentialStoreInterface for testing.
-type mockCredentialStore struct {
-	entries map[string]*KiteCredentialEntry
-}
-
-func (m *mockCredentialStore) Get(email string) (*KiteCredentialEntry, bool) {
-	e, ok := m.entries[email]
-	return e, ok
-}
-
-func (m *mockCredentialStore) Set(email string, entry *KiteCredentialEntry) {
-	m.entries[email] = entry
-}
-
-func (m *mockCredentialStore) Delete(email string) { delete(m.entries, email) }
-
-func (m *mockCredentialStore) ListAll() []KiteCredentialSummary { return nil }
-
-func (m *mockCredentialStore) ListAllRaw() []RawCredentialEntry { return nil }
-
-func (m *mockCredentialStore) GetSecretByAPIKey(apiKey string) (string, bool) { return "", false }
-
-func (m *mockCredentialStore) Count() int { return len(m.entries) }
-
-// mockTokenStore implements TokenStoreInterface for testing.
-type mockTokenStore struct {
-	entries map[string]*KiteTokenEntry
-}
-
-func (m *mockTokenStore) Get(email string) (*KiteTokenEntry, bool) {
-	e, ok := m.entries[email]
-	return e, ok
-}
-
-func (m *mockTokenStore) Set(email string, entry *KiteTokenEntry) {
-	m.entries[email] = entry
-}
-
-func (m *mockTokenStore) Delete(email string) { delete(m.entries, email) }
-
-func (m *mockTokenStore) OnChange(cb TokenChangeCallback) {}
-
-func (m *mockTokenStore) ListAll() []KiteTokenSummary { return nil }
-
-func (m *mockTokenStore) Count() int { return len(m.entries) }
+// Mock types (mockCredentialStore, mockTokenStore) live in mocks_test.go.
 
 // ===========================================================================
 // KiteTokenStore — SetDB, SetLogger, LoadFromDB
@@ -879,58 +835,7 @@ func TestKiteCredentialStore_SetLogger(t *testing.T) {
 // BackfillRegistryFromCredentials — edge cases
 // ---------------------------------------------------------------------------
 
-// mockRegistryStore implements RegistryStoreInterface for testing.
-type mockRegistryStore struct {
-	regs map[string]*registry.AppRegistration
-}
-
-func (m *mockRegistryStore) Register(reg *registry.AppRegistration) error {
-	m.regs[reg.ID] = reg
-	return nil
-}
-
-func (m *mockRegistryStore) Get(id string) (*registry.AppRegistration, bool) {
-	r, ok := m.regs[id]
-	return r, ok
-}
-
-func (m *mockRegistryStore) GetByAPIKey(apiKey string) (*registry.AppRegistration, bool) {
-	for _, r := range m.regs {
-		if r.APIKey == apiKey && r.Status == registry.StatusActive {
-			return r, true
-		}
-	}
-	return nil, false
-}
-
-func (m *mockRegistryStore) GetByAPIKeyAnyStatus(apiKey string) (*registry.AppRegistration, bool) {
-	for _, r := range m.regs {
-		if r.APIKey == apiKey {
-			return r, true
-		}
-	}
-	return nil, false
-}
-
-func (m *mockRegistryStore) GetByEmail(email string) (*registry.AppRegistration, bool) {
-	return nil, false
-}
-
-func (m *mockRegistryStore) List() []registry.AppRegistrationSummary { return nil }
-
-func (m *mockRegistryStore) Update(id, assignedTo, label, status string) error {
-	return nil
-}
-
-func (m *mockRegistryStore) UpdateLastUsedAt(apiKey string) {}
-
-func (m *mockRegistryStore) MarkStatus(apiKey, status string) {}
-
-func (m *mockRegistryStore) Delete(id string) error { return nil }
-
-func (m *mockRegistryStore) Count() int { return len(m.regs) }
-
-func (m *mockRegistryStore) HasEntries() bool { return len(m.regs) > 0 }
+// mockRegistryStore lives in mocks_test.go.
 
 func TestBackfillRegistryFromCredentials_NilRegistry(t *testing.T) {
 	t.Parallel()
@@ -1490,35 +1395,7 @@ func TestBackfillRegistryFromCredentials_NewMigrated(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// mockCredentialStoreWithRaw — supports ListAllRaw for BackfillRegistryFromCredentials
-// ===========================================================================
-
-type mockCredentialStoreWithRaw struct {
-	entries map[string]*KiteCredentialEntry
-	raw     []RawCredentialEntry
-}
-
-func (m *mockCredentialStoreWithRaw) Get(email string) (*KiteCredentialEntry, bool) {
-	e, ok := m.entries[email]
-	return e, ok
-}
-
-func (m *mockCredentialStoreWithRaw) Set(email string, entry *KiteCredentialEntry) {
-	m.entries[email] = entry
-}
-
-func (m *mockCredentialStoreWithRaw) Delete(email string) { delete(m.entries, email) }
-
-func (m *mockCredentialStoreWithRaw) ListAll() []KiteCredentialSummary { return nil }
-
-func (m *mockCredentialStoreWithRaw) ListAllRaw() []RawCredentialEntry { return m.raw }
-
-func (m *mockCredentialStoreWithRaw) GetSecretByAPIKey(apiKey string) (string, bool) {
-	return "", false
-}
-
-func (m *mockCredentialStoreWithRaw) Count() int { return len(m.entries) }
+// mockCredentialStoreWithRaw lives in mocks_test.go.
 
 // ===========================================================================
 // Coverage boost: CredentialStore edge cases, TokenStore edge cases

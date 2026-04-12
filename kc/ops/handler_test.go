@@ -15,7 +15,6 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // newTestHandler creates an ops Handler backed by a real kc.Manager with minimal config.
@@ -46,30 +45,6 @@ func newTestHandler(t *testing.T) *Handler {
 
 	lb := NewLogBuffer(100)
 	return New(mgr, nil, lb, logger, "test-v1", time.Now(), mgr.UserStoreConcrete(), nil)
-}
-
-// devNull implements io.Writer and discards all bytes.
-type devNull struct{}
-
-func (devNull) Write(p []byte) (int, error) { return len(p), nil }
-
-// noopAuth is a pass-through middleware that does NOT enforce authentication.
-func noopAuth(next http.Handler) http.Handler { return next }
-
-// requestWithEmail returns a request whose context carries the given email,
-// matching what oauth.RequireAuthBrowser would inject in production.
-func requestWithEmail(method, target, email string, body *strings.Reader) *http.Request {
-	var req *http.Request
-	if body != nil {
-		req = httptest.NewRequest(method, target, body)
-	} else {
-		req = httptest.NewRequest(method, target, nil)
-	}
-	if email != "" {
-		ctx := oauth.ContextWithEmail(req.Context(), email)
-		req = req.WithContext(ctx)
-	}
-	return req
 }
 
 // --- Overview tests ---

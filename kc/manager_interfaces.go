@@ -68,64 +68,131 @@ type CredentialResolver interface {
 	IsTokenValid(email string) bool
 }
 
-// StoreAccessor provides access to all data stores managed by the Manager.
-// Returns interface types to decouple consumers from concrete implementations
-// (Dependency Inversion Principle). Consumers should prefer the focused
-// interfaces (e.g., AlertStoreInterface) when they only need specific capabilities.
-type StoreAccessor interface {
-	// TokenStore returns the per-email token store.
+// ---------------------------------------------------------------------------
+// Focused store-provider interfaces (ISP)
+// ---------------------------------------------------------------------------
+// Each provider exposes access to exactly one store type. Consumers should
+// depend on the narrowest provider they need rather than the aggregate
+// StoreAccessor, so their dependencies remain explicit and tests can supply
+// minimal fakes.
+
+// TokenStoreProvider exposes the per-email Kite token store.
+type TokenStoreProvider interface {
 	TokenStore() TokenStoreInterface
+}
 
-	// CredentialStore returns the per-email Kite credential store.
+// CredentialStoreProvider exposes the per-email Kite credential store.
+type CredentialStoreProvider interface {
 	CredentialStore() CredentialStoreInterface
+}
 
-	// AlertStore returns the per-user alert store (alert CRUD).
+// AlertStoreProvider exposes the per-user alert store (alert CRUD).
+type AlertStoreProvider interface {
 	AlertStore() AlertStoreInterface
+}
 
-	// TelegramStore returns the per-user Telegram chat ID store.
+// TelegramStoreProvider exposes the per-user Telegram chat ID store.
+type TelegramStoreProvider interface {
 	TelegramStore() TelegramStoreInterface
+}
 
-	// WatchlistStore returns the per-user watchlist store.
+// WatchlistStoreProvider exposes the per-user watchlist store.
+type WatchlistStoreProvider interface {
 	WatchlistStore() WatchlistStoreInterface
+}
 
-	// UserStore returns the user identity store.
+// UserStoreProvider exposes the user identity store.
+type UserStoreProvider interface {
 	UserStore() UserStoreInterface
+}
 
-	// RegistryStore returns the key registry store.
+// RegistryStoreProvider exposes the key registry store.
+type RegistryStoreProvider interface {
 	RegistryStore() RegistryStoreInterface
+}
 
-	// AuditStore returns the audit trail store, or nil.
+// AuditStoreProvider exposes the audit trail store. Returns nil if disabled.
+type AuditStoreProvider interface {
 	AuditStore() AuditStoreInterface
+}
 
-	// BillingStore returns the billing store, or nil.
+// BillingStoreProvider exposes the billing store. Returns nil if disabled.
+type BillingStoreProvider interface {
 	BillingStore() BillingStoreInterface
+}
 
-	// TickerService returns the per-user WebSocket ticker service.
+// TickerServiceProvider exposes the per-user WebSocket ticker service.
+type TickerServiceProvider interface {
 	TickerService() TickerServiceInterface
+}
 
-	// PaperEngine returns the paper trading engine, or nil.
+// PaperEngineProvider exposes the paper trading engine. Returns nil if disabled.
+type PaperEngineProvider interface {
 	PaperEngine() PaperEngineInterface
+}
 
-	// InstrumentsManager returns the instruments manager.
+// InstrumentsManagerProvider exposes the instruments manager.
+type InstrumentsManagerProvider interface {
 	InstrumentsManager() InstrumentManagerInterface
+}
 
-	// AlertDB returns the optional SQLite database.
+// AlertDBProvider exposes the optional SQLite database used by the alerts subsystem.
+type AlertDBProvider interface {
 	AlertDB() *alerts.DB
+}
 
-	// RiskGuard returns the riskguard instance, or nil.
+// RiskGuardProvider exposes the risk guard. Returns nil if disabled.
+type RiskGuardProvider interface {
 	RiskGuard() *riskguard.Guard
+}
 
-	// TelegramNotifier returns the Telegram notifier (nil if not configured).
+// TelegramNotifierProvider exposes the Telegram notifier. Returns nil if unconfigured.
+type TelegramNotifierProvider interface {
 	TelegramNotifier() *alerts.TelegramNotifier
+}
 
-	// TrailingStopManager returns the trailing stop manager.
+// TrailingStopManagerProvider exposes the trailing stop manager.
+type TrailingStopManagerProvider interface {
 	TrailingStopManager() *alerts.TrailingStopManager
+}
 
-	// PnLService returns the P&L snapshot service.
+// PnLServiceProvider exposes the P&L snapshot service.
+type PnLServiceProvider interface {
 	PnLService() *alerts.PnLSnapshotService
+}
 
-	// MCPServer returns the stored MCP server reference, or nil.
+// MCPServerProvider exposes the stored MCP server reference. Returns nil before
+// the server has been attached.
+type MCPServerProvider interface {
 	MCPServer() any
+}
+
+// StoreAccessor is the aggregate composition of every Manager-implemented
+// store-provider interface, retained for consumers that legitimately need
+// broad access (e.g. the Manager itself, admin tooling, and registration
+// code). New code should depend on the narrowest provider(s) it needs
+// instead.
+//
+// Note: TelegramNotifierProvider, TrailingStopManagerProvider, and
+// PnLServiceProvider are intentionally excluded — those three accessors live
+// on AlertService (obtain them via m.AlertSvc().TelegramNotifier() etc.) and
+// are not exposed on Manager itself after the Round 3 decomposition.
+type StoreAccessor interface {
+	TokenStoreProvider
+	CredentialStoreProvider
+	AlertStoreProvider
+	TelegramStoreProvider
+	WatchlistStoreProvider
+	UserStoreProvider
+	RegistryStoreProvider
+	AuditStoreProvider
+	BillingStoreProvider
+	TickerServiceProvider
+	PaperEngineProvider
+	InstrumentsManagerProvider
+	AlertDBProvider
+	RiskGuardProvider
+	MCPServerProvider
 }
 
 // AppConfigProvider provides application-level configuration.
@@ -181,10 +248,10 @@ type ManagerLifecycle interface {
 // ---------------------------------------------------------------------------
 
 var (
-	_ SessionProvider   = (*Manager)(nil)
-	_ CredentialResolver = (*Manager)(nil)
-	_ StoreAccessor     = (*Manager)(nil)
-	_ AppConfigProvider = (*Manager)(nil)
-	_ MetricsRecorder   = (*Manager)(nil)
-	_ ManagerLifecycle  = (*Manager)(nil)
+	_ SessionProvider    = (*Manager)(nil)
+	_ CredentialResolver = (*CredentialService)(nil) // Round 3: delegated to CredentialService; obtain via m.CredentialSvc()
+	_ StoreAccessor      = (*Manager)(nil)
+	_ AppConfigProvider  = (*Manager)(nil)
+	_ MetricsRecorder    = (*Manager)(nil)
+	_ ManagerLifecycle   = (*Manager)(nil)
 )

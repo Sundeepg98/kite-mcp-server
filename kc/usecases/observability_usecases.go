@@ -10,11 +10,24 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 )
 
-// AuditStore abstracts the audit trail store for observability use cases.
-type AuditStore interface {
+// AuditReader provides read-only query access for audit records (ISP-narrowed).
+type AuditReader interface {
 	GetGlobalStats(since time.Time) (*audit.Stats, error)
 	GetToolMetrics(since time.Time) ([]audit.ToolMetric, error)
 	GetTopErrorUsers(since time.Time, limit int) ([]audit.UserErrorCount, error)
+}
+
+// AuditWriter provides audit record write operations (ISP-narrowed).
+// Retained here so use cases which write can depend on a narrow contract.
+type AuditWriter interface {
+	Enqueue(entry *audit.ToolCall)
+	Record(entry *audit.ToolCall) error
+}
+
+// AuditStore is the composite interface; prefer AuditReader / AuditWriter directly.
+type AuditStore interface {
+	AuditReader
+	AuditWriter
 }
 
 // ServerMetricsResult holds the structured result of a server metrics query.
@@ -29,12 +42,12 @@ type ServerMetricsResult struct {
 
 // ServerMetricsUseCase retrieves server observability metrics.
 type ServerMetricsUseCase struct {
-	auditStore AuditStore
+	auditStore AuditReader
 	logger     *slog.Logger
 }
 
 // NewServerMetricsUseCase creates a ServerMetricsUseCase with dependencies injected.
-func NewServerMetricsUseCase(store AuditStore, logger *slog.Logger) *ServerMetricsUseCase {
+func NewServerMetricsUseCase(store AuditReader, logger *slog.Logger) *ServerMetricsUseCase {
 	return &ServerMetricsUseCase{auditStore: store, logger: logger}
 }
 

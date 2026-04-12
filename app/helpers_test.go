@@ -15,7 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/users"
-	"github.com/zerodha/kite-mcp-server/testutil"
+	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
 
 // testLogger creates a discard logger for tests.
@@ -27,16 +27,16 @@ func testLogger() *slog.Logger {
 // For tests that don't need a SQLite DB.
 func newTestManager(t *testing.T) *kc.Manager {
 	t.Helper()
-	return testutil.NewTestManager(t, testutil.WithDevMode())
+	return kcfixture.NewTestManager(t, kcfixture.WithDevMode())
 }
 
 // newTestManagerWithDB creates a kc.Manager in DevMode with an in-memory SQLite DB.
 // For tests that need AlertDB, UserStore, BillingStore, etc.
 func newTestManagerWithDB(t *testing.T) *kc.Manager {
 	t.Helper()
-	return testutil.NewTestManager(t,
-		testutil.WithDevMode(),
-		testutil.WithAlertDB(":memory:"),
+	return kcfixture.NewTestManager(t,
+		kcfixture.WithDevMode(),
+		kcfixture.WithAlertDB(":memory:"),
 	)
 }
 

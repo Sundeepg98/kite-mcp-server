@@ -58,6 +58,47 @@ func NewMockKiteServer(t *testing.T) *MockKiteServer {
 	return m
 }
 
+// NewSessionKiteServer returns a bare *httptest.Server that handles the Kite
+// session lifecycle routes (POST /session/token, GET /user/profile, DELETE
+// /session/token) plus all default MockKiteServer data routes. It is the
+// shared replacement for per-package newMockKiteServer helpers that test the
+// GenerateSession → CompleteSession → InvalidateAccessToken flow.
+//
+// The server is automatically closed when the test finishes.
+func NewSessionKiteServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	m := &MockKiteServer{}
+	m.setDefaults()
+
+	mux := http.NewServeMux()
+	m.registerRoutes(mux)
+
+	// Session lifecycle routes — not part of the read-only MockKiteServer core.
+	mux.HandleFunc("/session/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodPost:
+			writeEnvelope(w, map[string]any{
+				"user_id":       "XY1234",
+				"user_name":     "Test User",
+				"email":         "test@example.com",
+				"access_token":  "mock-access-token",
+				"public_token":  "mock-public-token",
+				"refresh_token": "mock-refresh-token",
+			})
+		case http.MethodDelete:
+			writeEnvelope(w, true)
+		default:
+			http.Error(w, `{"status":"error","message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		}
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
 // URL returns the base URL of the mock server.
 func (m *MockKiteServer) URL() string {
 	return m.Server.URL

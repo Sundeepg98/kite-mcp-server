@@ -25,11 +25,12 @@ type PnLJournalResult struct {
 
 // PnLSnapshotService takes daily P&L snapshots and provides journal queries.
 type PnLSnapshotService struct {
-	db             *DB
-	tokens         TokenChecker
-	creds          CredentialGetter
-	logger         *slog.Logger
-	brokerProvider BrokerDataProvider // nil = use default (real kiteconnect)
+	db                *DB
+	tokens            TokenChecker
+	creds             CredentialGetter
+	logger            *slog.Logger
+	brokerProvider    BrokerDataProvider // nil = use default via kiteClientFactory
+	kiteClientFactory KiteClientFactory  // required for defaultBrokerProvider fallback
 }
 
 // NewPnLSnapshotService creates a new P&L snapshot service.
@@ -53,12 +54,21 @@ func (s *PnLSnapshotService) SetBrokerProvider(p BrokerDataProvider) {
 	}
 }
 
-// broker returns the BrokerDataProvider, defaulting to the real kiteconnect client.
+// SetKiteClientFactory wires the factory used by the default broker provider.
+// Production wires this during app bootstrap; tests may leave it nil when they
+// override the broker provider via SetBrokerProvider.
+func (s *PnLSnapshotService) SetKiteClientFactory(f KiteClientFactory) {
+	if s != nil {
+		s.kiteClientFactory = f
+	}
+}
+
+// broker returns the BrokerDataProvider, defaulting to a factory-backed provider.
 func (s *PnLSnapshotService) broker() BrokerDataProvider {
 	if s.brokerProvider != nil {
 		return s.brokerProvider
 	}
-	return &defaultBrokerProvider{}
+	return &defaultBrokerProvider{factory: s.kiteClientFactory}
 }
 
 // buildPnLEntry builds a DailyPnLEntry from broker data. Pure logic, testable.

@@ -230,70 +230,54 @@ func TestMockKiteServer_SetHoldings(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// NewTestManager tests
-// ---------------------------------------------------------------------------
-
-func TestNewTestManager_Default(t *testing.T) {
-	mgr := NewTestManager(t)
-	assert.NotNil(t, mgr)
-}
-
-func TestNewTestManager_WithDevMode(t *testing.T) {
-	mgr := NewTestManager(t, WithDevMode())
-	assert.NotNil(t, mgr)
-	assert.True(t, mgr.DevMode())
-}
-
-func TestNewTestManager_WithRiskGuard(t *testing.T) {
-	mgr := NewTestManager(t, WithRiskGuard())
-	assert.NotNil(t, mgr)
-	assert.NotNil(t, mgr.RiskGuard())
-}
-
-func TestNewTestManager_WithMockKite(t *testing.T) {
-	srv := NewMockKiteServer(t)
-	mgr := NewTestManager(t, WithMockKite(srv))
-	assert.NotNil(t, mgr)
-	// The mock server is passed for external use — tests would point a
-	// kiteconnect.Client at srv.URL() themselves.
-	assert.NotEmpty(t, srv.URL())
-}
-
-func TestNewTestManager_WithAPIKey(t *testing.T) {
-	mgr := NewTestManager(t, WithAPIKey("custom_key"), WithAPISecret("custom_secret"))
-	assert.NotNil(t, mgr)
-	assert.Equal(t, "custom_key", mgr.APIKey())
-}
-
-func TestNewTestManager_MultipleOptions(t *testing.T) {
-	srv := NewMockKiteServer(t)
-	mgr := NewTestManager(t,
-		WithDevMode(),
-		WithRiskGuard(),
-		WithMockKite(srv),
-		WithAPIKey("k"),
-		WithAPISecret("s"),
-	)
-	assert.NotNil(t, mgr)
-	assert.True(t, mgr.DevMode())
-	assert.NotNil(t, mgr.RiskGuard())
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-func TestDefaultTestData(t *testing.T) {
-	data := DefaultTestData()
-	assert.Len(t, data, 3)
-	assert.Contains(t, data, uint32(256265))
-	assert.Contains(t, data, uint32(408065))
-	assert.Contains(t, data, uint32(779521))
-}
 
 func TestDiscardLogger(t *testing.T) {
 	logger := DiscardLogger()
 	assert.NotNil(t, logger)
+}
+
+// ---------------------------------------------------------------------------
+// NewSessionKiteServer tests
+// ---------------------------------------------------------------------------
+
+func TestNewSessionKiteServer_ProfileRoute(t *testing.T) {
+	srv := NewSessionKiteServer(t)
+	body := httpGet(t, srv.URL+"/user/profile")
+
+	var envelope map[string]any
+	require.NoError(t, json.Unmarshal(body, &envelope))
+	assert.Equal(t, "success", envelope["status"])
+}
+
+func TestNewSessionKiteServer_SessionTokenPOST(t *testing.T) {
+	srv := NewSessionKiteServer(t)
+	resp, err := http.Post(srv.URL+"/session/token", "application/x-www-form-urlencoded", nil)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var envelope map[string]any
+	require.NoError(t, json.Unmarshal(body, &envelope))
+	assert.Equal(t, "success", envelope["status"])
+
+	data, ok := envelope["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "mock-access-token", data["access_token"])
+}
+
+func TestNewSessionKiteServer_SessionTokenDELETE(t *testing.T) {
+	srv := NewSessionKiteServer(t)
+	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/session/token", nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 // httpGet is a test helper that performs a GET and returns the body bytes.

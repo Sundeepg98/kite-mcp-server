@@ -113,8 +113,14 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		// If current_stop not provided, try to fetch from order history
 		if currentStop <= 0 || referencePrice <= 0 {
 			return handler.WithSession(ctx, "set_trailing_stop", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+				resolver := &sessionBrokerResolver{client: session.Broker}
+
 				if currentStop <= 0 {
-					history, histErr := session.Broker.GetOrderHistory(orderID)
+					historyUC := usecases.NewGetOrderHistoryUseCase(resolver, manager.Logger)
+					history, histErr := historyUC.Execute(ctx, cqrs.GetOrderHistoryQuery{
+						Email:   session.Email,
+						OrderID: orderID,
+					})
 					if histErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch order history for %s: %s. Please provide current_stop manually.", orderID, histErr)), nil
 					}
@@ -128,7 +134,10 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				}
 
 				if referencePrice <= 0 {
-					ltpResp, ltpErr := session.Broker.GetLTP(instrumentID)
+					ltpUC := usecases.NewGetLTPUseCase(resolver, manager.Logger)
+					ltpResp, ltpErr := ltpUC.Execute(ctx, session.Email, cqrs.GetLTPQuery{
+						Instruments: []string{instrumentID},
+					})
 					if ltpErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch LTP: %s. Please provide reference_price manually.", ltpErr)), nil
 					}

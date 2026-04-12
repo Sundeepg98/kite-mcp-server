@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
 
 // Shared test helpers used by multiple test files.
@@ -306,52 +307,11 @@ func assertResultNotContains(t *testing.T, result *gomcp.CallToolResult, substr 
 }
 
 // newTestManager creates a minimal Manager that never makes HTTP calls.
-// It uses instruments.Config.TestData to skip instrument downloading.
+// It delegates to kcfixture.NewTestManager (the shared factory) and attaches
+// a RiskGuard so tool handlers that gate on it have one.
 func newTestManager(t *testing.T) *kc.Manager {
 	t.Helper()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	// Provide minimal test data so instruments.New skips HTTP loading.
-	testData := map[uint32]*instruments.Instrument{
-		256265: {
-			InstrumentToken: 256265,
-			Tradingsymbol:   "INFY",
-			Name:            "INFOSYS",
-			Exchange:        "NSE",
-			Segment:         "NSE",
-			InstrumentType:  "EQ",
-		},
-		408065: {
-			InstrumentToken: 408065,
-			Tradingsymbol:   "RELIANCE",
-			Name:            "RELIANCE INDUSTRIES",
-			Exchange:        "NSE",
-			Segment:         "NSE",
-			InstrumentType:  "EQ",
-		},
-	}
-
-	instMgr, err := instruments.New(instruments.Config{
-		UpdateConfig: func() *instruments.UpdateConfig {
-			c := instruments.DefaultUpdateConfig()
-			c.EnableScheduler = false
-			return c
-		}(),
-		Logger:   logger,
-		TestData: testData,
-	})
-	require.NoError(t, err)
-
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-	})
-	require.NoError(t, err)
-
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
-	return mgr
+	return kcfixture.NewTestManager(t, kcfixture.WithRiskGuard())
 }
 
 // callToolWithManager invokes a tool handler with the given manager and context params.

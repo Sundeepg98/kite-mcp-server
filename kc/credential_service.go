@@ -169,3 +169,47 @@ func (cs *CredentialService) BackfillRegistryFromCredentials() {
 		cs.logger.Info("Backfilled registry from existing credentials", "count", backfilled)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Manager-level delegators (thin pass-throughs to m.credentialSvc)
+// ---------------------------------------------------------------------------
+
+// HasPreAuth returns true if the manager has a pre-set access token.
+func (m *Manager) HasPreAuth() bool {
+	return m.credentialSvc.HasPreAuth()
+}
+
+// HasCachedToken returns true if there's a cached Kite token for the given email.
+func (m *Manager) HasCachedToken(email string) bool {
+	return m.credentialSvc.HasCachedToken(email)
+}
+
+// HasGlobalCredentials returns true if global API key/secret are configured.
+func (m *Manager) HasGlobalCredentials() bool {
+	return m.credentialSvc.HasGlobalCredentials()
+}
+
+// IsTokenValid returns true if the user has a cached Kite token that has not expired.
+func (m *Manager) IsTokenValid(email string) bool {
+	return m.credentialSvc.IsTokenValid(email)
+}
+
+// HasUserCredentials returns true if per-user Kite credentials exist for the given email.
+func (m *Manager) HasUserCredentials(email string) bool {
+	return m.credentialSvc.HasUserCredentials(email)
+}
+
+// GetAPIKeyForEmail returns the API key for a user (per-user or global fallback).
+func (m *Manager) GetAPIKeyForEmail(email string) string {
+	return m.credentialSvc.GetAPIKeyForEmail(email)
+}
+
+// GetAPISecretForEmail returns the API secret for a user (per-user or global fallback).
+func (m *Manager) GetAPISecretForEmail(email string) string {
+	return m.credentialSvc.GetAPISecretForEmail(email)
+}
+
+// GetAccessTokenForEmail returns the cached access token for the given email.
+func (m *Manager) GetAccessTokenForEmail(email string) string {
+	return m.credentialSvc.GetAccessTokenForEmail(email)
+}

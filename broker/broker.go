@@ -398,32 +398,56 @@ type AuthResult struct {
 	Email       string `json:"email,omitempty"`
 }
 
-// Client is the core broker interface. Each broker implementation
-// (Zerodha, Angel One, Dhan, Upstox) must satisfy this contract.
-type Client interface {
+// ---------------------------------------------------------------------------
+// Focused broker sub-interfaces.
+//
+// These follow the Interface Segregation Principle: each sub-interface groups
+// a small, cohesive set of operations so callers can depend on the narrowest
+// surface they actually need. The composite `Client` interface below embeds
+// all of them, so any existing broker implementation that satisfies `Client`
+// automatically satisfies every sub-interface.
+//
+// Use cases and handlers should prefer to accept a sub-interface (e.g.
+// `broker.PortfolioReader`) over the full `broker.Client` when possible.
+// ---------------------------------------------------------------------------
+
+// BrokerIdentity exposes the broker's identity — implemented by every client.
+type BrokerIdentity interface {
 	// BrokerName returns the identifier for this broker implementation.
 	BrokerName() Name
+}
 
+// ProfileReader reads account profile and funds.
+type ProfileReader interface {
 	// GetProfile returns the authenticated user's profile.
 	GetProfile() (Profile, error)
 
 	// GetMargins returns margin/funds information.
 	GetMargins() (Margins, error)
+}
 
+// PortfolioReader reads holdings, positions, and executed trades.
+type PortfolioReader interface {
 	// GetHoldings returns the user's portfolio holdings.
 	GetHoldings() ([]Holding, error)
 
 	// GetPositions returns current day and net positions.
 	GetPositions() (Positions, error)
 
+	// GetTrades returns all executed trades for the day.
+	GetTrades() ([]Trade, error)
+}
+
+// OrderManager places, modifies, cancels, and reads orders.
+type OrderManager interface {
 	// GetOrders returns all orders for the current trading day.
 	GetOrders() ([]Order, error)
 
 	// GetOrderHistory returns the state history of a specific order.
 	GetOrderHistory(orderID string) ([]Order, error)
 
-	// GetTrades returns all executed trades for the day.
-	GetTrades() ([]Trade, error)
+	// GetOrderTrades returns executed trades for a specific order.
+	GetOrderTrades(orderID string) ([]Trade, error)
 
 	// PlaceOrder places a new order and returns the order ID.
 	PlaceOrder(params OrderParams) (OrderResponse, error)
@@ -434,7 +458,10 @@ type Client interface {
 	// CancelOrder cancels an existing pending order.
 	// variety specifies the order variety (e.g., "regular", "co", "amo", "iceberg", "auction").
 	CancelOrder(orderID string, variety string) (OrderResponse, error)
+}
 
+// MarketDataReader reads live and historical market data.
+type MarketDataReader interface {
 	// GetLTP returns the last traded price for the given instruments.
 	// Instrument format is "EXCHANGE:TRADINGSYMBOL" (e.g., "NSE:RELIANCE").
 	GetLTP(instruments ...string) (map[string]LTP, error)
@@ -442,16 +469,16 @@ type Client interface {
 	// GetOHLC returns OHLC data for the given instruments.
 	GetOHLC(instruments ...string) (map[string]OHLC, error)
 
-	// GetHistoricalData returns historical candle data for an instrument.
-	GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]HistoricalCandle, error)
-
 	// GetQuotes returns full market quotes for the given instruments.
 	// Instrument format is "EXCHANGE:TRADINGSYMBOL" (e.g., "NSE:RELIANCE").
 	GetQuotes(instruments ...string) (map[string]Quote, error)
 
-	// GetOrderTrades returns executed trades for a specific order.
-	GetOrderTrades(orderID string) ([]Trade, error)
+	// GetHistoricalData returns historical candle data for an instrument.
+	GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]HistoricalCandle, error)
+}
 
+// GTTManager manages Good-Till-Triggered orders.
+type GTTManager interface {
 	// GetGTTs returns all GTT (Good Till Triggered) orders.
 	GetGTTs() ([]GTTOrder, error)
 
@@ -463,12 +490,16 @@ type Client interface {
 
 	// DeleteGTT deletes an existing GTT order.
 	DeleteGTT(triggerID int) (GTTResponse, error)
+}
 
+// PositionConverter converts positions between product types.
+type PositionConverter interface {
 	// ConvertPosition converts a position from one product type to another.
 	ConvertPosition(params ConvertPositionParams) (bool, error)
+}
 
-	// --- Mutual Fund operations ---
-
+// MutualFundClient groups all mutual fund operations.
+type MutualFundClient interface {
 	// GetMFOrders returns all mutual fund orders.
 	GetMFOrders() ([]MFOrder, error)
 
@@ -489,9 +520,10 @@ type Client interface {
 
 	// CancelMFSIP cancels an existing mutual fund SIP.
 	CancelMFSIP(sipID string) (MFSIPResponse, error)
+}
 
-	// --- Margin calculation operations ---
-
+// MarginCalculator calculates order margins, basket margins, and charges.
+type MarginCalculator interface {
 	// GetOrderMargins calculates margin required for orders.
 	GetOrderMargins(orders []OrderMarginParam) (any, error)
 
@@ -500,6 +532,22 @@ type Client interface {
 
 	// GetOrderCharges calculates brokerage, taxes, and charges for orders.
 	GetOrderCharges(orders []OrderChargesParam) (any, error)
+}
+
+// Client is the composite broker interface. Each broker implementation
+// (Zerodha, Angel One, Dhan, Upstox) must satisfy this contract by implementing
+// every sub-interface below. Callers are encouraged to depend on a narrower
+// sub-interface when they only need part of the surface.
+type Client interface {
+	BrokerIdentity
+	ProfileReader
+	PortfolioReader
+	OrderManager
+	MarketDataReader
+	GTTManager
+	PositionConverter
+	MutualFundClient
+	MarginCalculator
 }
 
 // ---------------------------------------------------------------------------

@@ -99,16 +99,7 @@ type mockSessionTerminator struct {
 
 func (m *mockSessionTerminator) TerminateByEmail(email string) int { return m.terminated }
 
-// --- Mock credential/token/alert stores ---
-
-type mockCredentialStore struct{ deleted bool }
-func (m *mockCredentialStore) Delete(email string) { m.deleted = true }
-
-type mockTokenStore struct{ deleted bool }
-func (m *mockTokenStore) Delete(email string) { m.deleted = true }
-
-type mockAlertDeleterStore struct{ deleted bool }
-func (m *mockAlertDeleterStore) DeleteByEmail(email string) { m.deleted = true }
+// Credential/token/alert-deleter mocks live in mocks_test.go.
 
 // ===========================================================================
 // Admin List Users
@@ -1056,21 +1047,12 @@ func TestSetupTelegram_ZeroChatID(t *testing.T) {
 // account_usecases.go — UpdateMyCredentials
 // ---------------------------------------------------------------------------
 
-type mockCredUpdater struct{ deleted bool }
-
-func (m *mockCredUpdater) Delete(email string) { m.deleted = true }
-
-type mockTokenStr struct{ deleted bool }
-
-func (m *mockTokenStr) Delete(email string) { m.deleted = true }
-
-type mockAlertDel struct{ deleted bool }
-
-func (m *mockAlertDel) DeleteByEmail(email string) { m.deleted = true }
+// Duplicate mocks removed — use canonical mockCredentialStore / mockTokenStore
+// / mockAlertDeleterStore from mocks_test.go.
 
 func TestUpdateMyCredentials_Success(t *testing.T) {
 	t.Parallel()
-	uc := NewUpdateMyCredentialsUseCase(&mockCredUpdater{}, &mockTokenStr{}, testLogger())
+	uc := NewUpdateMyCredentialsUseCase(&mockCredentialStore{}, &mockTokenStore{}, testLogger())
 	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{
 		Email: "u@t.com", APIKey: "key", APISecret: "secret",
 	})
@@ -1079,14 +1061,14 @@ func TestUpdateMyCredentials_Success(t *testing.T) {
 
 func TestUpdateMyCredentials_EmptyEmail(t *testing.T) {
 	t.Parallel()
-	uc := NewUpdateMyCredentialsUseCase(&mockCredUpdater{}, &mockTokenStr{}, testLogger())
+	uc := NewUpdateMyCredentialsUseCase(&mockCredentialStore{}, &mockTokenStore{}, testLogger())
 	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{APIKey: "k", APISecret: "s"})
 	assert.ErrorContains(t, err, "email is required")
 }
 
 func TestUpdateMyCredentials_MissingKeys(t *testing.T) {
 	t.Parallel()
-	uc := NewUpdateMyCredentialsUseCase(&mockCredUpdater{}, &mockTokenStr{}, testLogger())
+	uc := NewUpdateMyCredentialsUseCase(&mockCredentialStore{}, &mockTokenStore{}, testLogger())
 	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{Email: "u@t.com"})
 	assert.ErrorContains(t, err, "both api_key and api_secret")
 }

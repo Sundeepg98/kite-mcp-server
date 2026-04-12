@@ -1344,7 +1344,6 @@ func TestManager_DBLifecycle(t *testing.T) {
 // Tests merged from manager_coverage_test.go
 // ===========================================================================
 
-
 // ---------------------------------------------------------------------------
 // New() — with EncryptionSecret to cover the HKDF salt branch
 // ---------------------------------------------------------------------------
@@ -2696,12 +2695,12 @@ func TestListActiveSessions_AutoExpire(t *testing.T) {
 	// Add a valid session
 	sm.mu.Lock()
 	sm.sessions["kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea0"] = &MCPSession{
-		ID: "kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea0",
+		ID:        "kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea0",
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	// Add an expired session
 	sm.sessions["kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea1"] = &MCPSession{
-		ID: "kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea1",
+		ID:        "kitemcp-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeea1",
 		CreatedAt: time.Now().Add(-2 * time.Hour), ExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
 	sm.mu.Unlock()
@@ -2742,12 +2741,7 @@ func TestLoadFromDB_DeleteError(t *testing.T) {
 // CompleteSession — with metrics
 // ---------------------------------------------------------------------------
 
-type mockMetrics struct{}
-
-func (m *mockMetrics) Increment(key string)      {}
-func (m *mockMetrics) TrackDailyUser(userID string) {}
-func (m *mockMetrics) IncrementDaily(key string)  {}
-func (m *mockMetrics) Shutdown()                  {}
+// mockMetrics lives in mocks_test.go.
 
 func TestCompleteSession_WithMetrics(t *testing.T) {
 	t.Parallel()

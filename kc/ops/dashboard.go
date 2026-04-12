@@ -14,7 +14,13 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 )
 
-// DashboardHandler serves the per-user trading dashboard and its API endpoints.
+// DashboardHandler is the composition root for the per-user trading dashboard.
+//
+// It owns the shared state (manager, logger, audit store, admin check, parsed
+// templates) and delegates route handling to focused sub-handlers that each
+// cover one concern (activity, portfolio, orders, alerts, paper, safety).
+// Sub-handlers hold a `core *DashboardHandler` back-reference so they can
+// reach the shared state and helpers (writeJSON, userContext, ...).
 type DashboardHandler struct {
 	manager      *kc.Manager
 	logger       *slog.Logger
@@ -30,6 +36,9 @@ type DashboardHandler struct {
 	paperTmpl     *htmltemplate.Template
 	safetyTmpl    *htmltemplate.Template
 	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
+
+	// Focused sub-handlers (composition root pattern).
+	activity *ActivityHandler
 }
 
 // billingStoreIface is the subset of billing.Store used by the dashboard.
@@ -46,6 +55,7 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 		auditStore: auditStore,
 	}
 	d.InitTemplates()
+	d.activity = newActivityHandler(d)
 	return d
 }
 
@@ -64,9 +74,9 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	wrap := func(f http.HandlerFunc) http.Handler { return auth(f) }
 	mux.Handle("/dashboard", wrap(d.servePortfolioPage))
 	mux.Handle("/dashboard/activity", wrap(d.serveActivityPageSSR))
-	mux.Handle("/dashboard/api/activity", wrap(d.activityAPI))
-	mux.Handle("/dashboard/api/activity/stream", wrap(d.activityStreamSSE))
-	mux.Handle("/dashboard/api/activity/export", wrap(d.activityExport))
+	mux.Handle("/dashboard/api/activity", wrap(d.activity.activityAPI))
+	mux.Handle("/dashboard/api/activity/stream", wrap(d.activity.activityStreamSSE))
+	mux.Handle("/dashboard/api/activity/export", wrap(d.activity.activityExport))
 	mux.Handle("/dashboard/orders", wrap(d.serveOrdersPageSSR))
 	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPageSSR))
 	mux.Handle("/dashboard/api/orders", wrap(d.ordersAPI))

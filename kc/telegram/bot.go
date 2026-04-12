@@ -96,13 +96,13 @@ type BotHandler struct {
 	// kiteBaseURI overrides the Kite API base URL (for testing).
 	kiteBaseURI string
 
-	// kiteClientFactory creates kiteconnect.Client instances; nil = direct kiteconnect.New().
+	// kiteClientFactory creates kiteconnect.Client instances. Required for trading.
 	kiteClientFactory KiteClientFactory
 }
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
 // that periodically prunes stale rate-limit and pending-order entries.
-// factory may be nil, in which case kiteconnect.New() is used directly.
+// A nil factory disables trading commands (getClient returns an error).
 func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger, factory KiteClientFactory) *BotHandler {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &BotHandler{
@@ -348,13 +348,10 @@ func (h *BotHandler) newKiteClient(email string) (*kiteconnect.Client, string) {
 	if !h.manager.IsTokenValid(email) {
 		return nil, "Kite token expired. Please re-login via MCP."
 	}
-	var client *kiteconnect.Client
-	if h.kiteClientFactory != nil {
-		client = h.kiteClientFactory.NewClientWithToken(apiKey, accessToken)
-	} else {
-		client = kiteconnect.New(apiKey)
-		client.SetAccessToken(accessToken)
+	if h.kiteClientFactory == nil {
+		return nil, "Internal error: Kite client factory not configured."
 	}
+	client := h.kiteClientFactory.NewClientWithToken(apiKey, accessToken)
 	if h.kiteBaseURI != "" {
 		client.SetBaseURI(h.kiteBaseURI)
 	}

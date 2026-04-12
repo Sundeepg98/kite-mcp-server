@@ -37,30 +37,47 @@ type KiteClientFactory interface {
 	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
 }
 
-func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) *kiteconnect.Client {
-	if d.factory != nil {
-		return d.factory.NewClientWithToken(apiKey, accessToken)
+// errNoKiteClientFactory is returned when defaultBrokerProvider is used without a factory.
+// Production code always wires a factory via the Manager; only misconfigured tests hit this.
+var errNoKiteClientFactory = fmt.Errorf("alerts: no KiteClientFactory configured")
+
+func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) (*kiteconnect.Client, error) {
+	if d.factory == nil {
+		return nil, errNoKiteClientFactory
 	}
-	// Fallback: create client via SDK directly (same as defaultKiteClientFactory).
-	c := kiteconnect.New(apiKey)
-	c.SetAccessToken(accessToken)
-	return c
+	return d.factory.NewClientWithToken(apiKey, accessToken), nil
 }
 
 func (d *defaultBrokerProvider) GetHoldings(apiKey, accessToken string) ([]kiteconnect.Holding, error) {
-	return d.newClient(apiKey, accessToken).GetHoldings()
+	c, err := d.newClient(apiKey, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	return c.GetHoldings()
 }
 
 func (d *defaultBrokerProvider) GetPositions(apiKey, accessToken string) (kiteconnect.Positions, error) {
-	return d.newClient(apiKey, accessToken).GetPositions()
+	c, err := d.newClient(apiKey, accessToken)
+	if err != nil {
+		return kiteconnect.Positions{}, err
+	}
+	return c.GetPositions()
 }
 
 func (d *defaultBrokerProvider) GetUserMargins(apiKey, accessToken string) (kiteconnect.AllMargins, error) {
-	return d.newClient(apiKey, accessToken).GetUserMargins()
+	c, err := d.newClient(apiKey, accessToken)
+	if err != nil {
+		return kiteconnect.AllMargins{}, err
+	}
+	return c.GetUserMargins()
 }
 
 func (d *defaultBrokerProvider) GetLTP(apiKey, accessToken string, instruments ...string) (kiteconnect.QuoteLTP, error) {
-	return d.newClient(apiKey, accessToken).GetLTP(instruments...)
+	c, err := d.newClient(apiKey, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	return c.GetLTP(instruments...)
 }
 
 // kolkataLoc is an alias for the shared IST timezone (kc/isttz leaf package).
@@ -90,7 +107,7 @@ type BriefingService struct {
 	creds             CredentialGetter
 	logger            *slog.Logger
 	brokerProvider    BrokerDataProvider // nil = use default via kiteClientFactory
-	kiteClientFactory KiteClientFactory  // nil = use kiteconnect.New directly
+	kiteClientFactory KiteClientFactory  // required for defaultBrokerProvider fallback
 }
 
 // NewBriefingService creates a BriefingService. Returns nil if notifier is nil.
@@ -117,6 +134,15 @@ func NewBriefingService(
 func (b *BriefingService) SetBrokerProvider(p BrokerDataProvider) {
 	if b != nil {
 		b.brokerProvider = p
+	}
+}
+
+// SetKiteClientFactory wires the factory used by the default broker provider.
+// Production wires this during app bootstrap; tests may leave it nil when they
+// override the broker provider via SetBrokerProvider.
+func (b *BriefingService) SetKiteClientFactory(f KiteClientFactory) {
+	if b != nil {
+		b.kiteClientFactory = f
 	}
 }
 
