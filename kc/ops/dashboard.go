@@ -705,8 +705,7 @@ func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	client := kiteconnect.New(credEntry.APIKey)
-	client.SetAccessToken(tokenEntry.AccessToken)
+	client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 
 	ohlcData, err := client.GetOHLC("NSE:NIFTY 50", "NSE:NIFTY BANK", "BSE:SENSEX")
 	if err != nil {
@@ -765,8 +764,7 @@ func (d *DashboardHandler) portfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create kiteconnect client
-	client := kiteconnect.New(credEntry.APIKey)
-	client.SetAccessToken(tokenEntry.AccessToken)
+	client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 
 	// Fetch holdings
 	holdings, holdingsErr := client.GetHoldings()
@@ -1049,8 +1047,7 @@ func (d *DashboardHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasCreds && hasToken {
-		client = kiteconnect.New(credEntry.APIKey)
-		client.SetAccessToken(tokenEntry.AccessToken)
+		client = d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 	}
 
 	if client != nil {
@@ -1317,8 +1314,7 @@ func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Requ
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
-		client = kiteconnect.New(credEntry.APIKey)
-		client.SetAccessToken(tokenEntry.AccessToken)
+		client = d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 	}
 
 	// Batch LTP lookup for active alerts
@@ -1801,8 +1797,7 @@ func (d *DashboardHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	client := kiteconnect.New(credEntry.APIKey)
-	client.SetAccessToken(tokenEntry.AccessToken)
+	client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 
 	holdings, err := client.GetHoldings()
 	if err != nil {
@@ -1966,8 +1961,7 @@ func (d *DashboardHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	client := kiteconnect.New(credEntry.APIKey)
-	client.SetAccessToken(tokenEntry.AccessToken)
+	client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 
 	holdings, err := client.GetHoldings()
 	if err != nil {

@@ -76,17 +76,18 @@ func New(cfg Config) (*Manager, error) {
 	}
 
 	m := &Manager{
-		apiKey:          cfg.APIKey,
-		apiSecret:       cfg.APISecret,
-		accessToken:     cfg.AccessToken,
-		Logger:          cfg.Logger,
-		metrics:         cfg.Metrics,
-		appMode:         cfg.AppMode,
-		externalURL:     cfg.ExternalURL,
-		adminSecretPath: cfg.AdminSecretPath,
-		devMode:         cfg.DevMode,
-		tokenStore:      NewKiteTokenStore(),
-		credentialStore: NewKiteCredentialStore(),
+		apiKey:            cfg.APIKey,
+		apiSecret:         cfg.APISecret,
+		accessToken:       cfg.AccessToken,
+		Logger:            cfg.Logger,
+		metrics:           cfg.Metrics,
+		appMode:           cfg.AppMode,
+		externalURL:       cfg.ExternalURL,
+		adminSecretPath:   cfg.AdminSecretPath,
+		devMode:           cfg.DevMode,
+		kiteClientFactory: &defaultKiteClientFactory{},
+		tokenStore:        NewKiteTokenStore(),
+		credentialStore:   NewKiteCredentialStore(),
 	}
 
 	// Initialize alert system: store → notifier → evaluator → ticker
@@ -253,8 +254,7 @@ func New(cfg Config) (*Manager, error) {
 		if accessToken == "" {
 			return nil, fmt.Errorf("no Kite access token for %s", email)
 		}
-		client := kiteconnect.New(apiKey)
-		client.SetAccessToken(accessToken)
+		client := m.kiteClientFactory.NewClientWithToken(apiKey, accessToken)
 		return client, nil
 	})
 
@@ -459,6 +459,7 @@ type Manager struct {
 	eventDispatcher    *domain.EventDispatcher        // optional: domain event pub/sub
 	eventStore         *eventsourcing.EventStore      // optional: domain audit log (append-only, not used for state reconstitution)
 	mcpServer          any                            // *server.MCPServer — stored as any to avoid circular import
+	kiteClientFactory  KiteClientFactory              // creates kiteconnect.Client instances; mockable in tests
 	appMode            string
 	externalURL        string
 	adminSecretPath    string
@@ -614,6 +615,18 @@ func (m *Manager) HasPreAuth() bool {
 // DevMode returns true if the server is running in development mode with mock broker.
 func (m *Manager) DevMode() bool {
 	return m.devMode
+}
+
+// KiteClientFactory returns the factory used to create kiteconnect.Client instances.
+// Callers should use this instead of calling kiteconnect.New() directly so that
+// tests can inject a mock factory that points clients at an httptest server.
+func (m *Manager) KiteClientFactory() KiteClientFactory {
+	return m.kiteClientFactory
+}
+
+// SetKiteClientFactory overrides the default factory. Intended for tests.
+func (m *Manager) SetKiteClientFactory(f KiteClientFactory) {
+	m.kiteClientFactory = f
 }
 
 // HasCachedToken returns true if there's a cached Kite token for the given email.

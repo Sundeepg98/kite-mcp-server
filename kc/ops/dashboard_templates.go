@@ -209,8 +209,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 		credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 		tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 		if hasCreds && hasToken {
-			client := kiteconnect.New(credEntry.APIKey)
-			client.SetAccessToken(tokenEntry.AccessToken)
+			client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 
 			holdings, holdingsErr := client.GetHoldings()
 			positions, positionsErr := client.GetPositions()
@@ -237,8 +236,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 		credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 		tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 		if hasCreds && hasToken {
-			client := kiteconnect.New(credEntry.APIKey)
-			client.SetAccessToken(tokenEntry.AccessToken)
+			client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 			ohlcData, err := client.GetOHLC("NSE:NIFTY 50", "NSE:NIFTY BANK", "BSE:SENSEX")
 			if err == nil {
 				indices := make(map[string]any, len(ohlcData))
@@ -418,8 +416,7 @@ func (d *DashboardHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email 
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
-		client := kiteconnect.New(credEntry.APIKey)
-		client.SetAccessToken(tokenEntry.AccessToken)
+		client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 		d.enrichOrdersWithKite(client, entries)
 	}
 
@@ -576,8 +573,7 @@ func (d *DashboardHandler) serveAlertsPageSSR(w http.ResponseWriter, r *http.Req
 			credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 			tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 			if hasCreds && hasToken {
-				client := kiteconnect.New(credEntry.APIKey)
-				client.SetAccessToken(tokenEntry.AccessToken)
+				client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 				instruments := make(map[string]bool)
 				for _, a := range activeAlerts {
 					key := a.Exchange + ":" + a.Tradingsymbol
@@ -964,8 +960,7 @@ func (d *DashboardHandler) servePortfolioFragment(w http.ResponseWriter, r *http
 		credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 		tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 		if hasCreds && hasToken {
-			client := kiteconnect.New(credEntry.APIKey)
-			client.SetAccessToken(tokenEntry.AccessToken)
+			client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 			holdings, herr := client.GetHoldings()
 			positions, perr := client.GetPositions()
 			if herr == nil && perr == nil {
@@ -984,8 +979,7 @@ func (d *DashboardHandler) servePortfolioFragment(w http.ResponseWriter, r *http
 		credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 		tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 		if hasCreds && hasToken {
-			client := kiteconnect.New(credEntry.APIKey)
-			client.SetAccessToken(tokenEntry.AccessToken)
+			client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 			ohlcData, err := client.GetOHLC("NSE:NIFTY 50", "NSE:NIFTY BANK", "BSE:SENSEX")
 			if err == nil {
 				indices := make(map[string]any, len(ohlcData))
