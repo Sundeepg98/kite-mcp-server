@@ -90,7 +90,7 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderMarginsUseCase(manager.SessionSvc(), manager.Logger)
+			uc := usecases.NewGetOrderMarginsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
 			resp, err := uc.Execute(ctx, cqrs.GetOrderMarginsQuery{
 				Email: session.Email,
 				Orders: []cqrs.OrderMarginQueryParam{{
@@ -171,7 +171,7 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetBasketMarginsUseCase(manager.SessionSvc(), manager.Logger)
+			uc := usecases.NewGetBasketMarginsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
 			resp, err := uc.Execute(ctx, cqrs.GetBasketMarginsQuery{
 				Email:             session.Email,
 				Orders:            orderParams,
@@ -230,7 +230,7 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderChargesUseCase(manager.SessionSvc(), manager.Logger)
+			uc := usecases.NewGetOrderChargesUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
 			resp, err := uc.Execute(ctx, cqrs.GetOrderChargesQuery{
 				Email:  session.Email,
 				Orders: orderParams,

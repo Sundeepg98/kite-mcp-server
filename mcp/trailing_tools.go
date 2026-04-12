@@ -150,20 +150,20 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 					referencePrice = ltpData.LastPrice
 				}
 
-				return doSetTrailingStop(manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+				return doSetTrailingStop(handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 					orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 			})
 		}
 
-		return doSetTrailingStop(manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+		return doSetTrailingStop(handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 			orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 	}
 }
 
-func doSetTrailingStop(manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
+func doSetTrailingStop(handler *ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
 	orderID, variety, direction string, trailAmount, trailPct, currentStop, referencePrice float64) (*mcp.CallToolResult, error) {
 
-	tsManager := manager.TrailingStopManager()
+	tsManager := handler.deps.TrailingStop.TrailingStopManager()
 	if tsManager == nil {
 		return mcp.NewToolResultError("Trailing stop manager not available (requires database persistence)"), nil
 	}
@@ -252,7 +252,7 @@ func (*ListTrailingStopsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		tsManager := manager.TrailingStopManager()
+		tsManager := handler.deps.TrailingStop.TrailingStopManager()
 		if tsManager == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
@@ -304,7 +304,7 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		tsID := NewArgParser(args).String("trailing_stop_id", "")
-		tsManager := manager.TrailingStopManager()
+		tsManager := handler.deps.TrailingStop.TrailingStopManager()
 		if tsManager == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}

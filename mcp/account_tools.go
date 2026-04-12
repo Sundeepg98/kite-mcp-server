@@ -51,7 +51,7 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			TokenStore:      handler.deps.Tokens.TokenStore(),
 			AlertDeleter:    handler.deps.Alerts.AlertStore(),
 			WatchlistStore:  handler.deps.Watchlist.WatchlistStore(),
-			TrailingStops:   manager.TrailingStopManager(),
+			TrailingStops:   handler.deps.TrailingStop.TrailingStopManager(),
 			PaperEngine:     handler.deps.Paper.PaperEngine(),
 			UserStore:       handler.deps.Users.UserStore(),
 			Sessions:        manager.SessionManager(),

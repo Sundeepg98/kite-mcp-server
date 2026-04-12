@@ -28,21 +28,23 @@ type ToolHandlerDeps struct {
 	// at the point of use. Providers are preferred over raw store interfaces
 	// because they can return nil when a subsystem is disabled without the
 	// caller needing to know the disable semantics up front.
-	Tokens      kc.TokenStoreProvider
-	CredStore   kc.CredentialStoreProvider
-	Alerts      kc.AlertStoreProvider
-	Telegram    kc.TelegramStoreProvider
-	Watchlist   kc.WatchlistStoreProvider
-	Users       kc.UserStoreProvider
-	Registry    kc.RegistryStoreProvider
-	Audit       kc.AuditStoreProvider
-	Billing     kc.BillingStoreProvider
-	Ticker      kc.TickerServiceProvider
-	Paper       kc.PaperEngineProvider
-	Instruments kc.InstrumentsManagerProvider
-	AlertDB     kc.AlertDBProvider
-	RiskGuard   kc.RiskGuardProvider
-	MCPServer   kc.MCPServerProvider
+	Tokens         kc.TokenStoreProvider
+	CredStore      kc.CredentialStoreProvider
+	Alerts         kc.AlertStoreProvider
+	Telegram       kc.TelegramStoreProvider
+	Watchlist      kc.WatchlistStoreProvider
+	Users          kc.UserStoreProvider
+	Registry       kc.RegistryStoreProvider
+	Audit          kc.AuditStoreProvider
+	Billing        kc.BillingStoreProvider
+	Ticker         kc.TickerServiceProvider
+	Paper          kc.PaperEngineProvider
+	Instruments    kc.InstrumentsManagerProvider
+	AlertDB        kc.AlertDBProvider
+	RiskGuard      kc.RiskGuardProvider
+	MCPServer      kc.MCPServerProvider
+	BrokerResolver kc.BrokerResolverProvider
+	TrailingStop   kc.TrailingStopManagerProvider
 }
 
 // ToolHandler provides common functionality for all MCP tools.
@@ -70,21 +72,23 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			Metrics:     manager,
 			Config:      manager,
 			// Narrow providers — *kc.Manager satisfies every one.
-			Tokens:      manager,
-			CredStore:   manager,
-			Alerts:      manager,
-			Telegram:    manager,
-			Watchlist:   manager,
-			Users:       manager,
-			Registry:    manager,
-			Audit:       manager,
-			Billing:     manager,
-			Ticker:      manager,
-			Paper:       manager,
-			Instruments: manager,
-			AlertDB:     manager,
-			RiskGuard:   manager,
-			MCPServer:   manager,
+			Tokens:         manager,
+			CredStore:      manager,
+			Alerts:         manager,
+			Telegram:       manager,
+			Watchlist:      manager,
+			Users:          manager,
+			Registry:       manager,
+			Audit:          manager,
+			Billing:        manager,
+			Ticker:         manager,
+			Paper:          manager,
+			Instruments:    manager,
+			AlertDB:        manager,
+			RiskGuard:      manager,
+			MCPServer:      manager,
+			BrokerResolver: manager,
+			TrailingStop:   manager,
 		},
 	}
 }

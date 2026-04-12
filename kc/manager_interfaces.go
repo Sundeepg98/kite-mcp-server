@@ -167,6 +167,15 @@ type MCPServerProvider interface {
 	MCPServer() any
 }
 
+// BrokerResolverProvider exposes the session service used by use cases to
+// resolve a broker.Client for a given email. Consumers depend on the narrow
+// *SessionService type because it already implements the usecases.BrokerResolver
+// interface — passing this into NewXxxUseCase(...) constructors replaces the
+// service-locator pattern of calling manager.SessionSvc() inline.
+type BrokerResolverProvider interface {
+	SessionSvc() *SessionService
+}
+
 // StoreAccessor is the aggregate composition of every Manager-implemented
 // store-provider interface, retained for consumers that legitimately need
 // broad access (e.g. the Manager itself, admin tooling, and registration
@@ -273,4 +282,9 @@ var (
 	_ AlertDBProvider            = (*Manager)(nil)
 	_ RiskGuardProvider          = (*Manager)(nil)
 	_ MCPServerProvider          = (*Manager)(nil)
+
+	// Round 4 narrow providers — used by mcp.ToolHandlerDeps to replace
+	// remaining service-locator calls (manager.SessionSvc(), manager.TrailingStopManager()).
+	_ BrokerResolverProvider     = (*Manager)(nil)
+	_ TrailingStopManagerProvider = (*Manager)(nil)
 )

@@ -639,7 +639,7 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		return handler.WithSession(ctx, "convert_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewConvertPositionUseCase(manager.SessionSvc(), manager.Logger)
+			uc := usecases.NewConvertPositionUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
 			ok, err := uc.Execute(ctx, cqrs.ConvertPositionCommand{
 				Email:           session.Email,
 				Exchange:        p.String("exchange", ""),
