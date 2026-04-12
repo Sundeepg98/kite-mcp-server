@@ -7,7 +7,8 @@ import (
 )
 
 // paperStatus returns the paper trading account status for the authenticated user.
-func (d *DashboardHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -32,7 +33,8 @@ func (d *DashboardHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // paperHoldings returns paper trading holdings for the authenticated user.
-func (d *DashboardHandler) paperHoldings(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) paperHoldings(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -57,7 +59,8 @@ func (d *DashboardHandler) paperHoldings(w http.ResponseWriter, r *http.Request)
 }
 
 // paperPositions returns paper trading positions for the authenticated user.
-func (d *DashboardHandler) paperPositions(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) paperPositions(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -82,7 +85,8 @@ func (d *DashboardHandler) paperPositions(w http.ResponseWriter, r *http.Request
 }
 
 // paperOrders returns paper trading orders for the authenticated user.
-func (d *DashboardHandler) paperOrders(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) paperOrders(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -107,7 +111,8 @@ func (d *DashboardHandler) paperOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 // paperReset resets the paper trading account for the authenticated user.
-func (d *DashboardHandler) paperReset(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) paperReset(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

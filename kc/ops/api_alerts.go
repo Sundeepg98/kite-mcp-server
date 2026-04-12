@@ -88,7 +88,8 @@ type pnlChartResponse struct {
 }
 
 // alerts returns the authenticated user's price alerts, separated into active and triggered.
-func (d *DashboardHandler) alerts(w http.ResponseWriter, r *http.Request) {
+func (h *AlertsHandler) alerts(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -122,7 +123,8 @@ func (d *DashboardHandler) alerts(w http.ResponseWriter, r *http.Request) {
 
 // alertsEnrichedAPI returns enriched alert data with lifecycle metrics and current prices.
 // It also supports DELETE method to remove an active alert by ID.
-func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request) {
+func (h *AlertsHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	email := oauth.EmailFromContext(r.Context())
 	if email == "" {
 		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
@@ -217,8 +219,8 @@ func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Requ
 		if cp, ok := ltpMap[key]; ok {
 			ea.CurrentPrice = cp
 			if cp > 0 {
-				d := math.Round(math.Abs(cp-a.TargetPrice)/cp*10000) / 100
-				ea.DistancePct = &d
+				dist := math.Round(math.Abs(cp-a.TargetPrice)/cp*10000) / 100
+				ea.DistancePct = &dist
 			}
 		}
 		enrichedActive = append(enrichedActive, ea)
@@ -276,7 +278,8 @@ func (d *DashboardHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Requ
 
 // pnlChartAPI returns daily P&L data for charting on the portfolio page.
 // Query params: period (days, default 30)
-func (d *DashboardHandler) pnlChartAPI(w http.ResponseWriter, r *http.Request) {
+func (h *AlertsHandler) pnlChartAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

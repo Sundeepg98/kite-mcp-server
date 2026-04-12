@@ -38,8 +38,14 @@ type DashboardHandler struct {
 	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
 
 	// Focused sub-handlers (composition root pattern).
-	activity *ActivityHandler
-	orders   *OrdersHandler
+	activity  *ActivityHandler
+	orders    *OrdersHandler
+	portfolio *PortfolioHandler
+	alerts    *AlertsHandler
+	paper     *PaperHandler
+	safety    *SafetyHandler
+	tax       *TaxHandler
+	account   *AccountHandler
 }
 
 // billingStoreIface is the subset of billing.Store used by the dashboard.
@@ -58,6 +64,12 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 	d.InitTemplates()
 	d.activity = newActivityHandler(d)
 	d.orders = newOrdersHandler(d)
+	d.portfolio = newPortfolioHandler(d)
+	d.alerts = newAlertsHandler(d)
+	d.paper = newPaperHandler(d)
+	d.safety = newSafetyHandler(d)
+	d.tax = newTaxHandler(d)
+	d.account = newAccountHandler(d)
 	return d
 }
 
@@ -74,37 +86,37 @@ func (d *DashboardHandler) SetBillingStore(store billingStoreIface) {
 // RegisterRoutes mounts all dashboard routes, protected by the provided auth middleware.
 func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler) {
 	wrap := func(f http.HandlerFunc) http.Handler { return auth(f) }
-	mux.Handle("/dashboard", wrap(d.servePortfolioPage))
-	mux.Handle("/dashboard/activity", wrap(d.serveActivityPageSSR))
+	mux.Handle("/dashboard", wrap(d.portfolio.servePortfolioPage))
+	mux.Handle("/dashboard/activity", wrap(d.activity.serveActivityPageSSR))
 	mux.Handle("/dashboard/api/activity", wrap(d.activity.activityAPI))
 	mux.Handle("/dashboard/api/activity/stream", wrap(d.activity.activityStreamSSE))
 	mux.Handle("/dashboard/api/activity/export", wrap(d.activity.activityExport))
 	mux.Handle("/dashboard/orders", wrap(d.orders.serveOrdersPageSSR))
-	mux.Handle("/dashboard/alerts", wrap(d.serveAlertsPageSSR))
+	mux.Handle("/dashboard/alerts", wrap(d.alerts.serveAlertsPageSSR))
 	mux.Handle("/dashboard/api/orders", wrap(d.orders.ordersAPI))
-	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio))
-	mux.Handle("/dashboard/api/alerts", wrap(d.alerts))
-	mux.Handle("/dashboard/api/alerts-enriched", wrap(d.alertsEnrichedAPI))
-	mux.Handle("/dashboard/api/pnl-chart", wrap(d.pnlChartAPI))
+	mux.Handle("/dashboard/api/portfolio", wrap(d.portfolio.portfolio))
+	mux.Handle("/dashboard/api/alerts", wrap(d.alerts.alerts))
+	mux.Handle("/dashboard/api/alerts-enriched", wrap(d.alerts.alertsEnrichedAPI))
+	mux.Handle("/dashboard/api/pnl-chart", wrap(d.alerts.pnlChartAPI))
 	mux.Handle("/dashboard/api/order-attribution", wrap(d.orders.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
-	mux.Handle("/dashboard/api/market-indices", wrap(d.marketIndices))
-	mux.Handle("/dashboard/safety", wrap(d.serveSafetyPageSSR))
-	mux.Handle("/dashboard/api/safety/status", wrap(d.safetyStatus))
-	mux.Handle("/dashboard/paper", wrap(d.servePaperPageSSR))
-	mux.Handle("/dashboard/api/paper/status", wrap(d.paperStatus))
+	mux.Handle("/dashboard/api/market-indices", wrap(d.portfolio.marketIndices))
+	mux.Handle("/dashboard/safety", wrap(d.safety.serveSafetyPageSSR))
+	mux.Handle("/dashboard/api/safety/status", wrap(d.safety.safetyStatus))
+	mux.Handle("/dashboard/paper", wrap(d.paper.servePaperPageSSR))
+	mux.Handle("/dashboard/api/paper/status", wrap(d.paper.paperStatus))
 	// Fragment endpoints for htmx auto-refresh
-	mux.Handle("/dashboard/api/portfolio-fragment", wrap(d.servePortfolioFragment))
-	mux.Handle("/dashboard/api/safety-fragment", wrap(d.serveSafetyFragment))
-	mux.Handle("/dashboard/api/paper-fragment", wrap(d.servePaperFragment))
-	mux.Handle("/dashboard/api/paper/holdings", wrap(d.paperHoldings))
-	mux.Handle("/dashboard/api/paper/positions", wrap(d.paperPositions))
-	mux.Handle("/dashboard/api/paper/orders", wrap(d.paperOrders))
-	mux.Handle("/dashboard/api/paper/reset", wrap(d.paperReset))
-	mux.Handle("/dashboard/api/sector-exposure", wrap(d.sectorExposureAPI))
-	mux.Handle("/dashboard/api/tax-analysis", wrap(d.taxAnalysisAPI))
-	mux.Handle("/dashboard/api/account/delete", wrap(d.selfDeleteAccount))
-	mux.Handle("/dashboard/api/account/credentials", wrap(d.selfManageCredentials))
+	mux.Handle("/dashboard/api/portfolio-fragment", wrap(d.portfolio.servePortfolioFragment))
+	mux.Handle("/dashboard/api/safety-fragment", wrap(d.safety.serveSafetyFragment))
+	mux.Handle("/dashboard/api/paper-fragment", wrap(d.paper.servePaperFragment))
+	mux.Handle("/dashboard/api/paper/holdings", wrap(d.paper.paperHoldings))
+	mux.Handle("/dashboard/api/paper/positions", wrap(d.paper.paperPositions))
+	mux.Handle("/dashboard/api/paper/orders", wrap(d.paper.paperOrders))
+	mux.Handle("/dashboard/api/paper/reset", wrap(d.paper.paperReset))
+	mux.Handle("/dashboard/api/sector-exposure", wrap(d.portfolio.sectorExposureAPI))
+	mux.Handle("/dashboard/api/tax-analysis", wrap(d.tax.taxAnalysisAPI))
+	mux.Handle("/dashboard/api/account/delete", wrap(d.account.selfDeleteAccount))
+	mux.Handle("/dashboard/api/account/credentials", wrap(d.account.selfManageCredentials))
 	// Only register billing page if billing store is available
 	if d.billingStore != nil {
 		mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))

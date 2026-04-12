@@ -70,11 +70,12 @@ func (*HoldingsTool) Tool() mcp.Tool {
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
-		portfolio, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+		// Phase 2j: dispatch through CQRS query bus (handler registered in app/wire_bus.go).
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		portfolio := raw.(*usecases.PortfolioResult)
 
 		// Convert to []interface{} for generic pagination
 		result := make([]interface{}, len(portfolio.Holdings))
@@ -110,11 +111,11 @@ func (*PositionsTool) Tool() mcp.Tool {
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]interface{}, error) {
-		uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
-		portfolio, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		portfolio := raw.(*usecases.PortfolioResult)
 
 		p := NewArgParser(args)
 		posType := p.String("position_type", "net")

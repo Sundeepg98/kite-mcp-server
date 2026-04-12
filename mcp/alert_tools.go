@@ -8,6 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
@@ -173,7 +174,9 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if clientErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
 			}
-			ltpResp, ltpErr := kiteSession.Kite.Client.GetLTP(instrumentID)
+			ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
+				return kiteSession.Kite.Client.GetLTP(instrumentID)
+			}, 2)
 			if ltpErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch current LTP for reference price: %s", ltpErr)), nil
 			}

@@ -118,12 +118,12 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
 		return handler.WithSession(ctx, "tax_harvest_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
-			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "tax_harvest_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
+			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{

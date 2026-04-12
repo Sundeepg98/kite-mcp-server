@@ -8,7 +8,8 @@ import (
 )
 
 // serveSafetyPageSSR renders the user safety / risk limits page.
-func (d *DashboardHandler) serveSafetyPageSSR(w http.ResponseWriter, r *http.Request) {
+func (h *SafetyHandler) serveSafetyPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.safetyTmpl == nil {
 		d.servePageFallback(w, "safety.html")
 		return
@@ -22,7 +23,7 @@ func (d *DashboardHandler) serveSafetyPageSSR(w http.ResponseWriter, r *http.Req
 		UpdatedAt:  nowTimestamp(),
 	}
 
-	safetyData := d.buildSafetyData(email)
+	safetyData := h.buildSafetyData(email)
 	data.Freeze = safetyToFreezeData(safetyData)
 	data.Limits = safetyToLimitsData(safetyData)
 	data.SEBI = safetyToSEBIData(safetyData)
@@ -34,14 +35,15 @@ func (d *DashboardHandler) serveSafetyPageSSR(w http.ResponseWriter, r *http.Req
 }
 
 // serveSafetyFragment renders safety partials for htmx refresh.
-func (d *DashboardHandler) serveSafetyFragment(w http.ResponseWriter, r *http.Request) {
+func (h *SafetyHandler) serveSafetyFragment(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.fragmentTmpl == nil {
 		http.Error(w, "templates not initialized", http.StatusInternalServerError)
 		return
 	}
 
 	email, _, _ := d.userContext(r)
-	safetyData := d.buildSafetyData(email)
+	safetyData := h.buildSafetyData(email)
 
 	freeze := safetyToFreezeData(safetyData)
 	limitsData := safetyToLimitsData(safetyData)
@@ -63,7 +65,8 @@ func (d *DashboardHandler) serveSafetyFragment(w http.ResponseWriter, r *http.Re
 
 // buildSafetyData assembles the safety map used by both the safety page and
 // its htmx fragment — riskguard status, effective limits, and SEBI compliance.
-func (d *DashboardHandler) buildSafetyData(email string) map[string]any {
+func (h *SafetyHandler) buildSafetyData(email string) map[string]any {
+	d := h.core
 	guard := d.manager.RiskGuard()
 	if guard == nil {
 		return map[string]any{

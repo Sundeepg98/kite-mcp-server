@@ -62,8 +62,28 @@ type Store struct {
 	hashKey       []byte // HMAC key for hash chaining
 	chainMu       sync.Mutex
 
+	// droppedCount tracks audit entries that could not be persisted
+	// (buffer full or synchronous fallback failed). Exposed via DroppedCount
+	// for monitoring — non-zero means compliance gaps exist.
+	droppedMu    sync.Mutex
+	droppedCount int64
+
 	listenerMu        sync.RWMutex
 	activityListeners map[string]chan *ToolCall
+}
+
+// DroppedCount returns the number of audit entries that have been dropped
+// since process start. Used by ops endpoints and alerting.
+func (s *Store) DroppedCount() int64 {
+	s.droppedMu.Lock()
+	defer s.droppedMu.Unlock()
+	return s.droppedCount
+}
+
+func (s *Store) incDropped() {
+	s.droppedMu.Lock()
+	s.droppedCount++
+	s.droppedMu.Unlock()
 }
 
 // New creates a new audit Store using the given database handle.
@@ -156,18 +176,35 @@ func (s *Store) computeChainLink(entry *ToolCall) {
 	s.lastHash = entry.EntryHash
 }
 
-// Enqueue adds a tool call to the write buffer. Non-blocking; drops if buffer full.
+// Enqueue adds a tool call to the write buffer. Non-blocking; logs and counts
+// any dropped entries via DroppedCount so operators can detect compliance gaps.
+//
+// H3 fix (phase 2i): previously the worker-not-started fallback swallowed
+// Record errors with `_ = s.Record(entry)` and the buffer-full path logged at
+// Warn level with no counter. Both paths now go through incDropped so monitoring
+// can alert on non-zero DroppedCount.
 func (s *Store) Enqueue(entry *ToolCall) {
 	if s.writeCh == nil {
-		// Worker not started — fall back to synchronous write.
-		_ = s.Record(entry)
+		// Worker not started — synchronous fallback. Compute the chain link
+		// here since the worker goroutine is not draining.
+		s.computeChainLink(entry)
+		if err := s.Record(entry); err != nil {
+			s.incDropped()
+			if s.logger != nil {
+				s.logger.Error("Audit sync-fallback write failed, entry dropped",
+					"error", err, "call_id", entry.CallID, "tool", entry.ToolName)
+			}
+		}
 		return
 	}
 	select {
 	case s.writeCh <- entry:
 	default:
+		s.incDropped()
 		if s.logger != nil {
-			s.logger.Warn("Audit buffer full, dropping entry", "call_id", entry.CallID)
+			s.logger.Error("Audit buffer full, entry dropped (compliance gap)",
+				"call_id", entry.CallID, "tool", entry.ToolName,
+				"dropped_total", s.DroppedCount())
 		}
 	}
 }

@@ -42,7 +42,8 @@ type taxAnalysisResponse struct {
 }
 
 // taxAnalysisAPI returns tax classification and harvesting opportunities for holdings.
-func (d *DashboardHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request) {
+func (h *TaxHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -84,13 +85,13 @@ func (d *DashboardHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp := d.computeTaxAnalysis(holdings)
+	resp := computeTaxAnalysis(holdings)
 	d.writeJSON(w, resp)
 }
 
 // computeTaxAnalysis classifies holdings and computes tax harvesting opportunities.
 // Indian tax rates (FY 2025-26): STCG on equity = 20%, LTCG on equity = 12.5%.
-func (d *DashboardHandler) computeTaxAnalysis(holdings kiteconnect.Holdings) taxAnalysisResponse {
+func computeTaxAnalysis(holdings kiteconnect.Holdings) taxAnalysisResponse {
 	const (
 		stcgRate = 20.0
 		ltcgRate = 12.5

@@ -97,7 +97,8 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 }
 
 // safetyStatus returns riskguard status and effective limits for the authenticated user.
-func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) {
+func (h *SafetyHandler) safetyStatus(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -147,7 +148,8 @@ func (d *DashboardHandler) safetyStatus(w http.ResponseWriter, r *http.Request) 
 
 // selfDeleteAccount handles POST /dashboard/api/account/delete.
 // Permanently deletes all data for the authenticated user.
-func (d *DashboardHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AccountHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -222,7 +224,8 @@ func maskKey(s string) string {
 }
 
 // selfManageCredentials handles GET/PUT/DELETE /dashboard/api/account/credentials.
-func (d *DashboardHandler) selfManageCredentials(w http.ResponseWriter, r *http.Request) {
+func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	email := oauth.EmailFromContext(r.Context())
 	if email == "" {
 		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")

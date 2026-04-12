@@ -230,6 +230,54 @@ func TestEnqueue_BufferFull_NoLogger(t *testing.T) {
 }
 
 // ===========================================================================
+// Phase 2i H3 fix — DroppedCount tracking on buffer-full and sync-fallback paths.
+// ===========================================================================
+
+func TestEnqueue_BufferFull_IncrementsDroppedCount(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	s.SetLogger(slog.Default())
+
+	// Starting dropped count is zero.
+	assert.Equal(t, int64(0), s.DroppedCount())
+
+	// Small buffer with no consumer so the second Enqueue is forced to drop.
+	s.writeCh = make(chan *ToolCall, 1)
+	s.done = make(chan struct{})
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	s.Enqueue(makeEntry("drop-1", "", "get_ltp", "market_data", false, now))
+	s.Enqueue(makeEntry("drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
+	s.Enqueue(makeEntry("drop-3", "", "get_ltp", "market_data", false, now.Add(2*time.Second)))
+
+	assert.Equal(t, int64(2), s.DroppedCount(),
+		"buffer-full entries should be counted via incDropped")
+
+	close(s.writeCh)
+	close(s.done)
+}
+
+func TestEnqueue_SyncFallback_RecordFailureIncrementsDroppedCount(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	s.SetLogger(slog.Default())
+
+	// writeCh nil → sync fallback path. Close the DB so Record() returns
+	// an error, then Enqueue should bump droppedCount.
+	s.writeCh = nil
+	s.db.Close()
+
+	assert.Equal(t, int64(0), s.DroppedCount())
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	s.Enqueue(makeEntry("sync-drop-1", "", "get_ltp", "market_data", false, now))
+	s.Enqueue(makeEntry("sync-drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
+
+	assert.Equal(t, int64(2), s.DroppedCount(),
+		"sync fallback Record() failures should be counted via incDropped")
+}
+
+// ===========================================================================
 // StartWorker — Record error path
 // ===========================================================================
 

@@ -352,20 +352,6 @@ type AdminUnfreezeGlobalCommand struct {
 	AdminEmail string `json:"admin_email"`
 }
 
-// AdminInviteFamilyMemberCommand requests inviting a family member.
-type AdminInviteFamilyMemberCommand struct {
-	AdminEmail string `json:"admin_email"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-}
-
-// AdminRemoveFamilyMemberCommand requests removing a family member.
-type AdminRemoveFamilyMemberCommand struct {
-	AdminEmail  string `json:"admin_email"`
-	TargetEmail string `json:"target_email"`
-}
-
 // --- Setup commands ---
 
 // LoginCommand requests generating a Kite login URL for the user.

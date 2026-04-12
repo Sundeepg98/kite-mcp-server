@@ -8,7 +8,8 @@ import (
 )
 
 // serveActivityPageSSR renders the user activity timeline page.
-func (d *DashboardHandler) serveActivityPageSSR(w http.ResponseWriter, r *http.Request) {
+func (h *ActivityHandler) serveActivityPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.activityTmpl == nil {
 		d.servePageFallback(w, "activity.html")
 		return

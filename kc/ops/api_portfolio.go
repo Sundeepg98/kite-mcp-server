@@ -69,7 +69,8 @@ type sectorExposureAPIResponse struct {
 }
 
 // marketIndices returns OHLC data for NIFTY 50, BANK NIFTY, and SENSEX.
-func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) marketIndices(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -124,7 +125,8 @@ func (d *DashboardHandler) marketIndices(w http.ResponseWriter, r *http.Request)
 }
 
 // portfolio fetches holdings and positions from the Kite API for the authenticated user.
-func (d *DashboardHandler) portfolio(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) portfolio(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -168,12 +170,12 @@ func (d *DashboardHandler) portfolio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := d.buildPortfolioResponse(holdings, positions)
+	resp := buildPortfolioResponse(holdings, positions)
 	d.writeJSON(w, resp)
 }
 
 // buildPortfolioResponse maps gokiteconnect holdings/positions to the dashboard response format.
-func (d *DashboardHandler) buildPortfolioResponse(holdings kiteconnect.Holdings, positions kiteconnect.Positions) portfolioResponse {
+func buildPortfolioResponse(holdings kiteconnect.Holdings, positions kiteconnect.Positions) portfolioResponse {
 	holdingItems := make([]holdingItem, 0, len(holdings))
 	var totalInvested, totalCurrent, totalPnL float64
 	for _, h := range holdings {
@@ -222,7 +224,8 @@ func (d *DashboardHandler) buildPortfolioResponse(holdings kiteconnect.Holdings,
 }
 
 // sectorExposureAPI returns sector allocation data for the authenticated user's holdings.
-func (d *DashboardHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -264,12 +267,12 @@ func (d *DashboardHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resp := d.computeDashboardSectorExposure(holdings)
+	resp := computeDashboardSectorExposure(holdings)
 	d.writeJSON(w, resp)
 }
 
 // computeDashboardSectorExposure maps holdings to sectors and computes allocation percentages.
-func (d *DashboardHandler) computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposureAPIResponse {
+func computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposureAPIResponse {
 	const overExposureThresh = 30.0
 
 	var totalValue float64

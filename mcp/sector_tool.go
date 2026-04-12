@@ -62,12 +62,12 @@ func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler.trackToolCall(ctx, "sector_exposure")
 
 		return handler.WithSession(ctx, "sector_exposure", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
-			uc := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
-			portfolio, err := uc.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "sector_exposure", "api_error")
 				return gomcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
+			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Holdings) == 0 {
 				return handler.MarshalResponse(map[string]interface{}{

@@ -33,13 +33,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// newTestManagerWithDBCov calls newTestManagerWithDB (from helpers_test.go).
-// Kept as alias while server_coverage_test.go references it.
-func newTestManagerWithDBCov(t *testing.T) *kc.Manager {
-	t.Helper()
-	return newTestManagerWithDB(t)
-}
-
 // ===========================================================================
 // setupGracefulShutdown — exercise the inner goroutine's shutdown paths
 // ===========================================================================
@@ -50,7 +43,7 @@ func newTestManagerWithDBCov(t *testing.T) *kc.Manager {
 // Instead, we test that the function sets up without panicking when the app
 // has scheduler, auditStore, telegramBot, oauthHandler, and rateLimiters set.
 func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
@@ -98,7 +91,7 @@ func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
 // when optional fields (scheduler, auditStore, telegramBot, oauthHandler, rateLimiters)
 // are all nil.
 func TestSetupGracefulShutdown_NilOptionalFields(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	// Ensure all optional fields are nil
 	app.scheduler = nil
@@ -379,7 +372,7 @@ func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
 // ===========================================================================
 
 func TestPaperLTPAdapter_SessionWithNonKiteData(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	sess := mgr.SessionManager()
 	// Generate a session with non-KiteSessionData (a string)
 	_ = sess.GenerateWithData("not a KiteSessionData")
@@ -391,7 +384,7 @@ func TestPaperLTPAdapter_SessionWithNonKiteData(t *testing.T) {
 }
 
 func TestPaperLTPAdapter_SessionWithEmptyKiteData(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	sess := mgr.SessionManager()
 	// Generate a session with KiteSessionData where Kite is nil
 	_ = sess.GenerateWithData(&kc.KiteSessionData{})
@@ -407,7 +400,7 @@ func TestPaperLTPAdapter_SessionWithEmptyKiteData(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Callback_BrowserFlow_NoHandler(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.oauthHandler = nil
 
@@ -426,7 +419,7 @@ func TestSetupMux_Callback_BrowserFlow_NoHandler(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_RobotsTxt(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -445,7 +438,7 @@ func TestSetupMux_RobotsTxt(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_ServerCard_OptionsMethod(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Version = "v1.0.0-test"
 
@@ -464,7 +457,7 @@ func TestSetupMux_ServerCard_OptionsMethod(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 
@@ -490,7 +483,7 @@ func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_event_log_123")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	// Set up a billing store on the manager so BillingStoreConcrete() != nil
 	if alertDB := mgr.AlertDB(); alertDB != nil {
@@ -518,7 +511,7 @@ func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 	userStore.EnsureAdmin("admin@test.com")
@@ -562,7 +555,7 @@ func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_GoogleSSO_NoCredentials(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	oauthCfg := &oauth.Config{
 		JWTSecret:   "test-jwt-secret-at-least-32-chars-long!!",
@@ -1112,7 +1105,7 @@ func TestStartServer_AllModes(t *testing.T) {
 
 			// For valid modes, we can't fully start without blocking,
 			// so just verify no error via a quick goroutine test
-			mgr := newTestManagerWithDBCov(t)
+			mgr := newTestManagerWithDB(t)
 			mcpSrv := newTestMCPServer()
 
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1148,7 +1141,7 @@ func TestStartServer_AllModes(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Healthz_Content(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Version = "v1.2.3"
 
@@ -1172,7 +1165,7 @@ func TestSetupMux_Healthz_Content(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Favicon_CacheControl(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -1194,7 +1187,7 @@ func TestSetupMux_Favicon_CacheControl(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 
@@ -1254,7 +1247,7 @@ func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AcceptInvite_TokenNotFound(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -1302,7 +1295,7 @@ func TestInitStatusPageTemplate_AllTemplatesSet(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 
@@ -1342,7 +1335,7 @@ func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_PricingPage_NoCookie(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -1425,7 +1418,7 @@ func TestTruncKey_Long_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminAuth_EmptyPath_DefaultRedirect(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 
@@ -1512,7 +1505,7 @@ func TestLoadConfig_NoCredsWithOAuthSecret(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_CheckoutSuccess(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -1530,7 +1523,7 @@ func TestSetupMux_CheckoutSuccess(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_SecurityTxt_Content(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -1550,7 +1543,7 @@ func TestSetupMux_SecurityTxt_Content(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_ServerCard_GETRequest(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Version = "v2.0.0"
 
@@ -1581,7 +1574,7 @@ func TestRegisterTelegramWebhook_NoExternalURL(t *testing.T) {
 	app.Config.OAuthJWTSecret = "test-secret-long-enough-for-sha256"
 	app.Config.ExternalURL = "" // triggers early return
 
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	mux := http.NewServeMux()
 
 	app.registerTelegramWebhook(mux, mgr)
@@ -1593,7 +1586,7 @@ func TestRegisterTelegramWebhook_NoJWTSecret_WithExternalURL(t *testing.T) {
 	app.Config.OAuthJWTSecret = "" // triggers early return
 	app.Config.ExternalURL = "https://test.example.com"
 
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	mux := http.NewServeMux()
 
 	app.registerTelegramWebhook(mux, mgr)
@@ -1674,7 +1667,7 @@ func TestSetLogBuffer_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestTelegramManagerAdapter_AllMethods(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	adapter := &telegramManagerAdapter{m: mgr}
 
 	// All adapter methods should not panic and should return the same
@@ -1698,7 +1691,7 @@ func TestTelegramManagerAdapter_AllMethods(t *testing.T) {
 // ===========================================================================
 
 func TestPaperLTPAdapter_NoActiveSessions_Cov(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	adapter := &paperLTPAdapter{manager: mgr}
 	_, err := adapter.GetLTP("NSE:INFY")
 	assert.Error(t, err)
@@ -1802,7 +1795,7 @@ func TestSetupMux_AcceptInvite_ValidInv_Cov(t *testing.T) {
 func TestSetupMux_StripeWebhookNoBillingStore_Cov(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_no_billing_123")
 
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	// Do NOT set billing store → the warning branch is exercised
 	app := NewApp(testLogger())
 
@@ -1821,7 +1814,7 @@ func TestSetupMux_StripeWebhookNoBillingStore_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	// Set up billing store
 	if alertDB := mgr.AlertDB(); alertDB != nil {
@@ -1868,7 +1861,7 @@ func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	// Set up billing with a pro subscriber
 	if alertDB := mgr.AlertDB(); alertDB != nil {
@@ -1920,7 +1913,7 @@ func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
 	userStore.EnsureAdmin("admin@test.com")
@@ -1964,7 +1957,7 @@ func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	oauthCfg := &oauth.Config{
 		JWTSecret:   "test-jwt-secret-at-least-32-chars-long!!",
@@ -2001,7 +1994,7 @@ func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
 // ===========================================================================
 
 func TestInitScheduler_WithAuditAndPnL(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
@@ -2079,7 +2072,7 @@ func TestInitializeServices_NoAlertDB(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_OpsHandler_AdminSecretPathFallback(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AdminSecretPath = "test-secret-path"
 
@@ -2101,7 +2094,7 @@ func TestSetupMux_OpsHandler_AdminSecretPathFallback(t *testing.T) {
 func TestSetupMux_AdminPassword_MultipleEmails(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "test-admin-password-123")
 
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AdminEmails = "admin1@test.com, admin2@test.com"
 
@@ -2120,7 +2113,7 @@ func TestSetupMux_AdminPassword_MultipleEmails(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminSeeding_SkipsWhenUsersExist(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	// Pre-populate with a user
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
@@ -2247,7 +2240,7 @@ func TestInstrumentsFreezeAdapter_WithFreezeQty(t *testing.T) {
 // ===========================================================================
 
 func TestInitScheduler_WithPnLService(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	// Set up audit store so audit_cleanup task is added
@@ -2391,7 +2384,7 @@ func TestClientPersisterAdapter_SaveLoadDelete(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Callback_OAuthFlow_NoHandler_Cov(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	// No oauthHandler
 
@@ -2409,7 +2402,7 @@ func TestSetupMux_Callback_OAuthFlow_NoHandler_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Callback_DefaultFlow_Cov(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	mux := app.setupMux(mgr)
@@ -2428,7 +2421,7 @@ func TestSetupMux_Callback_DefaultFlow_Cov(t *testing.T) {
 // ===========================================================================
 
 func TestServeLegalPages_AllRoutes(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	// Ensure initStatusPageTemplate is called to set up legal templates
 	_ = app.initStatusPageTemplate()
@@ -2451,7 +2444,7 @@ func TestServeLegalPages_AllRoutes(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_RateLimitersWithAdmin(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AdminSecretPath = "secret-path-123"
 
@@ -2466,7 +2459,7 @@ func TestSetupMux_RateLimitersWithAdmin(t *testing.T) {
 // ===========================================================================
 
 func TestConfigureAndStartServer_WithSSE(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AppMode = "sse"
 
@@ -2495,7 +2488,7 @@ func TestConfigureAndStartServer_WithSSE(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_DashboardWithBilling(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 
 	if alertDB := mgr.AlertDB(); alertDB != nil {
 		bs := billing.NewStore(alertDB, testLogger())
@@ -2519,7 +2512,7 @@ func TestSetupMux_DashboardWithBilling(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_AdminSeeding_EmptyEmailInList(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AdminEmails = "admin@test.com, , anotherAdmin@test.com"
 
@@ -2537,7 +2530,7 @@ func TestSetupMux_AdminSeeding_EmptyEmailInList(t *testing.T) {
 // ===========================================================================
 
 func TestStartHybridServer_QuickShutdown(t *testing.T) {
-	mgr := newTestManagerWithDBCov(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 	app.Config.AppMode = "hybrid"
 

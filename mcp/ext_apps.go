@@ -569,7 +569,10 @@ func watchlistData(manager *kc.Manager, _ *audit.Store, email string) any {
 				end = len(allInstruments)
 			}
 			batch := allInstruments[i:end]
-			if ltps, err := client.GetLTP(batch...); err == nil {
+			ltps, err := RetryBrokerCall(func() (map[string]broker.LTP, error) {
+				return client.GetLTP(batch...)
+			}, 2)
+			if err == nil {
 				for k, v := range ltps {
 					ltpMap[k] = v.LastPrice
 				}

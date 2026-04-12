@@ -1,12 +1,14 @@
 package kc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/url"
 	"os/exec"
+	"reflect"
 	"runtime"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
@@ -25,6 +28,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
@@ -86,6 +90,8 @@ func New(cfg Config) (*Manager, error) {
 		kiteClientFactory: &defaultKiteClientFactory{},
 		tokenStore:        NewKiteTokenStore(),
 		credentialStore:   NewKiteCredentialStore(),
+		commandBus:        cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
+		queryBus:          cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
 	}
 
 	// Initialize the decomposed facades. They hold a back-pointer to Manager,
@@ -384,7 +390,21 @@ func New(cfg Config) (*Manager, error) {
 		}
 	})
 
+	// Register CQRS handlers on the bus. Tool handlers dispatch queries through
+	// manager.QueryBus() rather than constructing use cases inline.
+	m.registerCQRSHandlers()
+
 	return m, nil
+}
+
+// registerCQRSHandlers wires use cases into the command/query buses. Called
+// from New() so every Manager (including test managers) has a fully-routed bus.
+func (m *Manager) registerCQRSHandlers() {
+	// GetPortfolioQuery -> GetPortfolioUseCase
+	portfolioUC := usecases.NewGetPortfolioUseCase(m.sessionSvc, m.Logger)
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetPortfolioQuery{}), func(ctx context.Context, msg any) (any, error) {
+		return portfolioUC.Execute(ctx, msg.(cqrs.GetPortfolioQuery))
+	})
 }
 
 // KiteConnect wraps the Kite Connect client
@@ -463,7 +483,6 @@ type Manager struct {
 	alertStore        *alerts.Store               // per-user price alerts
 	alertEvaluator    *alerts.Evaluator           // tick-to-alert matcher
 	trailingStopMgr   *alerts.TrailingStopManager // trailing stop-loss manager
-	pnlService        *alerts.PnLSnapshotService  // daily P&L snapshots
 	watchlistStore    *watchlist.Store            // per-user watchlists
 	userStore         *users.Store                // registered users (RBAC, lifecycle)
 	registryStore     *registry.Store             // pre-registered Kite app credentials (key registry)
@@ -478,6 +497,8 @@ type Manager struct {
 	eventStore        *eventsourcing.EventStore   // optional: domain audit log (append-only, not used for state reconstitution)
 	mcpServer         any                         // *server.MCPServer — stored as any to avoid circular import
 	kiteClientFactory KiteClientFactory           // creates kiteconnect.Client instances; mockable in tests
+	commandBus        *cqrs.InMemoryBus           // CQRS command bus (nil until wired by app/wire.go)
+	queryBus          *cqrs.InMemoryBus           // CQRS query bus (nil until wired by app/wire.go)
 	appMode           string
 	externalURL       string
 	adminSecretPath   string
@@ -508,6 +529,16 @@ func (m *Manager) CredentialSvc() *CredentialService {
 // SessionSvc returns the session lifecycle service.
 func (m *Manager) SessionSvc() *SessionService {
 	return m.sessionSvc
+}
+
+// CommandBus returns the CQRS command bus for write-side dispatches.
+func (m *Manager) CommandBus() *cqrs.InMemoryBus {
+	return m.commandBus
+}
+
+// QueryBus returns the CQRS query bus for read-side dispatches.
+func (m *Manager) QueryBus() *cqrs.InMemoryBus {
+	return m.queryBus
 }
 
 // PortfolioSvc returns the portfolio query service.

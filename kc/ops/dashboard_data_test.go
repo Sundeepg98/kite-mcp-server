@@ -37,8 +37,8 @@ func (m *mockBillingStore) GetSubscription(email string) *billing.Subscription {
 
 func TestBuildPortfolioResponse_Empty(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
-	resp := d.buildPortfolioResponse(nil, kiteconnect.Positions{})
+	_ = newTestDashboard(t)
+	resp := buildPortfolioResponse(nil, kiteconnect.Positions{})
 
 	assert.Equal(t, 0, resp.Summary.HoldingsCount)
 	assert.Equal(t, 0, resp.Summary.PositionsCount)
@@ -48,7 +48,7 @@ func TestBuildPortfolioResponse_Empty(t *testing.T) {
 
 func TestBuildPortfolioResponse_WithData(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{
@@ -85,7 +85,7 @@ func TestBuildPortfolioResponse_WithData(t *testing.T) {
 		},
 	}
 
-	resp := d.buildPortfolioResponse(holdings, positions)
+	resp := buildPortfolioResponse(holdings, positions)
 
 	assert.Equal(t, 2, resp.Summary.HoldingsCount)
 	assert.Equal(t, 1, resp.Summary.PositionsCount)
@@ -117,8 +117,8 @@ func TestBuildPortfolioResponse_WithData(t *testing.T) {
 
 func TestComputeDashboardSectorExposure_Empty(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
-	resp := d.computeDashboardSectorExposure(nil)
+	_ = newTestDashboard(t)
+	resp := computeDashboardSectorExposure(nil)
 
 	assert.Empty(t, resp.Sectors)
 	assert.Equal(t, 0, resp.HoldingsCount)
@@ -126,12 +126,12 @@ func TestComputeDashboardSectorExposure_Empty(t *testing.T) {
 
 func TestComputeDashboardSectorExposure_ZeroValue(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{Tradingsymbol: "INFY", LastPrice: 0, Quantity: 10},
 	}
-	resp := d.computeDashboardSectorExposure(holdings)
+	resp := computeDashboardSectorExposure(holdings)
 
 	assert.Equal(t, 1, resp.HoldingsCount)
 	assert.Empty(t, resp.Sectors)
@@ -139,7 +139,7 @@ func TestComputeDashboardSectorExposure_ZeroValue(t *testing.T) {
 
 func TestComputeDashboardSectorExposure_WithData(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{Tradingsymbol: "INFY", Exchange: "NSE", LastPrice: 1600, Quantity: 100},
@@ -148,7 +148,7 @@ func TestComputeDashboardSectorExposure_WithData(t *testing.T) {
 		{Tradingsymbol: "UNKNOWNSYM", Exchange: "NSE", LastPrice: 500, Quantity: 10},
 	}
 
-	resp := d.computeDashboardSectorExposure(holdings)
+	resp := computeDashboardSectorExposure(holdings)
 
 	assert.Equal(t, 4, resp.HoldingsCount)
 	assert.Equal(t, 3, resp.MappedCount)
@@ -164,14 +164,14 @@ func TestComputeDashboardSectorExposure_WithData(t *testing.T) {
 
 func TestComputeDashboardSectorExposure_OverExposure(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	// All in IT sector — way over 30% threshold
 	holdings := kiteconnect.Holdings{
 		{Tradingsymbol: "INFY", LastPrice: 1600, Quantity: 1000},
 	}
 
-	resp := d.computeDashboardSectorExposure(holdings)
+	resp := computeDashboardSectorExposure(holdings)
 
 	// Single sector should be 100% and over-exposed
 	assert.Len(t, resp.Sectors, 1)
@@ -181,7 +181,7 @@ func TestComputeDashboardSectorExposure_OverExposure(t *testing.T) {
 
 func TestComputeDashboardSectorExposure_SuffixStripping(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	// Test that -BE, -EQ suffixes are stripped for sector lookup
 	holdings := kiteconnect.Holdings{
@@ -189,7 +189,7 @@ func TestComputeDashboardSectorExposure_SuffixStripping(t *testing.T) {
 		{Tradingsymbol: "TCS-EQ", LastPrice: 3200, Quantity: 5},
 	}
 
-	resp := d.computeDashboardSectorExposure(holdings)
+	resp := computeDashboardSectorExposure(holdings)
 
 	assert.Equal(t, 2, resp.MappedCount)
 	assert.Equal(t, 0, resp.UnmappedCount)
@@ -201,8 +201,8 @@ func TestComputeDashboardSectorExposure_SuffixStripping(t *testing.T) {
 
 func TestComputeTaxAnalysis_Empty(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
-	resp := d.computeTaxAnalysis(nil)
+	_ = newTestDashboard(t)
+	resp := computeTaxAnalysis(nil)
 
 	assert.Empty(t, resp.Holdings)
 	assert.Equal(t, 0, resp.Summary.HoldingsAnalyzed)
@@ -210,7 +210,7 @@ func TestComputeTaxAnalysis_Empty(t *testing.T) {
 
 func TestComputeTaxAnalysis_WithGains(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{
@@ -222,7 +222,7 @@ func TestComputeTaxAnalysis_WithGains(t *testing.T) {
 		},
 	}
 
-	resp := d.computeTaxAnalysis(holdings)
+	resp := computeTaxAnalysis(holdings)
 
 	require.Len(t, resp.Holdings, 1)
 	assert.Equal(t, "INFY", resp.Holdings[0].Symbol)
@@ -236,7 +236,7 @@ func TestComputeTaxAnalysis_WithGains(t *testing.T) {
 
 func TestComputeTaxAnalysis_WithLosses(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{
@@ -248,7 +248,7 @@ func TestComputeTaxAnalysis_WithLosses(t *testing.T) {
 		},
 	}
 
-	resp := d.computeTaxAnalysis(holdings)
+	resp := computeTaxAnalysis(holdings)
 
 	require.Len(t, resp.Holdings, 1)
 	assert.True(t, resp.Holdings[0].Harvestable)
@@ -260,7 +260,7 @@ func TestComputeTaxAnalysis_WithLosses(t *testing.T) {
 
 func TestComputeTaxAnalysis_MixedSorted(t *testing.T) {
 	t.Parallel()
-	d := newTestDashboard(t)
+	_ = newTestDashboard(t)
 
 	holdings := kiteconnect.Holdings{
 		{Tradingsymbol: "GAIN1", Quantity: 10, AveragePrice: 100, LastPrice: 200},
@@ -268,7 +268,7 @@ func TestComputeTaxAnalysis_MixedSorted(t *testing.T) {
 		{Tradingsymbol: "GAIN2", Quantity: 5, AveragePrice: 100, LastPrice: 300},
 	}
 
-	resp := d.computeTaxAnalysis(holdings)
+	resp := computeTaxAnalysis(holdings)
 
 	// Losses should sort first (harvestable), then by ascending P&L
 	require.Len(t, resp.Holdings, 3)

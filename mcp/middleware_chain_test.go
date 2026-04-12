@@ -71,6 +71,25 @@ func setupChain(t *testing.T, handler server.ToolHandlerFunc) (server.ToolHandle
 	return chain, auditStore, billingStore, guard, cleanup
 }
 
+// waitForAuditCount polls auditStore.List(email) until the count equals
+// expected or the deadline elapses. The audit write path is async (worker
+// goroutine draining writeCh → SQLite file DB), and on Windows a fixed
+// time.Sleep is unreliable under load — especially when parallel tests
+// contend for I/O. Polling removes that flake class entirely.
+func waitForAuditCount(t *testing.T, auditStore *audit.Store, email string, expected int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	var total int
+	for time.Now().Before(deadline) {
+		_, total, _ = auditStore.List(email, audit.ListOptions{Limit: 100})
+		if total >= expected {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("audit did not reach %d records for %s within deadline (got %d)", expected, email, total)
+}
+
 // TestFullChain_FreeUserBlockedByBilling verifies that a free user calling
 // a pro tool (place_order) is blocked by billing middleware, and that the
 // audit trail records the blocked attempt.
@@ -111,8 +130,8 @@ func TestFullChain_FreeUserBlockedByBilling(t *testing.T) {
 	// Handler should NOT have been called
 	assert.False(t, handlerCalled, "handler should not be reached when billing blocks")
 
-	// Give the audit worker time to process (it's async via channel)
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the async audit write to drain.
+	waitForAuditCount(t, auditStore, email, 1)
 
 	// Audit should have recorded the call (even though it was blocked)
 	records, total, err := auditStore.List(email, audit.ListOptions{Limit: 10})
@@ -169,7 +188,7 @@ func TestFullChain_ProUserValidOrder(t *testing.T) {
 	assert.Equal(t, 1, status.DailyOrderCount, "riskguard should record successful order")
 
 	// Audit should record the call
-	time.Sleep(100 * time.Millisecond)
+	waitForAuditCount(t, auditStore, email, 1)
 	records, total, err := auditStore.List(email, audit.ListOptions{Limit: 10})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
@@ -227,7 +246,7 @@ func TestFullChain_ProUserExcessiveValueBlocked(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be reached when riskguard blocks")
 
 	// Audit should still record the blocked call
-	time.Sleep(100 * time.Millisecond)
+	waitForAuditCount(t, auditStore, email, 1)
 	records, total, err := auditStore.List(email, audit.ListOptions{Limit: 10})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
@@ -269,8 +288,10 @@ func TestFullChain_ReadOnlyToolPassesForAnyUser(t *testing.T) {
 		}
 	}
 
-	// Wait for audit records
-	time.Sleep(100 * time.Millisecond)
+	// Wait for async audit writes to drain (per user, not a fixed sleep).
+	for _, user := range users {
+		waitForAuditCount(t, auditStore, user.email, len(readOnlyTools))
+	}
 
 	// Verify audit records were created for all calls
 	for _, user := range users {
@@ -345,7 +366,7 @@ func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
 	assert.True(t, result3.IsError, "over-value order should be blocked")
 
 	// Wait for all async audit writes to complete
-	time.Sleep(300 * time.Millisecond)
+	waitForAuditCount(t, auditStore, email, 3)
 
 	// All 3 calls should be audited
 	records, total, err := auditStore.List(email, audit.ListOptions{Limit: 50})

@@ -93,6 +93,35 @@ func (a *Alert) IsPercentageAlert() bool {
 	return a.Direction == DirectionDropPct || a.Direction == DirectionRisePct
 }
 
+// IsActive returns true if the alert has not yet fired.
+func (a *Alert) IsActive() bool {
+	return !a.Triggered
+}
+
+// MatchesInstrument returns true if the alert is for the given instrument token.
+func (a *Alert) MatchesInstrument(instrumentToken uint32) bool {
+	return a.InstrumentToken == instrumentToken
+}
+
+// NeedsNotification returns true if the alert has fired but no notification has been sent.
+func (a *Alert) NeedsNotification() bool {
+	return a.Triggered && a.NotificationSentAt.IsZero()
+}
+
+// InstrumentKey returns the "exchange:tradingsymbol" identifier for the alerted instrument.
+func (a *Alert) InstrumentKey() string {
+	return a.Exchange + ":" + a.Tradingsymbol
+}
+
+// PercentageChange returns the signed percentage change of currentPrice from ReferencePrice.
+// Returns 0 if ReferencePrice is not set (<= 0).
+func (a *Alert) PercentageChange(currentPrice float64) float64 {
+	if a.ReferencePrice <= 0 {
+		return 0
+	}
+	return (currentPrice - a.ReferencePrice) / a.ReferencePrice * 100
+}
+
 // NotifyCallback is invoked when an alert is triggered.
 type NotifyCallback func(alert *Alert, currentPrice float64)
 

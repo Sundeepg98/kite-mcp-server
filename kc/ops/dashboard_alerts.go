@@ -7,7 +7,8 @@ import (
 )
 
 // serveAlertsPageSSR renders the user alerts page with active / triggered tabs.
-func (d *DashboardHandler) serveAlertsPageSSR(w http.ResponseWriter, r *http.Request) {
+func (h *AlertsHandler) serveAlertsPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.alertsTmpl == nil {
 		d.servePageFallback(w, "alerts.html")
 		return

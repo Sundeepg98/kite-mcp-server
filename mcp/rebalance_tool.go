@@ -126,13 +126,13 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		return handler.WithSession(ctx, "portfolio_rebalance", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Fetch current holdings via use case
-			portfolioUC := usecases.NewGetPortfolioUseCase(manager.SessionSvc(), manager.Logger)
-			portfolio, err := portfolioUC.Execute(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			// Fetch current holdings via CQRS query bus
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_rebalance", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
+			portfolio := raw.(*usecases.PortfolioResult)
 			holdings := portfolio.Holdings
 
 			// Build a map of current holdings: symbol -> {exchange, quantity, lastPrice}

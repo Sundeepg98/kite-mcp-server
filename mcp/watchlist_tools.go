@@ -8,6 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
@@ -392,7 +393,9 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			sessionID := sess.SessionID()
 			kiteSession, _, clientErr := manager.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr == nil {
-				ltpResp, ltpErr := kiteSession.Kite.Client.GetLTP(instrIDs...)
+				ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
+					return kiteSession.Kite.Client.GetLTP(instrIDs...)
+				}, 2)
 				if ltpErr == nil {
 					for key, data := range ltpResp {
 						ltpMap[key] = data.LastPrice

@@ -1934,3 +1934,53 @@ func TestTrailingStopCancelByEmailWithDB(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, m2.List("user@example.com"))
 }
+
+func TestAlert_IsActive(t *testing.T) {
+	a := &Alert{}
+	assert.True(t, a.IsActive())
+	a.Triggered = true
+	assert.False(t, a.IsActive())
+}
+
+func TestAlert_MatchesInstrument(t *testing.T) {
+	a := &Alert{InstrumentToken: 12345}
+	assert.True(t, a.MatchesInstrument(12345))
+	assert.False(t, a.MatchesInstrument(99999))
+	assert.False(t, a.MatchesInstrument(0))
+}
+
+func TestAlert_NeedsNotification(t *testing.T) {
+	a := &Alert{}
+	assert.False(t, a.NeedsNotification(), "not triggered")
+
+	a.Triggered = true
+	assert.True(t, a.NeedsNotification(), "triggered, notification pending")
+
+	a.NotificationSentAt = time.Now()
+	assert.False(t, a.NeedsNotification(), "triggered and notified")
+}
+
+func TestAlert_InstrumentKey(t *testing.T) {
+	a := &Alert{Exchange: "NSE", Tradingsymbol: "RELIANCE"}
+	assert.Equal(t, "NSE:RELIANCE", a.InstrumentKey())
+}
+
+func TestAlert_PercentageChange(t *testing.T) {
+	// Rising price
+	a := &Alert{ReferencePrice: 100.0}
+	assert.InDelta(t, 10.0, a.PercentageChange(110.0), 0.0001)
+
+	// Falling price (negative change)
+	assert.InDelta(t, -5.0, a.PercentageChange(95.0), 0.0001)
+
+	// No change
+	assert.InDelta(t, 0.0, a.PercentageChange(100.0), 0.0001)
+
+	// Zero reference — guard returns 0
+	zero := &Alert{ReferencePrice: 0}
+	assert.Equal(t, 0.0, zero.PercentageChange(100.0))
+
+	// Negative reference — guard returns 0
+	neg := &Alert{ReferencePrice: -50}
+	assert.Equal(t, 0.0, neg.PercentageChange(100.0))
+}

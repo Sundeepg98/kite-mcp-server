@@ -10,7 +10,8 @@ import (
 )
 
 // servePortfolioPage renders the user portfolio dashboard via server-side templates.
-func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) servePortfolioPage(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.portfolioTmpl == nil {
 		d.servePageFallback(w, "dashboard.html")
 		return
@@ -49,7 +50,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 			positions, positionsErr := client.GetPositions()
 
 			if holdingsErr == nil && positionsErr == nil {
-				portfolio = d.buildPortfolioResponse(holdings, positions)
+				portfolio = buildPortfolioResponse(holdings, positions)
 			} else {
 				if holdingsErr != nil {
 					d.logger.Error("Failed to fetch holdings for SSR", "email", email, "error", holdingsErr)
@@ -66,7 +67,7 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 	data.Positions = portfolioToPositionsData(portfolio.Positions)
 
 	if tokenValid && email != "" {
-		data.Market = d.fetchMarketBar(email)
+		data.Market = h.fetchMarketBar(email)
 	}
 	if len(data.Market.Indices) == 0 {
 		data.Market = MarketBarData{
@@ -92,7 +93,8 @@ func (d *DashboardHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 
 // fetchMarketBar pulls NIFTY / BANK NIFTY / SENSEX OHLC and maps it to the
 // market bar template data. Returns an empty value on error.
-func (d *DashboardHandler) fetchMarketBar(email string) MarketBarData {
+func (h *PortfolioHandler) fetchMarketBar(email string) MarketBarData {
+	d := h.core
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if !hasCreds || !hasToken {
@@ -152,7 +154,8 @@ func (d *DashboardHandler) buildUserStatus(email string) statusResponse {
 }
 
 // servePortfolioFragment renders just the portfolio stats + holdings + positions for htmx refresh.
-func (d *DashboardHandler) servePortfolioFragment(w http.ResponseWriter, r *http.Request) {
+func (h *PortfolioHandler) servePortfolioFragment(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.fragmentTmpl == nil {
 		http.Error(w, "templates not initialized", http.StatusInternalServerError)
 		return
@@ -179,7 +182,7 @@ func (d *DashboardHandler) servePortfolioFragment(w http.ResponseWriter, r *http
 			holdings, herr := client.GetHoldings()
 			positions, perr := client.GetPositions()
 			if herr == nil && perr == nil {
-				portfolio = d.buildPortfolioResponse(holdings, positions)
+				portfolio = buildPortfolioResponse(holdings, positions)
 			}
 		}
 	}
@@ -190,7 +193,7 @@ func (d *DashboardHandler) servePortfolioFragment(w http.ResponseWriter, r *http
 
 	var market MarketBarData
 	if tokenValid && email != "" {
-		market = d.fetchMarketBar(email)
+		market = h.fetchMarketBar(email)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

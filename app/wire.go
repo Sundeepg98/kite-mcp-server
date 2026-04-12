@@ -54,21 +54,33 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	app.logger.Debug("Kite Connect manager created successfully")
 
 	// Create audit store (reuse the same SQLite DB used for alerts).
+	//
+	// H1 fix (phase 2i): audit trail is a compliance requirement. In production
+	// mode, fail fast if the audit table cannot be created — silently running
+	// without audit middleware hides every tool call from the regulator. In
+	// DevMode, log and continue so local dev without a DB still works.
 	var auditMiddleware server.ToolHandlerMiddleware
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		app.auditStore = audit.New(alertDB)
 		if err := app.auditStore.InitTable(); err != nil {
-			app.logger.Error("Failed to initialize audit table", "error", err)
+			if !app.DevMode {
+				return nil, nil, fmt.Errorf("audit trail required in production: init table: %w", err)
+			}
+			app.logger.Error("Failed to initialize audit table (DevMode: continuing without audit)", "error", err)
 		} else {
 			// Wire encryption key for HMAC email hashing, AES-GCM email encryption,
 			// and HMAC-SHA256 hash chaining.
 			if app.Config.OAuthJWTSecret != "" {
-				if encKey, err := alerts.EnsureEncryptionSalt(alertDB, app.Config.OAuthJWTSecret); err == nil {
+				encKey, err := alerts.EnsureEncryptionSalt(alertDB, app.Config.OAuthJWTSecret)
+				if err != nil {
+					if !app.DevMode {
+						return nil, nil, fmt.Errorf("audit trail required in production: derive encryption key: %w", err)
+					}
+					app.logger.Error("Failed to derive audit encryption key (DevMode: continuing)", "error", err)
+				} else {
 					app.auditStore.SetEncryptionKey(encKey)
 					app.auditStore.SeedChain()
 					app.logger.Info("Audit trail encryption and hash chaining enabled")
-				} else {
-					app.logger.Error("Failed to derive audit encryption key", "error", err)
 				}
 			}
 			app.auditStore.SetLogger(app.logger)
@@ -79,18 +91,32 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// Wire audit store into manager for alert trigger + trailing stop notifications.
 			kcManager.SetAuditStore(app.auditStore)
 		}
+	} else if !app.DevMode {
+		return nil, nil, fmt.Errorf("audit trail required in production: no alert DB configured (set ALERT_DB_PATH)")
 	}
 
 	// Initialize riskguard for financial safety controls.
+	//
+	// H2 fix (phase 2i): LoadLimits failure used to silently fall back to
+	// in-memory defaults — which would WIPE a user-configured kill switch and
+	// allow trading to proceed without their limits. Fail fast in production.
 	riskGuard := riskguard.NewGuard(app.logger)
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		riskGuard.SetDB(alertDB)
 		if err := riskGuard.InitTable(); err != nil {
-			app.logger.Error("Failed to initialize risk_limits table", "error", err)
+			if !app.DevMode {
+				return nil, nil, fmt.Errorf("riskguard required in production: init risk_limits table: %w", err)
+			}
+			app.logger.Error("Failed to initialize risk_limits table (DevMode: continuing)", "error", err)
 		}
 		if err := riskGuard.LoadLimits(); err != nil {
-			app.logger.Error("Failed to load risk limits", "error", err)
+			if !app.DevMode {
+				return nil, nil, fmt.Errorf("riskguard required in production: load limits (refusing to start without user-configured limits): %w", err)
+			}
+			app.logger.Error("Failed to load risk limits (DevMode: continuing with defaults)", "error", err)
 		}
+	} else if !app.DevMode {
+		return nil, nil, fmt.Errorf("riskguard required in production: no alert DB configured (set ALERT_DB_PATH)")
 	}
 	if kcManager.InstrumentsManagerConcrete() != nil {
 		// Wrap instruments manager as FreezeQuantityLookup

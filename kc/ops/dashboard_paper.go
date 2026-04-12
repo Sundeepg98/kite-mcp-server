@@ -9,7 +9,8 @@ import (
 )
 
 // servePaperPageSSR renders the paper trading dashboard page.
-func (d *DashboardHandler) servePaperPageSSR(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) servePaperPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.paperTmpl == nil {
 		d.servePageFallback(w, "paper.html")
 		return
@@ -51,7 +52,8 @@ func (d *DashboardHandler) servePaperPageSSR(w http.ResponseWriter, r *http.Requ
 }
 
 // servePaperFragment renders paper trading partials for htmx refresh.
-func (d *DashboardHandler) servePaperFragment(w http.ResponseWriter, r *http.Request) {
+func (h *PaperHandler) servePaperFragment(w http.ResponseWriter, r *http.Request) {
+	d := h.core
 	if d.fragmentTmpl == nil {
 		http.Error(w, "templates not initialized", http.StatusInternalServerError)
 		return
