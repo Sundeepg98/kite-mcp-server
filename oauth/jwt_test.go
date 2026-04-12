@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateToken_Valid(t *testing.T) {
@@ -337,4 +339,30 @@ func TestJWTManager_Accessor(t *testing.T) {
 	if jwtMgr != h.jwt {
 		t.Error("JWTManager() should return the same instance")
 	}
+}
+
+// ===========================================================================
+// Merged from stores_coverage_test.go (jwt-related test)
+// ===========================================================================
+
+func TestValidateToken_MultiAud_Match(t *testing.T) {
+	t.Parallel()
+	jm := NewJWTManager("test-secret", 1*time.Hour)
+
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "test@test.com",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Audience:  jwt.ClaimStrings{"aud-a", "aud-b"},
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := token.SignedString([]byte("test-secret"))
+	require.NoError(t, err)
+
+	// First audience matches, multi-aud loop confirms
+	result, err := jm.ValidateToken(tokenStr, "aud-a", "aud-c")
+	assert.NoError(t, err)
+	assert.Equal(t, "test@test.com", result.Subject)
 }

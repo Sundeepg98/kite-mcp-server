@@ -7,26 +7,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
 // Ext apps DataFunc tests: dashboard resource data functions for portfolio, activity, orders, etc.
-
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
-
-func newTestAuditStore(t *testing.T) *audit.Store {
-	t.Helper()
-	db, err := alerts.OpenDB(":memory:")
-	require.NoError(t, err)
-	store := audit.New(db)
-	require.NoError(t, store.InitTable())
-	t.Cleanup(func() { db.Close() })
-	return store
-}
 
 func TestChartData_ReturnsNil(t *testing.T) {
 	t.Parallel()
@@ -149,7 +135,10 @@ func TestPortfolioData_NilClient(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	data := portfolioData(mgr, nil, "nobody@example.com")
-	assert.Nil(t, data)
+	// No Kite client → returns error map, not nil
+	errMap, ok := data.(map[string]string)
+	assert.True(t, ok)
+	assert.Contains(t, errMap["error"], "no Kite access token")
 }
 
 func TestActivityData_NilAuditStore(t *testing.T) {
@@ -205,10 +194,10 @@ func TestAlertsData_NoAlerts(t *testing.T) {
 	data := alertsData(mgr, nil, "nobody@example.com")
 	// AlertStore exists but has no alerts for this user
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetAlertsResult)
 	assert.True(t, ok)
-	assert.Equal(t, 0, dataMap["active_count"])
-	assert.Equal(t, 0, dataMap["triggered_count"])
+	assert.Equal(t, 0, result.ActiveCount)
+	assert.Equal(t, 0, result.TriggeredCount)
 }
 
 func TestAlertsData_WithAlerts(t *testing.T) {
@@ -218,9 +207,9 @@ func TestAlertsData_WithAlerts(t *testing.T) {
 	mgr.AlertStore().Add("alert@example.com", "INFY", "NSE", 256265, 1500.0, "above")
 	data := alertsData(mgr, nil, "alert@example.com")
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetAlertsResult)
 	assert.True(t, ok)
-	assert.Equal(t, 1, dataMap["active_count"])
+	assert.Equal(t, 1, result.ActiveCount)
 }
 
 func TestPaperData_NoEngineReturnsStatus(t *testing.T) {
@@ -357,6 +346,7 @@ func TestActivityData_WithAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	store := newTestAuditStore(t)
+	now := time.Now()
 	// Enqueue and flush a tool call
 	store.Record(&audit.ToolCall{
 		CallID:        "test-001",
@@ -365,13 +355,14 @@ func TestActivityData_WithAuditStore(t *testing.T) {
 		ToolCategory:  "query",
 		InputSummary:  "test",
 		OutputSummary: "ok",
+		StartedAt:     now,
+		CompletedAt:   now,
 	})
 	data := activityData(mgr, store, "activity@example.com")
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetActivityResult)
 	assert.True(t, ok)
-	_, hasEntries := dataMap["entries"]
-	assert.True(t, hasEntries)
+	assert.NotNil(t, result.Entries)
 }
 
 func TestOrdersData_WithAuditStore_NoOrders(t *testing.T) {
@@ -380,10 +371,9 @@ func TestOrdersData_WithAuditStore_NoOrders(t *testing.T) {
 	store := newTestAuditStore(t)
 	data := ordersData(mgr, store, "orders@example.com")
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetOrdersResult)
 	assert.True(t, ok)
-	_, hasOrders := dataMap["orders"]
-	assert.True(t, hasOrders)
+	assert.NotNil(t, result.Orders)
 }
 
 func TestOrdersData_WithAuditStoreAndToolCalls(t *testing.T) {
@@ -402,18 +392,9 @@ func TestOrdersData_WithAuditStoreAndToolCalls(t *testing.T) {
 	})
 	data := ordersData(mgr, store, "orders2@example.com")
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetOrdersResult)
 	assert.True(t, ok)
-	orders, ok := dataMap["orders"].([]struct {
-		OrderID   string  `json:"order_id"`
-		Symbol    string  `json:"tradingsymbol"`
-		Exchange  string  `json:"exchange"`
-		Side      string  `json:"transaction_type"`
-		OrderType string  `json:"order_type"`
-		Quantity  float64 `json:"quantity"`
-	})
-	_ = orders
-	_ = ok
+	assert.NotNil(t, result.Orders)
 }
 
 func TestHubData_WithAuditStore(t *testing.T) {
@@ -448,9 +429,9 @@ func TestAlertsData_WithTriggeredAlerts(t *testing.T) {
 	mgr.AlertStore().MarkTriggered(alertID, 1550.0)
 	data := alertsData(mgr, nil, "triggered@example.com")
 	assert.NotNil(t, data)
-	dataMap, ok := data.(map[string]any)
+	result, ok := data.(*usecases.WidgetAlertsResult)
 	assert.True(t, ok)
-	assert.Equal(t, 1, dataMap["triggered_count"])
+	assert.Equal(t, 1, result.TriggeredCount)
 }
 
 func TestOrdersData_WithAuditStore_P7(t *testing.T) {

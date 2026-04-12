@@ -2639,26 +2639,8 @@ func TestServeStatusPage_TemplateExecuteError(t *testing.T) {
 // initScheduler — exercises all three branches
 // ---------------------------------------------------------------------------
 
-func newTestManagerWithDB2(t *testing.T) *kc.Manager {
-	t.Helper()
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey: "tk", APISecret: "ts",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	return mgr
-}
-
 func TestInitScheduler_AuditAndPnL(t *testing.T) {
-	mgr := newTestManagerWithDB2(t)
+	mgr := newTestManagerWithDB(t)
 	app := NewApp(testLogger())
 
 	if alertDB := mgr.AlertDB(); alertDB != nil {
@@ -2949,31 +2931,6 @@ func TestSetupMux_StripeWebhookWithBillingStore(t *testing.T) {
 // ===========================================================================
 // Merged from server_lifecycle_test.go
 // ===========================================================================
-
-
-// ---------------------------------------------------------------------------
-// Helper: create a kc.Manager with :memory: SQLite DB for integration tests.
-// ---------------------------------------------------------------------------
-
-func newTestManagerWithDB(t *testing.T) *kc.Manager {
-	t.Helper()
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	return mgr
-}
 
 // ---------------------------------------------------------------------------
 // RunServer — full DevMode lifecycle: start → healthz → stop
@@ -5880,4 +5837,105 @@ func TestServeStatusPage_NotFoundPath(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
+// ===========================================================================
+// Merged from adapters_coverage_test.go — setupMux-related tests
+// ===========================================================================
 
+func TestSetupMux_AdminAuth_DoubleSlashPrefix_Push100Extra(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+	userStore := mgr.UserStoreConcrete()
+	require.NotNil(t, userStore)
+
+	oauthCfg := &oauth.Config{
+		JWTSecret:   "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL: "https://test.example.com",
+		Logger:      testLogger(),
+	}
+	_ = oauthCfg.Validate()
+	signer := &signerAdapter{signer: mgr.SessionSigner()}
+	exchanger := &kiteExchangerAdapter{
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		logger:          testLogger(),
+	}
+	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	handler.SetUserStore(userStore)
+
+	app := NewApp(testLogger())
+	app.oauthHandler = handler
+	app.Config.AdminEmails = "admin@test.com"
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops", nil)
+	req.URL.Path = "//evil.com/steal"
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code == http.StatusFound {
+		loc := rec.Header().Get("Location")
+		assert.Contains(t, loc, "/auth/admin-login")
+		assert.Contains(t, loc, "redirect=%2Fadmin%2Fops")
+	}
+}
+
+func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	if alertDB := mgr.AlertDB(); alertDB != nil {
+		bs := billing.NewStore(alertDB, testLogger())
+		require.NoError(t, bs.InitTable())
+		require.NoError(t, bs.SetSubscription(&billing.Subscription{
+			AdminEmail:       "premium@test.com",
+			Tier:             billing.TierPremium,
+			StripeCustomerID: "cus_prem",
+			StripeSubID:      "sub_prem",
+			Status:           billing.StatusActive,
+		}))
+		mgr.SetBillingStore(bs)
+	}
+
+	oauthCfg := &oauth.Config{
+		JWTSecret:   "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL: "https://test.example.com",
+		Logger:      testLogger(),
+	}
+	_ = oauthCfg.Validate()
+	signer := &signerAdapter{signer: mgr.SessionSigner()}
+	exchanger := &kiteExchangerAdapter{
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		logger:          testLogger(),
+	}
+	oauthHandler := oauth.NewHandler(oauthCfg, signer, exchanger)
+
+	token, err := oauthHandler.JWTManager().GenerateTokenWithExpiry("premium@test.com", "dashboard", 1*time.Hour)
+	require.NoError(t, err)
+
+	app := NewApp(testLogger())
+	app.oauthHandler = oauthHandler
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `data-current="premium"`)
+}
+
+func TestSetupMux_OpsHandler_NoUserStoreNoOAuth_Push100Extra(t *testing.T) {
+	mgr := newTestManager(t)
+
+	app := NewApp(testLogger())
+	app.Config.AdminSecretPath = "test-secret-path"
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.NotEqual(t, http.StatusNotFound, rec.Code)
+}

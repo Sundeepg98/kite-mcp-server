@@ -33,38 +33,11 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// ===========================================================================
-// newTestManagerWithDBCov — local helper to avoid collisions with server_test.go
-// ===========================================================================
-
+// newTestManagerWithDBCov calls newTestManagerWithDB (from helpers_test.go).
+// Kept as alias while server_coverage_test.go references it.
 func newTestManagerWithDBCov(t *testing.T) *kc.Manager {
 	t.Helper()
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey: "tk", APISecret: "ts",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	return mgr
-}
-
-// cleanupInitializeServices is a test helper that stops background goroutines
-// started by initializeServices.
-func cleanupInitializeServices(app *App, mgr *kc.Manager) {
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	mgr.Shutdown()
+	return newTestManagerWithDB(t)
 }
 
 // ===========================================================================
@@ -1736,14 +1709,7 @@ func TestPaperLTPAdapter_NoActiveSessions_Cov(t *testing.T) {
 // setupMux — family invitation acceptance branches
 // ===========================================================================
 
-func newTestManagerWithInvitations(t *testing.T) (*kc.Manager, *users.InvitationStore) {
-	t.Helper()
-	mgr := newTestManagerWithDBCov(t)
-	invStore := users.NewInvitationStore(mgr.AlertDB())
-	require.NoError(t, invStore.InitTable())
-	mgr.SetInvitationStore(invStore)
-	return mgr, invStore
-}
+// newTestManagerWithInvitations is now in helpers_test.go
 
 func TestSetupMux_AcceptInvite_MissingToken_Cov(t *testing.T) {
 	mgr, _ := newTestManagerWithInvitations(t)

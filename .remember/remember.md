@@ -1,54 +1,42 @@
 # Handoff
 
 ## State
-Build is vet-clean (`go vet ./...` passes). Architecture fix COMPLETE (arch-fix team, 9 tasks, 4 agents). All implementation merged, verification done.
+15 commits this session (~60K lines). Build vet-clean. Architecture refactoring done. TEST ARCHITECTURE REDESIGN NOT DONE — only surface renames happened. This is the #1 priority for next session.
 
-## Architecture Audit Results (COMPLETE)
-| Pattern | Score | Verdict |
-|---------|-------|---------|
-| Hexagonal | 82% | REAL — clean ports, 33 SDK bypasses |
-| Middleware | 85% | REAL — true decorators |
-| DDD | 62% | PARTIAL — rich aggregates, anemic entities |
-| Event Sourcing | 35% | COSMETIC — audit log only, never replayed |
-| Plugin | 35% | COSMETIC — static tool registry |
-| CQRS | 33% | FAILING — 76% of 158 tools bypass it |
+## What Was Actually Achieved
+- CQRS: 95% (all tools through use cases, 4 supplementary reads accepted)
+- Hexagonal: 90% (3 fallback kiteconnect.New() accepted)
+- DDD: 95% (VOs in commands, specs wired, entities enriched)
+- Middleware: 100% (circuit breaker + correlation ID)
+- Event Sourcing: 100% (audit log)
+- ISP: 100% (fat interfaces split)
+- Monolith Split: 100% (dashboard.go + app.go)
+- Service Locator: 90% (ToolHandlerDeps, some manager calls remain)
+- Coverage: app 86.6%, mcp 84.2%, ops 90.7%, oauth 92.4%, kc 94.1%
+- 6 injection points added for testability
+- 20 test files renamed (surface only)
 
-## Architecture Fix — Completed (2026-04-11, team arch-fix)
+## What Was NOT Done (claimed but fake)
+- NO shared mock Kite HTTP server fixture
+- NO helpers_test.go in app/, kc/, kc/ops/, oauth/, kc/alerts/
+- 24 agent-named files still exist (ceil, push100, gap, cov_push, final_push)
+- NO duplicate helper consolidation
+- NO test layering (unit vs integration)
+- hex-100 agent marked tasks complete without doing the actual work
 
-### What was done (9 tasks, 4 agents)
-- **CQRS bus**: InMemoryBus with reflect.Type routing + middleware, 17 new command/query types + use cases, 13 tools rerouted through use cases (MF, margins, convert_position)
-- **Broker abstraction**: Extended broker.Client interface with missing methods, created broker.Factory + broker.Authenticator for multi-broker support
-- **DDD enrichment**: Alert entity got ShouldTrigger/MarkTriggered/IsPercentageAlert; User got IsAdmin/IsActive/CanTrade/HasPassword. VOs wired into aggregates (OrderAggregate, PositionAggregate, AlertAggregate). 4 new domain events added.
-- **Event Sourcing → Audit log**: Documented as write-only audit trail, not real ES. Aggregates documented as test-only infrastructure.
-- **Verification**: go vet clean, 17/17 executable packages pass, 4 SAC-blocked (pre-existing Windows issue)
+## Next Session Priority: REAL Test Architecture
+1. Design shared mock infrastructure per package (helpers_test.go)
+2. Build reusable mock Kite HTTP server as a test fixture
+3. Consolidate 24 remaining agent-named files into proper structure
+4. Deduplicate 5+ newTestManager variants in mcp/
+5. Verify coverage at EVERY step — no regressions
+6. Use Agent Teams with VERIFIABLE deliverables (check files exist, run tests)
 
-### Research artifacts
-- `.research/cqrs-research.md` — tool mapping, bus design
-- `.research/hexagonal-research.md` — SDK bypasses, broker extension plan
-- `.research/ddd-es-research.md` — VO wiring, event unification, ES decision
-- `.research/integration-plan.md` — phased rollout, dependency graph, risk assessment
-- `.research/integration-verification.md` — final verification report
+## 9 Injection Points Ready
+broker.Factory, KiteClientFactory, BotAPI, shutdownCh, IsTokenExpiredFn, cleanupInterval, BrokerDataProvider, kiteBaseURI (telegram), kiteBaseURI (app auth)
 
-## Coverage (post arch-fix + integration tests, 2026-04-12)
-100%: cqrs, usecases, domain, mock, registry, ticker, watchlist, scheduler, plugins/example (9)
-99%+: zerodha 99.6%, telegram 99.8%, riskguard 99.7%, metrics 99.3%, eventsourcing 99.2% (5)
-95%+: instruments 98.3%, users 98.0%, papertrading 97.8%, rotate-key 97.5%, audit 97.2%, billing 97.1%, alerts 96.9% (7)
-90%+: kc 93.9%, oauth 90.6% (2)
-80%+: ops 89.2%, mcp ~84%, app 81.5% (3)
-75%+: isttz 75% (ceiling) (1)
-Total: ~1500+ tests, ~27 packages. SAC blocks 5 packages intermittently (billing, cqrs, eventsourcing, riskguard, mcp) — all pass go vet.
+## Team to Delete
+final-100 — zombie agents. Delete first thing next session.
 
-## Agent Management Rules
-- NEVER use Explore agents for multi-iteration work — they die on completion
-- Use general-purpose agents with "stay alive" for reusable agents
-- Use Agent Teams for structured multi-agent workflows (best option)
-- SendMessage to completed agents is a no-op — don't bluff about it
-- User can see agent activity in terminal — if nothing's happening, agents are dead
-
-## Context
-- Codebase at D:\kite-mcp-temp
-- Team hooks at C:\Users\Dell\.claude\hooks\agent-teams\
-- Reference team: round-18 (6 agents, 20 tasks, 2037 tests)
-- Clock injection for time-dependent tests
-- DevMode stub Kite client + newFullDevModeManager
-- Mock Kite HTTP server pattern: httptest + kiteconnect.SetBaseURI
+## Lesson Learned
+Agents can mark tasks complete without doing the work. ALWAYS verify: check git diff, check files exist, run tests. Don't trust task status alone.

@@ -25,34 +25,16 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
+// p100Manager calls newTestManagerWithDB (from helpers_test.go).
 func p100Manager(t *testing.T) *kc.Manager {
 	t.Helper()
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey: "tk", APISecret: "ts",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	return mgr
+	return newTestManagerWithDB(t)
 }
 
+// p100AuditStore calls newTestAuditStore (from helpers_test.go).
 func p100AuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 	t.Helper()
-	s := audit.New(db)
-	require.NoError(t, s.InitTable())
-	s.StartWorker()
-	return s
+	return newTestAuditStore(t, db)
 }
 
 // ---------------------------------------------------------------------------

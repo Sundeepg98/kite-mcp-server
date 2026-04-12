@@ -5,57 +5,15 @@ package app
 // with user provisioning, token storage, credential storage, and registry updates.
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
-
-// mockAuthenticator implements broker.Authenticator for testing.
-type mockAuthenticator struct {
-	result broker.AuthResult
-	err    error
-}
-
-func (m *mockAuthenticator) GetLoginURL(apiKey string) string {
-	return "https://kite.zerodha.com/connect/login?api_key=" + apiKey
-}
-
-func (m *mockAuthenticator) ExchangeToken(apiKey, apiSecret, requestToken string) (broker.AuthResult, error) {
-	if m.err != nil {
-		return broker.AuthResult{}, m.err
-	}
-	return m.result, nil
-}
-
-func (m *mockAuthenticator) InvalidateToken(apiKey, accessToken string) error {
-	return nil
-}
-
-// newMockAuth creates a mockAuthenticator returning the given user session data.
-func newMockAuth(email, userID, userName, accessToken string) *mockAuthenticator {
-	return &mockAuthenticator{
-		result: broker.AuthResult{
-			AccessToken: accessToken,
-			UserID:      userID,
-			UserName:    userName,
-			Email:       email,
-		},
-	}
-}
-
-// newMockAuthError creates a mockAuthenticator that returns an error.
-func newMockAuthError(errMsg string) *mockAuthenticator {
-	return &mockAuthenticator{
-		err: fmt.Errorf("%s", errMsg),
-	}
-}
 
 // TestExchangeRequestToken_WithUserStore_Success tests the full success path
 // including user auto-provisioning via userStore.
@@ -408,4 +366,150 @@ func TestGetSecretByAPIKey_Factory(t *testing.T) {
 
 	_, ok = adapter.GetSecretByAPIKey("nonexistent-key")
 	assert.False(t, ok)
+}
+
+// ===========================================================================
+// Merged from adapters_coverage_test.go — exchange-related tests
+// ===========================================================================
+
+func TestExchangeWithCredentials_KeyExistsDiffUser_Push100Extra(t *testing.T) {
+	t.Parallel()
+
+	regStore := registry.New()
+
+	// Pre-register the per-user key as belonging to "other@test.com"
+	err := regStore.Register(&registry.AppRegistration{
+		ID:           "existing-key-reg",
+		APIKey:       "per-user-key",
+		APISecret:    "per-user-secret",
+		AssignedTo:   "other@test.com",
+		Label:        "Other User",
+		Status:       registry.StatusActive,
+		Source:       registry.SourceSelfProvisioned,
+		RegisteredBy: "other@test.com",
+	})
+	require.NoError(t, err)
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		registryStore:   regStore,
+		userStore:       users.NewStore(),
+		logger:          testLogger(),
+		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
+	}
+
+	// Exchange with per-user-key succeeds -- mock returns email "test@example.com"
+	// which is different from the key's assigned user "other@test.com"
+	email, err := adapter.ExchangeWithCredentials("test-request-token", "per-user-key", "per-user-secret")
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", email)
+
+	// Key should now be re-assigned to test@example.com
+	entry, found := regStore.GetByAPIKeyAnyStatus("per-user-key")
+	require.True(t, found)
+	assert.Equal(t, "test@example.com", entry.AssignedTo)
+}
+
+func TestExchangeWithCredentials_RegisterError_Push100Extra(t *testing.T) {
+	t.Parallel()
+
+	regStore := registry.New()
+
+	// Pre-register with the exact ID that ExchangeWithCredentials will generate.
+	conflictID := "self-test@example.com-new-user"
+	err := regStore.Register(&registry.AppRegistration{
+		ID:         conflictID,
+		APIKey:     "different-key-for-conflict",
+		APISecret:  "different-secret-for-conflict",
+		AssignedTo: "someone@test.com",
+		Status:     registry.StatusActive,
+		Source:     registry.SourceAdmin,
+	})
+	require.NoError(t, err)
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		registryStore:   regStore,
+		userStore:       users.NewStore(),
+		logger:          testLogger(),
+		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
+	}
+
+	// Exchange with "new-user-key" -- key not in registry -- Register with conflictID -- error
+	email, err := adapter.ExchangeWithCredentials("test-request-token", "new-user-key", "new-user-secret")
+	// Should succeed despite registry error (logged as warning, not fatal)
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", email)
+}
+
+func TestExchangeWithCredentials_SuspendedUser_Push100Extra(t *testing.T) {
+	t.Parallel()
+
+	uStore := users.NewStore()
+	uStore.EnsureUser("test@example.com", "XY1234", "Test User", "self")
+	uStore.UpdateStatus("test@example.com", users.StatusSuspended)
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		userStore:       uStore,
+		logger:          testLogger(),
+		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
+	}
+
+	_, err := adapter.ExchangeWithCredentials("test-request-token", "per-key", "per-secret")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "suspended")
+}
+
+func TestExchangeWithCredentials_OffboardedUser_Push100Extra(t *testing.T) {
+	t.Parallel()
+
+	uStore := users.NewStore()
+	uStore.EnsureUser("test@example.com", "XY1234", "Test User", "self")
+	uStore.UpdateStatus("test@example.com", users.StatusOffboarded)
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "global-key",
+		apiSecret:       "global-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		userStore:       uStore,
+		logger:          testLogger(),
+		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
+	}
+
+	_, err := adapter.ExchangeWithCredentials("test-request-token", "per-key", "per-secret")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "offboarded")
+}
+
+func TestExchangeRequestToken_SuspendedUser_Push100Extra(t *testing.T) {
+	t.Parallel()
+
+	uStore := users.NewStore()
+	uStore.EnsureUser("test@example.com", "XY1234", "Test User", "self")
+	uStore.UpdateStatus("test@example.com", users.StatusSuspended)
+
+	adapter := &kiteExchangerAdapter{
+		apiKey:          "test-api-key",
+		apiSecret:       "test-api-secret",
+		tokenStore:      kc.NewKiteTokenStore(),
+		credentialStore: kc.NewKiteCredentialStore(),
+		userStore:       uStore,
+		logger:          testLogger(),
+		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
+	}
+
+	_, err := adapter.ExchangeRequestToken("test-request-token")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "suspended")
 }

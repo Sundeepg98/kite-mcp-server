@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -585,4 +586,28 @@ func TestNewApp_ConfigFromEnv(t *testing.T) {
 	assert.Equal(t, "/secret/path", app.Config.AdminSecretPath)
 	assert.Equal(t, "google-id", app.Config.GoogleClientID)
 	assert.Equal(t, "google-secret", app.Config.GoogleClientSecret)
+}
+
+// ===========================================================================
+// Merged from adapters_coverage_test.go — rate limiter concurrent test
+// ===========================================================================
+
+func TestGetLimiter_ConcurrentDoubleCheck_Push100Extra(t *testing.T) {
+	limiter := newIPRateLimiter(10, 20)
+
+	const ip = "192.168.1.100"
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			limiter.getLimiter(ip)
+		}()
+	}
+	wg.Wait()
+
+	l := limiter.getLimiter(ip)
+	assert.NotNil(t, l)
 }

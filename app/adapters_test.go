@@ -23,30 +23,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 )
 
-// ---------------------------------------------------------------------------
-// Helper: create a kc.Manager in DevMode for adapter tests.
-// ---------------------------------------------------------------------------
-
-func newTestManager(t *testing.T) *kc.Manager {
-	t.Helper()
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-	})
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	return mgr
-}
-
 // ===========================================================================
 // telegramManagerAdapter tests — all 11 methods
 // ===========================================================================

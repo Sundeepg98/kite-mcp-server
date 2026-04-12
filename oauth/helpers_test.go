@@ -128,3 +128,45 @@ func (devNull) Write(p []byte) (int, error) { return len(p), nil }
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(devNull{}, nil))
 }
+
+// ---------------------------------------------------------------------------
+// failPersister — mock client persister that always returns errors.
+// Moved from stores_coverage_test.go.
+// ---------------------------------------------------------------------------
+
+type failPersister struct{}
+
+func (fp *failPersister) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
+	return fmt.Errorf("persist fail")
+}
+
+func (fp *failPersister) LoadClients() ([]*ClientLoadEntry, error) {
+	return nil, fmt.Errorf("persist fail")
+}
+
+func (fp *failPersister) DeleteClient(clientID string) error {
+	return fmt.Errorf("persist fail")
+}
+
+// ---------------------------------------------------------------------------
+// mockRegistry — mock RegistryService for handler tests.
+// Moved from handlers_coverage_test.go.
+// ---------------------------------------------------------------------------
+
+type mockRegistry struct {
+	entries map[string]*RegistryEntry
+}
+
+func (m *mockRegistry) HasEntries() bool { return len(m.entries) > 0 }
+func (m *mockRegistry) GetByEmail(email string) (*RegistryEntry, bool) {
+	e, ok := m.entries[email]
+	return e, ok
+}
+func (m *mockRegistry) GetSecretByAPIKey(apiKey string) (string, bool) {
+	for _, e := range m.entries {
+		if e.APIKey == apiKey {
+			return e.APISecret, true
+		}
+	}
+	return "", false
+}

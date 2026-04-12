@@ -1,8 +1,6 @@
 package app
 
 import (
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,11 +15,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
-
-// testLogger creates a discard logger for tests
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 func TestLoadConfig_MissingAPIKey(t *testing.T) {
 	t.Setenv("KITE_API_KEY", "")

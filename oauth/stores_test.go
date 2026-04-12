@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // --- AuthCodeStore tests ---
@@ -1063,4 +1065,21 @@ func (m *mockPersisterFinal) LoadClients() ([]*ClientLoadEntry, error) {
 
 func (m *mockPersisterFinal) DeleteClient(clientID string) error {
 	return nil
+}
+
+// ===========================================================================
+// Merged from stores_coverage_test.go
+// ===========================================================================
+
+func TestClientStore_Register_PersistFail(t *testing.T) {
+	t.Parallel()
+	cs := NewClientStore()
+	cs.SetPersister(&failPersister{})
+	cs.SetLogger(testLogger())
+
+	// Register succeeds in-memory even if persistence fails
+	clientID, secret, err := cs.Register([]string{"http://localhost/cb"}, "test-client")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, clientID)
+	assert.NotEmpty(t, secret)
 }
