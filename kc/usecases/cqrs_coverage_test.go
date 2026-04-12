@@ -509,7 +509,7 @@ func TestPlaceGTT_CQRS_Success(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "u@t.com", Tradingsymbol: "INFY", Type: "single",
+		Email: "u@t.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 42, resp.TriggerID)
@@ -695,10 +695,9 @@ func TestPlaceOrder_CQRS_ResolveErr(t *testing.T) {
 	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: errors.New("no session")}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "u@t.com", Exchange: "NSE", Tradingsymbol: "INFY",
-		TransactionType: "BUY", OrderType: "MARKET", Quantity: 10,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"u@t.com", "NSE", "INFY", "BUY", "MARKET", "", 10, 0,
+	))
 	assert.ErrorContains(t, err, "resolve broker")
 }
 
@@ -707,10 +706,9 @@ func TestPlaceOrder_CQRS_BrokerErr(t *testing.T) {
 	client := &mockBrokerClient{placeErr: errors.New("api fail")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "u@t.com", Exchange: "NSE", Tradingsymbol: "INFY",
-		TransactionType: "BUY", OrderType: "MARKET", Quantity: 10,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"u@t.com", "NSE", "INFY", "BUY", "MARKET", "", 10, 0,
+	))
 	assert.ErrorContains(t, err, "place order")
 }
 

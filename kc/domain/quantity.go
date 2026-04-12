@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Quantity is a value object representing an order quantity.
 // It is always a positive integer — zero and negative quantities are invalid.
@@ -30,4 +33,20 @@ func (q Quantity) IsValid() bool {
 // String returns the quantity as a string.
 func (q Quantity) String() string {
 	return fmt.Sprintf("%d", q.value)
+}
+
+// MarshalJSON encodes the quantity as a JSON number.
+func (q Quantity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(q.value)
+}
+
+// UnmarshalJSON decodes a JSON number into a Quantity.
+// Accepts zero for cases where the quantity is intentionally unset (e.g., command defaults).
+func (q *Quantity) UnmarshalJSON(data []byte) error {
+	var v int
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	q.value = v
+	return nil
 }

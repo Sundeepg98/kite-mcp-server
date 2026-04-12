@@ -46,6 +46,9 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 		return broker.OrderResponse{}, fmt.Errorf("usecases: order_id is required")
 	}
 
+	// Extract raw price from Money VO.
+	price := cmd.Price.Amount
+
 	// Use domain specs for quantity/price validation on modify.
 	// Quantity of 0 means "don't change" — only validate when provided.
 	if cmd.Quantity > 0 {
@@ -55,9 +58,9 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 		}
 	}
 	// Price validation for non-MARKET modify orders when price is provided.
-	if cmd.Price > 0 && cmd.OrderType != "MARKET" && cmd.OrderType != "SL-M" {
+	if price > 0 && cmd.OrderType != "MARKET" && cmd.OrderType != "SL-M" {
 		priceSpec := domain.NewPriceSpec(0)
-		if !priceSpec.IsSatisfiedBy(cmd.Price) {
+		if !priceSpec.IsSatisfiedBy(price) {
 			return broker.OrderResponse{}, fmt.Errorf("usecases: %s", priceSpec.Reason())
 		}
 	}
@@ -70,7 +73,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 			ToolName:  "modify_order",
 			OrderType: cmd.OrderType,
 			Quantity:  cmd.Quantity,
-			Price:     cmd.Price,
+			Price:     price,
 		})
 		if !result.Allowed {
 			uc.logger.Warn("Modify order blocked by riskguard",
@@ -101,7 +104,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 	// 4. Modify order via broker API.
 	params := broker.OrderParams{
 		Quantity:         cmd.Quantity,
-		Price:            cmd.Price,
+		Price:            price,
 		TriggerPrice:     cmd.TriggerPrice,
 		OrderType:        cmd.OrderType,
 		Validity:         cmd.Validity,

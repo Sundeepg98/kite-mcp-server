@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
@@ -166,13 +167,13 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.manager.EventDispatcher(),
 				handler.manager.Logger,
 			)
+			qty, _ := domain.NewQuantity(orderParams.Quantity)
 			cmd := cqrs.PlaceOrderCommand{
 				Email:           session.Email,
-				Exchange:        orderParams.Exchange,
-				Tradingsymbol:   orderParams.Tradingsymbol,
+				Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
 				TransactionType: orderParams.TransactionType,
-				Quantity:        orderParams.Quantity,
-				Price:           orderParams.Price,
+				Qty:             qty,
+				Price:           domain.NewINR(orderParams.Price),
 				OrderType:       orderParams.OrderType,
 				Product:         orderParams.Product,
 				TriggerPrice:    orderParams.TriggerPrice,
@@ -305,7 +306,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				OrderID:          orderID,
 				Variety:          variety,
 				Quantity:         orderParams.Quantity,
-				Price:            orderParams.Price,
+				Price:            domain.NewINR(orderParams.Price),
 				TriggerPrice:     orderParams.TriggerPrice,
 				OrderType:        orderParams.OrderType,
 				Validity:         orderParams.Validity,
@@ -497,21 +498,20 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmd := cqrs.PlaceGTTCommand{
 				Email:             session.Email,
-				Exchange:          p.String("exchange", "NSE"),
-				Tradingsymbol:     p.String("tradingsymbol", ""),
-				LastPrice:         p.Float("last_price", 0.0),
+				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
+				LastPrice:         domain.NewINR(p.Float("last_price", 0.0)),
 				TransactionType:   p.String("transaction_type", ""),
 				Product:           p.String("product", ""),
 				Type:              triggerType,
 				TriggerValue:      p.Float("trigger_value", 0.0),
 				Quantity:          p.Float("quantity", 0.0),
-				LimitPrice:        p.Float("limit_price", 0.0),
+				LimitPrice:        domain.NewINR(p.Float("limit_price", 0.0)),
 				UpperTriggerValue: p.Float("upper_trigger_value", 0.0),
 				UpperQuantity:     p.Float("upper_quantity", 0.0),
-				UpperLimitPrice:   p.Float("upper_limit_price", 0.0),
+				UpperLimitPrice:   domain.NewINR(p.Float("upper_limit_price", 0.0)),
 				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
 				LowerQuantity:     p.Float("lower_quantity", 0.0),
-				LowerLimitPrice:   p.Float("lower_limit_price", 0.0),
+				LowerLimitPrice:   domain.NewINR(p.Float("lower_limit_price", 0.0)),
 			}
 
 			uc := usecases.NewPlaceGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
@@ -770,21 +770,20 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			cmd := cqrs.ModifyGTTCommand{
 				Email:             session.Email,
 				TriggerID:         p.Int("trigger_id", 0),
-				Exchange:          p.String("exchange", "NSE"),
-				Tradingsymbol:     p.String("tradingsymbol", ""),
-				LastPrice:         p.Float("last_price", 0.0),
+				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
+				LastPrice:         domain.NewINR(p.Float("last_price", 0.0)),
 				TransactionType:   p.String("transaction_type", ""),
 				Product:           p.String("product", ""),
 				Type:              triggerType,
 				TriggerValue:      p.Float("trigger_value", 0.0),
 				Quantity:          p.Float("quantity", 0.0),
-				LimitPrice:        p.Float("limit_price", 0.0),
+				LimitPrice:        domain.NewINR(p.Float("limit_price", 0.0)),
 				UpperTriggerValue: p.Float("upper_trigger_value", 0.0),
 				UpperQuantity:     p.Float("upper_quantity", 0.0),
-				UpperLimitPrice:   p.Float("upper_limit_price", 0.0),
+				UpperLimitPrice:   domain.NewINR(p.Float("upper_limit_price", 0.0)),
 				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
 				LowerQuantity:     p.Float("lower_quantity", 0.0),
-				LowerLimitPrice:   p.Float("lower_limit_price", 0.0),
+				LowerLimitPrice:   domain.NewINR(p.Float("lower_limit_price", 0.0)),
 			}
 
 			uc := usecases.NewModifyGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)

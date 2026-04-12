@@ -218,6 +218,20 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 }
 
+// testPlaceCmd builds a PlaceOrderCommand from raw values for test convenience.
+func testPlaceCmd(email, exchange, symbol, txnType, orderType, product string, qty int, price float64) cqrs.PlaceOrderCommand {
+	q, _ := domain.NewQuantity(qty)
+	return cqrs.PlaceOrderCommand{
+		Email:           email,
+		Instrument:      domain.NewInstrumentKey(exchange, symbol),
+		TransactionType: txnType,
+		Qty:             q,
+		Price:           domain.NewINR(price),
+		OrderType:       orderType,
+		Product:         product,
+	}
+}
+
 // --- PlaceOrderUseCase tests ---
 
 func TestPlaceOrder_Success(t *testing.T) {
@@ -232,16 +246,9 @@ func TestPlaceOrder_Success(t *testing.T) {
 
 	uc := NewPlaceOrderUseCase(resolver, nil, events, testLogger())
 
-	orderID, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email:           "test@example.com",
-		Exchange:        "NSE",
-		Tradingsymbol:   "RELIANCE",
-		TransactionType: "BUY",
-		OrderType:       "LIMIT",
-		Product:         "CNC",
-		Quantity:        10,
-		Price:           2500.0,
-	})
+	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "RELIANCE", "BUY", "LIMIT", "CNC", 10, 2500.0,
+	))
 
 	require.NoError(t, err)
 	assert.Equal(t, "ORD-1", orderID)
@@ -260,6 +267,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 func TestPlaceOrder_ValidationFailures(t *testing.T) {
 	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
 
+	qty10, _ := domain.NewQuantity(10)
 	tests := []struct {
 		name string
 		cmd  cqrs.PlaceOrderCommand
@@ -267,27 +275,27 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 	}{
 		{
 			name: "empty email",
-			cmd:  cqrs.PlaceOrderCommand{Tradingsymbol: "INFY", Quantity: 10},
+			cmd:  cqrs.PlaceOrderCommand{Instrument: domain.NewInstrumentKey("", "INFY"), Qty: qty10},
 			want: "email is required",
 		},
 		{
 			name: "empty tradingsymbol",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Quantity: 10},
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Qty: qty10},
 			want: "tradingsymbol is required",
 		},
 		{
 			name: "zero quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: 0},
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
 			want: "quantity 0 below minimum 1",
 		},
 		{
 			name: "negative quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: -5},
-			want: "quantity -5 below minimum 1",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
+			want: "quantity 0 below minimum 1",
 		},
 		{
 			name: "invalid transaction type",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "HOLD", Quantity: 10},
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "HOLD", Qty: qty10},
 			want: "transaction_type must be BUY or SELL",
 		},
 	}
@@ -305,10 +313,9 @@ func TestPlaceOrder_BrokerResolveError(t *testing.T) {
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token for user")}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY",
-		OrderType: "MARKET", Quantity: 10,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@test.com", "", "INFY", "BUY", "MARKET", "", 10, 0,
+	))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
 }
@@ -318,10 +325,9 @@ func TestPlaceOrder_BrokerPlaceError(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "test@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", Quantity: 10, Price: 2500,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@test.com", "NSE", "RELIANCE", "BUY", "", "", 10, 2500,
+	))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient margin")
 }
@@ -332,10 +338,9 @@ func TestPlaceOrder_NoEventsDispatcher(t *testing.T) {
 	// nil events dispatcher — should not panic.
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
-	orderID, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "test@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", OrderType: "MARKET", Quantity: 5,
-	})
+	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@test.com", "NSE", "RELIANCE", "BUY", "MARKET", "", 5, 0,
+	))
 	require.NoError(t, err)
 	assert.NotEmpty(t, orderID)
 }
@@ -517,7 +522,7 @@ func TestModifyOrder_Success(t *testing.T) {
 		Email:    "test@example.com",
 		OrderID:  "ORD-42",
 		Quantity: 20,
-		Price:    2600.0,
+		Price:    domain.NewINR(2600.0),
 	})
 
 	require.NoError(t, err)
@@ -1574,15 +1579,14 @@ func TestPlaceGTT_SingleLeg(t *testing.T) {
 
 	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
 		Email:           "test@test.com",
-		Tradingsymbol:   "RELIANCE",
-		Exchange:        "NSE",
-		LastPrice:       2500.0,
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		LastPrice:       domain.NewINR(2500.0),
 		TransactionType: "BUY",
 		Product:         "CNC",
 		Type:            "single",
 		TriggerValue:    2400.0,
 		Quantity:        10,
-		LimitPrice:      2390.0,
+		LimitPrice:      domain.NewINR(2390.0),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 42, resp.TriggerID)
@@ -1596,18 +1600,17 @@ func TestPlaceGTT_TwoLeg(t *testing.T) {
 
 	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
 		Email:             "test@test.com",
-		Tradingsymbol:     "INFY",
-		Exchange:          "NSE",
-		LastPrice:         1500.0,
+		Instrument:        domain.NewInstrumentKey("NSE", "INFY"),
+		LastPrice:         domain.NewINR(1500.0),
 		TransactionType:   "SELL",
 		Product:           "CNC",
 		Type:              "two-leg",
 		UpperTriggerValue: 1600.0,
 		UpperQuantity:     5,
-		UpperLimitPrice:   1595.0,
+		UpperLimitPrice:   domain.NewINR(1595.0),
 		LowerTriggerValue: 1400.0,
 		LowerQuantity:     5,
-		LowerLimitPrice:   1405.0,
+		LowerLimitPrice:   domain.NewINR(1405.0),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 43, resp.TriggerID)
@@ -1616,7 +1619,7 @@ func TestPlaceGTT_TwoLeg(t *testing.T) {
 func TestPlaceGTT_EmptyEmail(t *testing.T) {
 	uc := NewPlaceGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Tradingsymbol: "INFY", Type: "single",
+		Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "email is required")
@@ -1634,7 +1637,7 @@ func TestPlaceGTT_EmptyTradingsymbol(t *testing.T) {
 func TestPlaceGTT_InvalidType(t *testing.T) {
 	uc := NewPlaceGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Tradingsymbol: "INFY", Type: "triple",
+		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "triple",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid GTT type")
@@ -1644,7 +1647,7 @@ func TestPlaceGTT_ResolveError(t *testing.T) {
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Tradingsymbol: "INFY", Type: "single",
+		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
@@ -1655,7 +1658,7 @@ func TestPlaceGTT_BrokerError(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Tradingsymbol: "INFY", Type: "single",
+		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "place gtt")
@@ -1669,13 +1672,13 @@ func TestModifyGTT_Success(t *testing.T) {
 	uc := NewModifyGTTUseCase(resolver, testLogger())
 
 	resp, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email:         "test@test.com",
-		TriggerID:     42,
-		Tradingsymbol: "RELIANCE",
-		Type:          "single",
-		TriggerValue:  2450.0,
-		Quantity:       15,
-		LimitPrice:    2440.0,
+		Email:        "test@test.com",
+		TriggerID:    42,
+		Instrument:   domain.NewInstrumentKey("", "RELIANCE"),
+		Type:         "single",
+		TriggerValue: 2450.0,
+		Quantity:     15,
+		LimitPrice:   domain.NewINR(2440.0),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 42, resp.TriggerID)
@@ -1796,15 +1799,9 @@ func TestPlaceOrder_WithRiskguard(t *testing.T) {
 
 	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
 
-	orderID, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email:           "test@example.com",
-		Exchange:        "NSE",
-		Tradingsymbol:   "RELIANCE",
-		TransactionType: "BUY",
-		OrderType:       "MARKET",
-		Product:         "CNC",
-		Quantity:        1,
-	})
+	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "CNC", 1, 0,
+	))
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, orderID)
@@ -1824,7 +1821,7 @@ func TestModifyOrder_WithRiskguard(t *testing.T) {
 		Email:    "test@example.com",
 		OrderID:  "ORD-42",
 		Quantity: 1,
-		Price:    100.0,
+		Price:    domain.NewINR(100.0),
 	})
 
 	require.NoError(t, err)
@@ -2081,15 +2078,9 @@ func TestPlaceOrder_BlockedByRiskguard(t *testing.T) {
 	guard := newFrozenGuard(t)
 	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
 
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email:           "test@example.com",
-		Exchange:        "NSE",
-		Tradingsymbol:   "RELIANCE",
-		TransactionType: "BUY",
-		OrderType:       "MARKET",
-		Product:         "CNC",
-		Quantity:        1,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "CNC", 1, 0,
+	))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "riskguard")
@@ -2102,14 +2093,9 @@ func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
 	guard := newFrozenGuard(t)
 	uc := NewPlaceOrderUseCase(resolver, guard, nil, testLogger())
 
-	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email:           "test@example.com",
-		Exchange:        "NSE",
-		Tradingsymbol:   "RELIANCE",
-		TransactionType: "BUY",
-		OrderType:       "MARKET",
-		Quantity:        1,
-	})
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "", 1, 0,
+	))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "riskguard")

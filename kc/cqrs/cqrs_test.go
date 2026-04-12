@@ -8,18 +8,19 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // --- Command serialization tests ---
 
 func TestPlaceOrderCommandSerialize(t *testing.T) {
+	qty, _ := domain.NewQuantity(10)
 	cmd := PlaceOrderCommand{
 		Email:           "test@example.com",
-		Exchange:        "NSE",
-		Tradingsymbol:   "RELIANCE",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
 		TransactionType: "BUY",
-		Quantity:        10,
-		Price:           2500.50,
+		Qty:             qty,
+		Price:           domain.NewINR(2500.50),
 		OrderType:       "LIMIT",
 		Product:         "CNC",
 	}
@@ -53,7 +54,7 @@ func TestModifyOrderCommandSerialize(t *testing.T) {
 		Email:        "test@example.com",
 		OrderID:      "order-456",
 		Quantity:     20,
-		Price:        2600.0,
+		Price:        domain.NewINR(2600.0),
 		TriggerPrice: 2550.0,
 		OrderType:    "SL",
 	}
@@ -223,18 +224,18 @@ func TestCommandHandlerInterface(t *testing.T) {
 	handler := &mockCommandHandler{}
 	var _ CommandHandler[PlaceOrderCommand] = handler // compile-time check
 
+	qty, _ := domain.NewQuantity(10)
 	cmd := PlaceOrderCommand{
-		Email:         "test@example.com",
-		Exchange:      "NSE",
-		Tradingsymbol: "RELIANCE",
-		Quantity:      10,
+		Email:      "test@example.com",
+		Instrument: domain.NewInstrumentKey("NSE", "RELIANCE"),
+		Qty:        qty,
 	}
 
 	err := handler.Handle(context.Background(), cmd)
 	require.NoError(t, err)
 	assert.True(t, handler.called)
 	assert.Equal(t, cmd.Email, handler.cmd.Email)
-	assert.Equal(t, cmd.Tradingsymbol, handler.cmd.Tradingsymbol)
+	assert.Equal(t, cmd.Instrument.Tradingsymbol, handler.cmd.Instrument.Tradingsymbol)
 }
 
 // mockCommandHandlerWithResult tests the result-returning variant.
@@ -250,8 +251,9 @@ func TestCommandHandlerWithResultInterface(t *testing.T) {
 	handler := &mockPlaceOrderHandler{orderID: "ORD-123"}
 	var _ CommandHandlerWithResult[PlaceOrderCommand, string] = handler
 
+	qty5, _ := domain.NewQuantity(5)
 	id, err := handler.Handle(context.Background(), PlaceOrderCommand{
-		Email: "test@example.com", Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 5,
+		Email: "test@example.com", Instrument: domain.NewInstrumentKey("NSE", "INFY"), Qty: qty5,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "ORD-123", id)

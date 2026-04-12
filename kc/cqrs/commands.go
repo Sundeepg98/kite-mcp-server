@@ -6,22 +6,25 @@
 // commands and queries, enabling testable, composable use-case pipelines.
 package cqrs
 
+import "github.com/zerodha/kite-mcp-server/kc/domain"
+
 // --- Order commands ---
 
 // PlaceOrderCommand requests placing a new trading order.
+// Uses domain value objects for validated fields: Instrument (exchange+symbol),
+// Qty (positive integer), and Price (Money in INR).
 type PlaceOrderCommand struct {
-	Email           string  `json:"email"`
-	Exchange        string  `json:"exchange"`
-	Tradingsymbol   string  `json:"tradingsymbol"`
-	TransactionType string  `json:"transaction_type"` // BUY or SELL
-	Quantity        int     `json:"quantity"`
-	Price           float64 `json:"price,omitempty"`
-	OrderType       string  `json:"order_type"`       // MARKET, LIMIT, SL, SL-M
-	Product         string  `json:"product"`           // CNC, MIS, NRML
-	TriggerPrice    float64 `json:"trigger_price,omitempty"`
-	Validity        string  `json:"validity,omitempty"`
-	Variety         string  `json:"variety,omitempty"`
-	Tag             string  `json:"tag,omitempty"`
+	Email           string              `json:"email"`
+	Instrument      domain.InstrumentKey `json:"instrument"`
+	TransactionType string              `json:"transaction_type"` // BUY or SELL
+	Qty             domain.Quantity      `json:"qty"`
+	Price           domain.Money         `json:"price"`
+	OrderType       string              `json:"order_type"` // MARKET, LIMIT, SL, SL-M
+	Product         string              `json:"product"`    // CNC, MIS, NRML
+	TriggerPrice    float64             `json:"trigger_price,omitempty"`
+	Validity        string              `json:"validity,omitempty"`
+	Variety         string              `json:"variety,omitempty"`
+	Tag             string              `json:"tag,omitempty"`
 }
 
 // CancelOrderCommand requests cancelling an existing order.
@@ -32,60 +35,61 @@ type CancelOrderCommand struct {
 }
 
 // ModifyOrderCommand requests modifying an existing pending order.
+// Price uses domain.Money; Quantity stays int (0 = "don't modify").
 type ModifyOrderCommand struct {
-	Email            string  `json:"email"`
-	OrderID          string  `json:"order_id"`
-	Variety          string  `json:"variety,omitempty"`
-	Quantity         int     `json:"quantity,omitempty"`
-	Price            float64 `json:"price,omitempty"`
-	TriggerPrice     float64 `json:"trigger_price,omitempty"`
-	OrderType        string  `json:"order_type,omitempty"`
-	Validity         string  `json:"validity,omitempty"`
-	DisclosedQty     int     `json:"disclosed_quantity,omitempty"`
-	MarketProtection float64 `json:"market_protection,omitempty"`
+	Email            string       `json:"email"`
+	OrderID          string       `json:"order_id"`
+	Variety          string       `json:"variety,omitempty"`
+	Quantity         int          `json:"quantity,omitempty"`
+	Price            domain.Money `json:"price,omitempty"`
+	TriggerPrice     float64      `json:"trigger_price,omitempty"`
+	OrderType        string       `json:"order_type,omitempty"`
+	Validity         string       `json:"validity,omitempty"`
+	DisclosedQty     int          `json:"disclosed_quantity,omitempty"`
+	MarketProtection float64      `json:"market_protection,omitempty"`
 }
 
 // --- GTT commands ---
 
 // PlaceGTTCommand requests placing a new GTT order.
+// Uses domain.InstrumentKey for the instrument and domain.Money for price fields.
+// Quantities remain float64 as the GTT API accepts fractional quantities.
 type PlaceGTTCommand struct {
-	Email             string  `json:"email"`
-	Exchange          string  `json:"exchange"`
-	Tradingsymbol     string  `json:"tradingsymbol"`
-	LastPrice         float64 `json:"last_price"`
-	TransactionType   string  `json:"transaction_type"`
-	Product           string  `json:"product"`
-	Type              string  `json:"type"` // "single" or "two-leg"
-	TriggerValue      float64 `json:"trigger_value,omitempty"`
-	Quantity          float64 `json:"quantity,omitempty"`
-	LimitPrice        float64 `json:"limit_price,omitempty"`
-	UpperTriggerValue float64 `json:"upper_trigger_value,omitempty"`
-	UpperQuantity     float64 `json:"upper_quantity,omitempty"`
-	UpperLimitPrice   float64 `json:"upper_limit_price,omitempty"`
-	LowerTriggerValue float64 `json:"lower_trigger_value,omitempty"`
-	LowerQuantity     float64 `json:"lower_quantity,omitempty"`
-	LowerLimitPrice   float64 `json:"lower_limit_price,omitempty"`
+	Email             string               `json:"email"`
+	Instrument        domain.InstrumentKey  `json:"instrument"`
+	LastPrice         domain.Money          `json:"last_price"`
+	TransactionType   string               `json:"transaction_type"`
+	Product           string               `json:"product"`
+	Type              string               `json:"type"` // "single" or "two-leg"
+	TriggerValue      float64              `json:"trigger_value,omitempty"`
+	Quantity          float64              `json:"quantity,omitempty"`
+	LimitPrice        domain.Money          `json:"limit_price,omitempty"`
+	UpperTriggerValue float64              `json:"upper_trigger_value,omitempty"`
+	UpperQuantity     float64              `json:"upper_quantity,omitempty"`
+	UpperLimitPrice   domain.Money          `json:"upper_limit_price,omitempty"`
+	LowerTriggerValue float64              `json:"lower_trigger_value,omitempty"`
+	LowerQuantity     float64              `json:"lower_quantity,omitempty"`
+	LowerLimitPrice   domain.Money          `json:"lower_limit_price,omitempty"`
 }
 
 // ModifyGTTCommand requests modifying an existing GTT order.
 type ModifyGTTCommand struct {
-	Email             string  `json:"email"`
-	TriggerID         int     `json:"trigger_id"`
-	Exchange          string  `json:"exchange"`
-	Tradingsymbol     string  `json:"tradingsymbol"`
-	LastPrice         float64 `json:"last_price"`
-	TransactionType   string  `json:"transaction_type"`
-	Product           string  `json:"product"`
-	Type              string  `json:"type"` // "single" or "two-leg"
-	TriggerValue      float64 `json:"trigger_value,omitempty"`
-	Quantity          float64 `json:"quantity,omitempty"`
-	LimitPrice        float64 `json:"limit_price,omitempty"`
-	UpperTriggerValue float64 `json:"upper_trigger_value,omitempty"`
-	UpperQuantity     float64 `json:"upper_quantity,omitempty"`
-	UpperLimitPrice   float64 `json:"upper_limit_price,omitempty"`
-	LowerTriggerValue float64 `json:"lower_trigger_value,omitempty"`
-	LowerQuantity     float64 `json:"lower_quantity,omitempty"`
-	LowerLimitPrice   float64 `json:"lower_limit_price,omitempty"`
+	Email             string               `json:"email"`
+	TriggerID         int                  `json:"trigger_id"`
+	Instrument        domain.InstrumentKey  `json:"instrument"`
+	LastPrice         domain.Money          `json:"last_price"`
+	TransactionType   string               `json:"transaction_type"`
+	Product           string               `json:"product"`
+	Type              string               `json:"type"` // "single" or "two-leg"
+	TriggerValue      float64              `json:"trigger_value,omitempty"`
+	Quantity          float64              `json:"quantity,omitempty"`
+	LimitPrice        domain.Money          `json:"limit_price,omitempty"`
+	UpperTriggerValue float64              `json:"upper_trigger_value,omitempty"`
+	UpperQuantity     float64              `json:"upper_quantity,omitempty"`
+	UpperLimitPrice   domain.Money          `json:"upper_limit_price,omitempty"`
+	LowerTriggerValue float64              `json:"lower_trigger_value,omitempty"`
+	LowerQuantity     float64              `json:"lower_quantity,omitempty"`
+	LowerLimitPrice   domain.Money          `json:"lower_limit_price,omitempty"`
 }
 
 // DeleteGTTCommand requests deleting an existing GTT order.

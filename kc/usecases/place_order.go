@@ -56,16 +56,22 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 		return "", fmt.Errorf("usecases: email is required")
 	}
 
+	// Extract raw values from VOs for downstream use.
+	qty := cmd.Qty.Int()
+	price := cmd.Price.Amount
+	exchange := cmd.Instrument.Exchange
+	symbol := cmd.Instrument.Tradingsymbol
+
 	// Use OrderSpec (specification pattern) for domain-level order validation.
 	orderSpec := domain.NewOrderSpec(
 		domain.NewQuantitySpec(1, 0), // min 1, no max
 		domain.NewPriceSpec(0),       // positive price, no ceiling
 	)
 	candidate := domain.OrderCandidate{
-		Quantity:        cmd.Quantity,
-		Price:           cmd.Price,
-		Exchange:        cmd.Exchange,
-		Tradingsymbol:   cmd.Tradingsymbol,
+		Quantity:        qty,
+		Price:           price,
+		Exchange:        exchange,
+		Tradingsymbol:   symbol,
 		TransactionType: cmd.TransactionType,
 		OrderType:       cmd.OrderType,
 	}
@@ -78,11 +84,11 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
 			Email:           cmd.Email,
 			ToolName:        "place_order",
-			Exchange:        cmd.Exchange,
-			Tradingsymbol:   cmd.Tradingsymbol,
+			Exchange:        exchange,
+			Tradingsymbol:   symbol,
 			TransactionType: cmd.TransactionType,
-			Quantity:        cmd.Quantity,
-			Price:           cmd.Price,
+			Quantity:        qty,
+			Price:           price,
 			OrderType:       cmd.OrderType,
 		})
 		if !result.Allowed {
@@ -112,13 +118,13 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 
 	// 4. Place order via broker API.
 	params := broker.OrderParams{
-		Exchange:        cmd.Exchange,
-		Tradingsymbol:   cmd.Tradingsymbol,
+		Exchange:        exchange,
+		Tradingsymbol:   symbol,
 		TransactionType: cmd.TransactionType,
 		OrderType:       cmd.OrderType,
 		Product:         cmd.Product,
-		Quantity:        cmd.Quantity,
-		Price:           cmd.Price,
+		Quantity:        qty,
+		Price:           price,
 		TriggerPrice:    cmd.TriggerPrice,
 		Validity:        cmd.Validity,
 		Variety:         cmd.Variety,
@@ -129,7 +135,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	if err != nil {
 		uc.logger.Error("Order placement failed",
 			"email", cmd.Email,
-			"tradingsymbol", cmd.Tradingsymbol,
+			"tradingsymbol", symbol,
 			"error", err,
 		)
 		return "", fmt.Errorf("usecases: place order: %w", err)
@@ -137,13 +143,12 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 
 	// 5. Dispatch domain event.
 	if uc.events != nil {
-		qty, _ := domain.NewQuantity(cmd.Quantity)
 		uc.events.Dispatch(domain.OrderPlacedEvent{
 			Email:           cmd.Email,
 			OrderID:         resp.OrderID,
-			Instrument:      domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
-			Qty:             qty,
-			Price:           domain.NewINR(cmd.Price),
+			Instrument:      cmd.Instrument,
+			Qty:             cmd.Qty,
+			Price:           cmd.Price,
 			TransactionType: cmd.TransactionType,
 			Timestamp:       time.Now().UTC(),
 		})
@@ -152,7 +157,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	uc.logger.Info("Order placed",
 		"email", cmd.Email,
 		"order_id", resp.OrderID,
-		"tradingsymbol", cmd.Tradingsymbol,
+		"tradingsymbol", symbol,
 		"transaction_type", cmd.TransactionType,
 	)
 

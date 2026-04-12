@@ -66,7 +66,7 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 	if cmd.Email == "" {
 		return broker.GTTResponse{}, fmt.Errorf("usecases: email is required")
 	}
-	if cmd.Tradingsymbol == "" {
+	if cmd.Instrument.Tradingsymbol == "" {
 		return broker.GTTResponse{}, fmt.Errorf("usecases: tradingsymbol is required")
 	}
 	if cmd.Type != "single" && cmd.Type != "two-leg" {
@@ -79,21 +79,21 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 	}
 
 	params := broker.GTTParams{
-		Exchange:          cmd.Exchange,
-		Tradingsymbol:     cmd.Tradingsymbol,
-		LastPrice:         cmd.LastPrice,
+		Exchange:          cmd.Instrument.Exchange,
+		Tradingsymbol:     cmd.Instrument.Tradingsymbol,
+		LastPrice:         cmd.LastPrice.Amount,
 		TransactionType:   cmd.TransactionType,
 		Product:           cmd.Product,
 		Type:              cmd.Type,
 		TriggerValue:      cmd.TriggerValue,
 		Quantity:          cmd.Quantity,
-		LimitPrice:        cmd.LimitPrice,
+		LimitPrice:        cmd.LimitPrice.Amount,
 		UpperTriggerValue: cmd.UpperTriggerValue,
 		UpperQuantity:     cmd.UpperQuantity,
-		UpperLimitPrice:   cmd.UpperLimitPrice,
+		UpperLimitPrice:   cmd.UpperLimitPrice.Amount,
 		LowerTriggerValue: cmd.LowerTriggerValue,
 		LowerQuantity:     cmd.LowerQuantity,
-		LowerLimitPrice:   cmd.LowerLimitPrice,
+		LowerLimitPrice:   cmd.LowerLimitPrice.Amount,
 	}
 
 	resp, err := client.PlaceGTT(params)
@@ -105,7 +105,7 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 	uc.logger.Info("GTT order placed",
 		"email", cmd.Email,
 		"trigger_id", resp.TriggerID,
-		"tradingsymbol", cmd.Tradingsymbol,
+		"tradingsymbol", cmd.Instrument.Tradingsymbol,
 		"type", cmd.Type,
 	)
 
@@ -144,21 +144,21 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 	}
 
 	params := broker.GTTParams{
-		Exchange:          cmd.Exchange,
-		Tradingsymbol:     cmd.Tradingsymbol,
-		LastPrice:         cmd.LastPrice,
+		Exchange:          cmd.Instrument.Exchange,
+		Tradingsymbol:     cmd.Instrument.Tradingsymbol,
+		LastPrice:         cmd.LastPrice.Amount,
 		TransactionType:   cmd.TransactionType,
 		Product:           cmd.Product,
 		Type:              cmd.Type,
 		TriggerValue:      cmd.TriggerValue,
 		Quantity:          cmd.Quantity,
-		LimitPrice:        cmd.LimitPrice,
+		LimitPrice:        cmd.LimitPrice.Amount,
 		UpperTriggerValue: cmd.UpperTriggerValue,
 		UpperQuantity:     cmd.UpperQuantity,
-		UpperLimitPrice:   cmd.UpperLimitPrice,
+		UpperLimitPrice:   cmd.UpperLimitPrice.Amount,
 		LowerTriggerValue: cmd.LowerTriggerValue,
 		LowerQuantity:     cmd.LowerQuantity,
-		LowerLimitPrice:   cmd.LowerLimitPrice,
+		LowerLimitPrice:   cmd.LowerLimitPrice.Amount,
 	}
 
 	resp, err := client.ModifyGTT(cmd.TriggerID, params)
@@ -170,7 +170,7 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 	uc.logger.Info("GTT order modified",
 		"email", cmd.Email,
 		"trigger_id", cmd.TriggerID,
-		"tradingsymbol", cmd.Tradingsymbol,
+		"tradingsymbol", cmd.Instrument.Tradingsymbol,
 	)
 
 	return resp, nil
