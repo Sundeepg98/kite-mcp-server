@@ -66,6 +66,7 @@ type App struct {
 	auditStore     *audit.Store
 	scheduler      *scheduler.Scheduler
 	telegramBot    *tgbot.BotHandler
+	shutdownCh     chan struct{} // injectable shutdown trigger for testing (nil = OS signals)
 }
 
 // StatusPageData holds template data for the status page
@@ -890,7 +891,21 @@ func (app *App) createHTTPServer(url string) *http.Server {
 // receiving a signal (e.g., startup error), the goroutine and signal registration
 // are cleaned up by process exit. This is acceptable for a long-running server.
 func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// Use injected shutdown channel if available (for testing), else listen for OS signals.
+	var ctx context.Context
+	var stop context.CancelFunc
+	if app.shutdownCh != nil {
+		ctx, stop = context.WithCancel(context.Background())
+		go func() {
+			select {
+			case <-app.shutdownCh:
+				stop()
+			case <-ctx.Done():
+			}
+		}()
+	} else {
+		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	}
 
 	go func() {
 		defer stop()

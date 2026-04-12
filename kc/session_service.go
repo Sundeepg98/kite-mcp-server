@@ -27,6 +27,7 @@ type SessionService struct {
 	logger         *slog.Logger
 	metrics        metricsTracker       // thin interface to avoid importing metrics package
 	devMode        bool                 // when true, inject mock broker instead of real Kite client
+	brokerFactory  broker.Factory       // creates broker clients; defaults to Zerodha if nil
 }
 
 // metricsTracker is a minimal interface for metrics tracking within session service.
@@ -44,6 +45,7 @@ type SessionServiceConfig struct {
 	Logger        *slog.Logger
 	Metrics       metricsTracker
 	DevMode       bool
+	BrokerFactory broker.Factory // optional: defaults to Zerodha factory if nil
 }
 
 // NewSessionService creates a new SessionService.
@@ -57,6 +59,7 @@ func NewSessionService(cfg SessionServiceConfig) *SessionService {
 		logger:        cfg.Logger,
 		metrics:       cfg.Metrics,
 		devMode:       cfg.DevMode,
+		brokerFactory: cfg.BrokerFactory,
 	}
 	return ss
 }
@@ -454,6 +457,10 @@ func (ss *SessionService) GetBrokerForEmail(email string) (broker.Client, error)
 	accessToken := ss.credentialSvc.GetAccessTokenForEmail(email)
 	if accessToken == "" {
 		return nil, fmt.Errorf("no Kite access token for %s", email)
+	}
+	// Use injected factory if available, else fall back to Zerodha.
+	if ss.brokerFactory != nil {
+		return ss.brokerFactory.CreateWithToken(apiKey, accessToken)
 	}
 	kc := NewKiteConnect(apiKey)
 	kc.Client.SetAccessToken(accessToken)

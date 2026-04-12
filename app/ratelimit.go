@@ -53,23 +53,25 @@ func (l *ipRateLimiter) cleanup() {
 
 // rateLimiters holds all per-endpoint-group rate limiters.
 type rateLimiters struct {
-	auth  *ipRateLimiter // /oauth/register, /oauth/authorize, /auth/browser-login
-	token *ipRateLimiter // /oauth/token
-	mcp   *ipRateLimiter // /mcp, /sse, /message
-	done  chan struct{}   // closed during shutdown to stop the cleanup goroutine
+	auth           *ipRateLimiter // /oauth/register, /oauth/authorize, /auth/browser-login
+	token          *ipRateLimiter // /oauth/token
+	mcp            *ipRateLimiter // /mcp, /sse, /message
+	done           chan struct{}  // closed during shutdown to stop the cleanup goroutine
+	cleanupInterval time.Duration // injectable for testing (default 10 min)
 }
 
 // newRateLimiters creates rate limiters for each endpoint group and starts
 // a background goroutine that clears stale entries every 10 minutes.
 func newRateLimiters() *rateLimiters {
 	rl := &rateLimiters{
-		auth:  newIPRateLimiter(rate.Limit(2), 5),   // 2/sec, burst 5
-		token: newIPRateLimiter(rate.Limit(5), 10),   // 5/sec, burst 10
-		mcp:   newIPRateLimiter(rate.Limit(20), 40),  // 20/sec, burst 40
-		done:  make(chan struct{}),
+		auth:            newIPRateLimiter(rate.Limit(2), 5),   // 2/sec, burst 5
+		token:           newIPRateLimiter(rate.Limit(5), 10),   // 5/sec, burst 10
+		mcp:             newIPRateLimiter(rate.Limit(20), 40),  // 20/sec, burst 40
+		done:            make(chan struct{}),
+		cleanupInterval: 10 * time.Minute,
 	}
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(rl.cleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
