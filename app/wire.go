@@ -1,0 +1,398 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/zerodha/kite-mcp-server/mcp"
+	gomcp "github.com/mark3labs/mcp-go/mcp"
+	stripe "github.com/stripe/stripe-go/v82"
+)
+
+func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
+	app.logger.Info("Creating Kite Connect manager...")
+	kcManager, err := kc.New(kc.Config{
+		APIKey:           app.Config.KiteAPIKey,
+		APISecret:        app.Config.KiteAPISecret,
+		AccessToken:      app.Config.KiteAccessToken,
+		Logger:           app.logger,
+		Metrics:          app.metrics,
+		TelegramBotToken: app.Config.TelegramBotToken,
+		AlertDBPath:      app.Config.AlertDBPath,
+		AppMode:          app.Config.AppMode,
+		ExternalURL:      app.Config.ExternalURL,
+		AdminSecretPath:  app.Config.AdminSecretPath,
+		EncryptionSecret: app.Config.OAuthJWTSecret,
+		DevMode:          app.DevMode,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
+	}
+
+	// Store reference for template data
+	app.kcManager = kcManager
+
+	// Initialize the status template early for the status page
+	if err := app.initStatusPageTemplate(); err != nil {
+		app.logger.Warn("Failed to initialize status template", "error", err)
+	}
+
+	app.logger.Debug("Kite Connect manager created successfully")
+
+	// Create audit store (reuse the same SQLite DB used for alerts).
+	var auditMiddleware server.ToolHandlerMiddleware
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		app.auditStore = audit.New(alertDB)
+		if err := app.auditStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize audit table", "error", err)
+		} else {
+			// Wire encryption key for HMAC email hashing, AES-GCM email encryption,
+			// and HMAC-SHA256 hash chaining.
+			if app.Config.OAuthJWTSecret != "" {
+				if encKey, err := alerts.EnsureEncryptionSalt(alertDB, app.Config.OAuthJWTSecret); err == nil {
+					app.auditStore.SetEncryptionKey(encKey)
+					app.auditStore.SeedChain()
+					app.logger.Info("Audit trail encryption and hash chaining enabled")
+				} else {
+					app.logger.Error("Failed to derive audit encryption key", "error", err)
+				}
+			}
+			app.auditStore.SetLogger(app.logger)
+			app.auditStore.StartWorker()
+			app.logger.Info("Audit trail enabled")
+			auditMiddleware = audit.Middleware(app.auditStore)
+
+			// Wire audit store into manager for alert trigger + trailing stop notifications.
+			kcManager.SetAuditStore(app.auditStore)
+		}
+	}
+
+	// Initialize riskguard for financial safety controls.
+	riskGuard := riskguard.NewGuard(app.logger)
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		riskGuard.SetDB(alertDB)
+		if err := riskGuard.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize risk_limits table", "error", err)
+		}
+		if err := riskGuard.LoadLimits(); err != nil {
+			app.logger.Error("Failed to load risk limits", "error", err)
+		}
+	}
+	if kcManager.InstrumentsManagerConcrete() != nil {
+		// Wrap instruments manager as FreezeQuantityLookup
+		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
+	}
+	// Wire auto-freeze Telegram admin notification + domain event dispatch.
+	{
+		adminEmails := strings.Split(app.Config.AdminEmails, ",")
+		notifier := kcManager.TelegramNotifier()
+		riskGuard.SetAutoFreezeNotifier(func(email, reason string) {
+			// Dispatch domain event (eventDispatcher is set on kcManager after this closure is created,
+			// but the closure captures kcManager by reference so it picks up the dispatcher once wired).
+			if d := kcManager.EventDispatcher(); d != nil {
+				d.Dispatch(domain.UserFrozenEvent{
+					Email:    email,
+					FrozenBy: "riskguard:circuit-breaker",
+					Reason:   reason,
+					Timestamp: time.Now().UTC(),
+				})
+			}
+			// Telegram admin notification.
+			if notifier == nil {
+				return
+			}
+			for _, adminEmail := range adminEmails {
+				adminEmail = strings.TrimSpace(strings.ToLower(adminEmail))
+				if adminEmail == "" {
+					continue
+				}
+				chatID, ok := kcManager.TelegramStore().GetTelegramChatID(adminEmail)
+				if !ok {
+					continue
+				}
+				msg := fmt.Sprintf("<b>RiskGuard Alert</b>\nAuto-froze trading for <b>%s</b>\nReason: %s", email, reason)
+				if err := notifier.SendHTMLMessage(chatID, msg); err != nil {
+					app.logger.Error("Failed to send auto-freeze Telegram alert to admin", "admin", adminEmail, "error", err)
+				}
+			}
+		})
+		if notifier != nil {
+			app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
+		}
+	}
+	kcManager.SetRiskGuard(riskGuard)
+
+	// Initialize domain event dispatcher and audit log.
+	// Events flow: use case -> EventDispatcher.Dispatch() -> makeEventPersister() -> domain_events table.
+	// This is a write-only audit trail — events are never read back for state reconstitution.
+	eventDispatcher := domain.NewEventDispatcher()
+	kcManager.SetEventDispatcher(eventDispatcher)
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		eventStore := eventsourcing.NewEventStore(alertDB)
+		if err := eventStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize domain_events table", "error", err)
+		} else {
+			kcManager.SetEventStore(eventStore)
+			// Subscribe the domain audit log to persist all dispatched events.
+			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("order.modified", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("order.cancelled", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))
+			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
+			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
+			eventDispatcher.Subscribe("user.suspended", makeEventPersister(eventStore, "User", app.logger))
+			eventDispatcher.Subscribe("global.freeze", makeEventPersister(eventStore, "Global", app.logger))
+			eventDispatcher.Subscribe("family.invited", makeEventPersister(eventStore, "Family", app.logger))
+			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
+			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
+			app.logger.Info("Domain event store initialized and subscribed")
+		}
+	}
+
+	// Initialize paper trading engine.
+	var paperEngine *papertrading.PaperEngine
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		paperStore := papertrading.NewStore(alertDB, app.logger)
+		if err := paperStore.InitTables(); err != nil {
+			app.logger.Error("Failed to initialize paper trading tables", "error", err)
+		}
+		paperEngine = papertrading.NewEngine(paperStore, app.logger)
+		kcManager.SetPaperEngine(paperEngine)
+	}
+
+	// Create MCP server
+	app.logger.Info("Creating MCP server...")
+	var serverOpts []server.ServerOption
+	// Correlation ID middleware injects a unique ID per tool call for tracing.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.CorrelationMiddleware()))
+	// Timeout middleware kills tool handlers that exceed 30 seconds.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.TimeoutMiddleware(30*time.Second)))
+	if auditMiddleware != nil {
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
+	}
+	// Plugin hooks middleware runs registered before/after hooks around tool calls.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
+	// Circuit breaker protects against cascading failures from Kite API outages.
+	circuitBreaker := mcp.NewCircuitBreaker(5, 30*time.Second)
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(circuitBreaker.Middleware()))
+	// Riskguard middleware blocks orders exceeding safety limits.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
+	// Per-tool rate limiter prevents abuse of order-related tools.
+	toolRateLimiter := mcp.NewToolRateLimiter(map[string]int{
+		"place_order":     10,
+		"modify_order":    10,
+		"cancel_order":    20,
+		"place_gtt_order": 5,
+		"set_alert":       10,
+	})
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(toolRateLimiter.Middleware()))
+	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
+	// Skipped entirely in DEV_MODE — all tools are free tier.
+	if stripeKey := os.Getenv("STRIPE_SECRET_KEY"); stripeKey != "" && !app.DevMode {
+		stripe.Key = stripeKey
+		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
+		if err := billingStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize billing table", "error", err)
+		} else if err := billingStore.LoadFromDB(); err != nil {
+			app.logger.Error("Failed to load billing data from DB", "error", err)
+		}
+		kcManager.SetBillingStore(billingStore)
+		// Create adminEmailFn closure for family tier resolution.
+		adminEmailFn := func(email string) string {
+			u, ok := kcManager.UserStore().Get(email)
+			if !ok || u.AdminEmail == "" {
+				return ""
+			}
+			return u.AdminEmail
+		}
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore, adminEmailFn)))
+		app.logger.Info("Billing tier enforcement enabled")
+		if os.Getenv("STRIPE_PRICE_PRO") == "" || os.Getenv("STRIPE_PRICE_PREMIUM") == "" {
+			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
+		}
+	}
+
+	// Initialize family invitation store.
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		invStore := users.NewInvitationStore(alertDB)
+		if err := invStore.InitTable(); err != nil {
+			app.logger.Error("Failed to initialize invitations table", "error", err)
+		} else if err := invStore.LoadFromDB(); err != nil {
+			app.logger.Error("Failed to load invitations from DB", "error", err)
+		}
+		kcManager.SetInvitationStore(invStore)
+
+		// Wire family service (extracts family billing logic from manager).
+		famSvc := kc.NewFamilyService(kcManager.UserStore(), kcManager.BillingStore(), invStore)
+		kcManager.SetFamilyService(famSvc)
+
+		// Background cleanup of expired invitations (runs every 6 hours).
+		go func() {
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if is := kcManager.InvitationStore(); is != nil {
+					if n := is.CleanupExpired(); n > 0 {
+						app.logger.Info("Cleaned up expired invitations", "count", n)
+					}
+				}
+			}
+		}()
+	}
+
+	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
+	if paperEngine != nil {
+		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(papertrading.Middleware(paperEngine)))
+	}
+	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
+	// responses that have a relevant dashboard page.
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
+
+	// Enable elicitation so tool handlers can request user confirmation before
+	// placing orders. Clients that don't support elicitation will gracefully
+	// degrade (fail open — orders proceed without confirmation).
+	serverOpts = append(serverOpts, server.WithElicitation())
+
+	// Declare the MCP Apps UI extension so that MCP App hosts (Cowork,
+	// claude.ai) know this server supports inline rendering of ui:// resources.
+	// mcp-go doesn't have a WithExtensions option yet, so we inject it via an
+	// OnAfterInitialize hook that modifies the InitializeResult.
+	uiHooks := &server.Hooks{}
+	uiHooks.AddAfterInitialize(func(_ context.Context, _ any, _ *gomcp.InitializeRequest, result *gomcp.InitializeResult) {
+		if result.Capabilities.Extensions == nil {
+			result.Capabilities.Extensions = make(map[string]any)
+		}
+		result.Capabilities.Extensions["io.modelcontextprotocol/ui"] = map[string]any{}
+	})
+	serverOpts = append(serverOpts, server.WithHooks(uiHooks))
+
+	mcpServer := server.NewMCPServer(
+		"Kite MCP Server",
+		app.Version,
+		serverOpts...,
+	)
+	app.logger.Debug("MCP server created successfully")
+
+	// Wire MCPServer into Manager so tool handlers can call RequestElicitation.
+	kcManager.SetMCPServer(mcpServer)
+
+	// Wire paper trading LTP provider and start the background monitor.
+	if paperEngine != nil {
+		paperEngine.SetLTPProvider(&paperLTPAdapter{manager: kcManager})
+		paperMonitor := papertrading.NewMonitor(paperEngine, 5*time.Second, app.logger)
+		paperMonitor.Start()
+		app.logger.Info("Paper trading engine and monitor initialized")
+	}
+
+	// Register tools that will interact with MCP sessions and Kite API
+	app.logger.Info("Registering MCP tools...")
+	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger)
+	app.logger.Debug("MCP tools registered successfully")
+
+	// Initialize scheduled Telegram briefings (morning + daily P&L).
+	app.initScheduler(kcManager)
+
+	return kcManager, mcpServer, nil
+}
+
+// initScheduler wires the Telegram morning briefing, daily P&L summary, and
+// audit trail retention cleanup tasks.
+func (app *App) initScheduler(kcManager *kc.Manager) {
+	sched := scheduler.New(app.logger)
+	var taskNames []string
+
+	// --- Telegram briefings (opt-in: requires TELEGRAM_BOT_TOKEN) ---
+	notifier := kcManager.TelegramNotifier()
+	if notifier != nil {
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
+		credAdapter := &briefingCredAdapter{manager: kcManager}
+		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
+		if briefingSvc != nil {
+			sched.Add(scheduler.Task{
+				Name:   "morning_briefing",
+				Hour:   9,
+				Minute: 0,
+				Fn:     briefingSvc.SendMorningBriefings,
+			})
+			sched.Add(scheduler.Task{
+				Name:   "mis_warning",
+				Hour:   14,
+				Minute: 30,
+				Fn:     briefingSvc.SendMISWarnings,
+			})
+			sched.Add(scheduler.Task{
+				Name:   "daily_summary",
+				Hour:   15,
+				Minute: 35,
+				Fn:     briefingSvc.SendDailySummaries,
+			})
+			taskNames = append(taskNames, "morning_briefing(09:00)", "mis_warning(14:30)", "daily_summary(15:35)")
+		}
+	} else {
+		app.logger.Info("Telegram not configured, skipping briefing tasks")
+	}
+
+	// --- Audit trail retention cleanup — daily at 3:00 AM IST ---
+	if app.auditStore != nil {
+		const retentionDays = 1825 // 5 years — SEBI algo trading audit trail requirement
+		sched.Add(scheduler.Task{
+			Name:   "audit_cleanup",
+			Hour:   3,
+			Minute: 0,
+			Fn: func() {
+				cutoff := time.Now().AddDate(0, 0, -retentionDays)
+				deleted, err := app.auditStore.DeleteOlderThan(cutoff)
+				if err != nil {
+					app.logger.Error("Audit cleanup failed", "error", err)
+				} else if deleted > 0 {
+					app.logger.Info("Audit cleanup completed", "deleted", deleted, "retention_days", retentionDays)
+				}
+			},
+		})
+		taskNames = append(taskNames, "audit_cleanup(03:00)")
+	}
+
+	// --- Daily P&L snapshot — 3:40 PM IST (after market close, after Telegram summary) ---
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
+		credAdapter := &briefingCredAdapter{manager: kcManager}
+		pnlService := alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
+		if pnlService != nil {
+			kcManager.SetPnLService(pnlService)
+			sched.Add(scheduler.Task{
+				Name:   "pnl_snapshot",
+				Hour:   15,
+				Minute: 40,
+				Fn:     pnlService.TakeSnapshots,
+			})
+			taskNames = append(taskNames, "pnl_snapshot(15:40)")
+			app.logger.Info("P&L journal snapshot service enabled")
+		}
+	}
+
+	// Only start the scheduler if there are tasks to run.
+	if len(taskNames) == 0 {
+		app.logger.Info("No scheduled tasks configured")
+		return
+	}
+
+	sched.Start()
+	app.scheduler = sched
+	app.logger.Info("Scheduler started", "tasks", taskNames)
+}
+
+// briefingTokenAdapter bridges kc.KiteTokenStore to alerts.TokenChecker.

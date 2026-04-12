@@ -1,53 +1,66 @@
 package app
 
-// Tests for kiteExchangerAdapter using the kiteBaseURI injection point.
+// Tests for kiteExchangerAdapter using broker.Authenticator injection.
 // Covers ExchangeRequestToken and ExchangeWithCredentials success paths
 // with user provisioning, token storage, credential storage, and registry updates.
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
-// mockKiteAPIServerWithUser creates a httptest server that returns a
-// configurable user session response from /session/token.
-func mockKiteAPIServerWithUser(email, userID, userName, accessToken string) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/session/token" && r.Method == http.MethodPost {
-			w.Header().Set("Content-Type", "application/json")
-			resp := map[string]interface{}{
-				"status": "success",
-				"data": map[string]interface{}{
-					"user_id":       userID,
-					"user_name":     userName,
-					"email":         email,
-					"access_token":  accessToken,
-					"public_token":  "pub-" + accessToken,
-					"refresh_token": "ref-" + accessToken,
-				},
-			}
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
-		http.Error(w, "not found", http.StatusNotFound)
-	}))
+// mockAuthenticator implements broker.Authenticator for testing.
+type mockAuthenticator struct {
+	result broker.AuthResult
+	err    error
+}
+
+func (m *mockAuthenticator) GetLoginURL(apiKey string) string {
+	return "https://kite.zerodha.com/connect/login?api_key=" + apiKey
+}
+
+func (m *mockAuthenticator) ExchangeToken(apiKey, apiSecret, requestToken string) (broker.AuthResult, error) {
+	if m.err != nil {
+		return broker.AuthResult{}, m.err
+	}
+	return m.result, nil
+}
+
+func (m *mockAuthenticator) InvalidateToken(apiKey, accessToken string) error {
+	return nil
+}
+
+// newMockAuth creates a mockAuthenticator returning the given user session data.
+func newMockAuth(email, userID, userName, accessToken string) *mockAuthenticator {
+	return &mockAuthenticator{
+		result: broker.AuthResult{
+			AccessToken: accessToken,
+			UserID:      userID,
+			UserName:    userName,
+			Email:       email,
+		},
+	}
+}
+
+// newMockAuthError creates a mockAuthenticator that returns an error.
+func newMockAuthError(errMsg string) *mockAuthenticator {
+	return &mockAuthenticator{
+		err: fmt.Errorf("%s", errMsg),
+	}
 }
 
 // TestExchangeRequestToken_WithUserStore_Success tests the full success path
 // including user auto-provisioning via userStore.
 func TestExchangeRequestToken_WithUserStore_Success(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("alice@example.com", "AL1234", "Alice Trader", "tok-alice")
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
@@ -55,14 +68,14 @@ func TestExchangeRequestToken_WithUserStore_Success(t *testing.T) {
 	userStore := users.NewStore()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-api-key",
-		apiSecret:       "global-api-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "global-api-key",
+		apiSecret:     "global-api-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   regStore,
-		userStore:       userStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     userStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("alice@example.com", "AL1234", "Alice Trader", "tok-alice"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("test-request-token")
@@ -86,8 +99,6 @@ func TestExchangeRequestToken_WithUserStore_Success(t *testing.T) {
 // credentials path with user provisioning and credential storage.
 func TestExchangeWithCredentials_WithUserStore_Success(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("bob@example.com", "BO5678", "Bob Investor", "tok-bob")
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
@@ -95,14 +106,14 @@ func TestExchangeWithCredentials_WithUserStore_Success(t *testing.T) {
 	userStore := users.NewStore()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   regStore,
-		userStore:       userStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     userStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("bob@example.com", "BO5678", "Bob Investor", "tok-bob"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("test-request-token", "bob-api-key", "bob-api-secret")
@@ -129,20 +140,18 @@ func TestExchangeWithCredentials_WithUserStore_Success(t *testing.T) {
 // is auto-registered in the registry on first use.
 func TestExchangeWithCredentials_RegistryNewKey(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("carol@example.com", "CA9012", "Carol", "tok-carol")
-	defer mockServer.Close()
 
 	regStore := registry.New()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		userStore:       users.NewStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     users.NewStore(),
+		logger:        testLogger(),
+		authenticator: newMockAuth("carol@example.com", "CA9012", "Carol", "tok-carol"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("req-token", "carol-key", "carol-secret")
@@ -161,8 +170,6 @@ func TestExchangeWithCredentials_RegistryNewKey(t *testing.T) {
 // switches API keys, the old key is marked as replaced.
 func TestExchangeWithCredentials_RegistryOldKeyReplaced(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("dave@example.com", "DV3456", "Dave", "tok-dave")
-	defer mockServer.Close()
 
 	regStore := registry.New()
 
@@ -180,14 +187,14 @@ func TestExchangeWithCredentials_RegistryOldKeyReplaced(t *testing.T) {
 	require.NoError(t, err)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		userStore:       users.NewStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     users.NewStore(),
+		logger:        testLogger(),
+		authenticator: newMockAuth("dave@example.com", "DV3456", "Dave", "tok-dave"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("req-token", "dave-new-key", "dave-new-secret")
@@ -209,8 +216,6 @@ func TestExchangeWithCredentials_RegistryOldKeyReplaced(t *testing.T) {
 // updates the last-used timestamp of the global API key.
 func TestExchangeRequestToken_RegistryLastUsedAt(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("eve@example.com", "EV7890", "Eve", "tok-eve")
-	defer mockServer.Close()
 
 	regStore := registry.New()
 	err := regStore.Register(&registry.AppRegistration{
@@ -223,13 +228,13 @@ func TestExchangeRequestToken_RegistryLastUsedAt(t *testing.T) {
 	require.NoError(t, err)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-api-key",
-		apiSecret:       "global-api-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-api-key",
+		apiSecret:     "global-api-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("eve@example.com", "EV7890", "Eve", "tok-eve"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("req-token")
@@ -246,17 +251,15 @@ func TestExchangeRequestToken_RegistryLastUsedAt(t *testing.T) {
 // works correctly when registryStore is nil (minimal setup).
 func TestExchangeRequestToken_NoRegistryStore_Factory(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("frank@example.com", "FR1111", "Frank", "tok-frank")
-	defer mockServer.Close()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "key",
-		apiSecret:       "secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "key",
+		apiSecret:     "secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   nil,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: nil,
+		logger:        testLogger(),
+		authenticator: newMockAuth("frank@example.com", "FR1111", "Frank", "tok-frank"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("req-token")
@@ -268,20 +271,18 @@ func TestExchangeRequestToken_NoRegistryStore_Factory(t *testing.T) {
 // path without a registry store.
 func TestExchangeWithCredentials_NoRegistryStore_Factory(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServerWithUser("grace@example.com", "GR2222", "Grace", "tok-grace")
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   nil,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: nil,
+		logger:        testLogger(),
+		authenticator: newMockAuth("grace@example.com", "GR2222", "Grace", "tok-grace"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("req-token", "grace-key", "grace-secret")
@@ -298,17 +299,14 @@ func TestExchangeWithCredentials_NoRegistryStore_Factory(t *testing.T) {
 // returns an empty email, the user_id is used as the identity.
 func TestExchangeRequestToken_FallbackToUserID_Factory(t *testing.T) {
 	t.Parallel()
-	// Empty email in response — should fall back to user_id
-	mockServer := mockKiteAPIServerWithUser("", "ZK4444", "No Email User", "tok-noemail")
-	defer mockServer.Close()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "key",
-		apiSecret:       "secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "key",
+		apiSecret:     "secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		logger:        testLogger(),
+		authenticator: newMockAuth("", "ZK4444", "No Email User", "tok-noemail"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("req-token")
@@ -317,27 +315,17 @@ func TestExchangeRequestToken_FallbackToUserID_Factory(t *testing.T) {
 }
 
 // TestExchangeRequestToken_KiteAPIError tests the error path when
-// the mock Kite API returns an error response.
+// the authenticator returns an error.
 func TestExchangeRequestToken_KiteAPIError_Factory(t *testing.T) {
 	t.Parallel()
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":     "error",
-			"message":    "Invalid checksum",
-			"error_type": "TokenException",
-		})
-	}))
-	defer mockServer.Close()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "key",
-		apiSecret:       "secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "key",
+		apiSecret:     "secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		logger:        testLogger(),
+		authenticator: newMockAuthError("Invalid checksum"),
 	}
 
 	_, err := adapter.ExchangeRequestToken("bad-token")

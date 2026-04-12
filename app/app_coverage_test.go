@@ -642,9 +642,10 @@ func TestExchangeWithCredentials_ExistingKeyDifferentUser(t *testing.T) {
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
-	// This will fail at kite generate session but exercises the adapter creation
+	// This will fail at authenticator but exercises the adapter creation
 	_, exchangeErr := adapter.ExchangeWithCredentials("bad-token", "pk", "ps")
 	require.Error(t, exchangeErr)
 }
@@ -672,9 +673,10 @@ func TestExchangeWithCredentials_OldKeyReplacement(t *testing.T) {
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
-	// This will fail at kite generate session
+	// This will fail at authenticator
 	_, exchangeErr := adapter.ExchangeWithCredentials("bad-token", "new-key", "new-secret")
 	require.Error(t, exchangeErr)
 }
@@ -692,9 +694,10 @@ func TestExchangeRequestToken_WithRegistryStore(t *testing.T) {
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
-	// Will fail at kite API call but exercises the adapter setup
+	// Will fail at authenticator but exercises the adapter setup
 	_, err := adapter.ExchangeRequestToken("bad-token")
 	require.Error(t, err)
 }
@@ -2303,10 +2306,11 @@ func TestExchangeWithCredentials_NoRegistryStore(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		logger:          testLogger(),
+		authenticator:   newMockAuthError("Invalid checksum"),
 		// registryStore is nil
 	}
 
-	// This will fail at Kite API call (no mock server) but exercises the initial code path
+	// This will fail at authenticator but exercises the initial code path
 	_, err := exchanger.ExchangeWithCredentials("fake-request-token", "key1", "secret1")
 	assert.Error(t, err)
 }

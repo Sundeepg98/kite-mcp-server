@@ -277,13 +277,18 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 		},
 		{
 			name: "zero quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", Quantity: 0},
-			want: "quantity must be positive",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: 0},
+			want: "quantity 0 below minimum 1",
 		},
 		{
 			name: "negative quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", Quantity: -5},
-			want: "quantity must be positive",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: -5},
+			want: "quantity -5 below minimum 1",
+		},
+		{
+			name: "invalid transaction type",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "HOLD", Quantity: 10},
+			want: "transaction_type must be BUY or SELL",
 		},
 	}
 
@@ -301,7 +306,8 @@ func TestPlaceOrder_BrokerResolveError(t *testing.T) {
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
-		Email: "test@test.com", Tradingsymbol: "INFY", Quantity: 10,
+		Email: "test@test.com", Tradingsymbol: "INFY", TransactionType: "BUY",
+		OrderType: "MARKET", Quantity: 10,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
@@ -2101,6 +2107,7 @@ func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "BUY",
+		OrderType:       "MARKET",
 		Quantity:        1,
 	})
 

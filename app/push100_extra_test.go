@@ -131,8 +131,6 @@ func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
 
 func TestExchangeWithCredentials_KeyExistsDiffUser_Push100Extra(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	regStore := registry.New()
 
@@ -150,14 +148,14 @@ func TestExchangeWithCredentials_KeyExistsDiffUser_Push100Extra(t *testing.T) {
 	require.NoError(t, err)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		userStore:       users.NewStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     users.NewStore(),
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	// Exchange with per-user-key succeeds → mock returns email "test@example.com"
@@ -178,8 +176,6 @@ func TestExchangeWithCredentials_KeyExistsDiffUser_Push100Extra(t *testing.T) {
 
 func TestExchangeWithCredentials_RegisterError_Push100Extra(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	regStore := registry.New()
 
@@ -198,14 +194,14 @@ func TestExchangeWithCredentials_RegisterError_Push100Extra(t *testing.T) {
 	require.NoError(t, err)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		userStore:       users.NewStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		userStore:     users.NewStore(),
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	// Exchange with "new-user-key" → key not in registry → Register with conflictID → error (ID taken)
@@ -274,8 +270,6 @@ func TestSetupMux_OpsHandler_NoUserStoreNoOAuth_Push100Extra(t *testing.T) {
 
 func TestExchangeWithCredentials_SuspendedUser_Push100Extra(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	uStore := users.NewStore()
 	// Pre-create user as suspended — mock returns "test@example.com"
@@ -283,13 +277,13 @@ func TestExchangeWithCredentials_SuspendedUser_Push100Extra(t *testing.T) {
 	uStore.UpdateStatus("test@example.com", users.StatusSuspended)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		userStore:       uStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		userStore:     uStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	_, err := adapter.ExchangeWithCredentials("test-request-token", "per-key", "per-secret")
@@ -303,21 +297,19 @@ func TestExchangeWithCredentials_SuspendedUser_Push100Extra(t *testing.T) {
 
 func TestExchangeWithCredentials_OffboardedUser_Push100Extra(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	uStore := users.NewStore()
 	uStore.EnsureUser("test@example.com", "XY1234", "Test User", "self")
 	uStore.UpdateStatus("test@example.com", users.StatusOffboarded)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		userStore:       uStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		userStore:     uStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	_, err := adapter.ExchangeWithCredentials("test-request-token", "per-key", "per-secret")
@@ -331,21 +323,19 @@ func TestExchangeWithCredentials_OffboardedUser_Push100Extra(t *testing.T) {
 
 func TestExchangeRequestToken_SuspendedUser_Push100Extra(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	uStore := users.NewStore()
 	uStore.EnsureUser("test@example.com", "XY1234", "Test User", "self")
 	uStore.UpdateStatus("test@example.com", users.StatusSuspended)
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "test-api-key",
-		apiSecret:       "test-api-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "test-api-key",
+		apiSecret:     "test-api-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		userStore:       uStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		userStore:     uStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	_, err := adapter.ExchangeRequestToken("test-request-token")

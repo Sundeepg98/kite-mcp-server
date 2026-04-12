@@ -46,6 +46,22 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 		return broker.OrderResponse{}, fmt.Errorf("usecases: order_id is required")
 	}
 
+	// Use domain specs for quantity/price validation on modify.
+	// Quantity of 0 means "don't change" — only validate when provided.
+	if cmd.Quantity > 0 {
+		qtySpec := domain.NewQuantitySpec(1, 0)
+		if !qtySpec.IsSatisfiedBy(cmd.Quantity) {
+			return broker.OrderResponse{}, fmt.Errorf("usecases: %s", qtySpec.Reason())
+		}
+	}
+	// Price validation for non-MARKET modify orders when price is provided.
+	if cmd.Price > 0 && cmd.OrderType != "MARKET" && cmd.OrderType != "SL-M" {
+		priceSpec := domain.NewPriceSpec(0)
+		if !priceSpec.IsSatisfiedBy(cmd.Price) {
+			return broker.OrderResponse{}, fmt.Errorf("usecases: %s", priceSpec.Reason())
+		}
+	}
+
 	// 2. Run riskguard checks (if configured).
 	// Modify orders still need rate-limit and daily-count checks.
 	if uc.riskguard != nil {

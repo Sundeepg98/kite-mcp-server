@@ -256,3 +256,25 @@ type AdminGetRiskStatusQuery struct {
 type AdminListFamilyQuery struct {
 	AdminEmail string `json:"admin_email"`
 }
+
+// --- Widget queries ---
+
+// GetWidgetPortfolioQuery requests portfolio data formatted for the widget.
+type GetWidgetPortfolioQuery struct {
+	Email string `json:"email"`
+}
+
+// GetWidgetOrdersQuery requests order data formatted for the orders widget.
+type GetWidgetOrdersQuery struct {
+	Email string `json:"email"`
+}
+
+// GetWidgetAlertsQuery requests alert data formatted for the alerts widget.
+type GetWidgetAlertsQuery struct {
+	Email string `json:"email"`
+}
+
+// GetWidgetActivityQuery requests activity data formatted for the activity widget.
+type GetWidgetActivityQuery struct {
+	Email string `json:"email"`
+}

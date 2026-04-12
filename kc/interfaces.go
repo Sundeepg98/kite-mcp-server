@@ -82,16 +82,23 @@ type TelegramStoreInterface interface {
 // ---------------------------------------------------------------------------
 // AuditStoreInterface — tool call audit trail
 // ---------------------------------------------------------------------------
+// Split into focused sub-interfaces per Interface Segregation Principle.
+// Consumers should depend on the narrowest interface they need.
 
-// AuditStoreInterface defines operations for recording and querying MCP tool
-// call audit records.
-type AuditStoreInterface interface {
+// AuditWriter provides write operations for audit records.
+type AuditWriter interface {
 	// Enqueue adds a tool call to the async write buffer.
 	Enqueue(entry *audit.ToolCall)
 
 	// Record inserts a tool call synchronously.
 	Record(entry *audit.ToolCall) error
 
+	// DeleteOlderThan removes tool_calls older than the given time.
+	DeleteOlderThan(before time.Time) (int64, error)
+}
+
+// AuditReader provides read and query operations for audit records.
+type AuditReader interface {
 	// List retrieves tool call records for a given email with filtering/pagination.
 	List(email string, opts audit.ListOptions) ([]*audit.ToolCall, int, error)
 
@@ -100,9 +107,6 @@ type AuditStoreInterface interface {
 
 	// GetOrderAttribution returns the decision trace for a given order.
 	GetOrderAttribution(email, orderID string) ([]*audit.ToolCall, error)
-
-	// DeleteOlderThan removes tool_calls older than the given time.
-	DeleteOlderThan(before time.Time) (int64, error)
 
 	// GetStats returns aggregate stats for a given email since the given time.
 	// Optional category and errorsOnly filters scope the results.
@@ -123,12 +127,23 @@ type AuditStoreInterface interface {
 
 	// VerifyChain walks the hash chain and checks integrity.
 	VerifyChain() (*audit.ChainVerification, error)
+}
 
+// AuditStreamer provides real-time activity streaming via listeners.
+type AuditStreamer interface {
 	// AddActivityListener registers a listener for real-time activity streaming.
 	AddActivityListener(id string) chan *audit.ToolCall
 
 	// RemoveActivityListener unregisters and closes a listener.
 	RemoveActivityListener(id string)
+}
+
+// AuditStoreInterface defines operations for recording and querying MCP tool
+// call audit records. Composed from focused sub-interfaces.
+type AuditStoreInterface interface {
+	AuditWriter
+	AuditReader
+	AuditStreamer
 }
 
 // ---------------------------------------------------------------------------
@@ -163,13 +178,11 @@ type BillingStoreInterface interface {
 // ---------------------------------------------------------------------------
 // UserStoreInterface — user identity, RBAC, lifecycle
 // ---------------------------------------------------------------------------
+// Split into focused sub-interfaces per Interface Segregation Principle.
+// Consumers should depend on the narrowest interface they need.
 
-// UserStoreInterface defines operations for user registration, authentication,
-// and role-based access control.
-type UserStoreInterface interface {
-	// Create inserts a new user. Returns error if user already exists.
-	Create(u *users.User) error
-
+// UserReader provides read-only access to user data.
+type UserReader interface {
 	// Get retrieves a user by email.
 	Get(email string) (*users.User, bool)
 
@@ -179,14 +192,35 @@ type UserStoreInterface interface {
 	// Exists returns true if a user with the given email exists.
 	Exists(email string) bool
 
-	// IsAdmin returns true if the email belongs to an active admin.
-	IsAdmin(email string) bool
-
 	// GetStatus returns the user's status (empty if not found).
 	GetStatus(email string) string
 
 	// GetRole returns the user's role (empty if not found).
 	GetRole(email string) string
+
+	// List returns all users as a slice.
+	List() []*users.User
+
+	// Count returns the number of registered users.
+	Count() int
+
+	// ListByAdminEmail returns all users linked to this admin.
+	ListByAdminEmail(adminEmail string) []*users.User
+
+	// EnsureUser creates a user if they don't exist, returning the user.
+	EnsureUser(email, kiteUID, displayName, onboardedBy string) *users.User
+
+	// EnsureAdmin creates or upgrades a user to admin role.
+	EnsureAdmin(email string)
+}
+
+// UserWriter provides write operations on user data.
+type UserWriter interface {
+	// Create inserts a new user. Returns error if user already exists.
+	Create(u *users.User) error
+
+	// Delete removes a user from the store.
+	Delete(email string)
 
 	// UpdateLastLogin records the current time as the user's last login.
 	UpdateLastLogin(email string)
@@ -203,26 +237,14 @@ type UserStoreInterface interface {
 	// SetAdminEmail links a user to their admin for family billing.
 	SetAdminEmail(email, adminEmail string) error
 
-	// List returns all users as a slice.
-	List() []*users.User
-
-	// Count returns the number of registered users.
-	Count() int
-
-	// Delete removes a user from the store.
-	Delete(email string)
-
-	// EnsureAdmin creates or upgrades a user to admin role.
-	EnsureAdmin(email string)
-
-	// EnsureUser creates a user if they don't exist, returning the user.
-	EnsureUser(email, kiteUID, displayName, onboardedBy string) *users.User
-
-	// ListByAdminEmail returns all users linked to this admin.
-	ListByAdminEmail(adminEmail string) []*users.User
-
 	// SetPasswordHash stores a bcrypt password hash for the given user.
 	SetPasswordHash(email, hash string) error
+}
+
+// UserAuthChecker provides authentication and authorization checks.
+type UserAuthChecker interface {
+	// IsAdmin returns true if the email belongs to an active admin.
+	IsAdmin(email string) bool
 
 	// HasPassword returns true if the user has a non-empty password hash.
 	HasPassword(email string) bool
@@ -231,16 +253,22 @@ type UserStoreInterface interface {
 	VerifyPassword(email, password string) (bool, error)
 }
 
+// UserStoreInterface defines operations for user registration, authentication,
+// and role-based access control. Composed from focused sub-interfaces.
+type UserStoreInterface interface {
+	UserReader
+	UserWriter
+	UserAuthChecker
+}
+
 // ---------------------------------------------------------------------------
 // RegistryStoreInterface — pre-registered Kite app credentials
 // ---------------------------------------------------------------------------
+// Split into focused sub-interfaces per Interface Segregation Principle.
+// Consumers should depend on the narrowest interface they need.
 
-// RegistryStoreInterface defines operations for the Kite app key registry,
-// used for zero-config onboarding where admins pre-register API credentials.
-type RegistryStoreInterface interface {
-	// Register adds a new app registration.
-	Register(reg *registry.AppRegistration) error
-
+// RegistryReader provides read-only access to registry data.
+type RegistryReader interface {
 	// Get retrieves a registration by ID.
 	Get(id string) (*registry.AppRegistration, bool)
 
@@ -256,6 +284,18 @@ type RegistryStoreInterface interface {
 	// List returns a redacted summary of all registered apps.
 	List() []registry.AppRegistrationSummary
 
+	// Count returns the number of registry entries.
+	Count() int
+
+	// HasEntries returns true if the registry has any entries.
+	HasEntries() bool
+}
+
+// RegistryWriter provides write operations on registry data.
+type RegistryWriter interface {
+	// Register adds a new app registration.
+	Register(reg *registry.AppRegistration) error
+
 	// Update modifies a registration's mutable fields.
 	Update(id string, assignedTo, label, status string) error
 
@@ -267,12 +307,14 @@ type RegistryStoreInterface interface {
 
 	// Delete removes a registration by ID.
 	Delete(id string) error
+}
 
-	// Count returns the number of registry entries.
-	Count() int
-
-	// HasEntries returns true if the registry has any entries.
-	HasEntries() bool
+// RegistryStoreInterface defines operations for the Kite app key registry,
+// used for zero-config onboarding where admins pre-register API credentials.
+// Composed from focused sub-interfaces.
+type RegistryStoreInterface interface {
+	RegistryReader
+	RegistryWriter
 }
 
 // ---------------------------------------------------------------------------
@@ -511,4 +553,14 @@ var (
 	_ TickerServiceInterface     = (*ticker.Service)(nil)
 	_ PaperEngineInterface       = (*papertrading.PaperEngine)(nil)
 	_ InstrumentManagerInterface = (*instruments.Manager)(nil)
+
+	// Sub-interface satisfaction checks (ISP splits)
+	_ UserReader        = (*users.Store)(nil)
+	_ UserWriter        = (*users.Store)(nil)
+	_ UserAuthChecker   = (*users.Store)(nil)
+	_ AuditWriter       = (*audit.Store)(nil)
+	_ AuditReader       = (*audit.Store)(nil)
+	_ AuditStreamer      = (*audit.Store)(nil)
+	_ RegistryReader    = (*registry.Store)(nil)
+	_ RegistryWriter    = (*registry.Store)(nil)
 )

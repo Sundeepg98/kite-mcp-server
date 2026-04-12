@@ -55,11 +55,22 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	if cmd.Email == "" {
 		return "", fmt.Errorf("usecases: email is required")
 	}
-	if cmd.Tradingsymbol == "" {
-		return "", fmt.Errorf("usecases: tradingsymbol is required")
+
+	// Use OrderSpec (specification pattern) for domain-level order validation.
+	orderSpec := domain.NewOrderSpec(
+		domain.NewQuantitySpec(1, 0), // min 1, no max
+		domain.NewPriceSpec(0),       // positive price, no ceiling
+	)
+	candidate := domain.OrderCandidate{
+		Quantity:        cmd.Quantity,
+		Price:           cmd.Price,
+		Exchange:        cmd.Exchange,
+		Tradingsymbol:   cmd.Tradingsymbol,
+		TransactionType: cmd.TransactionType,
+		OrderType:       cmd.OrderType,
 	}
-	if cmd.Quantity <= 0 {
-		return "", fmt.Errorf("usecases: quantity must be positive, got %d", cmd.Quantity)
+	if !orderSpec.IsSatisfiedBy(candidate) {
+		return "", fmt.Errorf("usecases: %s", orderSpec.Reason())
 	}
 
 	// 2. Run riskguard checks (if configured).

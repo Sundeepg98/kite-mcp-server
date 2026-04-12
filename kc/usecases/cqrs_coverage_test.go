@@ -697,7 +697,7 @@ func TestPlaceOrder_CQRS_ResolveErr(t *testing.T) {
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
 		Email: "u@t.com", Exchange: "NSE", Tradingsymbol: "INFY",
-		TransactionType: "BUY", Quantity: 10,
+		TransactionType: "BUY", OrderType: "MARKET", Quantity: 10,
 	})
 	assert.ErrorContains(t, err, "resolve broker")
 }
@@ -709,7 +709,7 @@ func TestPlaceOrder_CQRS_BrokerErr(t *testing.T) {
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
 		Email: "u@t.com", Exchange: "NSE", Tradingsymbol: "INFY",
-		TransactionType: "BUY", Quantity: 10,
+		TransactionType: "BUY", OrderType: "MARKET", Quantity: 10,
 	})
 	assert.ErrorContains(t, err, "place order")
 }

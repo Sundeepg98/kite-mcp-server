@@ -31,6 +31,13 @@ type TelegramLookup interface {
 	GetEmailByChatID(chatID int64) (string, bool)
 }
 
+// KiteClientFactory creates Kite API clients. Mirrors kc.KiteClientFactory
+// to avoid a circular import between kc and kc/telegram.
+type KiteClientFactory interface {
+	NewClient(apiKey string) *kiteconnect.Client
+	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
+}
+
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
 // Using an interface avoids a circular import between kc and kc/telegram.
 type KiteManager interface {
@@ -88,20 +95,25 @@ type BotHandler struct {
 
 	// kiteBaseURI overrides the Kite API base URL (for testing).
 	kiteBaseURI string
+
+	// kiteClientFactory creates kiteconnect.Client instances; nil = direct kiteconnect.New().
+	kiteClientFactory KiteClientFactory
 }
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
 // that periodically prunes stale rate-limit and pending-order entries.
-func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger) *BotHandler {
+// factory may be nil, in which case kiteconnect.New() is used directly.
+func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger, factory KiteClientFactory) *BotHandler {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &BotHandler{
-		bot:           bot,
-		webhookSecret: webhookSecret,
-		manager:       manager,
-		logger:        logger,
-		rateWindow:    make(map[int64][]time.Time),
-		pendingOrders: make(map[int64]*pendingOrder),
-		cleanupCancel: cancel,
+		bot:               bot,
+		webhookSecret:     webhookSecret,
+		manager:           manager,
+		logger:            logger,
+		rateWindow:        make(map[int64][]time.Time),
+		pendingOrders:     make(map[int64]*pendingOrder),
+		cleanupCancel:     cancel,
+		kiteClientFactory: factory,
 	}
 	go h.runCleanup(ctx)
 	return h
@@ -336,8 +348,13 @@ func (h *BotHandler) newKiteClient(email string) (*kiteconnect.Client, string) {
 	if !h.manager.IsTokenValid(email) {
 		return nil, "Kite token expired. Please re-login via MCP."
 	}
-	client := kiteconnect.New(apiKey)
-	client.SetAccessToken(accessToken)
+	var client *kiteconnect.Client
+	if h.kiteClientFactory != nil {
+		client = h.kiteClientFactory.NewClientWithToken(apiKey, accessToken)
+	} else {
+		client = kiteconnect.New(apiKey)
+		client.SetAccessToken(accessToken)
+	}
 	if h.kiteBaseURI != "" {
 		client.SetBaseURI(h.kiteBaseURI)
 	}

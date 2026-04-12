@@ -1077,59 +1077,22 @@ func TestManagedSessionService(t *testing.T) {
 // FamilyService — full coverage of all branches
 // ---------------------------------------------------------------------------
 
-// mockUserStore implements UserStoreInterface for testing.
+// mockUserStoreForFamily implements FamilyUserStore (3 methods) for testing.
+// ISP benefit: mock only needs the methods FamilyService actually uses.
 type mockUserStoreForFamily struct {
 	users map[string]*users.User
 }
-
-func (m *mockUserStoreForFamily) Create(u *users.User) error { m.users[u.Email] = u; return nil }
 
 func (m *mockUserStoreForFamily) Get(email string) (*users.User, bool) {
 	u, ok := m.users[email]
 	return u, ok
 }
 
-func (m *mockUserStoreForFamily) GetByEmail(email string) (*users.User, bool) { return m.Get(email) }
-
-func (m *mockUserStoreForFamily) Exists(email string) bool { _, ok := m.users[email]; return ok }
-
-func (m *mockUserStoreForFamily) IsAdmin(email string) bool { return false }
-
-func (m *mockUserStoreForFamily) GetStatus(email string) string { return "" }
-
-func (m *mockUserStoreForFamily) GetRole(email string) string { return "" }
-
-func (m *mockUserStoreForFamily) UpdateLastLogin(email string) {}
-
-func (m *mockUserStoreForFamily) UpdateRole(email, role string) error { return nil }
-
-func (m *mockUserStoreForFamily) UpdateStatus(email, status string) error { return nil }
-
-func (m *mockUserStoreForFamily) UpdateKiteUID(email, kiteUID string) {}
-
 func (m *mockUserStoreForFamily) SetAdminEmail(email, adminEmail string) error {
 	if u, ok := m.users[email]; ok {
 		u.AdminEmail = adminEmail
 		return nil
 	}
-	return nil
-}
-
-func (m *mockUserStoreForFamily) List() []*users.User {
-	out := make([]*users.User, 0, len(m.users))
-	for _, u := range m.users {
-		out = append(out, u)
-	}
-	return out
-}
-
-func (m *mockUserStoreForFamily) Count() int { return len(m.users) }
-
-func (m *mockUserStoreForFamily) Delete(email string) { delete(m.users, email) }
-
-func (m *mockUserStoreForFamily) EnsureAdmin(email string) {}
-
-func (m *mockUserStoreForFamily) EnsureUser(email, kiteUID, displayName, onboardedBy string) *users.User {
 	return nil
 }
 
@@ -1141,14 +1104,6 @@ func (m *mockUserStoreForFamily) ListByAdminEmail(adminEmail string) []*users.Us
 		}
 	}
 	return out
-}
-
-func (m *mockUserStoreForFamily) SetPasswordHash(email, hash string) error { return nil }
-
-func (m *mockUserStoreForFamily) HasPassword(email string) bool { return false }
-
-func (m *mockUserStoreForFamily) VerifyPassword(email, password string) (bool, error) {
-	return false, nil
 }
 
 // mockBillingStore implements BillingStoreInterface for testing.

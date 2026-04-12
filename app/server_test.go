@@ -5470,21 +5470,19 @@ func mockKiteAPIServer(t *testing.T) *httptest.Server {
 
 func TestExchangeRequestToken_Success(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
 	regStore := registry.New()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "test-api-key",
-		apiSecret:       "test-api-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "test-api-key",
+		apiSecret:     "test-api-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   regStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("test-request-token")
@@ -5501,31 +5499,14 @@ func TestExchangeRequestToken_Success(t *testing.T) {
 
 func TestExchangeRequestToken_Success_FallbackToUserID(t *testing.T) {
 	t.Parallel()
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/session/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{
-				"status": "success",
-				"data": {
-					"user_id": "AB5678",
-					"user_name": "No Email User",
-					"access_token": "tok-no-email",
-					"public_token": "pub-no-email"
-				}
-			}`))
-			return
-		}
-		http.Error(w, "not found", http.StatusNotFound)
-	}))
-	defer mockServer.Close()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "test-key",
-		apiSecret:       "test-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "test-key",
+		apiSecret:     "test-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		logger:        testLogger(),
+		authenticator: newMockAuth("", "AB5678", "No Email User", "tok-no-email"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("test-request-token")
@@ -5537,21 +5518,19 @@ func TestExchangeRequestToken_Success_FallbackToUserID(t *testing.T) {
 
 func TestExchangeWithCredentials_Success(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
 	regStore := registry.New()
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-api-key",
-		apiSecret:       "global-api-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "global-api-key",
+		apiSecret:     "global-api-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   regStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("test-request-token", "per-user-key", "per-user-secret")
@@ -5573,8 +5552,6 @@ func TestExchangeWithCredentials_Success(t *testing.T) {
 
 func TestExchangeWithCredentials_Success_WithRegistry(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	tokenStore := kc.NewKiteTokenStore()
 	credStore := kc.NewKiteCredentialStore()
@@ -5590,13 +5567,13 @@ func TestExchangeWithCredentials_Success_WithRegistry(t *testing.T) {
 	})
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "global-key",
-		apiSecret:       "global-secret",
-		tokenStore:      tokenStore,
+		apiKey:        "global-key",
+		apiSecret:     "global-secret",
+		tokenStore:    tokenStore,
 		credentialStore: credStore,
-		registryStore:   regStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	email, err := adapter.ExchangeWithCredentials("test-request-token", "new-per-user-key", "new-per-user-secret")
@@ -5614,8 +5591,6 @@ func TestExchangeWithCredentials_Success_WithRegistry(t *testing.T) {
 
 func TestExchangeRequestToken_Success_RegistryUpdate(t *testing.T) {
 	t.Parallel()
-	mockServer := mockKiteAPIServer(t)
-	defer mockServer.Close()
 
 	regStore := registry.New()
 	_ = regStore.Register(&registry.AppRegistration{
@@ -5626,13 +5601,13 @@ func TestExchangeRequestToken_Success_RegistryUpdate(t *testing.T) {
 	})
 
 	adapter := &kiteExchangerAdapter{
-		apiKey:          "test-api-key",
-		apiSecret:       "test-api-secret",
-		tokenStore:      kc.NewKiteTokenStore(),
+		apiKey:        "test-api-key",
+		apiSecret:     "test-api-secret",
+		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		registryStore:   regStore,
-		logger:          testLogger(),
-		kiteBaseURI:     mockServer.URL,
+		registryStore: regStore,
+		logger:        testLogger(),
+		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
 	email, err := adapter.ExchangeRequestToken("test-request-token")

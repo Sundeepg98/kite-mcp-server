@@ -133,6 +133,9 @@ type AppConfigProvider interface {
 	// IsLocalMode returns true when running in STDIO mode.
 	IsLocalMode() bool
 
+	// DevMode returns true when the server runs with a mock broker.
+	DevMode() bool
+
 	// ExternalURL returns the configured external URL.
 	ExternalURL() string
 

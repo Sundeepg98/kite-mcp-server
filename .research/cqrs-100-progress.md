@@ -92,6 +92,12 @@ Vet: `go vet ./kc/cqrs/ ./kc/usecases/` passes clean.
 ### Compliance tool (1) — mcp/compliance_tool.go
 - [x] sebi_compliance_status — ACCEPTED EXCEPTION: multi-source aggregation
 
+### Widget DataFuncs (4) — mcp/ext_apps.go
+- [x] portfolioData — via GetPortfolioForWidgetUseCase
+- [x] ordersData — via GetOrdersForWidgetUseCase
+- [x] alertsData — via GetAlertsForWidgetUseCase
+- [x] activityData — via GetActivityForWidgetUseCase
+
 ## New artifacts created
 
 | Artifact | File | Type |
@@ -106,6 +112,16 @@ Vet: `go vet ./kc/cqrs/ ./kc/usecases/` passes clean.
 | SetupTelegramCommand | kc/cqrs/commands.go | CQRS Command |
 | LoginCommand (restored) | kc/cqrs/commands.go | CQRS Command |
 | AddToWatchlistCommand (expanded) | kc/cqrs/commands.go | CQRS Command |
+| GetPortfolioForWidgetUseCase | kc/usecases/widget_usecases.go | Use Case (NEW) |
+| GetOrdersForWidgetUseCase | kc/usecases/widget_usecases.go | Use Case (NEW) |
+| GetAlertsForWidgetUseCase | kc/usecases/widget_usecases.go | Use Case (NEW) |
+| GetActivityForWidgetUseCase | kc/usecases/widget_usecases.go | Use Case (NEW) |
+| WidgetAuditStore interface | kc/usecases/widget_usecases.go | Interface (NEW) |
+| WidgetAlertStore interface | kc/usecases/widget_usecases.go | Interface (NEW) |
+| GetWidgetPortfolioQuery | kc/cqrs/queries.go | CQRS Query (NEW) |
+| GetWidgetOrdersQuery | kc/cqrs/queries.go | CQRS Query (NEW) |
+| GetWidgetAlertsQuery | kc/cqrs/queries.go | CQRS Query (NEW) |
+| GetWidgetActivityQuery | kc/cqrs/queries.go | CQRS Query (NEW) |
 
 ## Accepted exceptions rationale
 

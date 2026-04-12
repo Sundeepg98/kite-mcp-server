@@ -63,6 +63,7 @@ func (a *Auth) ExchangeToken(apiKey, apiSecret, requestToken string) (broker.Aut
 		UserID:      sess.UserID,
 		UserName:    sess.UserName,
 		UserType:    sess.UserType,
+		Email:       sess.Email,
 	}, nil
 }
 

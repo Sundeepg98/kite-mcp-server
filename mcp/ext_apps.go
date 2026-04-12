@@ -18,7 +18,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -339,274 +341,53 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 
 // --- Data functions for each widget ---
 
-// portfolioData fetches holdings + positions in parallel for the portfolio widget.
+// portfolioData fetches holdings + positions via the portfolio widget use case.
 func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
-	client := brokerClientForEmail(manager, email)
-	if client == nil {
-		return nil
+	uc := usecases.NewGetPortfolioForWidgetUseCase(manager.SessionSvc(), manager.Logger)
+	result, err := uc.Execute(context.Background(), cqrs.GetWidgetPortfolioQuery{Email: email})
+	if err != nil {
+		return map[string]string{"error": err.Error()}
 	}
-
-	// Parallel API calls to reduce latency.
-	var holdings []broker.Holding
-	var positions broker.Positions
-	var holdingsErr, positionsErr error
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); holdings, holdingsErr = client.GetHoldings() }()
-	go func() { defer wg.Done(); positions, positionsErr = client.GetPositions() }()
-	wg.Wait()
-
-	if holdingsErr != nil {
-		return map[string]string{"error": "Failed to fetch holdings: " + holdingsErr.Error()}
-	}
-	if positionsErr != nil {
-		return map[string]string{"error": "Failed to fetch positions: " + positionsErr.Error()}
-	}
-
-	type holdingItem struct {
-		Symbol     string  `json:"tradingsymbol"`
-		Exchange   string  `json:"exchange"`
-		Quantity   int     `json:"quantity"`
-		AvgPrice   float64 `json:"average_price"`
-		LastPrice  float64 `json:"last_price"`
-		PnL        float64 `json:"pnl"`
-		DayChgPct  float64 `json:"day_change_percentage"`
-	}
-	type posItem struct {
-		Symbol   string  `json:"tradingsymbol"`
-		Exchange string  `json:"exchange"`
-		Quantity int     `json:"quantity"`
-		AvgPrice float64 `json:"average_price"`
-		LastPrice float64 `json:"last_price"`
-		PnL      float64 `json:"pnl"`
-		Product  string  `json:"product"`
-	}
-
-	hItems := make([]holdingItem, 0, len(holdings))
-	var totalInvested, totalCurrent, totalPnL float64
-	for _, h := range holdings {
-		hItems = append(hItems, holdingItem{
-			Symbol: h.Tradingsymbol, Exchange: h.Exchange, Quantity: h.Quantity,
-			AvgPrice: h.AveragePrice, LastPrice: h.LastPrice, PnL: h.PnL,
-			DayChgPct: h.DayChangePct,
-		})
-		totalInvested += h.AveragePrice * float64(h.Quantity)
-		totalCurrent += h.LastPrice * float64(h.Quantity)
-		totalPnL += h.PnL
-	}
-
-	pItems := make([]posItem, 0, len(positions.Net))
-	var posPnL float64
-	for _, p := range positions.Net {
-		pItems = append(pItems, posItem{
-			Symbol: p.Tradingsymbol, Exchange: p.Exchange, Quantity: p.Quantity,
-			AvgPrice: p.AveragePrice, LastPrice: p.LastPrice, PnL: p.PnL,
-			Product: p.Product,
-		})
-		posPnL += p.PnL
-	}
-
-	return map[string]any{
-		"holdings":  hItems,
-		"positions": pItems,
-		"summary": map[string]any{
-			"holdings_count":  len(holdings),
-			"total_invested":  totalInvested,
-			"total_current":   totalCurrent,
-			"total_pnl":       totalPnL,
-			"positions_count": len(positions.Net),
-			"positions_pnl":   posPnL,
-		},
-	}
+	return result
 }
 
-// activityData fetches recent audit trail entries for the activity widget.
+// activityData fetches recent audit trail entries via the activity widget use case.
 func activityData(_ *kc.Manager, auditStore *audit.Store, email string) any {
 	if auditStore == nil {
 		return nil
 	}
-
-	since := time.Now().AddDate(0, 0, -7)
-	entries, _, err := auditStore.List(email, audit.ListOptions{
-		Limit: 20,
-		Since: since,
-	})
+	uc := usecases.NewGetActivityForWidgetUseCase(auditStore, slog.Default())
+	result, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: email})
 	if err != nil {
 		return nil
 	}
-
-	stats, _ := auditStore.GetStats(email, since, "", false)
-	toolCounts, _ := auditStore.GetToolCounts(email, since, "", false)
-
-	return map[string]any{
-		"entries":     entries,
-		"stats":       stats,
-		"tool_counts": toolCounts,
-	}
+	return result
 }
 
-// ordersData fetches recent order entries for the orders widget.
+// ordersData fetches recent order entries via the orders widget use case.
 func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any {
 	if auditStore == nil {
 		return nil
 	}
-
-	since := time.Now().AddDate(0, 0, -1) // today
-	toolCalls, err := auditStore.ListOrders(email, since)
+	uc := usecases.NewGetOrdersForWidgetUseCase(manager.SessionSvc(), auditStore, manager.Logger)
+	result, err := uc.Execute(context.Background(), cqrs.GetWidgetOrdersQuery{Email: email})
 	if err != nil {
 		return nil
 	}
-
-	client := brokerClientForEmail(manager, email)
-
-	type orderEntry struct {
-		OrderID        string  `json:"order_id"`
-		Symbol         string  `json:"tradingsymbol"`
-		Exchange       string  `json:"exchange"`
-		Side           string  `json:"transaction_type"`
-		OrderType      string  `json:"order_type"`
-		Quantity       float64 `json:"quantity"`
-		FilledQuantity float64 `json:"filled_quantity"`
-		Price          float64 `json:"price"`
-		AveragePrice   float64 `json:"average_price"`
-		Status         string  `json:"status"`
-		PlacedAt       string  `json:"placed_at"`
-	}
-
-	// Fetch all orders in a single API call (instead of N GetOrderHistory calls).
-	orderStatusMap := make(map[string]broker.Order)
-	if client != nil {
-		if allOrders, oErr := client.GetOrders(); oErr == nil {
-			for _, o := range allOrders {
-				orderStatusMap[o.OrderID] = o
-			}
-		}
-	}
-
-	orders := make([]orderEntry, 0, len(toolCalls))
-	for _, tc := range toolCalls {
-		oe := orderEntry{OrderID: tc.OrderID, PlacedAt: tc.StartedAt.Format(time.RFC3339)}
-		if tc.InputParams != "" {
-			var params map[string]any
-			if json.Unmarshal([]byte(tc.InputParams), &params) == nil {
-				if v, ok := params["tradingsymbol"].(string); ok { oe.Symbol = v }
-				if v, ok := params["exchange"].(string); ok { oe.Exchange = v }
-				if v, ok := params["transaction_type"].(string); ok { oe.Side = v }
-				if v, ok := params["order_type"].(string); ok { oe.OrderType = v }
-				if v, ok := params["quantity"].(float64); ok { oe.Quantity = v }
-				if v, ok := params["price"].(float64); ok { oe.Price = v }
-			}
-		}
-		// Enrich from the single GetOrders() result.
-		if o, ok := orderStatusMap[oe.OrderID]; ok {
-			oe.Status = o.Status
-			oe.FilledQuantity = float64(o.FilledQuantity)
-			oe.AveragePrice = o.AveragePrice
-			if oe.Symbol == "" { oe.Symbol = o.Tradingsymbol }
-			if oe.Exchange == "" { oe.Exchange = o.Exchange }
-			if oe.Side == "" { oe.Side = o.TransactionType }
-			if oe.Quantity == 0 { oe.Quantity = float64(o.Quantity) }
-			if oe.Price == 0 { oe.Price = o.Price }
-		}
-		orders = append(orders, oe)
-	}
-
-	var completed, pending, rejected int
-	var totalBuyVal, totalSellVal float64
-	for _, o := range orders {
-		switch o.Status {
-		case "COMPLETE":
-			completed++
-			val := o.AveragePrice * o.FilledQuantity
-			if o.Side == "BUY" { totalBuyVal += val } else { totalSellVal += val }
-		case "OPEN", "TRIGGER PENDING", "VALIDATION PENDING":
-			pending++
-		case "REJECTED", "CANCELLED":
-			rejected++
-		}
-	}
-
-	return map[string]any{
-		"orders": orders,
-		"summary": map[string]any{
-			"total": len(orders), "completed": completed,
-			"pending": pending, "rejected": rejected,
-			"total_buy_value": totalBuyVal, "total_sell_value": totalSellVal,
-		},
-	}
+	return result
 }
 
-// alertsData fetches active/triggered alerts for the alerts widget.
+// alertsData fetches active/triggered alerts via the alerts widget use case.
 func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
 	if manager.AlertStore() == nil {
 		return nil
 	}
-	allAlerts := manager.AlertStore().List(email)
-	client := brokerClientForEmail(manager, email)
-
-	type alertItem struct {
-		ID          string  `json:"id"`
-		Symbol      string  `json:"tradingsymbol"`
-		Exchange    string  `json:"exchange"`
-		Direction   string  `json:"direction"`
-		TargetPrice float64 `json:"target_price"`
-		CurrentPrice float64 `json:"current_price,omitempty"`
-		DistancePct  float64 `json:"distance_pct,omitempty"`
-		CreatedAt   string  `json:"created_at"`
-		TriggeredAt string  `json:"triggered_at,omitempty"`
-		TriggeredPrice float64 `json:"triggered_price,omitempty"`
+	uc := usecases.NewGetAlertsForWidgetUseCase(manager.SessionSvc(), manager.AlertStore(), manager.Logger)
+	result, err := uc.Execute(context.Background(), cqrs.GetWidgetAlertsQuery{Email: email})
+	if err != nil {
+		return nil
 	}
-
-	active := make([]alertItem, 0)
-	triggered := make([]alertItem, 0)
-
-	// Batch LTP lookup for active alerts
-	ltpMap := make(map[string]float64)
-	if client != nil {
-		instruments := make([]string, 0)
-		for _, a := range allAlerts {
-			if !a.Triggered {
-				inst := a.Exchange + ":" + a.Tradingsymbol
-				instruments = append(instruments, inst)
-			}
-		}
-		if len(instruments) > 0 {
-			if ltps, err := client.GetLTP(instruments...); err == nil {
-				for k, v := range ltps {
-					ltpMap[k] = v.LastPrice
-				}
-			}
-		}
-	}
-
-	for _, a := range allAlerts {
-		item := alertItem{
-			ID: a.ID, Symbol: a.Tradingsymbol, Exchange: a.Exchange,
-			Direction: string(a.Direction), TargetPrice: a.TargetPrice,
-			CreatedAt: a.CreatedAt.Format(time.RFC3339),
-		}
-		if a.Triggered {
-			item.TriggeredAt = a.TriggeredAt.Format(time.RFC3339)
-			item.TriggeredPrice = a.TriggeredPrice
-			triggered = append(triggered, item)
-		} else {
-			inst := a.Exchange + ":" + a.Tradingsymbol
-			if ltp, ok := ltpMap[inst]; ok {
-				item.CurrentPrice = ltp
-				if ltp > 0 {
-					item.DistancePct = (a.TargetPrice - ltp) / ltp * 100
-				}
-			}
-			active = append(active, item)
-		}
-	}
-
-	return map[string]any{
-		"active":          active,
-		"triggered":       triggered,
-		"active_count":    len(active),
-		"triggered_count": len(triggered),
-	}
+	return result
 }
 
 // paperData fetches paper trading status, holdings, and positions for the widget.

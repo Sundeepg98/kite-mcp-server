@@ -395,6 +395,7 @@ type AuthResult struct {
 	UserID      string `json:"user_id"`
 	UserName    string `json:"user_name"`
 	UserType    string `json:"user_type"`
+	Email       string `json:"email,omitempty"`
 }
 
 // Client is the core broker interface. Each broker implementation

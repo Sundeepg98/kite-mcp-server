@@ -7,16 +7,24 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
+// FamilyUserStore is the narrow interface FamilyService needs from user store.
+// ISP: only Get + ListByAdminEmail + SetAdminEmail.
+type FamilyUserStore interface {
+	Get(email string) (*users.User, bool)
+	ListByAdminEmail(adminEmail string) []*users.User
+	SetAdminEmail(email, adminEmail string) error
+}
+
 // FamilyService handles family billing operations — invite, remove, list, tier resolution.
 // Extracts family logic from Manager to reduce god-object coupling.
 type FamilyService struct {
-	userStore       UserStoreInterface
+	userStore       FamilyUserStore
 	billingStore    BillingStoreInterface
 	invitationStore *users.InvitationStore
 }
 
 // NewFamilyService creates a family service with the required stores.
-func NewFamilyService(us UserStoreInterface, bs BillingStoreInterface, is *users.InvitationStore) *FamilyService {
+func NewFamilyService(us FamilyUserStore, bs BillingStoreInterface, is *users.InvitationStore) *FamilyService {
 	return &FamilyService{userStore: us, billingStore: bs, invitationStore: is}
 }
 

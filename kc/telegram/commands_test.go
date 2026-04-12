@@ -143,7 +143,7 @@ func newTestBotHandler(mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
 	bot, _ := tgbotapi.NewBotAPIWithClient("fake-token", "https://api.telegram.org/bot%s/%s", mockClient)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewBotHandler(bot, "test-secret", mgr, logger)
+	h := NewBotHandler(bot, "test-secret", mgr, logger, nil)
 	// Reset baseline: NewBotAPIWithClient makes a getMe call that we don't want to count.
 	mockClient.setBaseline()
 	return h, mockClient
