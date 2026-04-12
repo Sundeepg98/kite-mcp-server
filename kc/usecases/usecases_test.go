@@ -1433,7 +1433,7 @@ func TestPlaceGTT_ResolveError(t *testing.T) {
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
+		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single", Quantity: 1,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
@@ -1444,7 +1444,7 @@ func TestPlaceGTT_BrokerError(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
+		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single", Quantity: 1,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "place gtt")
@@ -1503,7 +1503,7 @@ func TestModifyGTT_ResolveError(t *testing.T) {
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", TriggerID: 1, Type: "single",
+		Email: "test@test.com", TriggerID: 1, Type: "single", Quantity: 1,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
@@ -1514,7 +1514,7 @@ func TestModifyGTT_BrokerError(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", TriggerID: 99, Type: "two-leg",
+		Email: "test@test.com", TriggerID: 99, Type: "two-leg", UpperQuantity: 1, LowerQuantity: 1,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "modify gtt")

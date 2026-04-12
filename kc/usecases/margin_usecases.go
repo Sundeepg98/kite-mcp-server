@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // GetOrderMarginsUseCase calculates margin required for orders.
@@ -34,6 +35,9 @@ func (uc *GetOrderMarginsUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 
 	params := make([]broker.OrderMarginParam, len(query.Orders))
 	for i, o := range query.Orders {
+		if _, qerr := domain.NewQuantity(int(o.Quantity)); qerr != nil {
+			return nil, fmt.Errorf("usecases: order %d: %w", i, qerr)
+		}
 		params[i] = broker.OrderMarginParam{
 			Exchange:        o.Exchange,
 			Tradingsymbol:   o.Tradingsymbol,
@@ -81,6 +85,9 @@ func (uc *GetBasketMarginsUseCase) Execute(ctx context.Context, query cqrs.GetBa
 
 	params := make([]broker.OrderMarginParam, len(query.Orders))
 	for i, o := range query.Orders {
+		if _, qerr := domain.NewQuantity(int(o.Quantity)); qerr != nil {
+			return nil, fmt.Errorf("usecases: basket order %d: %w", i, qerr)
+		}
 		params[i] = broker.OrderMarginParam{
 			Exchange:        o.Exchange,
 			Tradingsymbol:   o.Tradingsymbol,
@@ -128,6 +135,12 @@ func (uc *GetOrderChargesUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 
 	params := make([]broker.OrderChargesParam, len(query.Orders))
 	for i, o := range query.Orders {
+		if _, qerr := domain.NewQuantity(int(o.Quantity)); qerr != nil {
+			return nil, fmt.Errorf("usecases: charges order %d: %w", i, qerr)
+		}
+		if avg := domain.NewINR(o.AveragePrice); !avg.IsPositive() {
+			return nil, fmt.Errorf("usecases: charges order %d: average price must be positive", i)
+		}
 		params[i] = broker.OrderChargesParam{
 			OrderID:         o.OrderID,
 			Exchange:        o.Exchange,

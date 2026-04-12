@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // --- GTT query ---
@@ -73,6 +74,19 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 		return broker.GTTResponse{}, fmt.Errorf("usecases: invalid GTT type: %q", cmd.Type)
 	}
 
+	if cmd.Type == "single" {
+		if _, qerr := domain.NewQuantity(int(cmd.Quantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt quantity: %w", qerr)
+		}
+	} else {
+		if _, qerr := domain.NewQuantity(int(cmd.UpperQuantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt upper quantity: %w", qerr)
+		}
+		if _, qerr := domain.NewQuantity(int(cmd.LowerQuantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt lower quantity: %w", qerr)
+		}
+	}
+
 	client, err := uc.brokerResolver.GetBrokerForEmail(cmd.Email)
 	if err != nil {
 		return broker.GTTResponse{}, fmt.Errorf("usecases: resolve broker: %w", err)
@@ -136,6 +150,19 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 	}
 	if cmd.Type != "single" && cmd.Type != "two-leg" {
 		return broker.GTTResponse{}, fmt.Errorf("usecases: invalid GTT type: %q", cmd.Type)
+	}
+
+	if cmd.Type == "single" {
+		if _, qerr := domain.NewQuantity(int(cmd.Quantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt quantity: %w", qerr)
+		}
+	} else {
+		if _, qerr := domain.NewQuantity(int(cmd.UpperQuantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt upper quantity: %w", qerr)
+		}
+		if _, qerr := domain.NewQuantity(int(cmd.LowerQuantity)); qerr != nil {
+			return broker.GTTResponse{}, fmt.Errorf("usecases: gtt lower quantity: %w", qerr)
+		}
 	}
 
 	client, err := uc.brokerResolver.GetBrokerForEmail(cmd.Email)

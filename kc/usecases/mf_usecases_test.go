@@ -413,7 +413,7 @@ func TestGetOrderMargins_ResolveError(t *testing.T) {
 	uc := NewGetOrderMarginsUseCase(&mockBrokerResolver{resolveErr: errors.New("no broker")}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderMarginsQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE"}},
+		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE", Quantity: 1}},
 	})
 	assert.ErrorContains(t, err, "resolve broker")
 }
@@ -424,7 +424,7 @@ func TestGetOrderMargins_BrokerError(t *testing.T) {
 	uc := NewGetOrderMarginsUseCase(&mockBrokerResolver{client: client}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderMarginsQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE"}},
+		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE", Quantity: 1}},
 	})
 	assert.ErrorContains(t, err, "get order margins")
 }
@@ -439,7 +439,7 @@ func TestGetBasketMargins_Success(t *testing.T) {
 	uc := NewGetBasketMarginsUseCase(&mockBrokerResolver{client: client}, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.GetBasketMarginsQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE"}},
+		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE", Quantity: 1}},
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
@@ -464,7 +464,7 @@ func TestGetBasketMargins_ResolveError(t *testing.T) {
 	uc := NewGetBasketMarginsUseCase(&mockBrokerResolver{resolveErr: errors.New("no broker")}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetBasketMarginsQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE"}},
+		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE", Quantity: 1}},
 	})
 	assert.ErrorContains(t, err, "resolve broker")
 }
@@ -475,7 +475,7 @@ func TestGetBasketMargins_BrokerError(t *testing.T) {
 	uc := NewGetBasketMarginsUseCase(&mockBrokerResolver{client: client}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetBasketMarginsQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE"}},
+		Orders: []cqrs.OrderMarginQueryParam{{Exchange: "NSE", Quantity: 1}},
 	})
 	assert.ErrorContains(t, err, "get basket margins")
 }
@@ -490,7 +490,7 @@ func TestGetOrderCharges_Success(t *testing.T) {
 	uc := NewGetOrderChargesUseCase(&mockBrokerResolver{client: client}, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.GetOrderChargesQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1", Exchange: "NSE"}},
+		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1", Exchange: "NSE", Quantity: 1, AveragePrice: 100}},
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
@@ -515,7 +515,7 @@ func TestGetOrderCharges_ResolveError(t *testing.T) {
 	uc := NewGetOrderChargesUseCase(&mockBrokerResolver{resolveErr: errors.New("no broker")}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderChargesQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1"}},
+		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1", Quantity: 1, AveragePrice: 100}},
 	})
 	assert.ErrorContains(t, err, "resolve broker")
 }
@@ -526,7 +526,7 @@ func TestGetOrderCharges_BrokerError(t *testing.T) {
 	uc := NewGetOrderChargesUseCase(&mockBrokerResolver{client: client}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderChargesQuery{
 		Email:  "u@test.com",
-		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1"}},
+		Orders: []cqrs.OrderChargesQueryParam{{OrderID: "O1", Quantity: 1, AveragePrice: 100}},
 	})
 	assert.ErrorContains(t, err, "get order charges")
 }

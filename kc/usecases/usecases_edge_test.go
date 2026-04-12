@@ -1060,7 +1060,7 @@ func TestPlaceGTT_CQRS_Success(t *testing.T) {
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "u@t.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
+		Email: "u@t.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single", Quantity: 1,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 42, resp.TriggerID)
@@ -1071,7 +1071,7 @@ func TestModifyGTT_Error(t *testing.T) {
 	client := &mockBrokerClient{modifyGTTErr: errors.New("api fail")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{Email: "u@t.com", TriggerID: 1, Type: "two-leg"})
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{Email: "u@t.com", TriggerID: 1, Type: "two-leg", UpperQuantity: 1, LowerQuantity: 1})
 	assert.ErrorContains(t, err, "modify gtt")
 }
 
