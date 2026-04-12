@@ -70,7 +70,7 @@ const (
 // to the appropriate command handler. It enforces that only private chats
 // from registered users are served, with per-chat rate limiting.
 type BotHandler struct {
-	bot           *tgbotapi.BotAPI
+	bot           alerts.BotAPI
 	webhookSecret string
 	manager       KiteManager
 	logger        *slog.Logger
@@ -92,7 +92,7 @@ type BotHandler struct {
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
 // that periodically prunes stale rate-limit and pending-order entries.
-func NewBotHandler(bot *tgbotapi.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger) *BotHandler {
+func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger) *BotHandler {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &BotHandler{
 		bot:           bot,

@@ -10,11 +10,18 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// BotAPI abstracts the Telegram bot client for testability.
+// *tgbotapi.BotAPI satisfies this interface.
+type BotAPI interface {
+	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
+	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
+}
+
 // newBotFunc is the function used to create a BotAPI instance.
 // Protected by newBotFuncMu to allow safe override in tests.
 var (
 	newBotFuncMu sync.Mutex
-	newBotFunc   = func(token string) (*tgbotapi.BotAPI, error) {
+	newBotFunc   = func(token string) (BotAPI, error) {
 		return tgbotapi.NewBotAPI(token)
 	}
 )
@@ -29,7 +36,7 @@ func escapeTelegramMarkdown(s string) string {
 
 // TelegramNotifier sends alert notifications via Telegram.
 type TelegramNotifier struct {
-	bot    *tgbotapi.BotAPI
+	bot    BotAPI
 	store  *Store
 	logger *slog.Logger
 }
@@ -51,7 +58,7 @@ func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*T
 		return nil, fmt.Errorf("failed to create Telegram bot: %w", err)
 	}
 
-	logger.Info("Telegram bot initialized", "bot_name", bot.Self.UserName)
+	logger.Info("Telegram bot initialized")
 
 	return &TelegramNotifier{
 		bot:    bot,
@@ -91,7 +98,7 @@ func EscapeMarkdown(s string) string {
 }
 
 // Bot returns the underlying Telegram bot API instance.
-func (t *TelegramNotifier) Bot() *tgbotapi.BotAPI {
+func (t *TelegramNotifier) Bot() BotAPI {
 	if t == nil {
 		return nil
 	}
