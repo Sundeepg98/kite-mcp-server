@@ -123,7 +123,7 @@ func TestHookMiddleware_AllowsExecution(t *testing.T) {
 	defer ClearHooks()
 
 	hookCalled := false
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		hookCalled = true
 		return nil
 	})
@@ -145,7 +145,7 @@ func TestHookMiddleware_BlocksExecution(t *testing.T) {
 	ClearHooks()
 	defer ClearHooks()
 
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("blocked by policy")
 	})
 
@@ -170,7 +170,7 @@ func TestHookMiddleware_RunsAfterHooks(t *testing.T) {
 	defer ClearHooks()
 
 	afterCalled := false
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		afterCalled = true
 		return nil
 	})
@@ -682,18 +682,18 @@ func TestHookMiddleware_BlocksOnError(t *testing.T) {
 	// Save and restore hooks
 	defer ClearHooks()
 
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		if toolName == "blocked_tool" {
 			return fmt.Errorf("tool is blocked")
 		}
 		return nil
 	})
 
-	err := RunBeforeHooks("blocked_tool", nil)
+	err := RunBeforeHooks(context.Background(), "blocked_tool", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "blocked")
 
-	err = RunBeforeHooks("allowed_tool", nil)
+	err = RunBeforeHooks(context.Background(), "allowed_tool", nil)
 	require.NoError(t, err)
 }
 
@@ -702,12 +702,12 @@ func TestHookMiddleware_AfterHooks(t *testing.T) {
 	defer ClearHooks()
 
 	called := false
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		called = true
 		return nil
 	})
 
-	RunAfterHooks("test_tool", nil)
+	RunAfterHooks(context.Background(), "test_tool", nil)
 	assert.True(t, called)
 }
 

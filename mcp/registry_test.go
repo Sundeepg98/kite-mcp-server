@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -78,13 +79,13 @@ func TestBeforeHook(t *testing.T) {
 	defer ClearHooks()
 
 	called := false
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		called = true
 		assert.Equal(t, "place_order", toolName)
 		return nil
 	})
 
-	err := RunBeforeHooks("place_order", map[string]interface{}{"qty": 10})
+	err := RunBeforeHooks(context.Background(), "place_order", map[string]interface{}{"qty": 10})
 	require.NoError(t, err)
 	assert.True(t, called)
 }
@@ -94,18 +95,18 @@ func TestBeforeHookBlocksOnError(t *testing.T) {
 	defer ClearHooks()
 
 	errBlocked := errors.New("blocked by hook")
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errBlocked
 	})
 
 	// Second hook should NOT run
 	secondCalled := false
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		secondCalled = true
 		return nil
 	})
 
-	err := RunBeforeHooks("place_order", nil)
+	err := RunBeforeHooks(context.Background(), "place_order", nil)
 	assert.ErrorIs(t, err, errBlocked)
 	assert.False(t, secondCalled, "second hook should not run after first returns error")
 }
@@ -115,12 +116,12 @@ func TestAfterHook(t *testing.T) {
 	defer ClearHooks()
 
 	var capturedTool string
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		capturedTool = toolName
 		return nil
 	})
 
-	RunAfterHooks("get_holdings", map[string]interface{}{"segment": "equity"})
+	RunAfterHooks(context.Background(), "get_holdings", map[string]interface{}{"segment": "equity"})
 	assert.Equal(t, "get_holdings", capturedTool)
 }
 
@@ -129,32 +130,32 @@ func TestAfterHookContinuesOnError(t *testing.T) {
 	defer ClearHooks()
 
 	secondCalled := false
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("first hook fails")
 	})
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		secondCalled = true
 		return nil
 	})
 
-	RunAfterHooks("get_orders", nil)
+	RunAfterHooks(context.Background(), "get_orders", nil)
 	assert.True(t, secondCalled, "after hooks should continue even if one fails")
 }
 
 func TestClearHooks(t *testing.T) {
 	ClearHooks()
 
-	OnBeforeToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("should not run")
 	})
-	OnAfterToolExecution(func(toolName string, args map[string]interface{}) error {
+	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("should not run")
 	})
 
 	ClearHooks()
 
 	// No hooks should run
-	err := RunBeforeHooks("test", nil)
+	err := RunBeforeHooks(context.Background(), "test", nil)
 	assert.NoError(t, err)
-	RunAfterHooks("test", nil) // should not panic
+	RunAfterHooks(context.Background(), "test", nil) // should not panic
 }

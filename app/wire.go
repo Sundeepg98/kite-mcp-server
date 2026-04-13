@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/mcp"
+	"github.com/zerodha/kite-mcp-server/plugins/rolegate"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	stripe "github.com/stripe/stripe-go/v82"
 )
@@ -219,6 +220,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
 	}
 	// Plugin hooks middleware runs registered before/after hooks around tool calls.
+	// Register the rolegate plugin before wiring the middleware so its hook is
+	// active from the first tool call. First production consumer of the plugin
+	// system — family viewers get role-gated tool access via mcp.ToolHook.
+	mcp.OnBeforeToolExecution(rolegate.Hook(kcManager.UserStoreConcrete()))
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
 	// Circuit breaker protects against cascading failures from Kite API outages.
 	circuitBreaker := mcp.NewCircuitBreaker(5, 30*time.Second)

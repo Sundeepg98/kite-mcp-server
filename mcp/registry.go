@@ -49,8 +49,12 @@ func ClearPlugins() {
 	registry.plugins = registry.plugins[:0]
 }
 
-// ToolHook is called before or after tool execution.
-type ToolHook func(toolName string, args map[string]interface{}) error
+// ToolHook is called before or after tool execution. ctx carries the
+// request's session context (including caller email via
+// oauth.EmailFromContext) so hooks can enforce per-user policy — e.g.,
+// role-gated tool access for family viewers. Before-hooks may return an
+// error to block execution.
+type ToolHook func(ctx context.Context, toolName string, args map[string]interface{}) error
 
 var (
 	beforeHooks []ToolHook
@@ -73,11 +77,11 @@ func OnAfterToolExecution(hook ToolHook) {
 }
 
 // RunBeforeHooks executes all before hooks. Returns first error.
-func RunBeforeHooks(toolName string, args map[string]interface{}) error {
+func RunBeforeHooks(ctx context.Context, toolName string, args map[string]interface{}) error {
 	hooksMu.RLock()
 	defer hooksMu.RUnlock()
 	for _, hook := range beforeHooks {
-		if err := hook(toolName, args); err != nil {
+		if err := hook(ctx, toolName, args); err != nil {
 			return err
 		}
 	}
@@ -85,11 +89,11 @@ func RunBeforeHooks(toolName string, args map[string]interface{}) error {
 }
 
 // RunAfterHooks executes all after hooks.
-func RunAfterHooks(toolName string, args map[string]interface{}) {
+func RunAfterHooks(ctx context.Context, toolName string, args map[string]interface{}) {
 	hooksMu.RLock()
 	defer hooksMu.RUnlock()
 	for _, hook := range afterHooks {
-		_ = hook(toolName, args)
+		_ = hook(ctx, toolName, args)
 	}
 }
 
@@ -106,11 +110,11 @@ func ClearHooks() {
 func HookMiddleware() server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			if err := RunBeforeHooks(request.Params.Name, request.GetArguments()); err != nil {
+			if err := RunBeforeHooks(ctx, request.Params.Name, request.GetArguments()); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Hook blocked execution: %s", err.Error())), nil
 			}
 			result, err := next(ctx, request)
-			RunAfterHooks(request.Params.Name, request.GetArguments())
+			RunAfterHooks(ctx, request.Params.Name, request.GetArguments())
 			return result, err
 		}
 	}
