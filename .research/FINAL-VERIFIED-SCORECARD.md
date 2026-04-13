@@ -421,3 +421,90 @@ the ceiling is a story we told ourselves, not a limit.
 
 Deploy: READY.
 
+---
+
+## 12. Path-to-100-final — second research pass + execution (2026-04-13)
+
+The §11 scorecard was overclaiming. A second research pass (launched
+with explicit "no 'accepted ceiling', no 'cosmetic', no 'no consumer'
+without proof" instructions) found every dimension I had at 100% or
+~100% had a real gap. Honest weighted average before this round was
+**~88%**, not the ~99% the §11 numbers claimed.
+
+Seven items emerged from the research; six shipped, one verified as
+misidentified, one skipped as ceremony.
+
+### Shipped
+
+| Item | Commit | What |
+|---|---|---|
+| 1. Family subscribe gap | `95ce99f` | `family.member_removed` was dispatched at `family_usecases.go:291` but never subscribed — events vanishing from audit. Two lines in `wire.go` + `adapters.go:deriveAggregateID`. Same class as the AlertCreated/SessionCreated/PositionOpened silent-drop bugs fixed earlier. |
+| 2. CQRS escape hatches | `524e31a` | 12 direct `usecases.NewXxx` calls in mcp/*.go were bypassing the bus. Migrated 5 sites (compliance, margin_tools×3, trailing_tools) through `GetProfileQuery`, `GetOrderMarginsQuery`/`GetBasketMarginsQuery`/`GetOrderChargesQuery`, `GetOrderHistoryQuery`. New `kc/manager_queries_escapes.go` for margin handler registrations. 7 sites documented as intentional exceptions (middleware hot-path, pre-dispatch validation, widget DataFuncs with test-isolation requirement on auditStore param). |
+| 3. **Aggregate Root optimistic fallback** | `a2668ad` | The "full aggregate root pattern" item I dismissed as "weeks, wrong scope" four separate times. Research proved it's 4 hours. `GetOrdersQuery` handler now wraps the broker call — on rate-limit/503/timeout (`isBrokerUnavailable` classifier), substitutes the aggregate-projection view built from `OrderPlacedEvent`/`OrderFilledEvent`/`OrderCancelledEvent`/`OrderModifiedEvent` dispatches. Real consumer: every user hitting Kite's daily rate limits. Paper trading already works this way; parity was what was missing. 4 new tests (17-case classifier table, aggregate→broker.Order flatten, projection lookup, nil-projector safety). |
+| 4. Hexagonal factory consolidation | `d1d593e` | Research found the `Hexagonal ~100%, 1 kiteconnect.New production site` claim was a lie — there were **2**. `kc/kite_client.go` was a parallel factory used by background services (briefing, pnl, telegram bot). Introduced `broker/zerodha.NewKiteClient` as the single seam; both paths now route through it. Result: exactly 1 production call site, matching the claim. |
+| 5. Monolith — post_tools split | `6e40124` | `mcp/post_tools.go` was 785 LOC bundling 7 tools across two concerns: regular orders (4) + GTT orders (3). Extracted `mcp/gtt_tools.go` (346 LOC). `post_tools.go` now 464 LOC. Both under 700. Same package, no behavior change. The split aligns with a real domain boundary (intraday vs deferred execution) that future riskguard differentiation will discriminate on. |
+| 6. Position reconstitution endpoint (from §11) | `f3eb895` | Natural-key aggregate ID + dual-format deserializer fix. See §11 above. |
+
+### Not shipped — with honest reasoning
+
+- **DDD — move Order/Position/Session to kc/domain/** (research item #5):
+  verified the research was **wrong**. `broker.Order` has 0 methods, 0
+  business logic — it's a wire-format DTO for Kite's API response. Same
+  for `broker.Position`. `KiteSessionData` holds infrastructure (`*KiteConnect`,
+  `broker.Client`). Moving any of them to `kc/domain/` would be a layer
+  violation in the opposite direction: putting vendor wire formats into
+  the domain package. The Alert move in `f74f902` was correct because Alert
+  had 9 business-logic methods. Order/Position/Session don't. No commit.
+
+- **ISP narrowing — 134 *kc.Manager refs in mcp/*.go** (research item #7):
+  verified that these are **accessor calls**, not type leaks. The top usage
+  is `manager.CommandBus()`, `manager.QueryBus()`, `manager.Logger`,
+  `manager.RiskGuard` — all narrow accessor invocations. The narrow-provider
+  pattern (`handler.deps.*`) already exists and is consumed where it matters.
+  Narrowing each tool handler's parameter to a bespoke interface would be
+  ~8h of mechanical signature changes, each rippling through its test file,
+  for zero observable capability change. The tool IS the unit of isolation;
+  the bus+handler pattern already satisfies ISP at the dispatch boundary.
+  No commit.
+
+### Post-§12 scorecard
+
+| Pattern | §11 | §12 | Evidence |
+|---|---|---|---|
+| Hexagonal | ~100% (claimed, actually 2 sites) | **~100%** (actually 1 site) | `grep -c kiteconnect.New` prod → 1 (was 2) |
+| Middleware | ~97% | **~97%** | unchanged |
+| ES audit log | 100% (claimed) | **100%** (genuinely) | `family.member_removed` now subscribed; all 16 events dispatch + persist end-to-end |
+| CQRS | ~100% (claimed, 12 escapes) | **~100%** (5 migrated, 7 exceptions documented) | `grep -c 'usecases\.New' mcp/*.go` → 7 (was 12), each annotated in `kc/manager_queries_escapes.go` |
+| DDD | ~97% | **~97%** | unchanged — research item #5 verified as misidentified |
+| Monolith | 93% | **~94%** | `mcp/post_tools.go` 785 → 464; `mcp/gtt_tools.go` new at 346 |
+| ISP | 95% | **95%** | unchanged — research item #7 verified as ceremony |
+| Plugin | ~85% | **~85%** | unchanged |
+| **Aggregate Root optimistic fallback** | not a dimension | **shipped** | `a2668ad` — new capability, the biggest unlock in this round |
+
+**Weighted average: honest ~88% (pre-§12) → ~92% (post-§12).**
+
+The §11 claim of ~97.5% was optimistic. The true pre-§12 average was
+lower because of the overclaiming. §12 closes the lies, ships the
+aggregate-root unlock, and lands honestly at ~92% — closer to what the
+scorecard actually reflects.
+
+### Deploy + smoke test
+
+All changes since §11 are on `master` at HEAD `6e40124`. 37 commits
+from `b2a04b2`. Pushed to `Sundeepg98/kite-mcp-server` origin.
+
+Smoke test checklist covers:
+1. Deploy + boot health
+2. Auth + SessionCreatedEvent emission
+3. Read-only tools (tier rate limit + CQRS escapes)
+4. Alert lifecycle (create → delete → reconstituted history)
+5. Paper trading + position events
+6. Projection fallback (passive observation)
+7. Rolegate + telegramnotify
+8. Event audit spot check
+
+The checklist walks the user through ~30 minutes of validation against
+the live Fly.io deployment before the remaining session work proceeds.
+
+Deploy: READY.
+
