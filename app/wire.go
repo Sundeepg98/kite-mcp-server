@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/plugins/rolegate"
+	"github.com/zerodha/kite-mcp-server/plugins/telegramnotify"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	stripe "github.com/stripe/stripe-go/v82"
 )
@@ -224,6 +225,16 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// active from the first tool call. First production consumer of the plugin
 	// system — family viewers get role-gated tool access via mcp.ToolHook.
 	mcp.OnBeforeToolExecution(rolegate.Hook(kcManager.UserStoreConcrete()))
+	// Second production consumer — telegramnotify sends an after-hook DM to
+	// the family admin when a family member runs a trade-affecting tool.
+	// Demonstrates the OnAfterToolExecution half of the plugin API (rolegate
+	// uses the Before side). Any nil dep disables the plugin (fail-open).
+	mcp.OnAfterToolExecution(telegramnotify.Hook(telegramnotify.Deps{
+		Users:   kcManager.UserStoreConcrete(),
+		ChatIDs: kcManager.AlertStoreConcrete(),
+		Sender:  kcManager.TelegramNotifier(),
+		Logger:  app.logger,
+	}))
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
 	// Circuit breaker protects against cascading failures from Kite API outages.
 	circuitBreaker := mcp.NewCircuitBreaker(5, 30*time.Second)
