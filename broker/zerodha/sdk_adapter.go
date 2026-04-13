@@ -48,24 +48,11 @@ func defaultKiteSDKConstructor(apiKey string) KiteSDK {
 	return newKiteSDKAdapter(kiteconnect.New(apiKey))
 }
 
-// newClientFromSDK builds a broker.Client from a KiteSDK instance.
-//
-// Phase 2 transitional helper: Client still stores *kiteconnect.Client
-// internally (Phase 3 swaps this to KiteSDK). For now we unwrap the
-// real adapter to recover the concrete SDK pointer. Test doubles that
-// aren't *kiteSDKAdapter fall through to a nil-kite Client — which is
-// fine because Phase 2 tests only assert the constructor is CALLED
-// with the right apiKey; they don't exercise broker.Client methods.
-//
-// This unwrap branch goes away in Phase 3 when Client.kite becomes
-// KiteSDK.
+// newClientFromSDK builds a broker.Client from any KiteSDK
+// implementation. Phase 3 collapsed the old unwrap-adapter branch
+// now that Client holds a KiteSDK field directly.
 func newClientFromSDK(sdk KiteSDK) *Client {
-	if adapter, ok := sdk.(*kiteSDKAdapter); ok {
-		return New(adapter.kc)
-	}
-	// Fake SDK path — Client will have nil kite and cannot make
-	// network calls, but Phase 2 tests don't need it to.
-	return &Client{kite: nil}
+	return NewFromSDK(sdk)
 }
 
 // --- connect / auth lifecycle ---

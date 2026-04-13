@@ -439,8 +439,14 @@ func TestNew(t *testing.T) {
 	if c == nil {
 		t.Fatal("New should return non-nil Client")
 	}
-	if c.kite != kite {
-		t.Error("kite field should point to the passed kiteconnect.Client")
+	// Phase 3: sdk is a KiteSDK interface backed by the real
+	// *kiteSDKAdapter wrapping the passed *kiteconnect.Client.
+	adapter, ok := c.sdk.(*kiteSDKAdapter)
+	if !ok {
+		t.Fatalf("sdk field should be *kiteSDKAdapter, got %T", c.sdk)
+	}
+	if adapter.kc != kite {
+		t.Error("kiteSDKAdapter should wrap the passed *kiteconnect.Client")
 	}
 }
 
@@ -448,7 +454,7 @@ func TestKite(t *testing.T) {
 	kite := kiteconnect.New("test-api-key")
 	c := New(kite)
 	if c.Kite() != kite {
-		t.Error("Kite() should return the underlying kiteconnect.Client")
+		t.Error("Kite() should return the underlying *kiteconnect.Client via adapter unwrap")
 	}
 }
 

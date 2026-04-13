@@ -10,25 +10,44 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 )
 
-// Client wraps a gokiteconnect Client and satisfies broker.Client.
-// All methods delegate to the underlying Kite client and convert the
-// response types. Error values are passed through unchanged.
+// Client wraps a KiteSDK and satisfies broker.Client. All methods
+// delegate to the injected SDK and convert the response types. Error
+// values are passed through unchanged.
+//
+// Phase 3: the sdk field is the KiteSDK interface, not the concrete
+// *kiteconnect.Client. Production still gets a real *kiteSDKAdapter
+// wrapping a live gokiteconnect client; tests inject fakes through
+// NewFromSDK (directly) or the Factory's WithSDKConstructor option.
 type Client struct {
-	kite *kiteconnect.Client
+	sdk KiteSDK
 }
 
 // compile-time proof that *Client satisfies broker.Client.
 var _ broker.Client = (*Client)(nil)
 
-// New wraps an existing *kiteconnect.Client.
+// New wraps an existing *kiteconnect.Client. Kept as a thin shim over
+// NewFromSDK so existing callers (and broker tests using httptest-backed
+// gokiteconnect clients) keep working unchanged.
 func New(kite *kiteconnect.Client) *Client {
-	return &Client{kite: kite}
+	return NewFromSDK(newKiteSDKAdapter(kite))
 }
 
-// Kite returns the underlying *kiteconnect.Client for callers that still
-// need direct access during the migration period.
+// NewFromSDK builds a Client from any KiteSDK implementation. This is
+// the preferred entry point once a test or caller is working directly
+// in terms of the interface.
+func NewFromSDK(sdk KiteSDK) *Client {
+	return &Client{sdk: sdk}
+}
+
+// Kite returns the underlying *kiteconnect.Client when the Client was
+// built from a real *kiteSDKAdapter. Fake-SDK-backed clients return
+// nil. Kept as an escape hatch for the migration period; prefer
+// depending on KiteSDK or broker.Client.
 func (c *Client) Kite() *kiteconnect.Client {
-	return c.kite
+	if adapter, ok := c.sdk.(*kiteSDKAdapter); ok {
+		return adapter.kc
+	}
+	return nil
 }
 
 // BrokerName returns the broker identifier.
@@ -40,7 +59,7 @@ func (c *Client) BrokerName() broker.Name {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetProfile() (broker.Profile, error) {
 	return retryOnTransient(func() (broker.Profile, error) {
-		p, err := c.kite.GetUserProfile()
+		p, err := c.sdk.GetUserProfile()
 		if err != nil {
 			return broker.Profile{}, err
 		}
@@ -52,7 +71,7 @@ func (c *Client) GetProfile() (broker.Profile, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetMargins() (broker.Margins, error) {
 	return retryOnTransient(func() (broker.Margins, error) {
-		m, err := c.kite.GetUserMargins()
+		m, err := c.sdk.GetUserMargins()
 		if err != nil {
 			return broker.Margins{}, err
 		}
@@ -64,7 +83,7 @@ func (c *Client) GetMargins() (broker.Margins, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetHoldings() ([]broker.Holding, error) {
 	return retryOnTransient(func() ([]broker.Holding, error) {
-		h, err := c.kite.GetHoldings()
+		h, err := c.sdk.GetHoldings()
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +95,7 @@ func (c *Client) GetHoldings() ([]broker.Holding, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetPositions() (broker.Positions, error) {
 	return retryOnTransient(func() (broker.Positions, error) {
-		p, err := c.kite.GetPositions()
+		p, err := c.sdk.GetPositions()
 		if err != nil {
 			return broker.Positions{}, err
 		}
@@ -88,7 +107,7 @@ func (c *Client) GetPositions() (broker.Positions, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetOrders() ([]broker.Order, error) {
 	return retryOnTransient(func() ([]broker.Order, error) {
-		o, err := c.kite.GetOrders()
+		o, err := c.sdk.GetOrders()
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +119,7 @@ func (c *Client) GetOrders() ([]broker.Order, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetOrderHistory(orderID string) ([]broker.Order, error) {
 	return retryOnTransient(func() ([]broker.Order, error) {
-		o, err := c.kite.GetOrderHistory(orderID)
+		o, err := c.sdk.GetOrderHistory(orderID)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +131,7 @@ func (c *Client) GetOrderHistory(orderID string) ([]broker.Order, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetTrades() ([]broker.Trade, error) {
 	return retryOnTransient(func() ([]broker.Trade, error) {
-		t, err := c.kite.GetTrades()
+		t, err := c.sdk.GetTrades()
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +144,7 @@ func (c *Client) GetTrades() ([]broker.Trade, error) {
 func (c *Client) PlaceOrder(params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
 	return retryOnTransient(func() (broker.OrderResponse, error) {
-		resp, err := c.kite.PlaceOrder(variety, kp)
+		resp, err := c.sdk.PlaceOrder(variety, kp)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
@@ -138,7 +157,7 @@ func (c *Client) PlaceOrder(params broker.OrderParams) (broker.OrderResponse, er
 func (c *Client) ModifyOrder(orderID string, params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
 	return retryOnTransient(func() (broker.OrderResponse, error) {
-		resp, err := c.kite.ModifyOrder(variety, orderID, kp)
+		resp, err := c.sdk.ModifyOrder(variety, orderID, kp)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
@@ -153,7 +172,7 @@ func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderRespon
 		variety = kiteconnect.VarietyRegular
 	}
 	return retryOnTransient(func() (broker.OrderResponse, error) {
-		resp, err := c.kite.CancelOrder(variety, orderID, nil)
+		resp, err := c.sdk.CancelOrder(variety, orderID, nil)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
@@ -165,7 +184,7 @@ func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderRespon
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetLTP(instruments ...string) (map[string]broker.LTP, error) {
 	return retryOnTransient(func() (map[string]broker.LTP, error) {
-		q, err := c.kite.GetLTP(instruments...)
+		q, err := c.sdk.GetLTP(instruments...)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +196,7 @@ func (c *Client) GetLTP(instruments ...string) (map[string]broker.LTP, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetOHLC(instruments ...string) (map[string]broker.OHLC, error) {
 	return retryOnTransient(func() (map[string]broker.OHLC, error) {
-		q, err := c.kite.GetOHLC(instruments...)
+		q, err := c.sdk.GetOHLC(instruments...)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +208,7 @@ func (c *Client) GetOHLC(instruments ...string) (map[string]broker.OHLC, error) 
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, to time.Time) ([]broker.HistoricalCandle, error) {
 	return retryOnTransient(func() ([]broker.HistoricalCandle, error) {
-		data, err := c.kite.GetHistoricalData(instrumentToken, interval, from, to, false, false)
+		data, err := c.sdk.GetHistoricalData(instrumentToken, interval, from, to, false, false)
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +220,7 @@ func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, t
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
 	return retryOnTransient(func() (map[string]broker.Quote, error) {
-		q, err := c.kite.GetQuote(instruments...)
+		q, err := c.sdk.GetQuote(instruments...)
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +232,7 @@ func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, erro
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
 	return retryOnTransient(func() ([]broker.Trade, error) {
-		t, err := c.kite.GetOrderTrades(orderID)
+		t, err := c.sdk.GetOrderTrades(orderID)
 		if err != nil {
 			return nil, err
 		}
@@ -225,7 +244,7 @@ func (c *Client) GetOrderTrades(orderID string) ([]broker.Trade, error) {
 // Retries up to 2 times on transient network errors.
 func (c *Client) GetGTTs() ([]broker.GTTOrder, error) {
 	return retryOnTransient(func() ([]broker.GTTOrder, error) {
-		gtts, err := c.kite.GetGTTs()
+		gtts, err := c.sdk.GetGTTs()
 		if err != nil {
 			return nil, err
 		}
@@ -239,7 +258,7 @@ func (c *Client) PlaceGTT(params broker.GTTParams) (broker.GTTResponse, error) {
 	if err != nil {
 		return broker.GTTResponse{}, err
 	}
-	resp, err := c.kite.PlaceGTT(kp)
+	resp, err := c.sdk.PlaceGTT(kp)
 	if err != nil {
 		return broker.GTTResponse{}, err
 	}
@@ -252,7 +271,7 @@ func (c *Client) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTRe
 	if err != nil {
 		return broker.GTTResponse{}, err
 	}
-	resp, err := c.kite.ModifyGTT(triggerID, kp)
+	resp, err := c.sdk.ModifyGTT(triggerID, kp)
 	if err != nil {
 		return broker.GTTResponse{}, err
 	}
@@ -261,7 +280,7 @@ func (c *Client) ModifyGTT(triggerID int, params broker.GTTParams) (broker.GTTRe
 
 // DeleteGTT deletes an existing GTT order.
 func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
-	resp, err := c.kite.DeleteGTT(triggerID)
+	resp, err := c.sdk.DeleteGTT(triggerID)
 	if err != nil {
 		return broker.GTTResponse{}, err
 	}
@@ -270,7 +289,7 @@ func (c *Client) DeleteGTT(triggerID int) (broker.GTTResponse, error) {
 
 // ConvertPosition converts a position from one product type to another.
 func (c *Client) ConvertPosition(params broker.ConvertPositionParams) (bool, error) {
-	return c.kite.ConvertPosition(kiteconnect.ConvertPositionParams{
+	return c.sdk.ConvertPosition(kiteconnect.ConvertPositionParams{
 		Exchange:        params.Exchange,
 		TradingSymbol:   params.Tradingsymbol,
 		TransactionType: params.TransactionType,
@@ -286,7 +305,7 @@ func (c *Client) ConvertPosition(params broker.ConvertPositionParams) (bool, err
 // GetMFOrders returns all mutual fund orders.
 func (c *Client) GetMFOrders() ([]broker.MFOrder, error) {
 	return retryOnTransient(func() ([]broker.MFOrder, error) {
-		orders, err := c.kite.GetMFOrders()
+		orders, err := c.sdk.GetMFOrders()
 		if err != nil {
 			return nil, err
 		}
@@ -297,7 +316,7 @@ func (c *Client) GetMFOrders() ([]broker.MFOrder, error) {
 // GetMFSIPs returns all mutual fund SIPs.
 func (c *Client) GetMFSIPs() ([]broker.MFSIP, error) {
 	return retryOnTransient(func() ([]broker.MFSIP, error) {
-		sips, err := c.kite.GetMFSIPs()
+		sips, err := c.sdk.GetMFSIPs()
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +327,7 @@ func (c *Client) GetMFSIPs() ([]broker.MFSIP, error) {
 // GetMFHoldings returns all mutual fund holdings.
 func (c *Client) GetMFHoldings() ([]broker.MFHolding, error) {
 	return retryOnTransient(func() ([]broker.MFHolding, error) {
-		holdings, err := c.kite.GetMFHoldings()
+		holdings, err := c.sdk.GetMFHoldings()
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +337,7 @@ func (c *Client) GetMFHoldings() ([]broker.MFHolding, error) {
 
 // PlaceMFOrder places a mutual fund order.
 func (c *Client) PlaceMFOrder(params broker.MFOrderParams) (broker.MFOrderResponse, error) {
-	resp, err := c.kite.PlaceMFOrder(kiteconnect.MFOrderParams{
+	resp, err := c.sdk.PlaceMFOrder(kiteconnect.MFOrderParams{
 		Tradingsymbol:   params.Tradingsymbol,
 		TransactionType: params.TransactionType,
 		Amount:          params.Amount,
@@ -333,7 +352,7 @@ func (c *Client) PlaceMFOrder(params broker.MFOrderParams) (broker.MFOrderRespon
 
 // CancelMFOrder cancels a pending mutual fund order.
 func (c *Client) CancelMFOrder(orderID string) (broker.MFOrderResponse, error) {
-	resp, err := c.kite.CancelMFOrder(orderID)
+	resp, err := c.sdk.CancelMFOrder(orderID)
 	if err != nil {
 		return broker.MFOrderResponse{}, err
 	}
@@ -342,7 +361,7 @@ func (c *Client) CancelMFOrder(orderID string) (broker.MFOrderResponse, error) {
 
 // PlaceMFSIP starts a new mutual fund SIP.
 func (c *Client) PlaceMFSIP(params broker.MFSIPParams) (broker.MFSIPResponse, error) {
-	resp, err := c.kite.PlaceMFSIP(kiteconnect.MFSIPParams{
+	resp, err := c.sdk.PlaceMFSIP(kiteconnect.MFSIPParams{
 		Tradingsymbol: params.Tradingsymbol,
 		Amount:        params.Amount,
 		Frequency:     params.Frequency,
@@ -359,7 +378,7 @@ func (c *Client) PlaceMFSIP(params broker.MFSIPParams) (broker.MFSIPResponse, er
 
 // CancelMFSIP cancels an existing mutual fund SIP.
 func (c *Client) CancelMFSIP(sipID string) (broker.MFSIPResponse, error) {
-	resp, err := c.kite.CancelMFSIP(sipID)
+	resp, err := c.sdk.CancelMFSIP(sipID)
 	if err != nil {
 		return broker.MFSIPResponse{}, err
 	}
@@ -385,7 +404,7 @@ func (c *Client) GetOrderMargins(orders []broker.OrderMarginParam) (any, error) 
 			TriggerPrice:    o.TriggerPrice,
 		}
 	}
-	return c.kite.GetOrderMargins(kiteconnect.GetMarginParams{
+	return c.sdk.GetOrderMargins(kiteconnect.GetMarginParams{
 		OrderParams: kiteParams,
 	})
 }
@@ -407,7 +426,7 @@ func (c *Client) GetBasketMargins(orders []broker.OrderMarginParam, considerPosi
 			TriggerPrice:    o.TriggerPrice,
 		}
 	}
-	return c.kite.GetBasketMargins(kiteconnect.GetBasketParams{
+	return c.sdk.GetBasketMargins(kiteconnect.GetBasketParams{
 		OrderParams:       kiteParams,
 		ConsiderPositions: considerPositions,
 	})
@@ -430,7 +449,7 @@ func (c *Client) GetOrderCharges(orders []broker.OrderChargesParam) (any, error)
 			Variety:         o.Variety,
 		}
 	}
-	return c.kite.GetOrderCharges(kiteconnect.GetChargesParams{
+	return c.sdk.GetOrderCharges(kiteconnect.GetChargesParams{
 		OrderParams: kiteParams,
 	})
 }
@@ -445,7 +464,7 @@ var _ broker.NativeAlertCapable = (*Client)(nil)
 // CreateNativeAlert creates a server-side alert at Zerodha.
 func (c *Client) CreateNativeAlert(params broker.NativeAlertParams) (broker.NativeAlert, error) {
 	kp := convertNativeAlertParamsToKite(params)
-	alert, err := c.kite.CreateAlert(kp)
+	alert, err := c.sdk.CreateAlert(kp)
 	if err != nil {
 		return broker.NativeAlert{}, err
 	}
@@ -455,7 +474,7 @@ func (c *Client) CreateNativeAlert(params broker.NativeAlertParams) (broker.Nati
 // GetNativeAlerts retrieves all native alerts, optionally filtered.
 func (c *Client) GetNativeAlerts(filters map[string]string) ([]broker.NativeAlert, error) {
 	return retryOnTransient(func() ([]broker.NativeAlert, error) {
-		alerts, err := c.kite.GetAlerts(filters)
+		alerts, err := c.sdk.GetAlerts(filters)
 		if err != nil {
 			return nil, err
 		}
@@ -466,7 +485,7 @@ func (c *Client) GetNativeAlerts(filters map[string]string) ([]broker.NativeAler
 // ModifyNativeAlert modifies an existing native alert by UUID.
 func (c *Client) ModifyNativeAlert(uuid string, params broker.NativeAlertParams) (broker.NativeAlert, error) {
 	kp := convertNativeAlertParamsToKite(params)
-	alert, err := c.kite.ModifyAlert(uuid, kp)
+	alert, err := c.sdk.ModifyAlert(uuid, kp)
 	if err != nil {
 		return broker.NativeAlert{}, err
 	}
@@ -475,13 +494,13 @@ func (c *Client) ModifyNativeAlert(uuid string, params broker.NativeAlertParams)
 
 // DeleteNativeAlerts deletes one or more native alerts by UUID.
 func (c *Client) DeleteNativeAlerts(uuids ...string) error {
-	return c.kite.DeleteAlerts(uuids...)
+	return c.sdk.DeleteAlerts(uuids...)
 }
 
 // GetNativeAlertHistory retrieves the trigger history for an alert.
 func (c *Client) GetNativeAlertHistory(uuid string) ([]broker.NativeAlertHistoryEntry, error) {
 	return retryOnTransient(func() ([]broker.NativeAlertHistoryEntry, error) {
-		history, err := c.kite.GetAlertHistory(uuid)
+		history, err := c.sdk.GetAlertHistory(uuid)
 		if err != nil {
 			return nil, err
 		}
