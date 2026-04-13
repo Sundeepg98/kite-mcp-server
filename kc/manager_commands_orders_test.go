@@ -75,6 +75,31 @@ func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
 	}
 }
 
+// TestCommandBus_SetTrailingStop_NilManager_ReturnsError mirrors the
+// cancel-path nil-guard check for the SetTrailingStopCommand handler.
+// Production builds without SQLite leave trailingStopMgr nil and the
+// CommandBus handler must refuse to run instead of nil-panicking inside
+// the use case.
+func TestCommandBus_SetTrailingStop_NilManager_ReturnsError(t *testing.T) {
+	mgr, err := newTestManager("test_key", "test_secret")
+	if err != nil {
+		t.Fatalf("newTestManager: %v", err)
+	}
+	mgr.trailingStopMgr = nil
+
+	_, err = mgr.CommandBus().DispatchWithResult(context.Background(), cqrs.SetTrailingStopCommand{
+		Email:         "user@example.com",
+		Exchange:      "NSE",
+		Tradingsymbol: "SBIN",
+	})
+	if err == nil {
+		t.Fatal("expected error from nil trailing stop manager, got nil")
+	}
+	if !strings.Contains(err.Error(), "trailing stop manager") {
+		t.Errorf("expected trailing-stop-manager error, got: %v", err)
+	}
+}
+
 // TestCommandBus_CancelTrailingStop_NilManager_ReturnsError asserts the
 // CancelTrailingStopCommand handler refuses to run when the trailing-stop
 // manager is not configured. This mirrors the pre-migration behavior (the
