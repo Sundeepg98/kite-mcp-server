@@ -9,7 +9,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -72,10 +71,12 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "sebi_compliance_status", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
 
-			// Check session validity by calling a lightweight Kite endpoint.
+			// Check session validity by dispatching a lightweight profile query
+			// through the bus — exercises the full observability + middleware
+			// stack instead of hot-pathing the use case directly.
 			tokenStatus := "VALID"
-			profileUC := usecases.NewGetProfileUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
+			probeCtx := kc.WithBroker(ctx, session.Broker)
+			if _, err := manager.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email}); err != nil {
 				tokenStatus = "EXPIRED"
 			}
 

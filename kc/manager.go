@@ -598,6 +598,11 @@ func (m *Manager) registerCQRSHandlers() {
 
 	// --- QueryBus batch D: remaining read tool migrations ---
 	m.registerRemainingQueries()
+
+	// --- QueryBus escape-hatch migration (path-to-100 final research) ---
+	// Margin queries + widget DataFunc queries that had struct types but no
+	// bus handlers — callers were dispatching directly via usecases.NewXxx.
+	m.registerEscapeQueries()
 }
 
 // Event-sourced read-side serializers + reconstitution helpers

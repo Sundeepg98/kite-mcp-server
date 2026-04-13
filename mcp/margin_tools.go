@@ -9,7 +9,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // OrderMarginsTool calculates margin required for an order before placing it.
@@ -90,8 +89,8 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderMarginsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.GetOrderMarginsQuery{
+			ctx := kc.WithBroker(ctx, session.Broker)
+			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderMarginsQuery{
 				Email: session.Email,
 				Orders: []cqrs.OrderMarginQueryParam{{
 					Exchange:        p.String("exchange", "NSE"),
@@ -171,8 +170,8 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetBasketMarginsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.GetBasketMarginsQuery{
+			ctx := kc.WithBroker(ctx, session.Broker)
+			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetBasketMarginsQuery{
 				Email:             session.Email,
 				Orders:            orderParams,
 				ConsiderPositions: considerPositions,
@@ -230,8 +229,8 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewGetOrderChargesUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.GetOrderChargesQuery{
+			ctx := kc.WithBroker(ctx, session.Broker)
+			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderChargesQuery{
 				Email:  session.Email,
 				Orders: orderParams,
 			})

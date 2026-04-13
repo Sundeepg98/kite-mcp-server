@@ -341,6 +341,17 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 
 // --- Data functions for each widget ---
 
+// Widget DataFuncs below take auditStore as an explicit parameter from
+// RegisterAppResources (see line 289) rather than reading it off the
+// Manager. This is a test-isolation requirement — widget tests use a
+// locally-constructed audit store that isn't attached to the Manager.
+//
+// The path-to-100 escape-hatch research flagged these four call sites
+// as "direct usecase calls that should go through the bus". They
+// intentionally don't: the bus handler would have to resolve the audit
+// store from the Manager, which breaks the test contract. Documented
+// here instead of silently leaving them as mismatched escapes.
+
 // portfolioData fetches holdings + positions via the portfolio widget use case.
 func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
 	uc := usecases.NewGetPortfolioForWidgetUseCase(manager.SessionSvc(), manager.Logger)

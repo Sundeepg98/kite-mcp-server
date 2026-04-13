@@ -12,7 +12,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -115,17 +114,17 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		// If current_stop not provided, try to fetch from order history
 		if currentStop <= 0 || referencePrice <= 0 {
 			return handler.WithSession(ctx, "set_trailing_stop", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-				resolver := &sessionBrokerResolver{client: session.Broker}
+				ctx := kc.WithBroker(ctx, session.Broker)
 
 				if currentStop <= 0 {
-					historyUC := usecases.NewGetOrderHistoryUseCase(resolver, manager.Logger)
-					history, histErr := historyUC.Execute(ctx, cqrs.GetOrderHistoryQuery{
+					raw, histErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
 						Email:   session.Email,
 						OrderID: orderID,
 					})
 					if histErr != nil {
 						return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch order history for %s: %s. Please provide current_stop manually.", orderID, histErr)), nil
 					}
+					history, _ := raw.([]broker.Order)
 					if len(history) > 0 {
 						latest := history[len(history)-1]
 						currentStop = latest.TriggerPrice
