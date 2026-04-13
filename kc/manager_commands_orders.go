@@ -1,0 +1,139 @@
+package kc
+
+import (
+	"context"
+	"fmt"
+	"reflect"
+
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
+)
+
+// registerOrderCommands wires CommandBus handlers for write-side order,
+// GTT, position, and trailing-stop commands (CommandBus batch B).
+//
+// Handlers build the use case lazily from the Manager's stores. Where the
+// use case needs a broker.Client, the handler resolves it via
+// resolverFromContext(ctx): the MCP tool layer attaches the session-pinned
+// client via WithBroker before DispatchWithResult, so we re-use that
+// already-resolved client instead of paying for another credential lookup.
+// Handlers dispatched from tests without an attached broker transparently
+// fall back to the Manager's SessionService.
+func (m *Manager) registerOrderCommands() {
+	// --- Order: PlaceOrderCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.PlaceOrderCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewPlaceOrderUseCase(
+			m.resolverFromContext(ctx),
+			m.riskGuard,
+			m.eventing.Dispatcher(),
+			m.Logger,
+		)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- Order: ModifyOrderCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.ModifyOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.ModifyOrderCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewModifyOrderUseCase(
+			m.resolverFromContext(ctx),
+			m.riskGuard,
+			m.eventing.Dispatcher(),
+			m.Logger,
+		)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- Order: CancelOrderCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.CancelOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.CancelOrderCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewCancelOrderUseCase(
+			m.resolverFromContext(ctx),
+			m.eventing.Dispatcher(),
+			m.Logger,
+		)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- GTT: PlaceGTTCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.PlaceGTTCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewPlaceGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- GTT: ModifyGTTCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.ModifyGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.ModifyGTTCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewModifyGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- GTT: DeleteGTTCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.DeleteGTTCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewDeleteGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- Position: ConvertPositionCommand ---
+	// convert_position is unique in batch B: the existing MCP handler already
+	// resolves through the Manager's SessionService rather than a pinned
+	// broker, so we register it the same way — sessionSvc satisfies
+	// usecases.BrokerResolver on its own.
+	m.commandBus.Register(reflect.TypeOf(cqrs.ConvertPositionCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.ConvertPositionCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewConvertPositionUseCase(m.sessionSvc, m.Logger)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- Trailing stop: SetTrailingStopCommand ---
+	// SetTrailingStop talks to TrailingStopManager, not a broker, so no
+	// resolver needed. We still guard against nil manager because the
+	// trailing-stop feature depends on SQLite persistence being wired in.
+	m.commandBus.Register(reflect.TypeOf(cqrs.SetTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.SetTrailingStopCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		if m.trailingStopMgr == nil {
+			return nil, fmt.Errorf("cqrs: trailing stop manager not configured")
+		}
+		uc := usecases.NewSetTrailingStopUseCase(m.trailingStopMgr, m.Logger)
+		return uc.Execute(ctx, cmd)
+	})
+
+	// --- Trailing stop: CancelTrailingStopCommand ---
+	m.commandBus.Register(reflect.TypeOf(cqrs.CancelTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.CancelTrailingStopCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		if m.trailingStopMgr == nil {
+			return nil, fmt.Errorf("cqrs: trailing stop manager not configured")
+		}
+		uc := usecases.NewCancelTrailingStopUseCase(m.trailingStopMgr, m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	})
+}

@@ -7,7 +7,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -74,11 +73,11 @@ func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 
-		uc := usecases.NewPaperTradingStatusUseCase(engine, manager.Logger)
-		status, err := uc.Execute(ctx, cqrs.PaperTradingStatusQuery{Email: email})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.PaperTradingStatusQuery{Email: email})
 		if err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
+		status := raw.(map[string]any)
 		jsonBytes, err := json.Marshal(status)
 		if err != nil {
 			return gomcp.NewToolResultError("Failed to marshal status: " + err.Error()), nil

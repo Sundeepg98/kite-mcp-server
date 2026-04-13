@@ -63,11 +63,11 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		uc := usecases.NewAdminListUsersUseCase(uStore, manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.(*usecases.AdminListUsersResult)
 
 		entries := make([]adminUserEntry, 0, len(result.Users))
 		for _, u := range result.Users {
@@ -150,11 +150,11 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		uc := usecases.NewAdminGetUserUseCase(uStore, handler.deps.RiskGuard.RiskGuard(), manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.(*usecases.AdminGetUserResult)
 
 		user := result.User
 		var lastLogin string
@@ -247,11 +247,15 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 		}
 
-		uc := usecases.NewAdminSuspendUserUseCase(uStore, handler.deps.RiskGuard.RiskGuard(), manager.SessionManager(), manager.EventDispatcher(), manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.AdminSuspendUserCommand{AdminEmail: adminEmail, TargetEmail: targetEmail, Reason: reason})
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminSuspendUserCommand{
+			AdminEmail:  adminEmail,
+			TargetEmail: targetEmail,
+			Reason:      reason,
+		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.(*usecases.AdminSuspendUserResult)
 
 		return handler.MarshalResponse(map[string]any{
 			"status":               result.Status,
@@ -295,8 +299,9 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		uc := usecases.NewAdminActivateUserUseCase(uStore, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.AdminActivateUserCommand{TargetEmail: targetEmail}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminActivateUserCommand{
+			TargetEmail: targetEmail,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -364,11 +369,14 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		uc := usecases.NewAdminChangeRoleUseCase(uStore, manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.AdminChangeRoleCommand{TargetEmail: targetEmail, NewRole: newRole})
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminChangeRoleCommand{
+			TargetEmail: targetEmail,
+			NewRole:     newRole,
+		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.(*usecases.AdminChangeRoleResult)
 
 		return handler.MarshalResponse(map[string]string{
 			"email":     result.Email,

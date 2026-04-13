@@ -11,7 +11,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // sessionBrokerResolver wraps an already-resolved broker.Client so that
@@ -160,15 +159,13 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route through PlaceOrderUseCase (riskguard + broker + event dispatch).
-			uc := usecases.NewPlaceOrderUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				handler.manager.RiskGuard(),
-				handler.manager.EventDispatcher(),
-				handler.manager.Logger,
-			)
+			// Dispatch through the CommandBus so PlaceOrderUseCase runs under
+			// the shared pipeline. The session-pinned broker.Client rides on
+			// ctx so the handler-side resolver reuses it without a second
+			// credential lookup.
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
 			qty, _ := domain.NewQuantity(orderParams.Quantity)
-			cmd := cqrs.PlaceOrderCommand{
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceOrderCommand{
 				Email:           session.Email,
 				Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
 				TransactionType: orderParams.TransactionType,
@@ -180,35 +177,35 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Validity:        orderParams.Validity,
 				Variety:         orderParams.Variety,
 				Tag:             orderParams.Tag,
-			}
-			orderID, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
 			}
+			orderID, _ := raw.(string)
 
-			// Brief delay then check fill status for immediate feedback
+			// Brief delay then check fill status for immediate feedback.
+			// Order history dispatch also rides the bus (QueryBus side).
 			if orderID != "" {
 				time.Sleep(1500 * time.Millisecond)
-				historyUC := usecases.NewGetOrderHistoryUseCase(
-					&sessionBrokerResolver{client: session.Broker},
-					manager.Logger,
-				)
-				history, histErr := historyUC.Execute(ctx, cqrs.GetOrderHistoryQuery{
+				histRaw, histErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
 					Email:   session.Email,
 					OrderID: orderID,
 				})
-				if histErr == nil && len(history) > 0 {
-					latest := history[len(history)-1]
-					enriched := map[string]any{
-						"order_id":         orderID,
-						"status":           latest.Status,
-						"filled_quantity":  latest.FilledQuantity,
-						"average_price":    latest.AveragePrice,
-						"pending_quantity": latest.Quantity - latest.FilledQuantity,
-						"status_message":   latest.StatusMessage,
+				if histErr == nil {
+					history, _ := histRaw.([]broker.Order)
+					if len(history) > 0 {
+						latest := history[len(history)-1]
+						enriched := map[string]any{
+							"order_id":         orderID,
+							"status":           latest.Status,
+							"filled_quantity":  latest.FilledQuantity,
+							"average_price":    latest.AveragePrice,
+							"pending_quantity": latest.Quantity - latest.FilledQuantity,
+							"status_message":   latest.StatusMessage,
+						}
+						return handler.MarshalResponse(enriched, "place_order")
 					}
-					return handler.MarshalResponse(enriched, "place_order")
 				}
 			}
 
@@ -301,14 +298,8 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route through ModifyOrderUseCase (riskguard + broker + event dispatch).
-			uc := usecases.NewModifyOrderUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				handler.manager.RiskGuard(),
-				handler.manager.EventDispatcher(),
-				handler.manager.Logger,
-			)
-			cmd := cqrs.ModifyOrderCommand{
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyOrderCommand{
 				Email:            session.Email,
 				OrderID:          orderID,
 				Variety:          variety,
@@ -319,13 +310,12 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Validity:         orderParams.Validity,
 				DisclosedQty:     orderParams.DisclosedQty,
 				MarketProtection: orderParams.MarketProtection,
-			}
-			resp, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
-
+			resp, _ := raw.(broker.OrderResponse)
 			return handler.MarshalResponse(resp, "modify_order")
 		})
 	}
@@ -369,23 +359,17 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route through CancelOrderUseCase (broker + event dispatch).
-			uc := usecases.NewCancelOrderUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				handler.manager.EventDispatcher(),
-				handler.manager.Logger,
-			)
-			cmd := cqrs.CancelOrderCommand{
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.CancelOrderCommand{
 				Email:   session.Email,
 				OrderID: orderID,
 				Variety: variety,
-			}
-			resp, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
-
+			resp, _ := raw.(broker.OrderResponse)
 			return handler.MarshalResponse(resp, "cancel_order")
 		})
 	}
@@ -503,7 +487,8 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmd := cqrs.PlaceGTTCommand{
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceGTTCommand{
 				Email:             session.Email,
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
 				LastPrice:         domain.NewINR(p.Float("last_price", 0.0)),
@@ -519,14 +504,11 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
 				LowerQuantity:     p.Float("lower_quantity", 0.0),
 				LowerLimitPrice:   domain.NewINR(p.Float("lower_limit_price", 0.0)),
-			}
-
-			uc := usecases.NewPlaceGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
-			resp, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to place GTT order: %s", err.Error())), nil
 			}
-
+			resp, _ := raw.(broker.GTTResponse)
 			return handler.MarshalResponse(resp, "place_gtt_order")
 		})
 	}
@@ -564,17 +546,15 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		triggerID := p.Int("trigger_id", 0)
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmd := cqrs.DeleteGTTCommand{
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.DeleteGTTCommand{
 				Email:     session.Email,
 				TriggerID: triggerID,
-			}
-
-			uc := usecases.NewDeleteGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
-			resp, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete GTT order: %s", err.Error())), nil
 			}
-
+			resp, _ := raw.(broker.GTTResponse)
 			return handler.MarshalResponse(resp, "delete_gtt_order")
 		})
 	}
@@ -639,8 +619,10 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		return handler.WithSession(ctx, "convert_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewConvertPositionUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			ok, err := uc.Execute(ctx, cqrs.ConvertPositionCommand{
+			// convert_position goes through SessionSvc on the handler side,
+			// so we don't attach a session-pinned broker to ctx. Pre-migration
+			// behavior is preserved exactly.
+			raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.ConvertPositionCommand{
 				Email:           session.Email,
 				Exchange:        p.String("exchange", ""),
 				Tradingsymbol:   p.String("tradingsymbol", ""),
@@ -653,7 +635,7 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert position: %s", err.Error())), nil
 			}
-
+			ok, _ := raw.(bool)
 			return handler.MarshalResponse(map[string]bool{"success": ok}, "convert_position")
 		})
 	}
@@ -774,7 +756,8 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmd := cqrs.ModifyGTTCommand{
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyGTTCommand{
 				Email:             session.Email,
 				TriggerID:         p.Int("trigger_id", 0),
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
@@ -791,14 +774,11 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				LowerTriggerValue: p.Float("lower_trigger_value", 0.0),
 				LowerQuantity:     p.Float("lower_quantity", 0.0),
 				LowerLimitPrice:   domain.NewINR(p.Float("lower_limit_price", 0.0)),
-			}
-
-			uc := usecases.NewModifyGTTUseCase(&sessionBrokerResolver{client: session.Broker}, manager.Logger)
-			resp, err := uc.Execute(ctx, cmd)
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify GTT order: %s", err.Error())), nil
 			}
-
+			resp, _ := raw.(broker.GTTResponse)
 			return handler.MarshalResponse(resp, "modify_gtt_order")
 		})
 	}

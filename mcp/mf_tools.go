@@ -6,9 +6,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 type MFOrdersTool struct{}
@@ -30,13 +30,12 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 }
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetMFOrdersUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-		orders, err := uc.Execute(context.Background(), cqrs.GetMFOrdersQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		orders := raw.([]broker.MFOrder)
 
 		result := make([]interface{}, len(orders))
 		for i, order := range orders {
@@ -65,13 +64,12 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 }
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetMFSIPsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-		sips, err := uc.Execute(context.Background(), cqrs.GetMFSIPsQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFSIPsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		sips := raw.([]broker.MFSIP)
 
 		result := make([]interface{}, len(sips))
 		for i, sip := range sips {
@@ -100,13 +98,12 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 }
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
-		uc := usecases.NewGetMFHoldingsUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-		holdings, err := uc.Execute(context.Background(), cqrs.GetMFHoldingsQuery{Email: session.Email})
+		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFHoldingsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
+		holdings := raw.([]broker.MFHolding)
 
 		result := make([]interface{}, len(holdings))
 		for i, holding := range holdings {
@@ -182,8 +179,7 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewPlaceMFOrderUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.PlaceMFOrderCommand{
+			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFOrderCommand{
 				Email:           session.Email,
 				Tradingsymbol:   p.String("tradingsymbol", ""),
 				TransactionType: txnType,
@@ -228,8 +224,7 @@ func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := NewArgParser(args).String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewCancelMFOrderUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.CancelMFOrderCommand{
+			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFOrderCommand{
 				Email:   session.Email,
 				OrderID: orderID,
 			})
@@ -306,8 +301,7 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewPlaceMFSIPUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.PlaceMFSIPCommand{
+			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFSIPCommand{
 				Email:         session.Email,
 				Tradingsymbol: p.String("tradingsymbol", ""),
 				Amount:        amount,
@@ -354,8 +348,7 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		sipID := NewArgParser(args).String("sip_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			uc := usecases.NewCancelMFSIPUseCase(handler.deps.BrokerResolver.SessionSvc(), manager.Logger)
-			resp, err := uc.Execute(ctx, cqrs.CancelMFSIPCommand{
+			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFSIPCommand{
 				Email: session.Email,
 				SIPID: sipID,
 			})

@@ -375,12 +375,12 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		uc := usecases.NewGetWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
-		items, err := uc.Execute(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "get_watchlist", "get_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		items := raw.([]*watchlist.WatchlistItem)
 		if len(items) == 0 {
 			return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q is empty. Use add_to_watchlist to add instruments.", wl.Name)), nil
 		}
@@ -510,11 +510,11 @@ func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		uc := usecases.NewListWatchlistsUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.ListWatchlistsQuery{Email: email})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ListWatchlistsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.([]usecases.WatchlistInfo)
 
 		if len(result) == 0 {
 			return mcp.NewToolResultText("No watchlists. Use create_watchlist to create one."), nil

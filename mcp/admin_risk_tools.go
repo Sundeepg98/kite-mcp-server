@@ -59,11 +59,11 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		uc := usecases.NewAdminGetRiskStatusUseCase(rg, manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		result := raw.(*usecases.AdminGetRiskStatusResult)
 
 		return handler.MarshalResponse(&adminGetRiskStatusResponse{
 			TargetEmail:    result.TargetEmail,
@@ -138,8 +138,11 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		uc := usecases.NewAdminFreezeUserUseCase(guard, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.AdminFreezeUserCommand{AdminEmail: adminEmail, TargetEmail: targetEmail, Reason: reason}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeUserCommand{
+			AdminEmail:  adminEmail,
+			TargetEmail: targetEmail,
+			Reason:      reason,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -195,8 +198,9 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		uc := usecases.NewAdminUnfreezeUserUseCase(guard, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.AdminUnfreezeUserCommand{TargetEmail: targetEmail}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeUserCommand{
+			TargetEmail: targetEmail,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -271,8 +275,10 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		uc := usecases.NewAdminFreezeGlobalUseCase(guard, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.AdminFreezeGlobalCommand{AdminEmail: adminEmail, Reason: reason}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeGlobalCommand{
+			AdminEmail: adminEmail,
+			Reason:     reason,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -320,8 +326,7 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
-		uc := usecases.NewAdminUnfreezeGlobalUseCase(guard, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return handler.MarshalResponse(map[string]string{

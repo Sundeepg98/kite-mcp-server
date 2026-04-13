@@ -14,7 +14,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -76,8 +75,10 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
-		uc := usecases.NewSetupTelegramUseCase(handler.deps.Telegram.TelegramStore(), manager.Logger)
-		if err := uc.Execute(ctx, cqrs.SetupTelegramCommand{Email: email, ChatID: chatID}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.SetupTelegramCommand{
+			Email:  email,
+			ChatID: chatID,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -187,12 +188,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			referencePrice = ltpData.LastPrice
 		}
 
-		uc := usecases.NewCreateAlertUseCase(
-			handler.deps.Alerts.AlertStore(),
-			&instrumentResolverAdapter{mgr: manager.Instruments},
-			manager.Logger,
-		)
-		alertID, err := uc.Execute(ctx, cqrs.CreateAlertCommand{
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateAlertCommand{
 			Email:          email,
 			Tradingsymbol:  tradingsymbol,
 			Exchange:       exchange,
@@ -203,6 +199,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to set alert: %s", err)), nil
 		}
+		alertID := raw.(string)
 
 		// Auto-start ticker and subscribe instrument
 		tickerSvc := handler.deps.Ticker.TickerService()
@@ -268,11 +265,11 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		uc := usecases.NewListAlertsUseCase(handler.deps.Alerts.AlertStore(), manager.Logger)
-		alertList, err := uc.Execute(ctx, cqrs.GetAlertsQuery{Email: email})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetAlertsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		alertList := raw.([]*alerts.Alert)
 		if len(alertList) == 0 {
 			return mcp.NewToolResultText("No alerts configured. Use set_alert to create one."), nil
 		}
@@ -317,8 +314,10 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		alertID := NewArgParser(args).String("alert_id", "")
 
-		uc := usecases.NewDeleteAlertUseCase(handler.deps.Alerts.AlertStore(), manager.Logger)
-		if err := uc.Execute(ctx, cqrs.DeleteAlertCommand{Email: email, AlertID: alertID}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteAlertCommand{
+			Email:   email,
+			AlertID: alertID,
+		}); err != nil {
 			handler.trackToolError(ctx, "delete_alert", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}

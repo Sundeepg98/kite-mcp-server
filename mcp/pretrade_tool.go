@@ -135,12 +135,8 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "pre_trade_check", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route data gathering through use case
-			uc := usecases.NewPreTradeCheckUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				manager.Logger,
-			)
-			ucResult, err := uc.Execute(ctx, cqrs.PreTradeCheckQuery{
+			// Route data gathering through CQRS query bus.
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.PreTradeCheckQuery{
 				Email:           session.Email,
 				Exchange:        exchange,
 				Tradingsymbol:   tradingsymbol,
@@ -153,6 +149,7 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			ucResult := raw.(*usecases.PreTradeData)
 
 			// Convert use case result to legacy data/errs maps for buildPreTradeResponse
 			data := make(map[string]any)

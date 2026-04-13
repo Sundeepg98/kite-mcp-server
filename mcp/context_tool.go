@@ -102,18 +102,15 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "trading_context")
 
-		return handler.WithSession(ctx, "trading_context", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "trading_context", func(_ *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
 
-			// Route data gathering through use case
-			uc := usecases.NewTradingContextUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				manager.Logger,
-			)
-			ucResult, err := uc.Execute(ctx, cqrs.TradingContextQuery{Email: email})
+			// Route data gathering through CQRS query bus.
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.TradingContextQuery{Email: email})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			ucResult := raw.(*usecases.TradingContextResult)
 
 			// Convert use case result to the legacy data/errs maps for buildTradingContext
 			data := make(map[string]any)

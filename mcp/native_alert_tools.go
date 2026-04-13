@@ -184,15 +184,15 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		return handler.WithSession(ctx, "place_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			nac, ok := session.Broker.(broker.NativeAlertCapable)
-			if !ok {
+			if _, ok := session.Broker.(broker.NativeAlertCapable); !ok {
 				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			adapter := &nativeAlertAdapter{nac: nac}
-			uc := usecases.NewPlaceNativeAlertUseCase(manager.Logger)
-			alert, err := uc.Execute(ctx, adapter, cqrs.PlaceNativeAlertCommand{Email: email, Params: params})
+			alert, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceNativeAlertCommand{
+				Email:  email,
+				Params: params,
+			})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -244,8 +244,8 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 
 			email := oauth.EmailFromContext(ctx)
 			adapter := &nativeAlertAdapter{nac: nac}
-			uc := usecases.NewListNativeAlertsUseCase(manager.Logger)
-			alertsRaw, err := uc.Execute(ctx, adapter, cqrs.ListNativeAlertsQuery{Email: email, Filters: filters})
+			dispatchCtx := cqrs.WithNativeAlertClient(ctx, usecases.NativeAlertClient(adapter))
+			alertsRaw, err := manager.QueryBus().DispatchWithResult(dispatchCtx, cqrs.ListNativeAlertsQuery{Email: email, Filters: filters})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -400,15 +400,16 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		return handler.WithSession(ctx, "modify_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			nac, ok := session.Broker.(broker.NativeAlertCapable)
-			if !ok {
+			if _, ok := session.Broker.(broker.NativeAlertCapable); !ok {
 				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			adapter := &nativeAlertAdapter{nac: nac}
-			uc := usecases.NewModifyNativeAlertUseCase(manager.Logger)
-			alert, err := uc.Execute(ctx, adapter, cqrs.ModifyNativeAlertCommand{Email: email, UUID: uuid, Params: params})
+			alert, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.ModifyNativeAlertCommand{
+				Email:  email,
+				UUID:   uuid,
+				Params: params,
+			})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -461,15 +462,15 @@ func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		return handler.WithSession(ctx, "delete_native_alert", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			nac, ok := session.Broker.(broker.NativeAlertCapable)
-			if !ok {
+			if _, ok := session.Broker.(broker.NativeAlertCapable); !ok {
 				return mcp.NewToolResultError("Native alerts are not supported by the current broker"), nil
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			adapter := &nativeAlertAdapter{nac: nac}
-			uc := usecases.NewDeleteNativeAlertUseCase(manager.Logger)
-			if err := uc.Execute(ctx, adapter, cqrs.DeleteNativeAlertCommand{Email: email, UUIDs: uuids}); err != nil {
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteNativeAlertCommand{
+				Email: email,
+				UUIDs: uuids,
+			}); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -522,8 +523,8 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 
 			email := oauth.EmailFromContext(ctx)
 			adapter := &nativeAlertAdapter{nac: nac}
-			uc := usecases.NewGetNativeAlertHistoryUseCase(manager.Logger)
-			historyRaw, err := uc.Execute(ctx, adapter, cqrs.GetNativeAlertHistoryQuery{Email: email, UUID: uuid})
+			dispatchCtx := cqrs.WithNativeAlertClient(ctx, usecases.NativeAlertClient(adapter))
+			historyRaw, err := manager.QueryBus().DispatchWithResult(dispatchCtx, cqrs.GetNativeAlertHistoryQuery{Email: email, UUID: uuid})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

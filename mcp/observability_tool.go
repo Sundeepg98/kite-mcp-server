@@ -98,11 +98,11 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		period := NewArgParser(args).String("period", "24h")
 		adminEmail := oauth.EmailFromContext(ctx)
 
-		uc := usecases.NewServerMetricsUseCase(auditStore, manager.Logger)
-		ucResult, err := uc.Execute(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
+		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ucResult := raw.(*usecases.ServerMetricsResult)
 
 		stats := ucResult.Stats
 

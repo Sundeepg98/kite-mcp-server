@@ -523,6 +523,12 @@ func (m *Manager) registerCQRSHandlers() {
 
 	// --- CommandBus batch A: Account + Watchlist + Paper writes (STEP 8) ---
 	m.registerAccountCommands()
+
+	// --- CommandBus batch B: Order + GTT + Position + Trailing writes (STEP 9) ---
+	m.registerOrderCommands()
+
+	// --- QueryBus batch D: remaining read tool migrations ---
+	m.registerRemainingQueries()
 }
 
 // orderAggregateToProjectionResult serializes an OrderAggregate into the

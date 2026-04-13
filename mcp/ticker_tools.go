@@ -9,7 +9,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -48,8 +47,11 @@ func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("No access token — please login first"), nil
 			}
 
-			uc := usecases.NewStartTickerUseCase(handler.deps.Ticker.TickerService(), manager.Logger)
-			if err := uc.Execute(ctx, cqrs.StartTickerCommand{Email: email, APIKey: apiKey, AccessToken: accessToken}); err != nil {
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.StartTickerCommand{
+				Email:       email,
+				APIKey:      apiKey,
+				AccessToken: accessToken,
+			}); err != nil {
 				handler.trackToolError(ctx, "start_ticker", "start_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -86,8 +88,9 @@ func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			uc := usecases.NewStopTickerUseCase(handler.deps.Ticker.TickerService(), manager.Logger)
-			if err := uc.Execute(ctx, cqrs.StopTickerCommand{Email: email}); err != nil {
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.StopTickerCommand{
+				Email: email,
+			}); err != nil {
 				handler.trackToolError(ctx, "stop_ticker", "stop_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -124,12 +127,12 @@ func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			uc := usecases.NewTickerStatusUseCase(handler.deps.Ticker.TickerService(), manager.Logger)
-			status, err := uc.Execute(ctx, cqrs.TickerStatusQuery{Email: email})
+			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.TickerStatusQuery{Email: email})
 			if err != nil {
 				handler.trackToolError(ctx, "ticker_status", "status_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			status := raw.(*ticker.Status)
 
 			return handler.MarshalResponse(status, "ticker_status")
 		})
@@ -191,8 +194,11 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			uc := usecases.NewSubscribeInstrumentsUseCase(handler.deps.Ticker.TickerService(), manager.Logger)
-			if err := uc.Execute(ctx, cqrs.SubscribeInstrumentsCommand{Email: email, Tokens: tokens, Mode: modeStr}); err != nil {
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.SubscribeInstrumentsCommand{
+				Email:  email,
+				Tokens: tokens,
+				Mode:   modeStr,
+			}); err != nil {
 				handler.trackToolError(ctx, "subscribe_instruments", "subscribe_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -253,8 +259,10 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			uc := usecases.NewUnsubscribeInstrumentsUseCase(handler.deps.Ticker.TickerService(), manager.Logger)
-			if err := uc.Execute(ctx, cqrs.UnsubscribeInstrumentsCommand{Email: email, Tokens: tokens}); err != nil {
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UnsubscribeInstrumentsCommand{
+				Email:  email,
+				Tokens: tokens,
+			}); err != nil {
 				handler.trackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
