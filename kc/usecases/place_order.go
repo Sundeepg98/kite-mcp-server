@@ -141,8 +141,16 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 		return "", fmt.Errorf("usecases: place order: %w", err)
 	}
 
-	// 5. Dispatch domain event.
+	// 5. Dispatch domain events.
+	// OrderPlacedEvent drives the audit log and the order projection.
+	// PositionOpenedEvent activates the position projection: each new order
+	// is treated as opening a position candidate keyed by the order ID. Once
+	// close_position / close_all_positions dispatches PositionClosedEvent
+	// with the same-or-related order ID, the projection reflects the full
+	// open → close lifecycle. Position ID is the broker order ID because
+	// that's the only stable identifier available at placement time.
 	if uc.events != nil {
+		now := time.Now().UTC()
 		uc.events.Dispatch(domain.OrderPlacedEvent{
 			Email:           cmd.Email,
 			OrderID:         resp.OrderID,
@@ -150,7 +158,16 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Qty:             cmd.Qty,
 			Price:           cmd.Price,
 			TransactionType: cmd.TransactionType,
-			Timestamp:       time.Now().UTC(),
+			Timestamp:       now,
+		})
+		uc.events.Dispatch(domain.PositionOpenedEvent{
+			Email:           cmd.Email,
+			PositionID:      resp.OrderID,
+			Instrument:      cmd.Instrument,
+			Qty:             cmd.Qty,
+			AvgPrice:        cmd.Price,
+			TransactionType: cmd.TransactionType,
+			Timestamp:       now,
 		})
 	}
 

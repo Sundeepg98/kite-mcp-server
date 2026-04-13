@@ -199,6 +199,106 @@ func TestProjector_PositionClose(t *testing.T) {
 	}
 }
 
+// TestProjector_PositionOpenClose_Lifecycle verifies the full OPEN -> CLOSED
+// transition on a single position aggregate, matching the place_order ->
+// close_position production flow where both events share the broker order ID.
+//
+// Production contract (kc/usecases/place_order.go:150-151 and
+// kc/usecases/close_position.go:154): the opened-position's PositionID is set
+// to the broker OrderID at placement time, and close_position dispatches
+// PositionClosedEvent with the same OrderID. The projection keys opens by
+// PositionID and closes by OrderID, so both events land on the same aggregate
+// and produce an in-place OPEN -> CLOSED transition. This test pins that
+// contract end-to-end through the EventDispatcher.
+func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
+	dispatcher := domain.NewEventDispatcher()
+	proj := NewProjector()
+	proj.Subscribe(dispatcher)
+
+	now := time.Now().UTC()
+	openQty, _ := domain.NewQuantity(7)
+	instrument := domain.NewInstrumentKey("NSE", "INFY")
+	const positionID = "POS-ORD-42"
+
+	dispatcher.Dispatch(domain.PositionOpenedEvent{
+		Email:           "u@example.com",
+		PositionID:      positionID,
+		Instrument:      instrument,
+		Qty:             openQty,
+		AvgPrice:        domain.NewINR(1500.25),
+		TransactionType: "BUY",
+		Timestamp:       now,
+	})
+
+	pos, ok := proj.GetPosition(positionID)
+	if !ok {
+		t.Fatalf("expected %s to be projected after open event", positionID)
+	}
+	if pos.Status != PositionStatusOpen {
+		t.Errorf("after open: status = %s, want OPEN", pos.Status)
+	}
+	if pos.Email != "u@example.com" {
+		t.Errorf("email after open = %q, want u@example.com", pos.Email)
+	}
+	if pos.Instrument != instrument {
+		t.Errorf("instrument after open = %+v, want %+v", pos.Instrument, instrument)
+	}
+	if pos.Quantity.Int() != 7 {
+		t.Errorf("qty after open = %d, want 7", pos.Quantity.Int())
+	}
+	if pos.AvgPrice.Amount != 1500.25 {
+		t.Errorf("avg price after open = %v, want 1500.25", pos.AvgPrice.Amount)
+	}
+	if pos.TransactionType != "BUY" {
+		t.Errorf("txn type after open = %q, want BUY", pos.TransactionType)
+	}
+	if pos.OpenedAt.IsZero() {
+		t.Error("opened_at should be set after open")
+	}
+	if !pos.ClosedAt.IsZero() {
+		t.Error("closed_at should be zero before close event")
+	}
+
+	closeQty, _ := domain.NewQuantity(7)
+	dispatcher.Dispatch(domain.PositionClosedEvent{
+		Email:           "u@example.com",
+		OrderID:         positionID,
+		Instrument:      instrument,
+		Qty:             closeQty,
+		TransactionType: "SELL",
+		Timestamp:       now.Add(time.Hour),
+	})
+
+	pos, ok = proj.GetPosition(positionID)
+	if !ok {
+		t.Fatalf("expected %s to still exist after close event", positionID)
+	}
+	if pos.Status != PositionStatusClosed {
+		t.Errorf("after close: status = %s, want CLOSED", pos.Status)
+	}
+	if pos.ClosedAt.IsZero() {
+		t.Error("closed_at should be set after close")
+	}
+	if !pos.ClosedAt.After(pos.OpenedAt) {
+		t.Errorf("closed_at %v should be after opened_at %v", pos.ClosedAt, pos.OpenedAt)
+	}
+	if pos.Quantity.Int() != 0 {
+		t.Errorf("qty after close = %d, want 0 (zeroed by Apply on PositionClosedEvent)", pos.Quantity.Int())
+	}
+	// Metadata preserved from the open event — Apply on close should not wipe
+	// instrument or email since they are used by downstream readers.
+	if pos.Email != "u@example.com" {
+		t.Errorf("email after close = %q, want u@example.com", pos.Email)
+	}
+	if pos.Instrument != instrument {
+		t.Errorf("instrument after close = %+v, want %+v", pos.Instrument, instrument)
+	}
+
+	if proj.PositionCount() != 1 {
+		t.Errorf("position count = %d, want 1 (same aggregate through lifecycle)", proj.PositionCount())
+	}
+}
+
 // TestProjector_ListActiveOrders checks that PLACED and MODIFIED orders are
 // returned while CANCELLED/FILLED are filtered out.
 func TestProjector_ListActiveOrders(t *testing.T) {
