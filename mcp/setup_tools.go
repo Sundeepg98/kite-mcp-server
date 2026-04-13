@@ -262,8 +262,11 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		apiKey := p.String("api_key", "")
 		apiSecret := p.String("api_secret", "")
 
-		// Validate credentials through use case
-		loginUC := usecases.NewLoginUseCase(manager.Logger)
+		// Validate credentials up front. This is a pure, side-effect-free
+		// check, so we call the use case directly rather than dispatching;
+		// the real CommandBus dispatch happens below at the URL-generation
+		// site, which is where LoginUseCase.Execute actually runs.
+		loginUC := usecases.NewLoginUseCase(manager, manager.Logger)
 		if err := loginUC.Validate(ctx, cqrs.LoginCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -377,12 +380,25 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		// Proceed with Kite login URL generation using the MCP session
-		url, err := manager.SessionLoginURL(mcpSessionID)
+		// Proceed with Kite login URL generation via the CommandBus.
+		// The LoginCommand handler re-runs validation and calls
+		// LoginUseCase.Execute, which generates the URL through the narrow
+		// SessionLoginURLProvider port (Manager satisfies it directly).
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.LoginCommand{
+			Email:        email,
+			MCPSessionID: mcpSessionID,
+			APIKey:       apiKey,
+			APISecret:    apiSecret,
+		})
 		if err != nil {
 			manager.Logger.Error("Error generating Kite login URL", "session_id", mcpSessionID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to generate Kite login URL: %s", err.Error())), nil
 		}
+		loginRes, ok := raw.(*usecases.LoginResult)
+		if !ok || loginRes == nil {
+			return mcp.NewToolResultError("unexpected login result type"), nil
+		}
+		url := loginRes.URL
 
 		manager.Logger.Info("Successfully generated Kite login URL", "session_id", mcpSessionID)
 

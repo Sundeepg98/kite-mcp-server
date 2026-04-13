@@ -533,6 +533,9 @@ func (m *Manager) registerCQRSHandlers() {
 	// --- CommandBus batch E: exit_tools (close_position, close_all_positions) (STEP 13) ---
 	m.registerExitCommands()
 
+	// --- CommandBus batch F: setup_tools (login) (STEP 14) ---
+	m.registerSetupCommands()
+
 	// --- QueryBus batch D: remaining read tool migrations ---
 	m.registerRemainingQueries()
 }

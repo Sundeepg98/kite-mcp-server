@@ -818,42 +818,42 @@ func TestGetNativeAlertHistory_Error(t *testing.T) {
 
 func TestLoginUseCase_Valid(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{})
 	assert.NoError(t, err)
 }
 
 func TestLoginUseCase_APIKeyOnly(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{APIKey: "abc123"})
 	assert.ErrorContains(t, err, "both api_key and api_secret")
 }
 
 func TestLoginUseCase_APISecretOnly(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{APISecret: "abc123"})
 	assert.ErrorContains(t, err, "both api_key and api_secret")
 }
 
 func TestLoginUseCase_InvalidAPIKey(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{APIKey: "abc!@#", APISecret: "abc123"})
 	assert.ErrorContains(t, err, "invalid api_key")
 }
 
 func TestLoginUseCase_InvalidAPISecret(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{APIKey: "abc123", APISecret: "abc!@#"})
 	assert.ErrorContains(t, err, "invalid api_secret")
 }
 
 func TestLoginUseCase_BothValid(t *testing.T) {
 	t.Parallel()
-	uc := NewLoginUseCase(testLogger())
+	uc := NewLoginUseCase(nil, testLogger())
 	err := uc.Validate(context.Background(), cqrs.LoginCommand{APIKey: "abc123", APISecret: "def456"})
 	assert.NoError(t, err)
 }

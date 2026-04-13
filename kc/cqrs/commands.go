@@ -372,9 +372,10 @@ type AdminRemoveFamilyMemberCommand struct {
 
 // LoginCommand requests generating a Kite login URL for the user.
 type LoginCommand struct {
-	Email     string `json:"email"`
-	APIKey    string `json:"api_key,omitempty"`
-	APISecret string `json:"api_secret,omitempty"`
+	Email        string `json:"email"`
+	MCPSessionID string `json:"mcp_session_id,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	APISecret    string `json:"api_secret,omitempty"`
 }
 
 // --- Account commands ---
