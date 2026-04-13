@@ -338,3 +338,86 @@ PositionClosedEvent{ production sites    → 2
 
 Deploy: READY.
 
+---
+
+## 11. Path-to-100 §11 — Hexagonal full abstraction + capability sweep (2026-04-13)
+
+User rejected the framing of "accepted ceilings" with the observation that
+calling something cosmetic was us giving up, not answering. Research agent
+did a utility-per-hour pass and identified three items with real capability
+payoff that we'd been dismissing. All three shipped this round, plus the
+big Hexagonal bet that actually closed the 95% "permanent ceiling".
+
+### Steps and commits
+
+| Step | Task | Owner | Commit | Unlock |
+|---|---|---|---|---|
+| 16 | Aggregate reconstitution endpoint | isp | `4e3400a` | Time-travel debugging, corruption recovery, regulatory audit — first production caller of `LoadOrderFromEvents` |
+| 17 | Paper trading event dispatch | bus | `9875e20` | Paper trades now flow through audit log + projector + riskguard rules |
+| 18 | Bus pipeline integration tests | isp | `1cc03b2` | 4 new test files covering 30+ CommandBus handlers with riskguard/dispatch assertions |
+| 19 | Tier-aware rate limit middleware | fam | `a0c8f5c` | Premium users 10x bucket, Pro 3x, free base — first real tier-differentiated behavior beyond allow/deny |
+| 20 | Hexagonal Phase 1: KiteSDK interface + adapter | isp | `e45056d` | 39-method interface + thin adapter, purely additive |
+| 21 | Hexagonal Phase 2: Factory seam | isp | `ebdc596` | Factory takes SDK constructor func, zero `kiteconnect.New` in factory.go (was 5) |
+| 22 | Hexagonal Phase 3: Client field swap | isp | `a574900` | `Client.kite *kiteconnect.Client` → `Client.sdk KiteSDK`, 36 call sites migrated, backward-compat shims preserved |
+| 23 | Hexagonal Phase 4: MockKiteSDK + 14 off-HTTP tests | isp | `e884b3f` | Broker logic now unit-testable without HTTP — retries, network errors, response mapping all testable in microseconds |
+
+### §11 scorecard
+
+| Pattern | §10 | §11 | Evidence |
+|---|---|---|---|
+| **Hexagonal** | 95% | **~100%** | Only 1 `kiteconnect.New` production site remains (in `sdk_adapter.go:48` — the seam itself). All 36 client.go call sites route through the `KiteSDK` interface. Broker logic is now fully unit-testable without HTTP. The factory takes a constructor function, tests inject fakes. MockKiteSDK has 42 methods (39 interface + 3 helpers), 14 off-HTTP tests prove the unlock. |
+| Middleware | 95% | **~97%** | +2 for tier-aware rate limit. Still 10 layers, but one layer gained differentiated behavior via `TierMultiplierFunc`. |
+| ES audit log | 100% | **100%** | unchanged |
+| Monolith | 90% | **90%** | unchanged (genuinely cosmetic, research verified) |
+| DDD | 90% | **90%** | unchanged |
+| CQRS | ~100% | **~100%** | unchanged — write-side + read-side both done in §10 |
+| ISP | 95% | **95%** | unchanged |
+| Plugin | 40% | **40%** | accepted — no real consumer |
+
+**Weighted average: ~96% → ~97.5%** (Hexagonal +5, Middleware +2, others held)
+
+### Gate evidence (at HEAD `e884b3f`)
+
+```
+go vet ./...                                       → exit 0
+go build ./...                                     → exit 0
+go test ./broker/...                               → ok zerodha + mock (4.6s + 1.9s)
+grep -c kiteconnect.New (prod, broker/)            → 1  (was 5 — the seam itself)
+grep -c '^func (a \*kiteSDKAdapter)'               → 39 (interface surface)
+grep -c '^func (m \*MockKiteSDK)'                  → 42 (mock + helpers)
+grep -c 'c\.sdk\.' broker/zerodha/client.go        → 36 (was 0)
+grep -c '^func Test' broker/zerodha/client_mock_test.go → 14 (new off-HTTP tests)
+```
+
+### Lesson: "accepted ceiling" deserves honest examination
+
+The §9 scorecard called Hexagonal 95% a "permanent ceiling — factory is the
+5%". The research agent, pushed to look again with a growth lens, found:
+
+1. The 4h factory-only fix was genuinely a partial win — but we framed it as
+   the only path to 100 and gave up.
+2. The full fix (interface abstraction for `*kiteconnect.Client`) was 2-3 days,
+   not weeks. The "weeks" framing was inflated.
+3. Closing it unlocks real capability: mocking Kite entirely, unit tests
+   without HTTP, fast CI, no 429 flakes. These are not score theater — they're
+   daily-driver improvements to the dev loop.
+
+Rule for next session: before declaring a ceiling "accepted," do one more
+pass with "what capability does closing this unlock?" as the question. If the
+answer is "nothing," accept it honestly. If it's "these three concrete things,"
+the ceiling is a story we told ourselves, not a limit.
+
+### Still genuinely deferred
+
+- **Plugin 40%** — still truly has no production consumer. The machinery is
+  complete but the only user is a Claude-side skill plugin, not a Go plugin.
+  Revisit if/when third-party devs want to extend the server.
+- **Monolith `app/http.go` / `mcp/post_tools.go` splits** — research verified
+  these are genuinely cosmetic. Middleware is already per-route, test
+  isolation is per-package. No capability unlock.
+- **Full Aggregate state reconstitution for Alerts/Positions** — Order done
+  in §10 Step 16. Alert and Position aggregates have `LoadFromEvents`
+  functions waiting, just need their own consumer endpoints (~2h each).
+
+Deploy: READY.
+
