@@ -160,6 +160,7 @@ func GetAllTools() []Tool {
 		&AdminInviteFamilyMemberTool{},
 		&AdminListFamilyTool{},
 		&AdminRemoveFamilyMemberTool{},
+		&AdminSetBillingTierTool{},
 	}
 
 	// Append registered plugins

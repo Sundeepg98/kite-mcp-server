@@ -118,7 +118,11 @@ func (h *Handler) redirectToKiteLogin(w http.ResponseWriter, r *http.Request, ki
 
 	redirectParams := "flow=oauth&data=" + url.QueryEscape(signedState)
 	kiteURL := "https://kite.zerodha.com/connect/login?api_key=" + kiteAPIKey + "&v=3&redirect_params=" + url.QueryEscape(redirectParams)
-	h.logger.Info("Redirecting to Kite login", "client_id", stateData.ClientID, "api_key", kiteAPIKey[:8]+"...", "registry_flow", stateData.RegistryKey != "")
+	apiKeyPrefix := kiteAPIKey
+	if len(apiKeyPrefix) > 8 {
+		apiKeyPrefix = apiKeyPrefix[:8] + "..."
+	}
+	h.logger.Info("Redirecting to Kite login", "client_id", stateData.ClientID, "api_key", apiKeyPrefix, "registry_flow", stateData.RegistryKey != "")
 	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 
