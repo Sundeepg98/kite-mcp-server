@@ -1,9 +1,8 @@
-# Handoff — execute team (2026-04-12) + path-to-100 lift (2026-04-12)
+# Handoff — execute team (2026-04-12) + path-to-100 lift (2026-04-12) + §10 continuation (2026-04-13)
 
 ## State
-Deploy-ready. Honest architecture average **~94%** (up from 89% post-execute,
-and 76% pre-execute). Build vet-clean. Full test suite green (kc/ticker now
-passing too).
+Deploy-ready. Honest architecture average **~96%** (up from 94% → 89%
+→ 76%). HEAD `0e58734`. Build vet-clean. Full test suite green.
 
 Execute team ran 5 actions (76 → 89):
 1. Revived `pnlService` Manager field
@@ -21,8 +20,34 @@ Path-to-100 lift (89 → 94) — 4 follow-up steps, single-agent (`isp`):
    `manager.SessionSvc()` + `manager.TrailingStopManager()` in tool closures
    replaced
 4. **DDD 80 → 88** — `domain.NewQuantity`/`NewINR` wired into margin + GTT
-   use cases (2 → 13 prod sites); deleted 3 test-only ES aggregates + their
-   ~1200 LOC tests (net −2565 LOC)
+   use cases (2 → 13 prod sites); 3 test-only ES aggregates deleted in
+   `a22f5d0` — **reverted and re-wired as load-bearing projections** in
+   the §10 continuation below.
+
+## §10 continuation — CQRS close-out (2026-04-13)
+
+Second session lifted CQRS from ~98% to ~**100%** via six CommandBus
+batches (A → F) plus a QueryBus sweep, and reversed the `a22f5d0`
+aggregate deletion into a real projection wiring.
+
+Batches:
+- **A** (STEP 8): Account + Watchlist + Paper writes
+- **B** (STEP 9): Order + GTT + Position + Trailing writes
+- **C** (STEP 10): Admin + Alerts + MF + Ticker + Native alerts
+  (21 handlers across `kc/manager_commands_admin.go`)
+- **D** (QueryBus): remaining read-side migrations across 13 mcp files
+- **E** (STEP 13, isp): `exit_tools` — close_position, close_all_positions
+- **F** (STEP 14, fam): `setup_tools` — login (OpenDashboard stayed in
+  QueryBus since it's read-only)
+
+Wire-don't-delete reversal (the lesson of the session):
+- `a22f5d0` deleted 3 aggregates + ~1200 LOC tests (−2565 LOC net)
+- `bda9b51` **reverted** the deletion
+- `badbbd6` wired the aggregates as read-side projections
+- `512e48d` made `PositionOpenedEvent` / `PositionClosedEvent` flow
+  through the projection, turning the aggregates load-bearing
+- Net: zero deletions. Dead code was a wiring problem, not a deletion
+  target. See "Key Learnings" below.
 
 See `.research/FINAL-VERIFIED-SCORECARD.md` for the current state.
 See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
@@ -40,23 +65,29 @@ See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 | Production SDK leaks | **0** | Only factory files contain `kiteconnect.New()` |
 | Files >1000 LOC (non-test) | **0** | verified |
 | Provider interfaces defined | 20 | `kc/manager_interfaces.go` |
-| **Provider interfaces actually consumed** | **20** | execute team ACTION 3 wired 15 more; `grep handler\.deps\.*\.` → 46 sites |
-| **Narrow-provider production call sites** | **46** | 9 files in `mcp/` |
-| **Bus dispatches in mcp/** | **15** | 12 QueryBus + 3 CommandBus; `grep -c DispatchWithResult mcp/*.go` |
+| **Provider interfaces actually consumed** | **20** | execute team ACTION 3 wired 15 more; `grep handler\.deps\.*\.` → 65 sites post-§10 |
+| **Narrow-provider production call sites** | **65** | 15 files in `mcp/`; path-to-100 ISP step routed `SessionSvc()` + `TrailingStopManager()` through deps |
+| **Bus dispatches in mcp/** (CommandBus) | **43** | `grep -c 'DispatchWithResult.*Command' mcp/*.go` at HEAD `0e58734` |
+| **Bus dispatches in mcp/** (QueryBus) | **50** | `grep -c 'DispatchWithResult.*Query' mcp/*.go` at HEAD `0e58734` |
+| **Total bus dispatches in mcp/** | **93** | 43 CommandBus + 50 QueryBus |
+| Projection `.Apply()` production sites | **16** | post-`badbbd6` wiring |
+| PositionOpenedEvent production dispatchers | **1** | `512e48d` wiring |
+| PositionClosedEvent production dispatchers | **2** | `512e48d` wiring |
 
-## Honest Scores (not theater) — post path-to-100 lift
+## Honest Scores (not theater) — post §10 continuation
 
 - Hexagonal 95%, Middleware 95%, ES-audit-log 100%
-- **Monolith 90%** (up from 85%)
-- **DDD ~88%** (up from 80%)
-- **CQRS ~98%** (up from 92%) — 32 dispatches across 13 files
-- **ISP ~95%** (up from 90%) — 65 production call sites across 15 files
+- **Monolith 90%** (held from path-to-100)
+- **DDD ~90%** (up from 88%) — 3 aggregates now load-bearing projections
+- **CQRS ~100%** (up from 98%) — 93 dispatches (43 cmd + 50 query), batches A–F complete
+- **ISP ~95%** (held; 65 production call sites across 15 files)
 - Plugin 40% (accepted ceiling)
-- **Weighted average: ~94%** (up from 89% → 76% → earlier)
+- **Weighted average: ~96%** (up from 94% → 89% → 76%)
 
 ### Prior baselines
 - resume-final: CQRS 80%, ISP 30%, average 76%
 - execute team §2: CQRS 92%, ISP 90%, average 89%
+- path-to-100: CQRS 98%, DDD 88%, average ~94%
 
 ## Key Learnings from This Session
 
@@ -68,16 +99,21 @@ See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 6. **~2,300 LOC total dead code** found in Phase 2d. ~250 removed this session (pnlService field, 3 duplicate family use cases). Remaining ~2,050 LOC deferred: CQRS bus infrastructure beyond beachhead, test-only ES aggregates, 15 unused StoreProvider interfaces.
 7. **Test cross-package state leak** — `TestFullChain_ReadOnlyToolPassesForAnyUser` was flaky only under `go test ./...` (passed in isolation). Fixed in Task #14 by isolating audit buffer state.
 8. **Ground-truth tool count is 93**, not 40/60/80 cited in older docs. Always use the grep from the scorecard.
+9. **Wire don't delete** — the core lesson of §10. `a22f5d0` deleted 3 "dead" aggregates on the premise they were test-only. They weren't dead; they were unwired. Reversal sequence (`bda9b51` → `badbbd6` → `512e48d`) restored them, wired them as read-side projections, and routed Position events through the projection pipeline. Net deletion: zero. Rule: dead code is a wiring problem, not a deletion reason — escalate before deleting.
+10. **Task briefs must restate standing rules.** The `a22f5d0` delete happened because a task brief said "delete 3 test-only aggregates" without reinforcing the wire-don't-delete rule. Agents execute the brief, not chat history. Every brief now carries a RULES block.
 
 ## Things That Still Need Work
 
-- **Migrate remaining read tools to QueryBus** — Trades, Profile, Margins,
-  Quotes, GTTs, Historical, option chain (~15 tools). Clone Orders pattern.
-- **Wire order-write CommandBus** — `PlaceOrderCommand`, `ModifyOrderCommand`,
-  `CancelOrderCommand`. Currently direct use-case invocation. Family commands
-  were wired (3) by execute team; order-write is the next frontier.
-- **Delete test-only aggregates** (`AlertAggregate`, `OrderAggregate`,
-  `PositionAggregate`) — or move their tests out of `kc/eventsourcing/`.
+- **Read-side QueryBus migration is DONE** (batch D) — remaining read
+  tools now dispatch via QueryBus. 50 query dispatches at HEAD.
+- **Write-side CommandBus migration is DONE** (batches A–F) — 43 command
+  dispatches at HEAD covering Account, Watchlist, Paper, Order, GTT,
+  Position, Trailing, Admin, Alerts, MF, Ticker, Native alerts, Exit,
+  Setup/Login. Remaining work is incremental, not categorical.
+- **Aggregates are now load-bearing projections** — do NOT delete.
+  `AlertAggregate`, `OrderAggregate`, `PositionAggregate` are wired via
+  `badbbd6`/`512e48d`. Removing their tests would break the projection
+  coverage.
 - **DashboardHandler still single receiver type** — 11 methods, 13 files.
   Further split cosmetic.
 - **`kc/isttz` 75% coverage** — lowest real package.
@@ -110,10 +146,17 @@ See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 
 ## Next-Session Priorities (ranked by ROI)
 
-1. Migrate remaining read domains to QueryBus (Trades, Profile, Margins,
-   Quotes, GTTs, Historical, option chain) → CQRS 92% → 95% (~1 afternoon)
-2. First order-write CommandBus dispatch (`PlaceOrderCommand`) → opens the
-   command-side floodgates
-3. Delete test-only ES aggregates → −900 LOC dead code (1 hour)
-4. DDD aggregate root pattern out of test-only status
-5. Monitor flaky tests for regression under `-count=1`
+1. **Tests for the new bus pipeline** — integration tests asserting that
+   `riskguard → broker resolver → use case → event dispatch` fires in
+   order for each new CommandBus handler. isp's batch E test
+   (`manager_commands_exit_test.go`) is the template.
+2. **DashboardHandler split** — 11 methods, 13 files, still single
+   receiver. Low-risk cosmetic lift.
+3. **`kc/isttz` coverage** — raise from 75%.
+4. **Monitor flaky tests** for regression under `-count=1`.
+5. **Landscape outside CQRS** — plugin architecture has an accepted 40%
+   ceiling. If the project ever wants a higher Plugin score, that's a
+   separate architecture decision, not more wiring.
+
+Categorically, the bus migration work is **done**. Further CQRS lifts
+are diminishing-returns polish, not structural.
