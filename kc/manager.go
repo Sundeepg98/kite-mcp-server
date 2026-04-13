@@ -527,6 +527,9 @@ func (m *Manager) registerCQRSHandlers() {
 	// --- CommandBus batch B: Order + GTT + Position + Trailing writes (STEP 9) ---
 	m.registerOrderCommands()
 
+	// --- CommandBus batch C: Admin + Alerts + MF + Ticker + Native alerts (STEP 10) ---
+	m.registerAdminCommands()
+
 	// --- QueryBus batch D: remaining read tool migrations ---
 	m.registerRemainingQueries()
 }
