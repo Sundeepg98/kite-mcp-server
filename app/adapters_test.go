@@ -344,6 +344,23 @@ func TestDeriveAggregateID_Unknown(t *testing.T) {
 	assert.Equal(t, "unknown", result)
 }
 
+// TestDeriveAggregateID_PositionOpened pins the P1 fix: before this case was
+// added, every position.opened event hit the default branch and was persisted
+// with AggregateID="unknown", clobbering all opens across all users into one
+// bogus aggregate bucket. Now each open persists under its PositionID, which
+// is the order ID that created it (set by place_order.go:163).
+func TestDeriveAggregateID_PositionOpened(t *testing.T) {
+	ev := domain.PositionOpenedEvent{
+		Email:           "alice@example.com",
+		PositionID:      "ORD-12345",
+		TransactionType: "BUY",
+		Timestamp:       time.Now(),
+	}
+	result := deriveAggregateID(ev)
+	assert.Equal(t, "ORD-12345", result)
+	assert.NotEqual(t, "unknown", result, "P1 regression: PositionOpenedEvent must not fall through to unknown")
+}
+
 // ===========================================================================
 // briefingCredAdapter with per-user credentials
 // ===========================================================================
