@@ -131,18 +131,31 @@ See `.research/FINAL-SCORECARD.md` for the prior resume-final handoff.
 
 ## Do Trust
 
-- `.research/FINAL-SCORECARD.md` (this session's honest scorecard)
-- `.research/resume-phase2-metrics.md` (verifier's reality-check on every metric)
-- `.research/resume-dead-code.md` + `resume-dead-code-raw.txt` (Phase 2d)
-- `.research/resume-error-audit.md` (Phase 2g, 3 HIGH issues)
-- `.research/resume-deploy-readiness.md` (Phase 2f)
-- `.research/resume-feature-inventory.md` (93-tool breakdown, Phase 2h)
+- `.research/FINAL-VERIFIED-SCORECARD.md` — §0-§10, current at HEAD `0e58734`
+- `.research/path-to-100.md` — §10 research + theater audit (8 rejected items)
+- `.research/FINAL-SCORECARD.md` — prior execute-team scorecard
+- `.research/resume-phase2-metrics.md` — verifier's reality-check on every metric
+- `.research/resume-dead-code.md` + `resume-dead-code-raw.txt` — Phase 2d
+- `.research/resume-error-audit.md` — Phase 2g, 3 HIGH issues
+- `.research/resume-deploy-readiness.md` — Phase 2f
+- `.research/resume-feature-inventory.md` — 93-tool breakdown, Phase 2h
 
 ## Windows Quirks (repeated for next session)
 
 - `GOTMPDIR=D:/kite-mcp-temp/.gotmp` — sidesteps SAC blocking unsigned test binaries
 - `mcp` / `cmd/rotate-key` intermittent SAC flakes — not code bugs
 - Kite API 429 breaks `app/` and `kc/` tests that fetch `api.kite.trade/instruments.json` — external flake
+- **TaskCompleted hook verify commands**: `bash -c 'cd /d/kite-mcp-temp && ...'` fails
+  under Python subprocess. MSYS mount `/d/` only resolves in interactive Git Bash.
+  Use `"D:/kite-mcp-temp"` (forward-slash Windows path) in bash contexts, or
+  `cd /d D:\kite-mcp-temp` (cmd-native) for `shell=True` under cmd.exe. Python's
+  `subprocess.run(..., shell=True)` on Windows runs via COMSPEC (cmd), not bash,
+  and cmd does NOT recognize single quotes as grouping — `bash -c '...'` splits
+  at `&&` before bash ever runs.
+- **Go module discovery under subprocess**: hook subprocess loses GOPATH/
+  GOMODCACHE/HOME from user env; `go vet ./...` reports "pattern ./...: directory
+  prefix . does not contain main module" when run from harness cwd. Always cd to
+  the directory containing `go.mod` first.
 
 ## Next-Session Priorities (ranked by ROI)
 
