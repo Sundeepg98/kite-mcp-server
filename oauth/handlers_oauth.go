@@ -69,6 +69,24 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		State:         state,
 	}
 
+	// Short-circuit: if the caller already has a valid dashboard JWT cookie
+	// AND a fresh server-side Kite token for that email, skip the Kite
+	// redirect entirely. Issue the MCP authorization code directly so
+	// mcp-remote's bearer refresh is silent as long as the dashboard
+	// session is alive. Turns "click Kite daily" into "click Kite once a
+	// week at most" — matches the conceptual model that one authenticated
+	// user should not have to re-prove identity per client surface.
+	//
+	// Security: PKCE is still enforced (code_challenge is bound to the
+	// auth code below). Cookie is JWT-signed with OAUTH_JWT_SECRET, same
+	// trust root as the dashboard itself. kiteTokenChecker confirms the
+	// server has a currently-usable Kite token for the email — without it
+	// the short-circuit would issue a bearer that fails on the first tool
+	// call, which would be worse UX than just asking for Kite auth.
+	if h.shortCircuitFromDashboard(w, r, stateData) {
+		return
+	}
+
 	if h.clients.IsKiteClient(clientID) {
 		h.redirectToKiteLogin(w, r, clientID, stateData)
 		return
@@ -102,6 +120,68 @@ func (h *Handler) redirectToKiteLogin(w http.ResponseWriter, r *http.Request, ki
 	kiteURL := "https://kite.zerodha.com/connect/login?api_key=" + kiteAPIKey + "&v=3&redirect_params=" + url.QueryEscape(redirectParams)
 	h.logger.Info("Redirecting to Kite login", "client_id", stateData.ClientID, "api_key", kiteAPIKey[:8]+"...", "registry_flow", stateData.RegistryKey != "")
 	http.Redirect(w, r, kiteURL, http.StatusFound)
+}
+
+// shortCircuitFromDashboard handles the case where the incoming /oauth/authorize
+// request carries a valid dashboard JWT cookie and the server already holds a
+// fresh Kite token for that email. Returns true if the short-circuit fired
+// (response written, caller should return). False means fall through to the
+// normal Kite redirect path.
+//
+// Preserves OAuth 2.1 PKCE guarantees: the auth code we issue is still bound
+// to the client-provided code_challenge, so mcp-remote's code_verifier is
+// still required during the /oauth/token exchange.
+func (h *Handler) shortCircuitFromDashboard(w http.ResponseWriter, r *http.Request, stateData oauthState) bool {
+	cookie, err := r.Cookie(cookieName)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	claims, err := h.jwt.ValidateToken(cookie.Value, "dashboard")
+	if err != nil || claims.Subject == "" {
+		return false
+	}
+	email := claims.Subject
+	// Without a KiteTokenChecker we can't tell if the server has a usable
+	// Kite token — bail out rather than issue a bearer that fails on the
+	// first tool call.
+	if h.kiteTokenChecker == nil || !h.kiteTokenChecker(email) {
+		return false
+	}
+
+	mcpCode, err := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      stateData.ClientID,
+		CodeChallenge: stateData.CodeChallenge,
+		RedirectURI:   stateData.RedirectURI,
+		Email:         email,
+	})
+	if err != nil {
+		h.logger.Error("short-circuit: generate auth code", "email", email, "error", err)
+		return false
+	}
+
+	parsed, err := url.Parse(stateData.RedirectURI)
+	if err != nil {
+		h.logger.Error("short-circuit: parse redirect_uri", "redirect_uri", stateData.RedirectURI, "error", err)
+		return false
+	}
+	params := parsed.Query()
+	params.Set("code", mcpCode)
+	if stateData.State != "" {
+		params.Set("state", stateData.State)
+	}
+	redirectURL := (&url.URL{
+		Scheme:   parsed.Scheme,
+		Host:     parsed.Host,
+		Path:     parsed.Path,
+		RawQuery: params.Encode(),
+	}).String()
+
+	h.logger.Info("OAuth short-circuit: reusing dashboard session",
+		"email", email,
+		"client_id", stateData.ClientID,
+	)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+	return true
 }
 
 // serveEmailPrompt renders the email prompt page for zero-config onboarding.
