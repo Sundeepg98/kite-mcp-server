@@ -319,3 +319,55 @@ type OrderProjectionResult struct {
 	FilledAt        string  `json:"filled_at,omitempty"`
 	Found           bool    `json:"found"`
 }
+
+// GetOrderHistoryReconstitutedQuery requests the full lifecycle of an order
+// rebuilt from the append-only domain event log. Unlike GetOrderProjectionQuery
+// (which reads from the in-process Projector, lost on restart) and
+// GetOrderHistoryQuery (which calls the broker API), this query replays the
+// persisted event stream to reconstitute the aggregate — enabling time-travel
+// debugging, corruption recovery, and regulatory audit independent of broker
+// state.
+type GetOrderHistoryReconstitutedQuery struct {
+	Email   string `json:"email"`
+	OrderID string `json:"order_id"`
+}
+
+// OrderStateSnapshot captures the order aggregate at one event-replay step.
+// Sequence matches the domain_events.sequence column; EventType identifies
+// which event produced this snapshot (OrderPlaced, OrderModified, etc.).
+type OrderStateSnapshot struct {
+	Sequence        int64   `json:"sequence"`
+	EventType       string  `json:"event_type"`
+	OccurredAt      string  `json:"occurred_at"`
+	Status          string  `json:"status"`
+	Quantity        int     `json:"quantity"`
+	Price           float64 `json:"price"`
+	FilledPrice     float64 `json:"filled_price,omitempty"`
+	FilledQuantity  int     `json:"filled_quantity,omitempty"`
+	ModifyCount     int     `json:"modify_count,omitempty"`
+}
+
+// OrderHistoryResult is the read model returned by
+// GetOrderHistoryReconstitutedQuery. Final* fields reflect the state after all
+// events have been applied; States holds one snapshot per event so callers can
+// render the full lifecycle.
+type OrderHistoryResult struct {
+	OrderID         string              `json:"order_id"`
+	Found           bool                `json:"found"`
+	EventCount      int                 `json:"event_count"`
+	FinalStatus     string              `json:"final_status"`
+	Email           string              `json:"email,omitempty"`
+	Exchange        string              `json:"exchange,omitempty"`
+	Tradingsymbol   string              `json:"tradingsymbol,omitempty"`
+	TransactionType string              `json:"transaction_type,omitempty"`
+	OrderType       string              `json:"order_type,omitempty"`
+	Product         string              `json:"product,omitempty"`
+	FinalQuantity   int                 `json:"final_quantity,omitempty"`
+	FinalPrice      float64             `json:"final_price,omitempty"`
+	FinalFilledPrice float64            `json:"final_filled_price,omitempty"`
+	FinalFilledQty  int                 `json:"final_filled_quantity,omitempty"`
+	ModifyCount     int                 `json:"modify_count,omitempty"`
+	Version         int                 `json:"version,omitempty"`
+	PlacedAt        string              `json:"placed_at,omitempty"`
+	States          []OrderStateSnapshot `json:"states"`
+}

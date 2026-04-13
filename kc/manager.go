@@ -521,6 +521,25 @@ func (m *Manager) registerCQRSHandlers() {
 		return orderAggregateToProjectionResult(agg), nil
 	})
 
+	// GetOrderHistoryReconstitutedQuery -> replay persisted domain events.
+	// Unlike the in-process Projector (lost on restart), this reads the
+	// append-only EventStore and reconstitutes the order lifecycle from the
+	// persisted log. First production caller of LoadOrderFromEvents.
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetOrderHistoryReconstitutedQuery)
+		if m.eventStore == nil {
+			return nil, fmt.Errorf("cqrs: event store not configured")
+		}
+		events, err := m.eventStore.LoadEvents(q.OrderID)
+		if err != nil {
+			return nil, fmt.Errorf("cqrs: load events for %s: %w", q.OrderID, err)
+		}
+		if len(events) == 0 {
+			return cqrs.OrderHistoryResult{OrderID: q.OrderID, Found: false, States: []cqrs.OrderStateSnapshot{}}, nil
+		}
+		return reconstituteOrderHistory(q.OrderID, events)
+	})
+
 	// --- CommandBus batch A: Account + Watchlist + Paper writes (STEP 8) ---
 	m.registerAccountCommands()
 
@@ -573,6 +592,68 @@ func orderAggregateToProjectionResult(agg *eventsourcing.OrderAggregate) cqrs.Or
 		res.FilledAt = agg.FilledAt.UTC().Format(time.RFC3339)
 	}
 	return res
+}
+
+// reconstituteOrderHistory replays a persisted event stream for a single order
+// aggregate and returns one snapshot per event plus the final state. Replaying
+// growing prefixes is O(N^2) in event count, which is fine because real order
+// lifecycles top out at ~5 events (placed + optional modifies + fill/cancel).
+//
+// This function is the first production caller of
+// eventsourcing.LoadOrderFromEvents — prior to this, the reconstitution path
+// existed only in test code (store_test.go round-trip tests). Wiring it here
+// turns the event store from a write-only audit log into a read-side source
+// of truth for order lifecycle queries.
+func reconstituteOrderHistory(orderID string, events []eventsourcing.StoredEvent) (cqrs.OrderHistoryResult, error) {
+	snapshots := make([]cqrs.OrderStateSnapshot, 0, len(events))
+	for i := 1; i <= len(events); i++ {
+		prefix := events[:i]
+		agg, err := eventsourcing.LoadOrderFromEvents(prefix)
+		if err != nil {
+			return cqrs.OrderHistoryResult{}, fmt.Errorf("cqrs: replay prefix %d: %w", i, err)
+		}
+		last := prefix[len(prefix)-1]
+		snapshots = append(snapshots, cqrs.OrderStateSnapshot{
+			Sequence:       last.Sequence,
+			EventType:      last.EventType,
+			OccurredAt:     last.OccurredAt.UTC().Format(time.RFC3339Nano),
+			Status:         agg.Status,
+			Quantity:       agg.Quantity.Int(),
+			Price:          agg.Price.Amount,
+			FilledPrice:    agg.FilledPrice.Amount,
+			FilledQuantity: agg.FilledQuantity.Int(),
+			ModifyCount:    agg.ModifyCount,
+		})
+	}
+
+	// Final full replay for the aggregate-level fields.
+	finalAgg, err := eventsourcing.LoadOrderFromEvents(events)
+	if err != nil {
+		return cqrs.OrderHistoryResult{}, fmt.Errorf("cqrs: final replay: %w", err)
+	}
+	result := cqrs.OrderHistoryResult{
+		OrderID:          orderID,
+		Found:            true,
+		EventCount:       len(events),
+		FinalStatus:      finalAgg.Status,
+		Email:            finalAgg.Email,
+		Exchange:         finalAgg.Instrument.Exchange,
+		Tradingsymbol:    finalAgg.Instrument.Tradingsymbol,
+		TransactionType:  finalAgg.TransactionType,
+		OrderType:        finalAgg.OrderType,
+		Product:          finalAgg.Product,
+		FinalQuantity:    finalAgg.Quantity.Int(),
+		FinalPrice:       finalAgg.Price.Amount,
+		FinalFilledPrice: finalAgg.FilledPrice.Amount,
+		FinalFilledQty:   finalAgg.FilledQuantity.Int(),
+		ModifyCount:      finalAgg.ModifyCount,
+		Version:          finalAgg.Version(),
+		States:           snapshots,
+	}
+	if !finalAgg.PlacedAt.IsZero() {
+		result.PlacedAt = finalAgg.PlacedAt.UTC().Format(time.RFC3339)
+	}
+	return result, nil
 }
 
 // KiteConnect wraps the Kite Connect client

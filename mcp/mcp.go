@@ -141,6 +141,7 @@ func GetAllTools() []Tool {
 		// Server observability
 		&ServerMetricsTool{},
 		&GetOrderProjectionTool{},
+		&GetOrderHistoryReconstitutedTool{},
 
 		// Admin tools (admin-only, gated by IsAdmin check in handlers)
 		&AdminListUsersTool{},
