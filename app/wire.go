@@ -177,6 +177,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("order.modified", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("order.cancelled", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("order.filled", makeEventPersister(eventStore, "Order", app.logger))
+			eventDispatcher.Subscribe("position.opened", makeEventPersister(eventStore, "Position", app.logger))
 			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))
 			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
 			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
@@ -197,6 +199,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Error("Failed to initialize paper trading tables", "error", err)
 		}
 		paperEngine = papertrading.NewEngine(paperStore, app.logger)
+		// Thread the shared domain event dispatcher so paper fills emit
+		// OrderPlaced/OrderFilled/PositionOpened through the same audit
+		// and projection pipeline as live trades.
+		paperEngine.SetDispatcher(eventDispatcher)
 		kcManager.SetPaperEngine(paperEngine)
 	}
 

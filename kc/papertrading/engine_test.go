@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // mockLTP implements LTPProvider with fixed prices.
@@ -588,4 +589,89 @@ func TestResetAccount(t *testing.T) {
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
 	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
+}
+
+// TestPlaceOrder_DispatchesDomainEvents pins the paper-engine -> domain event
+// wiring activated in STEP 17. A MARKET BUY fill must emit OrderPlaced,
+// OrderFilled, and PositionOpened events on the shared dispatcher so paper
+// trades surface in /dashboard/activity, the event-sourcing projection, and
+// the domain_events audit table alongside live trades.
+func TestPlaceOrder_DispatchesDomainEvents(t *testing.T) {
+	engine := testEngine(t, map[string]float64{
+		"NSE:RELIANCE": 2500.0,
+	})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	dispatcher := domain.NewEventDispatcher()
+	var (
+		gotPlaced []domain.OrderPlacedEvent
+		gotFilled []domain.OrderFilledEvent
+		gotOpened []domain.PositionOpenedEvent
+	)
+	dispatcher.Subscribe("order.placed", func(e domain.Event) {
+		gotPlaced = append(gotPlaced, e.(domain.OrderPlacedEvent))
+	})
+	dispatcher.Subscribe("order.filled", func(e domain.Event) {
+		gotFilled = append(gotFilled, e.(domain.OrderFilledEvent))
+	})
+	dispatcher.Subscribe("position.opened", func(e domain.Event) {
+		gotOpened = append(gotOpened, e.(domain.PositionOpenedEvent))
+	})
+	engine.SetDispatcher(dispatcher)
+
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "COMPLETE", result["status"])
+
+	require.Len(t, gotPlaced, 1, "expected 1 OrderPlacedEvent")
+	require.Len(t, gotFilled, 1, "expected 1 OrderFilledEvent")
+	require.Len(t, gotOpened, 1, "expected 1 PositionOpenedEvent")
+
+	// All three events must be linked by the same paper order ID so
+	// downstream consumers (projection, audit log) can correlate them.
+	orderID := result["order_id"].(string)
+	assert.Equal(t, orderID, gotPlaced[0].OrderID)
+	assert.Equal(t, orderID, gotFilled[0].OrderID)
+	assert.Equal(t, orderID, gotOpened[0].PositionID)
+
+	assert.Equal(t, testEmail, gotPlaced[0].Email)
+	assert.Equal(t, "BUY", gotPlaced[0].TransactionType)
+	assert.Equal(t, 10, gotPlaced[0].Qty.Int())
+	assert.InDelta(t, 2500.0, gotPlaced[0].Price.Amount, 0.01)
+
+	assert.Equal(t, 10, gotFilled[0].FilledQty.Int())
+	assert.InDelta(t, 2500.0, gotFilled[0].FilledPrice.Amount, 0.01)
+
+	assert.Equal(t, "BUY", gotOpened[0].TransactionType)
+	assert.Equal(t, "NSE", gotOpened[0].Instrument.Exchange)
+	assert.Equal(t, "RELIANCE", gotOpened[0].Instrument.Tradingsymbol)
+}
+
+// TestPlaceOrder_NoDispatcher_Safe verifies the nil-dispatcher fast path:
+// paper trading must continue working identically for callers (tests, CLI)
+// that never wire a dispatcher.
+func TestPlaceOrder_NoDispatcher_Safe(t *testing.T) {
+	engine := testEngine(t, map[string]float64{
+		"NSE:INFY": 1500.0,
+	})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+	// Deliberately no SetDispatcher call.
+
+	result, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         5,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETE", result["status"])
 }

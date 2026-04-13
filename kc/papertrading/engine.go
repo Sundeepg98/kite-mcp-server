@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // LTPProvider fetches last-traded prices for instruments.
@@ -17,6 +19,7 @@ type LTPProvider interface {
 type PaperEngine struct {
 	store       *Store
 	ltpProvider LTPProvider
+	dispatcher  *domain.EventDispatcher
 	logger      *slog.Logger
 }
 
@@ -28,6 +31,14 @@ func NewEngine(store *Store, logger *slog.Logger) *PaperEngine {
 // SetLTPProvider sets the LTP provider used for market price lookups.
 func (e *PaperEngine) SetLTPProvider(p LTPProvider) {
 	e.ltpProvider = p
+}
+
+// SetDispatcher wires the paper engine to the shared domain event dispatcher
+// so paper fills emit OrderPlacedEvent + OrderFilledEvent + PositionOpenedEvent
+// into the same pipeline as live trades. Safe to leave nil in tests that don't
+// need the audit trail.
+func (e *PaperEngine) SetDispatcher(d *domain.EventDispatcher) {
+	e.dispatcher = d
 }
 
 // IsEnabled returns whether paper trading is enabled for the given email.
@@ -276,6 +287,43 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 		"type", order.TransactionType,
 		"qty", order.Quantity,
 		"price", fillPrice)
+
+	// Emit domain events so paper fills flow through the same audit trail,
+	// projection, and dashboard pipeline as live trades. Dispatcher is optional
+	// for tests; nil-guard skips the fan-out entirely.
+	if e.dispatcher != nil {
+		qty, qerr := domain.NewQuantity(order.Quantity)
+		if qerr == nil {
+			inst := domain.NewInstrumentKey(order.Exchange, order.Tradingsymbol)
+			price := domain.NewINR(fillPrice)
+			now := order.FilledAt
+			e.dispatcher.Dispatch(domain.OrderPlacedEvent{
+				Email:           acct.Email,
+				OrderID:         order.OrderID,
+				Instrument:      inst,
+				Qty:             qty,
+				Price:           price,
+				TransactionType: order.TransactionType,
+				Timestamp:       now,
+			})
+			e.dispatcher.Dispatch(domain.OrderFilledEvent{
+				Email:       acct.Email,
+				OrderID:     order.OrderID,
+				FilledQty:   qty,
+				FilledPrice: price,
+				Timestamp:   now,
+			})
+			e.dispatcher.Dispatch(domain.PositionOpenedEvent{
+				Email:           acct.Email,
+				PositionID:      order.OrderID,
+				Instrument:      inst,
+				Qty:             qty,
+				AvgPrice:        price,
+				TransactionType: order.TransactionType,
+				Timestamp:       now,
+			})
+		}
+	}
 
 	return map[string]any{"order_id": order.OrderID, "status": "COMPLETE"}, nil
 }
