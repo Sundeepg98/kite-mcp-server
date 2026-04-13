@@ -540,6 +540,28 @@ func (m *Manager) registerCQRSHandlers() {
 		return reconstituteOrderHistory(q.OrderID, events)
 	})
 
+	// GetPositionHistoryReconstitutedQuery -> replay persisted position events
+	// keyed by the natural (email, exchange, symbol, product) tuple. First
+	// production caller of LoadPositionFromEvents. Unlike orders/alerts where
+	// the aggregate ID is the order or alert ID, positions have no broker-
+	// assigned unique ID so we use PositionAggregateID() to join open and
+	// close events for the same user-instrument-product.
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetPositionHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetPositionHistoryReconstitutedQuery)
+		if m.eventStore == nil {
+			return nil, fmt.Errorf("cqrs: event store not configured")
+		}
+		aggregateID := domain.PositionAggregateID(q.Email, domain.NewInstrumentKey(q.Exchange, q.Tradingsymbol), q.Product)
+		events, err := m.eventStore.LoadEvents(aggregateID)
+		if err != nil {
+			return nil, fmt.Errorf("cqrs: load events for %s: %w", aggregateID, err)
+		}
+		if len(events) == 0 {
+			return cqrs.PositionHistoryResult{AggregateID: aggregateID, Found: false, States: []cqrs.PositionStateSnapshot{}}, nil
+		}
+		return reconstitutePositionHistory(aggregateID, events)
+	})
+
 	// GetAlertHistoryReconstitutedQuery -> replay persisted alert events.
 	// Solves the "did my alert fire?" problem when Telegram DMs drop — the
 	// event log is the immutable source of truth. First production caller of

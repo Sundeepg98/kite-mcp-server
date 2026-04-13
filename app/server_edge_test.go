@@ -736,16 +736,20 @@ func TestMakeEventPersister_PositionClosedEvent(t *testing.T) {
 	persister := makeEventPersister(store, "Position", testLogger())
 
 	event := domain.PositionClosedEvent{
-		OrderID:   "POS-CLS-1",
-		Email:     "trader@test.com",
-		Timestamp: time.Now().UTC(),
+		OrderID:    "POS-CLS-1",
+		Email:      "trader@test.com",
+		Instrument: domain.NewInstrumentKey("NSE", "HDFC"),
+		Product:    "CNC",
+		Timestamp:  time.Now().UTC(),
 	}
 	persister(event)
 
 	events, err := store.LoadEventsSince(time.Time{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(events))
-	assert.Equal(t, "POS-CLS-1", events[0].AggregateID)
+	// Positions use a natural aggregate key — (email, exchange, symbol, product) —
+	// not the closing order ID, so the open and close events join on the same key.
+	assert.Equal(t, "trader@test.com:NSE:HDFC:CNC", events[0].AggregateID)
 	assert.Equal(t, "Position", events[0].AggregateType)
 }
 

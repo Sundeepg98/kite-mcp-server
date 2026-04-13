@@ -113,6 +113,55 @@ func reconstituteOrderHistory(orderID string, events []eventsourcing.StoredEvent
 	return result, nil
 }
 
+// reconstitutePositionHistory replays position events for the natural
+// (email, exchange, symbol, product) aggregate. First production caller
+// of eventsourcing.LoadPositionFromEvents. The aggregate may contain
+// multiple open→close cycles if the user has repeatedly traded the same
+// instrument+product — the snapshots walk the full history so callers
+// can render lifecycle boundaries.
+func reconstitutePositionHistory(aggregateID string, events []eventsourcing.StoredEvent) (cqrs.PositionHistoryResult, error) {
+	snapshots := make([]cqrs.PositionStateSnapshot, 0, len(events))
+	for i := 1; i <= len(events); i++ {
+		prefix := events[:i]
+		agg, err := eventsourcing.LoadPositionFromEvents(prefix)
+		if err != nil {
+			return cqrs.PositionHistoryResult{}, fmt.Errorf("cqrs: replay prefix %d: %w", i, err)
+		}
+		last := prefix[len(prefix)-1]
+		snapshots = append(snapshots, cqrs.PositionStateSnapshot{
+			Sequence:   last.Sequence,
+			EventType:  last.EventType,
+			OccurredAt: last.OccurredAt.UTC().Format(time.RFC3339Nano),
+			Status:     agg.Status,
+			Quantity:   agg.Quantity.Int(),
+			AvgPrice:   agg.AvgPrice.Amount,
+		})
+	}
+
+	finalAgg, err := eventsourcing.LoadPositionFromEvents(events)
+	if err != nil {
+		return cqrs.PositionHistoryResult{}, fmt.Errorf("cqrs: final replay: %w", err)
+	}
+	result := cqrs.PositionHistoryResult{
+		AggregateID:   aggregateID,
+		Found:         true,
+		EventCount:    len(events),
+		FinalStatus:   finalAgg.Status,
+		Email:         finalAgg.Email,
+		Exchange:      finalAgg.Instrument.Exchange,
+		Tradingsymbol: finalAgg.Instrument.Tradingsymbol,
+		Product:       finalAgg.Product,
+		States:        snapshots,
+	}
+	if !finalAgg.OpenedAt.IsZero() {
+		result.OpenedAt = finalAgg.OpenedAt.UTC().Format(time.RFC3339)
+	}
+	if !finalAgg.ClosedAt.IsZero() {
+		result.ClosedAt = finalAgg.ClosedAt.UTC().Format(time.RFC3339)
+	}
+	return result, nil
+}
+
 // reconstituteAlertHistory replays a persisted event stream for a single
 // alert aggregate. Same growing-prefix pattern as reconstituteOrderHistory —
 // O(N^2) is fine because alert lifecycles are typically ≤3 events (create,

@@ -317,6 +317,7 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 				Email:           acct.Email,
 				PositionID:      order.OrderID,
 				Instrument:      inst,
+				Product:         order.Product,
 				Qty:             qty,
 				AvgPrice:        price,
 				TransactionType: order.TransactionType,

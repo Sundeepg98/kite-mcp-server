@@ -182,6 +182,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 					Email:           email,
 					OrderID:         resp.OrderID,
 					Instrument:      domain.NewInstrumentKey(p.Exchange, p.Tradingsymbol),
+					Product:         p.Product,
 					Qty:             q,
 					TransactionType: txnType,
 					Timestamp:       time.Now().UTC(),

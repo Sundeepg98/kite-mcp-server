@@ -23,6 +23,7 @@ type PositionAggregate struct {
 	BaseAggregate
 	Email           string
 	Instrument      domain.InstrumentKey
+	Product         string // MIS, CNC, NRML — part of natural aggregate key
 	TransactionType string // original direction: BUY or SELL
 	Quantity        domain.Quantity
 	AvgPrice        domain.Money
@@ -147,17 +148,22 @@ func (p *PositionAggregate) Apply(event domain.Event) {
 	case domain.PositionOpenedEvent:
 		p.Email = e.Email
 		p.Instrument = e.Instrument
+		p.Product = e.Product
 		p.TransactionType = e.TransactionType
 		p.Quantity = e.Qty
 		p.AvgPrice = e.AvgPrice
 		p.Status = PositionStatusOpen
 		p.OpenedAt = e.Timestamp
+		p.ClosedAt = time.Time{} // reset on re-open (multi-lifecycle)
 	case domain.PositionClosedEvent:
 		p.Status = PositionStatusClosed
 		p.Quantity = domain.Quantity{} // zero value
 		p.ClosedAt = e.Timestamp
 		if a := (domain.InstrumentKey{}); p.Instrument == a {
 			p.Instrument = e.Instrument
+		}
+		if p.Product == "" {
+			p.Product = e.Product
 		}
 		if p.Email == "" {
 			p.Email = e.Email
@@ -215,6 +221,22 @@ func LoadPositionFromEvents(events []StoredEvent) (*PositionAggregate, error) {
 }
 
 // deserializePositionEvent converts a StoredEvent back into the concrete domain event type.
+// Handles two wire formats:
+//
+//   1. Legacy "PositionOpened" / "PositionClosed" (PascalCase) — internal
+//      *positionOpenedEvent / *positionClosedEvent types with
+//      PositionOpenedPayload / PositionClosedPayload JSON shape. Used by
+//      ToPositionStoredEvents + the aggregate command API in tests.
+//   2. Production "position.opened" / "position.closed" (dotted) — public
+//      domain.PositionOpenedEvent / domain.PositionClosedEvent types
+//      serialized directly via MarshalPayload. This is what the
+//      makeEventPersister in app/adapters.go writes, so production events
+//      must deserialize through this path.
+//
+// Without path 2, production-persisted events would fail reconstitution
+// with "unknown position event type: position.opened" — the hidden bug
+// that the path-to-100 research flagged for Position and that silently
+// affected Order and Alert reconstitution too (fixed in parallel).
 func deserializePositionEvent(stored StoredEvent) (domain.Event, error) {
 	switch stored.EventType {
 	case "PositionOpened":
@@ -244,6 +266,20 @@ func deserializePositionEvent(stored StoredEvent) (domain.Event, error) {
 			transactionType: p.TransactionType,
 			timestamp:       stored.OccurredAt,
 		}, nil
+
+	case "position.opened":
+		var e domain.PositionOpenedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+
+	case "position.closed":
+		var e domain.PositionClosedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
 
 	default:
 		return nil, fmt.Errorf("unknown position event type: %s", stored.EventType)

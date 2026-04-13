@@ -278,6 +278,28 @@ func deserializeAlertEvent(stored StoredEvent) (domain.Event, error) {
 			timestamp: stored.OccurredAt,
 		}, nil
 
+	// Public domain event formats persisted directly by app/adapters.go
+	// makeEventPersister. See position_aggregate.go deserializePositionEvent
+	// for the dual-format rationale.
+	case "alert.created":
+		var e domain.AlertCreatedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "alert.triggered":
+		var e domain.AlertTriggeredEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "alert.deleted":
+		var e domain.AlertDeletedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+
 	default:
 		return nil, fmt.Errorf("unknown alert event type: %s", stored.EventType)
 	}

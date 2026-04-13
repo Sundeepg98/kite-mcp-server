@@ -62,10 +62,23 @@ func (e OrderFilledEvent) EventType() string    { return "order.filled" }
 func (e OrderFilledEvent) OccurredAt() time.Time { return e.Timestamp }
 
 // PositionOpenedEvent is emitted when a new position is opened.
+//
+// Aggregate-ID rule: positions do not have a broker-assigned unique ID —
+// Kite's Position struct doesn't expose an "opening order" field — so we
+// can't reliably join open and close events by ID. Instead, we key
+// position events by the natural tuple (email, exchange, symbol, product)
+// via PositionAggregateID() below. A single user-instrument-product
+// aggregate may contain multiple open→close lifecycles across time;
+// walking the event stream makes lifecycle boundaries visible.
+//
+// Product is required for the aggregate ID. PositionID is kept for
+// tracing — it equals the opening order ID from place_order — but is
+// no longer the aggregate key.
 type PositionOpenedEvent struct {
 	Email           string
-	PositionID      string
+	PositionID      string // opening order ID (historical trace only)
 	Instrument      InstrumentKey
+	Product         string // MIS, CNC, NRML — part of aggregate key
 	Qty             Quantity
 	AvgPrice        Money
 	TransactionType string // "BUY" or "SELL"
@@ -76,10 +89,13 @@ func (e PositionOpenedEvent) EventType() string    { return "position.opened" }
 func (e PositionOpenedEvent) OccurredAt() time.Time { return e.Timestamp }
 
 // PositionClosedEvent is emitted after a position is closed via close_position.
+// OrderID is the closing order (fresh from Kite), not the opening one —
+// use PositionAggregateID() to join with the corresponding open event.
 type PositionClosedEvent struct {
 	Email           string
-	OrderID         string
+	OrderID         string // the closing order's ID
 	Instrument      InstrumentKey
+	Product         string // MIS, CNC, NRML — part of aggregate key
 	Qty             Quantity
 	TransactionType string // opposite direction used to close
 	Timestamp       time.Time
@@ -87,6 +103,15 @@ type PositionClosedEvent struct {
 
 func (e PositionClosedEvent) EventType() string    { return "position.closed" }
 func (e PositionClosedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PositionAggregateID returns the natural aggregate key for position events.
+// Format: "email:exchange:tradingsymbol:product". Both PositionOpenedEvent
+// and PositionClosedEvent for the same (user, instrument, product) triple
+// land under the same aggregate ID, allowing event-store replay to
+// reconstruct the full position history.
+func PositionAggregateID(email string, instrument InstrumentKey, product string) string {
+	return email + ":" + instrument.Exchange + ":" + instrument.Tradingsymbol + ":" + product
+}
 
 // AlertCreatedEvent is emitted when a new price alert is created.
 type AlertCreatedEvent struct {

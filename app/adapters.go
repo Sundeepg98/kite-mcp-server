@@ -415,9 +415,9 @@ func deriveAggregateID(e domain.Event) string {
 	case domain.OrderCancelledEvent:
 		return ev.OrderID
 	case domain.PositionOpenedEvent:
-		return ev.PositionID
+		return domain.PositionAggregateID(ev.Email, ev.Instrument, ev.Product)
 	case domain.PositionClosedEvent:
-		return ev.OrderID
+		return domain.PositionAggregateID(ev.Email, ev.Instrument, ev.Product)
 	case domain.AlertCreatedEvent:
 		return ev.AlertID
 	case domain.AlertTriggeredEvent:

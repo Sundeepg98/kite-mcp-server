@@ -166,8 +166,9 @@ func TestProjector_AlertFlow(t *testing.T) {
 	}
 }
 
-// TestProjector_PositionClose projects a PositionClosedEvent (the only
-// production-dispatched position event) keyed by its closing order ID.
+// TestProjector_PositionClose projects a PositionClosedEvent keyed by the
+// natural (email, exchange, symbol, product) tuple — positions don't have
+// a broker-assigned unique ID, so we use PositionAggregateID for the join.
 func TestProjector_PositionClose(t *testing.T) {
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
@@ -175,18 +176,21 @@ func TestProjector_PositionClose(t *testing.T) {
 
 	now := time.Now().UTC()
 	qty, _ := domain.NewQuantity(3)
+	instrument := domain.NewInstrumentKey("NSE", "HDFC")
 	dispatcher.Dispatch(domain.PositionClosedEvent{
 		Email:           "u@example.com",
 		OrderID:         "CLOSE-ORD-1",
-		Instrument:      domain.NewInstrumentKey("NSE", "HDFC"),
+		Instrument:      instrument,
+		Product:         "CNC",
 		Qty:             qty,
 		TransactionType: "SELL",
 		Timestamp:       now,
 	})
 
-	pos, ok := proj.GetPosition("CLOSE-ORD-1")
+	aggID := domain.PositionAggregateID("u@example.com", instrument, "CNC")
+	pos, ok := proj.GetPosition(aggID)
 	if !ok {
-		t.Fatal("expected CLOSE-ORD-1 to be projected")
+		t.Fatalf("expected %s to be projected", aggID)
 	}
 	if pos.Status != PositionStatusClosed {
 		t.Errorf("status = %s, want CLOSED", pos.Status)
@@ -200,16 +204,11 @@ func TestProjector_PositionClose(t *testing.T) {
 }
 
 // TestProjector_PositionOpenClose_Lifecycle verifies the full OPEN -> CLOSED
-// transition on a single position aggregate, matching the place_order ->
-// close_position production flow where both events share the broker order ID.
-//
-// Production contract (kc/usecases/place_order.go:150-151 and
-// kc/usecases/close_position.go:154): the opened-position's PositionID is set
-// to the broker OrderID at placement time, and close_position dispatches
-// PositionClosedEvent with the same OrderID. The projection keys opens by
-// PositionID and closes by OrderID, so both events land on the same aggregate
-// and produce an in-place OPEN -> CLOSED transition. This test pins that
-// contract end-to-end through the EventDispatcher.
+// transition on a single position aggregate using the natural-key join.
+// Both events for the same (email, exchange, symbol, product) tuple land
+// on the same aggregate ID computed by domain.PositionAggregateID, so a
+// single open→close cycle produces one aggregate with OPEN then CLOSED
+// state.
 func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
@@ -218,21 +217,23 @@ func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
 	now := time.Now().UTC()
 	openQty, _ := domain.NewQuantity(7)
 	instrument := domain.NewInstrumentKey("NSE", "INFY")
-	const positionID = "POS-ORD-42"
+	const product = "MIS"
+	aggID := domain.PositionAggregateID("u@example.com", instrument, product)
 
 	dispatcher.Dispatch(domain.PositionOpenedEvent{
 		Email:           "u@example.com",
-		PositionID:      positionID,
+		PositionID:      "POS-ORD-42",
 		Instrument:      instrument,
+		Product:         product,
 		Qty:             openQty,
 		AvgPrice:        domain.NewINR(1500.25),
 		TransactionType: "BUY",
 		Timestamp:       now,
 	})
 
-	pos, ok := proj.GetPosition(positionID)
+	pos, ok := proj.GetPosition(aggID)
 	if !ok {
-		t.Fatalf("expected %s to be projected after open event", positionID)
+		t.Fatalf("expected %s to be projected after open event", aggID)
 	}
 	if pos.Status != PositionStatusOpen {
 		t.Errorf("after open: status = %s, want OPEN", pos.Status)
@@ -242,6 +243,9 @@ func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
 	}
 	if pos.Instrument != instrument {
 		t.Errorf("instrument after open = %+v, want %+v", pos.Instrument, instrument)
+	}
+	if pos.Product != product {
+		t.Errorf("product after open = %q, want %q", pos.Product, product)
 	}
 	if pos.Quantity.Int() != 7 {
 		t.Errorf("qty after open = %d, want 7", pos.Quantity.Int())
@@ -262,16 +266,17 @@ func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
 	closeQty, _ := domain.NewQuantity(7)
 	dispatcher.Dispatch(domain.PositionClosedEvent{
 		Email:           "u@example.com",
-		OrderID:         positionID,
+		OrderID:         "CLOSE-ORD-99",
 		Instrument:      instrument,
+		Product:         product,
 		Qty:             closeQty,
 		TransactionType: "SELL",
 		Timestamp:       now.Add(time.Hour),
 	})
 
-	pos, ok = proj.GetPosition(positionID)
+	pos, ok = proj.GetPosition(aggID)
 	if !ok {
-		t.Fatalf("expected %s to still exist after close event", positionID)
+		t.Fatalf("expected %s to still exist after close event", aggID)
 	}
 	if pos.Status != PositionStatusClosed {
 		t.Errorf("after close: status = %s, want CLOSED", pos.Status)

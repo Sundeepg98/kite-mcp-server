@@ -143,6 +143,7 @@ func GetAllTools() []Tool {
 		&GetOrderProjectionTool{},
 		&GetOrderHistoryReconstitutedTool{},
 		&GetAlertHistoryReconstitutedTool{},
+		&GetPositionHistoryReconstitutedTool{},
 
 		// Admin tools (admin-only, gated by IsAdmin check in handlers)
 		&AdminListUsersTool{},

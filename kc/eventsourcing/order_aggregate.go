@@ -419,6 +419,35 @@ func deserializeOrderEvent(stored StoredEvent) (domain.Event, error) {
 			timestamp:      stored.OccurredAt,
 		}, nil
 
+	// Public domain event formats persisted directly by app/adapters.go
+	// makeEventPersister. See kc/eventsourcing/position_aggregate.go
+	// deserializePositionEvent for the detailed rationale — same dual-
+	// format requirement applies to Orders.
+	case "order.placed":
+		var e domain.OrderPlacedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "order.modified":
+		var e domain.OrderModifiedEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "order.cancelled":
+		var e domain.OrderCancelledEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "order.filled":
+		var e domain.OrderFilledEvent
+		if err := json.Unmarshal(stored.Payload, &e); err != nil {
+			return nil, err
+		}
+		return e, nil
+
 	default:
 		return nil, fmt.Errorf("unknown order event type: %s", stored.EventType)
 	}

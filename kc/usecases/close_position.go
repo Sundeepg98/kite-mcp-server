@@ -163,6 +163,7 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 			Email:           email,
 			OrderID:         resp.OrderID,
 			Instrument:      domain.NewInstrumentKey(matched.Exchange, matched.Tradingsymbol),
+			Product:         matched.Product,
 			Qty:             q,
 			TransactionType: txnType,
 			Timestamp:       time.Now().UTC(),

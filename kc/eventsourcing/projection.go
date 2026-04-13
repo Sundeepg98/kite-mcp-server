@@ -110,17 +110,17 @@ func (p *Projector) handleAlertEvent(event domain.Event) {
 }
 
 func (p *Projector) handlePositionEvent(event domain.Event) {
-	// PositionOpenedEvent and PositionClosedEvent carry different id-ish fields.
-	// PositionOpenedEvent uses PositionID (from use cases that model positions
-	// explicitly). PositionClosedEvent has no PositionID — it is identified by
-	// the order that closed it. We key closed-position projections by the
-	// close order ID so each close produces its own snapshot.
+	// Both PositionOpenedEvent and PositionClosedEvent use the natural
+	// aggregate key — (email, exchange, symbol, product) — so open and
+	// close events for the same position land under one aggregate in the
+	// projector, matching how the event store persists them. See
+	// domain.PositionAggregateID in kc/domain/events.go.
 	var id string
 	switch e := event.(type) {
 	case domain.PositionOpenedEvent:
-		id = e.PositionID
+		id = domain.PositionAggregateID(e.Email, e.Instrument, e.Product)
 	case domain.PositionClosedEvent:
-		id = e.OrderID
+		id = domain.PositionAggregateID(e.Email, e.Instrument, e.Product)
 	default:
 		return
 	}

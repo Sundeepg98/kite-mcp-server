@@ -164,6 +164,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Email:           cmd.Email,
 			PositionID:      resp.OrderID,
 			Instrument:      cmd.Instrument,
+			Product:         cmd.Product,
 			Qty:             cmd.Qty,
 			AvgPrice:        cmd.Price,
 			TransactionType: cmd.TransactionType,

@@ -372,6 +372,46 @@ type OrderHistoryResult struct {
 	States          []OrderStateSnapshot `json:"states"`
 }
 
+// GetPositionHistoryReconstitutedQuery requests the full open→close
+// lifecycle of a position, keyed by the natural tuple
+// (email, exchange, symbol, product). The event store joins open and
+// close events under the same aggregate via
+// domain.PositionAggregateID(), so a single query returns the complete
+// history — including repeat cycles if the user has opened and closed
+// the same position multiple times.
+type GetPositionHistoryReconstitutedQuery struct {
+	Email         string `json:"email"`
+	Exchange      string `json:"exchange"`
+	Tradingsymbol string `json:"tradingsymbol"`
+	Product       string `json:"product"`
+}
+
+// PositionStateSnapshot captures the position aggregate at one event-replay step.
+type PositionStateSnapshot struct {
+	Sequence   int64   `json:"sequence"`
+	EventType  string  `json:"event_type"`
+	OccurredAt string  `json:"occurred_at"`
+	Status     string  `json:"status"`
+	Quantity   int     `json:"quantity,omitempty"`
+	AvgPrice   float64 `json:"avg_price,omitempty"`
+}
+
+// PositionHistoryResult is the read model for
+// GetPositionHistoryReconstitutedQuery.
+type PositionHistoryResult struct {
+	AggregateID   string                  `json:"aggregate_id"` // email:exchange:symbol:product
+	Found         bool                    `json:"found"`
+	EventCount    int                     `json:"event_count"`
+	FinalStatus   string                  `json:"final_status"`
+	Email         string                  `json:"email,omitempty"`
+	Exchange      string                  `json:"exchange,omitempty"`
+	Tradingsymbol string                  `json:"tradingsymbol,omitempty"`
+	Product       string                  `json:"product,omitempty"`
+	OpenedAt      string                  `json:"opened_at,omitempty"`
+	ClosedAt      string                  `json:"closed_at,omitempty"`
+	States        []PositionStateSnapshot `json:"states"`
+}
+
 // GetAlertHistoryReconstitutedQuery requests the full lifecycle of an alert
 // rebuilt from the append-only domain event log. Solves the "did my alert
 // actually fire?" problem when Telegram DMs are dropped — replays

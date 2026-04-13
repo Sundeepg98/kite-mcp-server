@@ -154,9 +154,26 @@ func TestDeriveAggregateID(t *testing.T) {
 			expected: "ORD-789",
 		},
 		{
-			name:     "PositionClosedEvent uses OrderID",
-			event:    domain.PositionClosedEvent{OrderID: "ORD-POS-1", Timestamp: now},
-			expected: "ORD-POS-1",
+			name: "PositionClosedEvent uses natural aggregate key",
+			event: domain.PositionClosedEvent{
+				Email:      "alice@example.com",
+				OrderID:    "ORD-POS-1",
+				Instrument: domain.NewInstrumentKey("NSE", "HDFC"),
+				Product:    "CNC",
+				Timestamp:  now,
+			},
+			expected: "alice@example.com:NSE:HDFC:CNC",
+		},
+		{
+			name: "PositionOpenedEvent uses natural aggregate key",
+			event: domain.PositionOpenedEvent{
+				Email:      "alice@example.com",
+				PositionID: "ORD-OPEN-1",
+				Instrument: domain.NewInstrumentKey("NSE", "HDFC"),
+				Product:    "CNC",
+				Timestamp:  now,
+			},
+			expected: "alice@example.com:NSE:HDFC:CNC",
 		},
 		{
 			name:     "AlertTriggeredEvent uses AlertID",
