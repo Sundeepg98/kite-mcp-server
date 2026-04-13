@@ -252,6 +252,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			return u.AdminEmail
 		}
 		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore, adminEmailFn)))
+		// Wire tier-aware throttling into the already-registered rate limiter.
+		// Late-binding via WithTierMultiplier keeps the middleware layer count
+		// unchanged (still 10) — the resolver is consulted per-request, so the
+		// order in which middleware was appended to serverOpts is preserved.
+		toolRateLimiter.WithTierMultiplier(func(email string) int {
+			return tierRateMultiplier(billingStore.GetTierForUser(email, adminEmailFn))
+		})
 		app.logger.Info("Billing tier enforcement enabled")
 		if os.Getenv("STRIPE_PRICE_PRO") == "" || os.Getenv("STRIPE_PRICE_PREMIUM") == "" {
 			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
