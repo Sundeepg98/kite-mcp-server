@@ -540,6 +540,25 @@ func (m *Manager) registerCQRSHandlers() {
 		return reconstituteOrderHistory(q.OrderID, events)
 	})
 
+	// GetAlertHistoryReconstitutedQuery -> replay persisted alert events.
+	// Solves the "did my alert fire?" problem when Telegram DMs drop — the
+	// event log is the immutable source of truth. First production caller of
+	// LoadAlertFromEvents (previously only used in round-trip tests).
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetAlertHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetAlertHistoryReconstitutedQuery)
+		if m.eventStore == nil {
+			return nil, fmt.Errorf("cqrs: event store not configured")
+		}
+		events, err := m.eventStore.LoadEvents(q.AlertID)
+		if err != nil {
+			return nil, fmt.Errorf("cqrs: load events for %s: %w", q.AlertID, err)
+		}
+		if len(events) == 0 {
+			return cqrs.AlertHistoryResult{AlertID: q.AlertID, Found: false, States: []cqrs.AlertStateSnapshot{}}, nil
+		}
+		return reconstituteAlertHistory(q.AlertID, events)
+	})
+
 	// --- CommandBus batch A: Account + Watchlist + Paper writes (STEP 8) ---
 	m.registerAccountCommands()
 
@@ -652,6 +671,58 @@ func reconstituteOrderHistory(orderID string, events []eventsourcing.StoredEvent
 	}
 	if !finalAgg.PlacedAt.IsZero() {
 		result.PlacedAt = finalAgg.PlacedAt.UTC().Format(time.RFC3339)
+	}
+	return result, nil
+}
+
+// reconstituteAlertHistory replays a persisted event stream for a single
+// alert aggregate. Same growing-prefix pattern as reconstituteOrderHistory —
+// O(N^2) is fine because alert lifecycles are typically ≤3 events (create,
+// trigger, delete). First production caller of LoadAlertFromEvents.
+func reconstituteAlertHistory(alertID string, events []eventsourcing.StoredEvent) (cqrs.AlertHistoryResult, error) {
+	snapshots := make([]cqrs.AlertStateSnapshot, 0, len(events))
+	for i := 1; i <= len(events); i++ {
+		prefix := events[:i]
+		agg, err := eventsourcing.LoadAlertFromEvents(prefix)
+		if err != nil {
+			return cqrs.AlertHistoryResult{}, fmt.Errorf("cqrs: replay prefix %d: %w", i, err)
+		}
+		last := prefix[len(prefix)-1]
+		snap := cqrs.AlertStateSnapshot{
+			Sequence:    last.Sequence,
+			EventType:   last.EventType,
+			OccurredAt:  last.OccurredAt.UTC().Format(time.RFC3339Nano),
+			Status:      agg.Status,
+			TargetPrice: agg.TargetPrice.Amount,
+		}
+		snapshots = append(snapshots, snap)
+	}
+
+	finalAgg, err := eventsourcing.LoadAlertFromEvents(events)
+	if err != nil {
+		return cqrs.AlertHistoryResult{}, fmt.Errorf("cqrs: final replay: %w", err)
+	}
+	result := cqrs.AlertHistoryResult{
+		AlertID:       alertID,
+		Found:         true,
+		EventCount:    len(events),
+		FinalStatus:   finalAgg.Status,
+		Email:         finalAgg.Email,
+		Exchange:      finalAgg.Instrument.Exchange,
+		Tradingsymbol: finalAgg.Instrument.Tradingsymbol,
+		Direction:     finalAgg.Direction,
+		TargetPrice:   finalAgg.TargetPrice.Amount,
+		Version:       finalAgg.Version(),
+		States:        snapshots,
+	}
+	if !finalAgg.CreatedAt.IsZero() {
+		result.CreatedAt = finalAgg.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	if !finalAgg.TriggeredAt.IsZero() {
+		result.TriggeredAt = finalAgg.TriggeredAt.UTC().Format(time.RFC3339)
+	}
+	if !finalAgg.DeletedAt.IsZero() {
+		result.DeletedAt = finalAgg.DeletedAt.UTC().Format(time.RFC3339)
 	}
 	return result, nil
 }

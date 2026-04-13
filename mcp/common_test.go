@@ -351,6 +351,7 @@ func TestToolDashboardPage(t *testing.T) {
 			"delete_my_account", "update_my_credentials", "server_metrics",
 			"get_order_projection",
 			"get_order_history_reconstituted",
+			"get_alert_history_reconstituted",
 			"admin_list_users", "admin_get_user", "admin_server_status",
 			"admin_get_risk_status", "admin_suspend_user", "admin_activate_user",
 			"admin_change_role", "admin_freeze_user", "admin_unfreeze_user",

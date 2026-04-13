@@ -371,3 +371,41 @@ type OrderHistoryResult struct {
 	PlacedAt        string              `json:"placed_at,omitempty"`
 	States          []OrderStateSnapshot `json:"states"`
 }
+
+// GetAlertHistoryReconstitutedQuery requests the full lifecycle of an alert
+// rebuilt from the append-only domain event log. Solves the "did my alert
+// actually fire?" problem when Telegram DMs are dropped — replays
+// AlertCreatedEvent → AlertTriggeredEvent → AlertDeletedEvent to prove
+// delivery independent of the notification layer.
+type GetAlertHistoryReconstitutedQuery struct {
+	Email   string `json:"email"`
+	AlertID string `json:"alert_id"`
+}
+
+// AlertStateSnapshot captures the alert aggregate at one event-replay step.
+type AlertStateSnapshot struct {
+	Sequence    int64   `json:"sequence"`
+	EventType   string  `json:"event_type"`
+	OccurredAt  string  `json:"occurred_at"`
+	Status      string  `json:"status"`
+	TargetPrice float64 `json:"target_price,omitempty"`
+	CurrentPrice float64 `json:"current_price,omitempty"`
+}
+
+// AlertHistoryResult is the read model for GetAlertHistoryReconstitutedQuery.
+type AlertHistoryResult struct {
+	AlertID     string               `json:"alert_id"`
+	Found       bool                 `json:"found"`
+	EventCount  int                  `json:"event_count"`
+	FinalStatus string               `json:"final_status"`
+	Email       string               `json:"email,omitempty"`
+	Exchange    string               `json:"exchange,omitempty"`
+	Tradingsymbol string             `json:"tradingsymbol,omitempty"`
+	Direction   string               `json:"direction,omitempty"`
+	TargetPrice float64              `json:"target_price,omitempty"`
+	CreatedAt   string               `json:"created_at,omitempty"`
+	TriggeredAt string               `json:"triggered_at,omitempty"`
+	DeletedAt   string               `json:"deleted_at,omitempty"`
+	Version     int                  `json:"version,omitempty"`
+	States      []AlertStateSnapshot `json:"states"`
+}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // AlertStore is the interface needed by CreateAlertUseCase.
@@ -25,6 +27,7 @@ type InstrumentResolver interface {
 type CreateAlertUseCase struct {
 	alertStore  AlertStore
 	instruments InstrumentResolver
+	events      *domain.EventDispatcher
 	logger      *slog.Logger
 }
 
@@ -39,6 +42,13 @@ func NewCreateAlertUseCase(
 		instruments: instruments,
 		logger:      logger,
 	}
+}
+
+// SetEventDispatcher wires an event dispatcher so AlertCreatedEvent is
+// emitted on successful creation. Optional — existing callers that don't
+// set one keep working; events are simply not dispatched.
+func (uc *CreateAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
 }
 
 // Execute creates an alert and returns the alert ID.
@@ -93,6 +103,17 @@ func (uc *CreateAlertUseCase) Execute(ctx context.Context, cmd cqrs.CreateAlertC
 		"target_price", cmd.TargetPrice,
 		"direction", cmd.Direction,
 	)
+
+	if uc.events != nil {
+		uc.events.Dispatch(domain.AlertCreatedEvent{
+			Email:       cmd.Email,
+			AlertID:     alertID,
+			Instrument:  domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
+			TargetPrice: domain.NewINR(cmd.TargetPrice),
+			Direction:   cmd.Direction,
+			Timestamp:   time.Now(),
+		})
+	}
 
 	return alertID, nil
 }

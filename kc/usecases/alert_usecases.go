@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // AlertReader abstracts alert read/delete operations for use cases.
@@ -41,12 +43,20 @@ func (uc *ListAlertsUseCase) Execute(ctx context.Context, query cqrs.GetAlertsQu
 // DeleteAlertUseCase deletes a specific alert.
 type DeleteAlertUseCase struct {
 	store  AlertReader
+	events *domain.EventDispatcher
 	logger *slog.Logger
 }
 
 // NewDeleteAlertUseCase creates a DeleteAlertUseCase with dependencies injected.
 func NewDeleteAlertUseCase(store AlertReader, logger *slog.Logger) *DeleteAlertUseCase {
 	return &DeleteAlertUseCase{store: store, logger: logger}
+}
+
+// SetEventDispatcher wires an event dispatcher so AlertDeletedEvent is
+// emitted on successful deletion. Optional — existing callers that don't
+// set one keep working; events are simply not dispatched.
+func (uc *DeleteAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
 }
 
 // Execute deletes an alert by ID.
@@ -60,6 +70,13 @@ func (uc *DeleteAlertUseCase) Execute(ctx context.Context, cmd cqrs.DeleteAlertC
 	if err := uc.store.Delete(cmd.Email, cmd.AlertID); err != nil {
 		uc.logger.Error("Failed to delete alert", "email", cmd.Email, "alert_id", cmd.AlertID, "error", err)
 		return fmt.Errorf("usecases: delete alert: %w", err)
+	}
+	if uc.events != nil {
+		uc.events.Dispatch(domain.AlertDeletedEvent{
+			Email:     cmd.Email,
+			AlertID:   cmd.AlertID,
+			Timestamp: time.Now(),
+		})
 	}
 	return nil
 }

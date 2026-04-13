@@ -58,6 +58,7 @@ var toolTiers = map[string]Tier{
 	"server_time":    TierFree,
 	"get_order_projection": TierFree,
 	"get_order_history_reconstituted": TierFree,
+	"get_alert_history_reconstituted": TierFree,
 
 	// Admin tools (gated by admin role check, not billing tier)
 	"admin_list_users": TierFree, "admin_get_user": TierFree,

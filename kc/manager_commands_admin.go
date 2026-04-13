@@ -162,6 +162,9 @@ func (m *Manager) registerAlertCommands() {
 			&adminBatchInstrumentResolver{m: m},
 			m.Logger,
 		)
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	})
 
@@ -174,6 +177,9 @@ func (m *Manager) registerAlertCommands() {
 			return nil, fmt.Errorf("cqrs: alert store not configured")
 		}
 		uc := usecases.NewDeleteAlertUseCase(m.alertStore, m.Logger)
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	})
 
