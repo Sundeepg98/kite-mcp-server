@@ -37,15 +37,29 @@ func newKiteSDKAdapter(kc *kiteconnect.Client) *kiteSDKAdapter {
 	return &kiteSDKAdapter{kc: kc}
 }
 
+// NewKiteClient is the single production site where a raw
+// *kiteconnect.Client is constructed. Every consumer that needs a
+// concrete Kite SDK client (kc/kite_client.go's legacy factory,
+// defaultKiteSDKConstructor below, telegram bot handler, briefing/pnl
+// services) routes through here so the gokiteconnect.New call site is
+// exactly one, matching the hexagonal-100 claim.
+//
+// Before this helper existed there were two independent call sites:
+// one in kc/kite_client.go (the legacy KiteClientFactory) and one in
+// this package's defaultKiteSDKConstructor. The path-to-100-final
+// research flagged the duplication and this helper collapses them.
+func NewKiteClient(apiKey string) *kiteconnect.Client {
+	return kiteconnect.New(apiKey)
+}
+
 // defaultKiteSDKConstructor is the production SDK constructor used by
-// Factory and Auth when no override is supplied. It builds a fresh
-// *kiteconnect.Client and wraps it in *kiteSDKAdapter so the rest of
-// the package can depend on the KiteSDK interface.
+// Factory and Auth when no override is supplied. Routes through
+// NewKiteClient so the gokiteconnect.New call lives in one place.
 //
 // Tests override this via WithSDKConstructor to inject a fake SDK
 // without touching network code.
 func defaultKiteSDKConstructor(apiKey string) KiteSDK {
-	return newKiteSDKAdapter(kiteconnect.New(apiKey))
+	return newKiteSDKAdapter(NewKiteClient(apiKey))
 }
 
 // newClientFromSDK builds a broker.Client from any KiteSDK
