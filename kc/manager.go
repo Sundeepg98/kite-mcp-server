@@ -520,6 +520,9 @@ func (m *Manager) registerCQRSHandlers() {
 		}
 		return orderAggregateToProjectionResult(agg), nil
 	})
+
+	// --- CommandBus batch A: Account + Watchlist + Paper writes (STEP 8) ---
+	m.registerAccountCommands()
 }
 
 // orderAggregateToProjectionResult serializes an OrderAggregate into the

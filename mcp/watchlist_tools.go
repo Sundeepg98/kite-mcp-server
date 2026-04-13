@@ -53,11 +53,14 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
 		}
 
-		uc := usecases.NewCreateWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
 		if err != nil {
 			handler.trackToolError(ctx, "create_watchlist", "create_error")
 			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result, ok := raw.(*usecases.CreateWatchlistResult)
+		if !ok || result == nil {
+			return mcp.NewToolResultError("internal: unexpected create_watchlist result"), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", result.Name, result.ID)), nil
@@ -102,11 +105,14 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		uc := usecases.NewDeleteWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
-		result, err := uc.Execute(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result, ok := raw.(*usecases.DeleteWatchlistResult)
+		if !ok || result == nil {
+			return mcp.NewToolResultError("internal: unexpected delete_watchlist result"), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", result.Name, result.ItemCount)), nil
@@ -175,7 +181,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("No valid instruments provided. Use exchange:symbol format (e.g. 'NSE:RELIANCE')."), nil
 		}
 
-		uc := usecases.NewAddToWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
+		bus := manager.CommandBus()
 
 		var added, failed []string
 		for _, instID := range instruments {
@@ -193,7 +199,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				continue
 			}
 
-			if err := uc.Execute(ctx, cqrs.AddToWatchlistCommand{
+			if _, err := bus.DispatchWithResult(ctx, cqrs.AddToWatchlistCommand{
 				Email:           email,
 				WatchlistID:     wl.ID,
 				Exchange:        exchange,
@@ -279,7 +285,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError("No items specified"), nil
 		}
 
-		uc := usecases.NewRemoveFromWatchlistUseCase(handler.deps.Watchlist.WatchlistStore(), manager.Logger)
+		bus := manager.CommandBus()
 
 		var removed, failed []string
 		for _, ref := range refs {
@@ -298,7 +304,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 				}
 			}
 
-			if err := uc.Execute(ctx, cqrs.RemoveFromWatchlistCommand{Email: email, WatchlistID: wl.ID, ItemID: itemID}); err != nil {
+			if _, err := bus.DispatchWithResult(ctx, cqrs.RemoveFromWatchlistCommand{Email: email, WatchlistID: wl.ID, ItemID: itemID}); err != nil {
 				failed = append(failed, fmt.Sprintf("%s (%s)", ref, err))
 				continue
 			}

@@ -31,16 +31,14 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		if email == "" {
 			return gomcp.NewToolResultError("Not authenticated"), nil
 		}
-		engine := handler.deps.Paper.PaperEngine()
-		if engine == nil {
+		if handler.deps.Paper.PaperEngine() == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 		args := request.GetArguments()
 		enable, _ := args["enable"].(bool)
 		initialCash := NewArgParser(args).Float("initial_cash", 10000000)
 
-		uc := usecases.NewPaperTradingToggleUseCase(engine, manager.Logger)
-		msg, err := uc.Execute(ctx, cqrs.PaperTradingToggleCommand{
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingToggleCommand{
 			Email:       email,
 			Enable:      enable,
 			InitialCash: initialCash,
@@ -48,6 +46,7 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		if err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
+		msg, _ := raw.(string)
 		return gomcp.NewToolResultText(msg), nil
 	}
 }
@@ -106,13 +105,11 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		if email == "" {
 			return gomcp.NewToolResultError("Not authenticated"), nil
 		}
-		engine := handler.deps.Paper.PaperEngine()
-		if engine == nil {
+		if handler.deps.Paper.PaperEngine() == nil {
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 
-		uc := usecases.NewPaperTradingResetUseCase(engine, manager.Logger)
-		if err := uc.Execute(ctx, cqrs.PaperTradingResetCommand{Email: email}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingResetCommand{Email: email}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 		return gomcp.NewToolResultText("Paper trading portfolio RESET. All positions, holdings, and orders cleared. Cash restored to initial amount."), nil

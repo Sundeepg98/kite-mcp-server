@@ -9,7 +9,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -46,18 +45,7 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return gomcp.NewToolResultError("This permanently deletes ALL your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading). Set confirm: true to proceed."), nil
 		}
 
-		uc := usecases.NewDeleteMyAccountUseCase(usecases.AccountDependencies{
-			CredentialStore: handler.deps.CredStore.CredentialStore(),
-			TokenStore:      handler.deps.Tokens.TokenStore(),
-			AlertDeleter:    handler.deps.Alerts.AlertStore(),
-			WatchlistStore:  handler.deps.Watchlist.WatchlistStore(),
-			TrailingStops:   handler.deps.TrailingStop.TrailingStopManager(),
-			PaperEngine:     handler.deps.Paper.PaperEngine(),
-			UserStore:       handler.deps.Users.UserStore(),
-			Sessions:        manager.SessionManager(),
-		}, manager.Logger)
-
-		if err := uc.Execute(ctx, cqrs.DeleteMyAccountCommand{Email: email}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteMyAccountCommand{Email: email}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -109,8 +97,7 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError("Both api_key and api_secret must be non-empty"), nil
 		}
 
-		uc := usecases.NewUpdateMyCredentialsUseCase(handler.deps.CredStore.CredentialStore(), handler.deps.Tokens.TokenStore(), manager.Logger)
-		if err := uc.Execute(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
+		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
