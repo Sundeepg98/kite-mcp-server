@@ -145,6 +145,11 @@ func (a *AlertAggregate) CanDelete() error {
 // --- Apply (state reconstitution) ---
 
 // Apply processes a domain event and updates aggregate state.
+//
+// Both internal event types (emitted by Create/Trigger/Delete command
+// methods) and the public domain.*Event types dispatched on the
+// domain.EventDispatcher are handled. The latter lets the projection pipeline
+// feed live alert events from the bus into the aggregate directly.
 func (a *AlertAggregate) Apply(event domain.Event) {
 	switch e := event.(type) {
 	case *alertCreatedEvent:
@@ -160,6 +165,28 @@ func (a *AlertAggregate) Apply(event domain.Event) {
 	case *alertDeletedEvent:
 		a.Status = AlertStatusDeleted
 		a.DeletedAt = e.timestamp
+	case domain.AlertCreatedEvent:
+		a.Email = e.Email
+		a.Instrument = e.Instrument
+		a.TargetPrice = e.TargetPrice
+		a.Direction = e.Direction
+		a.Status = AlertStatusActive
+		a.CreatedAt = e.Timestamp
+	case domain.AlertTriggeredEvent:
+		a.Status = AlertStatusTriggered
+		a.TriggeredAt = e.Timestamp
+		if a.Email == "" {
+			a.Email = e.Email
+		}
+		if a.TargetPrice.Amount == 0 {
+			a.TargetPrice = e.TargetPrice
+		}
+		if (a.Instrument == domain.InstrumentKey{}) {
+			a.Instrument = e.Instrument
+		}
+	case domain.AlertDeletedEvent:
+		a.Status = AlertStatusDeleted
+		a.DeletedAt = e.Timestamp
 	}
 	a.incrementVersion()
 }

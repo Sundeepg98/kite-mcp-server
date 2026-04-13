@@ -390,6 +390,11 @@ func New(cfg Config) (*Manager, error) {
 		}
 	})
 
+	// Initialize the read-side projection. The projector is empty until
+	// SetEventDispatcher wires it to a real dispatcher in app/wire.go; tests
+	// that skip dispatcher setup still get a usable empty projector.
+	m.projector = eventsourcing.NewProjector()
+
 	// Register CQRS handlers on the bus. Tool handlers dispatch queries through
 	// manager.QueryBus() rather than constructing use cases inline.
 	m.registerCQRSHandlers()
@@ -501,6 +506,55 @@ func (m *Manager) registerCQRSHandlers() {
 		uc := usecases.NewAdminRemoveFamilyMemberUseCase(m.familyService, m.eventing.Dispatcher(), m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.AdminRemoveFamilyMemberCommand))
 	})
+
+	// GetOrderProjectionQuery -> read-side Projector lookup.
+	// The projector is in-process and fed by the domain event dispatcher.
+	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderProjectionQuery{}), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetOrderProjectionQuery)
+		if m.projector == nil {
+			return nil, fmt.Errorf("cqrs: projector not configured")
+		}
+		agg, ok := m.projector.GetOrder(q.OrderID)
+		if !ok {
+			return cqrs.OrderProjectionResult{OrderID: q.OrderID, Found: false}, nil
+		}
+		return orderAggregateToProjectionResult(agg), nil
+	})
+}
+
+// orderAggregateToProjectionResult serializes an OrderAggregate into the
+// OrderProjectionResult read model. Timestamps are RFC3339 when non-zero.
+func orderAggregateToProjectionResult(agg *eventsourcing.OrderAggregate) cqrs.OrderProjectionResult {
+	res := cqrs.OrderProjectionResult{
+		OrderID:         agg.AggregateID(),
+		Status:          agg.Status,
+		Email:           agg.Email,
+		Exchange:        agg.Instrument.Exchange,
+		Tradingsymbol:   agg.Instrument.Tradingsymbol,
+		TransactionType: agg.TransactionType,
+		OrderType:       agg.OrderType,
+		Product:         agg.Product,
+		Quantity:        agg.Quantity.Int(),
+		Price:           agg.Price.Amount,
+		FilledPrice:     agg.FilledPrice.Amount,
+		FilledQuantity:  agg.FilledQuantity.Int(),
+		ModifyCount:     agg.ModifyCount,
+		Version:         agg.Version(),
+		Found:           true,
+	}
+	if !agg.PlacedAt.IsZero() {
+		res.PlacedAt = agg.PlacedAt.UTC().Format(time.RFC3339)
+	}
+	if !agg.ModifiedAt.IsZero() {
+		res.ModifiedAt = agg.ModifiedAt.UTC().Format(time.RFC3339)
+	}
+	if !agg.CancelledAt.IsZero() {
+		res.CancelledAt = agg.CancelledAt.UTC().Format(time.RFC3339)
+	}
+	if !agg.FilledAt.IsZero() {
+		res.FilledAt = agg.FilledAt.UTC().Format(time.RFC3339)
+	}
+	return res
 }
 
 // KiteConnect wraps the Kite Connect client
@@ -591,6 +645,7 @@ type Manager struct {
 	invitationStore   *users.InvitationStore      // optional: family invitation management
 	eventDispatcher   *domain.EventDispatcher     // optional: domain event pub/sub
 	eventStore        *eventsourcing.EventStore   // optional: domain audit log (append-only, not used for state reconstitution)
+	projector         *eventsourcing.Projector    // read-side projection of order/alert/position aggregates; subscribes to eventDispatcher
 	mcpServer         any                         // *server.MCPServer — stored as any to avoid circular import
 	kiteClientFactory KiteClientFactory           // creates kiteconnect.Client instances; mockable in tests
 	commandBus        *cqrs.InMemoryBus           // CQRS command bus (nil until wired by app/wire.go)

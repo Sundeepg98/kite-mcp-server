@@ -238,6 +238,12 @@ func (o *OrderAggregate) Fill(price float64, qty int) error {
 // Apply processes a domain event and updates aggregate state.
 // This is the only method that mutates fields — called during both command
 // execution and historical replay.
+//
+// Both internal event types (emitted by Place/Modify/Cancel/Fill command
+// methods) and the public domain.*Event types dispatched on the
+// domain.EventDispatcher by production use cases are handled. This lets the
+// projection pipeline feed live order events from the bus into the aggregate
+// without constructing internal events.
 func (o *OrderAggregate) Apply(event domain.Event) {
 	switch e := event.(type) {
 	case *orderPlacedEvent:
@@ -265,6 +271,26 @@ func (o *OrderAggregate) Apply(event domain.Event) {
 		o.FilledPrice = e.filledPrice
 		o.FilledQuantity = e.filledQuantity
 		o.FilledAt = e.timestamp
+	case domain.OrderPlacedEvent:
+		o.Status = OrderStatusPlaced
+		o.Email = e.Email
+		o.Instrument = e.Instrument
+		o.TransactionType = e.TransactionType
+		o.Quantity = e.Qty
+		o.Price = e.Price
+		o.PlacedAt = e.Timestamp
+	case domain.OrderModifiedEvent:
+		o.Status = OrderStatusModified
+		o.ModifyCount++
+		o.ModifiedAt = e.Timestamp
+	case domain.OrderCancelledEvent:
+		o.Status = OrderStatusCancelled
+		o.CancelledAt = e.Timestamp
+	case domain.OrderFilledEvent:
+		o.Status = OrderStatusFilled
+		o.FilledPrice = e.FilledPrice
+		o.FilledQuantity = e.FilledQty
+		o.FilledAt = e.Timestamp
 	}
 	o.incrementVersion()
 }

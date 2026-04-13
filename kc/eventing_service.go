@@ -20,8 +20,14 @@ func newEventingService(m *Manager) *EventingService {
 // Dispatcher returns the domain event dispatcher, or nil if not configured.
 func (e *EventingService) Dispatcher() *domain.EventDispatcher { return e.m.eventDispatcher }
 
-// SetDispatcher sets the domain event dispatcher.
-func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) { e.m.eventDispatcher = d }
+// SetDispatcher sets the domain event dispatcher and subscribes the read-side
+// projector so order/alert/position events flow into the live aggregate maps.
+func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
+	e.m.eventDispatcher = d
+	if d != nil && e.m.projector != nil {
+		e.m.projector.Subscribe(d)
+	}
+}
 
 // Store returns the domain audit log (append-only event store), or nil.
 func (e *EventingService) Store() *eventsourcing.EventStore { return e.m.eventStore }
@@ -47,3 +53,8 @@ func (m *Manager) EventStoreConcrete() *eventsourcing.EventStore { return m.even
 
 // SetEventStore sets the domain audit log.
 func (m *Manager) SetEventStore(s *eventsourcing.EventStore) { m.eventing.SetStore(s) }
+
+// Projector returns the read-side projection of order/alert/position
+// aggregates. Always non-nil after Manager construction; starts empty and
+// populates as events flow through the dispatcher.
+func (m *Manager) Projector() *eventsourcing.Projector { return m.projector }

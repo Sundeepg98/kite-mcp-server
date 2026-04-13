@@ -125,6 +125,11 @@ func (p *PositionAggregate) CanClose() error {
 // --- Apply (state reconstitution) ---
 
 // Apply processes a domain event and updates aggregate state.
+//
+// Both internal event types (emitted by Open/Close command methods) and the
+// public domain.*Event types dispatched on the domain.EventDispatcher are
+// handled. The latter lets the projection pipeline feed live position events
+// from the bus into the aggregate directly.
 func (p *PositionAggregate) Apply(event domain.Event) {
 	switch e := event.(type) {
 	case *positionOpenedEvent:
@@ -139,6 +144,24 @@ func (p *PositionAggregate) Apply(event domain.Event) {
 		p.Status = PositionStatusClosed
 		p.Quantity = domain.Quantity{} // zero value
 		p.ClosedAt = e.timestamp
+	case domain.PositionOpenedEvent:
+		p.Email = e.Email
+		p.Instrument = e.Instrument
+		p.TransactionType = e.TransactionType
+		p.Quantity = e.Qty
+		p.AvgPrice = e.AvgPrice
+		p.Status = PositionStatusOpen
+		p.OpenedAt = e.Timestamp
+	case domain.PositionClosedEvent:
+		p.Status = PositionStatusClosed
+		p.Quantity = domain.Quantity{} // zero value
+		p.ClosedAt = e.Timestamp
+		if a := (domain.InstrumentKey{}); p.Instrument == a {
+			p.Instrument = e.Instrument
+		}
+		if p.Email == "" {
+			p.Email = e.Email
+		}
 	}
 	p.incrementVersion()
 }

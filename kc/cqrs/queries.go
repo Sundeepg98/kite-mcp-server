@@ -285,3 +285,37 @@ type GetWidgetAlertsQuery struct {
 type GetWidgetActivityQuery struct {
 	Email string `json:"email"`
 }
+
+// --- Projection queries ---
+
+// GetOrderProjectionQuery requests the current read-side projection of an
+// order aggregate, built from events dispatched on the domain.EventDispatcher.
+// Unlike GetOrderHistoryQuery (which calls the broker API), this query returns
+// locally-projected state accumulated from in-process domain events.
+type GetOrderProjectionQuery struct {
+	Email   string `json:"email"`
+	OrderID string `json:"order_id"`
+}
+
+// OrderProjectionResult is the read model returned by GetOrderProjectionQuery.
+type OrderProjectionResult struct {
+	OrderID         string  `json:"order_id"`
+	Status          string  `json:"status"`
+	Email           string  `json:"email"`
+	Exchange        string  `json:"exchange"`
+	Tradingsymbol   string  `json:"tradingsymbol"`
+	TransactionType string  `json:"transaction_type"`
+	OrderType       string  `json:"order_type"`
+	Product         string  `json:"product"`
+	Quantity        int     `json:"quantity"`
+	Price           float64 `json:"price"`
+	FilledPrice     float64 `json:"filled_price"`
+	FilledQuantity  int     `json:"filled_quantity"`
+	ModifyCount     int     `json:"modify_count"`
+	Version         int     `json:"version"`
+	PlacedAt        string  `json:"placed_at,omitempty"`
+	ModifiedAt      string  `json:"modified_at,omitempty"`
+	CancelledAt     string  `json:"cancelled_at,omitempty"`
+	FilledAt        string  `json:"filled_at,omitempty"`
+	Found           bool    `json:"found"`
+}
