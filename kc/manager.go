@@ -411,10 +411,42 @@ func (m *Manager) registerCQRSHandlers() {
 		return portfolioUC.Execute(ctx, msg.(cqrs.GetPortfolioQuery))
 	})
 
-	// GetOrdersQuery -> GetOrdersUseCase
+	// GetOrdersQuery -> GetOrdersUseCase, with optimistic projection fallback.
+	//
+	// When Kite returns a transient failure (rate limit, 503, timeout,
+	// connection error — classified by isBrokerUnavailable), the handler
+	// substitutes the aggregate-projection view of the caller's orders so
+	// downstream tools get a best-effort answer instead of a hard failure.
+	// This is the "full Aggregate Root pattern" unlock: the event-sourced
+	// projection becomes a read-side source of truth when the broker is
+	// unavailable, matching how papertrading already works.
+	//
+	// Auth errors (expired token, forbidden) and validation errors are
+	// NOT caught by the fallback — those must propagate so users know to
+	// re-authenticate. isBrokerUnavailable's trigger list is conservative
+	// for this reason.
 	ordersUC := usecases.NewGetOrdersUseCase(m.sessionSvc, m.Logger)
 	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrdersQuery{}), func(ctx context.Context, msg any) (any, error) {
-		return ordersUC.Execute(ctx, msg.(cqrs.GetOrdersQuery))
+		q := msg.(cqrs.GetOrdersQuery)
+		orders, err := ordersUC.Execute(ctx, q)
+		if err == nil {
+			return orders, nil
+		}
+		if !isBrokerUnavailable(err) {
+			return nil, err
+		}
+		fallback := m.projectionOrdersForEmail(q.Email)
+		if len(fallback) == 0 {
+			// No projection data to serve either — surface the original
+			// broker error so the caller knows what's actually wrong.
+			return nil, err
+		}
+		m.Logger.Warn("Serving orders from projection fallback (broker unavailable)",
+			"email", q.Email,
+			"broker_error", err.Error(),
+			"projection_count", len(fallback),
+		)
+		return fallback, nil
 	})
 
 	// GetOrderHistoryQuery -> GetOrderHistoryUseCase

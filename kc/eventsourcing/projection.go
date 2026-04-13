@@ -183,6 +183,24 @@ func (p *Projector) ListActiveOrders() []*OrderAggregate {
 	return out
 }
 
+// ListOrdersForEmail returns all projected orders belonging to the given
+// email regardless of status (PLACED, MODIFIED, FILLED, CANCELLED), sorted
+// by placed-at (oldest first). Intended for the optimistic-fallback path
+// in GetOrdersQuery when Kite is rate-limited or unavailable — callers
+// get the full current-day lifecycle, not just active ones.
+func (p *Projector) ListOrdersForEmail(email string) []*OrderAggregate {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]*OrderAggregate, 0, len(p.orders))
+	for _, o := range p.orders {
+		if o.Email == email {
+			out = append(out, o)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PlacedAt.Before(out[j].PlacedAt) })
+	return out
+}
+
 // ListActiveAlerts returns all projected alerts currently in ACTIVE state,
 // sorted by created-at (oldest first).
 func (p *Projector) ListActiveAlerts() []*AlertAggregate {
