@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
@@ -62,17 +63,23 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route through ClosePositionUseCase (riskguard + broker + event dispatch).
-			uc := usecases.NewClosePositionUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				handler.manager.RiskGuard(),
-				handler.manager.EventDispatcher(),
-				handler.manager.Logger,
-			)
-			result, err := uc.Execute(ctx, session.Email, exchange, symbol, productFilter)
+			// Dispatch through CommandBus so ClosePositionUseCase runs under the
+			// shared pipeline. The session-pinned broker client rides on ctx so
+			// the handler-side resolver reuses it without another lookup.
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ClosePositionCommand{
+				Email:         session.Email,
+				Exchange:      exchange,
+				Symbol:        symbol,
+				ProductFilter: productFilter,
+			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to close position", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_position: %s", err.Error())), nil
+			}
+			result, _ := raw.(*usecases.ClosePositionResult)
+			if result == nil {
+				return mcp.NewToolResultError("close_position: unexpected nil result"), nil
 			}
 
 			return handler.MarshalResponse(map[string]any{
@@ -137,17 +144,20 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		productFilter := p.String("product", "ALL")
 
 		return handler.WithSession(ctx, "close_all_positions", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Route through CloseAllPositionsUseCase (riskguard + broker + event dispatch).
-			uc := usecases.NewCloseAllPositionsUseCase(
-				&sessionBrokerResolver{client: session.Broker},
-				handler.manager.RiskGuard(),
-				handler.manager.EventDispatcher(),
-				handler.manager.Logger,
-			)
-			result, err := uc.Execute(ctx, session.Email, productFilter)
+			// Dispatch through CommandBus so CloseAllPositionsUseCase runs under
+			// the shared pipeline. Session-pinned broker client rides on ctx.
+			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.CloseAllPositionsCommand{
+				Email:         session.Email,
+				ProductFilter: productFilter,
+			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to close all positions", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: %s", err.Error())), nil
+			}
+			result, _ := raw.(*usecases.CloseAllResult)
+			if result == nil {
+				return mcp.NewToolResultError("close_all_positions: unexpected nil result"), nil
 			}
 
 			if result.Total == 0 {

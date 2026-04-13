@@ -530,6 +530,9 @@ func (m *Manager) registerCQRSHandlers() {
 	// --- CommandBus batch C: Admin + Alerts + MF + Ticker + Native alerts (STEP 10) ---
 	m.registerAdminCommands()
 
+	// --- CommandBus batch E: exit_tools (close_position, close_all_positions) (STEP 13) ---
+	m.registerExitCommands()
+
 	// --- QueryBus batch D: remaining read tool migrations ---
 	m.registerRemainingQueries()
 }

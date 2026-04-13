@@ -9,9 +9,17 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
+
+// ExecuteCommand is the CQRS-bus adapter: unpacks a ClosePositionCommand and
+// delegates to Execute. Preserves Execute's raw-arg signature for the existing
+// test corpus while giving the CommandBus a typed entry point.
+func (uc *ClosePositionUseCase) ExecuteCommand(ctx context.Context, cmd cqrs.ClosePositionCommand) (*ClosePositionResult, error) {
+	return uc.Execute(ctx, cmd.Email, cmd.Exchange, cmd.Symbol, cmd.ProductFilter)
+}
 
 // ClosePositionUseCase closes a single position by placing an opposite MARKET order.
 // Pipeline: find position -> riskguard check -> place opposite order -> domain event.
