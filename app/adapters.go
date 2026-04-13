@@ -432,6 +432,8 @@ func deriveAggregateID(e domain.Event) string {
 		return ev.By
 	case domain.FamilyInvitedEvent:
 		return ev.AdminEmail
+	case domain.FamilyMemberRemovedEvent:
+		return ev.AdminEmail
 	case domain.RiskLimitBreachedEvent:
 		return ev.Email
 	case domain.SessionCreatedEvent:

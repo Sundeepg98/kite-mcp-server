@@ -189,6 +189,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("user.suspended", makeEventPersister(eventStore, "User", app.logger))
 			eventDispatcher.Subscribe("global.freeze", makeEventPersister(eventStore, "Global", app.logger))
 			eventDispatcher.Subscribe("family.invited", makeEventPersister(eventStore, "Family", app.logger))
+			eventDispatcher.Subscribe("family.member_removed", makeEventPersister(eventStore, "Family", app.logger))
 			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
 			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
