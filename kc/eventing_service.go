@@ -22,10 +22,15 @@ func (e *EventingService) Dispatcher() *domain.EventDispatcher { return e.m.even
 
 // SetDispatcher sets the domain event dispatcher and subscribes the read-side
 // projector so order/alert/position events flow into the live aggregate maps.
+// Also wires the dispatcher into the session service so new MCP sessions
+// emit SessionCreatedEvent.
 func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	e.m.eventDispatcher = d
 	if d != nil && e.m.projector != nil {
 		e.m.projector.Subscribe(d)
+	}
+	if e.m.sessionSvc != nil {
+		e.m.sessionSvc.SetEventDispatcher(d)
 	}
 }
 

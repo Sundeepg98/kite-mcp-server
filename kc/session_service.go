@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/mock"
 	zerodha "github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // SessionService owns MCP session lifecycle: creation, retrieval, validation,
@@ -24,6 +25,7 @@ type SessionService struct {
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
 	auditStore     AuditStoreInterface  // optional: for synthetic events
+	events         *domain.EventDispatcher // optional: dispatches SessionCreatedEvent on new sessions
 	logger         *slog.Logger
 	metrics        metricsTracker       // thin interface to avoid importing metrics package
 	devMode        bool                 // when true, inject mock broker instead of real Kite client
@@ -91,6 +93,14 @@ func (ss *SessionService) SetAuditStore(store AuditStoreInterface) {
 // Intended for tests that need to inject a mock broker.Factory.
 func (ss *SessionService) SetBrokerFactory(f broker.Factory) {
 	ss.brokerFactory = f
+}
+
+// SetEventDispatcher wires the domain event dispatcher so the service can
+// emit SessionCreatedEvent on every new MCP session. Optional — a nil
+// dispatcher disables the side-effect (existing behavior). Called from the
+// Manager after its dispatcher is built.
+func (ss *SessionService) SetEventDispatcher(d *domain.EventDispatcher) {
+	ss.events = d
 }
 
 // createKiteSessionData creates new KiteSessionData for a session.
@@ -227,6 +237,26 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 
 	if isNew {
 		ss.logger.Debug("Successfully created new Kite data for MCP session ID", "session_id", mcpSessionID)
+		// Dispatch SessionCreatedEvent so the audit log gets a durable record
+		// of session establishment. Nil-safe — if no dispatcher wired (tests,
+		// early boot), silently skip. The app/wire.go subscribes this event
+		// via makeEventPersister("Session", ...).
+		if ss.events != nil {
+			effectiveEmail := email
+			if effectiveEmail == "" {
+				effectiveEmail = kiteData.Email
+			}
+			brokerName := "zerodha"
+			if ss.devMode {
+				brokerName = "mock"
+			}
+			ss.events.Dispatch(domain.SessionCreatedEvent{
+				Email:     effectiveEmail,
+				SessionID: mcpSessionID,
+				Broker:    brokerName,
+				Timestamp: time.Now(),
+			})
+		}
 	} else {
 		ss.logger.Debug("Successfully retrieved existing Kite data for MCP session ID", "session_id", mcpSessionID)
 	}
