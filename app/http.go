@@ -438,16 +438,23 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	app.registerTelegramWebhook(mux, kcManager)
 
 	// Health check endpoint for load balancers and container orchestration.
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status":  "ok",
-			"uptime":  time.Since(app.startTime).Truncate(time.Second).String(),
-			"version": app.Version,
-			"tools":   len(mcp.GetAllTools()),
-		})
-	})
+	//
+	// Two response shapes, selected by the ?format=json query param:
+	//
+	//   GET /healthz              → always 200 with a flat JSON liveness body.
+	//                               Shape is unchanged for legacy callers
+	//                               (status, uptime, version, tools).
+	//   GET /healthz?format=json  → 200 with a richer component-level body
+	//                               that surfaces degraded states (audit
+	//                               disabled, audit buffer dropping, risk
+	//                               limits not loaded, etc.). Ops use this
+	//                               to detect silent failures without
+	//                               waiting for user complaints.
+	//
+	// The endpoint does NOT perform any runtime probes — all data is read
+	// from accessors already populated during startup, so response time
+	// stays well under 5ms.
+	mux.HandleFunc("/healthz", app.handleHealthz)
 
 	// Favicon — serve SVG from embedded static files.
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
@@ -485,6 +492,129 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	app.serveLegalPages(mux)
 	app.serveStatusPage(mux)
 	return mux
+}
+
+// handleHealthz serves the /healthz endpoint. Behaviour:
+//
+//   - Default (no ?format=json): returns the legacy flat JSON body. Existing
+//     load balancers, container orchestrators, and uptime checkers keep
+//     working unchanged.
+//   - ?format=json: returns a richer component-level body. Ops tooling uses
+//     this to detect silent failures (audit disabled, audit buffer dropping
+//     entries, riskguard running on defaults only in DevMode, etc.).
+//
+// The endpoint always returns 200 when the process is alive. A top-level
+// status of "degraded" signals that one or more components are unhealthy
+// but the process itself is responding. There is no "failed" path from
+// here — if the process can't serve the request, it wouldn't respond at
+// all (5xx or connection refused).
+func (app *App) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if r.URL.Query().Get("format") == "json" {
+		_ = json.NewEncoder(w).Encode(app.buildHealthzReport())
+		return
+	}
+
+	// Legacy flat response — preserved verbatim for callers that don't
+	// know about the richer format.
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":  "ok",
+		"uptime":  time.Since(app.startTime).Truncate(time.Second).String(),
+		"version": app.Version,
+		"tools":   len(mcp.GetAllTools()),
+	})
+}
+
+// healthzComponent is a single entry in the healthz components map.
+type healthzComponent struct {
+	Status       string `json:"status"`
+	DroppedCount int64  `json:"dropped_count,omitempty"`
+	Note         string `json:"note,omitempty"`
+}
+
+// healthzReport is the shape returned by /healthz?format=json.
+type healthzReport struct {
+	Status     string                      `json:"status"`
+	UptimeS    int64                       `json:"uptime_s"`
+	Version    string                      `json:"version"`
+	Components map[string]healthzComponent `json:"components"`
+}
+
+// buildHealthzReport assembles the component-level health report from
+// existing accessors. It performs no I/O and no runtime probes — all data
+// is sourced from state populated at startup.
+func (app *App) buildHealthzReport() healthzReport {
+	components := map[string]healthzComponent{
+		"audit":             app.auditComponentStatus(),
+		"riskguard":         app.riskguardComponentStatus(),
+		"kite_connectivity": {
+			Status: "unknown",
+			Note:   "not checked — no active session to probe",
+		},
+		"litestream": {
+			Status: "unknown",
+			Note:   "external binary — no in-process accessor available",
+		},
+	}
+
+	// Top-level status degrades if any component is not ok/unknown.
+	// unknown is treated as non-degrading so we don't cry wolf on
+	// components we can't probe yet.
+	topStatus := "ok"
+	for _, c := range components {
+		switch c.Status {
+		case "ok", "unknown":
+			// healthy or unprobed — no change.
+		default:
+			topStatus = "degraded"
+		}
+	}
+
+	return healthzReport{
+		Status:     topStatus,
+		UptimeS:    int64(time.Since(app.startTime).Seconds()),
+		Version:    app.Version,
+		Components: components,
+	}
+}
+
+// auditComponentStatus reports the audit trail health.
+func (app *App) auditComponentStatus() healthzComponent {
+	if app.auditStore == nil {
+		return healthzComponent{
+			Status: "disabled",
+			Note:   "audit store init failed — no compliance logging",
+		}
+	}
+	if dropped := app.auditStore.DroppedCount(); dropped > 0 {
+		return healthzComponent{
+			Status:       "dropping",
+			DroppedCount: dropped,
+			Note:         "audit buffer overflow — compliance gap",
+		}
+	}
+	return healthzComponent{Status: "ok"}
+}
+
+// riskguardComponentStatus reports the risk guard health.
+func (app *App) riskguardComponentStatus() healthzComponent {
+	if app.riskGuard == nil {
+		// Should not happen in production (initializeServices returns an
+		// error before this point); surface it explicitly for DevMode.
+		return healthzComponent{
+			Status: "defaults-only",
+			Note:   "riskguard not wired — operating with SystemDefaults",
+		}
+	}
+	if !app.riskLimitsLoaded {
+		return healthzComponent{
+			Status: "defaults-only",
+			Note:   "dev mode — user-configured limits not loaded",
+		}
+	}
+	return healthzComponent{Status: "ok"}
 }
 
 // registerTelegramWebhook registers the Telegram bot webhook endpoint and

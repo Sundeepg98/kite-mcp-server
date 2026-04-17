@@ -103,6 +103,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// in-memory defaults — which would WIPE a user-configured kill switch and
 	// allow trading to proceed without their limits. Fail fast in production.
 	riskGuard := riskguard.NewGuard(app.logger)
+	// Default to "loaded" — if there's no DB (DevMode without ALERT_DB_PATH)
+	// the guard runs with SystemDefaults, which is the intended DevMode path;
+	// we only flip this to false when LoadLimits is actually attempted and fails.
+	app.riskLimitsLoaded = true
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		riskGuard.SetDB(alertDB)
 		if err := riskGuard.InitTable(); err != nil {
@@ -110,16 +114,19 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				return nil, nil, fmt.Errorf("riskguard required in production: init risk_limits table: %w", err)
 			}
 			app.logger.Error("Failed to initialize risk_limits table (DevMode: continuing)", "error", err)
+			app.riskLimitsLoaded = false
 		}
 		if err := riskGuard.LoadLimits(); err != nil {
 			if !app.DevMode {
 				return nil, nil, fmt.Errorf("riskguard required in production: load limits (refusing to start without user-configured limits): %w", err)
 			}
 			app.logger.Error("Failed to load risk limits (DevMode: continuing with defaults)", "error", err)
+			app.riskLimitsLoaded = false
 		}
 	} else if !app.DevMode {
 		return nil, nil, fmt.Errorf("riskguard required in production: no alert DB configured (set ALERT_DB_PATH)")
 	}
+	app.riskGuard = riskGuard
 	if kcManager.InstrumentsManagerConcrete() != nil {
 		// Wrap instruments manager as FreezeQuantityLookup
 		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})

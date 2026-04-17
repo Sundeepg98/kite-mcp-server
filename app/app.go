@@ -13,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -38,7 +39,17 @@ type App struct {
 	auditStore     *audit.Store
 	scheduler      *scheduler.Scheduler
 	telegramBot    *tgbot.BotHandler
-	shutdownCh     chan struct{} // injectable shutdown trigger for testing (nil = OS signals)
+	// riskGuard is the initialized risk-management engine. nil means it
+	// wasn't wired (shouldn't happen in production since initializeServices
+	// returns an error, but kept as a defensive check for ops visibility).
+	riskGuard *riskguard.Guard
+	// riskLimitsLoaded is true when LoadLimits succeeded at startup. When
+	// false in DevMode, the guard is running with SystemDefaults only and
+	// any user-configured kill switches / custom limits are ignored.
+	// Production startup fails when LoadLimits fails, so this is only
+	// observable in DevMode.
+	riskLimitsLoaded bool
+	shutdownCh       chan struct{} // injectable shutdown trigger for testing (nil = OS signals)
 }
 
 // StatusPageData holds template data for the status page

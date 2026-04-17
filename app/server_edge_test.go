@@ -29,6 +29,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -1162,6 +1163,180 @@ func TestSetupMux_Healthz_Content(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", body["status"])
 	assert.Equal(t, "v1.2.3", body["version"])
+	// Legacy flat body: no "components" key.
+	_, hasComponents := body["components"]
+	assert.False(t, hasComponents, "plain /healthz must not include the rich component body")
+}
+
+// ===========================================================================
+// setupMux — healthz ?format=json: component-level health report
+// ===========================================================================
+
+func TestSetupMux_Healthz_JSONFormat_AllHealthy(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	// Wire a healthy audit store and a guard with limits loaded so
+	// every component reports "ok".
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	auditStore := audit.New(db)
+	require.NoError(t, auditStore.InitTable())
+	auditStore.StartWorker()
+	t.Cleanup(auditStore.Stop)
+
+	app := NewApp(testLogger())
+	app.Version = "v9.9.9"
+	app.auditStore = auditStore
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	assert.Equal(t, "ok", body["status"])
+	assert.Equal(t, "v9.9.9", body["version"])
+	assert.Contains(t, body, "uptime_s")
+
+	components, ok := body["components"].(map[string]any)
+	require.True(t, ok, "components must be a map")
+	// All four components present.
+	require.Contains(t, components, "audit")
+	require.Contains(t, components, "riskguard")
+	require.Contains(t, components, "kite_connectivity")
+	require.Contains(t, components, "litestream")
+
+	audit, _ := components["audit"].(map[string]any)
+	assert.Equal(t, "ok", audit["status"])
+
+	rg, _ := components["riskguard"].(map[string]any)
+	assert.Equal(t, "ok", rg["status"])
+
+	kite, _ := components["kite_connectivity"].(map[string]any)
+	assert.Equal(t, "unknown", kite["status"])
+	assert.NotEmpty(t, kite["note"])
+}
+
+func TestSetupMux_Healthz_JSONFormat_AuditDisabled(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	app := NewApp(testLogger())
+	app.Version = "v9.9.9"
+	// Simulate audit init failure in DevMode (startup continues, auditStore is nil).
+	app.auditStore = nil
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	// Audit disabled is a degraded condition at the top level.
+	assert.Equal(t, "degraded", body["status"])
+
+	components := body["components"].(map[string]any)
+	audit := components["audit"].(map[string]any)
+	assert.Equal(t, "disabled", audit["status"])
+	assert.NotEmpty(t, audit["note"])
+}
+
+func TestSetupMux_Healthz_JSONFormat_RiskLimitsNotLoaded(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	auditStore := audit.New(db)
+	require.NoError(t, auditStore.InitTable())
+	auditStore.StartWorker()
+	t.Cleanup(auditStore.Stop)
+
+	app := NewApp(testLogger())
+	app.auditStore = auditStore
+	// Simulate LoadLimits failure in DevMode — guard is running with SystemDefaults.
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = false
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	// Risk limits not loaded is a degraded condition.
+	assert.Equal(t, "degraded", body["status"])
+
+	components := body["components"].(map[string]any)
+	rg := components["riskguard"].(map[string]any)
+	assert.Equal(t, "defaults-only", rg["status"])
+	assert.NotEmpty(t, rg["note"])
+}
+
+// buildHealthzReport is the unit-testable core of handleHealthz. Exercising it
+// directly (bypassing the mux + HTTP layer) keeps the latency-sensitive path
+// small and makes edge cases easy to cover.
+
+func TestBuildHealthzReport_AuditDropping(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	// Create the store WITHOUT InitTable — Record() will fail because the
+	// tool_calls table doesn't exist. Without StartWorker the sync-fallback
+	// path runs, which increments droppedCount when Record fails.
+	auditStore := audit.New(db)
+	auditStore.Enqueue(&audit.ToolCall{CallID: "dropped-test", ToolName: "x"})
+	require.Greater(t, auditStore.DroppedCount(), int64(0),
+		"test setup: expected Enqueue without a table to drop the entry")
+
+	app := NewApp(testLogger())
+	app.auditStore = auditStore
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	report := app.buildHealthzReport()
+
+	assert.Equal(t, "degraded", report.Status)
+	assert.Equal(t, "dropping", report.Components["audit"].Status)
+	assert.Greater(t, report.Components["audit"].DroppedCount, int64(0))
+	assert.NotEmpty(t, report.Components["audit"].Note)
+}
+
+func TestBuildHealthzReport_RiskGuardNil(t *testing.T) {
+	app := NewApp(testLogger())
+	app.auditStore = nil // already "disabled"
+	app.riskGuard = nil  // never wired — should report defaults-only
+	app.riskLimitsLoaded = true
+
+	report := app.buildHealthzReport()
+
+	assert.Equal(t, "degraded", report.Status)
+	assert.Equal(t, "defaults-only", report.Components["riskguard"].Status)
+	assert.NotEmpty(t, report.Components["riskguard"].Note)
+	assert.Equal(t, "disabled", report.Components["audit"].Status)
 }
 
 // ===========================================================================
