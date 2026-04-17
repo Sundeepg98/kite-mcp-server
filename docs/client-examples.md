@@ -4,6 +4,8 @@ Copy-paste-ready interactions for each MCP client surface. The [Cookbook](cookbo
 
 All four surfaces point at the same endpoint: `https://kite-mcp-server.fly.dev/mcp`. The registry listing lives in [`server.json`](../server.json); version history is in [`CHANGELOG.md`](../CHANGELOG.md).
 
+For API-billed / quota-free usage, see [BYO API Key](./byo-api-key.md).
+
 ---
 
 ## 1. claude.ai Web

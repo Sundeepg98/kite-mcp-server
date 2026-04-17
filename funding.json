@@ -1,0 +1,88 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Sundeep Govarthinam",
+    "email": "g.karthick.renusharmafoundation@gmail.com",
+    "description": "Independent software engineer based in Bengaluru, India. Active Kite Connect developer for 2+ years, maintaining the Kite MCP Server — an MIT-licensed MCP (Model Context Protocol) server that extends Zerodha's upstream read-only MCP with order placement, alerts, paper trading, options analytics, backtesting, and safety controls. Indian Pvt Ltd incorporation pending.",
+    "webpageUrl": {
+      "url": "https://github.com/Sundeepg98"
+    }
+  },
+  "projects": [
+    {
+      "guid": "kite-mcp-server",
+      "name": "Kite MCP Server",
+      "description": "Open-source MCP (Model Context Protocol) server for Zerodha Kite Connect. Extends Zerodha's official read-only MCP with ~80 tools covering order placement, price alerts, Telegram briefings, paper trading, options Greeks (Black-Scholes), backtesting (4 strategies), technical indicators, portfolio rebalancing, sector exposure, tax-harvest analysis, and a riskguard safety layer (kill switch, order caps, rate limits). Per-user OAuth with AES-256-GCM encrypted credential storage. Ships MCP widgets for Claude.ai / Claude Desktop, a 24/7 Telegram trading bot, and a full audit trail. Production deployment on Fly.io. 330+ tests, Go 1.25, MIT licensed.",
+      "webpageUrl": {
+        "url": "https://kite-mcp-server.fly.dev/"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/Sundeepg98/kite-mcp-server",
+        "wellKnown": "https://github.com/Sundeepg98/kite-mcp-server/blob/main/funding.json"
+      },
+      "licenses": [
+        "spdx:MIT"
+      ],
+      "tags": [
+        "go",
+        "mcp",
+        "model-context-protocol",
+        "zerodha",
+        "kite-connect",
+        "trading",
+        "algo-trading",
+        "ai",
+        "llm",
+        "claude",
+        "open-source",
+        "fintech",
+        "india"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "grant-email",
+        "type": "other",
+        "address": "g.karthick.renusharmafoundation@gmail.com",
+        "description": "Direct grant disbursement via email coordination. Bank transfer / UPI / international wire details will be shared on grant approval. GitHub Sponsors setup pending post-incorporation."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "small-grant",
+        "status": "active",
+        "name": "Small grant — essentials",
+        "description": "Covers Indian Pvt Ltd incorporation and first-year compliance, trademark registration (Class 36 + 42), and an independent CERT-In VAPT security audit. Unlocks the legal and security baseline required to offer the service commercially and apply for NSE/BSE empanelment.",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["grant-email"]
+      },
+      {
+        "guid": "mid-grant",
+        "status": "active",
+        "name": "Mid grant — 6-month focused runway",
+        "description": "Small-grant scope PLUS 6 months of full-time maintainer runway. Deliverables: BYO-API-key hedge, multi-broker adapter (Dhan port), concall/FII-DII analytics tools, NSE empanelment application. Enables sustained, focused development instead of weekend hacking.",
+        "amount": 25000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["grant-email"]
+      },
+      {
+        "guid": "annual-stipend",
+        "status": "active",
+        "name": "Annual maintenance stipend",
+        "description": "Year-long stipend for continuous maintenance, security patches, upstream sync with zerodha/kite-mcp-server, MCP protocol updates, user support, and periodic independent security audits. Keeps the project healthy for the broader Kite developer ecosystem.",
+        "amount": 50000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": ["grant-email"]
+      }
+    ],
+    "history": []
+  }
+}
