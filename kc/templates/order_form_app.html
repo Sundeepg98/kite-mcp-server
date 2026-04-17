@@ -530,7 +530,7 @@ $placeBtn.addEventListener('click', async function() {
     updateButtonLabel();
     try {
       var params = getOrderParams();
-      var result = await AppBridge.callServerTool('pre_trade_check', params);
+      var result = await AppBridge.callServerTool('order_risk_report', params);
       lastPreTrade = result;
 
       // Parse pre-trade response
