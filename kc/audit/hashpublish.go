@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -130,6 +131,13 @@ type HashTipPublication struct {
 // If cfg is not Enabled(), logs a single informational line and returns
 // without starting any goroutine. This is the intended behaviour for
 // unconfigured deployments.
+//
+// If the configured S3 endpoint points at an internal / private / loopback
+// address (SSRF risk — e.g., an operator who mistakenly puts
+// AUDIT_HASH_PUBLISH_S3_ENDPOINT=http://169.254.169.254/ would leak SigV4
+// creds + audit tip hashes to the cloud metadata service), the publisher
+// refuses to start and logs an error. This is a startup-time check — fail
+// fast beats fail silently.
 func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) {
 	if logger == nil {
 		logger = slog.Default()
@@ -147,6 +155,15 @@ func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig
 		logger.Warn("Audit hash publisher: no signing key available (OAUTH_JWT_SECRET empty and AUDIT_HASH_PUBLISH_KEY unset); refusing to publish unsigned")
 		return
 	}
+	// SSRF guard: reject endpoints resolving to internal / private / loopback
+	// IPs. An attacker who can influence the env var — or an operator typo —
+	// could otherwise point the publisher at cloud metadata services
+	// (169.254.169.254), kubelet, or localhost daemons.
+	if err := ValidateS3Endpoint(cfg.S3Endpoint); err != nil {
+		logger.Error("Audit hash publisher: S3 endpoint blocked by SSRF guard; refusing to start",
+			"endpoint", cfg.S3Endpoint, "error", err)
+		return
+	}
 
 	go runHashPublisher(ctx, store, cfg, logger)
 
@@ -154,6 +171,116 @@ func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig
 		"interval", cfg.Interval,
 		"endpoint", cfg.S3Endpoint,
 		"bucket", cfg.Bucket)
+}
+
+// ValidateS3Endpoint rejects misconfigured AUDIT_HASH_PUBLISH_S3_ENDPOINT
+// values that would cause SSRF: internal/link-local, RFC 1918 private,
+// loopback, and multicast addresses. Also rejects malformed URLs and
+// non-http(s) schemes.
+//
+// Name resolution: if the host is a DNS name, all resolved IPs are checked
+// (not just the first) — belt-and-suspenders against DNS rebinding style
+// tricks at config time. If resolution fails entirely, the URL is rejected:
+// an unresolvable endpoint is useless anyway and allowing it could let a
+// later DNS flip resolve to an internal IP.
+//
+// Called at startup from StartHashPublisher. NOT called at runtime — doing
+// so on every publish would be redundant (endpoint is fixed) and would
+// couple availability to DNS uptime.
+func ValidateS3Endpoint(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return fmt.Errorf("endpoint is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse endpoint %q: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("endpoint scheme %q not allowed (require http or https)", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("endpoint has empty host: %q", raw)
+	}
+
+	// If the host parses as a literal IP, check it directly — don't feed it
+	// to the resolver.
+	if ip := net.ParseIP(host); ip != nil {
+		if reason := privateReason(ip); reason != "" {
+			return fmt.Errorf("endpoint IP %s is %s (SSRF guard)", ip, reason)
+		}
+		return nil
+	}
+
+	// Hostname: resolve and check every returned IP. Any single hit blocks.
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("resolve endpoint host %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("endpoint host %q resolved to no IPs", host)
+	}
+	for _, ip := range ips {
+		if reason := privateReason(ip); reason != "" {
+			return fmt.Errorf("endpoint host %q resolved to %s (%s); SSRF guard", host, ip, reason)
+		}
+	}
+	return nil
+}
+
+// privateReason returns a human-readable category if ip is in a blocked
+// range (loopback, link-local, private/RFC 1918, unspecified, multicast),
+// or "" if ip is considered public and safe for external PUT targets.
+func privateReason(ip net.IP) string {
+	switch {
+	case ip == nil:
+		return "invalid IP"
+	case ip.IsLoopback():
+		return "loopback"
+	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast():
+		return "link-local (includes cloud metadata 169.254.169.254)"
+	case ip.IsPrivate():
+		return "private RFC1918 / ULA"
+	case ip.IsUnspecified():
+		return "unspecified (0.0.0.0 / ::)"
+	case ip.IsMulticast():
+		return "multicast"
+	case isPrivateIP(ip):
+		// Backstop for older Go versions or edge cases net.IP.IsPrivate misses.
+		return "private"
+	}
+	return ""
+}
+
+// isPrivateIP returns true if ip is in a private range.
+// Duplicates net.IP.IsPrivate for defence-in-depth and explicit test coverage
+// of RFC 1918 ranges. Returns false for unrecognised / public IPs.
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	// net.IP.IsPrivate covers RFC 1918 (10/8, 172.16/12, 192.168/16) and
+	// RFC 4193 (fc00::/7). We rely on it as the primary test and keep the
+	// below as an explicit fallback against library quirks.
+	if ip.IsPrivate() {
+		return true
+	}
+	// IPv4 explicit ranges (redundant but unambiguous).
+	if v4 := ip.To4(); v4 != nil {
+		// 10.0.0.0/8
+		if v4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12  (172.16.0.0 – 172.31.255.255)
+		if v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if v4[0] == 192 && v4[1] == 168 {
+			return true
+		}
+	}
+	return false
 }
 
 // runHashPublisher is the goroutine body. Ticks every cfg.Interval, queries

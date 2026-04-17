@@ -5703,3 +5703,274 @@ func TestNewHandler_Minimal(t *testing.T) {
 	assert.NotNil(t, h)
 	h.Close()
 }
+
+// ===========================================================================
+// Consent cookie ordering (MCP §security-best-practices confused-deputy)
+//
+// The dashboard/session auth cookie (cookieName = "kite_jwt") is the CONSENT
+// cookie. MCP spec warns that if a server sets it BEFORE user approval, an
+// attacker can induce the server to issue the cookie without explicit consent
+// ("confused deputy"). These tests lock in the ordering: cookie is set ONLY
+// after a successful approval decision, never before.
+//
+// Note: short-lived CSRF tokens (csrf_token*, google_oauth_state) are NOT
+// consent cookies — they are nonces required to be set pre-approval. We only
+// guard the kite_jwt dashboard cookie here.
+// ===========================================================================
+
+// findAuthCookie extracts the kite_jwt Set-Cookie value (if any) from the recorder.
+// Returns "" when absent; ignores the clearing cookie (MaxAge<0).
+func findAuthCookie(t *testing.T, rr *httptest.ResponseRecorder) *http.Cookie {
+	t.Helper()
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == cookieName && c.Value != "" && c.MaxAge >= 0 {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestConsentCookie_NotSetOnAdminLogin_WrongPassword(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreWithPassword{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+		password: "correctpass",
+	})
+
+	csrfToken := "valid-csrf"
+	form := url.Values{
+		"email": {"admin@test.com"}, "password": {"wrongpass"}, "csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	// Approval failed → consent cookie MUST NOT be set
+	if c := findAuthCookie(t, rr); c != nil {
+		t.Fatalf("consent cookie set on FAILED admin login (confused-deputy): %q", c.Value)
+	}
+}
+
+func TestConsentCookie_NotSetOnAdminLogin_NotAdminRole(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	// Correct password but role != admin → must be rejected
+	h.SetUserStore(&mockAdminUserStoreWithPassword{
+		roles:    map[string]string{"user@test.com": "trader"},
+		statuses: map[string]string{"user@test.com": "active"},
+		password: "rightpass",
+	})
+
+	csrfToken := "valid-csrf"
+	form := url.Values{
+		"email": {"user@test.com"}, "password": {"rightpass"}, "csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if c := findAuthCookie(t, rr); c != nil {
+		t.Fatalf("consent cookie set for non-admin role (confused-deputy): %q", c.Value)
+	}
+}
+
+func TestConsentCookie_NotSetOnAdminLogin_CSRFMismatch(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreWithPassword{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+		password: "rightpass",
+	})
+
+	form := url.Values{
+		"email": {"admin@test.com"}, "password": {"rightpass"}, "csrf_token": {"forged"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: "server-value"})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if c := findAuthCookie(t, rr); c != nil {
+		t.Fatalf("consent cookie set despite CSRF mismatch (confused-deputy): %q", c.Value)
+	}
+}
+
+func TestConsentCookie_SetOnAdminLogin_Success(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	h.SetUserStore(&mockAdminUserStoreWithPassword{
+		roles:    map[string]string{"admin@test.com": "admin"},
+		statuses: map[string]string{"admin@test.com": "active"},
+		password: "rightpass",
+	})
+
+	csrfToken := "valid-csrf"
+	form := url.Values{
+		"email": {"admin@test.com"}, "password": {"rightpass"}, "csrf_token": {csrfToken},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/auth/admin-login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "csrf_token_admin", Value: csrfToken})
+	rr := httptest.NewRecorder()
+
+	h.HandleAdminLogin(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect after successful admin login, got %d", rr.Code)
+	}
+	c := findAuthCookie(t, rr)
+	if c == nil {
+		t.Fatal("consent cookie NOT set after successful admin login")
+	}
+	if !c.HttpOnly || !c.Secure {
+		t.Errorf("consent cookie missing HttpOnly/Secure flags: %+v", c)
+	}
+}
+
+// TestConsentCookie_NotSetOnKiteOAuthCallback_ExchangeFailure verifies that
+// the SSO dashboard cookie (set in HandleKiteOAuthCallback) is NOT set when
+// Kite token exchange fails. Confused-deputy: attacker must not induce cookie
+// issuance without a valid Kite approval upstream.
+func TestConsentCookie_NotSetOnKiteOAuthCallback_ExchangeFailure(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeFunc = func(rt string) (string, error) {
+			return "", fmt.Errorf("kite exchange failed")
+		}
+	})
+	defer h.Close()
+
+	clientID, _, _ := h.clients.Register([]string{"https://example.com/cb"}, "test")
+
+	stateData := oauthState{
+		ClientID:      clientID,
+		RedirectURI:   "https://example.com/cb",
+		CodeChallenge: "challenge",
+		State:         "s",
+	}
+	stateJSON, _ := json.Marshal(stateData)
+	encoded := base64.URLEncoding.EncodeToString(stateJSON)
+	signedData := h.signer.Sign(encoded)
+
+	req := httptest.NewRequest(http.MethodGet, "/kite/callback?data="+url.QueryEscape(signedData), nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleKiteOAuthCallback(rr, req, "any-request-token")
+
+	// Exchange failed → no SSO cookie
+	if c := findAuthCookie(t, rr); c != nil {
+		t.Fatalf("SSO cookie set despite failed Kite exchange (confused-deputy): %q", c.Value)
+	}
+}
+
+// TestConsentCookie_SetOnKiteOAuthCallback_Success verifies the SSO cookie
+// IS set when Kite exchange succeeds (approval complete). This is the
+// positive case that proves the cookie is emitted only after approval.
+func TestConsentCookie_SetOnKiteOAuthCallback_Success(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler(func(cfg *Config, s *mockSigner, e *mockExchanger) {
+		e.exchangeFunc = func(rt string) (string, error) {
+			return "user@example.com", nil
+		}
+	})
+	defer h.Close()
+
+	clientID, _, _ := h.clients.Register([]string{"https://example.com/cb"}, "test")
+
+	stateData := oauthState{
+		ClientID:      clientID,
+		RedirectURI:   "https://example.com/cb",
+		CodeChallenge: "challenge",
+		State:         "s",
+	}
+	stateJSON, _ := json.Marshal(stateData)
+	encoded := base64.URLEncoding.EncodeToString(stateJSON)
+	signedData := h.signer.Sign(encoded)
+
+	req := httptest.NewRequest(http.MethodGet, "/kite/callback?data="+url.QueryEscape(signedData), nil)
+	rr := httptest.NewRecorder()
+
+	h.HandleKiteOAuthCallback(rr, req, "valid-request-token")
+
+	// Approval succeeded → SSO cookie SHOULD be set
+	c := findAuthCookie(t, rr)
+	if c == nil {
+		t.Fatal("SSO cookie NOT set after successful Kite exchange")
+	}
+	if !c.HttpOnly || !c.Secure {
+		t.Errorf("SSO cookie missing HttpOnly/Secure flags: %+v", c)
+	}
+}
+
+// TestAuthCode_SingleUse verifies OAuth authorization codes are one-time.
+// Re-consuming a code (replay) MUST fail. Supports the confused-deputy
+// defense: even if an attacker captures a code, it cannot be reused.
+func TestAuthCode_SingleUse(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	code, err := h.authCodes.Generate(&AuthCodeEntry{
+		ClientID:      "c",
+		CodeChallenge: "cc",
+		RedirectURI:   "https://example.com/cb",
+		Email:         "user@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate auth code: %v", err)
+	}
+
+	// First consume succeeds
+	if _, ok := h.authCodes.Consume(code); !ok {
+		t.Fatal("first Consume failed — code should be valid")
+	}
+	// Second consume MUST fail (one-time use)
+	if _, ok := h.authCodes.Consume(code); ok {
+		t.Fatal("second Consume succeeded — auth code replay not prevented")
+	}
+}
+
+// TestAuthCode_TTL verifies OAuth auth codes expire after ~10 minutes.
+// Confused-deputy defense: stale codes must not be accepted indefinitely.
+// This is a static check (expiry field), not a clock wait.
+func TestAuthCode_TTL(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	before := time.Now()
+	code, err := h.authCodes.Generate(&AuthCodeEntry{ClientID: "c"})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	h.authCodes.mu.RLock()
+	entry, ok := h.authCodes.entries[code]
+	h.authCodes.mu.RUnlock()
+	if !ok {
+		t.Fatal("entry missing after generate")
+	}
+
+	ttl := entry.ExpiresAt.Sub(before)
+	if ttl < 9*time.Minute || ttl > 11*time.Minute {
+		t.Errorf("auth code TTL = %v, want ~10m", ttl)
+	}
+}
