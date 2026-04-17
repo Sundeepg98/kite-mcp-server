@@ -110,6 +110,10 @@ func GetAllTools() []Tool {
 		// Dividend & corporate actions
 		&DividendCalendarTool{},
 
+		// Earnings-call analysis (frames the LLM — returns pointer + themes,
+		// LLM fetches transcript client-side via WebFetch / Tavily).
+		&AnalyzeConcallTool{},
+
 		// SEBI compliance
 		&SEBIComplianceTool{},
 
