@@ -41,7 +41,7 @@ func (m *Manager) registerAdminCommands() error {
 // --- Admin: user lifecycle (suspend/activate/change-role) ------------------
 
 func (m *Manager) registerAdminUserCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminSuspendUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminSuspendUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminSuspendUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -61,7 +61,7 @@ func (m *Manager) registerAdminUserCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminActivateUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminActivateUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminActivateUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -75,7 +75,7 @@ func (m *Manager) registerAdminUserCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminChangeRoleCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminChangeRoleCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminChangeRoleCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -94,7 +94,7 @@ func (m *Manager) registerAdminUserCommands() error {
 // --- Admin: risk guard (freeze/unfreeze user + global) ---------------------
 
 func (m *Manager) registerAdminRiskCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminFreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -109,7 +109,7 @@ func (m *Manager) registerAdminRiskCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminUnfreezeUserCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -124,7 +124,7 @@ func (m *Manager) registerAdminRiskCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminFreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -139,7 +139,7 @@ func (m *Manager) registerAdminRiskCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminUnfreezeGlobalCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -178,7 +178,7 @@ func (r *adminBatchInstrumentResolver) GetInstrumentToken(exchange, tradingsymbo
 }
 
 func (m *Manager) registerAlertCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CreateAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CreateAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -199,7 +199,7 @@ func (m *Manager) registerAlertCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -216,7 +216,7 @@ func (m *Manager) registerAlertCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SetupTelegramCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SetupTelegramCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetupTelegramCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -235,7 +235,7 @@ func (m *Manager) registerAlertCommands() error {
 // --- Mutual Funds: place / cancel order + SIP ------------------------------
 
 func (m *Manager) registerMFCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -246,7 +246,7 @@ func (m *Manager) registerMFCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelMFOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -257,7 +257,7 @@ func (m *Manager) registerMFCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -268,7 +268,7 @@ func (m *Manager) registerMFCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelMFSIPCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -284,7 +284,7 @@ func (m *Manager) registerMFCommands() error {
 // --- Ticker: start / stop / subscribe / unsubscribe ------------------------
 
 func (m *Manager) registerTickerCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.StartTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.StartTickerCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StartTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -298,7 +298,7 @@ func (m *Manager) registerTickerCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.StopTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.StopTickerCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StopTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -312,7 +312,7 @@ func (m *Manager) registerTickerCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -326,7 +326,7 @@ func (m *Manager) registerTickerCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.UnsubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.UnsubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.UnsubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -396,7 +396,7 @@ func (m *Manager) resolveNativeAlertClient(email string) (usecases.NativeAlertCl
 }
 
 func (m *Manager) registerNativeAlertCommands() error {
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceNativeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -411,7 +411,7 @@ func (m *Manager) registerNativeAlertCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ModifyNativeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -426,7 +426,7 @@ func (m *Manager) registerNativeAlertCommands() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteNativeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)

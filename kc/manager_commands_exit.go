@@ -19,7 +19,7 @@ import (
 // SessionService transparently.
 func (m *Manager) registerExitCommands() error {
 	// --- Exit: ClosePositionCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ClosePositionCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ClosePositionCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ClosePositionCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -36,7 +36,7 @@ func (m *Manager) registerExitCommands() error {
 	}
 
 	// --- Exit: CloseAllPositionsCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CloseAllPositionsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CloseAllPositionsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CloseAllPositionsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)

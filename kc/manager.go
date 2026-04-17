@@ -411,7 +411,7 @@ func New(cfg Config) (*Manager, error) {
 func (m *Manager) registerCQRSHandlers() error {
 	// GetPortfolioQuery -> GetPortfolioUseCase
 	portfolioUC := usecases.NewGetPortfolioUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetPortfolioQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPortfolioQuery](), func(ctx context.Context, msg any) (any, error) {
 		return portfolioUC.Execute(ctx, msg.(cqrs.GetPortfolioQuery))
 	}); err != nil {
 		return err
@@ -432,7 +432,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// re-authenticate. isBrokerUnavailable's trigger list is conservative
 	// for this reason.
 	ordersUC := usecases.NewGetOrdersUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrdersQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrdersQuery)
 		orders, err := ordersUC.Execute(ctx, q)
 		if err == nil {
@@ -459,7 +459,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetOrderHistoryQuery -> GetOrderHistoryUseCase
 	orderHistoryUC := usecases.NewGetOrderHistoryUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderHistoryQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderHistoryQuery](), func(ctx context.Context, msg any) (any, error) {
 		return orderHistoryUC.Execute(ctx, msg.(cqrs.GetOrderHistoryQuery))
 	}); err != nil {
 		return err
@@ -467,7 +467,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetOrderTradesQuery -> GetOrderTradesUseCase
 	orderTradesUC := usecases.NewGetOrderTradesUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderTradesQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderTradesQuery](), func(ctx context.Context, msg any) (any, error) {
 		return orderTradesUC.Execute(ctx, msg.(cqrs.GetOrderTradesQuery))
 	}); err != nil {
 		return err
@@ -475,7 +475,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetProfileQuery -> GetProfileUseCase
 	profileUC := usecases.NewGetProfileUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetProfileQuery](), func(ctx context.Context, msg any) (any, error) {
 		return profileUC.Execute(ctx, msg.(cqrs.GetProfileQuery))
 	}); err != nil {
 		return err
@@ -483,7 +483,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetMarginsQuery -> GetMarginsUseCase
 	marginsUC := usecases.NewGetMarginsUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMarginsQuery](), func(ctx context.Context, msg any) (any, error) {
 		return marginsUC.Execute(ctx, msg.(cqrs.GetMarginsQuery))
 	}); err != nil {
 		return err
@@ -491,7 +491,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetTradesQuery -> GetTradesUseCase
 	tradesUC := usecases.NewGetTradesUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetTradesQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetTradesQuery](), func(ctx context.Context, msg any) (any, error) {
 		return tradesUC.Execute(ctx, msg.(cqrs.GetTradesQuery))
 	}); err != nil {
 		return err
@@ -499,7 +499,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetGTTsQuery -> GetGTTsUseCase
 	gttsUC := usecases.NewGetGTTsUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetGTTsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetGTTsQuery](), func(ctx context.Context, msg any) (any, error) {
 		return gttsUC.Execute(ctx, msg.(cqrs.GetGTTsQuery))
 	}); err != nil {
 		return err
@@ -508,7 +508,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// Market data queries take an email alongside the query (per usecase signature).
 	// We carry email via a dedicated envelope type so the bus can dispatch uniformly.
 	ltpUC := usecases.NewGetLTPUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetLTPQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetLTPQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetLTPQuery)
 		return ltpUC.Execute(ctx, q.Email, q)
 	}); err != nil {
@@ -516,7 +516,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	ohlcUC := usecases.NewGetOHLCUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOHLCQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOHLCQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOHLCQuery)
 		return ohlcUC.Execute(ctx, q.Email, q)
 	}); err != nil {
@@ -524,7 +524,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	quotesUC := usecases.NewGetQuotesUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetQuotesQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetQuotesQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetQuotesQuery)
 		return quotesUC.Execute(ctx, q.Email, q)
 	}); err != nil {
@@ -532,7 +532,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	histUC := usecases.NewGetHistoricalDataUseCase(m.sessionSvc, m.Logger)
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetHistoricalDataQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetHistoricalDataQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetHistoricalDataQuery)
 		return histUC.Execute(ctx, q.Email, q)
 	}); err != nil {
@@ -543,7 +543,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// FamilyService is assigned via SetFamilyService() after wire.go builds it,
 	// so it's nil at this point. Handlers resolve m.familyService lazily per
 	// dispatch, returning an error when the service is still unconfigured.
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.AdminListFamilyQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.AdminListFamilyQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.familyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
@@ -553,7 +553,7 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminInviteFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminInviteFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
 		if m.familyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
@@ -563,7 +563,7 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminRemoveFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminRemoveFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
 		if m.familyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
@@ -575,7 +575,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// GetOrderProjectionQuery -> read-side Projector lookup.
 	// The projector is in-process and fed by the domain event dispatcher.
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderProjectionQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderProjectionQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderProjectionQuery)
 		if m.projector == nil {
 			return nil, fmt.Errorf("cqrs: projector not configured")
@@ -593,7 +593,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// Unlike the in-process Projector (lost on restart), this reads the
 	// append-only EventStore and reconstitutes the order lifecycle from the
 	// persisted log. First production caller of LoadOrderFromEvents.
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderHistoryReconstitutedQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderHistoryReconstitutedQuery)
 		if m.eventStore == nil {
 			return nil, fmt.Errorf("cqrs: event store not configured")
@@ -616,7 +616,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// the aggregate ID is the order or alert ID, positions have no broker-
 	// assigned unique ID so we use PositionAggregateID() to join open and
 	// close events for the same user-instrument-product.
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetPositionHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPositionHistoryReconstitutedQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetPositionHistoryReconstitutedQuery)
 		if m.eventStore == nil {
 			return nil, fmt.Errorf("cqrs: event store not configured")
@@ -638,7 +638,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// Solves the "did my alert fire?" problem when Telegram DMs drop — the
 	// event log is the immutable source of truth. First production caller of
 	// LoadAlertFromEvents (previously only used in round-trip tests).
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetAlertHistoryReconstitutedQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetAlertHistoryReconstitutedQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetAlertHistoryReconstitutedQuery)
 		if m.eventStore == nil {
 			return nil, fmt.Errorf("cqrs: event store not configured")

@@ -39,7 +39,7 @@ import (
 func (m *Manager) registerEscapeQueries() error {
 	// --- Margin queries ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderMarginsQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderMarginsQuery)
 		uc := usecases.NewGetOrderMarginsUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)
@@ -47,7 +47,7 @@ func (m *Manager) registerEscapeQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetBasketMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetBasketMarginsQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetBasketMarginsQuery)
 		uc := usecases.NewGetBasketMarginsUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)
@@ -55,7 +55,7 @@ func (m *Manager) registerEscapeQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderChargesQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderChargesQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderChargesQuery)
 		uc := usecases.NewGetOrderChargesUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)

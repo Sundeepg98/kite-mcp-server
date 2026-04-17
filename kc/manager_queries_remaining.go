@@ -18,7 +18,7 @@ import (
 func (m *Manager) registerRemainingQueries() error {
 	// --- Watchlist queries ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetWatchlistQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetWatchlistQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.watchlistStore == nil {
 			return nil, fmt.Errorf("cqrs: watchlist store not configured")
 		}
@@ -28,7 +28,7 @@ func (m *Manager) registerRemainingQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.ListWatchlistsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.ListWatchlistsQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.watchlistStore == nil {
 			return nil, fmt.Errorf("cqrs: watchlist store not configured")
 		}
@@ -44,7 +44,7 @@ func (m *Manager) registerRemainingQueries() error {
 	// above (in registerCQRSHandlers) may not exist in batch D's parallel
 	// world, so we register defensively here. Register is last-write-wins on
 	// the reflect type key, matching the existing bus behavior.
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetAlertsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetAlertsQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.alertStore == nil {
 			return nil, fmt.Errorf("cqrs: alert store not configured")
 		}
@@ -56,7 +56,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Native alert queries (session-scoped NativeAlertClient via ctx) ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.ListNativeAlertsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.ListNativeAlertsQuery](), func(ctx context.Context, msg any) (any, error) {
 		raw := cqrs.NativeAlertClientFromContext(ctx)
 		if raw == nil {
 			return nil, fmt.Errorf("cqrs: native alert client not attached to context")
@@ -71,7 +71,7 @@ func (m *Manager) registerRemainingQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetNativeAlertHistoryQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetNativeAlertHistoryQuery](), func(ctx context.Context, msg any) (any, error) {
 		raw := cqrs.NativeAlertClientFromContext(ctx)
 		if raw == nil {
 			return nil, fmt.Errorf("cqrs: native alert client not attached to context")
@@ -88,21 +88,21 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Mutual fund queries ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetMFHoldingsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFHoldingsQuery](), func(ctx context.Context, msg any) (any, error) {
 		uc := usecases.NewGetMFHoldingsUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFHoldingsQuery))
 	}); err != nil {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetMFOrdersQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFOrdersQuery](), func(ctx context.Context, msg any) (any, error) {
 		uc := usecases.NewGetMFOrdersUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFOrdersQuery))
 	}); err != nil {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetMFSIPsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFSIPsQuery](), func(ctx context.Context, msg any) (any, error) {
 		uc := usecases.NewGetMFSIPsUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFSIPsQuery))
 	}); err != nil {
@@ -113,7 +113,7 @@ func (m *Manager) registerRemainingQueries() error {
 	// AdminListUsersQuery / AdminGetUserQuery are reused from existing defs;
 	// AdminGetRiskStatusQuery is the closest match for the "risk status" read.
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.AdminGetRiskStatusQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.AdminGetRiskStatusQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.riskGuard == nil {
 			return nil, fmt.Errorf("cqrs: risk guard not configured")
 		}
@@ -123,7 +123,7 @@ func (m *Manager) registerRemainingQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.AdminListUsersQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.AdminListUsersQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.userStore == nil {
 			return nil, fmt.Errorf("cqrs: user store not configured")
 		}
@@ -133,7 +133,7 @@ func (m *Manager) registerRemainingQueries() error {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.AdminGetUserQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.AdminGetUserQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.userStore == nil {
 			return nil, fmt.Errorf("cqrs: user store not configured")
 		}
@@ -145,7 +145,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Observability ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.ServerMetricsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.ServerMetricsQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.auditStore == nil {
 			return nil, fmt.Errorf("cqrs: audit store not configured")
 		}
@@ -157,7 +157,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- PnL ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetPnLJournalQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPnLJournalQuery](), func(ctx context.Context, msg any) (any, error) {
 		svc := m.PnLService()
 		if svc == nil {
 			return nil, fmt.Errorf("cqrs: pnl service not configured")
@@ -170,14 +170,14 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Trading context + pre-trade (BrokerResolver via sessionSvc) ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.TradingContextQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.TradingContextQuery](), func(ctx context.Context, msg any) (any, error) {
 		uc := usecases.NewTradingContextUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.TradingContextQuery))
 	}); err != nil {
 		return err
 	}
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.PreTradeCheckQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.PreTradeCheckQuery](), func(ctx context.Context, msg any) (any, error) {
 		uc := usecases.NewPreTradeCheckUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.PreTradeCheckQuery))
 	}); err != nil {
@@ -186,7 +186,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Paper trading status ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.PaperTradingStatusQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.PaperTradingStatusQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.paperEngine == nil {
 			return nil, fmt.Errorf("cqrs: paper engine not configured")
 		}
@@ -198,7 +198,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Trailing stops ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.ListTrailingStopsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.ListTrailingStopsQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.trailingStopMgr == nil {
 			return nil, fmt.Errorf("cqrs: trailing stop manager not configured")
 		}
@@ -210,7 +210,7 @@ func (m *Manager) registerRemainingQueries() error {
 
 	// --- Ticker status ---
 
-	if err := m.queryBus.Register(reflect.TypeOf(cqrs.TickerStatusQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.TickerStatusQuery](), func(ctx context.Context, msg any) (any, error) {
 		if m.tickerService == nil {
 			return nil, fmt.Errorf("cqrs: ticker service not configured")
 		}

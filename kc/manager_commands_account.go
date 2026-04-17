@@ -16,7 +16,7 @@ import (
 // them, keeping the single source of business logic.
 func (m *Manager) registerAccountCommands() error {
 	// --- Account: DeleteMyAccountCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteMyAccountCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteMyAccountCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteMyAccountCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -56,7 +56,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Account: UpdateMyCredentialsCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.UpdateMyCredentialsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.UpdateMyCredentialsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.UpdateMyCredentialsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -68,7 +68,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Watchlist: CreateWatchlistCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CreateWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CreateWatchlistCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -80,7 +80,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Watchlist: DeleteWatchlistCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteWatchlistCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -92,7 +92,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Watchlist: AddToWatchlistCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AddToWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AddToWatchlistCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AddToWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -104,7 +104,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Watchlist: RemoveFromWatchlistCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.RemoveFromWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.RemoveFromWatchlistCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.RemoveFromWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -116,7 +116,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Paper: PaperTradingToggleCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingToggleCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PaperTradingToggleCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PaperTradingToggleCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -131,7 +131,7 @@ func (m *Manager) registerAccountCommands() error {
 	}
 
 	// --- Paper: PaperTradingResetCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingResetCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PaperTradingResetCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PaperTradingResetCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)

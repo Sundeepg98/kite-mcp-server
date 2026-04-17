@@ -21,7 +21,7 @@ import (
 // fall back to the Manager's SessionService.
 func (m *Manager) registerOrderCommands() error {
 	// --- Order: PlaceOrderCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -38,7 +38,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- Order: ModifyOrderCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ModifyOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -55,7 +55,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- Order: CancelOrderCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -71,7 +71,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- GTT: PlaceGTTCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceGTTCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -83,7 +83,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- GTT: ModifyGTTCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ModifyGTTCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -95,7 +95,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- GTT: DeleteGTTCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteGTTCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -111,7 +111,7 @@ func (m *Manager) registerOrderCommands() error {
 	// resolves through the Manager's SessionService rather than a pinned
 	// broker, so we register it the same way — sessionSvc satisfies
 	// usecases.BrokerResolver on its own.
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ConvertPositionCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ConvertPositionCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ConvertPositionCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -126,7 +126,7 @@ func (m *Manager) registerOrderCommands() error {
 	// SetTrailingStop talks to TrailingStopManager, not a broker, so no
 	// resolver needed. We still guard against nil manager because the
 	// trailing-stop feature depends on SQLite persistence being wired in.
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SetTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SetTrailingStopCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetTrailingStopCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -141,7 +141,7 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- Trailing stop: CancelTrailingStopCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CancelTrailingStopCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelTrailingStopCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)

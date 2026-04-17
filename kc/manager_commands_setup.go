@@ -21,7 +21,7 @@ import (
 // `m` directly as the narrow port.
 func (m *Manager) registerSetupCommands() error {
 	// --- Setup: LoginCommand ---
-	if err := m.commandBus.Register(reflect.TypeOf(cqrs.LoginCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.LoginCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.LoginCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
