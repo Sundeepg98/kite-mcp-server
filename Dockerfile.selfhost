@@ -57,6 +57,8 @@ ENV TZ=Asia/Kolkata \
     ALERT_DB_PATH=/data/alerts.db
 
 COPY --from=builder /app/kite-mcp-server /usr/local/bin/kite-mcp-server
+COPY LICENSE /LICENSE
+COPY NOTICE /NOTICE
 
 LABEL io.modelcontextprotocol.server.name="io.github.sundeepg98/kite-trading" \
       org.opencontainers.image.title="kite-mcp-server (self-hosted)" \

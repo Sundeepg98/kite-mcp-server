@@ -1,0 +1,16 @@
+Kite MCP Server
+---------------
+
+This product is a fork of Zerodha's open-source Kite MCP Server
+(https://github.com/zerodha/kite-mcp-server), licensed under MIT.
+
+Copyright (c) 2025 Zerodha Tech
+Copyright (c) 2026 Sundeep Govarthinam (derivative work and added features)
+
+Licensed under the MIT License. See LICENSE for the full text.
+
+Third-party notices:
+- gokiteconnect (github.com/zerodha/gokiteconnect) — Apache 2.0
+- mcp-go (github.com/mark3labs/mcp-go) — MIT
+- Fly.io hosting — commercial SaaS
+- Litestream (github.com/benbjohnson/litestream) — Apache 2.0

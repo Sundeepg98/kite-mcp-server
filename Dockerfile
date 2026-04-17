@@ -17,6 +17,8 @@ RUN apk add --no-cache ca-certificates tzdata bash && \
     adduser -D -H appuser && \
     mkdir -p /data && chown appuser /data
 COPY --from=builder /app/kite-mcp-server /usr/local/bin/
+COPY LICENSE /LICENSE
+COPY NOTICE /NOTICE
 COPY --from=builder /usr/local/bin/litestream /usr/local/bin/litestream
 COPY etc/litestream.yml /etc/litestream.yml
 COPY scripts/run.sh /scripts/run.sh
