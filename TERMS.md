@@ -1,9 +1,12 @@
 # Terms of Service
 
-**Kite MCP Server** | Effective: 3 April 2026 | Last updated: 3 April 2026
+> [!WARNING]
+> **DRAFT - UNDER LEGAL REVIEW. These Terms are not currently in force. The service is in private/technical preview and no binding contractual relationship is established by its use.**
+
+**Kite MCP Server** | **Status: DRAFT - pending independent legal review. Not currently in force.**
 
 > [!IMPORTANT]
-> **LAWYER REVIEW NEEDED**: This document is a good-faith draft by the operator, not reviewed by a licensed attorney. Before commercial launch, have an Indian technology/fintech lawyer review Sections 3, 6, 7, 8, and 11 in particular. Budget INR 15,000-30,000 for a proper legal review.
+> **LAWYER REVIEW NEEDED**: This document is a good-faith draft by the operator, not reviewed by a licensed attorney. Before commercial launch, have an Indian technology/fintech lawyer review Sections 3, 6, 7, 8, and 11 in particular. Budget INR 15,000-30,000 for a proper legal review. The body below is retained as reference material for future lawyer review; it does not constitute binding terms.
 
 ---
 

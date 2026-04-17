@@ -1,19 +1,27 @@
 # Privacy Policy
 
-**Kite MCP Server** | Effective: 3 April 2026 | Last updated: 3 April 2026
+> [!WARNING]
+> **DRAFT - UNDER LEGAL REVIEW. Not effective as of publication. Do not rely on this document. Service is in private/technical preview; no user-identifiable data processing occurs outside its self-host use.**
+
+**Kite MCP Server** | **Status: DRAFT - pending independent legal review. Not currently in force.**
+
+**Contact for draft review feedback:** Sundeep Govarthinam (sundeepg8@gmail.com)
 
 > [!IMPORTANT]
-> **LAWYER REVIEW NEEDED**: This policy is drafted in good faith to comply with India's Digital Personal Data Protection Act, 2023 (DPDP Act) and DPDP Rules, 2025. It has not been reviewed by a licensed attorney. Before commercial launch, have an Indian data privacy lawyer review this document. Budget INR 10,000-20,000.
+> **LAWYER REVIEW NEEDED**: This policy is drafted in good faith to comply with India's Digital Personal Data Protection Act, 2023 (DPDP Act) and DPDP Rules, 2025. It has not been reviewed by a licensed attorney. Before commercial launch, have an Indian data privacy lawyer review this document. Budget INR 10,000-20,000. The body below is retained as reference material for future lawyer review; it does not constitute an effective policy, and the Data Fiduciary framing is aspirational pending legal review.
 
 ---
 
-## 1. Who We Are (Data Fiduciary)
+## 1. Who We Are (Data Fiduciary) - Aspirational, pending legal review
 
-**Data Fiduciary:** Sundeep Govarthinam (individual, India-based)
+> [!NOTE]
+> The Data Fiduciary framing below is aspirational and applies only once this policy is reviewed by counsel and brought into force. Until then, the service operates in private/technical preview and this section does not establish a regulated Data Fiduciary relationship.
+
+**Proposed Data Fiduciary (upon policy entering into force):** Sundeep Govarthinam (individual, India-based)
 **Contact:** sundeepg8@gmail.com
 **Service:** Kite MCP Server — an AI-powered trading tool for Zerodha Kite
 
-Under the DPDP Act, 2023, the Operator acts as a **Data Fiduciary** — the person who determines the purpose and means of processing your personal data.
+Under the DPDP Act, 2023, the Operator would act as a **Data Fiduciary** — the person who determines the purpose and means of processing your personal data — once this policy is finalised and in force.
 
 ## 2. What Personal Data We Collect
 
