@@ -164,11 +164,11 @@ func (h *BotHandler) handlePortfolio(_ int64, email string) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>Portfolio (%d stocks)</b>\n", len(holdings)))
-	sb.WriteString(fmt.Sprintf("Invested: \u20B9%.0f\n", totalInvested))
-	sb.WriteString(fmt.Sprintf("Current: \u20B9%.0f\n", totalCurrent))
-	sb.WriteString(fmt.Sprintf("P&amp;L: %s (%s)\n", formatRupee(totalPnL), formatPctChange(totalPnLPct)))
-	sb.WriteString(fmt.Sprintf("Day P&amp;L: %s\n", formatRupee(totalDayPnL)))
+	fmt.Fprintf(&sb, "<b>Portfolio (%d stocks)</b>\n", len(holdings))
+	fmt.Fprintf(&sb, "Invested: \u20B9%.0f\n", totalInvested)
+	fmt.Fprintf(&sb, "Current: \u20B9%.0f\n", totalCurrent)
+	fmt.Fprintf(&sb, "P&amp;L: %s (%s)\n", formatRupee(totalPnL), formatPctChange(totalPnLPct))
+	fmt.Fprintf(&sb, "Day P&amp;L: %s\n", formatRupee(totalDayPnL))
 
 	// Top 5 by day change
 	sort.Slice(rows, func(i, j int) bool { return rows[i].DayPct > rows[j].DayPct })
@@ -181,7 +181,7 @@ func (h *BotHandler) handlePortfolio(_ int64, email string) string {
 		if r.DayPct == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("  %s %s\n", escapeHTML(r.Symbol), formatPctChange(r.DayPct)))
+		fmt.Fprintf(&sb, "  %s %s\n", escapeHTML(r.Symbol), formatPctChange(r.DayPct))
 		shown++
 	}
 
@@ -407,7 +407,7 @@ func (h *BotHandler) handlePrices(_ int64, email string, args string) string {
 	for _, sym := range symbols {
 		q, ok := quotes[sym]
 		if !ok {
-			sb.WriteString(fmt.Sprintf("  %s — not found\n", escapeHTML(sym)))
+			fmt.Fprintf(&sb, "  %s — not found\n", escapeHTML(sym))
 			continue
 		}
 
@@ -423,8 +423,8 @@ func (h *BotHandler) handlePrices(_ int64, email string, args string) string {
 			display = after
 		}
 
-		sb.WriteString(fmt.Sprintf("  <b>%s</b> \u20B9%.2f (%s)\n",
-			escapeHTML(display), q.LastPrice, formatPctChange(changePct)))
+		fmt.Fprintf(&sb, "  <b>%s</b> \u20B9%.2f (%s)\n",
+			escapeHTML(display), q.LastPrice, formatPctChange(changePct))
 	}
 
 	return sb.String()
@@ -445,11 +445,11 @@ func (h *BotHandler) handleMyWatchlist(_ int64, email string) string {
 	client, errMsg := h.newKiteClient(email)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>My Watchlists (%d)</b>\n", len(watchlists)))
+	fmt.Fprintf(&sb, "<b>My Watchlists (%d)</b>\n", len(watchlists))
 
 	for _, wl := range watchlists {
 		items := store.GetItems(wl.ID)
-		sb.WriteString(fmt.Sprintf("\n<b>%s</b> (%d items)\n", escapeHTML(wl.Name), len(items)))
+		fmt.Fprintf(&sb, "\n<b>%s</b> (%d items)\n", escapeHTML(wl.Name), len(items))
 
 		if len(items) == 0 {
 			sb.WriteString("  (empty)\n")
@@ -476,18 +476,18 @@ func (h *BotHandler) handleMyWatchlist(_ int64, email string) string {
 		for _, item := range items {
 			instrID := item.Exchange + ":" + item.Tradingsymbol
 			if ltp, ok := ltpMap[instrID]; ok && ltp > 0 {
-				sb.WriteString(fmt.Sprintf("  <b>%s</b> \u20B9%.2f", escapeHTML(item.Tradingsymbol), ltp))
+				fmt.Fprintf(&sb, "  <b>%s</b> \u20B9%.2f", escapeHTML(item.Tradingsymbol), ltp)
 				if item.TargetEntry > 0 {
-					sb.WriteString(fmt.Sprintf(" (entry: \u20B9%.2f)", item.TargetEntry))
+					fmt.Fprintf(&sb, " (entry: \u20B9%.2f)", item.TargetEntry)
 				}
 				if item.TargetExit > 0 {
-					sb.WriteString(fmt.Sprintf(" (exit: \u20B9%.2f)", item.TargetExit))
+					fmt.Fprintf(&sb, " (exit: \u20B9%.2f)", item.TargetExit)
 				}
 				sb.WriteString("\n")
 			} else {
-				sb.WriteString(fmt.Sprintf("  %s", escapeHTML(item.Tradingsymbol)))
+				fmt.Fprintf(&sb, "  %s", escapeHTML(item.Tradingsymbol))
 				if client == nil {
-					sb.WriteString(fmt.Sprintf(" — %s", errMsg))
+					fmt.Fprintf(&sb, " — %s", errMsg)
 				}
 				sb.WriteString("\n")
 			}
@@ -509,7 +509,7 @@ func (h *BotHandler) handleStatus(_ int64, email string) string {
 	if apiKey == "" {
 		sb.WriteString("API Key: <b>Not configured</b> \u274C\n")
 	} else {
-		sb.WriteString(fmt.Sprintf("API Key: ...%s \u2705\n", escapeHTML(apiKey[max(0, len(apiKey)-4):])))
+		fmt.Fprintf(&sb, "API Key: ...%s \u2705\n", escapeHTML(apiKey[max(0, len(apiKey)-4):]))
 	}
 
 	if accessToken == "" {
@@ -523,7 +523,7 @@ func (h *BotHandler) handleStatus(_ int64, email string) string {
 	// Alert count.
 	store := h.manager.AlertStoreConcrete()
 	alertCount := store.ActiveCount(email)
-	sb.WriteString(fmt.Sprintf("Active alerts: %d\n", alertCount))
+	fmt.Fprintf(&sb, "Active alerts: %d\n", alertCount)
 
 	return sb.String()
 }

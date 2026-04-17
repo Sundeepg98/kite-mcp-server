@@ -87,14 +87,14 @@ func (h *BotHandler) handleOrderCommand(chatID int64, email, args, side string) 
 
 	// Build confirmation message.
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>%s Order Confirmation</b>\n\n", side))
-	sb.WriteString(fmt.Sprintf("Symbol: <b>%s</b>\n", escapeHTML(symbol)))
-	sb.WriteString(fmt.Sprintf("Qty: <b>%d</b>\n", qty))
-	sb.WriteString(fmt.Sprintf("Type: <b>%s</b>\n", orderType))
+	fmt.Fprintf(&sb, "<b>%s Order Confirmation</b>\n\n", side)
+	fmt.Fprintf(&sb, "Symbol: <b>%s</b>\n", escapeHTML(symbol))
+	fmt.Fprintf(&sb, "Qty: <b>%d</b>\n", qty)
+	fmt.Fprintf(&sb, "Type: <b>%s</b>\n", orderType)
 	if orderType == "LIMIT" {
-		sb.WriteString(fmt.Sprintf("Price: <b>\u20B9%.2f</b>\n", price))
+		fmt.Fprintf(&sb, "Price: <b>\u20B9%.2f</b>\n", price)
 	}
-	sb.WriteString(fmt.Sprintf("Product: <b>CNC</b>\n"))
+	sb.WriteString("Product: <b>CNC</b>\n")
 
 	// Check paper mode.
 	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
@@ -168,10 +168,10 @@ func (h *BotHandler) handleQuick(chatID int64, email, args string) {
 	h.setPendingOrder(chatID, order)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>Quick %s %s Order</b>\n\n", side, orderType))
-	sb.WriteString(fmt.Sprintf("Symbol: <b>%s</b> | Qty: <b>%d</b>\n", escapeHTML(symbol), qty))
+	fmt.Fprintf(&sb, "<b>Quick %s %s Order</b>\n\n", side, orderType)
+	fmt.Fprintf(&sb, "Symbol: <b>%s</b> | Qty: <b>%d</b>\n", escapeHTML(symbol), qty)
 	if orderType == "LIMIT" {
-		sb.WriteString(fmt.Sprintf("Price: <b>\u20B9%.2f</b>\n", price))
+		fmt.Fprintf(&sb, "Price: <b>\u20B9%.2f</b>\n", price)
 	}
 	sb.WriteString("Product: <b>CNC</b>\n")
 
