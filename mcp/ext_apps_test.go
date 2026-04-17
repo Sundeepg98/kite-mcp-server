@@ -204,6 +204,26 @@ func TestInjectData(t *testing.T) {
 		// Go escapes < to \u003c, so <!-- becomes \u003c!--
 		assert.Contains(t, result, `\u003c!--injection`)
 	})
+
+	t.Run("U+2028 line separator is escaped", func(t *testing.T) {
+		// U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are valid
+		// in JSON but terminate JS string literals early — an XSS vector if
+		// an attacker can get one into widget data. json.Marshal does not
+		// escape them, so injectData must.
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		data := map[string]string{"name": "before\u2028after"}
+		result := injectData(html, data)
+		assert.NotContains(t, result, "\u2028", "raw U+2028 must not appear in output")
+		assert.Contains(t, result, `\u2028`, "U+2028 should be escaped to \\u2028")
+	})
+
+	t.Run("U+2029 paragraph separator is escaped", func(t *testing.T) {
+		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
+		data := map[string]string{"name": "before\u2029after"}
+		result := injectData(html, data)
+		assert.NotContains(t, result, "\u2029", "raw U+2029 must not appear in output")
+		assert.Contains(t, result, `\u2029`, "U+2029 should be escaped to \\u2029")
+	})
 }
 
 func TestResourceMIMEType(t *testing.T) {

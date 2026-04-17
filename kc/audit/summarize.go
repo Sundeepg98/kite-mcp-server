@@ -412,6 +412,10 @@ func jsonFloat(m map[string]any, key string) float64 {
 }
 
 // jsonString extracts a string from a JSON object map.
+//
+// Applies sanitizeForLog because JSON responses from the broker can contain
+// strings that originated as user input (e.g., order tags, symbols from user
+// searches) and any of these may be interpolated into an audit summary.
 func jsonString(m map[string]any, key string) string {
 	v, ok := m[key]
 	if !ok || v == nil {
@@ -419,9 +423,9 @@ func jsonString(m map[string]any, key string) string {
 	}
 	s, ok := v.(string)
 	if !ok {
-		return fmt.Sprintf("%v", v)
+		s = fmt.Sprintf("%v", v)
 	}
-	return s
+	return sanitizeForLog(s)
 }
 
 // formatRupee formats a float as a compact rupee string (e.g. "5.2L", "50K", "1,250").
@@ -531,12 +535,30 @@ func summarizeDefault(args map[string]any) string {
 
 // strVal safely extracts a string value from the args map.
 // Returns "" if the key is missing or the value is not a string-like type.
+//
+// User-controlled values (watchlist names, instrument IDs, order IDs, etc.)
+// are sanitized via sanitizeForLog to prevent audit log injection: an attacker
+// that controls any of these fields cannot inject newlines/CRs/tabs that would
+// forge subsequent audit rows when the summary is rendered.
 func strVal(args map[string]any, key string) string {
 	v, ok := args[key]
 	if !ok || v == nil {
 		return ""
 	}
-	return fmt.Sprintf("%v", v)
+	return sanitizeForLog(fmt.Sprintf("%v", v))
+}
+
+// sanitizeForLog escapes control characters that could forge audit rows.
+// Applied to every user-controlled string interpolated into a log/audit
+// summary. Escapes newlines, carriage returns, and tabs — the typical
+// separators used by log viewers and the activity widget to split rows
+// and columns. Replaces with the literal backslash-escape so the original
+// intent remains readable while no longer being interpreted as a separator.
+func sanitizeForLog(s string) string {
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
 
 // nonEmpty filters out empty strings from a slice.

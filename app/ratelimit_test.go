@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/oauth"
 	"golang.org/x/time/rate"
 )
 
@@ -117,6 +118,110 @@ func TestRateLimit_BlocksExcessRequests(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 	assert.Equal(t, http.StatusTooManyRequests, rec2.Code)
+}
+
+// ===========================================================================
+// userRateLimiter tests
+// ===========================================================================
+
+func TestNewUserRateLimiter(t *testing.T) {
+	rl := newUserRateLimiter(rate.Limit(10), 20)
+	assert.NotNil(t, rl)
+	assert.NotNil(t, rl.limiters)
+	assert.Equal(t, rate.Limit(10), rl.rate)
+	assert.Equal(t, 20, rl.burst)
+}
+
+func TestUserRateLimiter_GetLimiter(t *testing.T) {
+	rl := newUserRateLimiter(rate.Limit(10), 20)
+
+	// Same email returns the same limiter
+	l1 := rl.getLimiter("alice@example.com")
+	l2 := rl.getLimiter("alice@example.com")
+	assert.Same(t, l1, l2)
+
+	// Different email returns a different limiter
+	l3 := rl.getLimiter("bob@example.com")
+	assert.NotSame(t, l1, l3)
+}
+
+func TestUserRateLimiter_Cleanup(t *testing.T) {
+	rl := newUserRateLimiter(rate.Limit(10), 20)
+	_ = rl.getLimiter("a@x.com")
+	_ = rl.getLimiter("b@x.com")
+	rl.cleanup()
+	rl.mu.RLock()
+	count := len(rl.limiters)
+	rl.mu.RUnlock()
+	assert.Equal(t, 0, count)
+}
+
+// rateLimitUser must pass through when there is no authenticated email in ctx
+// (fail open on the user scope — the IP scope remains in effect upstream).
+func TestRateLimitUser_NoEmailPassesThrough(t *testing.T) {
+	limiter := newUserRateLimiter(rate.Limit(1), 1)
+	handler := rateLimitUser(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Five back-to-back requests with no email context: all must pass.
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "request %d should pass without email", i)
+	}
+}
+
+// rateLimitUser must block when the same authenticated user hammers the
+// endpoint, regardless of source IP (this is the botnet/VPN defense scenario).
+func TestRateLimitUser_BlocksSameUserAcrossIPs(t *testing.T) {
+	limiter := newUserRateLimiter(rate.Limit(1), 1)
+	handler := rateLimitUser(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request from IP1 as alice: ok.
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "1.1.1.1:1000"
+	req1 = req1.WithContext(oauth.ContextWithEmail(req1.Context(), "alice@example.com"))
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code)
+
+	// Second request from a completely different IP as alice: blocked with
+	// X-RateLimit-Scope=user header so clients can distinguish the cause.
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "9.9.9.9:2000"
+	req2 = req2.WithContext(oauth.ContextWithEmail(req2.Context(), "alice@example.com"))
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusTooManyRequests, rec2.Code)
+	assert.Equal(t, "user", rec2.Header().Get("X-RateLimit-Scope"))
+
+	// Third request as bob: fresh limiter, still ok.
+	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req3.RemoteAddr = "9.9.9.9:2000"
+	req3 = req3.WithContext(oauth.ContextWithEmail(req3.Context(), "bob@example.com"))
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	assert.Equal(t, http.StatusOK, rec3.Code)
+}
+
+// Confirms that the composite rateLimiters struct exposes the per-user
+// limiters with matching defaults (parity with IP-layer tiers).
+func TestNewRateLimiters_IncludesUserLimiters(t *testing.T) {
+	rl := newRateLimiters()
+	defer rl.Stop()
+	assert.NotNil(t, rl.authUser)
+	assert.NotNil(t, rl.tokenUser)
+	assert.NotNil(t, rl.mcpUser)
+	assert.Equal(t, rate.Limit(2), rl.authUser.rate)
+	assert.Equal(t, 5, rl.authUser.burst)
+	assert.Equal(t, rate.Limit(5), rl.tokenUser.rate)
+	assert.Equal(t, 10, rl.tokenUser.burst)
+	assert.Equal(t, rate.Limit(20), rl.mcpUser.rate)
+	assert.Equal(t, 40, rl.mcpUser.burst)
 }
 
 func TestRateLimit_UsesFlyClientIP(t *testing.T) {

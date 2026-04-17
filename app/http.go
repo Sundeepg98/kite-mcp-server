@@ -583,8 +583,11 @@ func (app *App) registerSSEEndpoints(mux *http.ServeMux, sse *server.SSEServer) 
 	sseHandler := withSessionType(mcp.SessionTypeSSE, sse.ServeHTTP)
 
 	if app.oauthHandler != nil {
-		mux.Handle("/sse", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler))))
-		mux.Handle("/message", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(sseHandler))))
+		// Chain: IP rate limit → RequireAuth → per-user rate limit → handler.
+		// Both IP and user limits must pass; user scope defends against a single
+		// authenticated identity abusing the endpoint across rotating source IPs.
+		mux.Handle("/sse", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(rateLimitUser(app.rateLimiters.mcpUser)(http.HandlerFunc(sseHandler)))))
+		mux.Handle("/message", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(rateLimitUser(app.rateLimiters.mcpUser)(http.HandlerFunc(sseHandler)))))
 	} else {
 		mux.Handle("/sse", rateLimitFunc(app.rateLimiters.mcp, sseHandler))
 		mux.Handle("/message", rateLimitFunc(app.rateLimiters.mcp, sseHandler))
@@ -626,7 +629,8 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	app.registerSSEEndpoints(mux, sse)
 	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
 	if app.oauthHandler != nil {
-		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler))))
+		// IP rate limit → RequireAuth → per-user rate limit → handler.
+		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(rateLimitUser(app.rateLimiters.mcpUser)(http.HandlerFunc(mcpHandler)))))
 	} else {
 		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
@@ -678,7 +682,8 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	// Register /mcp with optional OAuth middleware (rate limited)
 	mcpHandler := withSessionType(mcp.SessionTypeMCP, streamable.ServeHTTP)
 	if app.oauthHandler != nil {
-		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(http.HandlerFunc(mcpHandler))))
+		// IP rate limit → RequireAuth → per-user rate limit → handler.
+		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(rateLimitUser(app.rateLimiters.mcpUser)(http.HandlerFunc(mcpHandler)))))
 		app.logger.Info("OAuth middleware enabled for /mcp endpoint")
 	} else {
 		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))

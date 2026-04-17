@@ -287,6 +287,14 @@ func injectData(html string, data any) string {
 	// changes to the JSON encoding (e.g., SetEscapeHTML(false)).
 	jsonStr = strings.ReplaceAll(jsonStr, "</", `<\/`)
 	jsonStr = strings.ReplaceAll(jsonStr, "<!--", `<\!--`)
+	// U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are valid
+	// whitespace in JSON but illegal line terminators inside JS string
+	// literals. Go's json.Marshal does NOT escape them, so if attacker-
+	// controlled data contains one, the injected JSON literal terminates
+	// early in the browser and subsequent bytes execute as script — XSS.
+	// Escape to their \uXXXX form so they live harmlessly inside the string.
+	jsonStr = strings.ReplaceAll(jsonStr, "\u2028", `\u2028`)
+	jsonStr = strings.ReplaceAll(jsonStr, "\u2029", `\u2029`)
 	return strings.Replace(html, dataPlaceholder, jsonStr, 1)
 }
 

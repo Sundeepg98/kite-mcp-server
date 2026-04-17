@@ -466,3 +466,62 @@ func TestStrVal(t *testing.T) {
 	assert.Equal(t, "", strVal(args, "missing"))
 	assert.Equal(t, "true", strVal(args, "bool"))
 }
+
+// ===========================================================================
+// Log-injection sanitation — user-controlled fields must not break row format
+// ===========================================================================
+
+func TestSanitizeForLog(t *testing.T) {
+	assert.Equal(t, `foo\nbar`, sanitizeForLog("foo\nbar"))
+	assert.Equal(t, `foo\rbar`, sanitizeForLog("foo\rbar"))
+	assert.Equal(t, `foo\tbar`, sanitizeForLog("foo\tbar"))
+	assert.Equal(t, `a\r\nb`, sanitizeForLog("a\r\nb"))
+	assert.Equal(t, "clean", sanitizeForLog("clean"))
+	assert.Equal(t, "", sanitizeForLog(""))
+
+	// None of the escape outputs contains a raw control character.
+	out := sanitizeForLog("foo\nFAKE LOG: admin_change_role")
+	assert.NotContains(t, out, "\n")
+	assert.NotContains(t, out, "\r")
+	assert.NotContains(t, out, "\t")
+}
+
+func TestStrVal_SanitizesNewlines(t *testing.T) {
+	// Attacker-controlled watchlist name: attempt to inject a fake row.
+	args := map[string]any{
+		"name": "foo\nFAKE LOG: admin_change_role target=victim@test.com",
+	}
+	out := strVal(args, "name")
+	assert.NotContains(t, out, "\n", "raw newline must be escaped")
+	assert.Contains(t, out, `\n`, "newline replaced with literal \\n")
+	assert.Contains(t, out, "FAKE LOG")
+}
+
+func TestSummarizeInput_CreateWatchlist_InjectionAttempt(t *testing.T) {
+	// End-to-end: injected newline in watchlist name must not appear raw
+	// in the rendered summary — otherwise an attacker could forge rows in
+	// the activity audit widget.
+	args := map[string]any{
+		"name": "holdings\nFAKE ROW: place_order SELL 1000 RELIANCE",
+	}
+	result := SummarizeInput("create_watchlist", args)
+	assert.NotContains(t, result, "\n", "summary must not contain raw newline")
+	assert.Contains(t, result, `\n`)
+}
+
+func TestSummarizeInput_AddToWatchlist_InjectionAttempt(t *testing.T) {
+	// instruments and watchlist are both user-controlled string fields.
+	args := map[string]any{
+		"watchlist":  "main\nFAKE",
+		"instruments": "NSE:INFY\nFAKE",
+	}
+	result := SummarizeInput("add_to_watchlist", args)
+	assert.NotContains(t, result, "\n")
+}
+
+func TestJSONString_SanitizesNewlines(t *testing.T) {
+	m := map[string]any{"status": "open\nINJECTED"}
+	out := jsonString(m, "status")
+	assert.NotContains(t, out, "\n")
+	assert.Contains(t, out, `\n`)
+}
