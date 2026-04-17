@@ -89,7 +89,7 @@ func TestGetLTP_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_ltp", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.True(t, result.IsError)
 }
@@ -98,7 +98,7 @@ func TestGetOHLC_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_ohlc", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.True(t, result.IsError)
 }
@@ -107,7 +107,7 @@ func TestGetQuotes_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_quotes", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.True(t, result.IsError)
 }
@@ -205,7 +205,7 @@ func TestTechnicalIndicators_WithSession(t *testing.T) {
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "technical_indicators", "trader@example.com", map[string]any{
 		"instrument_token": float64(256265),
-		"indicators":       []interface{}{"RSI", "SMA"},
+		"indicators":       []any{"RSI", "SMA"},
 	})
 	assert.True(t, result.IsError)
 }
@@ -649,7 +649,7 @@ func TestSubscribeInstruments_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "subscribe_instruments", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.NotNil(t, result)
 }
@@ -658,7 +658,7 @@ func TestUnsubscribeInstruments_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "unsubscribe_instruments", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.NotNil(t, result)
 }
@@ -870,7 +870,7 @@ func TestDevMode_GetLTP(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_ltp", "dev@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.NotNil(t, result)
 }
@@ -879,7 +879,7 @@ func TestDevMode_GetOHLC(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_ohlc", "dev@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.NotNil(t, result)
 }
@@ -888,7 +888,7 @@ func TestDevMode_GetQuotes(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_quotes", "dev@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	assert.NotNil(t, result)
 }

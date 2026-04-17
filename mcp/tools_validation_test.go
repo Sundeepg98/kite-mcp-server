@@ -14,7 +14,7 @@ import (
 
 func TestArgParser_RawReturnsOriginalMap(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{"key": "value"}
+	args := map[string]any{"key": "value"}
 	p := NewArgParser(args)
 	assert.Same(t, &args, &args) // sanity
 	raw := p.Raw()
@@ -47,14 +47,14 @@ func TestTrackToolError_NoMetrics(t *testing.T) {
 func TestValidateRequired_NumericZero(t *testing.T) {
 	t.Parallel()
 	// Numeric zero is a valid value (not nil, not empty string)
-	args := map[string]interface{}{"qty": float64(0)}
+	args := map[string]any{"qty": float64(0)}
 	err := ValidateRequired(args, "qty")
 	assert.NoError(t, err, "numeric zero should be considered present")
 }
 
 func TestValidateRequired_BoolFalse(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{"confirm": false}
+	args := map[string]any{"confirm": false}
 	err := ValidateRequired(args, "confirm")
 	assert.NoError(t, err, "bool false should be considered present")
 }
@@ -186,7 +186,7 @@ func TestOptionsStrategy_InvalidStrategy(t *testing.T) {
 
 func TestGetLTP_TooManyInstruments(t *testing.T) {
 	mgr := newTestManager(t)
-	insts := make([]interface{}, 501)
+	insts := make([]any, 501)
 	for i := range insts {
 		insts[i] = "NSE:FAKE"
 	}
@@ -199,7 +199,7 @@ func TestGetLTP_TooManyInstruments(t *testing.T) {
 
 func TestGetOHLC_TooManyInstruments(t *testing.T) {
 	mgr := newTestManager(t)
-	insts := make([]interface{}, 501)
+	insts := make([]any, 501)
 	for i := range insts {
 		insts[i] = "NSE:FAKE"
 	}
@@ -416,7 +416,7 @@ func TestRequestConfirmation_WrongType(t *testing.T) {
 }
 
 func TestValidateRequired_NonEmptyInterfaceSlice(t *testing.T) {
-	args := map[string]interface{}{"items": []interface{}{"a", "b"}}
+	args := map[string]any{"items": []any{"a", "b"}}
 	assert.NoError(t, ValidateRequired(args, "items"))
 }
 
@@ -1563,34 +1563,34 @@ func TestSessionTool_OptionsGreeks_SessionError(t *testing.T) {
 
 func TestValidateRequired_EmptyStringValue(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{"name": ""}, "name")
+	err := ValidateRequired(map[string]any{"name": ""}, "name")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be empty")
 }
 
 func TestValidateRequired_EmptySlice(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{"items": []interface{}{}}, "items")
+	err := ValidateRequired(map[string]any{"items": []any{}}, "items")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be empty")
 }
 
 func TestValidateRequired_NilValue(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{}, "missing_param")
+	err := ValidateRequired(map[string]any{}, "missing_param")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "is required")
 }
 
 func TestValidateRequired_ValidValue(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{"name": "test"}, "name")
+	err := ValidateRequired(map[string]any{"name": "test"}, "name")
 	assert.NoError(t, err)
 }
 
 func TestValidateRequired_MultipleParams(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{
+	err := ValidateRequired(map[string]any{
 		"a": "hello",
 		"b": float64(123),
 	}, "a", "b")
@@ -1599,7 +1599,7 @@ func TestValidateRequired_MultipleParams(t *testing.T) {
 
 func TestValidateRequired_FirstMissing(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{
+	err := ValidateRequired(map[string]any{
 		"b": "hello",
 	}, "a", "b")
 	assert.Error(t, err)
@@ -1608,14 +1608,14 @@ func TestValidateRequired_FirstMissing(t *testing.T) {
 
 func TestValidateRequired_EmptyStringSlice(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{"items": []string{}}, "items")
+	err := ValidateRequired(map[string]any{"items": []string{}}, "items")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be empty")
 }
 
 func TestValidateRequired_EmptyIntSlice(t *testing.T) {
 	t.Parallel()
-	err := ValidateRequired(map[string]interface{}{"items": []int{}}, "items")
+	err := ValidateRequired(map[string]any{"items": []int{}}, "items")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be empty")
 }
@@ -1691,7 +1691,7 @@ func TestArgParser_RequiredMissing(t *testing.T) {
 func TestArgParser_StringArrayMulti(t *testing.T) {
 	t.Parallel()
 	p := NewArgParser(map[string]any{
-		"instruments": []interface{}{"NSE:INFY", "NSE:TCS"},
+		"instruments": []any{"NSE:INFY", "NSE:TCS"},
 	})
 	result := p.StringArray("instruments")
 	assert.Len(t, result, 2)
@@ -1923,7 +1923,7 @@ func TestSessionTool_GetQuotesMultiple_SessionError(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithSession(t, mgr, "get_quotes", "trader@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY", "NSE:TCS"},
+		"instruments": []any{"NSE:INFY", "NSE:TCS"},
 	})
 	assert.True(t, result.IsError)
 }
@@ -3237,8 +3237,8 @@ func TestOptionsStrategy_UnknownStrategy(t *testing.T) {
 
 func TestValidateRequired_EmptyArray_P7(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
-		"items": []interface{}{},
+	args := map[string]any{
+		"items": []any{},
 	}
 	err := ValidateRequired(args, "items")
 	assert.Error(t, err)
@@ -3246,7 +3246,7 @@ func TestValidateRequired_EmptyArray_P7(t *testing.T) {
 
 func TestValidateRequired_EmptyStringSlice_P7(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"items": []string{},
 	}
 	err := ValidateRequired(args, "items")
@@ -3255,7 +3255,7 @@ func TestValidateRequired_EmptyStringSlice_P7(t *testing.T) {
 
 func TestValidateRequired_EmptyIntSlice_P7(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"items": []int{},
 	}
 	err := ValidateRequired(args, "items")
@@ -3264,8 +3264,8 @@ func TestValidateRequired_EmptyIntSlice_P7(t *testing.T) {
 
 func TestValidateRequired_NonEmptyArray_P7(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	args := map[string]any{
+		"items": []any{"a", "b"},
 	}
 	err := ValidateRequired(args, "items")
 	assert.NoError(t, err)
@@ -3282,7 +3282,7 @@ func TestArgParser_NilArgs(t *testing.T) {
 
 func TestArgParser_TypeMismatch(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"str_as_num": "not_a_number",
 		"num_as_str": float64(42),
 	}

@@ -255,7 +255,7 @@ func TestGetLTP_RequiresInstruments(t *testing.T) {
 func TestGetQuotes_TooManyInstruments(t *testing.T) {
 	mgr := newTestManager(t)
 	// Create more than 500 instruments
-	insts := make([]interface{}, 501)
+	insts := make([]any, 501)
 	for i := range insts {
 		insts[i] = "NSE:FAKE"
 	}
@@ -358,7 +358,7 @@ func TestSetupTelegram_ZeroChatIDInvalid(t *testing.T) {
 
 func TestArgParser_InToolContext(t *testing.T) {
 	// Simulate the exact arg types MCP sends (all numbers are float64 in JSON)
-	args := map[string]interface{}{
+	args := map[string]any{
 		"exchange":           "NSE",
 		"tradingsymbol":      "INFY",
 		"quantity":           float64(10),
@@ -384,7 +384,7 @@ func TestArgParser_InToolContext(t *testing.T) {
 }
 
 func TestArgParser_RequiredInToolContext(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -405,7 +405,7 @@ func TestArgParser_RequiredInToolContext(t *testing.T) {
 
 func TestArgParser_BoolFromString(t *testing.T) {
 	// MCP sometimes sends bools as strings
-	args := map[string]interface{}{
+	args := map[string]any{
 		"confirm_true":  "true",
 		"confirm_false": "false",
 		"confirm_yes":   "yes",
@@ -458,7 +458,7 @@ func TestReadToolsNotConfirmable(t *testing.T) {
 
 func TestValidateRequired_PlaceOrderParams(t *testing.T) {
 	// Full valid place_order args
-	args := map[string]interface{}{
+	args := map[string]any{
 		"variety":          "regular",
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
@@ -473,7 +473,7 @@ func TestValidateRequired_PlaceOrderParams(t *testing.T) {
 
 	// Remove one at a time and verify error
 	for _, key := range []string{"variety", "exchange", "tradingsymbol", "transaction_type", "product", "order_type"} {
-		reduced := make(map[string]interface{})
+		reduced := make(map[string]any)
 		for k, v := range args {
 			if k != key {
 				reduced[k] = v
@@ -486,7 +486,7 @@ func TestValidateRequired_PlaceOrderParams(t *testing.T) {
 }
 
 func TestValidateRequired_AlertParams(t *testing.T) {
-	args := map[string]interface{}{
+	args := map[string]any{
 		"instrument": "NSE:INFY",
 		"price":      float64(1500),
 		"direction":  "above",
@@ -1156,7 +1156,7 @@ func TestCreatePaginatedResponse_NilPaginatedData(t *testing.T) {
 }
 
 func TestCreatePaginatedResponse_InterfaceSlice(t *testing.T) {
-	data := []interface{}{"a", "b"}
+	data := []any{"a", "b"}
 	resp := CreatePaginatedResponse(nil, data, PaginationParams{From: 0, Limit: 5}, 10)
 	assert.Equal(t, 2, resp.Pagination.Returned)
 	assert.True(t, resp.Pagination.HasMore)
@@ -2122,7 +2122,7 @@ func TestBacktestStrategy_MissingInstrument(t *testing.T) {
 func TestTechnicalIndicators_MissingInstrument(t *testing.T) {
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "technical_indicators", "trader@example.com", map[string]any{
-		"indicators": []interface{}{"RSI"},
+		"indicators": []any{"RSI"},
 		// instrument missing
 	})
 	assert.True(t, result.IsError, "technical_indicators without instrument should fail")
@@ -2149,8 +2149,8 @@ func startExtendedMockKite() *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
 
-		envOK := func(data interface{}) {
-			b, _ := json.Marshal(map[string]interface{}{"status": "success", "data": data})
+		envOK := func(data any) {
+			b, _ := json.Marshal(map[string]any{"status": "success", "data": data})
 			fmt.Fprint(w, string(b))
 		}
 
@@ -2818,7 +2818,7 @@ func TestGetLTP_EmptyInstruments(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_ltp", "dev@example.com", map[string]any{
-		"instruments": []interface{}{},
+		"instruments": []any{},
 	})
 	assert.True(t, result.IsError)
 	assert.Contains(t, resultText(t, result), "cannot be empty")
@@ -2828,7 +2828,7 @@ func TestGetOHLC_EmptyInstruments(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_ohlc", "dev@example.com", map[string]any{
-		"instruments": []interface{}{},
+		"instruments": []any{},
 	})
 	assert.True(t, result.IsError)
 	assert.Contains(t, resultText(t, result), "cannot be empty")
@@ -2838,7 +2838,7 @@ func TestGetQuotes_EmptyInstruments(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	result := callToolDevMode(t, mgr, "get_quotes", "dev@example.com", map[string]any{
-		"instruments": []interface{}{},
+		"instruments": []any{},
 	})
 	assert.True(t, result.IsError)
 	assert.Contains(t, resultText(t, result), "cannot be empty")
@@ -3175,7 +3175,7 @@ func TestSimpleToolHandler_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	handler := SimpleToolHandler(mgr, "test_tool", func(session *kc.KiteSessionData) (interface{}, error) {
+	handler := SimpleToolHandler(mgr, "test_tool", func(session *kc.KiteSessionData) (any, error) {
 		return map[string]string{"status": "ok"}, nil
 	})
 

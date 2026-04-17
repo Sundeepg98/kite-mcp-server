@@ -58,11 +58,11 @@ func TestSafeAssertFunctions(t *testing.T) {
 	t.Run("SafeAssertStringArray", func(t *testing.T) {
 		t.Parallel()
 		// Valid array with mixed types
-		result := SafeAssertStringArray([]interface{}{"hello", "world", 42, nil, ""})
+		result := SafeAssertStringArray([]any{"hello", "world", 42, nil, ""})
 		assert.Equal(t, []string{"hello", "world", "42"}, result)
 
 		// Empty array
-		result = SafeAssertStringArray([]interface{}{})
+		result = SafeAssertStringArray([]any{})
 		assert.Empty(t, result)
 
 		// Nil input
@@ -82,12 +82,12 @@ func TestSafeAssertFunctions(t *testing.T) {
 // TestArgParser tests the declarative argument parser
 func TestArgParser(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"name":    "test",
 		"count":   42,
 		"price":   3.14,
 		"active":  true,
-		"tags":    []interface{}{"a", "b"},
+		"tags":    []any{"a", "b"},
 	}
 	p := NewArgParser(args)
 
@@ -138,7 +138,7 @@ func TestValidateRequired(t *testing.T) {
 	t.Parallel()
 	t.Run("valid parameters", func(t *testing.T) {
 		t.Parallel()
-		args := map[string]interface{}{
+		args := map[string]any{
 			"param1": "value1",
 			"param2": []string{"item1", "item2"},
 			"param3": []int{1, 2, 3},
@@ -148,7 +148,7 @@ func TestValidateRequired(t *testing.T) {
 
 	t.Run("missing parameters", func(t *testing.T) {
 		t.Parallel()
-		args := map[string]interface{}{"param1": "value1"}
+		args := map[string]any{"param1": "value1"}
 		err := ValidateRequired(args, "param1", "missing")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "missing")
@@ -158,18 +158,18 @@ func TestValidateRequired(t *testing.T) {
 		t.Parallel()
 		testCases := []struct {
 			name  string
-			value interface{}
+			value any
 		}{
 			{"empty string", ""},
 			{"nil value", nil},
-			{"empty []interface{}", []interface{}{}},
+			{"empty []any", []any{}},
 			{"empty []string", []string{}},
 			{"empty []int", []int{}},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				args := map[string]interface{}{"param": tc.value}
+				args := map[string]any{"param": tc.value}
 				err := ValidateRequired(args, "param")
 				assert.Error(t, err)
 			})
@@ -205,7 +205,7 @@ func TestPagination(t *testing.T) {
 	})
 
 	t.Run("ParsePaginationParams", func(t *testing.T) {
-		args := map[string]interface{}{"from": 10, "limit": 50}
+		args := map[string]any{"from": 10, "limit": 50}
 		params := ParsePaginationParams(args)
 		assert.Equal(t, 10, params.From)
 		assert.Equal(t, 50, params.Limit)
@@ -348,7 +348,7 @@ func TestToolDashboardPage(t *testing.T) {
 		t.Parallel()
 		unmappedTools := []string{
 			"login", "open_dashboard", "stop_ticker", "unsubscribe_instruments",
-			"delete_my_account", "update_my_credentials", "server_metrics",
+			"delete_my_account", "server_metrics",
 			"get_order_projection",
 			"get_order_history_reconstituted",
 			"get_alert_history_reconstituted",
@@ -411,7 +411,7 @@ func TestRaceConditions(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				_ = ApplyPagination(data, params)
-				_ = ParsePaginationParams(map[string]interface{}{"from": 1, "limit": 2})
+				_ = ParsePaginationParams(map[string]any{"from": 1, "limit": 2})
 			}()
 		}
 		wg.Wait()

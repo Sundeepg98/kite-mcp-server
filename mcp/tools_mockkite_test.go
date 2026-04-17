@@ -34,8 +34,8 @@ import (
 
 // ── mock Kite HTTP server ───────────────────────────────────────────���──────
 
-func kiteEnv(data interface{}) string {
-	b, _ := json.Marshal(map[string]interface{}{"status": "success", "data": data})
+func kiteEnv(data any) string {
+	b, _ := json.Marshal(map[string]any{"status": "success", "data": data})
 	return string(b)
 }
 

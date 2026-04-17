@@ -34,8 +34,8 @@ import (
 // Uses the raw {"data": ...} envelope that gokiteconnect expects.
 // ---------------------------------------------------------------------------
 
-func kiteEnvelope(data interface{}) string {
-	b, _ := json.Marshal(map[string]interface{}{"status": "success", "data": data})
+func kiteEnvelope(data any) string {
+	b, _ := json.Marshal(map[string]any{"status": "success", "data": data})
 	return string(b)
 }
 
@@ -299,7 +299,7 @@ func TestWithSession_NonDevMode_GetLTP(t *testing.T) {
 	defer ts.Close()
 	mgr := newNonDevModeManager(t, ts.URL)
 	result := callToolNonDevMode(t, mgr, ts.URL, "get_ltp", "session@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	require.NotNil(t, result)
 	assert.NotContains(t, resultTextSafe(t, result), "log in first")
@@ -311,7 +311,7 @@ func TestWithSession_NonDevMode_GetOHLC(t *testing.T) {
 	defer ts.Close()
 	mgr := newNonDevModeManager(t, ts.URL)
 	result := callToolNonDevMode(t, mgr, ts.URL, "get_ohlc", "session@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	require.NotNil(t, result)
 	assert.NotContains(t, resultTextSafe(t, result), "log in first")
@@ -323,7 +323,7 @@ func TestWithSession_NonDevMode_GetQuotes(t *testing.T) {
 	defer ts.Close()
 	mgr := newNonDevModeManager(t, ts.URL)
 	result := callToolNonDevMode(t, mgr, ts.URL, "get_quotes", "session@example.com", map[string]any{
-		"instruments": []interface{}{"NSE:INFY"},
+		"instruments": []any{"NSE:INFY"},
 	})
 	require.NotNil(t, result)
 	assert.NotContains(t, resultTextSafe(t, result), "log in first")

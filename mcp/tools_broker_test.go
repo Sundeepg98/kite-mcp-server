@@ -64,8 +64,8 @@ func startMockKiteForFactory() *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
 
-		env := func(data interface{}) string {
-			b, _ := json.Marshal(map[string]interface{}{"status": "success", "data": data})
+		env := func(data any) string {
+			b, _ := json.Marshal(map[string]any{"status": "success", "data": data})
 			return string(b)
 		}
 
