@@ -139,7 +139,30 @@ Add to MCP configuration:
 }
 ```
 
-### Self-Hosted
+### Self-hosted with Docker
+
+Run kite-mcp-server on your own machine — no Go toolchain, no Fly.io required:
+
+```bash
+git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
+cp .env.example .env                  # then edit: set OAUTH_JWT_SECRET (required)
+docker compose up -d                  # builds Dockerfile.selfhost and starts it
+curl http://localhost:8080/healthz    # should return "ok"
+```
+
+Point your MCP client at `http://localhost:8080/mcp` (use `--allow-http` if your
+client requires it). To expose it publicly, put it behind a reverse proxy such as
+Caddy, nginx, or a [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+tunnel — then set `EXTERNAL_URL` in `.env` to the public HTTPS URL so OAuth
+callbacks work.
+
+**Persistence warning:** the `kite_data` Docker volume holds `/data/alerts.db`
+with AES-256-GCM encrypted Kite tokens, OAuth clients, alerts, and the audit
+trail. If you lose the volume, all user logins die with it and must be redone.
+Back it up if continuity matters. A bind-mount example is included (commented)
+in `docker-compose.yml`.
+
+### Self-hosted from source (Go users)
 
 ```bash
 git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server

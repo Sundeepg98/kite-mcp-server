@@ -1,0 +1,73 @@
+# Self-hosted docker-compose for kite-mcp-server
+# ------------------------------------------------
+# This is the self-hosted compose file. For Fly.io deploy, see `fly.toml` +
+# `Dockerfile`. For more details on tunneling this server publicly (e.g.
+# via cloudflared), see the "Self-hosted with Docker" section in README.md.
+#
+# Usage:
+#   1. cp .env.example .env
+#   2. Fill in OAUTH_JWT_SECRET (required) and any Kite credentials you want.
+#   3. docker compose up -d
+#   4. curl http://localhost:8080/healthz
+#
+# Persistence:
+#   The named volume `kite_data` holds the SQLite DB at /data/alerts.db.
+#   This DB stores AES-256-GCM encrypted Kite tokens, OAuth client
+#   registrations, alerts, sessions, and the audit trail. IF YOU LOSE THIS
+#   VOLUME, all user logins and alert history are permanently gone —
+#   re-authentication is required because encrypted blobs are keyed from
+#   OAUTH_JWT_SECRET. Back it up if you care about continuity.
+#
+#   To bind-mount a host directory instead of a named volume (easier to
+#   back up), comment out the named-volume line and uncomment the bind
+#   mount in the service's `volumes:` block below.
+
+services:
+  kite-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+      args:
+        # Override at build time: docker compose build --build-arg VERSION=v1.1.0
+        VERSION: ${VERSION:-dev}
+    image: kite-mcp-server:selfhost
+    container_name: kite-mcp-server
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      # Force the DB path inside the container regardless of what .env says.
+      # The /data directory is the volume mount point.
+      ALERT_DB_PATH: /data/alerts.db
+      # Default host/port for the container (can still be overridden by .env).
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8080"
+    volumes:
+      - kite_data:/data
+      # --- Alternative: bind-mount a host path (uncomment and comment out
+      # the named-volume line above to use). Example for Linux/macOS:
+      # - ./data:/data
+      # Example for Windows (Docker Desktop):
+      # - ${USERPROFILE}/kite-mcp-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Tighten container runtime a bit — the app runs as non-root already
+    # (see Dockerfile.selfhost), these just add defense in depth.
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # SQLite needs to write; /data is the persistent target
+    tmpfs:
+      - /tmp
+
+volumes:
+  kite_data:
+    # Docker-managed named volume. Back up with:
+    #   docker run --rm -v kite-mcp-server_kite_data:/data -v $PWD:/backup \
+    #     alpine tar czf /backup/kite-data.tar.gz -C /data .
+    driver: local

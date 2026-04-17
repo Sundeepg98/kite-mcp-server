@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/Sundeepg98/kite-mcp-server/discussions
+    about: Ask questions, share strategies, discuss ideas with other users.
+  - name: Security vulnerability
+    url: https://github.com/Sundeepg98/kite-mcp-server/security/policy
+    about: Please do NOT file security issues publicly — see our security policy.
+  - name: Kite Connect API reference
+    url: https://kite.trade/docs/connect/v3/
+    about: Questions about the underlying Zerodha API belong with Zerodha support.

@@ -1,0 +1,75 @@
+# Self-hosted Dockerfile for kite-mcp-server
+# ------------------------------------------
+# This image is tuned for running on your own machine (VPS, home server,
+# Kubernetes cluster) via `docker compose up -d` or `docker run`.
+#
+# For Fly.io deployments, use the sibling `Dockerfile` (it bundles Litestream
+# for SQLite replication to R2, which is Fly.io-specific infrastructure).
+#
+# Build:
+#   docker build -f Dockerfile.selfhost -t kite-mcp-server:selfhost .
+#   docker build -f Dockerfile.selfhost --build-arg VERSION=v1.1.0 -t kite-mcp-server:v1.1.0 .
+#
+# Run:
+#   docker run -d -p 8080:8080 --env-file .env -v kite_data:/data kite-mcp-server:selfhost
+#
+# IMPORTANT: The /data volume holds the SQLite DB (alerts, encrypted tokens,
+# OAuth clients, sessions). Losing this volume means losing all user logins
+# and alerts — they cannot be recovered because tokens are AES-256-GCM
+# encrypted with OAUTH_JWT_SECRET as the KDF seed.
+
+ARG VERSION=dev
+ARG GO_VERSION=1.25.8
+ARG ALPINE_VERSION=3.21
+
+# -------- Builder --------
+FROM golang:${GO_VERSION}-alpine AS builder
+WORKDIR /app
+
+# Copy module files first for better layer caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+ARG VERSION
+RUN CGO_ENABLED=0 go build \
+    -ldflags "-s -w -X main.MCP_SERVER_VERSION=${VERSION}" \
+    -o kite-mcp-server \
+    .
+
+# -------- Runtime --------
+FROM alpine:${ALPINE_VERSION}
+
+# ca-certificates: HTTPS for Kite API
+# tzdata: IST timezone for market hours + SEBI compliance (see CLAUDE.md)
+# wget: used by HEALTHCHECK
+RUN apk add --no-cache ca-certificates tzdata wget && \
+    addgroup -S kite && \
+    adduser -S -G kite -H kite && \
+    mkdir -p /data && \
+    chown -R kite:kite /data
+
+ENV TZ=Asia/Kolkata \
+    APP_MODE=http \
+    APP_PORT=8080 \
+    APP_HOST=0.0.0.0 \
+    LOG_LEVEL=info \
+    ALERT_DB_PATH=/data/alerts.db
+
+COPY --from=builder /app/kite-mcp-server /usr/local/bin/kite-mcp-server
+
+LABEL io.modelcontextprotocol.server.name="io.github.sundeepg98/kite-trading" \
+      org.opencontainers.image.title="kite-mcp-server (self-hosted)" \
+      org.opencontainers.image.description="Kite Trading MCP Server — self-hosted image (no Litestream)" \
+      org.opencontainers.image.source="https://github.com/Sundeepg98/kite-mcp-server" \
+      org.opencontainers.image.licenses="MIT"
+
+EXPOSE 8080
+VOLUME ["/data"]
+
+# Healthcheck polls the built-in /healthz endpoint.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/healthz || exit 1
+
+USER kite:kite
+ENTRYPOINT ["/usr/local/bin/kite-mcp-server"]
