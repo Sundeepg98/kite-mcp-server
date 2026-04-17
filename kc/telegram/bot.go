@@ -289,7 +289,14 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse command and args.
 	cmd, args := parseCommand(text)
 
-	var reply string
+	// isMeta captures commands whose reply is not a financial output
+	// (help, disclaimer itself, unknown-command banner). Meta
+	// messages MUST NOT carry the short disclaimer banner — see
+	// disclaimer.go for the rationale.
+	var (
+		reply  string
+		isMeta bool
+	)
 	switch cmd {
 	case "/price":
 		reply = h.handlePrice(chatID, email, args)
@@ -314,7 +321,13 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply = h.handleStatus(chatID, email)
 	case "/help", "/start":
 		reply = h.handleHelp(chatID)
-	// Trading commands
+		isMeta = true
+	case "/disclaimer":
+		reply = h.handleDisclaimer(chatID)
+		isMeta = true
+	// Trading commands — these write their own confirmation card
+	// directly via sendFinancialHTMLWithKeyboard, so leave reply
+	// empty.
 	case "/buy":
 		h.handleBuy(chatID, email, args)
 	case "/sell":
@@ -325,16 +338,25 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply = h.handleSetAlert(chatID, email, args)
 	default:
 		reply = fmt.Sprintf("Unknown command: <code>%s</code>\nType /help for available commands.", escapeHTML(cmd))
+		isMeta = true
 	}
 
 	if reply != "" {
-		h.sendHTML(chatID, reply)
+		if isMeta {
+			h.sendHTML(chatID, reply)
+		} else {
+			h.sendFinancialHTML(chatID, reply)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
 // sendHTML sends an HTML-formatted message to the given chat.
+// Callers MUST use this only for meta/system messages (help, rate
+// limits, unregistered users, unknown commands). Financial replies
+// must go through sendFinancialHTML so the SEBI classification
+// banner is always present.
 func (h *BotHandler) sendHTML(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = tgbotapi.ModeHTML
@@ -343,6 +365,22 @@ func (h *BotHandler) sendHTML(chatID int64, text string) {
 		h.logger.Error("Telegram bot: failed to send message",
 			"chat_id", chatID, "error", err)
 	}
+}
+
+// sendFinancialHTML sends an HTML-formatted message prefixed with
+// DisclaimerPrefix. Use this for any outbound message whose content
+// touches prices, P&L, holdings, positions, orders, alerts, or order
+// confirmations / errors. This is the SEBI classification-drift
+// guardrail described in disclaimer.go.
+func (h *BotHandler) sendFinancialHTML(chatID int64, text string) {
+	h.sendHTML(chatID, withDisclaimer(text))
+}
+
+// sendFinancialHTMLWithKeyboard is the inline-keyboard counterpart
+// for trading confirmations (/buy, /sell, /quick). Same disclaimer
+// contract as sendFinancialHTML.
+func (h *BotHandler) sendFinancialHTMLWithKeyboard(chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
+	h.sendHTMLWithKeyboard(chatID, withDisclaimer(text), keyboard)
 }
 
 // allowCommand enforces the per-chat rate limit.
@@ -442,6 +480,9 @@ func (h *BotHandler) answerCallback(callbackID, text string) {
 }
 
 // editMessage replaces the text (and removes the keyboard) of an existing message.
+// Callers should use editFinancialMessage for any content that touches
+// orders, P&L, holdings, or alerts. This raw variant is for meta
+// text like "order cancelled" that doesn't contain financial data.
 func (h *BotHandler) editMessage(chatID int64, messageID int, newText string) {
 	edit := tgbotapi.NewEditMessageText(chatID, messageID, newText)
 	edit.ParseMode = tgbotapi.ModeHTML
@@ -449,6 +490,13 @@ func (h *BotHandler) editMessage(chatID int64, messageID int, newText string) {
 		h.logger.Error("Telegram bot: failed to edit message",
 			"chat_id", chatID, "message_id", messageID, "error", err)
 	}
+}
+
+// editFinancialMessage edits an existing message, prepending the
+// disclaimer banner. Used by order-result updates after the user
+// taps Confirm / Cancel on a pending trade card.
+func (h *BotHandler) editFinancialMessage(chatID int64, messageID int, newText string) {
+	h.editMessage(chatID, messageID, withDisclaimer(newText))
 }
 
 // setPendingOrder stores a pending order for the given chat, replacing any previous one.

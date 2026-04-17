@@ -103,7 +103,7 @@ func (h *BotHandler) handleOrderCommand(chatID int64, email, args, side string) 
 
 	sb.WriteString("\nThis order expires in 60 seconds.")
 
-	h.sendHTMLWithKeyboard(chatID, sb.String(), confirmKeyboard())
+	h.sendFinancialHTMLWithKeyboard(chatID, sb.String(), confirmKeyboard())
 }
 
 // handleQuick parses /quick SYMBOL QTY SIDE TYPE [PRICE] and shows a confirmation prompt.
@@ -181,7 +181,7 @@ func (h *BotHandler) handleQuick(chatID int64, email, args string) {
 
 	sb.WriteString("\nThis order expires in 60 seconds.")
 
-	h.sendHTMLWithKeyboard(chatID, sb.String(), confirmKeyboard())
+	h.sendFinancialHTMLWithKeyboard(chatID, sb.String(), confirmKeyboard())
 }
 
 // executeConfirmedOrder runs riskguard checks and places the confirmed order.
@@ -229,9 +229,9 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 		if !result.Allowed {
 			msg := fmt.Sprintf("\u274C <b>Order blocked by risk guard</b>\nReason: %s\n%s", result.Reason, escapeHTML(result.Message))
 			if cq.Message != nil {
-				h.editMessage(chatID, cq.Message.MessageID, msg)
+				h.editFinancialMessage(chatID, cq.Message.MessageID, msg)
 			} else {
-				h.sendHTML(chatID, msg)
+				h.sendFinancialHTML(chatID, msg)
 			}
 			return
 		}
@@ -261,9 +261,9 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 		client, errMsg := h.newKiteClient(email)
 		if client == nil {
 			if cq.Message != nil {
-				h.editMessage(chatID, cq.Message.MessageID, errMsg)
+				h.editFinancialMessage(chatID, cq.Message.MessageID, errMsg)
 			} else {
-				h.sendHTML(chatID, errMsg)
+				h.sendFinancialHTML(chatID, errMsg)
 			}
 			return
 		}
@@ -310,9 +310,9 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 		"qty", order.Quantity, "type", order.OrderType, "price", order.Price)
 
 	if cq.Message != nil {
-		h.editMessage(chatID, cq.Message.MessageID, resultMsg)
+		h.editFinancialMessage(chatID, cq.Message.MessageID, resultMsg)
 	} else {
-		h.sendHTML(chatID, resultMsg)
+		h.sendFinancialHTML(chatID, resultMsg)
 	}
 }
 

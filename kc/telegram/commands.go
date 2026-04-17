@@ -60,9 +60,18 @@ func (h *BotHandler) handleHelp(_ int64) string {
 
 <b>System:</b>
 /status — Token and system status
+/disclaimer — Classification statement &amp; ToS excerpt
 /help — This message
 
 <i>Trading orders require confirmation before execution.</i>`
+}
+
+// handleDisclaimer returns the full classification statement /
+// Terms-of-Service §3 excerpt. The text lives in disclaimer.go as
+// DisclaimerFullText so automated compliance checks can grep the
+// wording in one place.
+func (h *BotHandler) handleDisclaimer(_ int64) string {
+	return DisclaimerFullText
 }
 
 // handlePrice looks up a stock price via the Kite API.
