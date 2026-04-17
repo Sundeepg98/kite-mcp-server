@@ -2,27 +2,16 @@ package ops
 
 // helpers_test.go — shared test infrastructure for the kc/ops package.
 // Consolidates helpers that were previously defined in handler_test.go but
-// used across the whole package (devNull, noopAuth, requestWithEmail) and
-// adds a shared discard logger backed by testutil.DiscardLogger so every
-// ops test uses the same fixture.
+// used across the whole package (devNull, noopAuth, requestWithEmail).
 
 import (
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 
 	"github.com/zerodha/kite-mcp-server/oauth"
-	"github.com/zerodha/kite-mcp-server/testutil"
 )
-
-// testLogger returns a discard logger shared across the ops test suite. It
-// delegates to testutil.DiscardLogger so every package converges on the same
-// no-op logger fixture.
-func testLogger() *slog.Logger {
-	return testutil.DiscardLogger()
-}
 
 // devNull implements io.Writer and discards all bytes. It is used by factories
 // that build a slog.Logger directly (the handler constructor stores the

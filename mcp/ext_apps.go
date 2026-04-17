@@ -516,7 +516,7 @@ func safetyData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 }
 
 // orderFormData returns paper-mode status for the order form widget.
-// Margins are fetched dynamically via callServerTool('pre_trade_check')
+// Margins are fetched dynamically via callServerTool('order_risk_report')
 // rather than pre-injected, since the form needs fresh data at submission time.
 func orderFormData(manager *kc.Manager, _ *audit.Store, email string) any {
 	paperMode := false

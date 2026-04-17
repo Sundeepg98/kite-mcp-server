@@ -38,7 +38,6 @@ const (
 	errInvalidSessionIDFormat = "invalid session ID format"
 	errSessionNotFound        = "session ID not found"
 	errCannotUpdateTerminated = "cannot update terminated session"
-	errCannotExtendTerminated = "cannot extend terminated session"
 	mcpSessionPrefix          = "kitemcp-"
 )
 

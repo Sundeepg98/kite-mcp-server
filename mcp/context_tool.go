@@ -90,13 +90,6 @@ type alertSummary struct {
 	Target    float64 `json:"target"`
 }
 
-// apiResult holds the result from a parallel API call.
-type apiResult struct {
-	key string
-	val any
-	err error
-}
-
 func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

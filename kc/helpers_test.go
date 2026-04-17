@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/testutil"
 )
 
@@ -19,13 +18,6 @@ import (
 func newMockKiteServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return testutil.NewSessionKiteServer(t)
-}
-
-// newKiteClientWithMock creates a *kiteconnect.Client pointed at the mock server.
-func newKiteClientWithMock(ts *httptest.Server, apiKey string) *kiteconnect.Client {
-	c := kiteconnect.New(apiKey)
-	c.SetBaseURI(ts.URL)
-	return c
 }
 
 // newTestManagerWithDB creates a Manager backed by an in-memory SQLite DB.

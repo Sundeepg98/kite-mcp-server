@@ -19,7 +19,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // newTestAdminOpsHandler creates an ops Handler with a user store, audit store,
@@ -58,10 +57,6 @@ func newTestAdminOpsHandler(t *testing.T) *Handler {
 	lb := NewLogBuffer(100)
 	h := New(mgr, nil, lb, logger, "test-v1", time.Now(), userStore, auditStore)
 	return h
-}
-
-func adminCtx(email string) context.Context {
-	return oauth.ContextWithEmail(context.Background(), email)
 }
 
 // ===========================================================================

@@ -2203,10 +2203,6 @@ func TestPortfolioService_NoBroker(t *testing.T) {
 // PortfolioService — broker returns error (not "no broker" but actual call error)
 // ---------------------------------------------------------------------------
 
-type failBrokerSessionService struct {
-	*SessionService
-}
-
 func TestPortfolioService_BrokerCallErrors(t *testing.T) {
 	t.Parallel()
 	// Use a mock HTTP server that returns Kite errors for all endpoints
