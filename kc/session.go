@@ -48,6 +48,14 @@ type MCPSession struct {
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
 	Data       any // Contains KiteSessionData
+
+	// ClientHint is a free-form description of the MCP surface that created
+	// the session (e.g. the raw User-Agent from the bearer-issuance HTTP
+	// request, or a constant like "claude-code" / "claude-desktop"). Empty
+	// when the registry was called through a code path that has no HTTP
+	// request context (SessionIdManager.Generate(), SSE/stdio transports).
+	// Rendered as "Unknown" by list_mcp_sessions when empty.
+	ClientHint string
 }
 
 type SessionRegistry struct {
@@ -137,8 +145,18 @@ func (sm *SessionRegistry) Generate() string {
 	return sm.GenerateWithData(nil)
 }
 
-// GenerateWithData creates a new MCP session ID with associated Kite data and stores it in memory
+// GenerateWithData creates a new MCP session ID with associated Kite data and stores it in memory.
+// ClientHint is left empty. Callers with access to the originating HTTP request
+// should use GenerateWithDataAndHint instead.
 func (sm *SessionRegistry) GenerateWithData(data any) string {
+	return sm.GenerateWithDataAndHint(data, "")
+}
+
+// GenerateWithDataAndHint creates a new MCP session ID with associated Kite
+// data and a free-form client hint (typically the User-Agent of the HTTP
+// request that caused the session to be issued). The hint is best-effort —
+// empty is acceptable and renders as "Unknown" to consumers.
+func (sm *SessionRegistry) GenerateWithDataAndHint(data any, clientHint string) string {
 	sm.mu.Lock()
 
 	sessionID := mcpSessionPrefix + uuid.New().String()
@@ -151,6 +169,7 @@ func (sm *SessionRegistry) GenerateWithData(data any) string {
 		CreatedAt:  now,
 		ExpiresAt:  expiresAt,
 		Data:       data,
+		ClientHint: clientHint,
 	}
 
 	// Capture DB and values before releasing lock

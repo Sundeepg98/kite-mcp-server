@@ -141,6 +141,10 @@ func GetAllTools() []Tool {
 		&DeleteMyAccountTool{},
 		&UpdateMyCredentialsTool{},
 
+		// Per-user session management (not admin-only — each user sees their own)
+		&ListMCPSessionsTool{},
+		&RevokeMCPSessionTool{},
+
 		// Server observability
 		&ServerMetricsTool{},
 		&GetOrderProjectionTool{},

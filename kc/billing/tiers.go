@@ -54,6 +54,7 @@ var toolTiers = map[string]Tier{
 	"subscribe_instruments": TierFree, "unsubscribe_instruments": TierFree,
 	"get_order_margins": TierFree, "get_basket_margins": TierFree, "get_order_charges": TierFree,
 	"delete_my_account": TierFree, "update_my_credentials": TierFree,
+	"list_mcp_sessions": TierFree, "revoke_mcp_session": TierFree,
 	"server_metrics": TierFree,
 	"server_time":    TierFree,
 	"get_order_projection": TierFree,
@@ -65,10 +66,10 @@ var toolTiers = map[string]Tier{
 	// Pro/Premium, but the billing system is dormant infrastructure and there
 	// is no regulatory or commercial reason to withhold read-only analytics.
 	"list_alerts": TierFree, "list_trailing_stops": TierFree,
-	"portfolio_concentration": TierFree, "pre_trade_check": TierFree,
+	"portfolio_concentration": TierFree, "order_risk_report": TierFree,
 	"get_pnl_journal": TierFree, "sector_exposure": TierFree,
 	"sebi_compliance_status": TierFree,
-	"dividend_calendar": TierFree, "tax_harvest_analysis": TierFree,
+	"dividend_calendar": TierFree, "tax_loss_analysis": TierFree,
 	"technical_indicators": TierFree,
 	"historical_price_analyzer": TierFree,
 	"portfolio_analysis": TierFree,
