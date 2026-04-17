@@ -36,24 +36,31 @@ import (
 //
 // Called from Manager.registerCQRSHandlers, after the batch D remaining
 // queries are registered.
-func (m *Manager) registerEscapeQueries() {
+func (m *Manager) registerEscapeQueries() error {
 	// --- Margin queries ---
 
-	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderMarginsQuery)
 		uc := usecases.NewGetOrderMarginsUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.queryBus.Register(reflect.TypeOf(cqrs.GetBasketMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetBasketMarginsQuery{}), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetBasketMarginsQuery)
 		uc := usecases.NewGetBasketMarginsUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderChargesQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.queryBus.Register(reflect.TypeOf(cqrs.GetOrderChargesQuery{}), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrderChargesQuery)
 		uc := usecases.NewGetOrderChargesUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, q)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

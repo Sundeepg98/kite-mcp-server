@@ -19,14 +19,17 @@ import (
 // The Manager itself satisfies usecases.SessionLoginURLProvider via its
 // existing SessionLoginURL accessor, so no adapter struct is needed — we pass
 // `m` directly as the narrow port.
-func (m *Manager) registerSetupCommands() {
+func (m *Manager) registerSetupCommands() error {
 	// --- Setup: LoginCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.LoginCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.LoginCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.LoginCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewLoginUseCase(m, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

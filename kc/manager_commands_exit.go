@@ -17,9 +17,9 @@ import (
 // so we re-use it instead of paying for another credential lookup. Tests that
 // dispatch without an attached broker fall back to the Manager's
 // SessionService transparently.
-func (m *Manager) registerExitCommands() {
+func (m *Manager) registerExitCommands() error {
 	// --- Exit: ClosePositionCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.ClosePositionCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ClosePositionCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ClosePositionCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -31,10 +31,12 @@ func (m *Manager) registerExitCommands() {
 			m.Logger,
 		)
 		return uc.ExecuteCommand(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Exit: CloseAllPositionsCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.CloseAllPositionsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CloseAllPositionsCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CloseAllPositionsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -46,5 +48,8 @@ func (m *Manager) registerExitCommands() {
 			m.Logger,
 		)
 		return uc.ExecuteCommand(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

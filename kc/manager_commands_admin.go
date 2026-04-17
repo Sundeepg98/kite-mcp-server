@@ -16,19 +16,32 @@ import (
 // lazily from the Manager's concrete stores/services, mirroring the Family
 // and Account patterns. Use cases are not deleted — handlers call them,
 // keeping the single source of business logic.
-func (m *Manager) registerAdminCommands() {
-	m.registerAdminUserCommands()
-	m.registerAdminRiskCommands()
-	m.registerAlertCommands()
-	m.registerMFCommands()
-	m.registerTickerCommands()
-	m.registerNativeAlertCommands()
+func (m *Manager) registerAdminCommands() error {
+	if err := m.registerAdminUserCommands(); err != nil {
+		return err
+	}
+	if err := m.registerAdminRiskCommands(); err != nil {
+		return err
+	}
+	if err := m.registerAlertCommands(); err != nil {
+		return err
+	}
+	if err := m.registerMFCommands(); err != nil {
+		return err
+	}
+	if err := m.registerTickerCommands(); err != nil {
+		return err
+	}
+	if err := m.registerNativeAlertCommands(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Admin: user lifecycle (suspend/activate/change-role) ------------------
 
-func (m *Manager) registerAdminUserCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminSuspendUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerAdminUserCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminSuspendUserCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminSuspendUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -44,9 +57,11 @@ func (m *Manager) registerAdminUserCommands() {
 			m.Logger,
 		)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminActivateUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminActivateUserCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminActivateUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -56,9 +71,11 @@ func (m *Manager) registerAdminUserCommands() {
 		}
 		uc := usecases.NewAdminActivateUserUseCase(m.userStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminChangeRoleCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminChangeRoleCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminChangeRoleCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -68,13 +85,16 @@ func (m *Manager) registerAdminUserCommands() {
 		}
 		uc := usecases.NewAdminChangeRoleUseCase(m.userStore, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Admin: risk guard (freeze/unfreeze user + global) ---------------------
 
-func (m *Manager) registerAdminRiskCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerAdminRiskCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -85,9 +105,11 @@ func (m *Manager) registerAdminRiskCommands() {
 		}
 		uc := usecases.NewAdminFreezeUserUseCase(guard, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeUserCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeUserCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -98,9 +120,11 @@ func (m *Manager) registerAdminRiskCommands() {
 		}
 		uc := usecases.NewAdminUnfreezeUserUseCase(guard, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminFreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminFreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -111,9 +135,11 @@ func (m *Manager) registerAdminRiskCommands() {
 		}
 		uc := usecases.NewAdminFreezeGlobalUseCase(guard, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AdminUnfreezeGlobalCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AdminUnfreezeGlobalCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -124,7 +150,10 @@ func (m *Manager) registerAdminRiskCommands() {
 		}
 		uc := usecases.NewAdminUnfreezeGlobalUseCase(guard, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Alerts: create / delete / setup telegram -----------------------------
@@ -148,8 +177,8 @@ func (r *adminBatchInstrumentResolver) GetInstrumentToken(exchange, tradingsymbo
 	return inst.InstrumentToken, nil
 }
 
-func (m *Manager) registerAlertCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.CreateAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerAlertCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CreateAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -166,9 +195,11 @@ func (m *Manager) registerAlertCommands() {
 			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -181,9 +212,11 @@ func (m *Manager) registerAlertCommands() {
 			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.SetupTelegramCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SetupTelegramCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetupTelegramCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -193,53 +226,65 @@ func (m *Manager) registerAlertCommands() {
 		}
 		uc := usecases.NewSetupTelegramUseCase(m.alertStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Mutual Funds: place / cancel order + SIP ------------------------------
 
-func (m *Manager) registerMFCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerMFCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceMFOrderUseCase(m.SessionSvc(), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc(), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceMFSIPUseCase(m.SessionSvc(), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelMFSIPCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelMFSIPCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc(), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Ticker: start / stop / subscribe / unsubscribe ------------------------
 
-func (m *Manager) registerTickerCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.StartTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerTickerCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.StartTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StartTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -249,9 +294,11 @@ func (m *Manager) registerTickerCommands() {
 		}
 		uc := usecases.NewStartTickerUseCase(m.tickerService, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.StopTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.StopTickerCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StopTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -261,9 +308,11 @@ func (m *Manager) registerTickerCommands() {
 		}
 		uc := usecases.NewStopTickerUseCase(m.tickerService, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.SubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -273,9 +322,11 @@ func (m *Manager) registerTickerCommands() {
 		}
 		uc := usecases.NewSubscribeInstrumentsUseCase(m.tickerService, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.UnsubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.UnsubscribeInstrumentsCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.UnsubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -285,7 +336,10 @@ func (m *Manager) registerTickerCommands() {
 		}
 		uc := usecases.NewUnsubscribeInstrumentsUseCase(m.tickerService, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Native Alerts: place / modify / delete --------------------------------
@@ -341,8 +395,8 @@ func (m *Manager) resolveNativeAlertClient(email string) (usecases.NativeAlertCl
 	return &nativeAlertBusAdapter{nac: nac}, nil
 }
 
-func (m *Manager) registerNativeAlertCommands() {
-	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+func (m *Manager) registerNativeAlertCommands() error {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -353,9 +407,11 @@ func (m *Manager) registerNativeAlertCommands() {
 		}
 		uc := usecases.NewPlaceNativeAlertUseCase(m.Logger)
 		return uc.Execute(ctx, client, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.ModifyNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -366,9 +422,11 @@ func (m *Manager) registerNativeAlertCommands() {
 		}
 		uc := usecases.NewModifyNativeAlertUseCase(m.Logger)
 		return uc.Execute(ctx, client, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
-	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteNativeAlertCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteNativeAlertCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -379,5 +437,8 @@ func (m *Manager) registerNativeAlertCommands() {
 		}
 		uc := usecases.NewDeleteNativeAlertUseCase(m.Logger)
 		return nil, uc.Execute(ctx, client, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

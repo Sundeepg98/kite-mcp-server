@@ -51,14 +51,16 @@ func NewInMemoryBus(middlewares ...Middleware) *InMemoryBus {
 }
 
 // Register associates a message type with a handler function.
-// Panics on duplicate registration (programmer error caught at startup).
-func (b *InMemoryBus) Register(msgType reflect.Type, handler HandlerFunc) {
+// Returns an error on duplicate registration so startup code can surface
+// the programmer mistake cleanly instead of crashing the process mid-init.
+func (b *InMemoryBus) Register(msgType reflect.Type, handler HandlerFunc) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if _, exists := b.handlers[msgType]; exists {
-		panic(fmt.Sprintf("cqrs: duplicate handler for %s", msgType))
+		return fmt.Errorf("cqrs: duplicate handler for %s", msgType)
 	}
 	b.handlers[msgType] = handler
+	return nil
 }
 
 // Dispatch routes a message to its handler, applying middleware. Ignores return value.

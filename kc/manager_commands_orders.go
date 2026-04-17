@@ -19,9 +19,9 @@ import (
 // already-resolved client instead of paying for another credential lookup.
 // Handlers dispatched from tests without an attached broker transparently
 // fall back to the Manager's SessionService.
-func (m *Manager) registerOrderCommands() {
+func (m *Manager) registerOrderCommands() error {
 	// --- Order: PlaceOrderCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -33,10 +33,12 @@ func (m *Manager) registerOrderCommands() {
 			m.Logger,
 		)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Order: ModifyOrderCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.ModifyOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -48,10 +50,12 @@ func (m *Manager) registerOrderCommands() {
 			m.Logger,
 		)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Order: CancelOrderCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.CancelOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -62,57 +66,67 @@ func (m *Manager) registerOrderCommands() {
 			m.Logger,
 		)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- GTT: PlaceGTTCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.PlaceGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PlaceGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceGTTUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- GTT: ModifyGTTCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.ModifyGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ModifyGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ModifyGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewModifyGTTUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- GTT: DeleteGTTCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteGTTCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewDeleteGTTUseCase(m.resolverFromContext(ctx), m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Position: ConvertPositionCommand ---
 	// convert_position is unique in batch B: the existing MCP handler already
 	// resolves through the Manager's SessionService rather than a pinned
 	// broker, so we register it the same way — sessionSvc satisfies
 	// usecases.BrokerResolver on its own.
-	m.commandBus.Register(reflect.TypeOf(cqrs.ConvertPositionCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.ConvertPositionCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.ConvertPositionCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewConvertPositionUseCase(m.sessionSvc, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Trailing stop: SetTrailingStopCommand ---
 	// SetTrailingStop talks to TrailingStopManager, not a broker, so no
 	// resolver needed. We still guard against nil manager because the
 	// trailing-stop feature depends on SQLite persistence being wired in.
-	m.commandBus.Register(reflect.TypeOf(cqrs.SetTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.SetTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetTrailingStopCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -122,10 +136,12 @@ func (m *Manager) registerOrderCommands() {
 		}
 		uc := usecases.NewSetTrailingStopUseCase(m.trailingStopMgr, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Trailing stop: CancelTrailingStopCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.CancelTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CancelTrailingStopCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CancelTrailingStopCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -135,5 +151,8 @@ func (m *Manager) registerOrderCommands() {
 		}
 		uc := usecases.NewCancelTrailingStopUseCase(m.trailingStopMgr, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

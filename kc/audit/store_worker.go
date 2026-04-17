@@ -55,6 +55,10 @@ func (s *Store) computeChainLink(entry *ToolCall) {
 // Record errors with `_ = s.Record(entry)` and the buffer-full path logged at
 // Warn level with no counter. Both paths now go through incDropped so monitoring
 // can alert on non-zero DroppedCount.
+//
+// Sync-fallback path logs Error on every drop (rare — worker normally running).
+// Buffer-full path logs a Warning every 100 drops with the cumulative count so
+// a noisy backlog doesn't spam error logs but operators still see the trend.
 func (s *Store) Enqueue(entry *ToolCall) {
 	if s.writeCh == nil {
 		// Worker not started — synchronous fallback. Compute the chain link
@@ -74,9 +78,15 @@ func (s *Store) Enqueue(entry *ToolCall) {
 	default:
 		s.incDropped()
 		if s.logger != nil {
-			s.logger.Error("Audit buffer full, entry dropped (compliance gap)",
-				"call_id", entry.CallID, "tool", entry.ToolName,
-				"dropped_total", s.DroppedCount())
+			total := s.DroppedCount()
+			// Throttle log noise: one warning per 100 drops, with cumulative
+			// count so ops can chart the trend via log aggregation.
+			if total%100 == 0 {
+				s.logger.Warn("Audit buffer full, entries dropped (compliance gap)",
+					"dropped_total", total,
+					"last_call_id", entry.CallID,
+					"last_tool", entry.ToolName)
+			}
 		}
 	}
 }

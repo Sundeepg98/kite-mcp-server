@@ -14,9 +14,9 @@ import (
 // use case lazily from the Manager's concrete stores, mirroring the Family
 // pattern in registerCQRSHandlers(). Use cases are not deleted — handlers call
 // them, keeping the single source of business logic.
-func (m *Manager) registerAccountCommands() {
+func (m *Manager) registerAccountCommands() error {
 	// --- Account: DeleteMyAccountCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteMyAccountCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteMyAccountCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteMyAccountCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -51,60 +51,72 @@ func (m *Manager) registerAccountCommands() {
 		}
 		uc := usecases.NewDeleteMyAccountUseCase(deps, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Account: UpdateMyCredentialsCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.UpdateMyCredentialsCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.UpdateMyCredentialsCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.UpdateMyCredentialsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewUpdateMyCredentialsUseCase(m.credentialStore, m.tokenStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Watchlist: CreateWatchlistCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.CreateWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.CreateWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.CreateWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCreateWatchlistUseCase(m.watchlistStore, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Watchlist: DeleteWatchlistCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.DeleteWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.DeleteWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.DeleteWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewDeleteWatchlistUseCase(m.watchlistStore, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Watchlist: AddToWatchlistCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.AddToWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.AddToWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.AddToWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewAddToWatchlistUseCase(m.watchlistStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Watchlist: RemoveFromWatchlistCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.RemoveFromWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.RemoveFromWatchlistCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.RemoveFromWatchlistCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewRemoveFromWatchlistUseCase(m.watchlistStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Paper: PaperTradingToggleCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingToggleCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingToggleCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PaperTradingToggleCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -114,10 +126,12 @@ func (m *Manager) registerAccountCommands() {
 		}
 		uc := usecases.NewPaperTradingToggleUseCase(m.paperEngine, m.Logger)
 		return uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
 
 	// --- Paper: PaperTradingResetCommand ---
-	m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingResetCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := m.commandBus.Register(reflect.TypeOf(cqrs.PaperTradingResetCommand{}), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PaperTradingResetCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
@@ -127,5 +141,8 @@ func (m *Manager) registerAccountCommands() {
 		}
 		uc := usecases.NewPaperTradingResetUseCase(m.paperEngine, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }

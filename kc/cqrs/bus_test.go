@@ -13,10 +13,12 @@ func TestInMemoryBus_DispatchWithResult(t *testing.T) {
 	bus := NewInMemoryBus()
 
 	// Register a handler for GetProfileQuery
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(GetProfileQuery)
 		return "profile-for-" + q.Email, nil
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	result, err := bus.DispatchWithResult(context.Background(), GetProfileQuery{Email: "test@example.com"})
 	if err != nil {
@@ -31,10 +33,12 @@ func TestInMemoryBus_Dispatch(t *testing.T) {
 	bus := NewInMemoryBus()
 
 	called := false
-	bus.Register(reflect.TypeOf(PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		called = true
 		return nil, nil
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	err := bus.Dispatch(context.Background(), PlaceOrderCommand{Email: "test@example.com"})
 	if err != nil {
@@ -57,20 +61,24 @@ func TestInMemoryBus_UnregisteredType(t *testing.T) {
 	}
 }
 
-func TestInMemoryBus_DuplicateRegistrationPanics(t *testing.T) {
+func TestInMemoryBus_DuplicateRegistrationReturnsError(t *testing.T) {
 	bus := NewInMemoryBus()
 
 	handler := func(ctx context.Context, msg any) (any, error) { return nil, nil }
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), handler)
+	if err := bus.Register(reflect.TypeOf(GetProfileQuery{}), handler); err != nil {
+		t.Fatalf("first register should succeed: %v", err)
+	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic on duplicate registration")
-		}
-	}()
-
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), handler) // should panic
+	// Duplicate registration must return a descriptive error, not panic —
+	// startup code can now surface programmer mistakes cleanly instead of
+	// crashing the process.
+	err := bus.Register(reflect.TypeOf(GetProfileQuery{}), handler)
+	if err == nil {
+		t.Fatal("expected error on duplicate registration")
+	}
+	if got, want := err.Error(), "cqrs: duplicate handler for cqrs.GetProfileQuery"; got != want {
+		t.Fatalf("unexpected error message: got %q, want %q", got, want)
+	}
 }
 
 func TestInMemoryBus_MiddlewareChain(t *testing.T) {
@@ -96,10 +104,12 @@ func TestInMemoryBus_MiddlewareChain(t *testing.T) {
 
 	bus := NewInMemoryBus(mw1, mw2)
 
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
 		order = append(order, "handler")
 		return "ok", nil
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	result, err := bus.DispatchWithResult(context.Background(), GetProfileQuery{Email: "test@example.com"})
 	if err != nil {
@@ -124,9 +134,11 @@ func TestInMemoryBus_MiddlewareChain(t *testing.T) {
 func TestInMemoryBus_HandlerError(t *testing.T) {
 	bus := NewInMemoryBus()
 
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
 		return nil, errors.New("something went wrong")
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	_, err := bus.DispatchWithResult(context.Background(), GetProfileQuery{Email: "test@example.com"})
 	if err == nil {
@@ -141,9 +153,11 @@ func TestLoggingMiddleware(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	bus := NewInMemoryBus(LoggingMiddleware(logger))
 
-	bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(GetProfileQuery{}), func(ctx context.Context, msg any) (any, error) {
 		return "ok", nil
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	result, err := bus.DispatchWithResult(context.Background(), GetProfileQuery{Email: "test@example.com"})
 	if err != nil {
@@ -158,9 +172,11 @@ func TestLoggingMiddleware_ErrorPath(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	bus := NewInMemoryBus(LoggingMiddleware(logger))
 
-	bus.Register(reflect.TypeOf(PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeOf(PlaceOrderCommand{}), func(ctx context.Context, msg any) (any, error) {
 		return nil, errors.New("order failed")
-	})
+	}); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
 
 	_, err := bus.DispatchWithResult(context.Background(), PlaceOrderCommand{Email: "test@example.com"})
 	if err == nil {
