@@ -116,7 +116,6 @@ func TestBinary_VersionFlag(t *testing.T) {
 		"-o", binaryPath,
 		".",
 	)
-	buildCmd.Dir = "D:/kite-mcp-temp"
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Skipf("cannot build binary: %v\n%s", err, buildOut)
@@ -143,7 +142,6 @@ func TestBinary_ShortVersionFlag(t *testing.T) {
 	binaryPath := filepath.Join(tmpDir, binaryName)
 
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
-	buildCmd.Dir = "D:/kite-mcp-temp"
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Skipf("cannot build binary: %v\n%s", err, buildOut)
@@ -171,7 +169,6 @@ func TestBinary_NoArgsExitsNonZero(t *testing.T) {
 
 	// Clear env vars so the server fails fast on LoadConfig.
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
-	buildCmd.Dir = "D:/kite-mcp-temp"
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Skipf("cannot build binary: %v\n%s", err, buildOut)

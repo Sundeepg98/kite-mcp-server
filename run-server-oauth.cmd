@@ -7,4 +7,4 @@ set APP_MODE=http
 set APP_PORT=8080
 set OAUTH_JWT_SECRET=super-secret-key-for-testing-only-12345678901234567890
 set EXTERNAL_URL=http://localhost:8080
-D:\kite-mcp-temp\kite-mcp-server.exe 2>> D:\kite-mcp-temp\server.log
+D:\Sundeep\projects\kite-mcp-server\kite-mcp-server.exe 2>> D:\Sundeep\projects\kite-mcp-server\server.log
