@@ -466,7 +466,7 @@ func TestMock_TaxHarvestAnalysis_Path(t *testing.T) {
 	ts := startMockKite()
 	defer ts.Close()
 	mgr := newMockKiteManager(t, ts.URL)
-	result := callMockTool(t, mgr, "tax_harvest_analysis", map[string]any{})
+	result := callMockTool(t, mgr, "tax_loss_analysis", map[string]any{})
 	assert.NotNil(t, result)
 }
 
@@ -484,7 +484,7 @@ func TestMock_PreTradeCheck_Path(t *testing.T) {
 	ts := startMockKite()
 	defer ts.Close()
 	mgr := newMockKiteManager(t, ts.URL)
-	result := callMockTool(t, mgr, "pre_trade_check", map[string]any{
+	result := callMockTool(t, mgr, "order_risk_report", map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY", "transaction_type": "BUY",
 		"quantity": float64(10), "price": float64(1500), "product": "CNC", "order_type": "LIMIT",
 	})

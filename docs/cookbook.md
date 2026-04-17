@@ -101,7 +101,7 @@ for 50 shares of RELIANCE at market.
 
 **Tool calls (in order)**
 1. `paper_trading_toggle` with `enable=true`, `initial_cash=1000000`.
-2. `pre_trade_check` with the order params — composite check returning margins, charges, and LTP in one call; surfaced to Claude as a confirmation before the actual order.
+2. `order_risk_report` with the order params — composite check returning margins, charges, and LTP in one call; surfaced to Claude as a confirmation before the actual order.
 3. `place_order` with `tradingsymbol="RELIANCE"`, `exchange="NSE"`, `transaction_type="BUY"`, `quantity=50`, `order_type="MARKET"`, `product="MIS"`.
    - The Paper Trading middleware intercepts the `place_order` call and routes it to the virtual portfolio. A real Kite order is **not** placed.
 4. `paper_trading_status` — shows the new position in the virtual book.

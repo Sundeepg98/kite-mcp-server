@@ -21,9 +21,9 @@ import (
 type PreTradeCheckTool struct{}
 
 func (*PreTradeCheckTool) Tool() mcp.Tool {
-	return mcp.NewTool("pre_trade_check",
-		mcp.WithDescription("Pre-trade validation -- checks margin, concentration, existing positions, and current price in ONE call. Use before placing any order. Much faster than calling get_ltp + get_order_margins + get_margins + get_positions + portfolio_concentration separately."),
-		mcp.WithTitleAnnotation("Pre-Trade Check"),
+	return mcp.NewTool("order_risk_report",
+		mcp.WithDescription("Factual pre-submission review of a prospective order. Computes margin required vs available, portfolio concentration %, existing position in the symbol, current LTP, and mechanical stop-loss levels in a single call. Composite wrapper over get_ltp + get_order_margins + get_margins + get_positions + portfolio_concentration. Output includes warnings and a status field (PROCEED / PROCEED WITH CAUTION / BLOCKED) derived purely from margin sufficiency and concentration thresholds. Not investment advice."),
+		mcp.WithTitleAnnotation("Order Risk Report"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -65,7 +65,7 @@ func (*PreTradeCheckTool) Tool() mcp.Tool {
 	)
 }
 
-// preTradeResponse is the structured response returned by pre_trade_check.
+// preTradeResponse is the structured response returned by order_risk_report.
 type preTradeResponse struct {
 	Symbol          string                `json:"symbol"`
 	Exchange        string                `json:"exchange"`
@@ -108,7 +108,7 @@ type preTradeStopLoss struct {
 func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "pre_trade_check")
+		handler.trackToolCall(ctx, "order_risk_report")
 		args := request.GetArguments()
 
 		// Validate required parameters
@@ -134,7 +134,7 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("price must be greater than 0 for LIMIT orders"), nil
 		}
 
-		return handler.WithSession(ctx, "pre_trade_check", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "order_risk_report", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Route data gathering through CQRS query bus.
 			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.PreTradeCheckQuery{
 				Email:           session.Email,
@@ -179,7 +179,7 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				data, errs,
 			)
 
-			return handler.MarshalResponse(resp, "pre_trade_check")
+			return handler.MarshalResponse(resp, "order_risk_report")
 		})
 	}
 }

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OAuth `/oauth/authorize` short-circuits when a dashboard session cookie is present, eliminating a second Kite login for dashboard users (`0038a23`)
 - MCP responses wrap array data in `{items: [...]}` so strict-validating clients accept them; fixes `get_holdings`, `get_positions`, `get_orders`, `get_gtts`, `get_mf_holdings` (`2b637bf`)
 - Hardcoded local paths updated after project relocation (`b253f74`)
+- Tool rename follow-up (SEBI Path 1 compliance framing): `pre_trade_check` -> `order_risk_report`, `tax_harvest_analysis` -> `tax_loss_analysis`. Descriptions rewritten in factual voice with "Not investment advice." disclaimer appended. Behavior unchanged.
 
 ### Fixed
 - Audit buffer drop log spam; now logs `Warn` only every 100 drops under sustained overflow (`4a37f10`)

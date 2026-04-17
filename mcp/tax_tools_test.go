@@ -219,8 +219,8 @@ func TestTaxHarvestToolDefinition(t *testing.T) {
 	tool := &TaxHarvestTool{}
 	def := tool.Tool()
 
-	assert.Equal(t, "tax_harvest_analysis", def.Name)
+	assert.Equal(t, "tax_loss_analysis", def.Name)
 	assert.Contains(t, def.Description, "12.5% LTCG")
 	assert.Contains(t, def.Description, "20% STCG")
-	assert.Contains(t, def.Description, "tax-loss harvesting")
+	assert.Contains(t, def.Description, "Not investment advice")
 }

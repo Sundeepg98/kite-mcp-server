@@ -111,6 +111,11 @@ var appResources = []appResource{
 		DataFunc:     setupData,
 	},
 	{
+		URI: "ui://kite-mcp/credentials", Name: "Credentials Widget",
+		TemplateFile: "credentials_app.html",
+		DataFunc:     credentialsData,
+	},
+	{
 		URI: "ui://kite-mcp/admin-overview", Name: "Admin Overview",
 		TemplateFile: "admin_overview_app.html",
 		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
@@ -236,6 +241,7 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/options":   "ui://kite-mcp/options-chain",
 	"/dashboard/chart":     "ui://kite-mcp/chart",
 	"/dashboard/setup":     "ui://kite-mcp/setup",
+	"/dashboard/credentials": "ui://kite-mcp/credentials",
 	"/admin/overview":      "ui://kite-mcp/admin-overview",
 	"/admin/users":         "ui://kite-mcp/admin-users",
 	"/admin/metrics":       "ui://kite-mcp/admin-metrics",
@@ -730,6 +736,32 @@ func maskAPIKey(apiKey string) string {
 		return ""
 	}
 	return apiKey[:3] + "****..." + apiKey[len(apiKey)-3:]
+}
+
+// credentialsData returns current credential metadata for the rotation widget.
+// Only the API key is surfaced (masked) — the secret is never read back into
+// the widget. last_updated comes from KiteCredentialEntry.StoredAt which is
+// set on every Set() call in the credential store.
+func credentialsData(manager *kc.Manager, _ *audit.Store, email string) any {
+	resp := map[string]any{
+		"credentials_registered": false,
+		"api_key_masked":         "",
+		"last_updated":           "",
+	}
+	store := manager.CredentialStore()
+	if store == nil {
+		return resp
+	}
+	entry, ok := store.Get(email)
+	if !ok {
+		return resp
+	}
+	resp["credentials_registered"] = true
+	resp["api_key_masked"] = maskAPIKey(entry.APIKey)
+	if !entry.StoredAt.IsZero() {
+		resp["last_updated"] = entry.StoredAt.Format(time.RFC3339)
+	}
+	return resp
 }
 
 // brokerClientForEmail resolves a broker.Client for the given email,

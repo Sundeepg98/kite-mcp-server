@@ -49,10 +49,10 @@ func TestAllToolsRegistered(t *testing.T) {
 		"admin_list_users", "admin_freeze_global",
 		"admin_suspend_user", "admin_activate_user",
 		"start_ticker", "stop_ticker", "subscribe_instruments",
-		"portfolio_summary", "pre_trade_check",
+		"portfolio_summary", "order_risk_report",
 		"historical_price_analyzer", "technical_indicators",
 		"options_greeks", "options_payoff_builder",
-		"sector_exposure", "tax_harvest_analysis",
+		"sector_exposure", "tax_loss_analysis",
 		"sebi_compliance_status",
 	}
 	for _, name := range required {
@@ -979,7 +979,7 @@ func TestAnalyticsToolsAnnotations(t *testing.T) {
 	tools := GetAllTools()
 	readOnlyTools := []string{
 		"portfolio_summary", "portfolio_concentration", "position_analysis",
-		"sector_exposure", "tax_harvest_analysis", "dividend_calendar",
+		"sector_exposure", "tax_loss_analysis", "dividend_calendar",
 		"portfolio_analysis", "sebi_compliance_status",
 		"historical_price_analyzer", "technical_indicators",
 		"options_greeks", "options_payoff_builder",
@@ -1923,19 +1923,19 @@ func TestPortfolioRebalance_NegativePercentage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// pre_trade_check: pre-session validation
+// order_risk_report: pre-session validation
 // ---------------------------------------------------------------------------
 
 func TestPreTradeCheck_MissingRequired(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{})
-	assert.True(t, result.IsError, "pre_trade_check with no params should fail")
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "order_risk_report with no params should fail")
 	assertResultContains(t, result, "is required")
 }
 
 func TestPreTradeCheck_ZeroQuantity(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -1943,13 +1943,13 @@ func TestPreTradeCheck_ZeroQuantity(t *testing.T) {
 		"product":          "CNC",
 		"order_type":       "MARKET",
 	})
-	assert.True(t, result.IsError, "pre_trade_check with zero quantity should fail")
+	assert.True(t, result.IsError, "order_risk_report with zero quantity should fail")
 	assertResultContains(t, result, "quantity must be greater than 0")
 }
 
 func TestPreTradeCheck_LimitWithoutPrice(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -1957,7 +1957,7 @@ func TestPreTradeCheck_LimitWithoutPrice(t *testing.T) {
 		"product":          "CNC",
 		"order_type":       "LIMIT",
 	})
-	assert.True(t, result.IsError, "pre_trade_check LIMIT without price should fail")
+	assert.True(t, result.IsError, "order_risk_report LIMIT without price should fail")
 	assertResultContains(t, result, "price must be greater than 0")
 }
 

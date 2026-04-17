@@ -33,17 +33,18 @@ const (
 type TaxHarvestTool struct{}
 
 func (*TaxHarvestTool) Tool() mcp.Tool {
-	return mcp.NewTool("tax_harvest_analysis",
+	return mcp.NewTool("tax_loss_analysis",
 		mcp.WithDescription(
-			"Analyze portfolio for tax-loss harvesting opportunities. "+
-				"Shows LTCG vs STCG classification, unrealized gains/losses, harvestable losses, "+
-				"and holdings approaching LTCG eligibility. "+
-				"India-specific: 12.5% LTCG (>12 months, above ₹1.25L annual exemption), 20% STCG (≤12 months). "+
+			"Compute unrealized capital gains and losses with LTCG vs STCG classification. "+
+				"Shows invested vs current value, unrealized P&L per holding, holdings with unrealized "+
+				"losses (flagged as potentially harvestable), and holdings within 30 days of LTCG "+
+				"eligibility. India-specific rates: 12.5% LTCG (>12 months, above Rs 1.25L annual exemption), "+
+				"20% STCG (<=12 months). "+
 				"Note: Kite Holdings API does not expose individual lot purchase dates, so holdings "+
 				"are classified as STCG by default. Pass an optional assume_ltcg_days parameter to "+
-				"override the holding-period assumption.",
+				"override the holding-period assumption. Not investment advice.",
 		),
-		mcp.WithTitleAnnotation("Tax Harvest Analysis"),
+		mcp.WithTitleAnnotation("Tax Loss Analysis"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithNumber("assume_ltcg_days",
@@ -113,14 +114,14 @@ type taxHarvestResponse struct {
 func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "tax_harvest_analysis")
+		handler.trackToolCall(ctx, "tax_loss_analysis")
 
 		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
-		return handler.WithSession(ctx, "tax_harvest_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "tax_loss_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "tax_harvest_analysis", "api_error")
+				handler.trackToolError(ctx, "tax_loss_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)
@@ -129,11 +130,11 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return handler.MarshalResponse(map[string]interface{}{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
-				}, "tax_harvest_analysis")
+				}, "tax_loss_analysis")
 			}
 
 			resp := computeTaxHarvest(portfolio.Holdings, assumeDays)
-			return handler.MarshalResponse(resp, "tax_harvest_analysis")
+			return handler.MarshalResponse(resp, "tax_loss_analysis")
 		})
 	}
 }

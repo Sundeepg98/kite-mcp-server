@@ -93,10 +93,10 @@ var toolDashboardPage = map[string]string{
 	"portfolio_concentration":  "/dashboard",
 	"position_analysis":        "/dashboard",
 	"trading_context":          "/dashboard",
-	"pre_trade_check":          "/dashboard",
+	"order_risk_report":        "/dashboard",
 	"get_pnl_journal":          "/dashboard",
 	"get_mf_holdings":          "/dashboard",
-	"tax_harvest_analysis":     "/dashboard",
+	"tax_loss_analysis":        "/dashboard",
 	"portfolio_analysis":       "/dashboard",
 
 	// Orders page
@@ -189,6 +189,9 @@ var toolDashboardPage = map[string]string{
 
 	// Setup / onboarding diagnostics
 	"test_ip_whitelist": "/dashboard/setup",
+
+	// Credentials rotation
+	"update_my_credentials": "/dashboard/credentials",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,

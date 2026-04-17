@@ -483,7 +483,7 @@ func TestFactory_TaxHarvestAnalysis(t *testing.T) {
 	ts := startMockKiteForFactory()
 	defer ts.Close()
 	mgr := newFactoryManager(t, ts.URL)
-	result := callFactoryTool(t, mgr, "tax_harvest_analysis", map[string]any{})
+	result := callFactoryTool(t, mgr, "tax_loss_analysis", map[string]any{})
 	assert.NotNil(t, result)
 }
 
@@ -492,7 +492,7 @@ func TestFactory_PreTradeCheck(t *testing.T) {
 	ts := startMockKiteForFactory()
 	defer ts.Close()
 	mgr := newFactoryManager(t, ts.URL)
-	result := callFactoryTool(t, mgr, "pre_trade_check", map[string]any{
+	result := callFactoryTool(t, mgr, "order_risk_report", map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY", "transaction_type": "BUY",
 		"quantity": float64(10), "price": float64(1500), "product": "CNC", "order_type": "LIMIT",
 	})

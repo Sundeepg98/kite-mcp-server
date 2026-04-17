@@ -56,7 +56,7 @@ func TestResourceURIForTool(t *testing.T) {
 		portfolioTools := []string{
 			"get_holdings", "get_positions", "get_margins", "get_profile",
 			"portfolio_summary", "portfolio_concentration", "position_analysis",
-			"trading_context", "pre_trade_check", "get_pnl_journal", "get_mf_holdings",
+			"trading_context", "order_risk_report", "get_pnl_journal", "get_mf_holdings",
 		}
 		for _, name := range portfolioTools {
 			uri := resourceURIForTool(name)

@@ -605,7 +605,7 @@ func TestTechnicalIndicators_MissingIndicators(t *testing.T) {
 
 func TestPreTradeCheck_MissingExchange(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
 		"quantity":         float64(10),
@@ -710,7 +710,7 @@ func TestGetOrderMargins_SLMWithoutTriggerPrice(t *testing.T) {
 
 func TestPreTradeCheck_MissingTradingsymbol(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"transaction_type": "BUY",
 		"quantity":         float64(10),
@@ -778,7 +778,7 @@ func TestBacktestStrategy_InvalidStrategy2(t *testing.T) {
 func TestPreTradeCheck_MissingRequiredFields(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":       "NSE",
 		// missing tradingsymbol, quantity, etc.
 	})
@@ -789,7 +789,7 @@ func TestPreTradeCheck_MissingRequiredFields(t *testing.T) {
 func TestPreTradeCheck_ZeroQty(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -804,7 +804,7 @@ func TestPreTradeCheck_ZeroQty(t *testing.T) {
 func TestPreTradeCheck_LimitOrderNoPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -820,7 +820,7 @@ func TestPreTradeCheck_LimitOrderNoPrice(t *testing.T) {
 func TestTaxHarvestTool_ToolDefinition(t *testing.T) {
 	t.Parallel()
 	tool := (&TaxHarvestTool{}).Tool()
-	assert.Equal(t, "tax_harvest_analysis", tool.Name)
+	assert.Equal(t, "tax_loss_analysis", tool.Name)
 	assert.NotEmpty(t, tool.Description)
 	assert.NotNil(t, tool.Annotations)
 	assert.True(t, *tool.Annotations.ReadOnlyHint)
@@ -927,9 +927,9 @@ func TestAllToolsDefinitions_Categories(t *testing.T) {
 	assert.True(t, names["place_order"])
 	assert.True(t, names["get_holdings"])
 	assert.True(t, names["historical_price_analyzer"])
-	assert.True(t, names["tax_harvest_analysis"])
+	assert.True(t, names["tax_loss_analysis"])
 	assert.True(t, names["portfolio_analysis"])
-	assert.True(t, names["pre_trade_check"])
+	assert.True(t, names["order_risk_report"])
 	assert.True(t, names["trading_context"])
 	assert.True(t, names["get_pnl_journal"])
 	assert.True(t, names["options_greeks"])
@@ -2713,7 +2713,7 @@ func TestServerMetrics_NoEmail(t *testing.T) {
 func TestPreTradeCheck_MissingParams(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "pre_trade_check", "test@example.com", map[string]any{})
+	result := callToolWithManager(t, mgr, "order_risk_report", "test@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 	assertResultContains(t, result, "required")
 }

@@ -140,7 +140,7 @@ func TestTradingContext_WithSession(t *testing.T) {
 func TestPreTradeCheck_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "pre_trade_check", "trader@example.com", map[string]any{
+	result := callToolWithSession(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -165,7 +165,7 @@ func TestBacktestStrategy_WithSession(t *testing.T) {
 func TestTaxHarvest_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "tax_harvest_analysis", "trader@example.com", map[string]any{})
+	result := callToolWithSession(t, mgr, "tax_loss_analysis", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 }
 
@@ -945,7 +945,7 @@ func TestDevMode_SectorExposure(t *testing.T) {
 func TestDevMode_TaxHarvest(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "tax_harvest_analysis", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "tax_loss_analysis", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
@@ -973,7 +973,7 @@ func TestDevMode_TradingContext(t *testing.T) {
 func TestDevMode_PreTradeCheck(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "pre_trade_check", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "order_risk_report", "dev@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -1577,7 +1577,7 @@ func TestDevMode_TradingContext_Full(t *testing.T) {
 func TestDevMode_PreTradeCheck_Full(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "pre_trade_check", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "order_risk_report", "dev@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -1669,7 +1669,7 @@ func TestDevMode_PositionAnalysis_Full(t *testing.T) {
 func TestDevMode_TaxHarvest_Full(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "tax_harvest_analysis", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "tax_loss_analysis", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
 }
 
@@ -3478,7 +3478,7 @@ func TestDevMode_PortfolioRebalance_OverAllocated(t *testing.T) {
 func TestDevMode_TaxHarvest_WithMinLoss(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "tax_harvest_analysis", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "tax_loss_analysis", "dev@example.com", map[string]any{
 		"min_loss_pct": float64(5),
 	})
 	assert.NotNil(t, result)
@@ -3940,7 +3940,7 @@ func TestDevMode_GetNativeAlertHistory_MissingRequired(t *testing.T) {
 func TestDevMode_PreTradeCheck_SELLOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "pre_trade_check", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "order_risk_report", "dev@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "SELL",
@@ -3955,7 +3955,7 @@ func TestDevMode_PreTradeCheck_SELLOrder(t *testing.T) {
 func TestDevMode_PreTradeCheck_MISProduct(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "pre_trade_check", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "order_risk_report", "dev@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -5516,7 +5516,7 @@ func TestSEBICompliance_WithRiskGuard(t *testing.T) {
 func TestTaxHarvest_WithMinLoss(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "tax_harvest_analysis", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "tax_loss_analysis", "dev@example.com", map[string]any{
 		"min_loss_pct": float64(5),
 	})
 	assert.NotNil(t, result)
@@ -6074,13 +6074,13 @@ func TestConvertPosition_Full(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// pre_trade_check tool
+// order_risk_report tool
 // ---------------------------------------------------------------------------
 
 func TestPreTradeCheck_Full(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "pre_trade_check", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "order_risk_report", "dev@example.com", map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",

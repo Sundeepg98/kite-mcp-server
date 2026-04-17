@@ -544,7 +544,7 @@ func TestWithSession_NonDevMode_PreTradeCheck(t *testing.T) {
 	ts := newMockKiteServer()
 	defer ts.Close()
 	mgr := newNonDevModeManager(t, ts.URL)
-	result := callToolNonDevMode(t, mgr, ts.URL, "pre_trade_check", "session@example.com", map[string]any{
+	result := callToolNonDevMode(t, mgr, ts.URL, "order_risk_report", "session@example.com", map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY", "transaction_type": "BUY",
 		"quantity": float64(1), "product": "CNC", "order_type": "MARKET", "variety": "regular",
 	})
@@ -583,7 +583,7 @@ func TestWithSession_NonDevMode_TaxHarvestAnalysis(t *testing.T) {
 	ts := newMockKiteServer()
 	defer ts.Close()
 	mgr := newNonDevModeManager(t, ts.URL)
-	result := callToolNonDevMode(t, mgr, ts.URL, "tax_harvest_analysis", "session@example.com", nil)
+	result := callToolNonDevMode(t, mgr, ts.URL, "tax_loss_analysis", "session@example.com", nil)
 	require.NotNil(t, result)
 }
 
