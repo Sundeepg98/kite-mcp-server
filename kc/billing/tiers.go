@@ -61,6 +61,20 @@ var toolTiers = map[string]Tier{
 	"get_alert_history_reconstituted": TierFree,
 	"get_position_history_reconstituted": TierFree,
 
+	// Analytics — ungated under SEBI Path 1 (stay free forever). Previously
+	// Pro/Premium, but the billing system is dormant infrastructure and there
+	// is no regulatory or commercial reason to withhold read-only analytics.
+	"list_alerts": TierFree, "list_trailing_stops": TierFree,
+	"portfolio_concentration": TierFree, "pre_trade_check": TierFree,
+	"get_pnl_journal": TierFree, "sector_exposure": TierFree,
+	"sebi_compliance_status": TierFree,
+	"dividend_calendar": TierFree, "tax_harvest_analysis": TierFree,
+	"technical_indicators": TierFree,
+	"historical_price_analyzer": TierFree,
+	"portfolio_analysis": TierFree,
+	"options_payoff_builder": TierFree,
+	"volume_spike_detector":  TierFree,
+
 	// Admin tools (gated by admin role check, not billing tier)
 	"admin_list_users": TierFree, "admin_get_user": TierFree,
 	"admin_server_status": TierFree, "admin_get_risk_status": TierFree,
@@ -70,27 +84,37 @@ var toolTiers = map[string]Tier{
 	"admin_unfreeze_global": TierFree,
 	"admin_invite_family_member": TierFree, "admin_list_family": TierFree,
 	"admin_remove_family_member": TierFree,
+	"admin_set_billing_tier":     TierFree,
 
-	// Pro — order placement, GTT, alerts, Telegram, trailing stops, analytics, MF orders, native alerts
+	// Setup / onboarding diagnostics — always free, used before any paid
+	// feature is even usable.
+	"test_ip_whitelist": TierFree,
+
+	// Pro — state-changing/broker-write tools: order placement, GTT, alerts,
+	// Telegram, trailing stops, MF orders, native alerts. These remain gated
+	// because they carry real financial risk and are the natural dividing line
+	// if/when the billing infrastructure is reactivated. Read-only analytics
+	// that used to live here have been moved to TierFree (Path 1: stay free
+	// forever under SEBI MCP framework). The billing system stays as dormant
+	// infrastructure but every shipped analytics tool is free.
 	"place_order": TierPro, "modify_order": TierPro, "cancel_order": TierPro,
 	"close_position": TierPro, "close_all_positions": TierPro, "convert_position": TierPro,
 	"place_gtt_order": TierPro, "modify_gtt_order": TierPro, "delete_gtt_order": TierPro,
-	"set_alert": TierPro, "list_alerts": TierPro, "delete_alert": TierPro,
+	"set_alert": TierPro, "delete_alert": TierPro, "composite_alert": TierPro,
 	"place_native_alert": TierPro, "list_native_alerts": TierPro,
 	"modify_native_alert": TierPro, "delete_native_alert": TierPro, "get_native_alert_history": TierPro,
 	"setup_telegram": TierPro, "set_trailing_stop": TierPro,
-	"list_trailing_stops": TierPro, "cancel_trailing_stop": TierPro,
-	"pre_trade_check": TierPro, "get_pnl_journal": TierPro,
-	"portfolio_concentration": TierPro, "position_analysis": TierPro,
-	"sector_exposure": TierPro,
+	"cancel_trailing_stop": TierPro,
+	"position_analysis": TierPro,
 	"place_mf_order": TierPro, "cancel_mf_order": TierPro,
 	"place_mf_sip": TierPro, "cancel_mf_sip": TierPro,
 
-	// Premium — advanced analytics, backtesting, compliance
-	"historical_price_analyzer": TierPremium, "options_greeks": TierPremium,
-	"options_payoff_builder": TierPremium, "technical_indicators": TierPremium,
-	"portfolio_analysis": TierPremium, "dividend_calendar": TierPremium,
-	"tax_harvest_analysis": TierPremium, "sebi_compliance_status": TierPremium,
+	// Premium — advanced derivatives analytics. Only options_greeks remains
+	// gated here: Black-Scholes pricing is genuinely speculative/advanced and
+	// a plausible upsell target if billing is ever switched on. All other
+	// analytics (historical backtest, technical indicators, tax, dividends,
+	// compliance, portfolio rebalance, options payoff) were moved to Free.
+	"options_greeks": TierPremium,
 }
 
 // RequiredTier returns the minimum billing tier needed to invoke the named tool.

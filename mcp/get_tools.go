@@ -138,7 +138,10 @@ type TradesTool struct{}
 
 func (*TradesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_trades",
-		mcp.WithDescription("Get trading history. Supports pagination for large datasets."),
+		mcp.WithDescription("Get ALL executed trades for the current trading day (no order_id needed). "+
+			"For trades of a specific order, use get_order_trades. "+
+			"For state transitions of a specific order (PENDING→OPEN→COMPLETE), use get_order_history. "+
+			"Supports pagination for large datasets."),
 		mcp.WithTitleAnnotation("Get Trades"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -240,7 +243,10 @@ type OrderTradesTool struct{}
 
 func (*OrderTradesTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_trades",
-		mcp.WithDescription("Get trades for a specific order"),
+		mcp.WithDescription("Get executed trades for a SPECIFIC order_id. "+
+			"Returns only the fills associated with the given order (partial fills included). "+
+			"For ALL trades of the day across every order, use get_trades. "+
+			"For the state-transition history of this order (not its fills), use get_order_history."),
 		mcp.WithTitleAnnotation("Get Order Trades"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -281,7 +287,12 @@ type OrderHistoryTool struct{}
 
 func (*OrderHistoryTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_order_history",
-		mcp.WithDescription("Get order history for a specific order"),
+		mcp.WithDescription("Get the state-transition history of a SPECIFIC order_id. "+
+			"Returns a list of Order records showing how the order evolved "+
+			"(e.g. PUT ORDER RECEIVED → OPEN → TRIGGER PENDING → COMPLETE). "+
+			"This is the order lifecycle, NOT its fills. "+
+			"For the actual executed trades of this order, use get_order_trades. "+
+			"For every trade of the day, use get_trades."),
 		mcp.WithTitleAnnotation("Get Order History"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),

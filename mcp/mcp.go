@@ -64,6 +64,7 @@ func GetAllTools() []Tool {
 		// Tools for price alerts (custom, MCP server-side)
 		&SetupTelegramTool{},
 		&SetAlertTool{},
+		&CompositeAlertTool{},
 		&ListAlertsTool{},
 		&DeleteAlertTool{},
 
@@ -98,6 +99,7 @@ func GetAllTools() []Tool {
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},
 		&SectorExposureTool{},
+		&VolumeSpikeDetectorTool{},
 
 		// Portfolio rebalancing
 		&PortfolioRebalanceTool{},
