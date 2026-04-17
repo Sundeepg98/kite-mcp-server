@@ -9,6 +9,12 @@
 [![Tests](https://img.shields.io/badge/Tests-694-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
+## Registry
+
+Listed on the [official MCP Registry](https://modelcontextprotocol.info/tools/registry/) as `io.github.sundeepg98/kite-mcp-server`.
+Auto-indexed by [Smithery](https://smithery.ai) and [Glama](https://glama.ai).
+See [`server.json`](server.json) for the full registry manifest.
+
 ## What it does
 
 Connect any AI assistant to your Zerodha Kite account. Place orders, analyze portfolio, run backtests, compute options Greeks — all through natural conversation. 8 RiskGuard safety checks prevent costly mistakes before orders hit the exchange. Paper trading mode lets you practice risk-free.

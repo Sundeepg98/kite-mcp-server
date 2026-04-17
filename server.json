@@ -1,17 +1,41 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.Sundeepg98/kite-trading",
+  "name": "io.github.sundeepg98/kite-mcp-server",
   "title": "Kite Trading MCP Server",
-  "description": "Indian stock market trading via Zerodha Kite Connect. 79 tools for orders, portfolio, options.",
-  "version": "1.1.0",
+  "description": "Zerodha MCP for algorithmic developers - execution, safety, backtesting. Free and open-source.",
+  "websiteUrl": "https://kite-mcp-server.fly.dev",
   "repository": {
     "url": "https://github.com/Sundeepg98/kite-mcp-server",
-    "source": "github"
+    "source": "github",
+    "id": "1164168480"
   },
+  "version": "1.0.0",
   "remotes": [
     {
       "type": "streamable-http",
       "url": "https://kite-mcp-server.fly.dev/mcp"
     }
-  ]
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "license": "MIT",
+      "categories": ["trading", "finance", "brokerage"],
+      "keywords": ["zerodha", "kite", "india", "nse", "bse", "algo-trading", "options", "backtesting", "paper-trading"],
+      "capabilities": {
+        "tools": 80,
+        "paperTrading": true,
+        "orderPlacement": true,
+        "backtesting": true,
+        "optionsGreeks": true,
+        "telegramAlerts": true,
+        "riskGuardChecks": 8
+      },
+      "authentication": "oauth2-pkce",
+      "requires": "Zerodha Kite Connect developer app (per-user)",
+      "deployment": {
+        "region": "bom",
+        "egressIp": "209.71.68.157"
+      }
+    }
+  }
 }
