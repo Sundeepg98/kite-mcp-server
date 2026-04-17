@@ -50,8 +50,8 @@ func TestAllToolsRegistered(t *testing.T) {
 		"admin_suspend_user", "admin_activate_user",
 		"start_ticker", "stop_ticker", "subscribe_instruments",
 		"portfolio_summary", "pre_trade_check",
-		"backtest_strategy", "technical_indicators",
-		"options_greeks", "options_strategy",
+		"historical_price_analyzer", "technical_indicators",
+		"options_greeks", "options_payoff_builder",
 		"sector_exposure", "tax_harvest_analysis",
 		"sebi_compliance_status",
 	}
@@ -936,20 +936,20 @@ func TestOptionsGreeks_InvalidExpiryDate(t *testing.T) {
 
 func TestOptionsStrategy_MissingRequired(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{})
-	assert.True(t, result.IsError, "options_strategy with no params should fail validation")
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "options_payoff_builder with no params should fail validation")
 	assertResultContains(t, result, "is required")
 }
 
 func TestOptionsStrategy_MissingStrike1(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
 		// strike1 missing
 	})
-	assert.True(t, result.IsError, "options_strategy without strike1 should fail")
+	assert.True(t, result.IsError, "options_payoff_builder without strike1 should fail")
 	assertResultContains(t, result, "strike1")
 }
 
@@ -959,8 +959,8 @@ func TestOptionsStrategy_MissingStrike1(t *testing.T) {
 
 func TestBacktestStrategy_MissingRequired(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{})
-	assert.True(t, result.IsError, "backtest_strategy with no params should fail validation")
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "historical_price_analyzer with no params should fail validation")
 	assertResultContains(t, result, "is required")
 }
 
@@ -980,9 +980,9 @@ func TestAnalyticsToolsAnnotations(t *testing.T) {
 	readOnlyTools := []string{
 		"portfolio_summary", "portfolio_concentration", "position_analysis",
 		"sector_exposure", "tax_harvest_analysis", "dividend_calendar",
-		"portfolio_rebalance", "sebi_compliance_status",
-		"backtest_strategy", "technical_indicators",
-		"options_greeks", "options_strategy",
+		"portfolio_analysis", "sebi_compliance_status",
+		"historical_price_analyzer", "technical_indicators",
+		"options_greeks", "options_payoff_builder",
 	}
 
 	toolMap := make(map[string]Tool)
@@ -1854,71 +1854,71 @@ func TestConvertPosition_MissingTradingsymbol(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// portfolio_rebalance: pre-session validation (rich)
+// portfolio_analysis: pre-session validation (rich)
 // ---------------------------------------------------------------------------
 
 func TestPortfolioRebalance_MissingTargets(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{})
-	assert.True(t, result.IsError, "portfolio_rebalance without targets should fail")
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{})
+	assert.True(t, result.IsError, "portfolio_analysis without targets should fail")
 	assertResultContains(t, result, "targets")
 }
 
 func TestPortfolioRebalance_InvalidTargetsJSON(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": "not json",
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with invalid JSON should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with invalid JSON should fail")
 	assertResultContains(t, result, "Invalid")
 }
 
 func TestPortfolioRebalance_EmptyTargets(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": "{}",
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with empty targets should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with empty targets should fail")
 	assertResultContains(t, result, "at least one symbol")
 }
 
 func TestPortfolioRebalance_InvalidMode(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": `{"RELIANCE": 50, "INFY": 50}`,
 		"mode":    "invalid",
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with invalid mode should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with invalid mode should fail")
 	assertResultContains(t, result, "mode")
 }
 
 func TestPortfolioRebalance_NegativeThreshold(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets":   `{"RELIANCE": 50, "INFY": 50}`,
 		"threshold": float64(-1),
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with negative threshold should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with negative threshold should fail")
 	assertResultContains(t, result, "threshold")
 }
 
 func TestPortfolioRebalance_ExcessivePercentage(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": `{"RELIANCE": 80, "INFY": 80}`,
 		"mode":    "percentage",
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with >105% should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with >105% should fail")
 	assertResultContains(t, result, "exceeds 100%")
 }
 
 func TestPortfolioRebalance_NegativePercentage(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": `{"RELIANCE": -10, "INFY": 50}`,
 		"mode":    "percentage",
 	})
-	assert.True(t, result.IsError, "portfolio_rebalance with negative percentage should fail")
+	assert.True(t, result.IsError, "portfolio_analysis with negative percentage should fail")
 	assertResultContains(t, result, "non-negative")
 }
 
@@ -2086,32 +2086,32 @@ func TestGetOptionChain_EmptyUnderlying(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// options_strategy: additional validation
+// options_payoff_builder: additional validation
 // ---------------------------------------------------------------------------
 
 func TestOptionsStrategy_MissingExpiry(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"strike1":    float64(24000),
 		// expiry missing
 	})
-	assert.True(t, result.IsError, "options_strategy without expiry should fail")
+	assert.True(t, result.IsError, "options_payoff_builder without expiry should fail")
 	assertResultContains(t, result, "expiry")
 }
 
 // ---------------------------------------------------------------------------
-// backtest_strategy: additional validation
+// historical_price_analyzer: additional validation
 // ---------------------------------------------------------------------------
 
 func TestBacktestStrategy_MissingInstrument(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{
 		"strategy": "sma_crossover",
 		// instrument missing
 	})
-	assert.True(t, result.IsError, "backtest_strategy without instrument should fail")
+	assert.True(t, result.IsError, "historical_price_analyzer without instrument should fail")
 	assertResultContains(t, result, "is required")
 }
 

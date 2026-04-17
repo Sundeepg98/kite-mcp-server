@@ -107,11 +107,11 @@ var toolCategories = map[string]string{
 	"get_pnl_journal": "query",
 
 	// analytics
-	"backtest_strategy":      "analytics",
-	"technical_indicators":   "analytics",
-	"options_greeks":         "analytics",
-	"options_strategy":       "analytics",
-	"portfolio_rebalance":    "analytics",
+	"historical_price_analyzer": "analytics",
+	"technical_indicators":      "analytics",
+	"options_greeks":            "analytics",
+	"options_payoff_builder":    "analytics",
+	"portfolio_analysis":        "analytics",
 	"tax_harvest_analysis":   "analytics",
 	"sector_exposure":        "analytics",
 	"dividend_calendar":      "analytics",

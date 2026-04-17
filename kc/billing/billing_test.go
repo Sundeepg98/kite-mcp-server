@@ -534,7 +534,7 @@ func TestMiddleware_PremiumUserAccessesPremiumTool(t *testing.T) {
 
 	ctx := oauth.ContextWithEmail(context.Background(), "premium@example.com")
 	req := gomcp.CallToolRequest{}
-	req.Params.Name = "backtest_strategy" // TierPremium
+	req.Params.Name = "historical_price_analyzer" // TierPremium
 
 	result, err := handler(ctx, req)
 	require.NoError(t, err)
@@ -554,7 +554,7 @@ func TestMiddleware_ProUserBlockedFromPremiumTool(t *testing.T) {
 
 	ctx := oauth.ContextWithEmail(context.Background(), "pro@example.com")
 	req := gomcp.CallToolRequest{}
-	req.Params.Name = "backtest_strategy" // TierPremium
+	req.Params.Name = "historical_price_analyzer" // TierPremium
 
 	result, err := handler(ctx, req)
 	require.NoError(t, err)
@@ -1728,7 +1728,7 @@ func TestMiddleware_GetTierForUser_WithAdminEmailFn(t *testing.T) {
 
 	ctx := oauth.ContextWithEmail(context.Background(), "worker@example.com")
 	req := gomcp.CallToolRequest{}
-	req.Params.Name = "backtest_strategy" // TierPremium
+	req.Params.Name = "historical_price_analyzer" // TierPremium
 
 	result, err := handler(ctx, req)
 	require.NoError(t, err)

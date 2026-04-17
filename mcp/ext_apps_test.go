@@ -87,7 +87,7 @@ func TestResourceURIForTool(t *testing.T) {
 	})
 
 	t.Run("options tools return options-chain URI", func(t *testing.T) {
-		optionTools := []string{"get_option_chain", "options_greeks", "options_strategy"}
+		optionTools := []string{"get_option_chain", "options_greeks", "options_payoff_builder"}
 		for _, name := range optionTools {
 			uri := resourceURIForTool(name)
 			assert.Equal(t, "ui://kite-mcp/options-chain", uri, "tool %s", name)
@@ -95,7 +95,7 @@ func TestResourceURIForTool(t *testing.T) {
 	})
 
 	t.Run("analytics tools return chart URI", func(t *testing.T) {
-		analyticsTools := []string{"technical_indicators", "backtest_strategy"}
+		analyticsTools := []string{"technical_indicators", "historical_price_analyzer"}
 		for _, name := range analyticsTools {
 			uri := resourceURIForTool(name)
 			assert.Equal(t, "ui://kite-mcp/chart", uri, "tool %s", name)

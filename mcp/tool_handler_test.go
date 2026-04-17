@@ -103,7 +103,7 @@ func TestBillingMiddleware_FreeUserBlockedFromProTool(t *testing.T) {
 		{"get_profile", false},       // Free tool
 		{"get_ltp", false},           // Free tool
 		{"login", false},             // Free tool
-		{"backtest_strategy", true},  // Premium tool
+		{"historical_price_analyzer", true},  // Premium tool
 	}
 
 	for _, tc := range tests {
@@ -168,7 +168,7 @@ func TestBillingMiddleware_ProUserAccessesProTools(t *testing.T) {
 	// Premium tools should still be blocked for Pro user.
 	t.Run("premium tool blocked for pro user", func(t *testing.T) {
 		req := gomcp.CallToolRequest{}
-		req.Params.Name = "backtest_strategy"
+		req.Params.Name = "historical_price_analyzer"
 
 		result, err := handler(ctx, req)
 		require.NoError(t, err)

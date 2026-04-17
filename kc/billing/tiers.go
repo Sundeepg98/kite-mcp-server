@@ -87,9 +87,9 @@ var toolTiers = map[string]Tier{
 	"place_mf_sip": TierPro, "cancel_mf_sip": TierPro,
 
 	// Premium — advanced analytics, backtesting, compliance
-	"backtest_strategy": TierPremium, "options_greeks": TierPremium,
-	"options_strategy": TierPremium, "technical_indicators": TierPremium,
-	"portfolio_rebalance": TierPremium, "dividend_calendar": TierPremium,
+	"historical_price_analyzer": TierPremium, "options_greeks": TierPremium,
+	"options_payoff_builder": TierPremium, "technical_indicators": TierPremium,
+	"portfolio_analysis": TierPremium, "dividend_calendar": TierPremium,
 	"tax_harvest_analysis": TierPremium, "sebi_compliance_status": TierPremium,
 }
 

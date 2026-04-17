@@ -97,7 +97,7 @@ var toolDashboardPage = map[string]string{
 	"get_pnl_journal":          "/dashboard",
 	"get_mf_holdings":          "/dashboard",
 	"tax_harvest_analysis":     "/dashboard",
-	"portfolio_rebalance":      "/dashboard",
+	"portfolio_analysis":       "/dashboard",
 
 	// Orders page
 	"get_orders":               "/dashboard/orders",
@@ -126,11 +126,11 @@ var toolDashboardPage = map[string]string{
 	// Derivatives / options tools → options chain page
 	"get_option_chain":         "/dashboard/options",
 	"options_greeks":           "/dashboard/options",
-	"options_strategy":         "/dashboard/options",
+	"options_payoff_builder":   "/dashboard/options",
 
 	// Analytics tools → chart page
 	"technical_indicators":     "/dashboard/chart",
-	"backtest_strategy":        "/dashboard/chart",
+	"historical_price_analyzer": "/dashboard/chart",
 
 	// Paper trading page
 	"paper_trading_toggle":     "/dashboard/paper",

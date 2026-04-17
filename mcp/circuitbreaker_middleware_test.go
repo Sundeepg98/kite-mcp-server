@@ -144,7 +144,7 @@ func TestCircuitBreaker_IsBrokerTool(t *testing.T) {
 	assert.True(t, cb.isBrokerTool("get_holdings"))
 	assert.True(t, cb.isBrokerTool("get_ltp"))
 	assert.False(t, cb.isBrokerTool("search_instruments"))
-	assert.False(t, cb.isBrokerTool("backtest_strategy"))
+	assert.False(t, cb.isBrokerTool("historical_price_analyzer"))
 	assert.False(t, cb.isBrokerTool(""))
 }
 

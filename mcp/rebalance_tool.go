@@ -21,9 +21,9 @@ import (
 type PortfolioRebalanceTool struct{}
 
 func (*PortfolioRebalanceTool) Tool() mcp.Tool {
-	return mcp.NewTool("portfolio_rebalance",
-		mcp.WithDescription("Analyze portfolio against target allocations and suggest rebalancing trades. Provide target allocations as JSON (e.g., {\"RELIANCE\": 20, \"INFY\": 15, \"TCS\": 10} for percentage targets, or {\"RELIANCE\": 200000, \"INFY\": 150000} for value targets in INR). Returns drift analysis and suggested trades."),
-		mcp.WithTitleAnnotation("Portfolio Rebalance"),
+	return mcp.NewTool("portfolio_analysis",
+		mcp.WithDescription("Analyze current portfolio allocation vs target percentages. Shows deviations and suggested adjustment quantities for user consideration. Not investment advice."),
+		mcp.WithTitleAnnotation("Portfolio Analysis"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("targets", mcp.Description("Target allocations as JSON. Keys are tradingsymbols. Values are either percentages (must sum to ~100) or absolute INR amounts."), mcp.Required()),
@@ -75,7 +75,7 @@ type rebalanceResponse struct {
 func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "portfolio_rebalance")
+		handler.trackToolCall(ctx, "portfolio_analysis")
 
 		args := request.GetArguments()
 
@@ -126,11 +126,11 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			}
 		}
 
-		return handler.WithSession(ctx, "portfolio_rebalance", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "portfolio_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Fetch current holdings via CQRS query bus
 			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "portfolio_rebalance", "api_error")
+				handler.trackToolError(ctx, "portfolio_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)
@@ -169,7 +169,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			if len(ltpNeeded) > 0 {
 				raw, ltpErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: ltpNeeded})
 				if ltpErr != nil {
-					handler.trackToolError(ctx, "portfolio_rebalance", "ltp_error")
+					handler.trackToolError(ctx, "portfolio_analysis", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil
 				}
 				ltpResp := raw.(map[string]broker.LTP)
@@ -381,7 +381,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 				},
 			}
 
-			return handler.MarshalResponse(resp, "portfolio_rebalance")
+			return handler.MarshalResponse(resp, "portfolio_analysis")
 		})
 	}
 }

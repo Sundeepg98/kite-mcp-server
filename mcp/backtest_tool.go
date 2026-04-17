@@ -17,9 +17,9 @@ import (
 type BacktestStrategyTool struct{}
 
 func (*BacktestStrategyTool) Tool() mcp.Tool {
-	return mcp.NewTool("backtest_strategy",
-		mcp.WithDescription("Backtest a trading strategy against historical data. Supports built-in strategies: sma_crossover (buy when short SMA crosses above long SMA), rsi_reversal (buy when RSI < 30, sell when > 70), breakout (buy on N-day high, sell on N-day low), mean_reversion (buy below lower Bollinger Band, sell above upper). Returns total return, max drawdown, Sharpe ratio, win rate, and trade log."),
-		mcp.WithTitleAnnotation("Backtest Strategy"),
+	return mcp.NewTool("historical_price_analyzer",
+		mcp.WithDescription("Analyze historical price behavior over a period using simple rule-based entry/exit conditions. Returns statistics (return %, drawdown, win rate) for educational comparison. Not investment advice."),
+		mcp.WithTitleAnnotation("Historical Price Analyzer"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("strategy",
@@ -97,7 +97,7 @@ type backtestSignal struct {
 func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "backtest_strategy")
+		handler.trackToolCall(ctx, "historical_price_analyzer")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "strategy", "exchange", "tradingsymbol"); err != nil {
@@ -139,7 +139,7 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		// Parse strategy-specific parameters with defaults
 		param1, param2 := backtestDefaults(strategy, args)
 
-		return handler.WithSession(ctx, "backtest_strategy", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "historical_price_analyzer", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Resolve instrument token
 			inst := manager.Instruments
 			if inst == nil {
@@ -173,7 +173,7 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			// Run the backtest
 			result := runBacktest(candles, strategy, exchange, symbol, initialCapital, positionSizePct, param1, param2)
 
-			return handler.MarshalResponse(result, "backtest_strategy")
+			return handler.MarshalResponse(result, "historical_price_analyzer")
 		})
 	}
 }

@@ -174,7 +174,7 @@ func TestCloseAllPositions_MissingConfirm(t *testing.T) {
 
 func TestOptionsStrategy_InvalidStrategy(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "invalid_strategy",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -519,7 +519,7 @@ func TestInstrumentResolverAdapter_Type(t *testing.T) {
 
 func TestOptionsStrategy_BullCallSpreadInvalidStrikes(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -532,7 +532,7 @@ func TestOptionsStrategy_BullCallSpreadInvalidStrikes(t *testing.T) {
 
 func TestOptionsStrategy_InvalidExpiry(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     "not-a-date",
@@ -544,7 +544,7 @@ func TestOptionsStrategy_InvalidExpiry(t *testing.T) {
 
 func TestOptionsStrategy_BearPutSpreadInvalidStrikes(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bear_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -557,7 +557,7 @@ func TestOptionsStrategy_BearPutSpreadInvalidStrikes(t *testing.T) {
 
 func TestOptionsStrategy_IronCondorMissingStrikes(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -571,7 +571,7 @@ func TestOptionsStrategy_IronCondorMissingStrikes(t *testing.T) {
 
 func TestOptionsStrategy_ButterflyBadOrder(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "butterfly",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -585,7 +585,7 @@ func TestOptionsStrategy_ButterflyBadOrder(t *testing.T) {
 
 func TestBacktestStrategy_MissingStrategy(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
 		// strategy missing
 	})
@@ -683,7 +683,7 @@ func TestSetAlert_RisePctRequiresReferencePrice(t *testing.T) {
 
 func TestOptionsStrategy_StrangleMissingStrike2(t *testing.T) {
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     "2024-04-03",
@@ -766,7 +766,7 @@ func TestConvertPosition_MissingNewProduct(t *testing.T) {
 func TestBacktestStrategy_InvalidStrategy2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{
 		"strategy":       "invalid_strategy",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -829,7 +829,7 @@ func TestTaxHarvestTool_ToolDefinition(t *testing.T) {
 func TestPortfolioRebalance_ValueModeNegative(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": `{"INFY": -50000}`,
 		"mode":    "value",
 	})
@@ -926,14 +926,14 @@ func TestAllToolsDefinitions_Categories(t *testing.T) {
 	// Verify key tools exist
 	assert.True(t, names["place_order"])
 	assert.True(t, names["get_holdings"])
-	assert.True(t, names["backtest_strategy"])
+	assert.True(t, names["historical_price_analyzer"])
 	assert.True(t, names["tax_harvest_analysis"])
-	assert.True(t, names["portfolio_rebalance"])
+	assert.True(t, names["portfolio_analysis"])
 	assert.True(t, names["pre_trade_check"])
 	assert.True(t, names["trading_context"])
 	assert.True(t, names["get_pnl_journal"])
 	assert.True(t, names["options_greeks"])
-	assert.True(t, names["options_strategy"])
+	assert.True(t, names["options_payoff_builder"])
 	assert.True(t, names["server_metrics"])
 }
 
@@ -1542,7 +1542,7 @@ func TestSessionTool_GetMFOrders_SessionError(t *testing.T) {
 func TestSessionTool_OptionsStrategy_SessionError(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithSession(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":      "straddle",
 		"underlying":    "NIFTY",
 		"expiry":        "2026-04-24",
@@ -2550,7 +2550,7 @@ func TestGetPnLJournal_Periods(t *testing.T) {
 func TestPortfolioRebalance_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "test@example.com", map[string]any{
 		"targets": "not valid json",
 	})
 	assert.True(t, result.IsError)
@@ -2560,7 +2560,7 @@ func TestPortfolioRebalance_InvalidJSON(t *testing.T) {
 func TestPortfolioRebalance_EmptyObject(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "test@example.com", map[string]any{
 		"targets": "{}",
 	})
 	assert.True(t, result.IsError)
@@ -2570,7 +2570,7 @@ func TestPortfolioRebalance_EmptyObject(t *testing.T) {
 func TestPortfolioRebalance_InvalidMode_V2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "portfolio_rebalance", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "portfolio_analysis", "test@example.com", map[string]any{
 		"targets": `{"RELIANCE": 50, "INFY": 50}`,
 		"mode":    "invalid",
 	})
@@ -2675,7 +2675,7 @@ func TestOptionsGreeks_MissingParams(t *testing.T) {
 func TestOptionsStrategy_MissingParams(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{})
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 	assertResultContains(t, result, "required")
 }
@@ -2817,7 +2817,7 @@ func TestTechnicalIndicators_MissingParams(t *testing.T) {
 func TestBacktestStrategy_MissingParams(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "test@example.com", map[string]any{})
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "test@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 	assertResultContains(t, result, "required")
 }
@@ -2973,7 +2973,7 @@ func TestOptionsGreeks_InvalidParams(t *testing.T) {
 func TestOptionsStrategy_InvalidStrategy_V2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "invalid_strategy",
 		"underlying": "NIFTY",
 		"spot_price": float64(24000),
@@ -2984,7 +2984,7 @@ func TestOptionsStrategy_InvalidStrategy_V2(t *testing.T) {
 func TestBacktestStrategy_InvalidStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "backtest_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "historical_price_analyzer", "test@example.com", map[string]any{
 		"instrument": "NSE:INFY",
 		"strategy":   "nonexistent",
 		"period":     "1y",
@@ -3173,7 +3173,7 @@ func TestOptionsGreeks_InvalidExpiryFormat(t *testing.T) {
 func TestOptionsStrategy_InvalidExpiry_V2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "bad-date",
@@ -3186,7 +3186,7 @@ func TestOptionsStrategy_InvalidExpiry_V2(t *testing.T) {
 func TestOptionsStrategy_BullCallSpread_InvalidStrikes(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -3200,7 +3200,7 @@ func TestOptionsStrategy_BullCallSpread_InvalidStrikes(t *testing.T) {
 func TestOptionsStrategy_BearPutSpread_InvalidStrikes(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "bear_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -3213,7 +3213,7 @@ func TestOptionsStrategy_BearPutSpread_InvalidStrikes(t *testing.T) {
 func TestOptionsStrategy_BearCallSpread_InvalidStrikes(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "bear_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -3226,7 +3226,7 @@ func TestOptionsStrategy_BearCallSpread_InvalidStrikes(t *testing.T) {
 func TestOptionsStrategy_UnknownStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithManager(t, mgr, "options_strategy", "test@example.com", map[string]any{
+	result := callToolWithManager(t, mgr, "options_payoff_builder", "test@example.com", map[string]any{
 		"strategy":   "unknown_strat",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",

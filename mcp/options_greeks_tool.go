@@ -379,15 +379,15 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 // ---------------------------------------------------------------------------
-// Tool 2: options_strategy
+// Tool 2: options_payoff_builder
 // ---------------------------------------------------------------------------
 
 type OptionsStrategyTool struct{}
 
 func (*OptionsStrategyTool) Tool() gomcp.Tool {
-	return gomcp.NewTool("options_strategy",
-		gomcp.WithDescription("Construct a multi-leg options strategy and compute max profit, max loss, breakeven points, and net premium. Strategies: bull_call_spread, bear_put_spread, straddle, strangle, iron_condor, butterfly, bear_call_spread, bull_put_spread. Or specify custom legs via the legs parameter."),
-		gomcp.WithTitleAnnotation("Options Strategy Builder"),
+	return gomcp.NewTool("options_payoff_builder",
+		gomcp.WithDescription("Build multi-leg option position payoff diagrams (straddle, iron condor, butterfly, etc.) showing max profit, max loss, breakevens, and P&L curve. Educational visualization. Not investment advice."),
+		gomcp.WithTitleAnnotation("Options Payoff Builder"),
 		gomcp.WithReadOnlyHintAnnotation(true),
 		gomcp.WithOpenWorldHintAnnotation(true),
 		gomcp.WithString("strategy", gomcp.Description("Strategy name: bull_call_spread, bear_put_spread, bear_call_spread, bull_put_spread, straddle, strangle, iron_condor, butterfly, custom"), gomcp.Required()),
@@ -414,7 +414,7 @@ type strategyLeg struct {
 	TotalPremium  float64 `json:"total_premium"`
 }
 
-// strategyResponse is the full output for options_strategy.
+// strategyResponse is the full output for options_payoff_builder.
 type strategyResponse struct {
 	Strategy     string        `json:"strategy"`
 	Underlying   string        `json:"underlying"`
@@ -442,7 +442,7 @@ type legSpec struct {
 func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "options_strategy")
+		handler.trackToolCall(ctx, "options_payoff_builder")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "strategy", "underlying", "expiry", "strike1"); err != nil {
@@ -573,7 +573,7 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		return handler.WithSession(ctx, "options_strategy", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
+		return handler.WithSession(ctx, "options_payoff_builder", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 			// Resolve trading symbols and fetch premiums for each leg
 			legs := make([]strategyLeg, 0, len(specs))
 			instrumentKeys := make([]string, 0, len(specs))
@@ -794,7 +794,7 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				TotalLots:    lots,
 			}
 
-			return handler.MarshalResponse(resp, "options_strategy")
+			return handler.MarshalResponse(resp, "options_payoff_builder")
 		})
 	}
 }

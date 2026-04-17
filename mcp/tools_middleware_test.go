@@ -236,7 +236,7 @@ func TestToolDashboardPage_WatchlistTools(t *testing.T) {
 }
 
 func TestToolDashboardPage_OptionsTools(t *testing.T) {
-	optionsTools := []string{"get_option_chain", "options_greeks", "options_strategy"}
+	optionsTools := []string{"get_option_chain", "options_greeks", "options_payoff_builder"}
 	for _, tool := range optionsTools {
 		path, ok := toolDashboardPage[tool]
 		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
@@ -245,7 +245,7 @@ func TestToolDashboardPage_OptionsTools(t *testing.T) {
 }
 
 func TestToolDashboardPage_ChartTools(t *testing.T) {
-	chartTools := []string{"technical_indicators", "backtest_strategy", "get_quotes", "get_ltp", "get_ohlc", "get_historical_data", "search_instruments"}
+	chartTools := []string{"technical_indicators", "historical_price_analyzer", "get_quotes", "get_ltp", "get_ohlc", "get_historical_data", "search_instruments"}
 	for _, tool := range chartTools {
 		path, ok := toolDashboardPage[tool]
 		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)

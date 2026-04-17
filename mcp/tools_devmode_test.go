@@ -154,7 +154,7 @@ func TestPreTradeCheck_WithSession(t *testing.T) {
 func TestBacktestStrategy_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "backtest_strategy", "trader@example.com", map[string]any{
+	result := callToolWithSession(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{
 		"strategy":       "sma_crossover",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -172,7 +172,7 @@ func TestTaxHarvest_WithSession(t *testing.T) {
 func TestPortfolioRebalance_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "portfolio_rebalance", "trader@example.com", map[string]any{
+	result := callToolWithSession(t, mgr, "portfolio_analysis", "trader@example.com", map[string]any{
 		"targets": `{"INFY": 50, "TCS": 50}`,
 	})
 	assert.True(t, result.IsError)
@@ -514,7 +514,7 @@ func TestGetOrderCharges_WithSession(t *testing.T) {
 func TestOptionsStrategy_WithSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := callToolWithSession(t, mgr, "options_strategy", "trader@example.com", map[string]any{
+	result := callToolWithSession(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2026-04-30",
@@ -1018,7 +1018,7 @@ func TestDevMode_OptionsGreeks(t *testing.T) {
 func TestDevMode_BacktestStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":       "sma_crossover",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -1061,7 +1061,7 @@ func TestDevMode_DeleteNativeAlert(t *testing.T) {
 func TestDevMode_PortfolioRebalance(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"targets": `{"INFY": 50, "TCS": 50}`,
 	})
 	assert.NotNil(t, result)
@@ -1208,7 +1208,7 @@ func TestDevMode_GetOptionChain(t *testing.T) {
 func TestDevMode_OptionsStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     "2026-04-24",
@@ -1524,7 +1524,7 @@ func TestOpenDashboard_AllDeepLinkParams(t *testing.T) {
 func TestPortfolioRebalance_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"targets":   `{"RELIANCE": 50, "INFY": 50}`,
 		"mode":      "percentage",
 		"threshold": float64(1.0),
@@ -1923,7 +1923,7 @@ func TestTradingContext_DevMode(t *testing.T) {
 func TestPortfolioRebalance_ValueMode_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"targets": `{"RELIANCE": 200000, "INFY": 150000}`,
 		"mode":    "value",
 	})
@@ -1933,7 +1933,7 @@ func TestPortfolioRebalance_ValueMode_DevMode(t *testing.T) {
 func TestPortfolioRebalance_WithThreshold_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"targets":   `{"RELIANCE": 50, "INFY": 50}`,
 		"mode":      "percentage",
 		"threshold": float64(5.0),
@@ -1972,7 +1972,7 @@ func TestOptionsGreeks_ValidPE_DevMode(t *testing.T) {
 func TestOptionsStrategy_BullCallSpread_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -1985,7 +1985,7 @@ func TestOptionsStrategy_BullCallSpread_DevMode(t *testing.T) {
 func TestOptionsStrategy_IronCondor_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -2000,7 +2000,7 @@ func TestOptionsStrategy_IronCondor_DevMode(t *testing.T) {
 func TestOptionsStrategy_Straddle_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -2012,7 +2012,7 @@ func TestOptionsStrategy_Straddle_DevMode(t *testing.T) {
 func TestOptionsStrategy_Strangle_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     "2027-06-01",
@@ -2604,7 +2604,7 @@ func TestDevMode_OptionsGreeks_ValidPE_APIError(t *testing.T) {
 func TestDevMode_OptionsStrategy_MissingRequired(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
@@ -2612,7 +2612,7 @@ func TestDevMode_OptionsStrategy_MissingRequired(t *testing.T) {
 func TestDevMode_OptionsStrategy_InvalidStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":    "invalid_strategy",
 		"underlying":  "NIFTY",
 		"expiry_date": "2026-04-24",
@@ -2625,7 +2625,7 @@ func TestDevMode_OptionsStrategy_InvalidStrategy(t *testing.T) {
 func TestDevMode_OptionsStrategy_BullCallSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "bull_call_spread",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2641,7 +2641,7 @@ func TestDevMode_OptionsStrategy_BullCallSpread(t *testing.T) {
 func TestDevMode_OptionsStrategy_BearPutSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "bear_put_spread",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2656,7 +2656,7 @@ func TestDevMode_OptionsStrategy_BearPutSpread(t *testing.T) {
 func TestDevMode_OptionsStrategy_IronCondor(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "iron_condor",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2671,7 +2671,7 @@ func TestDevMode_OptionsStrategy_IronCondor(t *testing.T) {
 func TestDevMode_OptionsStrategy_Straddle(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":    "long_straddle",
 		"underlying":  "NIFTY",
 		"expiry_date": "2026-04-24",
@@ -2685,7 +2685,7 @@ func TestDevMode_OptionsStrategy_Straddle(t *testing.T) {
 func TestDevMode_OptionsStrategy_Strangle(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "long_strangle",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2700,7 +2700,7 @@ func TestDevMode_OptionsStrategy_Strangle(t *testing.T) {
 func TestDevMode_OptionsStrategy_ProtectivePut(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":    "protective_put",
 		"underlying":  "NIFTY",
 		"expiry_date": "2026-04-24",
@@ -2714,7 +2714,7 @@ func TestDevMode_OptionsStrategy_ProtectivePut(t *testing.T) {
 func TestDevMode_OptionsStrategy_CoveredCall(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "covered_call",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2729,7 +2729,7 @@ func TestDevMode_OptionsStrategy_CoveredCall(t *testing.T) {
 func TestDevMode_OptionsStrategy_ButterflySpread(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":     "butterfly",
 		"underlying":   "NIFTY",
 		"expiry_date":  "2026-04-24",
@@ -2810,7 +2810,7 @@ func TestDevMode_TechnicalIndicators_ValidSymbol(t *testing.T) {
 func TestDevMode_BacktestStrategy_MissingRequired(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
@@ -2818,7 +2818,7 @@ func TestDevMode_BacktestStrategy_MissingRequired(t *testing.T) {
 func TestDevMode_BacktestStrategy_InvalidStrategy(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":       "invalid",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -2830,7 +2830,7 @@ func TestDevMode_BacktestStrategy_InvalidStrategy(t *testing.T) {
 func TestDevMode_BacktestStrategy_SMACrossover(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":        "sma_crossover",
 		"exchange":        "NSE",
 		"tradingsymbol":   "INFY",
@@ -2846,7 +2846,7 @@ func TestDevMode_BacktestStrategy_SMACrossover(t *testing.T) {
 func TestDevMode_BacktestStrategy_RSIReversal(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":          "rsi_reversal",
 		"exchange":          "NSE",
 		"tradingsymbol":     "RELIANCE",
@@ -2860,7 +2860,7 @@ func TestDevMode_BacktestStrategy_RSIReversal(t *testing.T) {
 func TestDevMode_BacktestStrategy_Breakout(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":       "breakout",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -2874,7 +2874,7 @@ func TestDevMode_BacktestStrategy_Breakout(t *testing.T) {
 func TestDevMode_BacktestStrategy_MeanReversion(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":       "mean_reversion",
 		"exchange":       "NSE",
 		"tradingsymbol":  "INFY",
@@ -2889,7 +2889,7 @@ func TestDevMode_BacktestStrategy_CapitalAndDaysBounds(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	// days > 730 should be clamped
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":        "sma_crossover",
 		"exchange":        "NSE",
 		"tradingsymbol":   "INFY",
@@ -3441,7 +3441,7 @@ func TestDevMode_ListTrailingStops_NoEmail(t *testing.T) {
 func TestDevMode_PortfolioRebalance_MissingRequired(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{})
 	assert.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
@@ -3449,7 +3449,7 @@ func TestDevMode_PortfolioRebalance_MissingRequired(t *testing.T) {
 func TestDevMode_PortfolioRebalance_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"target_allocation": "not json",
 	})
 	assert.NotNil(t, result)
@@ -3459,7 +3459,7 @@ func TestDevMode_PortfolioRebalance_InvalidJSON(t *testing.T) {
 func TestDevMode_PortfolioRebalance_ValidAllocation(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"target_allocation": `{"NSE:INFY": 50, "NSE:RELIANCE": 50}`,
 	})
 	assert.NotNil(t, result)
@@ -3469,7 +3469,7 @@ func TestDevMode_PortfolioRebalance_ValidAllocation(t *testing.T) {
 func TestDevMode_PortfolioRebalance_OverAllocated(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"target_allocation": `{"NSE:INFY": 60, "NSE:RELIANCE": 60}`,
 	})
 	assert.NotNil(t, result)
@@ -4461,7 +4461,7 @@ func TestDevMode_OptionsStrategy_WithNFO_BullCall(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4476,7 +4476,7 @@ func TestDevMode_OptionsStrategy_WithNFO_IronCondor(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4493,7 +4493,7 @@ func TestDevMode_OptionsStrategy_WithNFO_Straddle(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4507,7 +4507,7 @@ func TestDevMode_OptionsStrategy_WithNFO_BearPut(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bear_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4522,7 +4522,7 @@ func TestDevMode_OptionsStrategy_WithNFO_Strangle(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4537,7 +4537,7 @@ func TestDevMode_OptionsStrategy_WithNFO_BearCallSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bear_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4552,7 +4552,7 @@ func TestDevMode_OptionsStrategy_WithNFO_BullPutSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4567,7 +4567,7 @@ func TestDevMode_OptionsStrategy_WithNFO_Butterfly(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "butterfly",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4583,7 +4583,7 @@ func TestDevMode_OptionsStrategy_WithNFO_BadStrikeOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4599,7 +4599,7 @@ func TestDevMode_OptionsStrategy_WithNFO_IronCondorBadOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -4616,7 +4616,7 @@ func TestDevMode_OptionsStrategy_WithNFO_StrangleMissingStrike2(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -5562,7 +5562,7 @@ func TestDividendCalendar_AllPeriods(t *testing.T) {
 func TestBacktest_MeanReversion(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":        "mean_reversion",
 		"exchange":        "NSE",
 		"tradingsymbol":   "INFY",
@@ -5575,7 +5575,7 @@ func TestBacktest_MeanReversion(t *testing.T) {
 func TestBacktest_RSIReversal(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":        "rsi_reversal",
 		"exchange":        "NSE",
 		"tradingsymbol":   "INFY",
@@ -5588,7 +5588,7 @@ func TestBacktest_RSIReversal(t *testing.T) {
 func TestBacktest_Breakout(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":        "breakout",
 		"exchange":        "NSE",
 		"tradingsymbol":   "RELIANCE",
@@ -5601,7 +5601,7 @@ func TestBacktest_Breakout(t *testing.T) {
 func TestBacktest_InvalidStrategy(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "backtest_strategy", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "historical_price_analyzer", "dev@example.com", map[string]any{
 		"strategy":      "invalid_strategy",
 		"exchange":      "NSE",
 		"tradingsymbol": "INFY",
@@ -5872,7 +5872,7 @@ func TestOptionsGreeks_SingleOption(t *testing.T) {
 func TestOptionsStrategy_BullCallSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"underlying": "NSE:NIFTY 50",
 		"strategy":   "bull_call_spread",
 		"expiry":     time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
@@ -5884,7 +5884,7 @@ func TestOptionsStrategy_BullCallSpread(t *testing.T) {
 func TestOptionsStrategy_BearPutSpread(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"underlying": "NSE:NIFTY 50",
 		"strategy":   "bear_put_spread",
 		"expiry":     time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
@@ -5896,7 +5896,7 @@ func TestOptionsStrategy_BearPutSpread(t *testing.T) {
 func TestOptionsStrategy_IronCondor(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"underlying":   "NSE:NIFTY 50",
 		"strategy":     "iron_condor",
 		"expiry":       time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
@@ -5909,7 +5909,7 @@ func TestOptionsStrategy_IronCondor(t *testing.T) {
 func TestOptionsStrategy_Butterfly(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"underlying":   "NSE:NIFTY 50",
 		"strategy":     "butterfly",
 		"expiry":       time.Now().AddDate(0, 0, 14).Format("2006-01-02"),
@@ -6048,7 +6048,7 @@ func TestDeleteGTTOrder_Full(t *testing.T) {
 func TestPortfolioRebalance_WithTargets(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"target_allocation": `{"INFY":40,"RELIANCE":60}`,
 		"position_size_pct": float64(100),
 	})
@@ -6397,13 +6397,13 @@ func TestPaperReset_NotEnabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// analytics: portfolio_rebalance edge cases
+// analytics: portfolio_analysis edge cases
 // ---------------------------------------------------------------------------
 
 func TestPortfolioRebalance_InvalidJSON_Push(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{
 		"target_allocation": `{not json}`,
 	})
 	assert.True(t, result.IsError)
@@ -6586,7 +6586,7 @@ func TestSetupTelegram_ZeroChatID_Push(t *testing.T) {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// options_strategy: branch coverage for bear_call_spread, bull_put_spread,
+// options_payoff_builder: branch coverage for bear_call_spread, bull_put_spread,
 // straddle, strangle, unknown strategy, invalid expiry, bad strike ordering
 // ---------------------------------------------------------------------------
 
@@ -6594,7 +6594,7 @@ func TestOptionsStrategy_BearCallSpread_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bear_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6608,7 +6608,7 @@ func TestOptionsStrategy_BullPutSpread_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6622,7 +6622,7 @@ func TestOptionsStrategy_Straddle_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6635,7 +6635,7 @@ func TestOptionsStrategy_Strangle_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6649,7 +6649,7 @@ func TestOptionsStrategy_UnknownStrategy_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "zigzag",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6662,7 +6662,7 @@ func TestOptionsStrategy_UnknownStrategy_Push(t *testing.T) {
 func TestOptionsStrategy_InvalidExpiry_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     "not-a-date",
@@ -6676,7 +6676,7 @@ func TestOptionsStrategy_BullCallSpread_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6691,7 +6691,7 @@ func TestOptionsStrategy_BearPutSpread_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bear_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6706,7 +6706,7 @@ func TestOptionsStrategy_BearCallSpread_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bear_call_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6720,7 +6720,7 @@ func TestOptionsStrategy_BullPutSpread_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "bull_put_spread",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6734,7 +6734,7 @@ func TestOptionsStrategy_Strangle_NoStrike2_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "strangle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6748,7 +6748,7 @@ func TestOptionsStrategy_IronCondor_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6764,7 +6764,7 @@ func TestOptionsStrategy_IronCondor_MissingStrikes_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "iron_condor",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6777,7 +6777,7 @@ func TestOptionsStrategy_Butterfly_BadOrder_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "butterfly",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6792,7 +6792,7 @@ func TestOptionsStrategy_Butterfly_MissingStrikes_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "butterfly",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -6805,7 +6805,7 @@ func TestOptionsStrategy_LotsOverride_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newNFODevModeManager(t)
 	futureExpiry := time.Now().AddDate(0, 0, 14).Format("2006-01-02")
-	result := callToolNFODevMode(t, mgr, "options_strategy", "dev@example.com", map[string]any{
+	result := callToolNFODevMode(t, mgr, "options_payoff_builder", "dev@example.com", map[string]any{
 		"strategy":   "straddle",
 		"underlying": "NIFTY",
 		"expiry":     futureExpiry,
@@ -7139,13 +7139,13 @@ func TestDividendCalendar_MissingInstrument_Push(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// portfolio_rebalance: missing params
+// portfolio_analysis: missing params
 // ---------------------------------------------------------------------------
 
 func TestPortfolioRebalance_MissingTargets_Push(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	result := callToolDevMode(t, mgr, "portfolio_rebalance", "dev@example.com", map[string]any{})
+	result := callToolDevMode(t, mgr, "portfolio_analysis", "dev@example.com", map[string]any{})
 	assert.True(t, result.IsError)
 	assert.Contains(t, resultText(t, result), "required")
 }
