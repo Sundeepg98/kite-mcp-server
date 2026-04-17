@@ -1,27 +1,59 @@
-# Kite Trading MCP Server
-
-> Trade on Indian stock markets via AI — Claude, ChatGPT, VS Code, or any MCP client.
-
-80 tools · Paper trading · Backtesting · Options Greeks · 8 safety checks · Telegram alerts · SEBI compliant
+# Kite MCP Server
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
-[![Tools](https://img.shields.io/badge/Tools-80-blue)]()
-[![Tests](https://img.shields.io/badge/Tests-694-brightgreen)]()
+[![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-7000%2B-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions)
+[![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-## Registry
+> Self-hosted MCP server that turns Claude / ChatGPT into a power-user trading copilot for your Zerodha Kite account.
 
-Listed on the [official MCP Registry](https://modelcontextprotocol.info/tools/registry/) as `io.github.sundeepg98/kite-mcp-server`.
-Auto-indexed by [Smithery](https://smithery.ai) and [Glama](https://glama.ai).
-See [`server.json`](server.json) for the full registry manifest.
+<!-- TODO: 30-second demo GIF of portfolio analysis + order placement flow -->
 
-## What it does
+## What this is
 
-Connect any AI assistant to your Zerodha Kite account. Place orders, analyze portfolio, run backtests, compute options Greeks — all through natural conversation. 8 RiskGuard safety checks prevent costly mistakes before orders hit the exchange. Paper trading mode lets you practice risk-free.
+A Go server that speaks the [Model Context Protocol](https://modelcontextprotocol.io/) and bridges any MCP-compatible AI client to Zerodha's Kite Connect API. Users bring their own Kite developer app (per-user OAuth 2.1 with PKCE) — credentials never leak between accounts. Ships ~80 tools spanning portfolio analysis, market data, options Greeks, backtesting, alerts, paper trading, and order placement, plus MCP Apps widgets that render inline inside chat. Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor, VS Code Copilot, Windsurf — anything MCP-compliant. Forked from and complementary to [Zerodha's official read-only MCP](https://mcp.kite.trade) (22 tools, GTT only); this server adds order placement, Telegram alerts, riskguard safety rails, and analytics.
 
-## Quick Start
+## Why trust this
 
-**1. Connect** — add to your MCP client config:
+- **7,000+ tests** across 159 test files — run `go test ./... -count=1`
+- **Security audit**: 27-pass manual analysis, 181 findings, all resolved — see [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_PENTEST_RESULTS.md](SECURITY_PENTEST_RESULTS.md)
+- **AES-256-GCM encryption** at rest for every sensitive value — Kite tokens, API secrets, OAuth client secrets — key derived via HKDF from `OAUTH_JWT_SECRET`
+- **RiskGuard** (8 checks) — kill switch, per-order value cap (Rs 5L default), quantity limit, daily order count (200/day), rate limit (10/min), duplicate detection (30s window), daily cumulative value cap (Rs 10L), auto-freeze circuit breaker
+- **Per-tool-call audit trail** with 90-day retention — every MCP call logged to SQLite, CSV/JSON export via dashboard
+- **CI on every push** — `go build`, `go vet`, `go test -race` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+- **MIT license, open source** — inspect anything. Upstream attribution to Zerodha Tech preserved in [LICENSE](LICENSE)
+- **Threat model**: [THREAT_MODEL.md](THREAT_MODEL.md). Security policy: [SECURITY.md](SECURITY.md)
+
+## Quick start
+
+### Option A — hosted demo (read-only)
+
+Point your MCP client at:
+
+```
+https://kite-mcp-server.fly.dev/mcp
+```
+
+Order-placement tools are gated off on the hosted instance pursuant to NSE/INVG/69255 Annexure I Para 2.8. Read-only tools (portfolio, market data, backtesting, analytics) work. You still bring your own Kite developer app (per-user OAuth).
+
+### Option B — run locally (personal use, full functionality)
+
+```bash
+git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
+cp .env.example .env               # edit: set OAUTH_JWT_SECRET (required)
+docker compose up -d               # builds Dockerfile.selfhost and starts it
+curl http://localhost:8080/healthz # should return "ok"
+```
+
+Point your client at `http://localhost:8080/mcp` (use `--allow-http` if your client requires it). Running locally against your own Kite account is the personal-use safe-harbor path — you remain the Zerodha Client; the software just helps you place orders.
+
+Go users can skip Docker: `go build -o kite-mcp-server && ./kite-mcp-server`.
+
+### Option C — connect from your MCP client
+
+Add this to your client config (`~/.claude.json`, `claude_desktop_config.json`, `.vscode/mcp.json`, etc.):
+
 ```json
 {
   "mcpServers": {
@@ -33,38 +65,98 @@ Connect any AI assistant to your Zerodha Kite account. Place orders, analyze por
 }
 ```
 
-**2. Login** — tell your AI: *"Log me in to Kite"*. Complete the OAuth flow in your browser.
+Then say: *"Log me in to Kite"* — complete the OAuth flow in your browser — then ask anything: *"Show my portfolio"*, *"Backtest SMA crossover on INFY"*, *"Enable paper trading mode"*.
 
-**3. Trade** — ask anything: *"Show my portfolio"*, *"What's RELIANCE at?"*, *"Backtest SMA crossover on INFY"*.
-
-> **New to this?** Start with paper trading: *"Enable paper trading mode"* — all orders are simulated, no real money at risk.
+New to this? Start with paper trading: *"Enable paper trading mode"* — virtual Rs 1 crore portfolio, no real money at risk.
 
 ## Features
 
-| Category | Tools | Highlights |
-|----------|------:|------------|
-| **Trading** | 11 | Place/modify/cancel orders, GTT, convert positions, close all |
-| **Portfolio** | 10 | Holdings, positions, margins, P&L, trades, order history |
-| **Market Data** | 8 | Quotes, LTP, OHLC, historical data, instrument search, market status |
-| **Analytics** | 7 | Portfolio summary, concentration, sector exposure, dividends, tax P&L |
-| **Options** | 3 | Greeks calculator, option chain, strategy analysis |
-| **Backtesting** | 1 | 4 built-in strategies: SMA crossover, RSI reversal, breakout, mean reversion |
-| **Technical** | 2 | 10+ indicators (SMA, EMA, RSI, MACD, Bollinger), pre-trade analysis |
-| **Paper Trading** | 3 | Simulated orders, paper portfolio, toggle on/off |
-| **Alerts** | 9 | Price above/below, % drop/rise, Telegram notifications, native GTT alerts |
-| **Mutual Funds** | 7 | MF holdings, place/cancel MF orders, SIP management |
-| **Watchlists** | 6 | Create, manage, and monitor instrument watchlists |
-| **Ticker** | 5 | Real-time WebSocket streaming, subscribe/unsubscribe |
-| **Rebalancing** | 1 | Portfolio rebalance suggestions against target allocation |
-| **Trailing SL** | 3 | Trailing stop-loss: start, status, cancel |
-| **Infrastructure** | 2 | Login, open dashboard |
+- **Portfolio analysis** — holdings, positions, margins, P&L, sector exposure (150+ stocks mapped), tax-loss harvest, concentration, dividends
+- **Market data** — quotes, LTP, OHLC, historical candles, instrument search, 10+ technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands)
+- **Options** — Black-Scholes Greeks (delta, gamma, theta, vega, IV), option chain, 8 multi-leg strategy templates
+- **Backtesting** — 4 built-in strategies (SMA crossover, RSI reversal, breakout, mean reversion) with Sharpe ratio and max drawdown
+- **Alerts** — price above/below, percentage drop/rise, composite conditions, volume spike, Telegram delivery + native Kite GTT alerts
+- **Paper trading** — virtual Rs 1 crore portfolio, simulated orders, background LIMIT fill monitor, toggle on/off
+- **RiskGuard** — 8 safety checks run before every order hits the exchange
+- **MCP Apps widgets** — inline portfolio / orders / alerts / activity UI on claude.ai, Claude Desktop, and ChatGPT
+- **Telegram bot** — `/buy`, `/sell`, `/quick`, `/setalert` with inline keyboard confirmation; morning briefing (9 AM IST) and daily P&L (3:35 PM IST)
+- **Order placement** — place, modify, cancel, GTT, convert positions, close-all (local build only; hosted deployment is read-only)
+
+Full tool taxonomy with counts per category in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Architecture
+
+Clean / hexagonal architecture:
+
+```
+AI Client <-> MCP Protocol <-> Tool Handler <-> Use Case <-> CQRS Command/Query <-> Broker Port <-> Kite Adapter <-> Kite Connect API <-> NSE/BSE
+```
+
+Go 1.25 + [mcp-go](https://github.com/mark3labs/mcp-go) v0.46.0. SQLite for persistence (credentials, alerts, sessions, audit trail — all AES-256-GCM encrypted), with [Litestream](https://litestream.io/) continuous replication to Cloudflare R2. OAuth 2.1 + PKCE, each user brings their own Kite developer app. Middleware chain: Timeout -> Audit -> Hooks -> RiskGuard -> Rate Limiter -> Billing -> Paper Trading -> Dashboard URL. Deployed on Fly.io (Mumbai region) with static egress IP for SEBI-mandated whitelisting. See [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Legal / compliance status
+
+> **Not a SEBI-registered intermediary.** This is infrastructure software, not an advisory or brokerage service.
+>
+> - Per-user BYO Kite developer app — **you remain the Zerodha Client of record.** The server holds no pooled user funds and executes no trades on its own behalf.
+> - The hosted deployment at `kite-mcp-server.fly.dev` is **read-only**; order-placement tools are gated off pursuant to **NSE/INVG/69255 Annexure I Para 2.8**. Order placement requires running the server locally against your own account.
+> - Running the server locally against your personal Kite account is the **personal-use safe-harbor path** — analogous to running your own algo script. See [OpenAlgo's framing](https://www.marketcalls.in/fintech/exchange-compliance-for-algo-vendors-what-you-need-to-know.html) of the compliance landscape for Indian algo vendors.
+> - Static egress IP (`209.71.68.157`, Mumbai) is published so users can whitelist it in their Kite developer console per the SEBI April 2026 mandate.
+> - [TERMS.md](TERMS.md) and [PRIVACY.md](PRIVACY.md) are **DRAFT** and under independent legal review. Do not rely on them as final legal agreements.
+> - Trading involves risk. This software is not financial advice. Not affiliated with Zerodha.
+
+## Environment variables
+
+`OAUTH_JWT_SECRET` is the only required variable for multi-user HTTP deployments. Everything else is optional and activates specific features when set. Full table:
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `OAUTH_JWT_SECRET` | Yes (HTTP) | — | Signs JWT tokens for OAuth sessions; also seeds AES-256-GCM encryption key |
+| `KITE_API_KEY` | No | — | Global Kite app API key (per-user OAuth used if unset) |
+| `KITE_API_SECRET` | No | — | Global Kite app API secret |
+| `KITE_ACCESS_TOKEN` | No | — | Pre-authenticated Kite token (bypasses browser login, local dev only) |
+| `ENABLE_TRADING` | No | `false` | Enables order-placement tools (gated off on hosted deployment) |
+| `EXTERNAL_URL` | No | `http://localhost:8080` | Public URL for OAuth callbacks |
+| `APP_MODE` | No | `http` | `http`, `sse`, or `stdio` |
+| `APP_PORT` | No | `8080` | HTTP listen port |
+| `ALERT_DB_PATH` | No | `alerts.db` | SQLite database path |
+| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot for alerts and daily briefings |
+| `ADMIN_EMAILS` | No | — | Comma-separated admin email list |
+| `GOOGLE_CLIENT_ID` / `_SECRET` | No | — | Google SSO for dashboard |
+| `STRIPE_*` | No | — | Billing tier enforcement |
+| `LITESTREAM_*` | No | — | R2/S3 SQLite replication |
+| `EXCLUDED_TOOLS` | No | — | Comma-separated tool names to disable |
+| `LOG_LEVEL` | No | `info` | `debug`, `info`, `warn`, `error` |
+
+## Client setup
+
+Any MCP-compliant client works with the same `mcp-remote` bridge above. Client-specific file locations:
+
+- **Claude Code** — `~/.claude.json` (`mcpServers` key)
+- **Claude Desktop** — `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/.config/Claude/claude_desktop_config.json` (macOS/Linux)
+- **ChatGPT Desktop** — Settings -> Tools & Integrations -> MCP Servers -> add URL
+- **VS Code / Cursor / Windsurf** — `.vscode/mcp.json` or equivalent
+
+## Dashboard
+
+Once logged in via MCP OAuth, the dashboard cookie is set automatically (no second login).
+
+| Page | Path | Description |
+|------|------|-------------|
+| Portfolio | `/dashboard` | Holdings, positions, P&L chart, order attribution |
+| Activity | `/dashboard/activity` | AI tool-call audit trail with filters and CSV/JSON export |
+| Orders | `/dashboard/orders` | Order history with AI attribution |
+| Alerts | `/dashboard/alerts` | Active price alerts with enriched market data |
+| Safety | `/dashboard/safety` | RiskGuard status, freeze controls, limit configuration |
+| Paper Trading | `/dashboard/paper` | Paper portfolio, simulated orders, positions |
+| Admin Ops | `/admin/ops` | All users, sessions, logs, metrics (admin only) |
 
 ## Comparison
 
-| Feature | This Server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
+| Feature | This server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
 |---------|:-----------:|:-------------------------------------------:|:------:|
-| Tools | 80 | 22 | N/A |
-| Order placement | Yes | GTT only | Yes |
+| Tools | ~80 | 22 | N/A |
+| Order placement | Yes (local) | GTT only | Yes |
 | Paper trading | Yes | No | No |
 | Safety checks | 8 | 0 | 0 |
 | Backtesting | 4 strategies | No | Yes |
@@ -73,200 +165,34 @@ Connect any AI assistant to your Zerodha Kite account. Place orders, analyze por
 | Self-hostable | Yes | No | N/A |
 | Cost | Kite Connect app (Rs 500/mo) | Free | Free + paid |
 
-The official server is the right choice for read-only use. This server is for traders who want order placement, safety rails, and analytics.
-
-## Client Setup
-
-### Claude Code
-
-```json
-// ~/.claude.json → mcpServers
-{
-  "kite": {
-    "command": "npx",
-    "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
-  }
-}
-```
-
-### Claude Desktop
-
-Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "kite": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
-    }
-  }
-}
-```
-
-### ChatGPT Desktop
-
-Settings → Tools & Integrations → MCP Servers → Add:
-```
-https://kite-mcp-server.fly.dev/mcp
-```
-
-### VS Code / Cursor
-
-Add to `.vscode/mcp.json`:
-```json
-{
-  "servers": {
-    "kite": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
-    }
-  }
-}
-```
-
-### Windsurf
-
-Add to MCP configuration:
-```json
-{
-  "mcpServers": {
-    "kite": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
-    }
-  }
-}
-```
-
-### Self-hosted with Docker
-
-Run kite-mcp-server on your own machine — no Go toolchain, no Fly.io required:
-
-```bash
-git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
-cp .env.example .env                  # then edit: set OAUTH_JWT_SECRET (required)
-docker compose up -d                  # builds Dockerfile.selfhost and starts it
-curl http://localhost:8080/healthz    # should return "ok"
-```
-
-Point your MCP client at `http://localhost:8080/mcp` (use `--allow-http` if your
-client requires it). To expose it publicly, put it behind a reverse proxy such as
-Caddy, nginx, or a [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
-tunnel — then set `EXTERNAL_URL` in `.env` to the public HTTPS URL so OAuth
-callbacks work.
-
-**Persistence warning:** the `kite_data` Docker volume holds `/data/alerts.db`
-with AES-256-GCM encrypted Kite tokens, OAuth clients, alerts, and the audit
-trail. If you lose the volume, all user logins die with it and must be redone.
-Back it up if continuity matters. A bind-mount example is included (commented)
-in `docker-compose.yml`.
-
-### Self-hosted from source (Go users)
-
-```bash
-git clone https://github.com/Sundeepg98/kite-mcp-server && cd kite-mcp-server
-go build -o kite-mcp-server && ./kite-mcp-server
-```
-
-Point your client to `http://localhost:8080/mcp` with `--allow-http`.
-
-## Environment Variables
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `OAUTH_JWT_SECRET` | Yes (HTTP mode) | — | Signs JWT tokens for OAuth sessions |
-| `KITE_API_KEY` | No | — | Global Kite developer app API key (per-user OAuth if unset) |
-| `KITE_API_SECRET` | No | — | Global Kite developer app API secret |
-| `KITE_ACCESS_TOKEN` | No | — | Pre-authenticated Kite token (bypasses browser login, local dev only) |
-| `EXTERNAL_URL` | No | `http://localhost:8080` | Public URL for OAuth callbacks and links |
-| `APP_MODE` | No | `http` | Server mode: `http`, `sse`, or `stdio` |
-| `APP_PORT` | No | `8080` | HTTP listen port |
-| `APP_HOST` | No | `0.0.0.0` | HTTP listen host |
-| `ALERT_DB_PATH` | No | `alerts.db` | Path to SQLite database file |
-| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token for alert notifications and daily briefings |
-| `ADMIN_EMAILS` | No | — | Comma-separated list of admin email addresses |
-| `ADMIN_ENDPOINT_SECRET_PATH` | No | — | Secret URL path segment for admin endpoints |
-| `ADMIN_PASSWORD` | No | — | Password for admin login (bcrypt hashed at runtime) |
-| `EXCLUDED_TOOLS` | No | — | Comma-separated tool names to disable |
-| `LOG_LEVEL` | No | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `GOOGLE_CLIENT_ID` | No | — | Google OAuth client ID for SSO login |
-| `GOOGLE_CLIENT_SECRET` | No | — | Google OAuth client secret for SSO login |
-| `STRIPE_SECRET_KEY` | No | — | Stripe secret key to enable billing tier enforcement |
-| `STRIPE_WEBHOOK_SECRET` | No | — | Stripe webhook signing secret |
-| `STRIPE_PRICE_PRO` | No | — | Stripe Price ID for the Pro tier |
-| `STRIPE_PRICE_PREMIUM` | No | — | Stripe Price ID for the Premium tier |
-| `LITESTREAM_BUCKET` | No | — | R2/S3 bucket name for Litestream SQLite replication |
-| `LITESTREAM_R2_ACCOUNT_ID` | No | — | Cloudflare R2 account ID for Litestream |
-| `LITESTREAM_ACCESS_KEY_ID` | No | — | R2/S3 access key ID for Litestream |
-| `LITESTREAM_SECRET_ACCESS_KEY` | No | — | R2/S3 secret access key for Litestream |
-
-Only `OAUTH_JWT_SECRET` is required for multi-user HTTP deployments. All other variables are optional and enable specific features when set.
-
-## Safety: RiskGuard
-
-Every order passes through 8 checks before reaching the exchange. Any failure blocks the order instantly.
-
-| # | Check | What it does |
-|---|-------|-------------|
-| 1 | **Kill switch** | Freeze/unfreeze trading per user — immediate halt |
-| 2 | **Order value limit** | Block orders exceeding Rs 5,00,000 (configurable) |
-| 3 | **Quantity limit** | Reject quantities above exchange freeze limits |
-| 4 | **Daily order count** | Cap at 200 orders/day (configurable) |
-| 5 | **Rate limit** | Max 10 orders/minute to prevent runaway loops |
-| 6 | **Duplicate detection** | Block identical orders within 30-second window |
-| 7 | **Daily value cap** | Cumulative placed value capped at Rs 10,00,000/day |
-| 8 | **Circuit breaker** | Auto-freeze account after 3 rejections in 5 minutes |
-
-All limits are per-user, configurable, and persisted to SQLite. Paper trading mode bypasses the exchange entirely — orders are simulated locally.
-
-## Dashboard
-
-| Page | Path | Description |
-|------|------|-------------|
-| Portfolio | `/dashboard` | Holdings, positions, P&L chart, order attribution |
-| Activity | `/dashboard/activity` | AI tool call audit trail with filters, live stream, CSV/JSON export |
-| Orders | `/dashboard/orders` | Order history with AI attribution |
-| Alerts | `/dashboard/alerts` | Active price alerts with enriched market data |
-| Safety | `/dashboard/safety` | RiskGuard status, freeze controls, limit configuration |
-| Paper Trading | `/dashboard/paper` | Paper portfolio, simulated orders, positions |
-| Admin Ops | `/admin/ops` | All users, sessions, logs, metrics (admin only) |
-
-SSO is automatic — login once via MCP OAuth, dashboard session follows.
-
-## Architecture
-
-```
-AI Client ←→ MCP Protocol ←→ Kite MCP Server ←→ Kite Connect API ←→ NSE/BSE
-```
-
-- **Go** with [mcp-go](https://github.com/mark3labs/mcp-go) v0.46.0
-- **SQLite** for persistence (credentials, alerts, sessions, audit trail — all AES-256-GCM encrypted)
-- **OAuth 2.1 + PKCE** — each user brings their own Kite developer app
-- **Fly.io** deployment with static egress IP for SEBI compliance
-- **Litestream** continuous SQLite replication to R2
-- **Telegram** daily briefings (9 AM alerts + 3:35 PM P&L)
+The official server is the right choice for read-only, zero-setup use. This server is for traders who want order placement, safety rails, and analytics.
 
 ## Prerequisites
 
 - A [Kite Connect](https://kite.trade) developer app (Rs 500/month from Zerodha)
-- `npx` (Node.js 18+) for `mcp-remote` — or self-host with Go 1.25+
+- `npx` (Node.js 18+) for `mcp-remote` — or Go 1.25+ to self-host from source
 
-## Contributing
+## Registry
 
-Contributions welcome. Check [open issues](https://github.com/Sundeepg98/kite-mcp-server/issues) for ideas.
+Listed on the [official MCP Registry](https://modelcontextprotocol.info/tools/registry/) as `io.github.sundeepg98/kite-mcp-server`. Auto-indexed by [Smithery](https://smithery.ai) and [Glama](https://glama.ai). See [`server.json`](server.json).
 
-```bash
-nix develop          # or: install Go 1.25+
-just build           # compile
-just test            # run 694 tests
-just lint            # format + lint
-```
+## Contributing / funding
+
+- **Issues / PRs** — [github.com/Sundeepg98/kite-mcp-server/issues](https://github.com/Sundeepg98/kite-mcp-server/issues). See [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Built on** — [zerodha/kite-mcp-server](https://github.com/zerodha/kite-mcp-server) (MIT). Huge thanks to Kailash Nadh and the Zerodha team for open-sourcing the foundation.
+- **Development** —
+
+  ```bash
+  nix develop          # or: install Go 1.25+
+  just build           # compile
+  just test            # run the full test suite
+  just lint            # format + vet + golangci-lint
+  ```
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Copyright notice preserved for original Zerodha Tech contribution.
 
 ## Disclaimer
 
-This software is not financial advice. Not affiliated with Zerodha. Trading involves risk — use at your own risk. SEBI-regulated operations require compliance with applicable regulations.
+This software is not financial advice. Not affiliated with Zerodha. Trading involves risk — use at your own risk. Running SEBI-regulated operations requires compliance with applicable regulations; see the compliance box above.
