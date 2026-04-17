@@ -99,6 +99,10 @@ func (*PlaceOrderTool) Tool() mcp.Tool {
 		mcp.WithNumber("market_protection",
 			mcp.Description("Market protection percentage for MARKET orders (0-100). Use -1 for auto (recommended). Required by SEBI for market orders since April 2026."),
 		),
+		mcp.WithString("client_order_id",
+			mcp.Description("Optional idempotency key (Alpaca-style). Supply a unique opaque string for each logical order intent; the server rejects duplicate submissions of the same key within 15 minutes. Use to make retries safe after network timeouts. Leave blank if not needed."),
+			mcp.MaxLength(64),
+		),
 	)
 }
 
@@ -258,6 +262,10 @@ func (*ModifyOrderTool) Tool() mcp.Tool {
 		),
 		mcp.WithNumber("market_protection",
 			mcp.Description("Market protection percentage for MARKET orders (0-100). Use -1 for auto (recommended)."),
+		),
+		mcp.WithString("client_order_id",
+			mcp.Description("Optional idempotency key (Alpaca-style). Supply a unique opaque string for each logical modify intent; the server rejects duplicate submissions of the same key within 15 minutes. Use to make retries safe after network timeouts. Leave blank if not needed."),
+			mcp.MaxLength(64),
 		),
 	)
 }

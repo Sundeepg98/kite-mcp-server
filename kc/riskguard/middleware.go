@@ -38,6 +38,10 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 				// RequireConfirmAllOrders gate. Populated from the tool's
 				// `confirm` boolean arg (same convention as elicitation).
 				Confirmed: safeBool(args["confirm"]),
+				// ClientOrderID is the optional idempotency key (Alpaca-style).
+				// When supplied, the same key within 15 min is rejected as a
+				// duplicate — primary defence against mcp-remote retry storms.
+				ClientOrderID: safeString(args["client_order_id"]),
 			}
 
 			// For SL/SL-M, use trigger_price if price is 0

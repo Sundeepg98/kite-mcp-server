@@ -134,6 +134,11 @@ type Guard struct {
 	logger              *slog.Logger
 	autoFreezeNotifier  AutoFreezeNotifier
 	clock               func() time.Time // defaults to time.Now
+	// dedup tracks user-supplied client_order_id idempotency keys. Complements
+	// the time-based duplicate detection in checkDuplicateOrder — this one
+	// triggers on an explicit user-supplied key, so mcp-remote retries after
+	// 504 reuse the same key and are rejected deterministically.
+	dedup *Dedup
 	// Global trading freeze — blocks ALL users from placing orders.
 	globalFrozen   bool
 	globalFrozenBy string
@@ -148,6 +153,7 @@ func NewGuard(logger *slog.Logger) *Guard {
 		limits:   make(map[string]*UserLimits),
 		logger:   logger,
 		clock:    time.Now,
+		dedup:    NewDedup(DefaultDedupTTL),
 	}
 }
 
@@ -234,6 +240,12 @@ type OrderCheckRequest struct {
 	// from request arguments; direct callers of CheckOrder must set this
 	// themselves.
 	Confirmed bool
+	// ClientOrderID is an optional user-supplied idempotency key (Alpaca-style
+	// client_order_id). When present, the guard hashes (email || key) and
+	// rejects any duplicate submission within DefaultDedupTTL (15 min) with
+	// ReasonDuplicateOrder. Empty means "no idempotency semantics" —
+	// backward-compatible with the existing time-based duplicate check.
+	ClientOrderID string
 }
 
 // CheckOrder runs all safety checks in sequence. Returns on first failure.
@@ -293,7 +305,19 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 		}
 		return r
 	}
-	// 6. Duplicate order detection
+	// 6a. Idempotency-key duplicate (client_order_id). Runs before the
+	//     time-based duplicate check because it is the most definitive
+	//     signal: a user-supplied key reused within TTL is unambiguously a
+	//     retry. This is the primary defence against mcp-remote retries
+	//     after a 504 gateway timeout re-submitting the same intent.
+	if r := g.checkClientOrderIDDuplicate(req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
+		return r
+	}
+	// 6b. Duplicate order detection (time-based, params-hash)
 	if r := g.checkDuplicateOrder(email, req); !r.Allowed {
 		g.recordRejection(email)
 		if frozen := g.checkAutoFreeze(email); frozen {
@@ -506,6 +530,33 @@ func (g *Guard) checkRateLimit(email string) CheckResult {
 		return CheckResult{
 			Allowed: false, Reason: ReasonRateLimit,
 			Message: fmt.Sprintf("%d orders in last minute (limit: %d)", len(t.RecentOrders), limits.MaxOrdersPerMinute),
+		}
+	}
+	return CheckResult{Allowed: true}
+}
+
+// checkClientOrderIDDuplicate enforces user-supplied idempotency keys. When
+// ClientOrderID is empty, the check is a no-op (backward-compatible). When
+// present, (email, ClientOrderID) is hashed and recorded; a second call with
+// the same pair inside DefaultDedupTTL is rejected.
+//
+// This is the deterministic retry-safety primitive stolen from Alpaca's
+// client_order_id: the user says "this is submission X; don't let me
+// double-book X" and the server enforces it without needing to guess from
+// symbol/qty/price coincidences.
+func (g *Guard) checkClientOrderIDDuplicate(req OrderCheckRequest) CheckResult {
+	if req.ClientOrderID == "" {
+		return CheckResult{Allowed: true} // no idempotency key — allow
+	}
+	if g.dedup == nil {
+		return CheckResult{Allowed: true} // defensive: uninitialized guard
+	}
+	email := strings.ToLower(req.Email)
+	if g.dedup.SeenOrAdd(email, req.ClientOrderID) {
+		return CheckResult{
+			Allowed: false, Reason: ReasonDuplicateOrder,
+			Message: fmt.Sprintf("client_order_id %q already submitted within the last %s — this looks like a retry of a prior order. If this is a new order, use a different client_order_id.",
+				req.ClientOrderID, DefaultDedupTTL),
 		}
 	}
 	return CheckResult{Allowed: true}
