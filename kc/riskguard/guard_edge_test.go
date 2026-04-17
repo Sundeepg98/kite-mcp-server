@@ -695,28 +695,23 @@ func TestGlobalFreeze_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent freezes and unfreezes
-	for i := 0; i < 50; i++ {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			g.FreezeGlobal("admin", "test")
-		}()
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			g.UnfreezeGlobal()
-		}()
+		})
 	}
 
 	// Concurrent checks
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			g.CheckOrder(OrderCheckRequest{
 				Email: "concurrent@test.com", ToolName: "place_order",
 				Quantity: 1, Price: 100, OrderType: "LIMIT",
 			})
-		}()
+		})
 	}
 
 	wg.Wait()

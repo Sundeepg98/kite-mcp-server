@@ -187,10 +187,8 @@ func TestManagerConcurrentOperations(t *testing.T) {
 	numGoroutines := 10
 
 	// Concurrent Insert operations
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range numGoroutines {
+		wg.Go(func() {
 			for j, inst := range testInsts {
 				// Create unique instruments for each goroutine
 				uniqueInst := &Instrument{
@@ -206,21 +204,19 @@ func TestManagerConcurrentOperations(t *testing.T) {
 				}
 				manager.Insert(uniqueInst)
 			}
-		}(i)
+		})
 	}
 
 	// Concurrent reads while writes are happening
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
+	for range numGoroutines {
+		wg.Go(func() {
+			for range 100 {
 				manager.Count()
 				manager.Filter(func(inst Instrument) bool {
 					return inst.Exchange == "NSE"
 				})
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -248,22 +244,18 @@ func TestManagerLoadMapConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent LoadMap operation
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		manager.LoadMap(testMap)
-	}()
+	})
 
 	// Concurrent reads
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 50; j++ {
+	for range 5 {
+		wg.Go(func() {
+			for range 50 {
 				manager.Count()
 				_, _ = manager.GetByID("NSE:SBIN")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -290,11 +282,9 @@ func TestManagerIntensiveRaceConditions(t *testing.T) {
 	operationsPerGoroutine := 20 // Reduced from 1000
 
 	// Concurrent inserts with reduced load
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+	for idx := range numGoroutines {
+		wg.Go(func() {
+			for j := range operationsPerGoroutine {
 				for k, inst := range testInsts {
 					uniqueInst := &Instrument{
 						ID:              fmt.Sprintf("%s_%d_%d_%d", inst.ID, idx, j, k),
@@ -311,15 +301,13 @@ func TestManagerIntensiveRaceConditions(t *testing.T) {
 					manager.Insert(uniqueInst)
 				}
 			}
-		}(i)
+		})
 	}
 
 	// Concurrent reads with reduced load
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+	for range numGoroutines {
+		wg.Go(func() {
+			for range operationsPerGoroutine {
 				// Various read operations
 				manager.Count()
 				_, _ = manager.GetByID("NSE:SBIN")
@@ -330,14 +318,12 @@ func TestManagerIntensiveRaceConditions(t *testing.T) {
 				})
 				_, _ = manager.GetAllByUnderlying("NSE", "STATE BANK OF INDIA")
 			}
-		}()
+		})
 	}
 
 	// Reduced concurrent LoadMap operations
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+	for idx := range 2 {
+		wg.Go(func() {
 			testMap := make(map[uint32]*Instrument)
 			for j, inst := range testInsts {
 				newInst := &Instrument{
@@ -355,7 +341,7 @@ func TestManagerIntensiveRaceConditions(t *testing.T) {
 				testMap[newInst.InstrumentToken] = newInst
 			}
 			manager.LoadMap(testMap)
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -395,38 +381,32 @@ func TestManagerUpdateInstrumentsConcurrency(t *testing.T) {
 	operationsPerGoroutine := 100
 
 	// Concurrent readers during UpdateInstruments
-	for i := 0; i < numReaders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+	for range numReaders {
+		wg.Go(func() {
+			for range operationsPerGoroutine {
 				manager.Count()
 				_, _ = manager.GetByID("NSE:SBIN")
 				manager.Filter(func(inst Instrument) bool {
 					return inst.Exchange == "NSE"
 				})
 			}
-		}()
+		})
 	}
 
 	// Concurrent UpdateInstruments calls
-	for i := 0; i < numWriters; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 5; j++ {
+	for range numWriters {
+		wg.Go(func() {
+			for j := range 5 {
 				// Simulate update operations without HTTP calls
 				manager.updateStats(true, j+1)
 			}
-		}()
+		})
 	}
 
 	// Concurrent inserts during updates
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			for j := 0; j < 50; j++ {
+	for idx := range 10 {
+		wg.Go(func() {
+			for j := range 50 {
 				inst := &Instrument{
 					ID:              fmt.Sprintf("UPDATE_TEST_%d_%d", idx, j),
 					InstrumentToken: uint32(100000 + idx*1000 + j),
@@ -441,7 +421,7 @@ func TestManagerUpdateInstrumentsConcurrency(t *testing.T) {
 				}
 				manager.Insert(inst)
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -479,11 +459,9 @@ func TestManagerMapCorruption(t *testing.T) {
 	}
 
 	// Extreme concurrent operations
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			for j := 0; j < operationsPerGoroutine; j++ {
+	for idx := range numGoroutines {
+		wg.Go(func() {
+			for j := range operationsPerGoroutine {
 				switch j % 7 {
 				case 0:
 					// Insert
@@ -510,7 +488,7 @@ func TestManagerMapCorruption(t *testing.T) {
 					// LoadMap with small dataset (only occasionally)
 					if j%10 == 0 { // Only do LoadMap every 10th operation
 						smallMap := make(map[uint32]*Instrument)
-						for k := 0; k < 2; k++ { // Reduced from 3 to 2
+						for k := range 2 { // Reduced from 3 to 2
 							inst := createTestInstrument(idx, j*10+k)
 							smallMap[inst.InstrumentToken] = inst
 						}
@@ -518,7 +496,7 @@ func TestManagerMapCorruption(t *testing.T) {
 					}
 				}
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -722,12 +700,10 @@ func TestManagerConcurrentShutdown(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Multiple concurrent shutdown calls
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			manager.Shutdown()
-		}()
+		})
 	}
 
 	// Should complete without panic or hanging

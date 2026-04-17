@@ -44,12 +44,8 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		symbol := p.String("tradingsymbol", "")
 		interval := p.String("interval", "day")
 		days := p.Int("days", 90)
-		if days > 365 {
-			days = 365
-		}
-		if days < 14 {
-			days = 14
-		}
+		days = min(days, 365)
+		days = max(days, 14)
 
 		return handler.WithSession(ctx, "technical_indicators", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Resolve instrument token via exchange:tradingsymbol lookup
@@ -191,7 +187,7 @@ func computeSMA(prices []float64, period int) []float64 {
 	}
 	sma := make([]float64, len(prices))
 	var sum float64
-	for i := 0; i < period; i++ {
+	for i := range period {
 		sum += prices[i]
 	}
 	sma[period-1] = sum / float64(period)
@@ -209,7 +205,7 @@ func computeEMA(prices []float64, period int) []float64 {
 	ema := make([]float64, len(prices))
 	multiplier := 2.0 / float64(period+1)
 	var sum float64
-	for i := 0; i < period; i++ {
+	for i := range period {
 		sum += prices[i]
 	}
 	ema[period-1] = sum / float64(period)

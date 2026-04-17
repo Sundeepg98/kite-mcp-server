@@ -145,7 +145,7 @@ func reEncryptTable(db *DB, oldKey, newKey []byte, table, pkCol string, columns 
 	var allRows []row
 	for rows.Next() {
 		r := row{values: make([]string, len(columns))}
-		scanDest := make([]interface{}, 1+len(columns))
+		scanDest := make([]any, 1+len(columns))
 		scanDest[0] = &r.pk
 		for i := range columns {
 			scanDest[i+1] = &r.values[i]
@@ -161,7 +161,7 @@ func reEncryptTable(db *DB, oldKey, newKey []byte, table, pkCol string, columns 
 
 	for _, r := range allRows {
 		setClauses := ""
-		args := make([]interface{}, 0, len(columns)+1)
+		args := make([]any, 0, len(columns)+1)
 		for i, encVal := range r.values {
 			if encVal == "" {
 				// Empty value — nothing to re-encrypt.

@@ -351,13 +351,13 @@ func TestFamilyUseCases_BusIntegration_EndToEnd(t *testing.T) {
 	removeUC := NewAdminRemoveFamilyMemberUseCase(fp, events, testLogger())
 
 	bus := cqrs.NewInMemoryBus()
-	require.NoError(t, bus.Register(reflect.TypeOf(cqrs.AdminListFamilyQuery{}), func(ctx context.Context, msg any) (any, error) {
+	require.NoError(t, bus.Register(reflect.TypeFor[cqrs.AdminListFamilyQuery](), func(ctx context.Context, msg any) (any, error) {
 		return listUC.Execute(ctx, msg.(cqrs.AdminListFamilyQuery))
 	}))
-	require.NoError(t, bus.Register(reflect.TypeOf(cqrs.AdminInviteFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+	require.NoError(t, bus.Register(reflect.TypeFor[cqrs.AdminInviteFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
 		return inviteUC.Execute(ctx, msg.(cqrs.AdminInviteFamilyMemberCommand))
 	}))
-	require.NoError(t, bus.Register(reflect.TypeOf(cqrs.AdminRemoveFamilyMemberCommand{}), func(ctx context.Context, msg any) (any, error) {
+	require.NoError(t, bus.Register(reflect.TypeFor[cqrs.AdminRemoveFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
 		return removeUC.Execute(ctx, msg.(cqrs.AdminRemoveFamilyMemberCommand))
 	}))
 

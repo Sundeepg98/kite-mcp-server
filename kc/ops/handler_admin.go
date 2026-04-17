@@ -24,7 +24,7 @@ func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.userStore == nil {
-		h.writeJSON(w, []interface{}{})
+		h.writeJSON(w, []any{})
 		return
 	}
 	h.writeJSON(w, h.userStore.List())

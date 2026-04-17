@@ -124,12 +124,8 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 
 		// Clamp days
-		if days < 30 {
-			days = 30
-		}
-		if days > 730 {
-			days = 730
-		}
+		days = max(days, 30)
+		days = min(days, 730)
 
 		// Clamp position size
 		if positionSizePct <= 0 || positionSizePct > 100 {
@@ -179,7 +175,7 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 }
 
 // backtestDefaults returns strategy-specific default param1/param2.
-func backtestDefaults(strategy string, args map[string]interface{}) (float64, float64) {
+func backtestDefaults(strategy string, args map[string]any) (float64, float64) {
 	var p1Default, p2Default float64
 	switch strategy {
 	case "sma_crossover":

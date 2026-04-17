@@ -164,10 +164,10 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		paginatedData := ApplyPagination(out, params)
 
 		// Create response with pagination metadata if pagination was applied
-		var responseData interface{}
+		var responseData any
 		if params.Limit > 0 {
-			// Convert to []interface{} for pagination response
-			interfaceData := make([]interface{}, len(paginatedData))
+			// Convert to []any for pagination response
+			interfaceData := make([]any, len(paginatedData))
 			for i, instrument := range paginatedData {
 				interfaceData[i] = instrument
 			}

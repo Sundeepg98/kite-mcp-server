@@ -190,7 +190,7 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON encodes data as JSON and writes it to the response writer.
 // Logs an error if encoding fails rather than silently discarding the error.
-func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}) {
+func (h *Handler) writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.logger.Error("Failed to encode JSON response", "error", err)

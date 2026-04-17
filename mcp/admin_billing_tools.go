@@ -72,9 +72,7 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		default:
 			return mcp.NewToolResultError(fmt.Sprintf("invalid tier %q (expected free|pro|premium|solo_pro)", tierStr)), nil
 		}
-		if maxUsers < 1 {
-			maxUsers = 1
-		}
+		maxUsers = max(maxUsers, 1)
 
 		bs := manager.BillingStore()
 		if bs == nil {
@@ -92,7 +90,7 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError(fmt.Sprintf("set subscription: %s", err.Error())), nil
 		}
 
-		return handler.MarshalResponse(map[string]interface{}{
+		return handler.MarshalResponse(map[string]any{
 			"target_email": targetEmail,
 			"tier":         tierStr,
 			"max_users":    maxUsers,

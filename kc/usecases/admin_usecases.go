@@ -83,9 +83,7 @@ func (uc *AdminListUsersUseCase) Execute(ctx context.Context, query cqrs.AdminLi
 
 	from := query.From
 	limit := query.Limit
-	if from < 0 {
-		from = 0
-	}
+	from = max(from, 0)
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -184,9 +182,7 @@ func (uc *AdminGetRiskStatusUseCase) Execute(ctx context.Context, query cqrs.Adm
 	status := uc.riskguard.GetUserStatus(query.TargetEmail)
 	limits := uc.riskguard.GetEffectiveLimits(query.TargetEmail)
 	headroom := limits.MaxDailyValueINR - status.DailyPlacedValue
-	if headroom < 0 {
-		headroom = 0
-	}
+	headroom = max(headroom, 0)
 
 	return &AdminGetRiskStatusResult{
 		TargetEmail:     query.TargetEmail,

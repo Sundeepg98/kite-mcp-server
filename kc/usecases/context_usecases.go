@@ -85,7 +85,7 @@ func (uc *TradingContextUseCase) Execute(ctx context.Context, query cqrs.Trading
 		ch <- apiResult{"holdings", h, err}
 	}()
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		r := <-ch
 		if r.err != nil {
 			result.Errors[r.key] = r.err.Error()

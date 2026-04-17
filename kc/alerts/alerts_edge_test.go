@@ -31,12 +31,10 @@ func TestEvaluator_MarkTriggeredRace(t *testing.T) {
 	// Fire many concurrent evaluations to increase the chance of hitting the
 	// MarkTriggered-returns-false path.
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			eval.Evaluate("u@test.com", models.Tick{InstrumentToken: 408065, LastPrice: 1600.0})
-		}()
+		})
 	}
 	wg.Wait()
 

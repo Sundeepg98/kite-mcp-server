@@ -271,12 +271,10 @@ func TestEnsureAdmin_ConcurrentCreate(t *testing.T) {
 
 	// Run EnsureAdmin concurrently to exercise the race paths
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			s.EnsureAdmin("concurrent@test.com")
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -316,7 +314,7 @@ func TestEnsureUser_ConcurrentCreate(t *testing.T) {
 	t.Parallel()
 
 	// Run 50 times to increase probability of hitting the race path
-	for attempt := 0; attempt < 50; attempt++ {
+	for attempt := range 50 {
 		s := newTestStore(t)
 
 		var wg sync.WaitGroup
@@ -324,13 +322,11 @@ func TestEnsureUser_ConcurrentCreate(t *testing.T) {
 		start.Add(1) // barrier so all goroutines start simultaneously
 		n := 10
 		results := make([]*User, n)
-		for i := 0; i < n; i++ {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
+		for idx := range n {
+			wg.Go(func() {
 				start.Wait() // wait for barrier
 				results[idx] = s.EnsureUser("race@test.com", "uid", "Racer", "test")
-			}(i)
+			})
 		}
 		start.Done() // release all goroutines simultaneously
 		wg.Wait()

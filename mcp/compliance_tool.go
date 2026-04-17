@@ -131,7 +131,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				OrderTagging: complianceSection{
 					Status: "COMPLIANT",
 					Tag:    "mcp",
-					Note:   "All orders tagged 'mcp'. Zerodha OMS handles NNF algo ID (99999) automatically.",
+					Note:   "All orders tagged 'mcp' for SEBI traceability. Exchange-level algo ID assignment for third-party API clients is a Zerodha OMS implementation detail — see your broker for specifics.",
 				},
 				RateLimits: complianceSection{
 					Status: "COMPLIANT",
@@ -151,7 +151,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				RiskGuard: rgSection,
 				AlgoRegistration: complianceSection{
 					Status: "NOT REQUIRED",
-					Reason: "Under 10 OPS threshold. Zerodha OMS auto-tags as unregistered algo (ID 99999).",
+					Reason: "Under 10 OPS threshold. White-Box platform (transparent execution wrapper, no proprietary strategies) — SEBI RA registration not required. Broker empanelment advised post-April-2026 SEBI framework.",
 				},
 			}
 

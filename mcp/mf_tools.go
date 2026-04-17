@@ -30,14 +30,14 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 }
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		orders := raw.([]broker.MFOrder)
 
-		result := make([]interface{}, len(orders))
+		result := make([]any, len(orders))
 		for i, order := range orders {
 			result[i] = order
 		}
@@ -64,14 +64,14 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 }
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFSIPsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		sips := raw.([]broker.MFSIP)
 
-		result := make([]interface{}, len(sips))
+		result := make([]any, len(sips))
 		for i, sip := range sips {
 			result[i] = sip
 		}
@@ -98,14 +98,14 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 }
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFHoldingsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		holdings := raw.([]broker.MFHolding)
 
-		result := make([]interface{}, len(holdings))
+		result := make([]any, len(holdings))
 		for i, holding := range holdings {
 			result[i] = holding
 		}

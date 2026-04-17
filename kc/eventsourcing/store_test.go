@@ -406,10 +406,8 @@ func TestConcurrentAppendSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, 20)
 
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for i := range 20 {
+		wg.Go(func() {
 			err := store.Append(StoredEvent{
 				AggregateID:   "concurrent-order",
 				AggregateType: "Order",
@@ -421,7 +419,7 @@ func TestConcurrentAppendSafety(t *testing.T) {
 			if err != nil {
 				errCh <- err
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()

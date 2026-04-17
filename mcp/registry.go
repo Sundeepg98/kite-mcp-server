@@ -54,7 +54,7 @@ func ClearPlugins() {
 // oauth.EmailFromContext) so hooks can enforce per-user policy — e.g.,
 // role-gated tool access for family viewers. Before-hooks may return an
 // error to block execution.
-type ToolHook func(ctx context.Context, toolName string, args map[string]interface{}) error
+type ToolHook func(ctx context.Context, toolName string, args map[string]any) error
 
 var (
 	beforeHooks []ToolHook
@@ -77,7 +77,7 @@ func OnAfterToolExecution(hook ToolHook) {
 }
 
 // RunBeforeHooks executes all before hooks. Returns first error.
-func RunBeforeHooks(ctx context.Context, toolName string, args map[string]interface{}) error {
+func RunBeforeHooks(ctx context.Context, toolName string, args map[string]any) error {
 	hooksMu.RLock()
 	defer hooksMu.RUnlock()
 	for _, hook := range beforeHooks {
@@ -89,7 +89,7 @@ func RunBeforeHooks(ctx context.Context, toolName string, args map[string]interf
 }
 
 // RunAfterHooks executes all after hooks.
-func RunAfterHooks(ctx context.Context, toolName string, args map[string]interface{}) {
+func RunAfterHooks(ctx context.Context, toolName string, args map[string]any) {
 	hooksMu.RLock()
 	defer hooksMu.RUnlock()
 	for _, hook := range afterHooks {

@@ -69,9 +69,7 @@ type attributionResponse struct {
 
 // formatDuration formats a time.Duration into a human-readable string like "5d 1h 32m".
 func formatDuration(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
+	d = max(d, 0)
 	days := int(d.Hours()) / 24
 	hours := int(d.Hours()) % 24
 	minutes := int(d.Minutes()) % 60
@@ -132,7 +130,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if tc.InputParams != "" {
-			var params map[string]interface{}
+			var params map[string]any
 			if jsonErr := json.Unmarshal([]byte(tc.InputParams), &params); jsonErr == nil {
 				if v, ok := params["tradingsymbol"].(string); ok {
 					oe.Symbol = v

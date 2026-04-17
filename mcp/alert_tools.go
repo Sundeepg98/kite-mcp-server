@@ -274,7 +274,7 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultText("No alerts configured. Use set_alert to create one."), nil
 		}
 
-		return handler.MarshalResponse(map[string]interface{}{
+		return handler.MarshalResponse(map[string]any{
 			"alerts": alertList,
 		}, "list_alerts")
 	}

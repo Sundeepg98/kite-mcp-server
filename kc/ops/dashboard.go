@@ -161,7 +161,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 }
 
 // writeJSON encodes data as JSON and writes it to the response writer.
-func (d *DashboardHandler) writeJSON(w http.ResponseWriter, data interface{}) {
+func (d *DashboardHandler) writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		d.logger.Error("Failed to encode JSON response", "error", err)

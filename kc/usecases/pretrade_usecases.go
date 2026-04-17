@@ -86,7 +86,7 @@ func (uc *PreTradeCheckUseCase) Execute(ctx context.Context, query cqrs.PreTrade
 		ch <- apiResult{"order_margins", om, err}
 	}()
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		r := <-ch
 		if r.err != nil {
 			result.Errors[r.key] = r.err.Error()

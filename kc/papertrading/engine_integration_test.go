@@ -498,10 +498,8 @@ func TestIntegration_ConcurrentOrders(t *testing.T) {
 
 	// 20 concurrent MARKET BUY orders for 10 shares each = 200 shares total * 1500 = 3,00,000.
 	// Should fit within 1 Cr.
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			result, err := engine.PlaceOrder(integrationEmail, map[string]any{
 				"exchange":         "NSE",
 				"tradingsymbol":    "INFY",
@@ -521,7 +519,7 @@ func TestIntegration_ConcurrentOrders(t *testing.T) {
 			} else {
 				rejectCount++
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

@@ -149,7 +149,7 @@ func (m *Manager) GetTodayUserCount() int64 {
 // GetAllCounters returns a snapshot of all counter values.
 func (m *Manager) GetAllCounters() map[string]int64 {
 	result := make(map[string]int64)
-	m.counters.Range(func(key, val interface{}) bool {
+	m.counters.Range(func(key, val any) bool {
 		if name, ok := key.(string); ok {
 			result[name] = atomic.LoadInt64(val.(*int64))
 		}
@@ -163,7 +163,7 @@ func (m *Manager) CleanupOldData() error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -m.cleanupRetentionDays)
 
 	var keysToDelete []string
-	m.dailyUsers.Range(func(key, _ interface{}) bool {
+	m.dailyUsers.Range(func(key, _ any) bool {
 		dateStr, ok := key.(string)
 		if !ok {
 			return true
@@ -298,7 +298,7 @@ func (m *Manager) WritePrometheus(buf *bytes.Buffer) {
 	today := now.Format("2006-01-02")
 
 	// Write counter metrics - separate daily and total counters
-	m.counters.Range(func(key, val interface{}) bool {
+	m.counters.Range(func(key, val any) bool {
 		name, ok := key.(string)
 		if !ok {
 			return true

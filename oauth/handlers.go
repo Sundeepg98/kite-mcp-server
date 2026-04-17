@@ -194,7 +194,7 @@ func (h *Handler) ResourceMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]any{
 		"resource":              h.config.ExternalURL + "/mcp",
 		"authorization_servers": []string{h.config.ExternalURL},
 	})
@@ -206,7 +206,7 @@ func (h *Handler) AuthServerMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                 h.config.ExternalURL,
 		"authorization_endpoint":                 h.config.ExternalURL + "/oauth/authorize",
 		"token_endpoint":                         h.config.ExternalURL + "/oauth/token",
@@ -255,7 +255,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Debug("Registered OAuth client", "client_id", clientID, "client_name", req.ClientName)
 
-	h.writeJSON(w, http.StatusCreated, map[string]interface{}{
+	h.writeJSON(w, http.StatusCreated, map[string]any{
 		"client_id":                  clientID,
 		"client_secret":              clientSecret,
 		"redirect_uris":              req.RedirectURIs,
@@ -280,7 +280,7 @@ func generateCSRFToken() (string, error) {
 }
 
 // writeJSON writes a JSON response with the given status code.
-func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {

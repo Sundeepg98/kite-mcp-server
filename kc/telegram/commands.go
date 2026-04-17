@@ -410,8 +410,8 @@ func (h *BotHandler) handlePrices(_ int64, email string, args string) string {
 
 		// Short symbol: strip "NSE:" prefix for display.
 		display := sym
-		if idx := strings.Index(sym, ":"); idx >= 0 {
-			display = sym[idx+1:]
+		if _, after, ok := strings.Cut(sym, ":"); ok {
+			display = after
 		}
 
 		sb.WriteString(fmt.Sprintf("  <b>%s</b> \u20B9%.2f (%s)\n",

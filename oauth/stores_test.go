@@ -128,10 +128,8 @@ func TestAuthCodeStore_ConcurrentAccess(t *testing.T) {
 	codes := make(chan string, goroutines)
 
 	// Generate codes concurrently
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			code, err := store.Generate(&AuthCodeEntry{
 				ClientID:      "client",
 				CodeChallenge: "challenge",
@@ -143,7 +141,7 @@ func TestAuthCodeStore_ConcurrentAccess(t *testing.T) {
 				return
 			}
 			codes <- code
-		}()
+		})
 	}
 	wg.Wait()
 	close(codes)
@@ -389,17 +387,15 @@ func TestClientStore_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent registrations
 	clientIDs := make(chan string, goroutines)
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			id, _, err := store.Register([]string{"https://example.com/callback"}, "app")
 			if err != nil {
 				t.Errorf("Register failed: %v", err)
 				return
 			}
 			clientIDs <- id
-		}()
+		})
 	}
 	wg.Wait()
 	close(clientIDs)
@@ -407,16 +403,15 @@ func TestClientStore_ConcurrentAccess(t *testing.T) {
 	// Concurrent reads
 	var readWg sync.WaitGroup
 	for id := range clientIDs {
-		readWg.Add(1)
-		go func(clientID string) {
-			defer readWg.Done()
+		clientID := id
+		readWg.Go(func() {
 			_, ok := store.Get(clientID)
 			if !ok {
 				t.Errorf("Get(%q) failed", clientID)
 			}
 			store.ValidateRedirectURI(clientID, "https://example.com/callback")
 			store.IsKiteClient(clientID)
-		}(id)
+		})
 	}
 	readWg.Wait()
 }

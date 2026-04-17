@@ -13,8 +13,8 @@ import (
 // --- Alerts types ---
 
 type alertsResponse struct {
-	Active         interface{} `json:"active"`
-	Triggered      interface{} `json:"triggered"`
+	Active         any `json:"active"`
+	Triggered      any `json:"triggered"`
 	ActiveCount    int         `json:"active_count"`
 	TriggeredCount int         `json:"triggered_count"`
 }
@@ -103,8 +103,8 @@ func (h *AlertsHandler) alerts(w http.ResponseWriter, r *http.Request) {
 
 	allAlerts := d.manager.AlertStore().List(email)
 
-	activeAlerts := make([]interface{}, 0)
-	triggeredAlerts := make([]interface{}, 0)
+	activeAlerts := make([]any, 0)
+	triggeredAlerts := make([]any, 0)
 	for _, a := range allAlerts {
 		if a.Triggered {
 			triggeredAlerts = append(triggeredAlerts, a)

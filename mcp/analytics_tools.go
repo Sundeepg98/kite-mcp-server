@@ -63,7 +63,7 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Holdings) == 0 {
-				return handler.MarshalResponse(map[string]interface{}{
+				return handler.MarshalResponse(map[string]any{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "portfolio_summary")
@@ -225,7 +225,7 @@ func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandl
 			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Holdings) == 0 {
-				return handler.MarshalResponse(map[string]interface{}{
+				return handler.MarshalResponse(map[string]any{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "portfolio_concentration")
@@ -381,7 +381,7 @@ func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Positions.Net) == 0 {
-				return handler.MarshalResponse(map[string]interface{}{
+				return handler.MarshalResponse(map[string]any{
 					"net_positions_count": 0,
 					"message":             "No open positions",
 				}, "position_analysis")

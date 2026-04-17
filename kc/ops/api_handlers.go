@@ -240,12 +240,12 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 	case http.MethodGet:
 		entry, ok := d.manager.CredentialStore().Get(email)
 		if !ok {
-			d.writeJSON(w, map[string]interface{}{
+			d.writeJSON(w, map[string]any{
 				"has_credentials": false,
 			})
 			return
 		}
-		d.writeJSON(w, map[string]interface{}{
+		d.writeJSON(w, map[string]any{
 			"has_credentials": true,
 			"api_key":         maskKey(entry.APIKey),
 			"has_secret":      entry.APISecret != "",
@@ -351,9 +351,7 @@ func relativeTime(t, now time.Time) string {
 		return ""
 	}
 	d := now.Sub(t)
-	if d < 0 {
-		d = 0
-	}
+	d = max(d, 0)
 	switch {
 	case d < time.Minute:
 		secs := int(d.Seconds())

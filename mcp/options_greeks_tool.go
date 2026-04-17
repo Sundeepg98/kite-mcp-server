@@ -129,7 +129,7 @@ func impliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, b
 	}
 
 	sigma := 0.3 // initial guess
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		price := blackScholesPrice(S, K, T, r, sigma, isCall)
 		v := bsVega(S, K, T, r, sigma) * 100 // undo the /100 to get raw vega
 		if v < 1e-10 {
@@ -150,7 +150,7 @@ func impliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, b
 
 	// Bisection fallback if Newton-Raphson didn't converge well.
 	lo, hi := 0.001, 10.0
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		mid := (lo + hi) / 2
 		price := blackScholesPrice(S, K, T, r, mid, isCall)
 		if math.Abs(price-marketPrice) < 0.01 {
@@ -459,9 +459,7 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		strike4 := p.Float("strike4", 0)
 		lotSizeOverride := p.Int("lot_size", 0)
 		lots := p.Int("lots", 1)
-		if lots < 1 {
-			lots = 1
-		}
+		lots = max(lots, 1)
 
 		// Validate expiry
 		if _, err := time.Parse("2006-01-02", expiryStr); err != nil {

@@ -110,7 +110,7 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 // writeSSEEvent writes a named SSE event with multiline data support.
 func writeSSEEvent(w http.ResponseWriter, event, payload string) {
 	fmt.Fprintf(w, "event: %s\n", event)
-	for _, line := range strings.Split(payload, "\n") {
+	for line := range strings.SplitSeq(payload, "\n") {
 		fmt.Fprintf(w, "data: %s\n", line)
 	}
 	fmt.Fprint(w, "\n")

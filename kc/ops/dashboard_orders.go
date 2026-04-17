@@ -187,7 +187,7 @@ func parseOrderParamsJSON(raw string, oe *orderEntry) {
 	if raw == "" {
 		return
 	}
-	var params map[string]interface{}
+	var params map[string]any
 	if err := json.Unmarshal([]byte(raw), &params); err != nil {
 		return
 	}

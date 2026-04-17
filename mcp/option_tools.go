@@ -220,12 +220,8 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			atmIdx := sort.SearchFloat64s(strikes, atmStrike)
 			lo := atmIdx - strikesAround
 			hi := atmIdx + strikesAround + 1
-			if lo < 0 {
-				lo = 0
-			}
-			if hi > len(strikes) {
-				hi = len(strikes)
-			}
+			lo = max(lo, 0)
+			hi = min(hi, len(strikes))
 			selectedStrikes := strikes[lo:hi]
 
 			// Step 7: Build instrument list for batch quote

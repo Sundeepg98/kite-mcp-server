@@ -68,7 +68,7 @@ func (j *JWTManager) ValidateToken(tokenString string, audiences ...string) (*Cl
 		// Validate that the token was issued for one of the expected audiences
 		opts = append(opts, jwt.WithAudience(audiences[0]))
 	}
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}

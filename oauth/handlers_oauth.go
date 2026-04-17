@@ -417,7 +417,7 @@ func (h *Handler) Token(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Debug("Issued JWT access token", "email", email, "client_id", clientID)
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	h.writeJSON(w, http.StatusOK, map[string]any{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
 		"expires_in":   int(h.config.TokenExpiry.Seconds()),

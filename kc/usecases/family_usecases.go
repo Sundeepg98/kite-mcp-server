@@ -89,9 +89,7 @@ func (uc *AdminListFamilyUseCase) Execute(ctx context.Context, query cqrs.AdminL
 
 	from := query.From
 	limit := query.Limit
-	if from < 0 {
-		from = 0
-	}
+	from = max(from, 0)
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}

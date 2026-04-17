@@ -25,7 +25,7 @@ func (*ProfileTool) Tool() mcp.Tool {
 }
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (interface{}, error) {
+	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (any, error) {
 		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
 	})
 }
@@ -43,7 +43,7 @@ func (*MarginsTool) Tool() mcp.Tool {
 }
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (interface{}, error) {
+	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (any, error) {
 		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
 	})
 }
@@ -67,7 +67,7 @@ func (*HoldingsTool) Tool() mcp.Tool {
 }
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]any, error) {
 		// Phase 2j: dispatch through CQRS query bus (handler registered in app/wire_bus.go).
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
@@ -75,8 +75,8 @@ func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		portfolio := raw.(*usecases.PortfolioResult)
 
-		// Convert to []interface{} for generic pagination
-		result := make([]interface{}, len(portfolio.Holdings))
+		// Convert to []any for generic pagination
+		result := make([]any, len(portfolio.Holdings))
 		for i, holding := range portfolio.Holdings {
 			result[i] = holding
 		}
@@ -108,7 +108,7 @@ func (*PositionsTool) Tool() mcp.Tool {
 }
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]interface{}, error) {
+	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
@@ -126,7 +126,7 @@ func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			source = portfolio.Positions.Net
 		}
 
-		result := make([]interface{}, len(source))
+		result := make([]any, len(source))
 		for i, pos := range source {
 			result[i] = pos
 		}
@@ -156,14 +156,14 @@ func (*TradesTool) Tool() mcp.Tool {
 }
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		trades := raw.([]broker.Trade)
 
-		result := make([]interface{}, len(trades))
+		result := make([]any, len(trades))
 		for i, trade := range trades {
 			result[i] = trade
 		}
@@ -190,14 +190,14 @@ func (*OrdersTool) Tool() mcp.Tool {
 }
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		orders := raw.([]broker.Order)
 
-		result := make([]interface{}, len(orders))
+		result := make([]any, len(orders))
 		for i, order := range orders {
 			result[i] = order
 		}
@@ -224,14 +224,14 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 }
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]interface{}, error) {
+	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]any, error) {
 		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
 		gtts := raw.([]broker.GTTOrder)
 
-		result := make([]interface{}, len(gtts))
+		result := make([]any, len(gtts))
 		for i, gtt := range gtts {
 			result[i] = gtt
 		}

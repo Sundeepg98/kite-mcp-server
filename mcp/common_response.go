@@ -19,7 +19,7 @@ import (
 // top-level arrays from the Kite API, so we wrap those in {"items": [...]}
 // before passing to NewToolResultStructured. The text fallback keeps the
 // original array JSON for LLM readability.
-func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolResult, error) {
 	v, err := json.Marshal(data)
 	if err != nil {
 		h.deps.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
@@ -34,14 +34,14 @@ func (h *ToolHandler) MarshalResponse(data interface{}, toolName string) (*mcp.C
 // wrapForStructuredContent ensures the value handed to NewToolResultStructured
 // is a JSON object. Slices, arrays, and primitives get wrapped in {"items": …}.
 // Maps and structs pass through unchanged.
-func wrapForStructuredContent(data interface{}) interface{} {
+func wrapForStructuredContent(data any) any {
 	if data == nil {
-		return map[string]interface{}{"items": nil}
+		return map[string]any{"items": nil}
 	}
 	rv := reflect.ValueOf(data)
 	for rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface {
 		if rv.IsNil() {
-			return map[string]interface{}{"items": nil}
+			return map[string]any{"items": nil}
 		}
 		rv = rv.Elem()
 	}
@@ -49,12 +49,12 @@ func wrapForStructuredContent(data interface{}) interface{} {
 	case reflect.Struct, reflect.Map:
 		return data
 	default:
-		return map[string]interface{}{"items": data}
+		return map[string]any{"items": data}
 	}
 }
 
 // HandleAPICall wraps common API call pattern with error handling and response marshalling
-func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(*kc.KiteSessionData) (interface{}, error)) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(*kc.KiteSessionData) (any, error)) (*mcp.CallToolResult, error) {
 	return h.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 		data, err := apiCall(session)
 		if err != nil {

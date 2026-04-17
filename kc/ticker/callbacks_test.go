@@ -355,12 +355,10 @@ func TestOnConnect_ConcurrentSafe(t *testing.T) {
 	mock := &mockSubscriber{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			svc.onConnect(ut, mock)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -379,12 +377,10 @@ func TestOnClose_ConcurrentSafe(t *testing.T) {
 	ut.mu.Unlock()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(code int) {
-			defer wg.Done()
+	for code := range 10 {
+		wg.Go(func() {
 			svc.onClose(ut, code, "test")
-		}(i)
+		})
 	}
 	wg.Wait()
 
@@ -404,12 +400,10 @@ func TestOnTickReceived_ConcurrentSafe(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for i := range 50 {
+		wg.Go(func() {
 			svc.onTickReceived("conc@test.com", models.Tick{InstrumentToken: uint32(i)})
-		}(i)
+		})
 	}
 	wg.Wait()
 

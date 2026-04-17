@@ -2365,13 +2365,11 @@ func TestGetLimiter_ConcurrentAccess(t *testing.T) {
 
 	// Use many goroutines to force the double-check-after-write-lock path
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			l := limiter.getLimiter(ip)
 			assert.NotNil(t, l)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -3841,14 +3839,13 @@ func TestRateLimiters_CleanupDoesNotPanic(t *testing.T) {
 
 	// Use the limiters concurrently
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func(ip string) {
-			defer wg.Done()
+	for i := range 20 {
+		ip := "10.0.0." + string(rune('0'+i%10))
+		wg.Go(func() {
 			rl.auth.getLimiter(ip)
 			rl.token.getLimiter(ip)
 			rl.mcp.getLimiter(ip)
-		}("10.0.0." + string(rune('0'+i%10)))
+		})
 	}
 	wg.Wait()
 

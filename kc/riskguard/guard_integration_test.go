@@ -592,10 +592,8 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 	var mu sync.Mutex
 
 	// 50 goroutines each trying to place an order.
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			req := OrderCheckRequest{
 				Email: email, ToolName: "place_order",
 				Exchange: "NSE", Tradingsymbol: "INFY",
@@ -610,7 +608,7 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 				errCount++
 				mu.Unlock()
 			}
-		}(i)
+		})
 	}
 	wg.Wait()
 

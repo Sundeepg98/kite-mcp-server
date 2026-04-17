@@ -72,7 +72,7 @@ func (lb *LogBuffer) Recent(n int) []LogEntry {
 
 	result := make([]LogEntry, n)
 	start := (lb.head - n + lb.bufCap) % lb.bufCap
-	for i := 0; i < n; i++ {
+	for i := range n {
 		result[i] = lb.entries[(start+i)%lb.bufCap]
 	}
 	return result

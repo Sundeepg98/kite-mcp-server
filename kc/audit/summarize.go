@@ -510,8 +510,8 @@ func summarizeHistoricalData(args map[string]any) string {
 func summarizeSetAlert(args map[string]any) string {
 	instrID := strVal(args, "instrument_id")
 	symbol := instrID
-	if idx := strings.Index(instrID, ":"); idx >= 0 {
-		symbol = instrID[idx+1:]
+	if _, after, ok := strings.Cut(instrID, ":"); ok {
+		symbol = after
 	}
 	direction := strVal(args, "direction")
 	targetPrice := strVal(args, "target_price")

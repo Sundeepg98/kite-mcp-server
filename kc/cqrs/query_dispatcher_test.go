@@ -116,12 +116,10 @@ func TestQueryDispatcher_ConcurrentDispatch(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			d.Dispatch("GetPortfolio", "user@example.com", 10, nil)
-		}()
+		})
 	}
 	wg.Wait()
 

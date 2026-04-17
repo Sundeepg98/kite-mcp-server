@@ -442,8 +442,8 @@ func parseCommand(text string) (string, string) {
 	// Strip @botname suffix from commands like /price@MyBot
 	parts := strings.SplitN(text, " ", 2)
 	cmd := strings.ToLower(parts[0])
-	if i := strings.Index(cmd, "@"); i > 0 {
-		cmd = cmd[:i]
+	if before, _, ok := strings.Cut(cmd, "@"); ok && before != "" {
+		cmd = before
 	}
 	args := ""
 	if len(parts) > 1 {

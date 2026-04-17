@@ -315,8 +315,6 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 
 	registered := 0
 	for _, res := range appResources {
-		res := res
-
 		htmlBytes, err := templates.FS.ReadFile(res.TemplateFile)
 		if err != nil {
 			logger.Warn("Failed to read widget template",

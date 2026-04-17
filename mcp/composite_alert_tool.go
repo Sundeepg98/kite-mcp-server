@@ -177,7 +177,7 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("logic must be 'AND' or 'ANY'"), nil
 		}
 
-		rawConds, ok := args["conditions"].([]interface{})
+		rawConds, ok := args["conditions"].([]any)
 		if !ok {
 			return mcp.NewToolResultError("conditions must be an array of objects"), nil
 		}
@@ -243,10 +243,10 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 // `conditions` array into a validated compositeCondition. The `idx`
 // parameter is echoed into error messages so the caller can pinpoint
 // which leg was rejected.
-func parseCompositeCondition(idx int, raw interface{}) (compositeCondition, error) {
+func parseCompositeCondition(idx int, raw any) (compositeCondition, error) {
 	var zero compositeCondition
 
-	obj, ok := raw.(map[string]interface{})
+	obj, ok := raw.(map[string]any)
 	if !ok {
 		return zero, fmt.Errorf("conditions[%d]: expected an object, got %T", idx, raw)
 	}

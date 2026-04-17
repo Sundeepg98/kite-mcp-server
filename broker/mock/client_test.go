@@ -448,10 +448,8 @@ func TestConcurrency(t *testing.T) {
 	errs := make(chan error, 200)
 
 	// Concurrent writers: place orders.
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			_, err := c.PlaceOrder(broker.OrderParams{
 				Exchange:        "NSE",
 				Tradingsymbol:   "RELIANCE",
@@ -463,14 +461,12 @@ func TestConcurrency(t *testing.T) {
 			if err != nil {
 				errs <- err
 			}
-		}()
+		})
 	}
 
 	// Concurrent readers: get orders, holdings, LTP.
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			if _, err := c.GetOrders(); err != nil {
 				errs <- err
 			}
@@ -483,17 +479,15 @@ func TestConcurrency(t *testing.T) {
 			if _, err := c.GetProfile(); err != nil {
 				errs <- err
 			}
-		}()
+		})
 	}
 
 	// Concurrent setters.
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			c.SetHoldings([]broker.Holding{{Tradingsymbol: "RELIANCE"}})
 			c.SetPrices(map[string]float64{"NSE:RELIANCE": 2510})
-		}()
+		})
 	}
 
 	wg.Wait()

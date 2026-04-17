@@ -388,14 +388,12 @@ func TestRaceConditions(t *testing.T) {
 	t.Run("SafeAssert functions", func(t *testing.T) {
 		t.Parallel()
 		var wg sync.WaitGroup
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				_ = SafeAssertString("test", "default")
 				_ = SafeAssertInt(42, 0)
 				_ = SafeAssertBool(true, false)
-			}()
+			})
 		}
 		wg.Wait()
 	})
@@ -406,13 +404,11 @@ func TestRaceConditions(t *testing.T) {
 		params := PaginationParams{From: 1, Limit: 2}
 
 		var wg sync.WaitGroup
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				_ = ApplyPagination(data, params)
 				_ = ParsePaginationParams(map[string]any{"from": 1, "limit": 2})
-			}()
+			})
 		}
 		wg.Wait()
 	})

@@ -256,7 +256,7 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 				return mcp.NewToolResultText("No native alerts found. Use place_native_alert to create one."), nil
 			}
 
-			return handler.MarshalResponse(map[string]interface{}{
+			return handler.MarshalResponse(map[string]any{
 				"alerts": alertsRaw,
 			}, "list_native_alerts")
 		})
@@ -534,7 +534,7 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 				return mcp.NewToolResultText(fmt.Sprintf("No trigger history for alert %s.", uuid)), nil
 			}
 
-			return handler.MarshalResponse(map[string]interface{}{
+			return handler.MarshalResponse(map[string]any{
 				"uuid":    uuid,
 				"history": historyRaw,
 			}, "get_native_alert_history")

@@ -154,7 +154,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 	return kd
 }
 
-// extractKiteSessionData safely extracts KiteSessionData from interface{}.
+// extractKiteSessionData safely extracts KiteSessionData from any.
 func (ss *SessionService) extractKiteSessionData(data any, sessionID string) (*KiteSessionData, error) {
 	kiteData, ok := data.(*KiteSessionData)
 	if !ok || kiteData == nil {

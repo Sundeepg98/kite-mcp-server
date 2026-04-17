@@ -144,7 +144,7 @@ func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			portfolio := raw.(*usecases.PortfolioResult)
 
 			if len(portfolio.Holdings) == 0 {
-				return handler.MarshalResponse(map[string]interface{}{
+				return handler.MarshalResponse(map[string]any{
 					"holdings_count": 0,
 					"message":        "No holdings found in portfolio",
 				}, "dividend_calendar")

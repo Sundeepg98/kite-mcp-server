@@ -187,7 +187,7 @@ func (e ValidationError) Error() string {
 }
 
 // ValidateRequired checks if required parameters are present and non-empty
-func ValidateRequired(args map[string]interface{}, required ...string) error {
+func ValidateRequired(args map[string]any, required ...string) error {
 	for _, param := range required {
 		value := args[param]
 		if value == nil {
@@ -200,7 +200,7 @@ func ValidateRequired(args map[string]interface{}, required ...string) error {
 		}
 
 		// Check for empty arrays/slices using reflection
-		if arr, ok := value.([]interface{}); ok && len(arr) == 0 {
+		if arr, ok := value.([]any); ok && len(arr) == 0 {
 			return ValidationError{Parameter: param, Message: "cannot be empty"}
 		}
 
@@ -222,11 +222,11 @@ func ValidateRequired(args map[string]interface{}, required ...string) error {
 // ArgParser provides declarative argument extraction from MCP tool requests.
 // Eliminates repetitive SafeAssertString/Int/Float chains.
 type ArgParser struct {
-	args map[string]interface{}
+	args map[string]any
 }
 
 // NewArgParser wraps tool request arguments for fluent extraction.
-func NewArgParser(args map[string]interface{}) *ArgParser {
+func NewArgParser(args map[string]any) *ArgParser {
 	return &ArgParser{args: args}
 }
 
@@ -261,12 +261,12 @@ func (p *ArgParser) Required(keys ...string) error {
 }
 
 // Raw returns the underlying args map.
-func (p *ArgParser) Raw() map[string]interface{} {
+func (p *ArgParser) Raw() map[string]any {
 	return p.args
 }
 
-// SafeAssertString safely converts interface{} to string with fallback
-func SafeAssertString(v interface{}, fallback string) string {
+// SafeAssertString safely converts any to string with fallback
+func SafeAssertString(v any, fallback string) string {
 	if v == nil {
 		return fallback
 	}
@@ -276,8 +276,8 @@ func SafeAssertString(v interface{}, fallback string) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// SafeAssertInt safely converts interface{} to int with fallback
-func SafeAssertInt(v interface{}, fallback int) int {
+// SafeAssertInt safely converts any to int with fallback
+func SafeAssertInt(v any, fallback int) int {
 	if v == nil {
 		return fallback
 	}
@@ -290,8 +290,8 @@ func SafeAssertInt(v interface{}, fallback int) int {
 	return fallback
 }
 
-// SafeAssertFloat64 safely converts interface{} to float64 with fallback
-func SafeAssertFloat64(v interface{}, fallback float64) float64 {
+// SafeAssertFloat64 safely converts any to float64 with fallback
+func SafeAssertFloat64(v any, fallback float64) float64 {
 	if v == nil {
 		return fallback
 	}
@@ -304,8 +304,8 @@ func SafeAssertFloat64(v interface{}, fallback float64) float64 {
 	return fallback
 }
 
-// SafeAssertBool safely converts interface{} to bool with fallback
-func SafeAssertBool(v interface{}, fallback bool) bool {
+// SafeAssertBool safely converts any to bool with fallback
+func SafeAssertBool(v any, fallback bool) bool {
 	if v == nil {
 		return fallback
 	}
@@ -323,9 +323,9 @@ func SafeAssertBool(v interface{}, fallback bool) bool {
 	return fallback
 }
 
-// SafeAssertStringArray safely converts interface{} to []string with fallback.
-// Handles both []interface{} (normal) and single string (wraps into slice).
-func SafeAssertStringArray(v interface{}) []string {
+// SafeAssertStringArray safely converts any to []string with fallback.
+// Handles both []any (normal) and single string (wraps into slice).
+func SafeAssertStringArray(v any) []string {
 	if v == nil {
 		return nil
 	}
@@ -335,7 +335,7 @@ func SafeAssertStringArray(v interface{}) []string {
 		return []string{s}
 	}
 
-	arr, ok := v.([]interface{})
+	arr, ok := v.([]any)
 	if !ok {
 		return nil
 	}
@@ -373,7 +373,7 @@ type PaginationParams struct {
 }
 
 // ParsePaginationParams extracts pagination parameters from arguments
-func ParsePaginationParams(args map[string]interface{}) PaginationParams {
+func ParsePaginationParams(args map[string]any) PaginationParams {
 	p := NewArgParser(args)
 	limit := p.Int("limit", 0)
 	if limit > MaxPaginationLimit {
@@ -409,7 +409,7 @@ func ApplyPagination[T any](data []T, params PaginationParams) []T {
 
 // PaginatedResponse wraps a response with pagination metadata
 type PaginatedResponse struct {
-	Data       interface{} `json:"data"`
+	Data       any `json:"data"`
 	Pagination struct {
 		From     int  `json:"from"`
 		Limit    int  `json:"limit"`
@@ -420,7 +420,7 @@ type PaginatedResponse struct {
 }
 
 // CreatePaginatedResponse creates a paginated response with metadata
-func CreatePaginatedResponse(originalData interface{}, paginatedData interface{}, params PaginationParams, originalLength int) *PaginatedResponse {
+func CreatePaginatedResponse(originalData any, paginatedData any, params PaginationParams, originalLength int) *PaginatedResponse {
 	response := &PaginatedResponse{
 		Data: paginatedData,
 	}
@@ -433,7 +433,7 @@ func CreatePaginatedResponse(originalData interface{}, paginatedData interface{}
 	returnedCount := 0
 	if paginatedData != nil {
 		switch data := paginatedData.(type) {
-		case []interface{}:
+		case []any:
 			returnedCount = len(data)
 		default:
 			// For other types, calculate based on parameters with bounds checking
@@ -461,7 +461,7 @@ func CreatePaginatedResponse(originalData interface{}, paginatedData interface{}
 }
 
 // SimpleToolHandler creates a handler function for simple GET endpoints
-func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData) (interface{}, error)) server.ToolHandlerFunc {
+func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData) (any, error)) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Track the tool call at the handler level
@@ -500,7 +500,7 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 			paginatedData := ApplyPagination(data, params)
 
 			// Create response with pagination metadata if pagination was applied
-			var responseData interface{}
+			var responseData any
 			if params.Limit > 0 {
 				responseData = CreatePaginatedResponse(data, paginatedData, params, originalLength)
 			} else {
@@ -539,7 +539,7 @@ func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, a
 			originalLength := len(data)
 			paginatedData := ApplyPagination(data, params)
 
-			var responseData interface{}
+			var responseData any
 			if params.Limit > 0 {
 				responseData = CreatePaginatedResponse(data, paginatedData, params, originalLength)
 			} else {

@@ -373,37 +373,35 @@ func TestTickerService_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent reads on populated state (exercises s.mu.RLock and ut.mu.RLock)
-	for i := 0; i < 30; i++ {
-		wg.Add(1)
-		go func(email string) {
-			defer wg.Done()
+	for i := range 30 {
+		email := emails[i%len(emails)]
+		wg.Go(func() {
 			svc.IsRunning(email)
 			svc.GetStatus(email)
 			svc.ListAll()
-		}(emails[i%len(emails)])
+		})
 	}
 
 	// Concurrent writes that exercise Subscribe/Unsubscribe on populated tickers
 	// (these write to ut.Subscribed under ut.mu.Lock)
-	for i := 0; i < 15; i++ {
-		wg.Add(1)
-		go func(email string, token uint32) {
-			defer wg.Done()
+	for i := range 15 {
+		email := emails[i%len(emails)]
+		token := uint32(300000 + i)
+		wg.Go(func() {
 			_ = svc.Subscribe(email, []uint32{token}, ModeLTP)
 			_ = svc.Unsubscribe(email, []uint32{token})
-		}(emails[i%len(emails)], uint32(300000+i))
+		})
 	}
 
 	// Concurrent error-path writes (no ticker for these emails)
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(email string) {
-			defer wg.Done()
+	for i := range 10 {
+		email := emails[i%len(emails)] + ".missing"
+		wg.Go(func() {
 			_ = svc.Stop(email)
 			_ = svc.Subscribe(email, []uint32{100}, ModeLTP)
 			_ = svc.Unsubscribe(email, []uint32{100})
 			_ = svc.UpdateToken(email, "k", "t")
-		}(emails[i%len(emails)] + ".missing")
+		})
 	}
 
 	wg.Wait()
@@ -431,24 +429,20 @@ func TestTickerService_ConcurrentAccessWithUpdateToken(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent reads while UpdateToken might be running
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			svc.IsRunning(email)
 			svc.GetStatus(email)
 			svc.ListAll()
-		}()
+		})
 	}
 
 	// Sequential UpdateToken calls (each needs exclusive lock, so only one
 	// runs at a time, but they race with the concurrent reads above)
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			_ = svc.UpdateToken(email, "key", "newtok")
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -480,21 +474,17 @@ func TestTickerService_ShutdownConcurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	// Multiple goroutines calling Shutdown concurrently
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			svc.Shutdown()
-		}()
+		})
 	}
 	// Concurrent reads during shutdown
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			svc.IsRunning("x@test.com")
 			svc.ListAll()
-		}()
+		})
 	}
 	wg.Wait()
 

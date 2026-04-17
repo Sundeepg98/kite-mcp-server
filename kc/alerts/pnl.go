@@ -216,12 +216,8 @@ func (s *PnLSnapshotService) GetJournal(email, fromDate, toDate string) (*PnLJou
 			}
 		}
 
-		if runStreak > bestStreak {
-			bestStreak = runStreak
-		}
-		if runStreak < worstStreak {
-			worstStreak = runStreak
-		}
+		bestStreak = max(bestStreak, runStreak)
+		worstStreak = min(worstStreak, runStreak)
 	}
 
 	result.CumulativePnL = cumulative

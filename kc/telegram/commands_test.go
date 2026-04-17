@@ -1599,16 +1599,15 @@ func TestPendingOrder_Concurrent(t *testing.T) {
 	defer h.Shutdown()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func(chatID int64) {
-			defer wg.Done()
+	for i := range 50 {
+		chatID := int64(i)
+		wg.Go(func() {
 			h.setPendingOrder(chatID, &pendingOrder{
 				Tradingsymbol: "TEST",
 				CreatedAt:     time.Now(),
 			})
 			h.popPendingOrder(chatID)
-		}(int64(i))
+		})
 	}
 	wg.Wait()
 }
@@ -1619,12 +1618,10 @@ func TestAllowCommand_Concurrent(t *testing.T) {
 	defer h.Shutdown()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			h.allowCommand(int64(1))
-		}()
+		})
 	}
 	wg.Wait()
 }

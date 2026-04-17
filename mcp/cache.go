@@ -14,7 +14,7 @@ type ToolCache struct {
 }
 
 type cacheEntry struct {
-	data      interface{}
+	data      any
 	expiresAt time.Time
 }
 
@@ -36,7 +36,7 @@ func NewToolCache(ttl time.Duration) *ToolCache {
 }
 
 // Get retrieves a cached value. Returns nil if not found or expired.
-func (c *ToolCache) Get(key string) (interface{}, bool) {
+func (c *ToolCache) Get(key string) (any, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[key]
 	c.mu.RUnlock()
@@ -47,7 +47,7 @@ func (c *ToolCache) Get(key string) (interface{}, bool) {
 }
 
 // Set stores a value with the configured TTL.
-func (c *ToolCache) Set(key string, data interface{}) {
+func (c *ToolCache) Set(key string, data any) {
 	c.mu.Lock()
 	c.entries[key] = &cacheEntry{
 		data:      data,
