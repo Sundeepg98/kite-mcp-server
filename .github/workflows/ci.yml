@@ -9,16 +9,31 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-and-test:
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.25.x'
+          cache: true
+
       - name: Build
         run: go build ./...
+
       - name: Vet
         run: go vet ./...
+
       - name: Test
-        run: go test ./... -count=1
+        run: go test ./... -count=1 -race -timeout 5m -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage
+        if: always() && hashFiles('coverage.out') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: ignore
+          retention-days: 7
