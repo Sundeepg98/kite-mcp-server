@@ -58,6 +58,44 @@ const (
 	// the middleware populates from a `confirm: true` tool argument the user
 	// acknowledged via elicitation).
 	ReasonConfirmationRequired RejectionReason = "confirmation_required"
+	// ReasonAnomalyHigh fires when an order is simultaneously > μ+3σ AND
+	// > 10×μ on the user's rolling 30-day baseline. Catches the "user who
+	// typically places Rs 5k orders suddenly places Rs 49k" pattern that
+	// slips under static per-order caps but is statistically impossible
+	// given their trading history — prompt injection or account takeover.
+	ReasonAnomalyHigh RejectionReason = "anomaly_high"
+	// ReasonOffHoursBlocked fires on any order placed between 02:00 and 06:00
+	// IST. Outside market hours AND outside the typical human decision window,
+	// so any activity there is either automation gone wrong or an adversary
+	// betting the account owner is asleep. Power users can opt out via
+	// UserLimits.AllowOffHours.
+	ReasonOffHoursBlocked RejectionReason = "off_hours_blocked"
+)
+
+// Anomaly-detection tuning constants. Centralised here so the product team
+// can audit the thresholds without hunting through the check function.
+const (
+	// anomalySigmaMultiplier is how many standard deviations above the mean
+	// an order must sit before it is a statistical outlier (3σ ≈ 0.27% of a
+	// normal distribution's mass — deliberately conservative).
+	anomalySigmaMultiplier = 3.0
+	// anomalyMeanMultiplier is the multiplicative cap: even a 3σ event is
+	// tolerated unless it also exceeds 10× the user's historical mean. This
+	// prevents false positives for users whose stdev is naturally tiny
+	// (e.g. only ever trades exactly Rs 5000 lots — stdev ~= 0, so every
+	// non-baseline order is "infinite σ" away).
+	anomalyMeanMultiplier = 10.0
+	// anomalyBaselineDays is the rolling window over which we compute the
+	// user's baseline. 30 days covers 20-ish trading days — long enough to
+	// smooth out one-off fat-finger days, short enough to adapt as the
+	// user's habits evolve.
+	anomalyBaselineDays = 30
+	// offHoursStartIST and offHoursEndIST define the hard-block window in
+	// IST [start, end). 02:00–06:00 is after late-night manual trading has
+	// wound down and before the market-prep hours when legitimate automation
+	// (morning brief jobs, SIP triggers) kicks in.
+	offHoursStartIST = 2
+	offHoursEndIST   = 6
 )
 
 const (
@@ -89,10 +127,14 @@ type UserLimits struct {
 	// explicitly confirming (typically via MCP elicitation). A power user may
 	// set this to false per-account to restore "no-ack" behaviour.
 	RequireConfirmAllOrders bool
-	TradingFrozen           bool
-	FrozenBy                string
-	FrozenReason            string
-	FrozenAt                time.Time
+	// AllowOffHours, when true, lets this user trade during the 02:00–06:00
+	// IST hard-block window. Default false for all new accounts — opt-in
+	// escape hatch for power users running legitimate overnight automation.
+	AllowOffHours bool
+	TradingFrozen bool
+	FrozenBy      string
+	FrozenReason  string
+	FrozenAt      time.Time
 }
 
 // recentOrder captures the signature of a placed order for duplicate detection.
@@ -120,6 +162,22 @@ type FreezeQuantityLookup interface {
 	GetFreezeQuantity(exchange, tradingsymbol string) (uint32, bool)
 }
 
+// BaselineProvider returns rolling order-value statistics for a user. The
+// production implementation is audit.Store.UserOrderStats, which queries
+// the tool_calls table for historical place_order/modify_order rows and
+// computes mean + population-stdev over the window. This interface lets
+// tests inject fakes without pulling in the audit package (which would
+// create a circular dependency) and keeps riskguard narrowly dependent
+// on the one method it needs.
+//
+// Contract: when the user has fewer than the store's minimum history
+// threshold (currently 5 rows), the provider MUST return (0, 0, count)
+// so the guard knows to skip the anomaly check rather than treat the
+// empty baseline as "all orders are infinitely anomalous".
+type BaselineProvider interface {
+	UserOrderStats(email string, days int) (mean, stdev, count float64)
+}
+
 // AutoFreezeNotifier is called when the circuit breaker auto-freezes a user.
 // Implementations should be non-blocking (e.g. send async Telegram message).
 type AutoFreezeNotifier func(email, reason string)
@@ -130,6 +188,7 @@ type Guard struct {
 	trackers            map[string]*UserTracker
 	limits              map[string]*UserLimits // per-user overrides
 	freezeLookup        FreezeQuantityLookup
+	baseline            BaselineProvider // optional — nil ⇒ anomaly check is a no-op
 	db                  *alerts.DB
 	logger              *slog.Logger
 	autoFreezeNotifier  AutoFreezeNotifier
@@ -165,6 +224,11 @@ func (g *Guard) SetDB(db *alerts.DB) { g.db = db }
 
 // SetFreezeQuantityLookup sets the instrument lookup for quantity checks.
 func (g *Guard) SetFreezeQuantityLookup(lookup FreezeQuantityLookup) { g.freezeLookup = lookup }
+
+// SetBaselineProvider wires the rolling-baseline source used by the anomaly
+// check. Optional: when nil, checkAnomalyMultiplier is a silent no-op, which
+// is the correct behaviour for DevMode / tests without an audit store.
+func (g *Guard) SetBaselineProvider(p BaselineProvider) { g.baseline = p }
 
 // SetAutoFreezeNotifier registers a callback invoked when the circuit breaker
 // auto-freezes a user. The callback receives the user email and the freeze reason.
@@ -327,6 +391,24 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 	}
 	// 7. Daily cumulative placed value
 	if r := g.checkDailyValue(email, req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
+		return r
+	}
+	// 8. Anomaly detection — rolling 30-day baseline (mean + 3σ AND 10× mean).
+	//    Catches the "sub-cap layering"-adjacent attack where a single order
+	//    slips under the static cap but is wildly outside the user's history.
+	if r := g.checkAnomalyMultiplier(req); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
+		return r
+	}
+	// 9. Off-hours hard-block (02:00–06:00 IST) unless AllowOffHours=true.
+	if r := g.checkOffHours(req); !r.Allowed {
 		g.recordRejection(email)
 		if frozen := g.checkAutoFreeze(email); frozen {
 			r.Message += " [Account auto-frozen due to repeated violations]"
@@ -612,6 +694,89 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 			Allowed: false, Reason: ReasonDailyValueLimit,
 			Message: fmt.Sprintf("Cumulative placed value Rs %.0f + this order Rs %.0f exceeds daily limit Rs %.0f",
 				t.DailyPlacedValue, orderValue, limits.MaxDailyValueINR),
+		}
+	}
+	return CheckResult{Allowed: true}
+}
+
+// checkAnomalyMultiplier compares this order's value against the user's
+// rolling 30-day baseline. Blocks only when BOTH conditions hold:
+//  1. order value > μ + 3σ (statistically improbable given their history)
+//  2. order value > 10 × μ (magnitude jump, not just stdev noise)
+//
+// Fail-open paths:
+//   - no BaselineProvider configured → allow (DevMode / tests)
+//   - MARKET order (Price == 0) → allow, no known value to compare
+//   - insufficient baseline rows → provider returns (0, 0, count) → allow
+//
+// Rationale for AND-not-OR: a user who only trades exactly Rs 5,000 lots
+// has σ = 0, so ANY larger order is "infinitely many σ above the mean".
+// Conversely, a user with wild Rs 5k–Rs 5L range already has σ so large
+// that 10×mean stays within 3σ. Requiring both conditions gives a cleaner
+// signal: "this order is far from center AND much larger in magnitude".
+func (g *Guard) checkAnomalyMultiplier(req OrderCheckRequest) CheckResult {
+	if g.baseline == nil {
+		return CheckResult{Allowed: true} // no provider → silent no-op
+	}
+	if req.Price <= 0 {
+		return CheckResult{Allowed: true} // MARKET — skip
+	}
+	orderValue := float64(req.Quantity) * req.Price
+	mean, stdev, _ := g.baseline.UserOrderStats(strings.ToLower(req.Email), anomalyBaselineDays)
+	if mean <= 0 {
+		// Insufficient history (or unknown user). Fail open — the static
+		// per-order and daily-value caps still apply.
+		return CheckResult{Allowed: true}
+	}
+
+	sigmaThreshold := mean + anomalySigmaMultiplier*stdev
+	meanThreshold := anomalyMeanMultiplier * mean
+
+	if orderValue > sigmaThreshold && orderValue > meanThreshold {
+		return CheckResult{
+			Allowed: false, Reason: ReasonAnomalyHigh,
+			Message: fmt.Sprintf(
+				"Order value Rs %.0f is a statistical anomaly: your 30-day baseline mean is Rs %.0f (σ=Rs %.0f), so this order is both > %.0fx mean and > mean+%.0fσ. If legitimate, place a smaller order to rebuild baseline or contact admin.",
+				orderValue, mean, stdev, anomalyMeanMultiplier, anomalySigmaMultiplier),
+		}
+	}
+	return CheckResult{Allowed: true}
+}
+
+// checkOffHours hard-blocks any order placed between 02:00 and 06:00 IST,
+// unless the user has explicitly opted in via UserLimits.AllowOffHours.
+// Uses Asia/Kolkata explicitly so the block works regardless of the host's
+// local timezone (Fly.io machines run UTC).
+//
+// The window intentionally straddles the time band when:
+//   - legitimate manual trading has stopped (nobody's awake to approve)
+//   - morning-prep automation hasn't started yet (SIPs fire after 09:00)
+//   - market orders cannot execute anyway (open is 09:15 IST)
+//
+// Any activity in this window is therefore either malfunctioning automation
+// or an adversary exploiting the owner being asleep. Blocking it costs the
+// legitimate user nothing (no market during this window) but deprives an
+// attacker of the quietest attack window.
+func (g *Guard) checkOffHours(req OrderCheckRequest) CheckResult {
+	limits := g.GetEffectiveLimits(req.Email)
+	if limits.AllowOffHours {
+		return CheckResult{Allowed: true}
+	}
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		// If tzdata is missing in the container, fail open rather than
+		// lock everyone out. This is a deployment-level configuration
+		// issue, not an attacker's fault.
+		return CheckResult{Allowed: true}
+	}
+	nowIST := g.clock().In(ist)
+	hour := nowIST.Hour()
+	if hour >= offHoursStartIST && hour < offHoursEndIST {
+		return CheckResult{
+			Allowed: false, Reason: ReasonOffHoursBlocked,
+			Message: fmt.Sprintf(
+				"Orders are blocked between %02d:00 and %02d:00 IST. Current IST time: %s. Enable AllowOffHours in risk_limits to opt in to 24/7 trading.",
+				offHoursStartIST, offHoursEndIST, nowIST.Format("15:04 MST")),
 		}
 	}
 	return CheckResult{Allowed: true}
