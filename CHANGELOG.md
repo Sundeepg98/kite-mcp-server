@@ -8,18 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Research copilot tools (LLM-framed, no market data dependency): `analyze_concall` for earnings call transcript analysis, `get_fii_dii_flow` for FII/DII daily flow context, `peer_compare` for PEG + Piotroski + Altman Z-Score comparison across 2–6 stocks
+- Claude Skills wrapper package (8 skills + README) for use with the Claude Skills system
+- OAuth 13-Levels blog post (`docs/blog/oauth-13-levels.md`) distilled from the 237KB callback deep-dive archive
+- Incident response runbook — actionable crisis playbook for production incidents
+- FLOSS/fund proposal + `funding.json` manifest (Zerodha open-source grant application)
+- BYO Anthropic API key guide — walks users through bypassing Claude.ai tool-call quotas by bringing their own key
 - Setup checklist widget (`ui://kite-mcp/setup`) and `test_ip_whitelist` tool for in-Claude IP/credential verification (`db503de`)
 - MCP Registry manifest (`server.json`) for listing on modelcontextprotocol.io (`142a5e1`)
 - Per-user rate limiting (email-based), complementing existing per-IP limits (`0b1724d`)
 - CHANGELOG.md
 
 ### Changed
+- README rewritten with trust signals, compliance framing, and self-hosted fork positioning
+- Riskguard defaults tightened — lower order value cap, stricter daily limits, and order confirmation elicitation now defaults on (mitigates prompt-injection risk in agentic flows)
+- MCP Apps widgets are now gated on client capability — hosts that don't render widgets no longer receive widget-URL noise in responses
+- Telegram outbound messages prefixed with SEBI disclaimer, plus `/disclaimer` command (protects against SEBI advisory classification drift)
 - Landing page redesigned with client-specific setup tabs (claude.ai web / Claude Desktop / Claude Code / ChatGPT / VS Code), IP whitelist prerequisite notice, daily refresh note, and algorithmic-developer framing (`cd3f7de`)
 - CQRS duplicate handler registration now returns an error instead of panicking at startup (`4a37f10`)
 - OAuth `/oauth/authorize` short-circuits when a dashboard session cookie is present, eliminating a second Kite login for dashboard users (`0038a23`)
 - MCP responses wrap array data in `{items: [...]}` so strict-validating clients accept them; fixes `get_holdings`, `get_positions`, `get_orders`, `get_gtts`, `get_mf_holdings` (`2b637bf`)
 - Hardcoded local paths updated after project relocation (`b253f74`)
 - Tool rename follow-up (SEBI Path 1 compliance framing): `pre_trade_check` -> `order_risk_report`, `tax_harvest_analysis` -> `tax_loss_analysis`. Descriptions rewritten in factual voice with "Not investment advice." disclaimer appended. Behavior unchanged.
+- Lint cleanup sweeps — idiom modernization, `strings.Builder.Fprintf`, drop unnecessary `fmt.Sprintf` in Telegram package
 
 ### Fixed
 - Audit buffer drop log spam; now logs `Warn` only every 100 drops under sustained overflow (`4a37f10`)
@@ -28,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiter IP-only bypass via VPN/botnet (closed by per-user rate limiting) (`0b1724d`)
 
 ### Security
+- Idempotency keys on `place_order` / `modify_order` — `client_order_id` deduplication prevents replay and duplicate submissions across retries
+- Tool-description integrity manifest — detects line-jumping prompt-injection attacks against the MCP tool registry
+- `X-Request-ID` header propagation across HTTP → MCP → audit layers for end-to-end correlation and forensic replay
+- Anomaly detection in riskguard — rolling baseline of user behavior + off-hours block for atypical order patterns
+- SBOM (Software Bill of Materials) generation on master push and release tags via CI
+- Kite Connect v4 vendor hedge — vendored dependencies + CI watchdog workflow to detect upstream breakage
+- Path 2 compliance gate: `ENABLE_TRADING` env flag for order-placement tools (read-only by default when unset)
+- Legal `TERMS` and `PRIVACY` marked as DRAFT under review to mitigate DPDP exposure
+- Complete MIT attribution — Dockerfile `LICENSE` copy, `NOTICE` file, and landing-page footer attribution
 - Per-user rate limiting (`X-RateLimit-Scope: user`) blocks credential-stuffing and multi-IP abuse (`0b1724d`)
 - Audit log injection via malicious watchlist/symbol names is now prevented (`0b1724d`)
 
