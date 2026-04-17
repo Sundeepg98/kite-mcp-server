@@ -186,6 +186,9 @@ var toolDashboardPage = map[string]string{
 	"start_ticker":          "/dashboard/chart",
 	"ticker_status":         "/dashboard/chart",
 	"subscribe_instruments": "/dashboard/chart",
+
+	// Setup / onboarding diagnostics
+	"test_ip_whitelist": "/dashboard/setup",
 }
 
 // DashboardURLForTool returns the full dashboard URL for a given tool name,

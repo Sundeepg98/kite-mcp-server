@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Setup Checklist · Kite MCP</title>
+<style>
+/*
+ * Widget CSS: Self-contained by MCP protocol requirement.
+ * Variables mirror dashboard-base.css tokens but MUST be inline
+ * because MCP widgets are served as standalone HTML blobs.
+ * Canonical token definitions: dashboard-base.css
+ */
+:root {
+  --bg-0: var(--mcp-ui-bg-primary, #0a0c10);
+  --bg-1: var(--mcp-ui-bg-secondary, #0f1218);
+  --bg-2: var(--mcp-ui-bg-tertiary, #161b24);
+  --bg-3: #1e2430;
+  --border: var(--mcp-ui-border-color, #252d3a); --border-hi: #334155;
+  --text-0: var(--mcp-ui-text-primary, #e2e8f0);
+  --text-1: var(--mcp-ui-text-secondary, #94a3b8);
+  --text-2: var(--mcp-ui-text-tertiary, #64748b);
+  --accent: var(--mcp-ui-accent-color, #22d3ee); --accent-dim: rgba(34,211,238,0.12);
+  --green: var(--mcp-ui-success-color, #34d399); --green-dim: rgba(52,211,153,0.12);
+  --red: var(--mcp-ui-error-color, #f87171); --red-dim: rgba(248,113,113,0.1);
+  --amber: var(--mcp-ui-warning-color, #fbbf24); --amber-dim: rgba(251,191,36,0.1);
+  --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+html.light {
+  --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+  --border: #e2e8f0; --border-hi: #cbd5e1;
+  --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/*__INJECTED_CSS__*/
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-1); }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.logo { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.sep { width: 1px; height: 16px; background: var(--border); }
+.title { font-size: 13px; font-weight: 500; color: var(--text-1); }
+
+.content { padding: 18px 20px; }
+
+/* Egress IP card */
+.ip-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 18px; }
+.ip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.ip-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--accent); }
+.copy-btn { margin-left: auto; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.copy-btn.copied { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+/* Steps */
+.step { display: flex; gap: 12px; padding: 14px; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; }
+.step-marker { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-2); }
+.step-marker.pass { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.step-marker.fail { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+.step-marker.pending { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-size: 13px; font-weight: 600; color: var(--text-0); margin-bottom: 4px; }
+.step-desc { font-size: 12px; color: var(--text-1); margin-bottom: 6px; }
+.step-detail { font-family: var(--mono); font-size: 11px; color: var(--text-2); word-break: break-all; }
+.step-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* Buttons */
+.btn { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.btn-primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.btn-primary:hover { background: var(--accent); color: var(--bg-0); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Inline status */
+.step-status { margin-top: 8px; padding: 8px 10px; border-radius: 4px; font-size: 12px; display: none; }
+.step-status.show { display: block; }
+.step-status.pass { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.step-status.fail { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+.step-status.loading { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+
+/* Spinner */
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Ready banner */
+.ready-banner { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-radius: 6px; margin-top: 14px; font-size: 13px; font-weight: 500; }
+.ready-banner.ready { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.ready-banner.not-ready { background: var(--bg-2); color: var(--text-2); border: 1px solid var(--border); }
+
+/* Auth error */
+.auth-error { text-align: center; padding: 40px 16px; color: var(--text-2); font-size: 13px; }
+.auth-error strong { color: var(--red); }
+
+/* Mobile: stack content */
+@media (max-width: 500px) {
+  .content { padding: 14px; }
+  .ip-card { flex-wrap: wrap; }
+  .copy-btn { margin-left: 0; width: 100%; margin-top: 8px; }
+  .step { padding: 12px; }
+  .step-actions { flex-direction: column; }
+  .btn { width: 100%; justify-content: center; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <span class="logo">Kite MCP</span><span class="sep"></span><span class="title">Setup Checklist</span>
+  </div>
+</div>
+
+<div class="content" id="content">
+  <!-- populated by render() -->
+</div>
+
+<script>window.__DATA__ = "__INJECTED_DATA__";</script>
+<script>
+// AppBridge v1.0 — canonical source: appbridge.js
+const AppBridge = (() => {
+  const isIframe = window.parent !== window;
+  let nextId = 1;
+  const pending = new Map();
+  let hostContext = null;
+
+  if (isIframe) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent) return;
+      let msg;
+      try {
+        msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) { return; }
+      if (!msg || msg.jsonrpc !== '2.0') return;
+
+      if (msg.id != null && pending.has(msg.id)) {
+        const {resolve, reject} = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || 'RPC error'));
+        else resolve(msg.result);
+        return;
+      }
+
+      if (msg.method === 'ping' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/resource-teardown' && msg.id != null) {
+        window.parent.postMessage({jsonrpc: '2.0', id: msg.id, result: {}}, '*');
+        return;
+      }
+
+      if (msg.method === 'ui/notifications/host-context-changed' && msg.params) {
+        hostContext = Object.assign({}, hostContext, msg.params);
+        applyHostTheme(hostContext);
+      }
+    });
+  }
+
+  function sendRequest(method, params) {
+    if (!isIframe) return Promise.reject(new Error('Not in iframe'));
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, {resolve, reject});
+      window.parent.postMessage({jsonrpc: '2.0', id, method, params}, '*');
+      setTimeout(() => {
+        if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout')); }
+      }, 30000);
+    });
+  }
+
+  async function init() {
+    if (!isIframe) return null;
+    const result = await sendRequest('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'Kite Widget', version: '1.0.0' },
+      appCapabilities: {},
+    });
+    hostContext = result.hostContext || null;
+    if (hostContext) applyHostTheme(hostContext);
+    window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+    return result;
+  }
+
+  async function callServerTool(name, args) {
+    const result = await sendRequest('tools/call', { name, arguments: args || {} });
+    if (result && result.content && result.content[0] && result.content[0].text) {
+      try { return JSON.parse(result.content[0].text); } catch(e) {}
+      return result.content[0].text;
+    }
+    return result;
+  }
+
+  function openLink(url) {
+    if (!isIframe) { window.open(url, '_blank'); return; }
+    sendRequest('ui/open-link', { url }).catch(() => window.open(url, '_blank'));
+  }
+
+  function applyHostTheme(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+  }
+
+  function notifySize() {
+    if (!isIframe) return;
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
+    }, '*');
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => notifySize(), 100);
+    }).observe(document.body);
+  }
+
+  async function sendMessage(text) {
+    return sendRequest('ui/message', {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function updateModelContext(text) {
+    return sendRequest('ui/update-model-context', {
+      content: [{ type: 'text', text }]
+    });
+  }
+
+  async function requestDisplayMode(mode) {
+    return sendRequest('ui/request-display-mode', { mode });
+  }
+
+  async function downloadFile(filename, mimeType, data) {
+    return sendRequest('ui/download-file', { filename, mimeType, data: btoa(data) });
+  }
+
+  return { init, callServerTool, openLink, notifySize,
+    sendMessage, updateModelContext, requestDisplayMode, downloadFile,
+    get isIframe() { return isIframe; } };
+})();
+
+const KITE_DEV_CONSOLE_URL = 'https://developers.kite.trade/apps';
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = String(text);
+  return e;
+}
+
+function clearEl(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function isDataEmpty(d) {
+  if (!d || typeof d !== 'object') return true;
+  return Object.keys(d).length === 0;
+}
+
+function renderAuthError(container) {
+  clearEl(container);
+  const wrap = el('div', 'auth-error');
+  wrap.appendChild(el('strong', null, 'Not authenticated'));
+  wrap.appendChild(document.createElement('br'));
+  wrap.appendChild(document.createTextNode('Please log in via your MCP client'));
+  container.appendChild(wrap);
+}
+
+async function copyIP(btn, ip) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(ip);
+    } else {
+      // Fallback for older browsers / iframe sandboxing
+      const ta = document.createElement('textarea');
+      ta.value = ip;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    btn.classList.add('copied');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.textContent = orig;
+    }, 1400);
+  } catch (e) {
+    btn.textContent = 'Copy failed';
+  }
+}
+
+async function runConnectivityTest(btn, statusEl, markerEl) {
+  btn.disabled = true;
+  statusEl.className = 'step-status show loading';
+  clearEl(statusEl);
+  const spinner = el('span', 'spinner');
+  statusEl.appendChild(spinner);
+  statusEl.appendChild(document.createTextNode('Testing connectivity to Kite...'));
+  markerEl.className = 'step-marker pending';
+  markerEl.textContent = '*';
+
+  try {
+    const result = await AppBridge.callServerTool('test_ip_whitelist', {});
+    const status = (result && result.status) || 'other_error';
+    const message = (result && result.message) || 'Unknown result';
+
+    if (status === 'pass') {
+      statusEl.className = 'step-status show pass';
+      clearEl(statusEl);
+      statusEl.appendChild(document.createTextNode('\u2713 ' + message));
+      markerEl.className = 'step-marker pass';
+      markerEl.textContent = '\u2713';
+    } else {
+      statusEl.className = 'step-status show fail';
+      clearEl(statusEl);
+      statusEl.appendChild(document.createTextNode('\u2717 ' + message));
+      markerEl.className = 'step-marker fail';
+      markerEl.textContent = '\u2717';
+    }
+  } catch (e) {
+    statusEl.className = 'step-status show fail';
+    clearEl(statusEl);
+    statusEl.appendChild(document.createTextNode('\u2717 Test failed: ' + (e.message || 'Unknown error')));
+    markerEl.className = 'step-marker fail';
+    markerEl.textContent = '\u2717';
+  } finally {
+    btn.disabled = false;
+    AppBridge.notifySize();
+  }
+}
+
+function render() {
+  const content = document.getElementById('content');
+  const data = window.__DATA__;
+
+  if (isDataEmpty(data)) {
+    renderAuthError(content);
+    AppBridge.notifySize();
+    return;
+  }
+
+  clearEl(content);
+
+  const egressIP = data.egress_ip || '209.71.68.157';
+  const credsRegistered = !!data.credentials_registered;
+  const apiKeyMasked = data.api_key_masked || '';
+  const readyToTrade = !!data.ready_to_trade;
+
+  // Egress IP card with Copy button
+  const ipCard = el('div', 'ip-card');
+  ipCard.appendChild(el('span', 'ip-label', 'Static Egress IP:'));
+  ipCard.appendChild(el('span', 'ip-value', egressIP));
+  const copyBtn = el('button', 'copy-btn', 'Copy');
+  copyBtn.type = 'button';
+  copyBtn.setAttribute('aria-label', 'Copy IP to clipboard');
+  copyBtn.addEventListener('click', function() { copyIP(copyBtn, egressIP); });
+  ipCard.appendChild(copyBtn);
+  content.appendChild(ipCard);
+
+  // ---- Step 1: Credentials Registered ----
+  const step1 = el('div', 'step');
+  const step1Marker = el('div', 'step-marker ' + (credsRegistered ? 'pass' : 'fail'));
+  step1Marker.textContent = credsRegistered ? '\u2713' : '1';
+  step1.appendChild(step1Marker);
+  const step1Body = el('div', 'step-body');
+  step1Body.appendChild(el('div', 'step-title', 'Step 1: Credentials Registered'));
+  if (credsRegistered) {
+    step1Body.appendChild(el('div', 'step-desc', 'Your Kite developer app credentials are stored.'));
+    if (apiKeyMasked) {
+      step1Body.appendChild(el('div', 'step-detail', 'API key ' + apiKeyMasked));
+    }
+  } else {
+    step1Body.appendChild(el('div', 'step-desc', 'Register your Kite developer app credentials to continue.'));
+    step1Body.appendChild(el('div', 'step-detail', 'Run the login tool with your api_key and api_secret.'));
+  }
+  step1.appendChild(step1Body);
+  content.appendChild(step1);
+
+  // ---- Step 2: IP Whitelist Setup ----
+  const step2 = el('div', 'step');
+  const step2Marker = el('div', 'step-marker');
+  step2Marker.textContent = '2';
+  step2.appendChild(step2Marker);
+  const step2Body = el('div', 'step-body');
+  step2Body.appendChild(el('div', 'step-title', 'Step 2: IP Whitelist Setup'));
+  step2Body.appendChild(el('div', 'step-desc', 'Paste ' + egressIP + ' into your Kite developer console so SEBI-compliant API orders can reach Kite.'));
+  step2Body.appendChild(el('div', 'step-detail', KITE_DEV_CONSOLE_URL));
+  const actions2 = el('div', 'step-actions');
+  const openBtn = el('button', 'btn', '\u2192 Open Zerodha Console');
+  openBtn.type = 'button';
+  openBtn.addEventListener('click', function() { AppBridge.openLink(KITE_DEV_CONSOLE_URL); });
+  actions2.appendChild(openBtn);
+  step2Body.appendChild(actions2);
+  step2.appendChild(step2Body);
+  content.appendChild(step2);
+
+  // ---- Step 3: Test Connectivity ----
+  const step3 = el('div', 'step');
+  const step3Marker = el('div', 'step-marker');
+  step3Marker.textContent = '3';
+  step3.appendChild(step3Marker);
+  const step3Body = el('div', 'step-body');
+  step3Body.appendChild(el('div', 'step-title', 'Step 3: Test Connectivity'));
+  step3Body.appendChild(el('div', 'step-desc', 'Run a lightweight Kite call to verify your credentials and IP whitelist.'));
+  const actions3 = el('div', 'step-actions');
+  const testBtn = el('button', 'btn btn-primary', 'Test Now');
+  testBtn.type = 'button';
+  if (!credsRegistered) {
+    testBtn.disabled = true;
+    testBtn.title = 'Register credentials first (Step 1).';
+  }
+  const statusEl = el('div', 'step-status');
+  testBtn.addEventListener('click', function() { runConnectivityTest(testBtn, statusEl, step3Marker); });
+  actions3.appendChild(testBtn);
+  step3Body.appendChild(actions3);
+  step3Body.appendChild(statusEl);
+  step3.appendChild(step3Body);
+  content.appendChild(step3);
+
+  // ---- Ready banner ----
+  const banner = el('div', 'ready-banner ' + (readyToTrade ? 'ready' : 'not-ready'));
+  banner.textContent = readyToTrade
+    ? '\u2713 Ready to trade when all steps pass'
+    : 'Complete the steps above to start trading';
+  content.appendChild(banner);
+
+  AppBridge.notifySize();
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) {
+    location.reload();
+  }
+});
+
+AppBridge.init().then(function() {
+  try { render(); } catch(e) {
+    var app = document.getElementById('content') || document.body;
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'padding:40px;text-align:center;color:var(--red,#f87171);font-size:13px;';
+    errDiv.textContent = 'Widget error: ' + (e.message || 'Unknown error');
+    app.textContent = '';
+    app.appendChild(errDiv);
+    if (typeof AppBridge !== 'undefined') AppBridge.notifySize();
+  }
+}).catch(function() {
+  try { render(); } catch(e) {
+    var app = document.getElementById('content') || document.body;
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'padding:40px;text-align:center;color:var(--red,#f87171);font-size:13px;';
+    errDiv.textContent = 'Widget error: ' + (e.message || 'Unknown error');
+    app.textContent = '';
+    app.appendChild(errDiv);
+    if (typeof AppBridge !== 'undefined') AppBridge.notifySize();
+  }
+});
+</script>
+</body>
+</html>

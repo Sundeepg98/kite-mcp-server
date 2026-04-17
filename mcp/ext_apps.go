@@ -106,6 +106,11 @@ var appResources = []appResource{
 		DataFunc:     chartData,
 	},
 	{
+		URI: "ui://kite-mcp/setup", Name: "Setup Widget",
+		TemplateFile: "setup_app.html",
+		DataFunc:     setupData,
+	},
+	{
 		URI: "ui://kite-mcp/admin-overview", Name: "Admin Overview",
 		TemplateFile: "admin_overview_app.html",
 		DataFunc: func(manager *kc.Manager, auditStore *audit.Store, email string) any {
@@ -230,6 +235,7 @@ var pagePathToResourceURI = map[string]string{
 	"/dashboard/hub":       "ui://kite-mcp/hub",
 	"/dashboard/options":   "ui://kite-mcp/options-chain",
 	"/dashboard/chart":     "ui://kite-mcp/chart",
+	"/dashboard/setup":     "ui://kite-mcp/setup",
 	"/admin/overview":      "ui://kite-mcp/admin-overview",
 	"/admin/users":         "ui://kite-mcp/admin-users",
 	"/admin/metrics":       "ui://kite-mcp/admin-metrics",
@@ -683,6 +689,39 @@ func optionsChainData(manager *kc.Manager, _ *audit.Store, email string) any {
 // to search_instruments, get_historical_data, and technical_indicators.
 func chartData(_ *kc.Manager, _ *audit.Store, _ string) any {
 	return nil
+}
+
+// setupData returns onboarding state for the setup checklist widget.
+// Step 1 (credentials registered) is hydrated from the credential store.
+// Step 2 (IP whitelisted) can't be verified independently — it's confirmed
+// indirectly when Step 3 (test_ip_whitelist tool) passes. Until then the
+// widget shows Step 2 as unverified.
+func setupData(manager *kc.Manager, _ *audit.Store, email string) any {
+	credsRegistered := false
+	apiKeyMasked := ""
+	if store := manager.CredentialStore(); store != nil {
+		if entry, ok := store.Get(email); ok {
+			credsRegistered = true
+			apiKeyMasked = maskAPIKey(entry.APIKey)
+		}
+	}
+	return map[string]any{
+		"egress_ip":              setupStaticEgressIP,
+		"credentials_registered": credsRegistered,
+		"api_key_masked":         apiKeyMasked,
+		// ready_to_trade currently mirrors credentials_registered — Step 3
+		// connectivity result lives in the browser, not server-side state.
+		"ready_to_trade": credsRegistered,
+	}
+}
+
+// maskAPIKey returns a masked form of a Kite API key: first 3 chars, stars,
+// last 3 chars, e.g. "4c0****...3b7". Returns empty string for short/empty input.
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) < 7 {
+		return ""
+	}
+	return apiKey[:3] + "****..." + apiKey[len(apiKey)-3:]
 }
 
 // brokerClientForEmail resolves a broker.Client for the given email,
