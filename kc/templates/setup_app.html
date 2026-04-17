@@ -53,6 +53,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .ip-value { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--accent); }
 .copy-btn { margin-left: auto; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1); font-size: 11px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; }
 .copy-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.copy-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .copy-btn.copied { border-color: var(--green); color: var(--green); background: var(--green-dim); }
 
 /* Steps */
@@ -62,7 +63,7 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 .step-marker.fail { background: var(--red-dim); border-color: var(--red); color: var(--red); }
 .step-marker.pending { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
 .step-body { flex: 1; min-width: 0; }
-.step-title { font-size: 13px; font-weight: 600; color: var(--text-0); margin-bottom: 4px; }
+.step-title { font-size: 13px; font-weight: 600; color: var(--text-0); margin-bottom: 4px; margin-top: 0; }
 .step-desc { font-size: 12px; color: var(--text-1); margin-bottom: 6px; }
 .step-detail { font-family: var(--mono); font-size: 11px; color: var(--text-2); word-break: break-all; }
 .step-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -70,9 +71,11 @@ body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); 
 /* Buttons */
 .btn { padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.12s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .btn-primary:hover { background: var(--accent); color: var(--bg-0); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled:hover { border-color: var(--border); color: var(--text-1); background: var(--bg-2); }
 
 /* Inline status */
 .step-status { margin-top: 8px; padding: 8px 10px; border-radius: 4px; font-size: 12px; display: none; }
@@ -301,9 +304,11 @@ async function copyIP(btn, ip) {
 
 async function runConnectivityTest(btn, statusEl, markerEl) {
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
   statusEl.className = 'step-status show loading';
   clearEl(statusEl);
   const spinner = el('span', 'spinner');
+  spinner.setAttribute('aria-hidden', 'true');
   statusEl.appendChild(spinner);
   statusEl.appendChild(document.createTextNode('Testing connectivity to Kite...'));
   markerEl.className = 'step-marker pending';
@@ -335,6 +340,7 @@ async function runConnectivityTest(btn, statusEl, markerEl) {
     markerEl.textContent = '\u2717';
   } finally {
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     AppBridge.notifySize();
   }
 }
@@ -371,9 +377,10 @@ function render() {
   const step1 = el('div', 'step');
   const step1Marker = el('div', 'step-marker ' + (credsRegistered ? 'pass' : 'fail'));
   step1Marker.textContent = credsRegistered ? '\u2713' : '1';
+  step1Marker.setAttribute('aria-hidden', 'true');
   step1.appendChild(step1Marker);
   const step1Body = el('div', 'step-body');
-  step1Body.appendChild(el('div', 'step-title', 'Step 1: Credentials Registered'));
+  step1Body.appendChild(el('h3', 'step-title', 'Step 1: Credentials Registered — ' + (credsRegistered ? 'complete' : 'pending')));
   if (credsRegistered) {
     step1Body.appendChild(el('div', 'step-desc', 'Your Kite developer app credentials are stored.'));
     if (apiKeyMasked) {
@@ -390,14 +397,16 @@ function render() {
   const step2 = el('div', 'step');
   const step2Marker = el('div', 'step-marker');
   step2Marker.textContent = '2';
+  step2Marker.setAttribute('aria-hidden', 'true');
   step2.appendChild(step2Marker);
   const step2Body = el('div', 'step-body');
-  step2Body.appendChild(el('div', 'step-title', 'Step 2: IP Whitelist Setup'));
+  step2Body.appendChild(el('h3', 'step-title', 'Step 2: IP Whitelist Setup'));
   step2Body.appendChild(el('div', 'step-desc', 'Paste ' + egressIP + ' into your Kite developer console so SEBI-compliant API orders can reach Kite.'));
   step2Body.appendChild(el('div', 'step-detail', KITE_DEV_CONSOLE_URL));
   const actions2 = el('div', 'step-actions');
   const openBtn = el('button', 'btn', '\u2192 Open Zerodha Console');
   openBtn.type = 'button';
+  openBtn.setAttribute('aria-label', 'Open Zerodha developer console in a new window');
   openBtn.addEventListener('click', function() { AppBridge.openLink(KITE_DEV_CONSOLE_URL); });
   actions2.appendChild(openBtn);
   step2Body.appendChild(actions2);
@@ -408,9 +417,10 @@ function render() {
   const step3 = el('div', 'step');
   const step3Marker = el('div', 'step-marker');
   step3Marker.textContent = '3';
+  step3Marker.setAttribute('aria-hidden', 'true');
   step3.appendChild(step3Marker);
   const step3Body = el('div', 'step-body');
-  step3Body.appendChild(el('div', 'step-title', 'Step 3: Test Connectivity'));
+  step3Body.appendChild(el('h3', 'step-title', 'Step 3: Test Connectivity'));
   step3Body.appendChild(el('div', 'step-desc', 'Run a lightweight Kite call to verify your credentials and IP whitelist.'));
   const actions3 = el('div', 'step-actions');
   const testBtn = el('button', 'btn btn-primary', 'Test Now');
@@ -418,8 +428,11 @@ function render() {
   if (!credsRegistered) {
     testBtn.disabled = true;
     testBtn.title = 'Register credentials first (Step 1).';
+    testBtn.setAttribute('aria-disabled', 'true');
   }
   const statusEl = el('div', 'step-status');
+  statusEl.setAttribute('role', 'status');
+  statusEl.setAttribute('aria-live', 'polite');
   testBtn.addEventListener('click', function() { runConnectivityTest(testBtn, statusEl, step3Marker); });
   actions3.appendChild(testBtn);
   step3Body.appendChild(actions3);
@@ -429,6 +442,7 @@ function render() {
 
   // ---- Ready banner ----
   const banner = el('div', 'ready-banner ' + (readyToTrade ? 'ready' : 'not-ready'));
+  banner.setAttribute('role', 'status');
   banner.textContent = readyToTrade
     ? '\u2713 Ready to trade when all steps pass'
     : 'Complete the steps above to start trading';
