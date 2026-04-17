@@ -132,11 +132,22 @@ html.fullscreen table { font-size: 14px; }
 html.fullscreen td { font-size: 13px; padding: 7px 10px; }
 html.fullscreen th { font-size: 11px; padding: 8px 10px; }
 
-/* Responsive */
+/* Greek cells are narrow — tighten padding so 17-col table still scans */
+td.greek-col, th.greek-col { padding: 5px 4px; font-size: 10.5px; letter-spacing: 0; color: var(--text-1); }
+th.greek-col { font-size: 9.5px; }
+td.greek-col.muted { color: var(--text-2); }
+
+/* Responsive: hide inline Greek columns on small screens — the per-strike
+ * expand panel still shows them, pre-populated from the same chain payload. */
 @media (max-width: 480px) {
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
   .summary-value { font-size: 14px; }
   .greeks-panel { grid-template-columns: repeat(3, 1fr); }
+  th.greek-col, td.greek-col { display: none; }
+}
+/* On tablet widths show only Delta + IV inline; hide Gamma/Theta/Vega cols. */
+@media (min-width: 481px) and (max-width: 900px) {
+  th.greek-col.secondary, td.greek-col.secondary { display: none; }
 }
 </style>
 </head>
@@ -357,7 +368,7 @@ function th(text, classes) {
 let currentChain = null;   // last loaded chain response
 let expandedStrike = null;  // currently expanded strike (or null)
 let expandedType = null;    // 'CE' or 'PE' for the expanded greeks row
-let greeksCache = {};       // cache: "strike-CE" -> greeks response
+let greeksCache = {};       // unused since Greeks arrive inline; kept for back-compat
 
 // --- Idle State ---
 function showIdle() {
@@ -367,7 +378,7 @@ function showIdle() {
   const idle = el('div', 'idle-state');
   idle.appendChild(el('div', 'idle-icon', '\u2637'));
   idle.appendChild(el('div', 'idle-title', 'Options Chain'));
-  idle.appendChild(el('div', 'idle-sub', 'Enter an underlying symbol above to load the option chain with live OI, volume, and Greeks.'));
+  idle.appendChild(el('div', 'idle-sub', 'Enter an underlying symbol above to load the option chain with live OI, volume, and Black-Scholes Greeks (\u0394, \u0393, \u0398, V, IV) inline per strike.'));
 
   const quickBtns = el('div', 'quick-btns');
   var underlyings = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'SENSEX', 'RELIANCE', 'TCS'];
@@ -468,18 +479,29 @@ function renderChain(data) {
   table.setAttribute('aria-label', 'Option chain');
 
   // Header
+  // Layout (left to right, with responsive hiding):
+  //   CE side:  Vol | OI | LTP | Delta | IV | Gamma | Theta | Vega
+  //   Center:   Strike
+  //   PE side:  Vega | Theta | Gamma | IV | Delta | LTP | OI | Vol
+  // On tablets (<=900px) Gamma/Theta/Vega hide (secondary cols).
+  // On mobile  (<=480px) all greek cols hide; expand panel still shows them.
   var thead = document.createElement('thead');
   var headRow = document.createElement('tr');
-  var cols = [
-    ['Volume', 'r ce-side'], ['OI', 'r ce-side'], ['LTP', 'r ce-side'],
-    ['Strike', 'c'],
-    ['LTP', 'ce-side'], ['OI', 'ce-side'], ['Volume', 'ce-side']
-  ];
   // CE header group
   headRow.appendChild(th('CE Vol', 'r'));
   headRow.appendChild(th('CE OI', 'r'));
   headRow.appendChild(th('CE LTP', 'r'));
+  headRow.appendChild(th('\u0394', 'r greek-col'));         // Delta
+  headRow.appendChild(th('IV%', 'r greek-col'));
+  headRow.appendChild(th('\u0393', 'r greek-col secondary')); // Gamma
+  headRow.appendChild(th('\u0398', 'r greek-col secondary')); // Theta
+  headRow.appendChild(th('V', 'r greek-col secondary'));       // Vega
   headRow.appendChild(th('Strike', 'c'));
+  headRow.appendChild(th('V', 'greek-col secondary'));         // PE Vega
+  headRow.appendChild(th('\u0398', 'greek-col secondary'));    // PE Theta
+  headRow.appendChild(th('\u0393', 'greek-col secondary'));    // PE Gamma
+  headRow.appendChild(th('IV%', 'greek-col'));
+  headRow.appendChild(th('\u0394', 'greek-col'));              // PE Delta
   headRow.appendChild(th('PE LTP', ''));
   headRow.appendChild(th('PE OI', ''));
   headRow.appendChild(th('PE Vol', ''));
@@ -515,6 +537,41 @@ function renderChain(data) {
   app.appendChild(footer);
 }
 
+// fmtGreek returns a formatted greek value or an em-dash when absent/zero.
+// Greeks in the chain payload arrive as omitempty — JSON omits zeros — so a
+// strict `== null` check misses strikes where the IV solver failed. Treat
+// zero as "missing" for display; true zero-delta options are edge cases and
+// still render as "0.0000" if explicitly non-zero.
+function fmtGreek(v, decimals) {
+  if (v == null || isNaN(v) || v === 0) return '\u2014';
+  return fmtNum(v, decimals);
+}
+
+function greekTd(value, decimals, extraCls) {
+  var cell = document.createElement('td');
+  cell.className = 'r greek-col' + (extraCls ? ' ' + extraCls : '');
+  if (value == null || isNaN(value) || value === 0) {
+    cell.className += ' muted';
+    cell.textContent = '\u2014';
+  } else {
+    cell.textContent = fmtNum(value, decimals);
+  }
+  return cell;
+}
+
+// Like greekTd but aligned left for PE side so the Greek cluster mirrors CE.
+function peGreekTd(value, decimals, extraCls) {
+  var cell = document.createElement('td');
+  cell.className = 'greek-col' + (extraCls ? ' ' + extraCls : '');
+  if (value == null || isNaN(value) || value === 0) {
+    cell.className += ' muted';
+    cell.textContent = '\u2014';
+  } else {
+    cell.textContent = fmtNum(value, decimals);
+  }
+  return cell;
+}
+
 function appendChainRow(tbody, row, isATM, maxOI, data) {
   var tr = document.createElement('tr');
   tr.className = 'chain-row' + (isATM ? ' atm-row' : '');
@@ -536,8 +593,22 @@ function appendChainRow(tbody, row, isATM, maxOI, data) {
   // CE LTP
   tr.appendChild(td(row.ce_ltp > 0 ? fmtNum(row.ce_ltp) : '--', 'r'));
 
+  // CE Greeks inline: Delta, IV, (Gamma, Theta, Vega — secondary).
+  tr.appendChild(greekTd(row.ce_delta, 4));
+  tr.appendChild(greekTd(row.ce_iv, 1));
+  tr.appendChild(greekTd(row.ce_gamma, 5, 'secondary'));
+  tr.appendChild(greekTd(row.ce_theta, 2, 'secondary'));
+  tr.appendChild(greekTd(row.ce_vega, 2, 'secondary'));
+
   // Strike
   tr.appendChild(td(fmtNum(row.strike, 0), 'strike-col'));
+
+  // PE Greeks inline (mirror: Vega, Theta, Gamma secondary; then IV, Delta).
+  tr.appendChild(peGreekTd(row.pe_vega, 2, 'secondary'));
+  tr.appendChild(peGreekTd(row.pe_theta, 2, 'secondary'));
+  tr.appendChild(peGreekTd(row.pe_gamma, 5, 'secondary'));
+  tr.appendChild(peGreekTd(row.pe_iv, 1));
+  tr.appendChild(peGreekTd(row.pe_delta, 4));
 
   // PE LTP
   tr.appendChild(td(row.pe_ltp > 0 ? fmtNum(row.pe_ltp) : '--', ''));
@@ -556,7 +627,7 @@ function appendChainRow(tbody, row, isATM, maxOI, data) {
   // PE Volume
   tr.appendChild(td(fmtVol(row.pe_volume), ''));
 
-  // Click handler: expand greeks row
+  // Click handler: expand greeks row (now pre-populated from the chain payload)
   (function(strike, rowData, chainData) {
     tr.addEventListener('click', function() {
       toggleGreeks(strike, rowData, chainData);
@@ -567,6 +638,11 @@ function appendChainRow(tbody, row, isATM, maxOI, data) {
 }
 
 // --- Greeks expand/collapse ---
+// The expand panel is no longer a separate tool call. Greeks arrive inline
+// on every chain row (ce_delta, ce_gamma, ce_theta, ce_vega, ce_iv, and the
+// PE equivalents), so we can render the full panel synchronously from
+// whatever the server sent us. A zero value means the IV solver rejected
+// that strike (price < intrinsic, or market closed) — shown as an em-dash.
 function toggleGreeks(strike, rowData, chainData) {
   var tbody = document.getElementById('chainBody');
   if (!tbody) return;
@@ -606,9 +682,12 @@ function toggleGreeks(strike, rowData, chainData) {
   greeksTr.className = 'greeks-row';
   greeksTr.id = 'greeks-' + strike;
   var greeksTd = document.createElement('td');
-  greeksTd.colSpan = 7;
+  // Table has 17 columns: 8 CE (Vol, OI, LTP, Delta, IV, Gamma, Theta, Vega)
+  // + Strike + 8 PE (Vega, Theta, Gamma, IV, Delta, LTP, OI, Vol). Colspan
+  // must match so the expanded Greeks panel stretches full table width.
+  greeksTd.colSpan = 17;
 
-  var panel = el('div', 'greeks-panel loading', 'Loading Greeks...');
+  var panel = el('div', 'greeks-panel');
   greeksTd.appendChild(panel);
   greeksTr.appendChild(greeksTd);
 
@@ -619,100 +698,75 @@ function toggleGreeks(strike, rowData, chainData) {
     tbody.appendChild(greeksTr);
   }
 
+  // Render synchronously from inline data — no tool call.
+  renderGreeksPanel(panel, rowData, rowData, chainData);
+
   requestAnimationFrame(function() { AppBridge.notifySize(); });
-
-  // Fetch greeks for both CE and PE
-  var cacheKey = strike + '-both';
-  if (greeksCache[cacheKey]) {
-    renderGreeksPanel(panel, greeksCache[cacheKey].ce, greeksCache[cacheKey].pe);
-    return;
-  }
-
-  var cePromise = null;
-  var pePromise = null;
-
-  if (rowData.ce_tradingsymbol) {
-    cePromise = AppBridge.callServerTool('options_greeks', {
-      exchange: 'NFO',
-      tradingsymbol: rowData.ce_tradingsymbol,
-      strike_price: strike,
-      expiry_date: chainData.expiry,
-      option_type: 'CE'
-    }).catch(function() { return null; });
-  } else {
-    cePromise = Promise.resolve(null);
-  }
-
-  if (rowData.pe_tradingsymbol) {
-    pePromise = AppBridge.callServerTool('options_greeks', {
-      exchange: 'NFO',
-      tradingsymbol: rowData.pe_tradingsymbol,
-      strike_price: strike,
-      expiry_date: chainData.expiry,
-      option_type: 'PE'
-    }).catch(function() { return null; });
-  } else {
-    pePromise = Promise.resolve(null);
-  }
-
-  Promise.all([cePromise, pePromise]).then(function(results) {
-    var ceData = results[0];
-    var peData = results[1];
-    greeksCache[cacheKey] = { ce: ceData, pe: peData };
-
-    // Only render if still expanded on this strike
-    if (expandedStrike === strike) {
-      renderGreeksPanel(panel, ceData, peData);
-      requestAnimationFrame(function() { AppBridge.notifySize(); });
-    }
-  });
 }
 
-function renderGreeksPanel(panel, ceData, peData) {
+// Compute moneyness client-side since the chain response carries spot + strike
+// but not the decorated label the old options_greeks tool used.
+function computeMoneyness(spot, strike, isCall) {
+  if (!spot || !strike) return '--';
+  var band = strike * 0.005;
+  if (isCall) {
+    if (spot > strike + band) return 'ITM';
+    if (spot < strike - band) return 'OTM';
+    return 'ATM';
+  }
+  if (spot < strike - band) return 'ITM';
+  if (spot > strike + band) return 'OTM';
+  return 'ATM';
+}
+
+function renderGreeksPanel(panel, ceRow, peRow, chainData) {
   panel.className = 'greeks-panel';
   panel.textContent = '';
 
-  // CE Greeks column
+  var spot = chainData ? chainData.spot_price : 0;
+  var strike = ceRow ? ceRow.strike : (peRow ? peRow.strike : 0);
+
+  // CE Greeks column — reads directly from the chain row fields (ce_*).
   var ceHeader = el('div', 'greek-item');
   ceHeader.appendChild(el('div', 'greek-label', 'CE Greeks'));
-  ceHeader.appendChild(el('div', 'greek-value green', ceData ? ceData.moneyness || '--' : '--'));
+  ceHeader.appendChild(el('div', 'greek-value green', computeMoneyness(spot, strike, true)));
   panel.appendChild(ceHeader);
 
   var ceFields = [
-    { label: 'Delta', key: 'delta', fmt: 4 },
-    { label: 'IV %', key: 'iv_percent', fmt: 1 },
-    { label: 'Theta', key: 'theta_per_day', fmt: 2 },
-    { label: 'Gamma', key: 'gamma', fmt: 5 },
-    { label: 'Vega', key: 'vega_per_pct', fmt: 2 }
+    { label: 'Delta', key: 'ce_delta', fmt: 4 },
+    { label: 'IV %',  key: 'ce_iv',    fmt: 1 },
+    { label: 'Theta', key: 'ce_theta', fmt: 2 },
+    { label: 'Gamma', key: 'ce_gamma', fmt: 5 },
+    { label: 'Vega',  key: 'ce_vega',  fmt: 2 }
   ];
 
   for (var i = 0; i < ceFields.length; i++) {
     var item = el('div', 'greek-item greek-ce');
     item.appendChild(el('div', 'greek-label', ceFields[i].label));
-    var val = ceData ? ceData[ceFields[i].key] : null;
-    item.appendChild(el('div', 'greek-value', val != null ? fmtNum(val, ceFields[i].fmt) : '--'));
+    var val = ceRow ? ceRow[ceFields[i].key] : null;
+    item.appendChild(el('div', 'greek-value', fmtGreek(val, ceFields[i].fmt)));
     panel.appendChild(item);
   }
 
-  // PE Greeks column
+  // PE Greeks column — reads directly from the chain row fields (pe_*).
   var peHeader = el('div', 'greek-item');
   peHeader.appendChild(el('div', 'greek-label', 'PE Greeks'));
-  peHeader.appendChild(el('div', 'greek-value red', peData ? peData.moneyness || '--' : '--'));
+  peHeader.appendChild(el('div', 'greek-value red', computeMoneyness(spot, strike, false)));
   panel.appendChild(peHeader);
 
   var peFields = [
-    { label: 'Delta', key: 'delta', fmt: 4 },
-    { label: 'IV %', key: 'iv_percent', fmt: 1 },
-    { label: 'Theta', key: 'theta_per_day', fmt: 2 },
-    { label: 'Gamma', key: 'gamma', fmt: 5 },
-    { label: 'Vega', key: 'vega_per_pct', fmt: 2 }
+    { label: 'Delta', key: 'pe_delta', fmt: 4 },
+    { label: 'IV %',  key: 'pe_iv',    fmt: 1 },
+    { label: 'Theta', key: 'pe_theta', fmt: 2 },
+    { label: 'Gamma', key: 'pe_gamma', fmt: 5 },
+    { label: 'Vega',  key: 'pe_vega',  fmt: 2 }
   ];
 
   for (var i = 0; i < peFields.length; i++) {
     var item = el('div', 'greek-item greek-pe');
     item.appendChild(el('div', 'greek-label', peFields[i].label));
-    var val = peData ? peData[peFields[i].key] : null;
-    item.appendChild(el('div', 'greek-value', val != null ? fmtNum(val, peFields[i].fmt) : '--'));
+    var val = peRow ? peRow[peFields[i].key] : null;
+    item.appendChild(el('div', 'greek-value', fmtGreek(val, peFields[i].fmt)));
     panel.appendChild(item);
   }
 }

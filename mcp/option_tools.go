@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -38,27 +39,47 @@ func (*OptionChainTool) Tool() mcp.Tool {
 }
 
 // optionChainEntry represents one strike row in the chain.
+//
+// Greek fields (delta, gamma, theta, vega, iv) are populated inline via
+// Black-Scholes computation so the widget can show them at a glance without
+// making an N+1 options_greeks call per strike. When the option LTP is zero
+// or the IV solver fails (e.g., price < intrinsic, market closed), Greek
+// fields are left at their zero values and the widget renders "—".
 type optionChainEntry struct {
 	Strike          float64 `json:"strike"`
 	CELTP           float64 `json:"ce_ltp"`
 	CEOI            float64 `json:"ce_oi"`
 	CEVolume        int     `json:"ce_volume"`
 	CETradingsymbol string  `json:"ce_tradingsymbol,omitempty"`
+	// CE Greeks (empty when CE LTP is absent or IV cannot be solved).
+	CEDelta         float64 `json:"ce_delta,omitempty"`
+	CEGamma         float64 `json:"ce_gamma,omitempty"`
+	CETheta         float64 `json:"ce_theta,omitempty"` // per-day
+	CEVega          float64 `json:"ce_vega,omitempty"`  // per 1% vol move
+	CEIV            float64 `json:"ce_iv,omitempty"`    // implied volatility as percent
 	PELTP           float64 `json:"pe_ltp"`
 	PEOI            float64 `json:"pe_oi"`
 	PEVolume        int     `json:"pe_volume"`
 	PETradingsymbol string  `json:"pe_tradingsymbol,omitempty"`
+	// PE Greeks (empty when PE LTP is absent or IV cannot be solved).
+	PEDelta float64 `json:"pe_delta,omitempty"`
+	PEGamma float64 `json:"pe_gamma,omitempty"`
+	PETheta float64 `json:"pe_theta,omitempty"` // per-day
+	PEVega  float64 `json:"pe_vega,omitempty"`  // per 1% vol move
+	PEIV    float64 `json:"pe_iv,omitempty"`    // implied volatility as percent
 }
 
 // optionChainResponse is the full response returned to the caller.
 type optionChainResponse struct {
-	Underlying string             `json:"underlying"`
-	SpotPrice  float64            `json:"spot_price"`
-	Expiry     string             `json:"expiry"`
-	ATMStrike  float64            `json:"atm_strike"`
-	Chain      []optionChainEntry `json:"chain"`
-	MaxPain    float64            `json:"max_pain"`
-	PCR        float64            `json:"pcr"`
+	Underlying   string             `json:"underlying"`
+	SpotPrice    float64            `json:"spot_price"`
+	Expiry       string             `json:"expiry"`
+	ATMStrike    float64            `json:"atm_strike"`
+	Chain        []optionChainEntry `json:"chain"`
+	MaxPain      float64            `json:"max_pain"`
+	PCR          float64            `json:"pcr"`
+	RiskFreeRate float64            `json:"risk_free_rate,omitempty"` // rate used for Greek computation
+	DaysToExpiry int                `json:"days_to_expiry,omitempty"`
 }
 
 func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
@@ -320,17 +341,100 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				}
 			}
 
+			// Step 12: Compute Black-Scholes Greeks for every strike inline.
+			// Previously, the widget made a separate options_greeks call per
+			// strike on click (N+1). Computing here is ~O(strikes) and pure
+			// CPU — no I/O — so it adds well under 10ms for a typical chain.
+			// Greek fields are left zero when LTP is absent or IV fails.
+			const riskFreeRate = 0.07 // India 10-year G-Sec ~7% p.a.
+			timeToExpiry, daysToExpiry := timeToExpiryYearsFromKiteDate(targetExpiry)
+			if timeToExpiry > 0 && spotPrice > 0 {
+				for i := range chain {
+					e := &chain[i]
+					if e.CELTP > 0 {
+						fillGreeks(e, spotPrice, e.Strike, timeToExpiry, riskFreeRate, e.CELTP, true)
+					}
+					if e.PELTP > 0 {
+						fillGreeks(e, spotPrice, e.Strike, timeToExpiry, riskFreeRate, e.PELTP, false)
+					}
+				}
+			}
+
 			resp := optionChainResponse{
-				Underlying: underlying,
-				SpotPrice:  spotPrice,
-				Expiry:     targetExpiry,
-				ATMStrike:  atmStrike,
-				Chain:      chain,
-				MaxPain:    maxPain,
-				PCR:        pcr,
+				Underlying:   underlying,
+				SpotPrice:    spotPrice,
+				Expiry:       targetExpiry,
+				ATMStrike:    atmStrike,
+				Chain:        chain,
+				MaxPain:      maxPain,
+				PCR:          pcr,
+				RiskFreeRate: riskFreeRate,
+				DaysToExpiry: daysToExpiry,
 			}
 
 			return handler.MarshalResponse(resp, "get_option_chain")
 		})
+	}
+}
+
+// timeToExpiryYearsFromKiteDate converts a Kite-format expiry string to
+// fractional years until 15:30 IST on expiry day (Indian options cutoff) and
+// also returns the integer calendar days to expiry. The expiry string may be
+// either "YYYY-MM-DD" or an RFC3339-like timestamp from the instruments CSV.
+// Returns (0, 0) when the string can't be parsed — the caller treats a zero
+// T as "skip Greeks".
+func timeToExpiryYearsFromKiteDate(expiry string) (float64, int) {
+	if expiry == "" {
+		return 0, 0
+	}
+	// Kite exposes expiry as "YYYY-MM-DD" in most cases; fall back to parsing
+	// the first 10 characters in case the loader left a timestamp suffix.
+	layout := "2006-01-02"
+	trimmed := expiry
+	if len(expiry) >= 10 {
+		trimmed = expiry[:10]
+	}
+	d, err := time.Parse(layout, trimmed)
+	if err != nil {
+		return 0, 0
+	}
+	ist := time.FixedZone("IST", 5*3600+30*60)
+	expiryTime := time.Date(d.Year(), d.Month(), d.Day(), 15, 30, 0, 0, ist)
+	now := time.Now().In(ist)
+	hoursUntil := expiryTime.Sub(now).Hours()
+	if hoursUntil <= 0 {
+		return 0, 0
+	}
+	years := hoursUntil / (365.25 * 24)
+	days := int(math.Ceil(hoursUntil / 24))
+	return years, days
+}
+
+// fillGreeks solves IV from the option's market LTP and writes delta, gamma,
+// theta, vega, and IV (as a percent) into the appropriate side of the entry.
+// Uses the Black-Scholes primitives defined in options_greeks_tool.go — both
+// files live in package mcp so no export rename is needed.
+func fillGreeks(e *optionChainEntry, spot, strike, t, r, marketPrice float64, isCall bool) {
+	iv, ok := impliedVolatility(marketPrice, spot, strike, t, r, isCall)
+	if !ok || iv <= 0 {
+		return
+	}
+	delta := bsDelta(spot, strike, t, r, iv, isCall)
+	gamma := bsGamma(spot, strike, t, r, iv)
+	theta := bsTheta(spot, strike, t, r, iv, isCall)
+	vega := bsVega(spot, strike, t, r, iv)
+	ivPct := round2(iv * 100)
+	if isCall {
+		e.CEDelta = round6(delta)
+		e.CEGamma = round6(gamma)
+		e.CETheta = round4(theta)
+		e.CEVega = round4(vega)
+		e.CEIV = ivPct
+	} else {
+		e.PEDelta = round6(delta)
+		e.PEGamma = round6(gamma)
+		e.PETheta = round4(theta)
+		e.PEVega = round4(vega)
+		e.PEIV = ivPct
 	}
 }
