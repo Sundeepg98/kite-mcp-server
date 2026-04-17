@@ -11,13 +11,22 @@ import (
 )
 
 // System defaults — overridable via env vars or per-user DB config.
+//
+// SECURITY NOTE (Free-tier mitigation for prompt-injection / market-manipulation):
+// These values were tightened to address the "sub-cap layering" landmine — an
+// adversarial prompt that places many small orders under the per-order cap but
+// whose cumulative notional still looks like manipulative layering to SEBI
+// surveillance. The previous defaults (Rs 5L cap, 200/day, Rs 10L notional) were
+// too permissive for an autonomous agent execution path. Power users can still
+// raise their limits per-account via risk_limits overrides.
 var SystemDefaults = UserLimits{
-	MaxSingleOrderINR:    500000,  // Rs 5,00,000
-	MaxOrdersPerDay:      200,
-	MaxOrdersPerMinute:   10,
-	DuplicateWindowSecs:  30,
-	MaxDailyValueINR:     1000000, // Rs 10,00,000
-	AutoFreezeOnLimitHit: true,
+	MaxSingleOrderINR:       50000,  // Rs 50,000 (Free tier — was Rs 5,00,000)
+	MaxOrdersPerDay:         20,     // Free tier — was 200
+	MaxOrdersPerMinute:      10,
+	DuplicateWindowSecs:     30,
+	MaxDailyValueINR:        200000, // Rs 2,00,000 (Free tier — was Rs 10,00,000)
+	AutoFreezeOnLimitHit:    true,
+	RequireConfirmAllOrders: true, // Default ON: every order needs an explicit ACK
 }
 
 // orderTools lists tools that go through risk checks (same as elicitation).
@@ -35,15 +44,20 @@ func IsOrderTool(name string) bool { return orderTools[name] }
 type RejectionReason string
 
 const (
-	ReasonGlobalFreeze    RejectionReason = "global_freeze"
-	ReasonTradingFrozen   RejectionReason = "trading_frozen"
-	ReasonOrderValue      RejectionReason = "order_value_limit"
-	ReasonQuantityLimit   RejectionReason = "quantity_limit"
-	ReasonDailyOrderLimit RejectionReason = "daily_order_limit"
-	ReasonRateLimit       RejectionReason = "rate_limit"
-	ReasonDuplicateOrder  RejectionReason = "duplicate_order"
-	ReasonDailyValueLimit RejectionReason = "daily_value_limit"
-	ReasonAutoFreeze      RejectionReason = "auto_freeze"
+	ReasonGlobalFreeze         RejectionReason = "global_freeze"
+	ReasonTradingFrozen        RejectionReason = "trading_frozen"
+	ReasonOrderValue           RejectionReason = "order_value_limit"
+	ReasonQuantityLimit        RejectionReason = "quantity_limit"
+	ReasonDailyOrderLimit      RejectionReason = "daily_order_limit"
+	ReasonRateLimit            RejectionReason = "rate_limit"
+	ReasonDuplicateOrder       RejectionReason = "duplicate_order"
+	ReasonDailyValueLimit      RejectionReason = "daily_value_limit"
+	ReasonAutoFreeze           RejectionReason = "auto_freeze"
+	// ReasonConfirmationRequired blocks silent auto-execution by an agent — the
+	// caller must explicitly set Confirmed=true on the OrderCheckRequest (which
+	// the middleware populates from a `confirm: true` tool argument the user
+	// acknowledged via elicitation).
+	ReasonConfirmationRequired RejectionReason = "confirmation_required"
 )
 
 const (
@@ -68,10 +82,17 @@ type UserLimits struct {
 	DuplicateWindowSecs  int
 	MaxDailyValueINR     float64
 	AutoFreezeOnLimitHit bool // when true, auto-freeze after repeated rejections
-	TradingFrozen        bool
-	FrozenBy             string
-	FrozenReason         string
-	FrozenAt             time.Time
+	// RequireConfirmAllOrders, when true, blocks any order that does not
+	// carry an explicit Confirmed=true flag on the OrderCheckRequest. This
+	// is the primary defence against silent prompt-injection auto-execution:
+	// an agent cannot place an order on behalf of a user without that user
+	// explicitly confirming (typically via MCP elicitation). A power user may
+	// set this to false per-account to restore "no-ack" behaviour.
+	RequireConfirmAllOrders bool
+	TradingFrozen           bool
+	FrozenBy                string
+	FrozenReason            string
+	FrozenAt                time.Time
 }
 
 // recentOrder captures the signature of a placed order for duplicate detection.
@@ -206,6 +227,13 @@ type OrderCheckRequest struct {
 	Quantity        int
 	Price           float64 // 0 for MARKET orders
 	OrderType       string  // MARKET, LIMIT, SL, SL-M
+	// Confirmed indicates the user explicitly acknowledged this order (e.g.
+	// replied `confirm: true` to an elicitation). When
+	// UserLimits.RequireConfirmAllOrders is true, orders without Confirmed=true
+	// are rejected with ReasonConfirmationRequired. Wire-set by the middleware
+	// from request arguments; direct callers of CheckOrder must set this
+	// themselves.
+	Confirmed bool
 }
 
 // CheckOrder runs all safety checks in sequence. Returns on first failure.
@@ -225,6 +253,12 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 
 	// 1. Kill switch — not a limit violation, so no auto-freeze logic here
 	if r := g.checkKillSwitch(email); !r.Allowed {
+		return r
+	}
+	// 1b. Confirmation gate — blocks silent prompt-injection auto-execution.
+	//     Runs AFTER kill-switch so a frozen user still gets "frozen" (do not
+	//     leak freeze state via differentiated error codes).
+	if r := g.checkConfirmationRequired(req); !r.Allowed {
 		return r
 	}
 	// 2. Order value
@@ -384,6 +418,26 @@ func (g *Guard) checkKillSwitch(email string) CheckResult {
 		}
 	}
 	return CheckResult{Allowed: true}
+}
+
+// checkConfirmationRequired enforces RequireConfirmAllOrders. When the
+// effective user limit has the flag set (default true), any order without
+// req.Confirmed=true is rejected. This is the primary defence against silent
+// prompt-injection auto-execution: the caller (middleware) must surface a
+// user-facing confirmation step and pass the ack through.
+func (g *Guard) checkConfirmationRequired(req OrderCheckRequest) CheckResult {
+	limits := g.GetEffectiveLimits(req.Email)
+	if !limits.RequireConfirmAllOrders {
+		return CheckResult{Allowed: true}
+	}
+	if req.Confirmed {
+		return CheckResult{Allowed: true}
+	}
+	return CheckResult{
+		Allowed: false,
+		Reason:  ReasonConfirmationRequired,
+		Message: "Order confirmation required: every order must be explicitly acknowledged. Pass confirm=true to proceed.",
+	}
 }
 
 func (g *Guard) checkOrderValue(req OrderCheckRequest) CheckResult {
@@ -615,7 +669,10 @@ func (g *Guard) getOrCreateTracker(email string) *UserTracker {
 func (g *Guard) getOrCreateLimits(email string) *UserLimits {
 	l, ok := g.limits[email]
 	if !ok {
-		l = &UserLimits{AutoFreezeOnLimitHit: SystemDefaults.AutoFreezeOnLimitHit}
+		l = &UserLimits{
+			AutoFreezeOnLimitHit:    SystemDefaults.AutoFreezeOnLimitHit,
+			RequireConfirmAllOrders: SystemDefaults.RequireConfirmAllOrders,
+		}
 		g.limits[email] = l
 	}
 	return l
@@ -649,13 +706,17 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 	if l.AutoFreezeOnLimitHit {
 		autoFreeze = 1
 	}
+	requireConfirm := 0
+	if l.RequireConfirmAllOrders {
+		requireConfirm = 1
+	}
 	frozenAt := ""
 	if !l.FrozenAt.IsZero() {
 		frozenAt = l.FrozenAt.Format(time.RFC3339)
 	}
 	err := g.db.ExecInsert(
-		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, require_confirm_all_orders, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(email) DO UPDATE SET
 		   max_single_order_inr=excluded.max_single_order_inr,
 		   max_orders_per_day=excluded.max_orders_per_day,
@@ -663,12 +724,13 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 		   duplicate_window_secs=excluded.duplicate_window_secs,
 		   max_daily_value_inr=excluded.max_daily_value_inr,
 		   auto_freeze_on_limit_hit=excluded.auto_freeze_on_limit_hit,
+		   require_confirm_all_orders=excluded.require_confirm_all_orders,
 		   trading_frozen=excluded.trading_frozen,
 		   frozen_at=excluded.frozen_at,
 		   frozen_by=excluded.frozen_by,
 		   frozen_reason=excluded.frozen_reason,
 		   updated_at=excluded.updated_at`,
-		email, l.MaxSingleOrderINR, l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR, autoFreeze, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
+		email, l.MaxSingleOrderINR, l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR, autoFreeze, requireConfirm, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
 	)
 	if err != nil && g.logger != nil {
 		g.logger.Error("Failed to persist risk limits", "email", email, "error", err)
@@ -676,23 +738,30 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 }
 
 // InitTable creates the risk_limits table if it doesn't exist, and migrates new columns.
+//
+// NOTE: the DEFAULT values below are the DB-side defaults used ONLY for rows
+// that omit the column at INSERT time. persistLimits always supplies every
+// column, so the authoritative Free-tier defaults are the Go-side SystemDefaults
+// values above. The DDL defaults are kept aligned with SystemDefaults for
+// consistency during forensic DB inspection.
 func (g *Guard) InitTable() error {
 	if g.db == nil {
 		return nil
 	}
 	if err := g.db.ExecDDL(`
 		CREATE TABLE IF NOT EXISTS risk_limits (
-			email                 TEXT PRIMARY KEY,
-			max_single_order_inr  REAL NOT NULL DEFAULT 500000,
-			max_orders_per_day    INTEGER NOT NULL DEFAULT 200,
-			max_orders_per_minute INTEGER NOT NULL DEFAULT 10,
-			duplicate_window_secs INTEGER NOT NULL DEFAULT 30,
-			max_daily_value_inr   REAL NOT NULL DEFAULT 1000000,
-			trading_frozen        INTEGER NOT NULL DEFAULT 0,
-			frozen_at             TEXT DEFAULT '',
-			frozen_by             TEXT DEFAULT '',
-			frozen_reason         TEXT DEFAULT '',
-			updated_at            TEXT NOT NULL
+			email                      TEXT PRIMARY KEY,
+			max_single_order_inr       REAL NOT NULL DEFAULT 50000,
+			max_orders_per_day         INTEGER NOT NULL DEFAULT 20,
+			max_orders_per_minute      INTEGER NOT NULL DEFAULT 10,
+			duplicate_window_secs      INTEGER NOT NULL DEFAULT 30,
+			max_daily_value_inr        REAL NOT NULL DEFAULT 200000,
+			require_confirm_all_orders INTEGER NOT NULL DEFAULT 1,
+			trading_frozen             INTEGER NOT NULL DEFAULT 0,
+			frozen_at                  TEXT DEFAULT '',
+			frozen_by                  TEXT DEFAULT '',
+			frozen_reason              TEXT DEFAULT '',
+			updated_at                 TEXT NOT NULL
 		)`); err != nil {
 		return err
 	}
@@ -700,8 +769,10 @@ func (g *Guard) InitTable() error {
 	migrations := []string{
 		`ALTER TABLE risk_limits ADD COLUMN max_orders_per_minute INTEGER NOT NULL DEFAULT 10`,
 		`ALTER TABLE risk_limits ADD COLUMN duplicate_window_secs INTEGER NOT NULL DEFAULT 30`,
-		`ALTER TABLE risk_limits ADD COLUMN max_daily_value_inr REAL NOT NULL DEFAULT 1000000`,
+		`ALTER TABLE risk_limits ADD COLUMN max_daily_value_inr REAL NOT NULL DEFAULT 200000`,
 		`ALTER TABLE risk_limits ADD COLUMN auto_freeze_on_limit_hit INTEGER NOT NULL DEFAULT 1`,
+		// Secure-by-default: existing rows gain require_confirm_all_orders=1.
+		`ALTER TABLE risk_limits ADD COLUMN require_confirm_all_orders INTEGER NOT NULL DEFAULT 1`,
 	}
 	for _, m := range migrations {
 		_ = g.db.ExecDDL(m) // ignore "duplicate column" errors
@@ -714,7 +785,7 @@ func (g *Guard) LoadLimits() error {
 	if g.db == nil {
 		return nil
 	}
-	rows, err := g.db.RawQuery(`SELECT email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason FROM risk_limits`)
+	rows, err := g.db.RawQuery(`SELECT email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, require_confirm_all_orders, trading_frozen, frozen_at, frozen_by, frozen_reason FROM risk_limits`)
 	if err != nil {
 		return fmt.Errorf("load risk_limits: %w", err)
 	}
@@ -726,20 +797,21 @@ func (g *Guard) LoadLimits() error {
 	for rows.Next() {
 		var email, frozenAt, frozenBy, frozenReason string
 		var maxOrder, maxDailyValue float64
-		var maxDaily, maxPerMin, dupWindow, autoFreeze, frozen int
-		if err := rows.Scan(&email, &maxOrder, &maxDaily, &maxPerMin, &dupWindow, &maxDailyValue, &autoFreeze, &frozen, &frozenAt, &frozenBy, &frozenReason); err != nil {
+		var maxDaily, maxPerMin, dupWindow, autoFreeze, requireConfirm, frozen int
+		if err := rows.Scan(&email, &maxOrder, &maxDaily, &maxPerMin, &dupWindow, &maxDailyValue, &autoFreeze, &requireConfirm, &frozen, &frozenAt, &frozenBy, &frozenReason); err != nil {
 			return fmt.Errorf("scan risk_limits: %w", err)
 		}
 		l := &UserLimits{
-			MaxSingleOrderINR:    maxOrder,
-			MaxOrdersPerDay:      maxDaily,
-			MaxOrdersPerMinute:   maxPerMin,
-			DuplicateWindowSecs:  dupWindow,
-			MaxDailyValueINR:     maxDailyValue,
-			AutoFreezeOnLimitHit: autoFreeze != 0,
-			TradingFrozen:        frozen != 0,
-			FrozenBy:             frozenBy,
-			FrozenReason:         frozenReason,
+			MaxSingleOrderINR:       maxOrder,
+			MaxOrdersPerDay:         maxDaily,
+			MaxOrdersPerMinute:      maxPerMin,
+			DuplicateWindowSecs:     dupWindow,
+			MaxDailyValueINR:        maxDailyValue,
+			AutoFreezeOnLimitHit:    autoFreeze != 0,
+			RequireConfirmAllOrders: requireConfirm != 0,
+			TradingFrozen:           frozen != 0,
+			FrozenBy:                frozenBy,
+			FrozenReason:            frozenReason,
 		}
 		if frozenAt != "" {
 			l.FrozenAt, _ = time.Parse(time.RFC3339, frozenAt)

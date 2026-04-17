@@ -41,10 +41,12 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	assert.Equal(t, "market crash", status.Reason)
 	assert.False(t, status.FrozenAt.IsZero())
 
-	// Orders should be blocked
+	// Orders should be blocked (Confirmed=true so the confirmation gate is
+	// not the reason; global freeze must take precedence).
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
 		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Confirmed: true,
 	})
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonGlobalFreeze, r.Reason)
@@ -64,6 +66,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	r = g.CheckOrder(OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
 		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
 }
@@ -258,6 +261,8 @@ func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
+	// confirm=true needed because the Free-tier default now requires explicit
+	// acknowledgement to satisfy the RequireConfirmAllOrders gate.
 	req.Params.Arguments = map[string]interface{}{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
@@ -265,6 +270,7 @@ func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 		"quantity":         float64(5),
 		"price":            float64(1500),
 		"order_type":       "LIMIT",
+		"confirm":          true,
 	}
 
 	ctx := oauth.ContextWithEmail(context.Background(), "trader@test.com")
@@ -295,6 +301,7 @@ func TestMiddleware_TriggerPriceFallback(t *testing.T) {
 		"price":            float64(0), // zero price
 		"trigger_price":    float64(1480),
 		"order_type":       "SL",
+		"confirm":          true,
 	}
 
 	ctx := oauth.ContextWithEmail(context.Background(), "sl@test.com")
@@ -438,11 +445,12 @@ func TestLoadLimits_WithFrozenAtEmpty(t *testing.T) {
 	g.SetDB(db)
 	require.NoError(t, g.InitTable())
 
-	// Insert a row with empty frozen_at
+	// Insert a row with empty frozen_at (include the new
+	// require_confirm_all_orders column — set to 1 to match Free-tier default).
 	err = db.ExecInsert(
-		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		"empty@test.com", 500000, 200, 10, 30, 1000000, 1, 0, "", "", "", time.Now().Format(time.RFC3339),
+		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, require_confirm_all_orders, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"empty@test.com", 50000, 20, 10, 30, 200000, 1, 1, 0, "", "", "", time.Now().Format(time.RFC3339),
 	)
 	require.NoError(t, err)
 
@@ -465,9 +473,9 @@ func TestLoadLimits_WithFrozenAtSet(t *testing.T) {
 
 	frozenAt := time.Now().Format(time.RFC3339)
 	err = db.ExecInsert(
-		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		"frozen@test.com", 500000, 200, 10, 30, 1000000, 1, 1, frozenAt, "admin", "test", time.Now().Format(time.RFC3339),
+		`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, require_confirm_all_orders, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"frozen@test.com", 50000, 20, 10, 30, 200000, 1, 1, 1, frozenAt, "admin", "test", time.Now().Format(time.RFC3339),
 	)
 	require.NoError(t, err)
 
@@ -500,6 +508,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
 
@@ -633,6 +642,7 @@ func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 		Email: "nolookup@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // fail open
 }
@@ -652,6 +662,7 @@ func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 		Email: "zerofq@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "ZEROFQ",
 		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // freeze qty 0 => fail open
 }
@@ -671,6 +682,7 @@ func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
 		Email: "empty@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "",
 		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // fail open
 }
@@ -1072,9 +1084,9 @@ func TestLoadLimits_MultipleRows(t *testing.T) {
 			frozenAt = time.Now().Format(time.RFC3339)
 		}
 		err = db.ExecInsert(
-			`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			email, 500000, 200, 10, 30, 1000000, 1, frozen, frozenAt, "", "", time.Now().Format(time.RFC3339),
+			`INSERT INTO risk_limits (email, max_single_order_inr, max_orders_per_day, max_orders_per_minute, duplicate_window_secs, max_daily_value_inr, auto_freeze_on_limit_hit, require_confirm_all_orders, trading_frozen, frozen_at, frozen_by, frozen_reason, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			email, 50000, 20, 10, 30, 200000, 1, 1, frozen, frozenAt, "", "", time.Now().Format(time.RFC3339),
 		)
 		require.NoError(t, err)
 	}

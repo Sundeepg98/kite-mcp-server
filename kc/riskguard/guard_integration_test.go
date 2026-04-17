@@ -28,6 +28,9 @@ func newIntegrationGuard(t *testing.T) *Guard {
 }
 
 // validSmallOrder is a baseline request that should pass all 8 checks.
+// Confirmed=true is set so the new default-on require-confirm gate is not
+// the reason for any block in these integration tests — they target the
+// OTHER safety checks specifically.
 func validSmallOrder(email string) OrderCheckRequest {
 	return OrderCheckRequest{
 		Email:           email,
@@ -38,6 +41,7 @@ func validSmallOrder(email string) OrderCheckRequest {
 		Quantity:        5,
 		Price:           1500,
 		OrderType:       "LIMIT",
+		Confirmed:       true,
 	}
 }
 
@@ -106,19 +110,22 @@ func TestFullChain_OrderValueLimit(t *testing.T) {
 	g := newIntegrationGuard(t)
 	email := "bigspender@example.com"
 
+	// Tightened Free-tier cap: Rs 50,000 per order (was Rs 5,00,000). The
+	// table cases below were rescaled by 10x to match the new default.
+	// Confirmed=true on every request isolates the order-value check.
 	tests := []struct {
-		name     string
-		qty      int
-		price    float64
-		allowed  bool
-		reason   RejectionReason
+		name    string
+		qty     int
+		price   float64
+		allowed bool
+		reason  RejectionReason
 	}{
-		{"exactly at limit passes (strict >)", 50, 10000, true, ""},          // 50*10000 = 500000 = limit, check is > not >=
-		{"just over limit", 51, 10000, false, ReasonOrderValue},              // 510000 > 500000
-		{"way over limit", 100, 10000, false, ReasonOrderValue},              // 1000000 > 500000
-		{"MARKET order (price 0) passes", 100000, 0, true, ""},               // price=0 skips check
-		{"small order passes", 10, 100, true, ""},                            // 1000 < 500000
-		{"single expensive share", 1, 600000, false, ReasonOrderValue},       // 600000 > 500000
+		{"exactly at limit passes (strict >)", 5, 10000, true, ""},       // 5*10000 = 50000 = limit
+		{"just over limit", 6, 10000, false, ReasonOrderValue},           // 60000 > 50000
+		{"way over limit", 10, 10000, false, ReasonOrderValue},           // 100000 > 50000
+		{"MARKET order (price 0) passes", 100000, 0, true, ""},           // price=0 skips check
+		{"small order passes", 10, 100, true, ""},                        // 1000 < 50000
+		{"single expensive share", 1, 60000, false, ReasonOrderValue},    // 60000 > 50000
 	}
 
 	for _, tc := range tests {
@@ -129,6 +136,7 @@ func TestFullChain_OrderValueLimit(t *testing.T) {
 				TransactionType: "BUY",
 				Quantity: tc.qty, Price: tc.price,
 				OrderType: "LIMIT",
+				Confirmed: true,
 			}
 			if tc.price == 0 {
 				req.OrderType = "MARKET"
@@ -203,29 +211,29 @@ func TestFullChain_QuantityLimit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Check 4: Daily order count limit (200/day)
+// Check 4: Daily order count limit (Free-tier default: 20/day, was 200/day)
 // ---------------------------------------------------------------------------
 
 func TestFullChain_DailyOrderLimit(t *testing.T) {
 	g := newIntegrationGuard(t)
 	email := "dailylimit@example.com"
 
-	// Use system default: 200/day.
-	// Simulate 200 orders already placed.
+	// Use system default: 20/day.
+	// Simulate 20 orders already placed.
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	tracker.DailyOrderCount = 200
+	tracker.DailyOrderCount = 20
 	tracker.DayResetAt = time.Now()
 	g.mu.Unlock()
 
 	r := g.CheckOrder(validSmallOrder(email))
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
-	assert.Contains(t, r.Message, "200")
+	assert.Contains(t, r.Message, "20")
 
 	// Reduce count by 1 — should pass.
 	g.mu.Lock()
-	tracker.DailyOrderCount = 199
+	tracker.DailyOrderCount = 19
 	g.mu.Unlock()
 
 	r = g.CheckOrder(validSmallOrder(email))
@@ -316,11 +324,15 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 	g := newIntegrationGuard(t)
 	email := "dup@example.com"
 
+	// 50 * 800 = 40000 < new 50k per-order cap. Confirmed=true bypasses the
+	// new default-on require-confirm gate so this test isolates duplicate
+	// detection.
 	req := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "SBIN",
 		TransactionType: "BUY", Quantity: 50,
 		Price: 800, OrderType: "LIMIT",
+		Confirmed: true,
 	}
 
 	// First order passes.
@@ -359,38 +371,41 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Check 7: Daily value limit (Rs 10L)
+// Check 7: Daily value limit (Free-tier default: Rs 2L, was Rs 10L)
 // ---------------------------------------------------------------------------
 
 func TestFullChain_DailyValueLimit(t *testing.T) {
 	g := newIntegrationGuard(t)
 	email := "valueday@example.com"
 
-	// System default: Rs 10,00,000 daily value.
-	// Simulate Rs 9,50,000 already placed.
+	// System default: Rs 2,00,000 daily value (was Rs 10,00,000).
+	// Simulate Rs 1,90,000 already placed.
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	tracker.DailyPlacedValue = 950000
+	tracker.DailyPlacedValue = 190000
 	tracker.DayResetAt = time.Now()
 	g.mu.Unlock()
 
-	// An order for Rs 60,000 would push total to Rs 10,10,000 > Rs 10,00,000.
+	// An order for Rs 12,000 would push total to Rs 2,02,000 > Rs 2,00,000
+	// and also passes the per-order Rs 50,000 cap.
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", Quantity: 20, Price: 3000,
+		TransactionType: "BUY", Quantity: 4, Price: 3000,
 		OrderType: "LIMIT",
+		Confirmed: true,
 	})
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonDailyValueLimit, r.Reason)
 	assert.Contains(t, r.Message, "exceeds daily limit")
 
-	// An order for Rs 40,000 fits: 950000 + 40000 = 990000 < 1000000.
+	// An order for Rs 8,000 fits: 190000 + 8000 = 198000 < 200000.
 	r = g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", Quantity: 20, Price: 2000,
+		TransactionType: "BUY", Quantity: 4, Price: 2000,
 		OrderType: "LIMIT",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
 }
@@ -399,10 +414,10 @@ func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
 	g := newIntegrationGuard(t)
 	email := "marketval@example.com"
 
-	// Simulate Rs 9,99,999 already placed.
+	// Simulate Rs 1,99,999 already placed (just under new Rs 2L cap).
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	tracker.DailyPlacedValue = 999999
+	tracker.DailyPlacedValue = 199999
 	tracker.DayResetAt = time.Now()
 	g.mu.Unlock()
 
@@ -412,6 +427,7 @@ func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
 		Exchange: "NSE", Tradingsymbol: "TCS",
 		TransactionType: "BUY", Quantity: 1000, Price: 0,
 		OrderType: "MARKET",
+		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "MARKET orders (price=0) should skip daily value check")
 }
@@ -592,6 +608,8 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 	var mu sync.Mutex
 
 	// 50 goroutines each trying to place an order.
+	// Confirmed=true so the new require-confirm gate isn't the block reason;
+	// we're stress-testing concurrency of the limit checks specifically.
 	for range 50 {
 		wg.Go(func() {
 			req := OrderCheckRequest{
@@ -599,6 +617,7 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 				Exchange: "NSE", Tradingsymbol: "INFY",
 				TransactionType: "BUY", Quantity: 1,
 				Price: 1500, OrderType: "LIMIT",
+				Confirmed: true,
 			}
 			r := g.CheckOrder(req)
 			if r.Allowed {
@@ -613,11 +632,11 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 	status := g.GetUserStatus(email)
-	// All 50 should be allowed (system defaults: 200/day, 10/min window).
-	// Some might be rate-limited if they hit the 10/min window.
-	// But daily count + errCount should sum to 50.
+	// With Free-tier defaults (20/day, 10/min, duplicate 30s window), most
+	// will be rejected; we assert only that every goroutine either succeeded
+	// or was blocked — the two counts must sum to 50 (concurrency invariant).
 	assert.Equal(t, 50, status.DailyOrderCount+errCount,
-		"all goroutines should either succeed or be rate-limited")
+		"every goroutine should end in either success or rejection")
 }
 
 // ---------------------------------------------------------------------------
@@ -684,6 +703,7 @@ func TestLoadLimits_ScanError(t *testing.T) {
 		duplicate_window_secs TEXT,
 		max_daily_value_inr TEXT,
 		auto_freeze_on_limit_hit TEXT,
+		require_confirm_all_orders TEXT,
 		trading_frozen TEXT,
 		frozen_at TEXT,
 		frozen_by TEXT,

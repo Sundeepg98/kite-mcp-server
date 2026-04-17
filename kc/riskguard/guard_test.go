@@ -17,13 +17,15 @@ func TestCheckKillSwitch(t *testing.T) {
 	g := newTestGuard()
 
 	t.Run("unfrozen user passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order"})
+		// Confirmed=true bypasses the new default-on require-confirm gate so
+		// this test isolates the kill-switch behaviour.
+		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed)
 	})
 
 	t.Run("frozen user blocked", func(t *testing.T) {
 		g.Freeze("user@test.com", "admin@test.com", "testing")
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed)
 		assert.Equal(t, ReasonTradingFrozen, r.Reason)
 		assert.Contains(t, r.Message, "testing")
@@ -31,7 +33,7 @@ func TestCheckKillSwitch(t *testing.T) {
 
 	t.Run("unfreeze restores access", func(t *testing.T) {
 		g.Unfreeze("user@test.com")
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed)
 	})
 }
@@ -39,20 +41,25 @@ func TestCheckKillSwitch(t *testing.T) {
 func TestCheckOrderValue(t *testing.T) {
 	g := newTestGuard()
 
+	// Tightened Free-tier default: Rs 50,000 per order. Tests updated to reflect
+	// the new cap. Confirmed=true bypasses the new default-on require-confirm
+	// gate so these tests isolate the value-check behaviour.
 	t.Run("under limit passes", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+			Confirmed: true,
 		})
-		assert.True(t, r.Allowed) // 10*1000=10000 < 500000
+		assert.True(t, r.Allowed) // 10*1000=10000 < 50000
 	})
 
 	t.Run("over limit blocked", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
-			Quantity: 100, Price: 10000, OrderType: "LIMIT",
+			Quantity: 10, Price: 10000, OrderType: "LIMIT",
+			Confirmed: true,
 		})
-		assert.False(t, r.Allowed) // 100*10000=1000000 > 500000
+		assert.False(t, r.Allowed) // 10*10000=100000 > 50000
 		assert.Equal(t, ReasonOrderValue, r.Reason)
 	})
 
@@ -60,6 +67,7 @@ func TestCheckOrderValue(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Quantity: 100000, Price: 0, OrderType: "MARKET",
+			Confirmed: true,
 		})
 		assert.True(t, r.Allowed)
 	})
@@ -85,6 +93,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 100,
+			Confirmed: true,
 		})
 		assert.True(t, r.Allowed)
 	})
@@ -93,6 +102,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 2000,
+			Confirmed: true,
 		})
 		assert.False(t, r.Allowed)
 		assert.Equal(t, ReasonQuantityLimit, r.Reason)
@@ -102,6 +112,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "UNKNOWN", Quantity: 999999,
+			Confirmed: true,
 		})
 		assert.True(t, r.Allowed)
 	})
@@ -111,7 +122,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 	g := newTestGuard()
 
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed)
 	})
 
@@ -122,7 +133,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 		g.trackers["u@t.com"] = &UserTracker{DailyOrderCount: 3, DayResetAt: time.Now()}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed)
 		assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
 	})
@@ -188,7 +199,7 @@ func TestCheckRateLimit(t *testing.T) {
 	g.mu.Unlock()
 
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed)
 	})
 
@@ -204,7 +215,7 @@ func TestCheckRateLimit(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed)
 		assert.Equal(t, ReasonRateLimit, r.Reason)
 		assert.Contains(t, r.Message, "limit: 3")
@@ -220,7 +231,7 @@ func TestCheckRateLimit(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order"})
+		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed)
 	})
 }
@@ -232,7 +243,7 @@ func TestCheckDuplicate(t *testing.T) {
 	baseReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY", Quantity: 10,
-		Price: 2500, OrderType: "LIMIT",
+		Price: 2500, OrderType: "LIMIT", Confirmed: true,
 	}
 
 	t.Run("first order passes", func(t *testing.T) {

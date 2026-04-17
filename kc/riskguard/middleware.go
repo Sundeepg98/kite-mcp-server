@@ -34,6 +34,10 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 				Quantity:        safeInt(args["quantity"]),
 				Price:           safeFloat(args["price"]),
 				OrderType:       safeString(args["order_type"]),
+				// Confirmed=true is the user-facing ACK that satisfies the
+				// RequireConfirmAllOrders gate. Populated from the tool's
+				// `confirm` boolean arg (same convention as elicitation).
+				Confirmed: safeBool(args["confirm"]),
 			}
 
 			// For SL/SL-M, use trigger_price if price is 0
@@ -87,4 +91,11 @@ func safeFloat(v any) float64 {
 		return f
 	}
 	return 0
+}
+
+func safeBool(v any) bool {
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
 }
