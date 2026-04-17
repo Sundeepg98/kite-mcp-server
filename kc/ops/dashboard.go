@@ -100,6 +100,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/pnl-chart", wrap(d.alerts.pnlChartAPI))
 	mux.Handle("/dashboard/api/order-attribution", wrap(d.orders.orderAttributionAPI))
 	mux.Handle("/dashboard/api/status", wrap(d.status))
+	mux.Handle("/dashboard/api/connections", wrap(d.connections))
 	mux.Handle("/dashboard/api/market-indices", wrap(d.portfolio.marketIndices))
 	mux.Handle("/dashboard/safety", wrap(d.safety.serveSafetyPageSSR))
 	mux.Handle("/dashboard/api/safety/status", wrap(d.safety.safetyStatus))

@@ -67,6 +67,36 @@
 .badge-over { background: var(--red-dim); color: var(--red); }
 .badge-ok { background: var(--green-dim); color: var(--green); }
 
+.conn-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
+.conn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.conn-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
+.conn-count { font-family: var(--mono); font-size: 11px; color: var(--text-2); background: var(--bg-1); border: 1px solid var(--border); border-radius: 3px; padding: 2px 8px; }
+.conn-count.live { color: var(--green); border-color: var(--green); }
+.conn-body { }
+.conn-empty { padding: 24px 12px; text-align: center; color: var(--text-2); font-size: 13px; }
+.conn-empty a { color: var(--accent); text-decoration: none; }
+.conn-empty a:hover { text-decoration: underline; }
+.conn-loading { padding: 20px 12px; text-align: center; color: var(--text-2); font-size: 12px; }
+.conn-loading .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: -2px; animation: conn-spin 0.8s linear infinite; }
+@keyframes conn-spin { to { transform: rotate(360deg); } }
+.conn-error { padding: 16px 12px; text-align: center; color: var(--red); font-size: 12px; }
+.conn-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 12px; flex-wrap: wrap; }
+.conn-row:first-child { border-top: none; }
+.conn-client { min-width: 140px; display: flex; align-items: center; gap: 8px; }
+.conn-client-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 4px var(--green); flex-shrink: 0; }
+.conn-client-dot.audit-only { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.conn-client-name { color: var(--text-0); font-weight: 600; font-family: var(--sans); font-size: 13px; }
+.conn-sid { color: var(--text-2); font-size: 11px; min-width: 180px; }
+.conn-meta { color: var(--text-1); font-size: 11px; margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap; }
+.conn-meta-label { color: var(--text-2); margin-right: 4px; }
+.conn-tool-pill { background: var(--accent-dim); color: var(--accent); border-radius: 3px; padding: 1px 6px; font-size: 10px; }
+@media (max-width: 640px) {
+  .conn-row { font-size: 11px; }
+  .conn-client { min-width: 0; width: 100%; }
+  .conn-sid { min-width: 0; width: 100%; }
+  .conn-meta { margin-left: 0; width: 100%; gap: 10px; }
+}
+
 .market-bar { display: flex; gap: 20px; padding: 12px 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
 .market-item { display: flex; align-items: baseline; gap: 8px; }
 .market-label { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
@@ -170,6 +200,24 @@
   <!-- Status Cards (server-rendered) -->
   <div class="stats-grid" id="statusCards">
     {{template "user_portfolio_stats" .Stats}}
+  </div>
+
+  <!-- Connections — active MCP sessions for this account (auto-refresh 30s). -->
+  <div class="conn-card" id="connectionsCard">
+    <div class="conn-head">
+      <span class="conn-title">Connections</span>
+      <span class="conn-count" id="connCount">--</span>
+    </div>
+    <div class="conn-body">
+      <div class="conn-loading" id="connLoading"><span class="spinner"></span>Loading connections...</div>
+      <div id="connList" style="display:none"></div>
+      <div class="conn-empty" id="connEmpty" style="display:none">
+        No active MCP connections.
+        <a href="/" target="_blank" rel="noopener">Pair a client</a>
+        to connect Claude Code, Claude Desktop, or the web.
+      </div>
+      <div class="conn-error" id="connError" style="display:none">Could not load connections.</div>
+    </div>
   </div>
 
   <!-- P&L Equity Curve -->
@@ -749,6 +797,125 @@
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', {hour12: false});
   }
 
+  // --- Refresh Connections (active MCP sessions) ---
+  // Answers "what's connected to my account right now?" — fed by
+  // /dashboard/api/connections which merges SessionRegistry with audit log.
+  function refreshConnections() {
+    var loading = document.getElementById('connLoading');
+    var list = document.getElementById('connList');
+    var empty = document.getElementById('connEmpty');
+    var errEl = document.getElementById('connError');
+    var countEl = document.getElementById('connCount');
+
+    fetchJSON('connections').then(function(d) {
+      errEl.style.display = 'none';
+      loading.style.display = 'none';
+      var conns = d.connections || [];
+
+      // Count pill — green when at least one session is live.
+      if (countEl) {
+        if (conns.length === 0) {
+          countEl.textContent = '0';
+          countEl.className = 'conn-count';
+        } else {
+          countEl.textContent = conns.length + (conns.length === 1 ? ' connection' : ' connections');
+          countEl.className = 'conn-count live';
+        }
+      }
+
+      if (conns.length === 0) {
+        list.style.display = 'none';
+        empty.style.display = 'block';
+        // Surface the server-provided message when one is present (e.g. "No
+        // active MCP connections — pair a client at /").
+        if (d.message) {
+          // Replace the static empty text with the server message, keeping
+          // the pairing link as a separate line for affordance.
+          empty.textContent = '';
+          var line = document.createElement('div');
+          line.textContent = d.message;
+          empty.appendChild(line);
+          var link = document.createElement('a');
+          link.href = '/';
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = 'Pair a client';
+          link.style.marginTop = '6px';
+          link.style.display = 'inline-block';
+          empty.appendChild(link);
+        }
+        return;
+      }
+
+      empty.style.display = 'none';
+      list.style.display = 'block';
+      clearChildren(list);
+
+      conns.forEach(function(c) {
+        var row = el('div', 'conn-row');
+
+        // Left: status dot + client hint.
+        var client = el('div', 'conn-client');
+        var dot = el('span', 'conn-client-dot');
+        var isAuditOnly = c.session_id_short === 'recent activity';
+        if (isAuditOnly) dot.classList.add('audit-only');
+        client.appendChild(dot);
+        client.appendChild(el('span', 'conn-client-name', c.client_hint || 'Unknown'));
+        row.appendChild(client);
+
+        // Middle: shortened session ID.
+        row.appendChild(el('span', 'conn-sid', c.session_id_short));
+
+        // Right: metadata cluster.
+        var meta = el('div', 'conn-meta');
+
+        if (c.last_activity_relative) {
+          var act = el('span');
+          act.appendChild(el('span', 'conn-meta-label', 'Active:'));
+          act.appendChild(document.createTextNode(c.last_activity_relative));
+          meta.appendChild(act);
+        } else if (c.created_at) {
+          var cr = el('span');
+          cr.appendChild(el('span', 'conn-meta-label', 'Connected:'));
+          cr.appendChild(document.createTextNode(fmtTime(c.created_at)));
+          meta.appendChild(cr);
+        }
+
+        var calls = el('span');
+        calls.appendChild(el('span', 'conn-meta-label', 'Tool calls today:'));
+        calls.appendChild(document.createTextNode(String(c.tool_calls_today || 0)));
+        meta.appendChild(calls);
+
+        if (c.last_tool_called) {
+          var tool = el('span');
+          tool.appendChild(el('span', 'conn-meta-label', 'Last:'));
+          tool.appendChild(el('span', 'conn-tool-pill', c.last_tool_called));
+          meta.appendChild(tool);
+        }
+
+        row.appendChild(meta);
+        list.appendChild(row);
+      });
+    }).catch(function(e) {
+      loading.style.display = 'none';
+      // 401 = not authenticated; the main status refresh already handles the
+      // auth banner — just show the generic error here rather than a second
+      // noisy banner.
+      list.style.display = 'none';
+      empty.style.display = 'none';
+      errEl.style.display = 'block';
+      if (e && e.code === 'not_authenticated') {
+        errEl.textContent = 'Please re-authenticate to see connections.';
+      } else {
+        errEl.textContent = 'Could not load connections.';
+      }
+      if (countEl) {
+        countEl.textContent = '--';
+        countEl.className = 'conn-count';
+      }
+    });
+  }
+
   // --- P&L Equity Curve Chart ---
   var cumulativeChart = null;
   var dailyChart = null;
@@ -1189,12 +1356,14 @@
   refreshPortfolio();
   refreshAlerts();
   refreshPnlChart();
+  refreshConnections();
   // Sector & tax are lazy-loaded on first expand (see initCollapsible above)
   setInterval(refreshMarketBar, 30000);
   setInterval(refreshStatus, 10000);
   setInterval(refreshPortfolio, 30000);
   setInterval(refreshAlerts, 60000);
   setInterval(refreshPnlChart, 300000); // refresh chart every 5 min
+  setInterval(refreshConnections, 30000);
   // Sector & tax refresh only when visible (expanded)
   setInterval(function() {
     var sh = document.getElementById('sectorHeader');

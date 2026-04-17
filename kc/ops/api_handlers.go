@@ -2,10 +2,14 @@ package ops
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -287,4 +291,257 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// --- Connections (active MCP sessions) ---
+//
+// The dashboard Connections card answers "who is connected to my account right
+// now?" — a feature absent from Linear/Sentry/etc. We merge two data sources:
+//
+//  1. SessionRegistry.ListActiveSessions() — authoritative for in-memory MCP
+//     sessions. Populated when a session record gains a KiteSessionData (first
+//     tool call that touches the Kite client), so fresh OAuth-only clients may
+//     be absent here until they make a real tool call.
+//  2. Audit log — recent tool calls grouped by session_id. Surfaces activity
+//     for sessions that are not yet in the registry (the "lazy population"
+//     case) and enriches registered sessions with `tool_calls_today` and
+//     `last_tool_called`.
+//
+// If the registry has zero entries but the audit log has today's activity,
+// the response still lists those sessions as "recent activity" rows so the
+// user sees something meaningful.
+
+// connectionEntry is the per-session payload returned by /dashboard/api/connections.
+type connectionEntry struct {
+	SessionIDShort       string `json:"session_id_short"`
+	ClientHint           string `json:"client_hint"`
+	CreatedAt            string `json:"created_at,omitempty"`
+	LastActivityAt       string `json:"last_activity_at,omitempty"`
+	LastActivityRelative string `json:"last_activity_relative,omitempty"`
+	ToolCallsToday       int    `json:"tool_calls_today"`
+	LastToolCalled       string `json:"last_tool_called,omitempty"`
+}
+
+type connectionsResponse struct {
+	Connections []connectionEntry `json:"connections"`
+	Total       int               `json:"total"`
+	Message     string            `json:"message,omitempty"`
+}
+
+// connectionsIDHead/Tail control the shortened session ID display:
+// `kitemcp-abc1…d4f2` — same convention used by list_mcp_sessions.
+const (
+	connectionsIDHead = 12
+	connectionsIDTail = 4
+)
+
+// truncateConnectionID renders a session ID as `<first-12>…<last-4>`.
+// Short IDs are returned unchanged.
+func truncateConnectionID(id string) string {
+	if len(id) <= connectionsIDHead+connectionsIDTail {
+		return id
+	}
+	return id[:connectionsIDHead] + "…" + id[len(id)-connectionsIDTail:]
+}
+
+// relativeTime formats a duration since t as a short "3 min ago"-style string.
+// Returns "" for zero time.
+func relativeTime(t, now time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		secs := int(d.Seconds())
+		if secs <= 1 {
+			return "just now"
+		}
+		return fmt.Sprintf("%d sec ago", secs)
+	case d < time.Hour:
+		mins := int(d.Minutes())
+		if mins == 1 {
+			return "1 min ago"
+		}
+		return fmt.Sprintf("%d min ago", mins)
+	case d < 24*time.Hour:
+		hrs := int(d.Hours())
+		if hrs == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hrs)
+	default:
+		days := int(d / (24 * time.Hour))
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	}
+}
+
+// connections returns the authenticated user's active MCP sessions, merged
+// with recent audit activity. This powers the "Connections" card on the
+// dashboard — the integration-feel feature that answers "what's connected
+// to my account right now?".
+func (d *DashboardHandler) connections(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := oauth.EmailFromContext(r.Context())
+	if email == "" {
+		d.writeJSONError(w, http.StatusUnauthorized, "not_authenticated", "Not authenticated.")
+		return
+	}
+	emailLower := strings.ToLower(email)
+
+	now := time.Now()
+	todayStart := now.Truncate(24 * time.Hour)
+
+	// --- Data source 1: active in-memory sessions for this user. ---
+	type sessionAgg struct {
+		sessionID  string
+		clientHint string
+		createdAt  time.Time
+		fromReg    bool
+	}
+	agg := map[string]*sessionAgg{}
+
+	if reg := d.manager.SessionManager(); reg != nil {
+		for _, s := range reg.ListActiveSessions() {
+			if s == nil {
+				continue
+			}
+			kd, ok := s.Data.(*kc.KiteSessionData)
+			if !ok || kd == nil {
+				continue
+			}
+			if !strings.EqualFold(kd.Email, emailLower) {
+				continue
+			}
+			hint := s.ClientHint
+			if hint == "" {
+				hint = "Unknown"
+			}
+			agg[s.ID] = &sessionAgg{
+				sessionID:  s.ID,
+				clientHint: hint,
+				createdAt:  s.CreatedAt,
+				fromReg:    true,
+			}
+		}
+	}
+
+	// --- Data source 2: today's audit entries grouped by session_id. ---
+	// Per-session totals, last-activity timestamp and last-called tool are
+	// computed from the audit log since it already has the data we need and
+	// avoids hitting the DB per session.
+	type sessionStats struct {
+		count      int
+		lastAt     time.Time
+		lastTool   string
+		earliestAt time.Time
+	}
+	stats := map[string]*sessionStats{}
+
+	if d.auditStore != nil {
+		// A reasonable cap; most users have at most a few sessions. 500 is
+		// enough to cover a high-volume day without dragging the dashboard.
+		opts := audit.ListOptions{
+			Limit: 500,
+			Since: todayStart,
+		}
+		calls, _, err := d.auditStore.List(email, opts)
+		if err != nil {
+			d.logger.Warn("connections: audit list failed", "email", email, "error", err)
+		}
+		for _, c := range calls {
+			if c == nil || c.SessionID == "" {
+				continue
+			}
+			st, ok := stats[c.SessionID]
+			if !ok {
+				st = &sessionStats{}
+				stats[c.SessionID] = st
+			}
+			st.count++
+			if c.StartedAt.After(st.lastAt) {
+				st.lastAt = c.StartedAt
+				st.lastTool = c.ToolName
+			}
+			if st.earliestAt.IsZero() || c.StartedAt.Before(st.earliestAt) {
+				st.earliestAt = c.StartedAt
+			}
+		}
+	}
+
+	// --- Merge audit-only sessions (registry missed them). ---
+	// SessionRegistry only populates on first tool call that creates the
+	// Kite client. If the audit log has today's activity for a session that
+	// isn't in the registry, surface it as an "audit-only" row so the user
+	// still sees the connection.
+	for sid := range stats {
+		if _, ok := agg[sid]; ok {
+			continue
+		}
+		agg[sid] = &sessionAgg{
+			sessionID:  sid,
+			clientHint: "Unknown",
+			createdAt:  stats[sid].earliestAt, // best-effort: first seen today
+			fromReg:    false,
+		}
+	}
+
+	// --- Build the response payload. ---
+	entries := make([]connectionEntry, 0, len(agg))
+	for _, s := range agg {
+		e := connectionEntry{
+			SessionIDShort: truncateConnectionID(s.sessionID),
+			ClientHint:     s.clientHint,
+		}
+		if !s.createdAt.IsZero() {
+			e.CreatedAt = s.createdAt.UTC().Format(time.RFC3339)
+		}
+		if !s.fromReg {
+			// Audit-only: session registry didn't have this one. Make it
+			// obvious to the UI so it can show a subtle badge.
+			e.SessionIDShort = "recent activity"
+		}
+		if st, ok := stats[s.sessionID]; ok {
+			e.ToolCallsToday = st.count
+			e.LastToolCalled = st.lastTool
+			if !st.lastAt.IsZero() {
+				e.LastActivityAt = st.lastAt.UTC().Format(time.RFC3339)
+				e.LastActivityRelative = relativeTime(st.lastAt, now)
+			}
+		}
+		entries = append(entries, e)
+	}
+
+	// Sort most-recent-activity first; fall back to created_at.
+	sort.Slice(entries, func(i, j int) bool {
+		li, _ := time.Parse(time.RFC3339, entries[i].LastActivityAt)
+		lj, _ := time.Parse(time.RFC3339, entries[j].LastActivityAt)
+		if !li.Equal(lj) {
+			return li.After(lj)
+		}
+		ci, _ := time.Parse(time.RFC3339, entries[i].CreatedAt)
+		cj, _ := time.Parse(time.RFC3339, entries[j].CreatedAt)
+		return ci.After(cj)
+	})
+
+	resp := connectionsResponse{
+		Connections: entries,
+		Total:       len(entries),
+	}
+	if len(entries) == 0 {
+		resp.Connections = []connectionEntry{}
+		resp.Message = "No active MCP connections — pair a client at /"
+	}
+
+	d.writeJSON(w, resp)
 }
