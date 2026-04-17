@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
@@ -221,6 +222,17 @@ type Config struct {
 	// Google SSO (opt-in: set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to enable)
 	GoogleClientID     string
 	GoogleClientSecret string
+
+	// EnableTrading gates all order-placement tools (place_order,
+	// modify_order, GTT, MF, trailing stops, native alerts, etc.).
+	// Default FALSE so a hosted multi-user deployment (Fly.io) that
+	// forgets to set the var does not silently accept orders — and
+	// thus does not fall under the NSE/INVG/69255 Annexure I Para 2.8
+	// "Algo Provider" classification ("all orders received via API
+	// from clients / Algo Provider's platform shall be considered as
+	// Algo and will be required to be tagged"). Local single-user
+	// builds set ENABLE_TRADING=true to unlock order placement.
+	EnableTrading bool
 }
 
 // Server mode constants
@@ -262,6 +274,10 @@ func NewApp(logger *slog.Logger) *App {
 
 			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+
+			// Default false: hosted multi-user safe mode. Only an
+			// explicit "true" (case-insensitive) flips trading on.
+			EnableTrading: strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
 		},
 		DevMode:   devMode,
 		Version:   "v0.0.0", // Ideally injected at build time

@@ -378,7 +378,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	// Register tools that will interact with MCP sessions and Kite API
 	app.logger.Info("Registering MCP tools...")
-	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger)
+	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger, app.Config.EnableTrading)
 	app.logger.Debug("MCP tools registered successfully")
 
 	// Initialize scheduled Telegram briefings (morning + daily P&L).

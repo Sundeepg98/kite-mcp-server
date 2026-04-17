@@ -98,11 +98,26 @@ type BotHandler struct {
 
 	// kiteClientFactory creates kiteconnect.Client instances. Required for trading.
 	kiteClientFactory KiteClientFactory
+
+	// tradingEnabled mirrors app.Config.EnableTrading. When false the
+	// /buy, /sell, /quick commands return a polite "disabled in this
+	// deployment" message instead of actually sending an order. The
+	// zero value is *false*, so the hosted Fly.io path (which never
+	// calls SetTradingEnabled) is safe by default; the constructor
+	// initializes to true so local-dev tests and older call sites
+	// retain the trading-on behaviour they relied on before Path 2.
+	tradingEnabled bool
 }
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
 // that periodically prunes stale rate-limit and pending-order entries.
 // A nil factory disables trading commands (getClient returns an error).
+//
+// tradingEnabled defaults to *true* for back-compat with local/single-user
+// builds and the existing test suite. The hosted multi-user server
+// constructs this and then calls SetTradingEnabled(false) from
+// app.Config.EnableTrading so /buy, /sell, /quick are gated consistently
+// with the MCP tool gating.
 func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager, logger *slog.Logger, factory KiteClientFactory) *BotHandler {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &BotHandler{
@@ -114,10 +129,32 @@ func NewBotHandler(bot alerts.BotAPI, webhookSecret string, manager KiteManager,
 		pendingOrders:     make(map[int64]*pendingOrder),
 		cleanupCancel:     cancel,
 		kiteClientFactory: factory,
+		tradingEnabled:    true,
 	}
 	go h.runCleanup(ctx)
 	return h
 }
+
+// SetTradingEnabled toggles the /buy, /sell, /quick Telegram commands on
+// or off. Called once at wire-up from app.Config.EnableTrading so the
+// Telegram surface matches the MCP tool gating (Path 2 compliance —
+// NSE/INVG/69255 Annexure I Para 2.8 Algo Provider classification).
+func (h *BotHandler) SetTradingEnabled(enabled bool) {
+	h.tradingEnabled = enabled
+}
+
+// TradingEnabled reports the current trading-gate state. Exported so
+// tests and admin tools can read it without reaching into unexported
+// fields.
+func (h *BotHandler) TradingEnabled() bool {
+	return h.tradingEnabled
+}
+
+// tradingDisabledMessage is the polite refusal shown to users who run
+// /buy, /sell, or /quick on a deployment where trading is gated off.
+const tradingDisabledMessage = "\u26A0\uFE0F Trading commands are disabled in this deployment.\n\n" +
+	"You can still use read-only commands: /portfolio, /positions, /orders, /pnl, /alerts, /prices, /status. " +
+	"For order placement, run the server locally with <code>ENABLE_TRADING=true</code>."
 
 const (
 	maxCommandsPerMinute = 10

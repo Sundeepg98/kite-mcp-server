@@ -642,6 +642,10 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 	// Create bot command handler. The telegramManagerAdapter bridges *kc.Manager
 	// to telegram.KiteManager, adapting interface return types.
 	botHandler := tgbot.NewBotHandler(notifier.Bot(), webhookSecret, &telegramManagerAdapter{m: kcManager}, app.logger, kcManager.KiteClientFactory())
+	// Mirror the MCP tool gating: /buy, /sell, /quick are disabled when
+	// ENABLE_TRADING is false so the Telegram surface stays consistent
+	// with the registered MCP tool set (Path 2 compliance).
+	botHandler.SetTradingEnabled(app.Config.EnableTrading)
 	app.telegramBot = botHandler
 
 	// Register the webhook endpoint (the secret in the path prevents spoofing).

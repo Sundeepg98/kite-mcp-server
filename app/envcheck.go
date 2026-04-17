@@ -135,6 +135,30 @@ func (app *App) envCheck() error {
 		}
 	}
 
+	// --- ENABLE_TRADING ---
+	//
+	// Gates every order-placement tool (place_order, modify_order,
+	// GTT, MF, trailing stops, native alerts). Default is FALSE so a
+	// hosted multi-user deployment that forgets to configure this
+	// cannot silently accept orders — and thus does not fall under the
+	// NSE/INVG/69255 Annexure I Para 2.8 "Algo Provider" classification.
+	// We accept only the strings "true" or "false" (case-insensitive);
+	// anything else warns because the app will silently treat it as
+	// false, which is usually not what the operator intended.
+	if raw := os.Getenv("ENABLE_TRADING"); raw != "" {
+		switch strings.ToLower(raw) {
+		case "true":
+			logger.Warn("env var ENABLE_TRADING=true — order-placement tools ENABLED (intended for local single-user only)")
+		case "false":
+			logger.Info("env var ENABLE_TRADING=false — order-placement tools gated (hosted safe mode)")
+		default:
+			logger.Warn("env var ENABLE_TRADING value unrecognized; treating as false",
+				"value", raw, "valid", "true|false")
+		}
+	} else {
+		logger.Info("env var ENABLE_TRADING not set — defaulting to false (order-placement gated)")
+	}
+
 	// --- AUDIT_HASH_PUBLISH_INTERVAL ---
 	//
 	// LoadHashPublishConfig silently ignores an unparseable value and

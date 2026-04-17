@@ -17,3 +17,12 @@ primary_region = "bom"
   APP_HOST = "0.0.0.0"
   LOG_LEVEL = "info"
   ALERT_DB_PATH = "/data/alerts.db"
+  # ENABLE_TRADING=false strips place_order / modify_order / GTT /
+  # trailing-stop / native-alert / MF-order / exit-helper tools from the
+  # hosted multi-user build. Without this gate the server would fall
+  # under NSE/INVG/69255 Annexure I Para 2.8 "Algo Provider"
+  # classification ("all orders received via API from clients / Algo
+  # Provider's platform shall be considered as Algo and will be
+  # required to be tagged"). Local single-user builds override by
+  # setting ENABLE_TRADING=true in their shell.
+  ENABLE_TRADING = "false"

@@ -2494,8 +2494,8 @@ func TestRegisterTools_Basic(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	srv := server.NewMCPServer("test", "1.0")
-	// Register with no excluded tools
-	RegisterTools(srv, mgr, "", nil, mgr.Logger)
+	// Register with no excluded tools, trading enabled (default "local dev" shape)
+	RegisterTools(srv, mgr, "", nil, mgr.Logger, true)
 	// Should not panic
 }
 
@@ -2503,7 +2503,7 @@ func TestRegisterTools_WithExclusions(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	srv := server.NewMCPServer("test", "1.0")
-	RegisterTools(srv, mgr, "login,place_order", nil, mgr.Logger)
+	RegisterTools(srv, mgr, "login,place_order", nil, mgr.Logger, true)
 	// Should not panic; login and place_order excluded
 }
 

@@ -26,11 +26,19 @@ func confirmKeyboard() tgbotapi.InlineKeyboardMarkup {
 
 // handleBuy parses /buy SYMBOL QTY [PRICE] and shows a confirmation prompt.
 func (h *BotHandler) handleBuy(chatID int64, email, args string) {
+	if !h.tradingEnabled {
+		h.sendHTML(chatID, tradingDisabledMessage)
+		return
+	}
 	h.handleOrderCommand(chatID, email, args, "BUY")
 }
 
 // handleSell parses /sell SYMBOL QTY [PRICE] and shows a confirmation prompt.
 func (h *BotHandler) handleSell(chatID int64, email, args string) {
+	if !h.tradingEnabled {
+		h.sendHTML(chatID, tradingDisabledMessage)
+		return
+	}
 	h.handleOrderCommand(chatID, email, args, "SELL")
 }
 
@@ -100,6 +108,10 @@ func (h *BotHandler) handleOrderCommand(chatID int64, email, args, side string) 
 
 // handleQuick parses /quick SYMBOL QTY SIDE TYPE [PRICE] and shows a confirmation prompt.
 func (h *BotHandler) handleQuick(chatID int64, email, args string) {
+	if !h.tradingEnabled {
+		h.sendHTML(chatID, tradingDisabledMessage)
+		return
+	}
 	parts := strings.Fields(args)
 	if len(parts) < 4 || len(parts) > 5 {
 		h.sendHTML(chatID, "Usage: /quick SYMBOL QTY SIDE TYPE [PRICE]\n\n"+
@@ -174,6 +186,17 @@ func (h *BotHandler) handleQuick(chatID int64, email, args string) {
 
 // executeConfirmedOrder runs riskguard checks and places the confirmed order.
 func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbotapi.CallbackQuery) {
+	// Defence-in-depth: if trading was flipped off *after* the user
+	// queued a pending order, refuse to place it. This avoids a
+	// race where the gate toggles between /buy and the Confirm tap.
+	if !h.tradingEnabled {
+		h.popPendingOrder(chatID) // discard
+		h.answerCallback(cq.ID, "Trading disabled in this deployment.")
+		if cq.Message != nil {
+			h.editMessage(chatID, cq.Message.MessageID, tradingDisabledMessage)
+		}
+		return
+	}
 	order := h.popPendingOrder(chatID)
 	if order == nil {
 		h.answerCallback(cq.ID, "Order expired or already processed.")
