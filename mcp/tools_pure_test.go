@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -37,7 +37,7 @@ func containsAnyStr(s string, substrs ...string) bool {
 func makeCandles(n int, startPrice float64, volatility float64) []broker.HistoricalCandle {
 	candles := make([]broker.HistoricalCandle, n)
 	price := startPrice
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Simple price movement: alternate up/down with drift
 		delta := volatility * float64((i%7)-3) / 3.0
 		price += delta
@@ -699,7 +699,7 @@ func TestSignalsSMACrossover_CrossoverAndCrossunder(t *testing.T) {
 	t.Parallel()
 	// Create price data where short SMA crosses above then below long SMA
 	closes := make([]float64, 60)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		closes[i] = 100 + float64(i)*0.5
 	}
 	// Insert a dip in the middle to create crossunder then crossover
@@ -730,7 +730,7 @@ func TestSignalsRSIReversal_OversoldBuy(t *testing.T) {
 	t.Parallel()
 	// Create a downtrend followed by reversal to trigger oversold RSI
 	closes := make([]float64, 40)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		closes[i] = 100 - float64(i)*3 // steep decline
 	}
 	for i := 20; i < 40; i++ {
@@ -762,7 +762,7 @@ func TestSignalsBreakout_BreakAboveHigh(t *testing.T) {
 	closes := make([]float64, 30)
 	highs := make([]float64, 30)
 	lows := make([]float64, 30)
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		closes[i] = 100
 		highs[i] = 105
 		lows[i] = 95
@@ -791,7 +791,7 @@ func TestSignalsBreakout_BreakBelowLow(t *testing.T) {
 	closes := make([]float64, 30)
 	highs := make([]float64, 30)
 	lows := make([]float64, 30)
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		closes[i] = 100
 		highs[i] = 105
 		lows[i] = 95
@@ -816,7 +816,7 @@ func TestSignalsBreakout_BreakBelowLow(t *testing.T) {
 func TestSignalsMeanReversion_BelowLowerBand(t *testing.T) {
 	t.Parallel()
 	closes := make([]float64, 40)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		closes[i] = 100 + float64(i%5)
 	}
 	for i := 30; i < 40; i++ {
@@ -1742,7 +1742,7 @@ func TestBsD1_ATM(t *testing.T) {
 
 func TestBacktestDefaults_PartialOverride(t *testing.T) {
 	t.Parallel()
-	args := map[string]interface{}{
+	args := map[string]any{
 		"param1": float64(7),
 		// param2 not set — should use default
 	}
@@ -1890,7 +1890,7 @@ func TestBuildPreTradeResponse_WithLimitPrice(t *testing.T) {
 func TestBuildPreTradeResponse_WithAPIErrors(t *testing.T) {
 	t.Parallel()
 	apiErrors := map[string]string{
-		"ltp":    "API error: rate limited",
+		"ltp":     "API error: rate limited",
 		"margins": "timeout",
 	}
 	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0,
@@ -2222,7 +2222,7 @@ func TestSignalsSMACrossover_NoCrossover(t *testing.T) {
 func TestSignalsMeanReversion_AboveUpperBand(t *testing.T) {
 	t.Parallel()
 	closes := make([]float64, 40)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		closes[i] = 100 + float64(i%5)
 	}
 	// Sudden spike above upper band
@@ -2797,7 +2797,7 @@ func TestSignalsRSIReversal_WithOversoldOverbought(t *testing.T) {
 	// Create a price series that goes down then up to trigger RSI signals
 	n := 50
 	closes := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i < 20 {
 			closes[i] = 100 - float64(i)*3 // decline → RSI drops
 		} else if i < 35 {
@@ -2825,7 +2825,7 @@ func TestSignalsBreakout_GeneratesSignals(t *testing.T) {
 	closes := make([]float64, n)
 	highs := make([]float64, n)
 	lows := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		base := 100.0
 		if i > 50 {
 			base = 130.0 // sudden jump — breakout signal

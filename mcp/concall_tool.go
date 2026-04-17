@@ -45,17 +45,17 @@ func (*AnalyzeConcallTool) Tool() mcp.Tool {
 // The text fallback (via MarshalResponse) contains the same JSON so LLM
 // clients without structuredContent parsing still get readable guidance.
 type concallResponse struct {
-	Symbol         string   `json:"symbol"`
-	Exchange       string   `json:"exchange"`
-	CompanyName    string   `json:"company_name"`
-	Quarter        string   `json:"quarter"`
-	Year           string   `json:"year,omitempty"`
-	DocumentStatus string   `json:"document_status"` // "pointer_available" | "unknown_symbol"
-	TranscriptHint string   `json:"transcript_hint"`
-	BSEAnnouncementURL string `json:"bse_announcement_url"`
-	NextSteps      []string `json:"next_steps"`
-	Themes         []string `json:"themes_to_extract"`
-	Disclaimer     string   `json:"disclaimer"`
+	Symbol             string   `json:"symbol"`
+	Exchange           string   `json:"exchange"`
+	CompanyName        string   `json:"company_name"`
+	Quarter            string   `json:"quarter"`
+	Year               string   `json:"year,omitempty"`
+	DocumentStatus     string   `json:"document_status"` // "pointer_available" | "unknown_symbol"
+	TranscriptHint     string   `json:"transcript_hint"`
+	BSEAnnouncementURL string   `json:"bse_announcement_url"`
+	NextSteps          []string `json:"next_steps"`
+	Themes             []string `json:"themes_to_extract"`
+	Disclaimer         string   `json:"disclaimer"`
 }
 
 func (*AnalyzeConcallTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {

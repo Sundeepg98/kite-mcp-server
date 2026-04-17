@@ -193,10 +193,10 @@ func (h *BotHandler) handlePositions(_ int64, email string) string {
 
 	// Show net positions with non-zero quantity.
 	var open []struct {
-		Symbol   string
-		Qty      int
-		PnL      float64
-		Product  string
+		Symbol  string
+		Qty     int
+		PnL     float64
+		Product string
 	}
 
 	for _, p := range positions.Net {
@@ -221,18 +221,18 @@ func (h *BotHandler) handlePositions(_ int64, email string) string {
 
 	var sb strings.Builder
 	var totalPnL float64
-	sb.WriteString(fmt.Sprintf("<b>Open Positions (%d)</b>\n\n", len(open)))
+	fmt.Fprintf(&sb, "<b>Open Positions (%d)</b>\n\n", len(open))
 	for _, p := range open {
 		direction := "LONG"
 		if p.Qty < 0 {
 			direction = "SHORT"
 		}
 		totalPnL += p.PnL
-		sb.WriteString(fmt.Sprintf("  %s %s %d [%s] %s\n",
+		fmt.Fprintf(&sb, "  %s %s %d [%s] %s\n",
 			escapeHTML(p.Symbol), direction, absInt(p.Qty),
-			escapeHTML(p.Product), formatRupee(p.PnL)))
+			escapeHTML(p.Product), formatRupee(p.PnL))
 	}
-	sb.WriteString(fmt.Sprintf("\n<b>Total: %s</b>", formatRupee(totalPnL)))
+	fmt.Fprintf(&sb, "\n<b>Total: %s</b>", formatRupee(totalPnL))
 
 	return sb.String()
 }
@@ -254,13 +254,13 @@ func (h *BotHandler) handleOrders(_ int64, email string) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>Orders (%d)</b>\n\n", len(orders)))
+	fmt.Fprintf(&sb, "<b>Orders (%d)</b>\n\n", len(orders))
 
 	// Show most recent first (last 10).
 	start := 0
 	if len(orders) > 10 {
 		start = len(orders) - 10
-		sb.WriteString(fmt.Sprintf("(showing last 10 of %d)\n\n", len(orders)))
+		fmt.Fprintf(&sb, "(showing last 10 of %d)\n\n", len(orders))
 	}
 
 	for i := len(orders) - 1; i >= start; i-- {
@@ -278,10 +278,10 @@ func (h *BotHandler) handleOrders(_ int64, email string) string {
 		}
 
 		txType := strings.ToUpper(o.TransactionType)
-		sb.WriteString(fmt.Sprintf("%s %s %s %d x %s @ \u20B9%.2f [%s]\n",
+		fmt.Fprintf(&sb, "%s %s %s %d x %s @ \u20B9%.2f [%s]\n",
 			statusEmoji, txType, escapeHTML(o.TradingSymbol),
 			int(o.Quantity), escapeHTML(o.Product),
-			o.AveragePrice, escapeHTML(o.Status)))
+			o.AveragePrice, escapeHTML(o.Status))
 	}
 
 	return sb.String()
@@ -306,7 +306,7 @@ func (h *BotHandler) handlePnL(_ int64, email string) string {
 		for _, h := range holdings {
 			holdingsPnL += h.DayChange
 		}
-		sb.WriteString(fmt.Sprintf("Holdings: %s (%d stocks)\n", formatRupee(holdingsPnL), len(holdings)))
+		fmt.Fprintf(&sb, "Holdings: %s (%d stocks)\n", formatRupee(holdingsPnL), len(holdings))
 	}
 
 	positions, err := client.GetPositions()
@@ -316,11 +316,11 @@ func (h *BotHandler) handlePnL(_ int64, email string) string {
 		for _, p := range positions.Day {
 			positionsPnL += p.PnL
 		}
-		sb.WriteString(fmt.Sprintf("Positions: %s (%d)\n", formatRupee(positionsPnL), len(positions.Day)))
+		fmt.Fprintf(&sb, "Positions: %s (%d)\n", formatRupee(positionsPnL), len(positions.Day))
 	}
 
 	net := holdingsPnL + positionsPnL
-	sb.WriteString(fmt.Sprintf("\n<b>Net: %s</b>", formatRupee(net)))
+	fmt.Fprintf(&sb, "\n<b>Net: %s</b>", formatRupee(net))
 
 	return sb.String()
 }
@@ -342,17 +342,17 @@ func (h *BotHandler) handleAlerts(_ int64, email string) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>Active Alerts (%d)</b>\n\n", len(active)))
+	fmt.Fprintf(&sb, "<b>Active Alerts (%d)</b>\n\n", len(active))
 
 	for _, a := range active {
 		if alerts.IsPercentageDirection(a.Direction) {
-			sb.WriteString(fmt.Sprintf("  <code>%s</code> %s:%s %s %.2f%% (ref \u20B9%.2f)\n",
+			fmt.Fprintf(&sb, "  <code>%s</code> %s:%s %s %.2f%% (ref \u20B9%.2f)\n",
 				a.ID, escapeHTML(a.Exchange), escapeHTML(a.Tradingsymbol),
-				a.Direction, a.TargetPrice, a.ReferencePrice))
+				a.Direction, a.TargetPrice, a.ReferencePrice)
 		} else {
-			sb.WriteString(fmt.Sprintf("  <code>%s</code> %s:%s %s \u20B9%.2f\n",
+			fmt.Fprintf(&sb, "  <code>%s</code> %s:%s %s \u20B9%.2f\n",
 				a.ID, escapeHTML(a.Exchange), escapeHTML(a.Tradingsymbol),
-				a.Direction, a.TargetPrice))
+				a.Direction, a.TargetPrice)
 		}
 	}
 

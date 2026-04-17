@@ -199,8 +199,7 @@ func GetAllTools() []Tool {
 func parseExcludedTools(excludedTools string) map[string]bool {
 	excludedSet := make(map[string]bool)
 	if excludedTools != "" {
-		excluded := strings.Split(excludedTools, ",")
-		for _, toolName := range excluded {
+		for toolName := range strings.SplitSeq(excludedTools, ",") {
 			toolName = strings.TrimSpace(toolName)
 			if toolName != "" {
 				excludedSet[toolName] = true

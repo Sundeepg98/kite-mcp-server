@@ -314,23 +314,23 @@ var appResources = []appResource{
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
 var pagePathToResourceURI = map[string]string{
-	"/dashboard":          "ui://kite-mcp/portfolio",
-	"/dashboard/activity": "ui://kite-mcp/activity",
-	"/dashboard/orders":   "ui://kite-mcp/orders",
-	"/dashboard/alerts":   "ui://kite-mcp/alerts",
-	"/dashboard/paper":    "ui://kite-mcp/paper",
+	"/dashboard":             "ui://kite-mcp/portfolio",
+	"/dashboard/activity":    "ui://kite-mcp/activity",
+	"/dashboard/orders":      "ui://kite-mcp/orders",
+	"/dashboard/alerts":      "ui://kite-mcp/alerts",
+	"/dashboard/paper":       "ui://kite-mcp/paper",
 	"/dashboard/safety":      "ui://kite-mcp/safety",
-	"/dashboard/order-form": "ui://kite-mcp/order-form",
-	"/dashboard/watchlist":  "ui://kite-mcp/watchlist",
-	"/dashboard/hub":       "ui://kite-mcp/hub",
-	"/dashboard/options":   "ui://kite-mcp/options-chain",
-	"/dashboard/chart":     "ui://kite-mcp/chart",
-	"/dashboard/setup":     "ui://kite-mcp/setup",
+	"/dashboard/order-form":  "ui://kite-mcp/order-form",
+	"/dashboard/watchlist":   "ui://kite-mcp/watchlist",
+	"/dashboard/hub":         "ui://kite-mcp/hub",
+	"/dashboard/options":     "ui://kite-mcp/options-chain",
+	"/dashboard/chart":       "ui://kite-mcp/chart",
+	"/dashboard/setup":       "ui://kite-mcp/setup",
 	"/dashboard/credentials": "ui://kite-mcp/credentials",
-	"/admin/overview":      "ui://kite-mcp/admin-overview",
-	"/admin/users":         "ui://kite-mcp/admin-users",
-	"/admin/metrics":       "ui://kite-mcp/admin-metrics",
-	"/admin/registry":      "ui://kite-mcp/admin-registry",
+	"/admin/overview":        "ui://kite-mcp/admin-overview",
+	"/admin/users":           "ui://kite-mcp/admin-users",
+	"/admin/metrics":         "ui://kite-mcp/admin-metrics",
+	"/admin/registry":        "ui://kite-mcp/admin-registry",
 }
 
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
@@ -662,21 +662,21 @@ func watchlistData(manager *kc.Manager, _ *audit.Store, email string) any {
 
 	// Collect all instruments across all watchlists for batch LTP.
 	type itemWithLTP struct {
-		Exchange        string  `json:"exchange"`
-		Tradingsymbol   string  `json:"tradingsymbol"`
-		Notes           string  `json:"notes,omitempty"`
-		TargetEntry     float64 `json:"target_entry,omitempty"`
-		TargetExit      float64 `json:"target_exit,omitempty"`
-		LTP             float64 `json:"ltp,omitempty"`
+		Exchange         string  `json:"exchange"`
+		Tradingsymbol    string  `json:"tradingsymbol"`
+		Notes            string  `json:"notes,omitempty"`
+		TargetEntry      float64 `json:"target_entry,omitempty"`
+		TargetExit       float64 `json:"target_exit,omitempty"`
+		LTP              float64 `json:"ltp,omitempty"`
 		DistanceEntryPct float64 `json:"distance_entry_pct,omitempty"`
 		DistanceExitPct  float64 `json:"distance_exit_pct,omitempty"`
-		NearTarget      bool    `json:"near_target,omitempty"`
+		NearTarget       bool    `json:"near_target,omitempty"`
 	}
 
 	// Build per-watchlist item lists and collect instrument IDs.
 	type wlEntry struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
+		ID    string        `json:"id"`
+		Name  string        `json:"name"`
 		Items []itemWithLTP `json:"items"`
 	}
 
@@ -710,10 +710,7 @@ func watchlistData(manager *kc.Manager, _ *audit.Store, email string) any {
 	if client != nil && len(allInstruments) > 0 {
 		const batchSize = 50
 		for i := 0; i < len(allInstruments); i += batchSize {
-			end := i + batchSize
-			if end > len(allInstruments) {
-				end = len(allInstruments)
-			}
+			end := min(i+batchSize, len(allInstruments))
 			batch := allInstruments[i:end]
 			ltps, err := RetryBrokerCall(func() (map[string]broker.LTP, error) {
 				return client.GetLTP(batch...)
