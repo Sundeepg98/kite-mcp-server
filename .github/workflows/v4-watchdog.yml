@@ -1,0 +1,54 @@
+name: Kite Connect v4 Watchdog
+# Nightly probe for signs that Kite Connect v4 is being announced.
+# Runs at 02:00 UTC daily (07:30 IST — ~30 min before Kite's own 6 AM IST
+# token refresh, so staff may be active and docs may drop earlier if leaked).
+# Fails the workflow when a v4 docs page or unexpected gokiteconnect major
+# version appears, which surfaces a red X in the Actions tab and sends the
+# default "workflow failed" email to the repo owner.
+#
+# Context: Agent 50 concluded no v4 is on the horizon and that Zerodha has
+# historically given ~5 months migration notice. See docs/kite-version-hedge.md
+# for the full hedge strategy (vendoring + this watchdog).
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  check-v4:
+    name: Probe Kite docs and gokiteconnect releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for v4 docs page
+        id: docs
+        run: |
+          set -u
+          URL="https://kite.trade/docs/connect/v4/"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "Probed $URL -> HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "::warning title=Kite Connect v4 detected::v4 docs page returned 200 at $URL. Migration planning needed — see docs/kite-version-hedge.md response plan."
+            exit 1
+          fi
+          echo "v4 docs not found (HTTP $STATUS) — current v3 version stable."
+
+      - name: Check gokiteconnect latest release
+        id: sdk
+        run: |
+          set -u
+          RESP=$(curl -s --max-time 30 -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/zerodha/gokiteconnect/releases/latest" || echo '{}')
+          TAG=$(printf '%s' "$RESP" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "gokiteconnect latest release tag: ${TAG:-unknown}"
+          # Extract leading major version (v4, v5, etc.)
+          MAJOR=$(printf '%s' "$TAG" | grep -oE '^v[0-9]+' || true)
+          if [ -n "$MAJOR" ] && [ "$MAJOR" != "v4" ]; then
+            echo "::warning title=gokiteconnect major version changed::Latest tag is $TAG (major $MAJOR, expected v4). Review upstream release notes."
+            exit 1
+          fi
