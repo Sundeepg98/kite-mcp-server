@@ -3,6 +3,7 @@ package mcp
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -338,6 +339,16 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 
 	// Register MCP prompts for common trading workflows.
 	RegisterPrompts(srv, manager)
+
+	// Compute the tool-description integrity manifest (sha256 per tool)
+	// so operators can detect wire-level tampering ("line jumping" /
+	// tool-poisoning attacks from a hostile proxy — see integrity.go).
+	manifest := ComputeToolManifest(filteredTools)
+	storeToolManifest(manifest)
+	logger.Info("Tool integrity manifest computed",
+		"tools", len(manifest.Tools),
+		"hash_bytes", manifest.TotalHashBytes(),
+		"logged_at", manifest.LoggedAt.Format(time.RFC3339))
 
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,
