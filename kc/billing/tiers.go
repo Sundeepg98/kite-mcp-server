@@ -76,6 +76,7 @@ var toolTiers = map[string]Tier{
 	"options_payoff_builder": TierFree,
 	"volume_spike_detector":  TierFree,
 	"analyze_concall":        TierFree,
+	"get_fii_dii_flow":       TierFree,
 
 	// Admin tools (gated by admin role check, not billing tier)
 	"admin_list_users": TierFree, "admin_get_user": TierFree,

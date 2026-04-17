@@ -114,6 +114,10 @@ func GetAllTools() []Tool {
 		// LLM fetches transcript client-side via WebFetch / Tavily).
 		&AnalyzeConcallTool{},
 
+		// get_fii_dii_flow — FII/DII daily institutional flow (frames the LLM;
+		// returns NSE + Moneycontrol URL pointers, LLM fetches via WebFetch / Tavily).
+		&GetFIIDIIFlowTool{},
+
 		// SEBI compliance
 		&SEBIComplianceTool{},
 
