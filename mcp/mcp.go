@@ -118,6 +118,12 @@ func GetAllTools() []Tool {
 		// returns NSE + Moneycontrol URL pointers, LLM fetches via WebFetch / Tavily).
 		&GetFIIDIIFlowTool{},
 
+		// peer_compare — side-by-side fundamental-strength comparison for 2-6
+		// stocks (PEG, Piotroski F-score, Altman Z-score + key ratios). Frames
+		// the LLM: returns Screener.in URL pointers + formulas, LLM fetches
+		// fundamentals via WebFetch/Tavily and computes scores client-side.
+		&PeerCompareTool{},
+
 		// SEBI compliance
 		&SEBIComplianceTool{},
 
