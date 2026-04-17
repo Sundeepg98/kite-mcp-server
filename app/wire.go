@@ -92,6 +92,16 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 			// Wire audit store into manager for alert trigger + trailing stop notifications.
 			kcManager.SetAuditStore(app.auditStore)
+
+			// Start audit hash-chain external publisher. Opt-in via
+			// AUDIT_HASH_PUBLISH_* env vars — disabled (no-op) otherwise.
+			// SEBI CSCRF: publishing the chain tip to external storage
+			// prevents an attacker with DB write access from rewriting the
+			// audit log history undetected.
+			hpCfg := audit.LoadHashPublishConfig([]byte(app.Config.OAuthJWTSecret))
+			hpCtx, hpCancel := context.WithCancel(context.Background())
+			app.hashPublisherCancel = hpCancel
+			audit.StartHashPublisher(hpCtx, app.auditStore, hpCfg, app.logger)
 		}
 	} else if !app.DevMode {
 		return nil, nil, fmt.Errorf("audit trail required in production: no alert DB configured (set ALERT_DB_PATH)")

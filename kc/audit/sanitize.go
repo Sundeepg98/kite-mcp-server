@@ -68,7 +68,7 @@ var toolCategories = map[string]string{
 	"portfolio_summary":       "query",
 	"portfolio_concentration": "query",
 	"position_analysis":       "query",
-	"pre_trade_check":         "query",
+	"order_risk_report":       "query",
 
 	// market_data
 	"get_quotes":          "market_data",
@@ -112,7 +112,7 @@ var toolCategories = map[string]string{
 	"options_greeks":            "analytics",
 	"options_payoff_builder":    "analytics",
 	"portfolio_analysis":        "analytics",
-	"tax_harvest_analysis":   "analytics",
+	"tax_loss_analysis":      "analytics",
 	"sector_exposure":        "analytics",
 	"dividend_calendar":      "analytics",
 	"sebi_compliance_status": "analytics",

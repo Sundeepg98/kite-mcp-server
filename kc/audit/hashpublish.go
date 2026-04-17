@@ -1,0 +1,459 @@
+// Package audit — hash chain external publisher.
+//
+// Periodically publishes the audit log's chain-tip (latest entry_hash + entry
+// count) to external object storage (Cloudflare R2 / S3-compatible). The
+// publication is signed with HMAC-SHA256 so an attacker who gains write access
+// to the audit database cannot silently rewrite history — the external record
+// of the chain tip acts as an independent anchor that any verifier can check
+// against the local DB via VerifyChain().
+//
+// SEBI Cybersecurity & Cyber Resilience Framework (CSCRF) requires tamper-
+// evident audit logs. A hash-chain alone is necessary but not sufficient: if
+// the attacker rewrites every entry_hash consistently, the local chain still
+// verifies. Publishing the tip externally closes that gap.
+//
+// The feature is OPT-IN. If the required env vars are not set, the publisher
+// logs "disabled (no storage configured)" once at startup and does nothing.
+// This keeps local dev and unconfigured deployments working while making
+// production opt-in a simple env-var change.
+//
+// Storage client: we avoid pulling in aws-sdk-go (large transitive tree) and
+// instead speak raw S3 REST via net/http + AWS SigV4. Cloudflare R2 accepts
+// SigV4 signed PUT requests on its S3-compatible endpoint. Only PUT /object
+// is implemented — no list/get/delete needed for this feature.
+package audit
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"sort"
+	"strings"
+	"time"
+)
+
+// HashPublishConfig holds configuration for the hash-chain external publisher.
+// All fields are populated from environment variables in LoadHashPublishConfig.
+type HashPublishConfig struct {
+	// Interval between tip publishes. Defaults to 1 hour.
+	Interval time.Duration
+
+	// S3Endpoint is the S3-compatible URL (e.g. Cloudflare R2:
+	// https://<account-id>.r2.cloudflarestorage.com). Empty disables publishing.
+	S3Endpoint string
+
+	// Bucket is the bucket name. Empty disables publishing.
+	Bucket string
+
+	// Region is the AWS region. For R2 this is always "auto".
+	Region string
+
+	// AccessKey / SecretKey are the S3-compatible credentials.
+	AccessKey string
+	SecretKey string
+
+	// SigningKey is the HMAC-SHA256 key used to sign the published blob.
+	// If empty, falls back to OAUTH_JWT_SECRET. Callers should pass the
+	// JWT secret here since it's already derived and domain-separated.
+	SigningKey []byte
+
+	// SchemaVersion identifies the publication format for future evolution.
+	SchemaVersion int
+}
+
+// Enabled reports whether the publisher has enough configuration to run.
+// A publisher with Enabled()==false logs a single "disabled" line at startup
+// and becomes a no-op. This keeps local dev and unconfigured deployments
+// working without surprise failures.
+func (c HashPublishConfig) Enabled() bool {
+	return c.S3Endpoint != "" && c.Bucket != "" && c.AccessKey != "" && c.SecretKey != ""
+}
+
+// LoadHashPublishConfig reads the AUDIT_HASH_PUBLISH_* env vars.
+// The signingKey fallback argument should typically be the OAUTH_JWT_SECRET
+// bytes so the HMAC uses an already-strong secret.
+func LoadHashPublishConfig(signingKey []byte) HashPublishConfig {
+	cfg := HashPublishConfig{
+		S3Endpoint:    os.Getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT"),
+		Bucket:        os.Getenv("AUDIT_HASH_PUBLISH_BUCKET"),
+		AccessKey:     os.Getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY"),
+		SecretKey:     os.Getenv("AUDIT_HASH_PUBLISH_SECRET_KEY"),
+		Region:        os.Getenv("AUDIT_HASH_PUBLISH_REGION"),
+		SchemaVersion: 1,
+		SigningKey:    signingKey,
+	}
+	if cfg.Region == "" {
+		cfg.Region = "auto" // R2 default
+	}
+
+	// Interval — default 1h, override via env.
+	cfg.Interval = time.Hour
+	if raw := os.Getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			cfg.Interval = d
+		}
+	}
+
+	// Dedicated HMAC key overrides JWT-derived fallback.
+	if raw := os.Getenv("AUDIT_HASH_PUBLISH_KEY"); raw != "" {
+		cfg.SigningKey = []byte(raw)
+	}
+
+	return cfg
+}
+
+// HashTipPublication is the JSON payload uploaded to external storage.
+// It's intentionally minimal: only the tip hash, count, time, and schema —
+// enough to detect tampering, not so much that we leak audit content.
+type HashTipPublication struct {
+	Timestamp     string `json:"timestamp"`      // RFC3339 UTC
+	TipHash       string `json:"tip_hash"`       // latest entry_hash from tool_calls
+	EntryCount    int64  `json:"entry_count"`    // MAX(id) — monotonic, matches chain length
+	SchemaVersion int    `json:"schema_version"` // 1
+	Signature     string `json:"signature"`      // HMAC-SHA256(SigningKey, unsignedJSON)
+}
+
+// StartHashPublisher spins up the hash-chain publisher as a background
+// goroutine. Returns immediately. The goroutine exits cleanly when ctx is
+// cancelled.
+//
+// If cfg is not Enabled(), logs a single informational line and returns
+// without starting any goroutine. This is the intended behaviour for
+// unconfigured deployments.
+func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if store == nil {
+		logger.Warn("Audit hash publisher: no audit store provided, skipping")
+		return
+	}
+	if !cfg.Enabled() {
+		logger.Info("Audit hash publishing disabled (no storage configured)",
+			"hint", "set AUDIT_HASH_PUBLISH_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY to enable")
+		return
+	}
+	if len(cfg.SigningKey) == 0 {
+		logger.Warn("Audit hash publisher: no signing key available (OAUTH_JWT_SECRET empty and AUDIT_HASH_PUBLISH_KEY unset); refusing to publish unsigned")
+		return
+	}
+
+	go runHashPublisher(ctx, store, cfg, logger)
+
+	logger.Info("Audit hash publisher started",
+		"interval", cfg.Interval,
+		"endpoint", cfg.S3Endpoint,
+		"bucket", cfg.Bucket)
+}
+
+// runHashPublisher is the goroutine body. Ticks every cfg.Interval, queries
+// the chain tip, signs it, and uploads. Errors are logged and retried on
+// the next tick — we do not crash the app on publish failures.
+func runHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) {
+	ticker := time.NewTicker(cfg.Interval)
+	defer ticker.Stop()
+
+	// Publish once immediately so we have an anchor on process start.
+	if err := publishOnce(ctx, store, cfg, logger); err != nil {
+		logger.Warn("Audit hash tip publish failed (initial)", "error", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Audit hash publisher stopping (context cancelled)")
+			return
+		case <-ticker.C:
+			if err := publishOnce(ctx, store, cfg, logger); err != nil {
+				logger.Warn("Audit hash tip publish failed", "error", err)
+			}
+		}
+	}
+}
+
+// publishOnce reads the chain tip, builds the signed blob, and PUTs it.
+func publishOnce(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) error {
+	tipHash, count, err := store.ChainTip()
+	if err != nil {
+		return fmt.Errorf("query chain tip: %w", err)
+	}
+	if tipHash == "" {
+		// No entries yet — nothing to anchor. Not an error, just skip.
+		logger.Debug("Audit hash publisher: chain empty, skipping publish")
+		return nil
+	}
+
+	now := time.Now().UTC()
+	pub := HashTipPublication{
+		Timestamp:     now.Format(time.RFC3339),
+		TipHash:       tipHash,
+		EntryCount:    count,
+		SchemaVersion: cfg.SchemaVersion,
+	}
+	pub.Signature = signPublication(pub, cfg.SigningKey)
+
+	body, err := json.MarshalIndent(pub, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal publication: %w", err)
+	}
+
+	// Object key: audit-hashes/YYYY-MM-DDTHH-MM-SSZ.json
+	// Colons are avoided because some S3 clients/CLIs treat them awkwardly.
+	keyTs := now.Format("2006-01-02T15-04-05Z")
+	objectKey := "audit-hashes/" + keyTs + ".json"
+
+	if err := putObject(ctx, cfg, objectKey, body); err != nil {
+		return fmt.Errorf("put object %s: %w", objectKey, err)
+	}
+
+	logger.Info("Audit hash tip published",
+		"tip_hash", tipHash[:min(12, len(tipHash))]+"...",
+		"entry_count", count,
+		"key", objectKey)
+	return nil
+}
+
+// signPublication computes HMAC-SHA256 over the deterministic JSON encoding
+// of the publication (with Signature field zeroed). A verifier recomputes
+// the HMAC with the same key to confirm authenticity.
+func signPublication(p HashTipPublication, key []byte) string {
+	p.Signature = "" // exclude signature field from its own input
+	// Deterministic: use a fixed field order, not json.Marshal's map-based
+	// non-determinism. (For struct types json.Marshal IS deterministic in
+	// field order, but we document the intent explicitly.)
+	unsigned, _ := json.Marshal(p)
+	mac := hmac.New(sha256.New, key)
+	mac.Write(unsigned)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// ChainTip returns the latest entry_hash and the total count of audit
+// entries. Used by the hash publisher. (Chain-break markers are included
+// in the count because they are legitimate chain links.)
+//
+// Returns ("", 0, nil) on an empty chain — callers should treat this as
+// "nothing to publish yet", not an error.
+func (s *Store) ChainTip() (string, int64, error) {
+	if s.db == nil {
+		return "", 0, fmt.Errorf("audit store has no DB")
+	}
+	var (
+		tip      sql.NullString
+		maxID    sql.NullInt64
+		rowCount int64
+	)
+	// Single query for both tip and count — avoids two round-trips and
+	// eliminates the race where a row is inserted between them.
+	row := s.db.QueryRow(`
+		SELECT
+			(SELECT entry_hash FROM tool_calls ORDER BY id DESC LIMIT 1) AS tip,
+			(SELECT COALESCE(MAX(id), 0) FROM tool_calls) AS max_id,
+			(SELECT COUNT(*) FROM tool_calls) AS row_count`)
+	if err := row.Scan(&tip, &maxID, &rowCount); err != nil {
+		if err == sql.ErrNoRows {
+			return "", 0, nil
+		}
+		return "", 0, fmt.Errorf("scan chain tip: %w", err)
+	}
+	// Use rowCount (not maxID) as the entry count — maxID is affected by
+	// retention cleanup deletions. rowCount matches VerifyChain's Total.
+	return tip.String, rowCount, nil
+}
+
+// --- Minimal AWS SigV4 PUT for S3-compatible endpoints (R2 etc.) ---
+//
+// We implement only what's needed for a single PUT of a small JSON blob
+// from memory. No multipart, no streaming, no retries beyond the outer
+// ticker loop. See the AWS SigV4 spec:
+// https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html
+
+const (
+	sigV4Algorithm = "AWS4-HMAC-SHA256"
+	sigV4Service   = "s3"
+	// Empty-payload hash — we still set it explicitly even for non-empty
+	// payloads so the var is defined once.
+)
+
+// putObject uploads body to cfg.Bucket at objectKey with SigV4 signing.
+// Content-Type is application/json.
+func putObject(ctx context.Context, cfg HashPublishConfig, objectKey string, body []byte) error {
+	// Build URL: {endpoint}/{bucket}/{objectKey}
+	u, err := url.Parse(cfg.S3Endpoint)
+	if err != nil {
+		return fmt.Errorf("parse endpoint: %w", err)
+	}
+	// Path-style addressing works on R2 and most S3-compatible services.
+	u.Path = "/" + cfg.Bucket + "/" + objectKey
+
+	// Prepare request.
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = int64(len(body))
+
+	// Sign the request in-place.
+	if err := signSigV4(req, body, cfg.AccessKey, cfg.SecretKey, cfg.Region, sigV4Service, time.Now().UTC()); err != nil {
+		return fmt.Errorf("sign request: %w", err)
+	}
+
+	// Execute with a per-request timeout so we don't hang the goroutine
+	// forever if the endpoint stalls.
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		// Read a bounded amount of body for diagnostics — S3 error XML is
+		// normally <1KB.
+		diag, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(diag)))
+	}
+	return nil
+}
+
+// signSigV4 adds Authorization + x-amz-* headers to req using AWS SigV4.
+// This mutates req.Header.
+func signSigV4(req *http.Request, body []byte, accessKey, secretKey, region, service string, now time.Time) error {
+	// Payload hash — lowercase hex of SHA256(body).
+	payloadHash := sha256Hex(body)
+
+	amzDate := now.Format("20060102T150405Z")
+	dateStamp := now.Format("20060102")
+
+	req.Header.Set("X-Amz-Date", amzDate)
+	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
+	// Host header is set automatically by net/http from req.URL, but SigV4
+	// requires it to be in SignedHeaders, so we make sure it's present.
+	host := req.URL.Host
+	req.Host = host
+
+	// --- Canonical request ---
+	canonicalURI := canonicalURIPath(req.URL.EscapedPath())
+	canonicalQuery := canonicalQueryString(req.URL.Query())
+
+	// Headers included in the signature. Sorted, lowercase names.
+	signedHeadersList := []string{"content-type", "host", "x-amz-content-sha256", "x-amz-date"}
+	sort.Strings(signedHeadersList)
+
+	var canonicalHeaders strings.Builder
+	for _, h := range signedHeadersList {
+		var val string
+		switch h {
+		case "host":
+			val = host
+		case "content-type":
+			val = req.Header.Get("Content-Type")
+		case "x-amz-date":
+			val = amzDate
+		case "x-amz-content-sha256":
+			val = payloadHash
+		}
+		canonicalHeaders.WriteString(h)
+		canonicalHeaders.WriteString(":")
+		canonicalHeaders.WriteString(strings.TrimSpace(val))
+		canonicalHeaders.WriteString("\n")
+	}
+	signedHeaders := strings.Join(signedHeadersList, ";")
+
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		canonicalURI,
+		canonicalQuery,
+		canonicalHeaders.String(),
+		signedHeaders,
+		payloadHash,
+	}, "\n")
+
+	// --- String to sign ---
+	credentialScope := strings.Join([]string{dateStamp, region, service, "aws4_request"}, "/")
+	stringToSign := strings.Join([]string{
+		sigV4Algorithm,
+		amzDate,
+		credentialScope,
+		sha256Hex([]byte(canonicalRequest)),
+	}, "\n")
+
+	// --- Signing key derivation ---
+	kDate := hmacSHA256([]byte("AWS4"+secretKey), []byte(dateStamp))
+	kRegion := hmacSHA256(kDate, []byte(region))
+	kService := hmacSHA256(kRegion, []byte(service))
+	kSigning := hmacSHA256(kService, []byte("aws4_request"))
+
+	signature := hex.EncodeToString(hmacSHA256(kSigning, []byte(stringToSign)))
+
+	// --- Authorization header ---
+	auth := fmt.Sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		sigV4Algorithm,
+		accessKey,
+		credentialScope,
+		signedHeaders,
+		signature,
+	)
+	req.Header.Set("Authorization", auth)
+	return nil
+}
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func hmacSHA256(key, data []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// canonicalURIPath returns the path component for SigV4 canonical request.
+// The path must be URI-encoded, with slashes preserved. net/http's
+// req.URL.EscapedPath already does this correctly for paths we construct.
+func canonicalURIPath(p string) string {
+	if p == "" {
+		return "/"
+	}
+	return p
+}
+
+// canonicalQueryString returns the SigV4 canonical query: sorted by key,
+// with both keys and values URI-encoded. Our PUT has no query params, so
+// this will typically be "".
+func canonicalQueryString(q url.Values) string {
+	if len(q) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(q))
+	for k := range q {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString("&")
+		}
+		for j, v := range q[k] {
+			if j > 0 {
+				b.WriteString("&")
+			}
+			b.WriteString(url.QueryEscape(k))
+			b.WriteString("=")
+			b.WriteString(url.QueryEscape(v))
+		}
+	}
+	return b.String()
+}

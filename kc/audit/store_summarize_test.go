@@ -424,7 +424,7 @@ func TestStore_VerifyChain_ValidChain(t *testing.T) {
 	assert.Equal(t, 5, result.Verified)
 }
 
-// --- Summarize coverage: trading_context, pre_trade_check ---
+// --- Summarize coverage: trading_context, order_risk_report ---
 
 func TestSummarizeOutput_TradingContext(t *testing.T) {
 	t.Parallel()
@@ -456,7 +456,7 @@ func TestSummarizeOutput_PreTradeCheck(t *testing.T) {
 	t.Parallel()
 	json := `{"symbol":"RELIANCE","side":"BUY","quantity":10,"current_price":2500,"recommendation":"PROCEED"}`
 	result := gomcp.NewToolResultText(json)
-	summary := SummarizeOutput("pre_trade_check", result)
+	summary := SummarizeOutput("order_risk_report", result)
 	assert.Contains(t, summary, "BUY")
 	assert.Contains(t, summary, "RELIANCE")
 	assert.Contains(t, summary, "PROCEED")
@@ -465,7 +465,7 @@ func TestSummarizeOutput_PreTradeCheck(t *testing.T) {
 func TestSummarizeOutput_PreTradeCheck_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	result := gomcp.NewToolResultText(`not json`)
-	summary := SummarizeOutput("pre_trade_check", result)
+	summary := SummarizeOutput("order_risk_report", result)
 	assert.Equal(t, "not json", summary)
 }
 
@@ -494,7 +494,7 @@ func TestSummarizeInput_PreTradeCheck(t *testing.T) {
 		"tradingsymbol":    "RELIANCE",
 		"exchange":         "NSE",
 	}
-	result := SummarizeInput("pre_trade_check", args)
+	result := SummarizeInput("order_risk_report", args)
 	assert.Contains(t, result, "BUY")
 	assert.Contains(t, result, "RELIANCE")
 }

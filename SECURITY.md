@@ -92,6 +92,13 @@ Best effort, typically:
 - Manual pen-test notes live in [`SECURITY_PENTEST_RESULTS.md`](SECURITY_PENTEST_RESULTS.md)
 - Full audit history in [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md)
 
+## Full Posture Assessment
+
+For the honest, audit-grade self-assessment against the SEBI Cybersecurity
+Framework — including what's implemented, what's deferred, and what would
+NOT pass a formal cyber audit today — see
+[`docs/SECURITY_POSTURE.md`](docs/SECURITY_POSTURE.md).
+
 ## Credits
 
 We credit researchers who responsibly disclose vulnerabilities. If you'd

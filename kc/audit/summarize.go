@@ -33,7 +33,7 @@ func SummarizeInput(toolName string, args map[string]any) string {
 			strVal(args, "old_product"),
 			strVal(args, "new_product"),
 			args["quantity"])
-	case "pre_trade_check":
+	case "order_risk_report":
 		return fmt.Sprintf("%s %s %s %s qty=%s",
 			strings.ToUpper(strVal(args, "transaction_type")),
 			strVal(args, "quantity"),
@@ -140,7 +140,7 @@ func SummarizeOutput(toolName string, result *gomcp.CallToolResult) string {
 		return summarizeTradingContext(text)
 	case "search_instruments":
 		return summarizeSearch(text)
-	case "pre_trade_check":
+	case "order_risk_report":
 		return summarizePreTradeCheck(text)
 	case "place_mf_order", "cancel_mf_order":
 		return summarizeMFOrderResult(text)
@@ -359,7 +359,7 @@ func summarizeTradingContext(text string) string {
 	return strings.Join(parts, ", ")
 }
 
-// summarizePreTradeCheck extracts key metrics from pre_trade_check output.
+// summarizePreTradeCheck extracts key metrics from order_risk_report output.
 func summarizePreTradeCheck(text string) string {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(text), &obj); err != nil {

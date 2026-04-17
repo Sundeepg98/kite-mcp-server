@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -50,6 +51,9 @@ type App struct {
 	// observable in DevMode.
 	riskLimitsLoaded bool
 	shutdownCh       chan struct{} // injectable shutdown trigger for testing (nil = OS signals)
+	// hashPublisherCancel cancels the audit hash-chain publisher goroutine
+	// at shutdown. nil when the publisher is disabled (no storage configured).
+	hashPublisherCancel context.CancelFunc
 }
 
 // StatusPageData holds template data for the status page

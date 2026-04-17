@@ -69,6 +69,11 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.scheduler.Stop()
 		}
 
+		// Stop audit hash-chain publisher (no-op if never started).
+		if app.hashPublisherCancel != nil {
+			app.hashPublisherCancel()
+		}
+
 		// Shutdown HTTP server first (stop accepting new requests, drain in-flight)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
