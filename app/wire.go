@@ -26,6 +26,9 @@ import (
 )
 
 func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
+	if err := app.envCheck(); err != nil {
+		return nil, nil, fmt.Errorf("environment validation failed: %w", err)
+	}
 	app.logger.Info("Creating Kite Connect manager...")
 	kcManager, err := kc.New(kc.Config{
 		APIKey:           app.Config.KiteAPIKey,
