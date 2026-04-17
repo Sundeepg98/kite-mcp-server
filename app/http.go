@@ -746,9 +746,15 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// configureAndStartServer sets up server handler and starts it
+// configureAndStartServer sets up server handler and starts it.
+//
+// Middleware order (outermost first):
+//  1. withRequestID — earliest so every downstream handler, middleware, and
+//     log line can observe the correlation ID via RequestIDFromCtx.
+//  2. securityHeaders — applies standard response hardening headers.
+//  3. mux — application routes.
 func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
-	srv.Handler = securityHeaders(mux)
+	srv.Handler = withRequestID(securityHeaders(mux))
 	app.serveHTTPServer(srv)
 }
 
