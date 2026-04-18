@@ -166,6 +166,72 @@ func TestStatsCache_NilSafety(t *testing.T) {
 	assert.Equal(t, 0.0, c.cacheHitRate())
 }
 
+// TestStatsCache_DefaultMaxEntries verifies the default cache constructor
+// sets a size cap so malicious or runaway user creation can't blow memory.
+// Defence in depth: even though under normal ops the key space is bounded
+// by the active user population (hundreds), we must not trust that.
+func TestStatsCache_DefaultMaxEntries(t *testing.T) {
+	t.Parallel()
+	c := newStatsCache(15 * time.Minute)
+
+	assert.Equal(t, DefaultMaxStatsCacheEntries, c.maxEntries,
+		"default constructor must apply the package-default size cap")
+}
+
+// TestStatsCache_SizeCapEnforced fills the cache past its max and verifies
+// len(entries) never exceeds maxEntries. Uses a tiny cap (5) so the loop
+// stays fast; the eviction policy (random single-entry drop on insert
+// overflow) is not externally observable beyond the len bound.
+func TestStatsCache_SizeCapEnforced(t *testing.T) {
+	t.Parallel()
+	const cap = 5
+	c := newStatsCacheWithSize(15*time.Minute, cap)
+
+	// Insert 10x the cap — every Set must keep the map <= cap.
+	for i := 0; i < cap*10; i++ {
+		email := fmt.Sprintf("user-%d@attacker.test", i)
+		c.Set(email, 30, float64(i), float64(i), float64(i))
+
+		c.mu.RLock()
+		sz := len(c.entries)
+		c.mu.RUnlock()
+		assert.LessOrEqual(t, sz, cap,
+			"cache must never exceed maxEntries on iteration %d", i)
+	}
+
+	// Final state: exactly at cap (or below if a duplicate happened to collide,
+	// which can't happen with unique emails above but we assert the bound anyway).
+	c.mu.RLock()
+	final := len(c.entries)
+	c.mu.RUnlock()
+	assert.Equal(t, cap, final,
+		"after saturating inserts with unique keys, cache must sit at the cap")
+}
+
+// TestStatsCache_CustomSizeOverride verifies newStatsCacheWithSize honours
+// the caller-supplied maxEntries and does not fall back to the default.
+func TestStatsCache_CustomSizeOverride(t *testing.T) {
+	t.Parallel()
+	c := newStatsCacheWithSize(15*time.Minute, 42)
+	assert.Equal(t, 42, c.maxEntries,
+		"custom size constructor must store the caller's cap verbatim")
+}
+
+// TestStatsCache_SizeCapZeroOrNegativeUsesDefault guards the sanity of a
+// cache constructed with a nonsensical size — we fall back to the default
+// rather than create an unbounded or unusable cache.
+func TestStatsCache_SizeCapZeroOrNegativeUsesDefault(t *testing.T) {
+	t.Parallel()
+
+	c0 := newStatsCacheWithSize(15*time.Minute, 0)
+	assert.Equal(t, DefaultMaxStatsCacheEntries, c0.maxEntries,
+		"maxEntries=0 must fall back to the default — an unusable cache is worse than a bounded one")
+
+	cNeg := newStatsCacheWithSize(15*time.Minute, -1)
+	assert.Equal(t, DefaultMaxStatsCacheEntries, cNeg.maxEntries,
+		"negative maxEntries must fall back to the default")
+}
+
 // insertOrderRowDirect bypasses s.Record() (and therefore the automatic
 // cache invalidation) by writing to tool_calls via db.ExecInsert. Used in
 // cache tests to prove that fresh DB rows are NOT visible when the cache

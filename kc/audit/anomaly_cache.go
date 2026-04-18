@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+// DefaultMaxStatsCacheEntries is the default size cap for statsCache.
+//
+// Under normal operation the key space is bounded by (active users) *
+// (distinct days windows). Active users today are in the hundreds and only
+// `days=30` is queried, so we expect real-world len() to sit well below
+// this. The cap is defence in depth: a brute-force login loop or a bug in
+// email parsing could otherwise grow the cache without bound and OOM the
+// process. 10_000 entries is cheap (~1 MB of map+entries on a 64-bit
+// runtime) and several orders of magnitude above the expected steady state.
+const DefaultMaxStatsCacheEntries = 10_000
+
 // statsCache is a small in-memory TTL cache for UserOrderStats results.
 //
 // Rationale: UserOrderStats is called on every place_order to evaluate
@@ -22,16 +33,19 @@ import (
 // Invalidate() for the affected email, so the very next anomaly check
 // reflects the new row.
 //
-// Eviction strategy: TTL only. Entries are lazily evicted on Get() when
-// they are stale. We do NOT enforce a size cap: the cache key is
-// (email, days), days is effectively a small fixed set (30 is the only
-// caller today), and active users are measured in hundreds. Memory use
-// is bounded by the active user population and will be revisited if
-// that assumption breaks.
+// Eviction strategy: TTL + bounded size with random single-entry eviction
+// on insert overflow. Entries are lazily evicted on Get() when they are
+// stale. When Set() would push len beyond maxEntries, we drop one
+// arbitrary entry (Go's map iteration order is randomised, so this is a
+// cheap random eviction). We chose random over LRU because the hit-rate
+// penalty on overflow is acceptable — overflow only occurs under a DoS /
+// bug condition anyway, and proper LRU (container/list) would add
+// per-entry bookkeeping for no gain in the common path.
 type statsCache struct {
-	mu      sync.RWMutex
-	entries map[string]cachedEntry
-	ttl     time.Duration
+	mu         sync.RWMutex
+	entries    map[string]cachedEntry
+	ttl        time.Duration
+	maxEntries int
 
 	// hits and misses are touched under the lock for correctness with the
 	// map state but are also atomically readable so cacheHitRate() can be
@@ -50,11 +64,24 @@ type cachedEntry struct {
 	storedAt time.Time
 }
 
-// newStatsCache constructs an empty TTL cache.
+// newStatsCache constructs an empty TTL cache with the default size cap
+// (DefaultMaxStatsCacheEntries). Use newStatsCacheWithSize to override.
 func newStatsCache(ttl time.Duration) *statsCache {
+	return newStatsCacheWithSize(ttl, DefaultMaxStatsCacheEntries)
+}
+
+// newStatsCacheWithSize constructs an empty TTL cache with an explicit
+// entry cap. A non-positive maxEntries is rejected and falls back to the
+// default — an unbounded or unusable cache is never safer than a bounded
+// one, and silently correcting keeps callers simple.
+func newStatsCacheWithSize(ttl time.Duration, maxEntries int) *statsCache {
+	if maxEntries <= 0 {
+		maxEntries = DefaultMaxStatsCacheEntries
+	}
 	return &statsCache{
-		entries: make(map[string]cachedEntry),
-		ttl:     ttl,
+		entries:    make(map[string]cachedEntry),
+		ttl:        ttl,
+		maxEntries: maxEntries,
 	}
 }
 
@@ -101,12 +128,28 @@ func (c *statsCache) Get(email string, days int) (mean, stdev, count float64, ok
 
 // Set stores a (mean, stdev, count) snapshot in the cache with the current
 // time as storedAt. A nil receiver is a no-op.
+//
+// If inserting would push len(entries) past maxEntries (and the key isn't
+// already present, i.e. this is a genuinely new entry), one arbitrary
+// existing entry is evicted first. Go's map iteration order is
+// pseudo-random per-run, which gives us cheap random eviction without
+// per-entry bookkeeping.
 func (c *statsCache) Set(email string, days int, mean, stdev, count float64) {
 	if c == nil {
 		return
 	}
+	key := cacheKey(email, days)
 	c.mu.Lock()
-	c.entries[cacheKey(email, days)] = cachedEntry{
+	// Bound the map size. We only need to evict when this is a net-new key
+	// AND we're already at the cap — replacing an existing entry leaves
+	// len unchanged.
+	if _, present := c.entries[key]; !present && len(c.entries) >= c.maxEntries {
+		for k := range c.entries {
+			delete(c.entries, k)
+			break
+		}
+	}
+	c.entries[key] = cachedEntry{
 		mean:     mean,
 		stdev:    stdev,
 		count:    count,
