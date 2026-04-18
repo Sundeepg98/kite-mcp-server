@@ -144,6 +144,16 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		// Wrap instruments manager as FreezeQuantityLookup
 		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
 	}
+	// Wire the anomaly-detection baseline. audit.Store.UserOrderStats matches
+	// riskguard.BaselineProvider exactly (same signature), so it's a direct
+	// assignment — no adapter shim needed. Without this wire the anomaly
+	// check in checkAnomalyMultiplier silently no-ops (fail-open) because
+	// g.baseline is nil. When auditStore is nil (DevMode without ALERT_DB_PATH),
+	// we leave baseline unset and the fail-open behaviour continues.
+	if app.auditStore != nil {
+		riskGuard.SetBaselineProvider(app.auditStore)
+		app.logger.Info("riskguard anomaly baseline wired", "provider", "audit")
+	}
 	// Wire auto-freeze Telegram admin notification + domain event dispatch.
 	{
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
