@@ -198,6 +198,10 @@ type Guard struct {
 	// triggers on an explicit user-supplied key, so mcp-remote retries after
 	// 504 reuse the same key and are rejected deterministically.
 	dedup *Dedup
+	// perSecond enforces SEBI's Apr 2026 retail-algo sub-second threshold
+	// defensively: capped at 9/sec so the broker-side 10/sec cap always has
+	// a 1-order headroom. Keyed by (email, calendar_second) — see per_second.go.
+	perSecond *perSecondCounter
 	// Global trading freeze — blocks ALL users from placing orders.
 	globalFrozen   bool
 	globalFrozenBy string
@@ -208,11 +212,12 @@ type Guard struct {
 // NewGuard creates a new Guard with system defaults.
 func NewGuard(logger *slog.Logger) *Guard {
 	return &Guard{
-		trackers: make(map[string]*UserTracker),
-		limits:   make(map[string]*UserLimits),
-		logger:   logger,
-		clock:    time.Now,
-		dedup:    NewDedup(DefaultDedupTTL),
+		trackers:  make(map[string]*UserTracker),
+		limits:    make(map[string]*UserLimits),
+		logger:    logger,
+		clock:     time.Now,
+		dedup:     NewDedup(DefaultDedupTTL),
+		perSecond: newPerSecondCounter(),
 	}
 }
 
@@ -361,7 +366,19 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 		}
 		return r
 	}
-	// 5. Order rate limit (per minute)
+	// 5a. Per-calendar-second rate cap (9/sec defensive — SEBI Apr 2026
+	//     retail-algo threshold is 10/sec; broker enforces at the 11th.
+	//     Capping at 9 guarantees 1-order headroom. Runs BEFORE the
+	//     per-minute check because 10 orders in one second would all pass
+	//     the 10/min allowance yet breach the sub-second SEBI threshold.
+	if r := g.checkPerSecondRate(email); !r.Allowed {
+		g.recordRejection(email)
+		if frozen := g.checkAutoFreeze(email); frozen {
+			r.Message += " [Account auto-frozen due to repeated violations]"
+		}
+		return r
+	}
+	// 5b. Order rate limit (per minute)
 	if r := g.checkRateLimit(email); !r.Allowed {
 		g.recordRejection(email)
 		if frozen := g.checkAutoFreeze(email); frozen {
@@ -422,6 +439,10 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 // RecordOrder records a successful order for all tracking: daily count, rate window, duplicate detection, and daily value.
 func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 	email = strings.ToLower(email)
+	// Bump the per-calendar-second counter first — it has its own mutex and
+	// uses the guard's clock, so the (email, second) bucket reflects the
+	// same "now" the CheckOrder path sees.
+	g.recordPerSecondOrder(email)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
