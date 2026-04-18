@@ -156,7 +156,7 @@ func TestIsValidRequestID(t *testing.T) {
 // TestNewRequestID_IsUnique smoke-tests that generated IDs differ.
 func TestNewRequestID_IsUnique(t *testing.T) {
 	seen := make(map[string]struct{}, 100)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := newRequestID()
 		require.NotEmpty(t, id)
 		require.Len(t, id, 36)

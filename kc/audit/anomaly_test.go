@@ -53,7 +53,7 @@ func TestUserOrderStats_InsufficientHistory(t *testing.T) {
 	now := time.Now().UTC()
 
 	// Only 4 orders — below the minimum baseline threshold.
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		recordOrderEntry(t, s, email, "place_order", 10, 500, now.Add(-time.Duration(i)*time.Hour))
 	}
 
@@ -73,7 +73,7 @@ func TestUserOrderStats_SteadyBaseline(t *testing.T) {
 	now := time.Now().UTC()
 
 	// 10 orders at exactly Rs 5000 each — zero variance.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		recordOrderEntry(t, s, email, "place_order", 10, 500, now.Add(-time.Duration(i)*time.Hour))
 	}
 
@@ -118,11 +118,11 @@ func TestUserOrderStats_WindowExcludesOldOrders(t *testing.T) {
 	now := time.Now().UTC()
 
 	// 10 small recent orders (within 30d).
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		recordOrderEntry(t, s, email, "place_order", 1, 1000, now.Add(-time.Duration(i)*time.Hour))
 	}
 	// 5 giant old orders from 60 days ago — must be excluded by the 30-day window.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		recordOrderEntry(t, s, email, "place_order", 1, 1_000_000, now.Add(-60*24*time.Hour).Add(-time.Duration(i)*time.Hour))
 	}
 
@@ -141,11 +141,11 @@ func TestUserOrderStats_OnlyOrderTools(t *testing.T) {
 	now := time.Now().UTC()
 
 	// 5 order rows at 1000.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		recordOrderEntry(t, s, email, "place_order", 1, 1000, now.Add(-time.Duration(i)*time.Hour))
 	}
 	// 10 non-order rows that happen to mention "quantity"/"price" in params.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		recordOrderEntry(t, s, email, "get_ltp", 100, 99999, now.Add(-time.Duration(i)*time.Hour))
 	}
 
@@ -163,10 +163,10 @@ func TestUserOrderStats_ModifyOrderCounted(t *testing.T) {
 	email := "modifier@user.com"
 	now := time.Now().UTC()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		recordOrderEntry(t, s, email, "place_order", 1, 1000, now.Add(-time.Duration(i)*time.Hour))
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		recordOrderEntry(t, s, email, "modify_order", 1, 2000, now.Add(-time.Duration(i+3)*time.Hour))
 	}
 

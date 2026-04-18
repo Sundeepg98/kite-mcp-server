@@ -77,7 +77,7 @@ func TestDedup_Concurrent(t *testing.T) {
 	const N = 50
 	results := make([]bool, N)
 	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -201,7 +201,7 @@ func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -241,7 +241,7 @@ func TestMiddleware_ClientOrderID_ModifyOrder(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "modify_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"order_id":        "ORD-42",
 		"order_type":      "LIMIT",
 		"quantity":        float64(10),

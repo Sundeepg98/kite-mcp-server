@@ -37,14 +37,14 @@ func TestResourceMetadata_GET(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 
-	var body map[string]interface{}
+	var body map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatalf("Failed to decode JSON: %v", err)
 	}
 	if body["resource"] != "https://test.example.com/mcp" {
 		t.Errorf("resource = %v, want %q", body["resource"], "https://test.example.com/mcp")
 	}
-	servers, ok := body["authorization_servers"].([]interface{})
+	servers, ok := body["authorization_servers"].([]any)
 	if !ok || len(servers) != 1 || servers[0] != "https://test.example.com" {
 		t.Errorf("authorization_servers = %v, want [https://test.example.com]", body["authorization_servers"])
 	}
@@ -79,7 +79,7 @@ func TestAuthServerMetadata(t *testing.T) {
 		t.Fatalf("Status = %d, want 200", rr.Code)
 	}
 
-	var body map[string]interface{}
+	var body map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatalf("Failed to decode JSON: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestAuthServerMetadata(t *testing.T) {
 	// Check supported values
 	checkStringSlice := func(key string, want []string) {
 		t.Helper()
-		arr, ok := body[key].([]interface{})
+		arr, ok := body[key].([]any)
 		if !ok {
 			t.Errorf("%s is not an array", key)
 			return
@@ -141,7 +141,7 @@ func TestRegister_Valid(t *testing.T) {
 		t.Fatalf("Status = %d, want 201. Body: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to decode JSON: %v", err)
 	}
@@ -460,7 +460,7 @@ func TestToken_ValidPKCEExchange(t *testing.T) {
 		t.Fatalf("Status = %d, want 200. Body: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("Failed to decode JSON: %v", err)
 	}
@@ -999,7 +999,7 @@ func TestFullPKCEFlow(t *testing.T) {
 	if regRR.Code != http.StatusCreated {
 		t.Fatalf("Register: status = %d, want 201", regRR.Code)
 	}
-	var regResp map[string]interface{}
+	var regResp map[string]any
 	json.Unmarshal(regRR.Body.Bytes(), &regResp)
 	clientID := regResp["client_id"].(string)
 	clientSecret := regResp["client_secret"].(string)
@@ -1037,7 +1037,7 @@ func TestFullPKCEFlow(t *testing.T) {
 	if tokenRR.Code != http.StatusOK {
 		t.Fatalf("Token: status = %d, want 200. Body: %s", tokenRR.Code, tokenRR.Body.String())
 	}
-	var tokenResp map[string]interface{}
+	var tokenResp map[string]any
 	json.Unmarshal(tokenRR.Body.Bytes(), &tokenResp)
 	accessToken := tokenResp["access_token"].(string)
 
@@ -1105,7 +1105,7 @@ func TestToken_DeferredExchange_KiteClient(t *testing.T) {
 		t.Fatalf("Status = %d, want 200. Body: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(rr.Body.Bytes(), &resp)
 	accessToken := resp["access_token"].(string)
 

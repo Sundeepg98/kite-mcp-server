@@ -236,7 +236,7 @@ func TestMiddleware_BlockedOrder(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -263,7 +263,7 @@ func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 	req.Params.Name = "place_order"
 	// confirm=true needed because the Free-tier default now requires explicit
 	// acknowledgement to satisfy the RequireConfirmAllOrders gate.
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -293,7 +293,7 @@ func TestMiddleware_TriggerPriceFallback(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -320,7 +320,7 @@ func TestMiddleware_ErrorResponseNotRecorded(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange":         "NSE",
 		"tradingsymbol":    "INFY",
 		"transaction_type": "BUY",
@@ -791,7 +791,7 @@ func TestMiddleware_BlockedOrderWithLogger(t *testing.T) {
 
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY",
 		"transaction_type": "BUY", "quantity": float64(10),
 		"price": float64(1500), "order_type": "LIMIT",
