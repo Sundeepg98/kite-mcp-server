@@ -4,7 +4,7 @@
     "type": "individual",
     "role": "owner",
     "name": "Sundeep Govarthinam",
-    "email": "g.karthick.renusharmafoundation@gmail.com",
+    "email": "<product-email-placeholder>",
     "description": "Independent software engineer based in Bengaluru, India. Active Kite Connect developer for 2+ years, maintaining the Kite MCP Server — an MIT-licensed MCP (Model Context Protocol) server that extends Zerodha's upstream read-only MCP with order placement, alerts, paper trading, options analytics, backtesting, and safety controls. Indian Pvt Ltd incorporation pending.",
     "webpageUrl": {
       "url": "https://github.com/Sundeepg98"
@@ -47,7 +47,7 @@
       {
         "guid": "grant-email",
         "type": "other",
-        "address": "g.karthick.renusharmafoundation@gmail.com",
+        "address": "<product-email-placeholder>",
         "description": "Direct grant disbursement via email coordination. Bank transfer / UPI / international wire details will be shared on grant approval. GitHub Sponsors setup pending post-incorporation."
       }
     ],
