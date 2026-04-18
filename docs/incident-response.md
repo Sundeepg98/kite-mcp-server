@@ -88,7 +88,7 @@ Pre-drafted template (~150 words, adjust the square brackets only):
 > shutdown? I will action whichever you choose within 24 hours.
 >
 > — Sundeep
-> [phone] | g.karthick.renusharmafoundation@gmail.com
+> [phone] | <grievance officer email>
 
 **Do NOT** in this email: defend the project, offer counter-arguments,
 cite SEBI regulations, claim compliance wins, reference community
@@ -117,7 +117,7 @@ Pre-drafted template:
 > kite-mcp-server. Effective today: trading tools disabled on the
 > hosted instance pending their review; read-only data tools remain
 > for self-hosted users. Changelog: [link]. Happy to take this
-> offline — g.karthick.renusharmafoundation@gmail.com.
+> offline — <grievance officer email>.
 
 If supporters pile on in the thread, do not reply to any of them, not
 even to thank them. Every reply you make becomes a new attack surface.
@@ -320,6 +320,292 @@ notification:
 
 ---
 
+## Data breach playbook
+
+A dedicated playbook for confirmed data breaches. Cross-cuts Scenario 3
+(security vulnerability) and Scenario 4 (DPDP complaint) — use this
+section whenever personal data has been (or is suspected to have been)
+accessed, exfiltrated, or disclosed without authorization.
+
+Written for the current operating reality: solo operator, pre-LLP,
+fewer than 50 users. Scale assumptions will change once the entity
+incorporates or paid user count crosses 200.
+
+### Scope
+
+Any unauthorized access, exfiltration, or disclosure of user personal
+data falls into this scope. Specifically:
+
+- Kite API credentials (API key + secret stored encrypted in
+  `KiteCredentialStore`)
+- Kite access tokens (encrypted in `KiteTokenStore`, refreshed daily)
+- User email addresses (from OAuth sign-in + billing)
+- Tool-call audit logs (`tool_calls` table — contains redacted
+  parameters but user-attributable)
+- Telegram chat IDs (linked to email in the Telegram binding store)
+- OAuth client registrations (client_secret encrypted)
+
+Any of the above leaving our control — via server compromise, SQLite
+exfiltration, Cloudflare R2 backup exposure, a rogue dependency, or a
+config accident — triggers this playbook.
+
+### Timelines (legally bounded — meet all of these)
+
+These are cumulative legal obligations; missing any one is a separate
+violation independent of the breach itself.
+
+- **T+0 to T+6h — CERT-In notification.** Mandatory under the CERT-In
+  Directions dated April 28, 2022 (issued under §70B(6) of the IT Act).
+  Submit via https://www.cert-in.org.in (incident reporting form) or
+  email `incident@cert-in.org.in` with the form attached. Use the
+  template below. The 6-hour clock starts at the moment of *detection*,
+  not the moment of breach — document both timestamps.
+- **T+0 to T+72h — Data Protection Board of India (DPB) notification.**
+  Required under §8(5) of the DPDP Act 2023. Form and exact fields
+  pending final DPDP Rules; draft using §8(5) requirements (nature,
+  extent, timing, consequences, mitigation). Submit when the DPB
+  portal is live; until then, keep the draft under
+  `docs/evidence/incident-YYYY-MM-DD/dpb-draft.md` so the audit trail
+  shows the 72-hour draft was prepared on time.
+- **T+0 to T+72h — affected-user notification.** Email every affected
+  user via the address on file in `KiteCredentialStore`. Simultaneously
+  display an in-app banner on `/dashboard` (inject via the server-side
+  template — do NOT rely on users logging in within 72h).
+- **Parallel — Zerodha notification.** If Kite API credentials or
+  developer-app secrets were exposed, email `kiteconnect@zerodha.com`
+  within the same 72h window. They may rotate developer-app secrets
+  on their side, which breaks every user's active session — they need
+  to know first.
+
+### Decision tree (first 60 minutes)
+
+The first hour determines whether the next 72 are manageable or
+catastrophic. Follow this order; do not skip.
+
+**0–5 min — confirm the breach is real.**
+
+- [ ] Is this a test, a false positive, or a genuine event? Check
+      `fly logs -a kite-mcp-server` for the trigger.
+- [ ] Verify audit-trail hash-chain integrity (`admin_list_anomaly_flags`
+      + manual `tool_calls` hash walk).
+- [ ] Cross-check with Cloudflare R2 access logs (unexpected download
+      = exfiltration).
+- [ ] If still uncertain after 5 minutes: treat as real and continue.
+      False positive during containment is cheap; missed real breach
+      is not.
+
+**5–15 min — scope assessment.**
+
+- [ ] How many users affected? (`SELECT COUNT(DISTINCT user_email) FROM
+      tool_calls WHERE ts BETWEEN ? AND ?`)
+- [ ] What data categories? Map to DPDP §8(5) terminology:
+      credentials, tokens, emails, audit logs, or combinations.
+- [ ] Is this ongoing (attacker still has access) or past (window
+      closed)? Ongoing = containment is priority 1; past = evidence
+      preservation is priority 1.
+
+**15–30 min — containment.**
+
+- [ ] Freeze the kill switch:
+      `admin_set_kill_switch --enabled=true --reason="data breach
+      incident YYYY-MM-DD"`. This halts all write paths immediately.
+- [ ] Rotate `OAUTH_JWT_SECRET`:
+      `flyctl secrets set OAUTH_JWT_SECRET=$(openssl rand -hex 32)
+      -a kite-mcp-server`. Invalidates all MCP bearer JWTs; forces
+      every user to re-authenticate. This also rotates the HKDF salt
+      for AES-256-GCM credential encryption — see credstore notes
+      below before flipping.
+- [ ] If credential-store encryption key was exposed: rotate the
+      derived key and re-encrypt the table in-place. Procedure in
+      `kc/credstore/README.md` — test in staging first if time allows.
+- [ ] Revoke all active MCP sessions (`SessionRegistry` table purge):
+      `sqlite3 $ALERT_DB_PATH "DELETE FROM sessions;"`. Users will
+      reconnect via mcp-remote automatically.
+- [ ] Preserve a forensic snapshot BEFORE any of the above:
+      `flyctl ssh sftp get /data/alerts.db ./evidence/alerts.db.preimage`
+      and hash it (`sha256sum`) so the forensic timeline has a
+      known-good starting point.
+
+**30–60 min — draft notifications.**
+
+- [ ] Fill out the CERT-In template (below) and submit. The 6-hour
+      deadline is the tightest — prioritise this over DPB.
+- [ ] Draft the user-notification email (template below) but do NOT
+      send yet. Check with the lawyer first if one is engaged.
+- [ ] Open `docs/evidence/incident-YYYY-MM-DD/timeline.md` and start
+      logging timestamped events. Every action goes in.
+
+### Template: CERT-In incident notification form fields
+
+Pre-fill these so the form can be submitted in ≤15 minutes under
+pressure. The form is at https://www.cert-in.org.in under "Report an
+Incident".
+
+```
+Type of incident: Data breach / Unauthorized access
+Date and time of occurrence: YYYY-MM-DD HH:MM IST
+Date and time of detection: YYYY-MM-DD HH:MM IST
+
+Incident description (1 paragraph, ≤500 chars):
+On <date>, unauthorized access to <component> was detected. The
+incident resulted in <exposure summary>. Root cause is <known /
+under investigation>. The service was placed in kill-switch mode at
+<time>; all active sessions revoked at <time>. Forensic snapshot
+preserved at <hash>.
+
+Number of affected users: <exact count or "approximately N">
+Category of data exposed (DPDP Act §8(5) terminology):
+  - Authentication credentials (encrypted at rest)
+  - Session tokens (encrypted at rest)
+  - Contact identifiers (email addresses)
+  - Audit / transaction logs (PII-redacted)
+  - <any other category that applies>
+
+Actions taken:
+  - Kill switch engaged at <time>
+  - Rotated OAUTH_JWT_SECRET and credential-store key at <time>
+  - Revoked all active sessions at <time>
+  - Forensic snapshot preserved (SHA256: <hash>)
+  - Affected users notified at <time> (or: draft ready; send
+    scheduled for <time> pending lawyer review)
+  - DPB notification drafted; submission pending portal activation
+    (DPDP Rules not yet notified)
+
+Contact person:
+  Name: Sundeep Govarthinam
+  Role: Grievance Officer (solo operator; entity incorporation pending)
+  Email: <grievance officer email>
+  Phone: <phone>
+```
+
+### Template: user breach notification email
+
+Send from the grievance officer address (NOT a personal Gmail).
+Plain text. No tracking pixels. No marketing content.
+
+```
+Subject: Important security notice about your kite-mcp-server account
+
+Hello,
+
+On <date> we detected <brief factual description of the incident>.
+Your account is affected because <specific reason — do not
+generalise>.
+
+What data was involved:
+  - <specific category 1>
+  - <specific category 2>
+  (We have NOT found evidence that <category not affected> was
+   accessed. We will update you if that changes.)
+
+What we did:
+  - Engaged the server kill switch at <time>, halting all writes
+  - Rotated the encryption key protecting stored credentials
+  - Revoked all active sessions — you will need to sign in again
+  - Preserved forensic evidence and notified CERT-In within 6 hours
+  - Filed a draft notification with the Data Protection Board of
+    India (pending portal activation)
+
+What you should do:
+  1. Rotate your Kite developer-app credentials immediately:
+     a. Log in to https://developers.kite.trade
+     b. Revoke the existing app ("Revoke" button on the app page)
+     c. Create a new app with the same redirect URI
+     d. Re-upload the new API key + secret via our dashboard at
+        https://kite-mcp-server.fly.dev/dashboard
+  2. Log in to https://kite.zerodha.com and review all orders and
+     positions between <start date> and now. Flag anything unfamiliar
+     to Zerodha support.
+  3. If you used the same password anywhere else, change it (this
+     incident does not involve passwords, but basic hygiene applies).
+
+Timeline:
+  <date> <time> — Incident occurred (best estimate)
+  <date> <time> — Incident detected
+  <date> <time> — Containment actions completed
+  <date> <time> — CERT-In notified
+  <date> <time> — This notice sent
+
+Questions: reply to this email. I respond personally within 24 hours
+as the sole operator. Formal grievance channel:
+  Grievance Officer: Sundeep Govarthinam
+  Email: <grievance officer email>
+
+The full technical post-mortem will be published at
+<docs/post-mortems/YYYY-MM-DD-<slug>.md> within 30 days of this
+notice.
+
+— Sundeep
+  <grievance officer email>
+```
+
+### Credential compromise — Kite API key/secret
+
+A sub-case of the broader data-breach playbook, specific to exposure
+of Kite developer-app credentials. Handle slightly differently because
+the rotation burden falls on the user, not the server.
+
+**Single-user compromise (one user's credentials leaked):**
+
+- [ ] Mark that user's row in `KiteCredentialStore` as
+      `status=revoked` (admin SQL or future admin tool). Subsequent
+      tool calls for this user return 401 until they re-upload.
+- [ ] Email the user specifically (template above, scoped to one
+      account). Do NOT broadcast — it unnecessarily alarms unaffected
+      users.
+- [ ] User action required: they log in to
+      https://developers.kite.trade, revoke their existing app, create
+      a new one with the same redirect URI, and re-upload the new
+      credentials via `/dashboard`.
+- [ ] Server action: once they re-upload, the new row replaces the
+      revoked one. No action needed on the old `kite_access_tokens`
+      row — the revoked credentials can no longer mint tokens against
+      it.
+
+**Server-side compromise (credential-store encryption key exposed —
+all users affected):**
+
+- [ ] Mark all rows in `KiteCredentialStore` as `status=revoked`
+      simultaneously (admin SQL: `UPDATE kite_credentials SET
+      status='revoked' WHERE status='active';`).
+- [ ] Email all users simultaneously via a bulk send from the
+      grievance officer address. Template above, addressed generically.
+- [ ] Provide a 7-day grace window before hard-disabling the
+      revoked credentials (just in case a user's email bounces and
+      they need to be reached via Telegram or another channel).
+- [ ] Rotate the credential-store encryption key (HKDF salt stored
+      in `OAUTH_JWT_SECRET` — rotating the JWT secret forces
+      key re-derivation on next write).
+- [ ] Post a public incident notice on the landing page + GitHub
+      README within 24 hours. Silent server-side compromises that
+      users discover via media become DPDP-violation compounders.
+
+### Post-breach
+
+The 72 hours are survival. The 30 days afterward determine whether
+users and regulators trust you again.
+
+- [ ] Forensic review — hire an independent security engineer for
+      4–8 hours (budget ₹15–25k). They review the exfil path and
+      the fix; their writeup becomes an appendix to the post-mortem.
+- [ ] Update `THREAT_MODEL.md` with the vulnerability class so the
+      threat model covers it next time (not "this specific bug" —
+      the class it belongs to).
+- [ ] File the post-mortem under
+      `docs/post-mortems/YYYY-MM-DD-<incident-slug>.md`. Must include:
+      timeline, root cause, diff that caused it, diff that fixed it,
+      independent-review appendix, and what changed in the threat
+      model.
+- [ ] Publish the post-mortem publicly within 30 days. Specificity
+      rebuilds trust; vagueness erodes it.
+- [ ] Re-submit to CERT-In a "closure report" confirming the incident
+      is resolved (form on the CERT-In portal).
+- [ ] If DPB was notified: file the follow-up report with DPB once the
+      portal accepts follow-ups (§8(5) DPDP requires closure
+      notification when mitigation is complete).
+
+---
+
 ## Contact directory
 
 Keep this list current. If a contact changes, the wrong address in a
@@ -415,3 +701,10 @@ narrative calcifies against them.
 
 - 2026-04-17: Initial version. Pre-drafted from Agent 53's crisis
   playbook. Untested in a live incident (good problem to have).
+- 2026-04-18: Added dedicated "Data breach playbook" section covering
+  CERT-In 6-hour notification (IT Act §70B(6), April 2022 Directions),
+  DPDP Act 2023 §8(5) 72-hour DPB notification, decision tree for the
+  first 60 minutes, pre-filled CERT-In form template, user-breach
+  notification email template, and the Kite API credential-compromise
+  sub-playbook (single-user vs server-side). Replaced Foundation email
+  references with `<grievance officer email>` placeholder.
