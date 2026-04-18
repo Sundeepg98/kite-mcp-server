@@ -320,6 +320,15 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
     <strong>Daily refresh:</strong> Kite sessions auto-refresh at ~7:35 AM IST each morning. Claude will prompt you to log in once a day before market opens &mdash; takes 10 seconds.
   </div>
 
+  <!-- Hosted vs Self-host -->
+  <div class="section-title">Hosted vs Self-Host</div>
+  <div class="callout">
+    <strong>Hosted endpoint (<code>https://kite-mcp-server.fly.dev/mcp</code>) is read-only.</strong>
+    Order placement, modification, cancellation, GTT, and native alert tools are disabled on the hosted instance to keep it within Path 2 of NSE circular NSE/INVG/69255 (third-party algo execution framework). Read tools &mdash; quotes, holdings, positions, historical data, analytics, backtesting, concall summariser, FII/DII, peer-compare &mdash; are unaffected.
+    <br><br>
+    <strong>Self-hosted local build</strong> runs the full feature set (orders, alerts, Telegram, paper trading) under personal-use safe harbor. Set <code>ENABLE_TRADING=true</code> and run locally against your own Kite developer app. See the <a href="https://github.com/Sundeepg98/kite-mcp-server" target="_blank" rel="noopener">GitHub repo</a> for self-host instructions.
+  </div>
+
   <!-- Capabilities -->
   <div class="section-title">Capabilities</div>
   <div class="features">
@@ -353,6 +362,25 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
       <h3>Litestream Backup</h3>
       <p>Continuous SQLite replication to Cloudflare R2. Your alerts and session data survive restarts.</p>
     </div>
+    <div class="feature-card">
+      <span class="feature-icon" aria-hidden="true">&#9863;</span>
+      <h3>Earnings Concall Summarizer</h3>
+      <p><code>analyze_concall</code> &mdash; structured frame for the LLM to parse quarterly earnings calls into themes, guidance, and Q&amp;A signals.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" aria-hidden="true">&#9650;</span>
+      <h3>FII / DII Daily Flow</h3>
+      <p><code>get_fii_dii_flow</code> &mdash; institutional cash + F&amp;O flow pointer with extraction themes for the day.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" aria-hidden="true">&#9878;</span>
+      <h3>Peer Comparison</h3>
+      <p><code>peer_compare</code> &mdash; PEG, Piotroski F-Score, Altman Z &mdash; structured report frame with external-data hints.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Also available:</strong> <code>server_version</code> &mdash; returns build SHA, uptime, region, and enabled feature flags. Useful when reporting issues.
   </div>
 
   <!-- Status -->
