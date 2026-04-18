@@ -137,6 +137,43 @@ Any MCP-compliant client works with the same `mcp-remote` bridge above. Client-s
 - **ChatGPT Desktop** — Settings -> Tools & Integrations -> MCP Servers -> add URL
 - **VS Code / Cursor / Windsurf** — `.vscode/mcp.json` or equivalent
 
+## Documentation
+
+### For users
+- **[Quick start](#quick-start)** — run locally or connect to hosted
+- **[Terms of Service](TERMS.md)** & **[Privacy Policy](PRIVACY.md)** (currently DRAFT — under legal review)
+- **[BYO Anthropic API key](docs/byo-api-key.md)** — bypass Claude.ai Pro tool-call limits
+
+### For developers
+- **[Architecture / how it works](docs/blog/oauth-13-levels.md)** — 2,500-word OAuth deep-dive (also published as blog)
+- **[Contributing](CONTRIBUTING.md)**
+- **[Adding a new tool](docs/adding-a-new-tool.md)**
+- **[Environment variables](docs/env-vars.md)**
+
+### Operations
+- **[Release checklist](docs/release-checklist.md)**
+- **[Operator playbook](docs/operator-playbook.md)**
+- **[Incident response runbook](docs/incident-response.md)** — 4 crisis scenarios + contact directory
+- **[Evidence package skeleton](docs/evidence/)** — pre-built for regulator/incident response
+
+### Compliance / legal
+- **[NSE algo framework status](docs/sebi-paths-comparison.md)** — Path 1-4 comparison
+- **[Kite v4 migration hedge](docs/kite-version-hedge.md)** — dependency risk mitigation
+- **[SBOM generation](docs/sbom.md)** — software bill of materials for supply chain transparency
+- **[SECURITY.md](SECURITY.md)**
+
+### Funding / ecosystem
+- **[FLOSS/fund proposal](docs/floss-fund-proposal.md)** — Zerodha open-source grant application
+- **[funding.json](funding.json)** — machine-readable funding manifest
+
+### Claude Skills wrapper
+- **[8 Skills](skills/README.md)** — /kite:morning, /kite:trade, /kite:eod, etc.
+
+### Research / strategic
+- **[Launch materials](docs/launch-materials.md)**
+- **[Billing activation plan](docs/billing-activation-plan.md)**
+- **[Multi-broker plan](docs/multi-broker-plan.md)**
+
 ## Dashboard
 
 Once logged in via MCP OAuth, the dashboard cookie is set automatically (no second login).
