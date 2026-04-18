@@ -1,0 +1,47 @@
+# .gitattributes — consistent line endings across Windows/Mac/Linux
+# See https://git-scm.com/docs/gitattributes
+
+# Default: let git auto-detect text
+* text=auto
+
+# Go source: always LF (gofmt output is LF; must match toolchain)
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# Shell scripts: always LF (portability)
+*.sh text eol=lf
+*.bash text eol=lf
+
+# YAML / JSON / Markdown: LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+
+# HTML / CSS / JS: LF (served from Unix containers)
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+
+# Dockerfile: LF
+Dockerfile* text eol=lf
+
+# Windows-specific: preserve CRLF (if any) — none in this repo, placeholder
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files: never convert
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.db binary
+*.sqlite binary
+*.pdf binary
