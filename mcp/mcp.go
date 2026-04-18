@@ -175,6 +175,7 @@ func GetAllTools() []Tool {
 		// Admin tools (admin-only, gated by IsAdmin check in handlers)
 		&AdminListUsersTool{},
 		&AdminGetUserTool{},
+		&AdminGetUserBaselineTool{},
 		&AdminServerStatusTool{},
 		&AdminGetRiskStatusTool{},
 		&AdminSuspendUserTool{},
