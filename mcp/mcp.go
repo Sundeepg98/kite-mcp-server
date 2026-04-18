@@ -176,6 +176,7 @@ func GetAllTools() []Tool {
 		&AdminListUsersTool{},
 		&AdminGetUserTool{},
 		&AdminGetUserBaselineTool{},
+		&AdminStatsCacheInfoTool{},
 		&AdminServerStatusTool{},
 		&AdminGetRiskStatusTool{},
 		&AdminSuspendUserTool{},

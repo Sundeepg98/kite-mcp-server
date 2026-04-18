@@ -83,6 +83,7 @@ var toolTiers = map[string]Tier{
 	// Admin tools (gated by admin role check, not billing tier)
 	"admin_list_users": TierFree, "admin_get_user": TierFree,
 	"admin_get_user_baseline": TierFree,
+	"admin_stats_cache_info":  TierFree,
 	"admin_server_status":     TierFree, "admin_get_risk_status": TierFree,
 	"admin_suspend_user": TierFree, "admin_activate_user": TierFree,
 	"admin_change_role": TierFree, "admin_freeze_user": TierFree,
