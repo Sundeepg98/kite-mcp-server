@@ -2,11 +2,18 @@ package alerts
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
-// SaveAlert inserts or replaces an alert in the database.
+// SaveAlert inserts or replaces an alert in the database. Both single-leg
+// and composite alerts route through here — the composite_* columns stay
+// NULL for single-leg alerts, and the top-level Direction/TargetPrice are
+// zero-valued (but present) for composite alerts so the NOT NULL columns
+// are satisfied.
 func (d *DB) SaveAlert(alert *Alert) error {
 	triggered := 0
 	if alert.Triggered {
@@ -29,15 +36,41 @@ func (d *DB) SaveAlert(alert *Alert) error {
 		notifSentAt = sql.NullString{String: alert.NotificationSentAt.Format(time.RFC3339), Valid: true}
 	}
 
+	// Composite columns: only populated for composite alerts. Normalize
+	// missing AlertType to 'single' so legacy call-sites that construct
+	// Alert without the new fields still save correctly.
+	alertType := alert.AlertType
+	if alertType == "" {
+		alertType = domain.AlertTypeSingle
+	}
+	var compositeLogic, compositeName, conditionsJSON sql.NullString
+	if alert.IsComposite() {
+		if alert.CompositeLogic != "" {
+			compositeLogic = sql.NullString{String: string(alert.CompositeLogic), Valid: true}
+		}
+		if alert.CompositeName != "" {
+			compositeName = sql.NullString{String: alert.CompositeName, Valid: true}
+		}
+		if len(alert.Conditions) > 0 {
+			raw, err := json.Marshal(alert.Conditions)
+			if err != nil {
+				return fmt.Errorf("marshal conditions_json: %w", err)
+			}
+			conditionsJSON = sql.NullString{String: string(raw), Valid: true}
+		}
+	}
+
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO alerts
 		(id, email, tradingsymbol, exchange, instrument_token, target_price,
 		 direction, triggered, created_at, triggered_at, triggered_price,
-		 reference_price, notification_sent_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 reference_price, notification_sent_at,
+		 alert_type, composite_logic, composite_name, conditions_json)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		alert.ID, alert.Email, alert.Tradingsymbol, alert.Exchange,
 		alert.InstrumentToken, alert.TargetPrice, string(alert.Direction),
 		triggered, alert.CreatedAt.Format(time.RFC3339),
-		triggeredAt, trigPrice, refPrice, notifSentAt)
+		triggeredAt, trigPrice, refPrice, notifSentAt,
+		string(alertType), compositeLogic, compositeName, conditionsJSON)
 	if err != nil {
 		return fmt.Errorf("save alert: %w", err)
 	}

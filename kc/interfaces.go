@@ -34,6 +34,10 @@ type AlertStoreInterface interface {
 	// AddWithReferencePrice creates a new alert with an optional reference price.
 	AddWithReferencePrice(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction, referencePrice float64) (string, error)
 
+	// AddComposite creates a new composite alert combining multiple per-
+	// instrument conditions via AND/ANY logic. Returns the alert ID.
+	AddComposite(email, name string, logic alerts.CompositeLogic, conds []alerts.CompositeCondition) (string, error)
+
 	// Delete removes an alert by ID for the given email.
 	Delete(email, alertID string) error
 
