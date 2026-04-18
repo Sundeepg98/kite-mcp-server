@@ -1,63 +1,70 @@
+# Dependabot config — weekly dependency update PRs
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+
 version: 2
 updates:
-  # Go module dependencies
-  - package-ecosystem: gomod
+  # Go modules
+  - package-ecosystem: "gomod"
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: Asia/Kolkata
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - go
-    commit-message:
-      prefix: "deps"
-      include: scope
-    groups:
-      # Group minor + patch bumps into a single PR per week to reduce noise.
-      # Major bumps still come as individual PRs so they get proper review.
-      go-minor-and-patch:
-        applies-to: version-updates
-        update-types:
-          - minor
-          - patch
-
-  # GitHub Actions workflow pins
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: Asia/Kolkata
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
     labels:
-      - dependencies
-      - github-actions
+      - "dependencies"
+      - "go"
     commit-message:
-      prefix: "ci"
-      include: scope
+      prefix: "chore(deps)"
+      include: "scope"
     groups:
-      actions-minor-and-patch:
-        applies-to: version-updates
+      # Group minor/patch updates to reduce PR noise
+      go-minor-patch:
+        patterns:
+          - "*"
         update-types:
-          - minor
-          - patch
+          - "minor"
+          - "patch"
+    ignore:
+      # Kite SDK: we pin this manually per compatibility concerns
+      - dependency-name: "github.com/zerodha/gokiteconnect/v4"
+        update-types: ["version-update:semver-major"]
 
-  # Dockerfile base image updates
-  - package-ecosystem: docker
+  # GitHub Actions (workflows)
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: Asia/Kolkata
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Kolkata"
     open-pull-requests-limit: 3
     labels:
-      - dependencies
-      - docker
+      - "dependencies"
+      - "github-actions"
     commit-message:
-      prefix: "deps"
-      include: scope
+      prefix: "chore(ci)"
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+
+  # Docker base images (Alpine pinning per memory)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
+    ignore:
+      # Alpine: pin to 3.21 per memory — only patch updates auto-merge
+      - dependency-name: "alpine"
+        update-types: ["version-update:semver-major"]
