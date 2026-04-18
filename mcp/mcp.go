@@ -345,6 +345,17 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	// Register widget pages as MCP App resources (ui:// scheme).
 	RegisterAppResources(srv, manager, auditStore, logger)
 
+	// Register curated repo documentation as MCP Resources (doc:// scheme).
+	// Resolves the repo root at runtime via go.mod walk-up; deployments
+	// that don't ship the source tree (e.g. distroless Docker images)
+	// simply end up with an empty doc resource list (warnings logged).
+	if repoRoot, err := findRepoRoot(); err == nil {
+		RegisterDocResources(srv, repoRoot, logger)
+	} else {
+		logger.Warn("Skipping doc resources — repo root not found (likely running without source tree)",
+			"error", err)
+	}
+
 	// Register MCP prompts for common trading workflows.
 	RegisterPrompts(srv, manager)
 
