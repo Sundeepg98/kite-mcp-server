@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kite": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://kite-mcp-server.fly.dev/mcp"]
+    }
+  }
+}

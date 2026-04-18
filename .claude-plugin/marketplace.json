@@ -1,0 +1,11 @@
+{
+  "name": "sundeepg98-plugins",
+  "displayName": "Sundeepg98's Claude Plugins",
+  "description": "Indian fintech + trading plugins for Claude",
+  "plugins": [
+    {
+      "name": "kite",
+      "path": "."
+    }
+  ]
+}

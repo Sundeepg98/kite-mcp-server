@@ -1,0 +1,38 @@
+{
+  "name": "kite",
+  "displayName": "Kite MCP — Algo Trading Copilot for Zerodha",
+  "description": "Power-user MCP + Skills for Indian retail traders on Zerodha Kite. Order placement (local build), portfolio analysis, FII/DII flow, concall summarizer, peer comparison, Telegram integration.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sundeep Govarthinam",
+    "email": "g.karthick.renusharmafoundation@gmail.com",
+    "url": "https://github.com/Sundeepg98"
+  },
+  "license": "MIT",
+  "homepage": "https://kite-mcp-server.fly.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sundeepg98/kite-mcp-server"
+  },
+  "keywords": ["zerodha", "kite-connect", "trading", "indian-markets", "nse", "bse", "mcp", "algotrading"],
+  "mcpServers": {
+    "kite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://kite-mcp-server.fly.dev/mcp"
+      ]
+    }
+  },
+  "skills": [
+    "skills/morning-brief",
+    "skills/trade-check",
+    "skills/eod-review",
+    "skills/options-sanity-check",
+    "skills/sector-rotation",
+    "skills/alert-playbook",
+    "skills/tax-harvest",
+    "skills/backtest-interpretation"
+  ]
+}
