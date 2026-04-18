@@ -5,7 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — 2026-04-18
+
+### Added
+- Per-calendar-second order cap in riskguard (9/sec defensive — broker enforces at 10/sec per SEBI April 2026 retail-algo framework); keyed by `(email, calendar-second)` with lazy GC; evaluated before the per-minute check
+- DPDP hash-chained consent log with OAuth-callback recorder — append-only SQLite table records OAuth consent events with a tamper-evident SHA-256 chain
+- `composite_alert` persistence via shared alerts table + CQRS command — composite alert definitions now survive restarts alongside simple alerts
+- `SessionRegistry.ClientHint` population from HTTP `User-Agent` — lets downstream code identify client type (claude.ai / Claude Desktop / ChatGPT / mcp-remote) per session
+- `kc/legaldocs` Go package embedding `PRIVACY.md` and `TERMS.md` via `//go:embed`, consumed by `app/legal.go` for `/privacy` and `/terms` rendering
+- `?format=md` query param on `/privacy` and `/terms` for raw-markdown fetch
+- ChatGPT Apps SDK live-validation script (`scripts/`) — end-to-end probe of OAuth dynamic client registration + MCP bearer flow against the Fly.io deployment; used as a pre-publish smoke test
+- DPDP + CERT-In data breach playbook (`docs/incident-response.md`) — CERT-In 6-hour notification template, DPDP Act §8(5) 72-hour DPB notification, first-60-minute decision tree, user-breach email template, Kite API credential-compromise sub-playbook
+- README Trademark block clarifying kite-mcp-server is unaffiliated with Zerodha Broking Ltd., Personal-use scope note citing SEBI §I(c) family carve-out and the <10 OPS threshold, and a Compliance section summarising enforced controls + DPDP posture
+- MCP Registry prepublish config: `server.json` v1.1.0 with registry-friendly title, neutral description, `orderPlacement: false` on hosted + `orderPlacementSelfHostedOnly: true`, and `riskGuardChecks: 9`
+- goldmark v1.8.2 as a direct module dependency for markdown rendering of legal pages
+
+### Changed
+- `/privacy` and `/terms` now render embedded markdown via goldmark instead of hardcoded HTML constants; DPDP-aligned content (Bengaluru arbitration seat, Privacy Notice heading, Erase/Data Fiduciary terminology)
+- `Cache-Control` for `/privacy` and `/terms` tightened from 86400s (24h) to 3600s (1h) to accelerate legal-content propagation
+- `composite_alert` tool response shape: was `{status: "pending_persistence"}`, now `{status: "created", alert_id: ...}` reflecting durable storage
+- Riskguard check count bumped from 8 to 9 across README and `server.json` (per-calendar-second cap added)
+- `server.json` registry title reframed from "Kite Trading MCP Server" to "MCP Server for Zerodha Kite Connect API" (trademark-safe); `algo-trading` keyword dropped, `kite-connect` added
+
+### Fixed
+- Product metadata (`plugin.json`, issue-template contact links, `funding.json`) no longer references a personal-foundation email address; replaced with a placeholder pending product-contact setup
+- Compliance documents (Zerodha compliance email draft, FLOSS/fund proposal, compliance timeline owner, `compliance-emails-sent.md`) scrubbed of the same personal-foundation address; two remaining references in incident-response scenarios replaced with `<grievance officer email>` placeholder
+
+### Security
+- OAuth-callback path now records a DPDP consent event (`purpose`, `scope`, `proof-hash`) into the hash-chained consent log on every successful authorisation — produces auditable evidence for DPDP §6 consent-manager requirements
+- Sub-second order throttle (9/sec) closes a theoretical bypass where 10 orders in a single second could pass the prior 10/min window while breaching the SEBI sub-second retail-algo threshold
+
+## [1.1.0] — 2026-04-18
 
 ### Added
 - Research copilot tools (LLM-framed, no market data dependency): `analyze_concall` for earnings call transcript analysis, `get_fii_dii_flow` for FII/DII daily flow context, `peer_compare` for PEG + Piotroski + Altman Z-Score comparison across 2–6 stocks
