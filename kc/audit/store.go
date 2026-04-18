@@ -73,6 +73,14 @@ type Store struct {
 	// re-running the 30-day scan on every place_order. See anomaly_cache.go
 	// for the eviction policy and invalidation hooks.
 	statsCache *statsCache
+
+	// Retention worker shutdown coordination. retentionStop is closed by
+	// StopRetentionWorker to signal the goroutine to exit; retentionDone is
+	// closed by the goroutine on exit so StopRetentionWorker can block until
+	// shutdown is complete. retentionMu guards state transitions.
+	retentionMu   sync.Mutex
+	retentionStop chan struct{}
+	retentionDone chan struct{}
 }
 
 // DroppedCount returns the number of audit entries that have been dropped
