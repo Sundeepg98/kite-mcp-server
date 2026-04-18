@@ -759,10 +759,17 @@ func (app *App) createSSEServer(mcpServer *server.MCPServer, url string) *server
 	)
 }
 
-// createStreamableHTTPServer creates and configures a streamable HTTP server
+// createStreamableHTTPServer creates and configures a streamable HTTP server.
+//
+// We register a custom SessionIdManagerResolver so that each newly generated
+// MCP session carries a ClientHint derived from the incoming request's
+// User-Agent. The resolver wraps the existing SessionRegistry — all other
+// behavior (validation, termination, persistence, cleanup hooks) is
+// unchanged. See kc/client_hint_resolver.go for the detailed design.
 func (app *App) createStreamableHTTPServer(mcpServer *server.MCPServer, kcManager *kc.Manager) *server.StreamableHTTPServer {
+	resolver := newClientHintedResolver(kcManager.SessionManager())
 	return server.NewStreamableHTTPServer(mcpServer,
-		server.WithSessionIdManager(kcManager.SessionManager()),
+		server.WithSessionIdManagerResolver(resolver),
 		server.WithLogger(util.DefaultLogger()),
 	)
 }
