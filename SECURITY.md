@@ -65,10 +65,18 @@ Best effort, typically:
 
 ## Hardening Measures In Place
 
+### Authentication & cryptography
+
 - OAuth 2.1 with PKCE (S256) for all authentication
 - AES-256-GCM encryption for secrets at rest (tokens, API keys, client secrets)
 - HKDF-SHA256 key derivation with random salt
 - HMAC-SHA256 email hashing in audit trail
+- bcrypt password hashing for admin login (cost 12)
+- OAuth consent cookie ordering verified with regression tests (prevents
+  pre-consent callback races)
+
+### Audit trail integrity
+
 - Hash-chained tamper-evident audit log (HMAC-SHA256 per entry, prev_hash
   linkage, chain-break markers for retention deletions, `VerifyChain()` walks
   the full chain to detect tampering)
@@ -79,18 +87,92 @@ Best effort, typically:
   pass local `VerifyChain()`. Verifiers can compare local chain state against
   the independently-stored anchor. See `AUDIT_HASH_PUBLISH_*` env vars in
   `.env.example` and `kc/audit/hashpublish.go` for details.
-- bcrypt password hashing for admin login (cost 12)
+- **X-Request-ID correlation** — every HTTP request is assigned (or inherits)
+  a `X-Request-ID` header that is threaded through the MCP handler, RiskGuard,
+  audit store, and outbound logs. Support queries can pivot from a user report
+  to the exact tool call, credentials used, and downstream broker call.
+
+### Order / trade safety
+
+- RiskGuard pre-trade checks (kill switch, order value cap, daily value cap,
+  daily order count cap, per-IP rate limit, duplicate-order window,
+  auto-freeze circuit breaker)
+- **Default caps tightened**: 20 orders/day, ₹2L notional/day, ₹50k per-order
+- **Idempotency keys** — `client_order_id` on `place_order` / `modify_order`
+  dedupes retry storms from a misbehaving client or LLM-driven loop
+- **Anomaly detection** — 30-day rolling baseline (μ + 3σ) per user on order
+  value / order count; orders that fall outside the band are flagged. A
+  dedicated off-hours block rejects orders submitted between 2 AM and 6 AM IST
+  unless explicitly overridden
+- **15-min TTL cache** on user order statistics reduces SQLite load while
+  keeping the anomaly check warm
+- **Path 2 env gate** — `ENABLE_TRADING` must be set explicitly for
+  order-placement tools to register. The public hosted deployment ships with
+  order placement disabled; only users self-hosting (and accepting the
+  liability) see the order tools
+- Order confirmation elicitation on 8 tools (fail-open for older MCP clients
+  that can't render an elicitation prompt)
+
+### Network & abuse prevention
+
 - Per-IP rate limiting on all endpoints (auth 2/sec, token 5/sec, MCP 20/sec)
 - Security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy)
-- SEBI-compliant static egress IP + 5-year audit retention
-- RiskGuard pre-trade checks (kill switch, order cap, daily value cap, etc.)
+- **SSRF blocklist** on the audit publish endpoint — blocks loopback, link-local,
+  multicast, IPv4/IPv6 private ranges, and cloud metadata (169.254.169.254,
+  fd00::/8) before HTTP dial. Belt-and-braces against a misconfigured
+  `AUDIT_HASH_PUBLISH_ENDPOINT` pointing inward.
+
+### Attack-surface minimization
+
+- **Tool-description integrity manifest** — on startup, the server logs a
+  SHA-256 of every registered tool's name + description. A diff in that
+  manifest between deploys catches "line-jumping" / instruction-injection
+  attacks where a tool description is silently mutated to change LLM
+  behaviour (e.g. "…always confirm=true"). Operators can alert on unexpected
+  manifest changes in their log pipeline.
+- MCP Apps widgets gated on client capability — not advertised to hosts that
+  can't render them
+
+### Compliance & legal posture
+
+- SEBI-compliant static egress IP (209.71.68.157 from bom region)
+- 5-year audit retention, 90-day in-app retention window
+- Telegram disclaimer prefix on all financial messages (SEBI classification
+  drift protection) + `/disclaimer` command
+- MIT attribution shipped in Docker images and surfaced in the landing-page
+  footer
 
 ## Automated Scanning
 
-- `gosec` and `go vet` run on every CI build
+- `gosec`, `go vet`, and `govulncheck` run weekly in CI; findings uploaded to
+  GitHub Code Scanning as SARIF
+- **SBOM** (CycloneDX) generated on every master push and release tag, also
+  uploaded to GitHub Code Scanning for supply-chain auditability
+- `testing.F` fuzz harnesses on the ArgParser, widget-injection path, and
+  Telegram command parser — run locally on demand, seed corpus checked in
 - Dependabot monitors Go modules, GitHub Actions, and the Docker base image
 - Manual pen-test notes live in [`SECURITY_PENTEST_RESULTS.md`](SECURITY_PENTEST_RESULTS.md)
 - Full audit history in [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md)
+
+## Recent hardening (2026-04-17)
+
+The most recent security-adjacent commits, for reviewers who want a
+diff-level view:
+
+- Idempotency keys (`client_order_id`) on `place_order` / `modify_order` (commit `2780329`)
+- Tool-description integrity manifest logged at startup (`5a82032`)
+- X-Request-ID header propagation across HTTP/MCP/audit (`676c71f`)
+- Anomaly detection: 30-day rolling μ+3σ + 2-6 AM IST off-hours block (`792c687`)
+- 15-min TTL cache on stats lookups (`543d3f2`)
+- SBOM generation in CI → GitHub Code Scanning (`dc9cca3`)
+- SSRF blocklist on audit publish endpoints (`e561377`)
+- Riskguard default caps tightened: 20 orders/day, ₹2L notional, ₹50k cap (`7cd7b35`)
+- Telegram disclaimer prefix on all financial messages (`3879aba`)
+- MIT attribution in Docker images + landing footer (`9b787e0`)
+- Path 2 env gate: order placement disabled on hosted deployment (`04f4b18`)
+- Fuzz harnesses on ArgParser + widget injection + Telegram parser (`96e0e4b`)
+- `gosec` + `govulncheck` CI (`503a860`)
+- OAuth consent cookie ordering verified + regression tests (`e561377`)
 
 ## Full Posture Assessment
 
