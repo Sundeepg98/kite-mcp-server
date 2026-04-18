@@ -1,0 +1,39 @@
+# Run Go race detector on concurrency-heavy packages.
+# Separate from main CI because race mode is slower + needs cgo on Linux.
+#
+# Context: local Windows dev env cannot run `go test -race` reliably
+# (cgo/mingw requirement + Smart App Control mismatch). This workflow
+# ensures race detection runs on every push/PR against the packages most
+# likely to exhibit data races (audit buffered writers, riskguard counters,
+# oauth token/credential stores, app-level wiring).
+name: Test Race
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Race tests — concurrency-heavy packages
+        run: |
+          go test -race -timeout 120s -count=1 \
+            ./kc/audit/... \
+            ./kc/riskguard/... \
+            ./oauth/... \
+            ./app/...
+      - name: Race tests — remaining packages (best-effort)
+        continue-on-error: true
+        run: |
+          go test -race -timeout 120s -count=1 ./mcp/...
