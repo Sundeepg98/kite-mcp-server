@@ -947,30 +947,59 @@ type legalPageData struct {
 }
 
 // serveLegalPages registers /terms and /privacy routes.
+//
+// Both routes render markdown documents (kc/legaldocs/TERMS.md,
+// kc/legaldocs/PRIVACY.md) embedded at build time and pre-rendered to HTML
+// in app/legal.go. The handler supports two response formats, selected by
+// the ?format query parameter:
+//
+//   - default (no ?format, or anything other than "md"): HTML, wrapped in
+//     the shared legal.html template (topbar, dashboard styling, footer).
+//   - ?format=md: raw markdown (Content-Type: text/markdown; charset=utf-8),
+//     useful for scraping, archival, or clients that prefer the source.
+//
+// Both responses carry Cache-Control: public, max-age=3600. The pages are
+// public and change rarely (policy updates are the only reason); a 1-hour
+// cache keeps Fly.io edge load low without making updates painful to roll
+// out.
+//
+// When app.legalTemplate is nil (initStatusPageTemplate not called or
+// failed) the routes are skipped entirely so /terms and /privacy return
+// 404 via the default mux handler — the same defensive behaviour the
+// previous implementation had.
 func (app *App) serveLegalPages(mux *http.ServeMux) {
 	if app.legalTemplate == nil {
 		return
 	}
 
-	serve := func(title string, content template.HTML) http.HandlerFunc {
+	serve := func(title string, htmlContent template.HTML, markdown []byte) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			// Shared cache header — applied to both response formats so
+			// CDNs treat them consistently.
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+
+			if r.URL.Query().Get("format") == "md" {
+				w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+				_, _ = w.Write(markdown)
+				return
+			}
+
 			var buf bytes.Buffer
 			if err := app.legalTemplate.ExecuteTemplate(&buf, "legal", legalPageData{
 				Title:   title,
-				Content: content,
+				Content: htmlContent,
 			}); err != nil {
 				app.logger.Error("Failed to execute legal template", "page", title, "error", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Header().Set("Cache-Control", "public, max-age=86400")
 			_, _ = buf.WriteTo(w)
 		}
 	}
 
-	mux.HandleFunc("/terms", serve("Terms of Service", termsHTML))
-	mux.HandleFunc("/privacy", serve("Privacy Policy", privacyHTML))
+	mux.HandleFunc("/terms", serve("Terms of Service", termsHTML, termsMarkdown))
+	mux.HandleFunc("/privacy", serve("Privacy Policy", privacyHTML, privacyMarkdown))
 	app.logger.Info("Legal pages registered at /terms and /privacy")
 }
 

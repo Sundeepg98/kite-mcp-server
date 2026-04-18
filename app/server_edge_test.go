@@ -1547,7 +1547,10 @@ func TestServeLegalPages_CacheControl(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "public, max-age=86400", rec.Header().Get("Cache-Control"))
+	// Cache TTL was reduced from 24h to 1h when the /privacy and /terms
+	// handlers moved to markdown-sourced content; shorter TTL lets policy
+	// updates propagate through Fly.io edge caches within an hour.
+	assert.Equal(t, "public, max-age=3600", rec.Header().Get("Cache-Control"))
 }
 
 // ===========================================================================

@@ -329,20 +329,20 @@ func TestCheckoutSuccessHTML_IsValidHTML(t *testing.T) {
 func TestTermsHTML_ContainsKeyContent(t *testing.T) {
 	s := string(termsHTML)
 	assert.Contains(t, s, "Terms of Service")
-	assert.Contains(t, s, "Kite MCP Server")
+	assert.Contains(t, s, "kite-mcp-server")
 	assert.Contains(t, s, "SEBI")
-	assert.Contains(t, s, "Limitation of Liability")
-	assert.Contains(t, s, "Governing Law")
-	assert.Contains(t, s, "Chennai, Tamil Nadu, India")
+	assert.Contains(t, s, "Limitation of liability")
+	assert.Contains(t, s, "Governing law")
+	assert.Contains(t, s, "Bengaluru")
 }
 
 func TestPrivacyHTML_ContainsKeyContent(t *testing.T) {
 	s := string(privacyHTML)
-	assert.Contains(t, s, "Privacy Policy")
+	assert.Contains(t, s, "Privacy Notice")
 	assert.Contains(t, s, "Data Fiduciary")
 	assert.Contains(t, s, "AES-256-GCM")
 	assert.Contains(t, s, "DPDP Act")
-	assert.Contains(t, s, "Right to Erasure")
+	assert.Contains(t, s, "Erase")
 	assert.Contains(t, s, "Mumbai")
 }
 
