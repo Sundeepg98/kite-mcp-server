@@ -5,9 +5,20 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 )
+
+// flyRegionPattern matches Fly.io region codes: 3-4 lowercase letters.
+// Fly.io uses codes like "bom" (Mumbai), "sin" (Singapore), "ord" (Chicago),
+// "iad" (Ashburn). Older codes are 3 chars; newer multi-AZ codes are 4.
+// Uppercase or mixed-case is invalid and would fail silently in Fly's
+// platform — catch it here so operators see the mistake at startup.
+var flyRegionPattern = regexp.MustCompile(`^[a-z]{3,4}$`)
 
 // envCheck runs targeted validation of environment variables at startup.
 //
@@ -142,9 +153,11 @@ func (app *App) envCheck() error {
 	// hosted multi-user deployment that forgets to configure this
 	// cannot silently accept orders — and thus does not fall under the
 	// NSE/INVG/69255 Annexure I Para 2.8 "Algo Provider" classification.
-	// We accept only the strings "true" or "false" (case-insensitive);
-	// anything else warns because the app will silently treat it as
-	// false, which is usually not what the operator intended.
+	// We accept only the strings "true" or "false" (case-insensitive).
+	// Anything else is an error: a typo like ENABLE_TRADING=yes means
+	// Config.EnableTrading silently becomes false — the operator thinks
+	// they enabled trading, but order tools are gated. Fail fast rather
+	// than ship a misconfigured deployment.
 	if raw := os.Getenv("ENABLE_TRADING"); raw != "" {
 		switch strings.ToLower(raw) {
 		case "true":
@@ -152,11 +165,106 @@ func (app *App) envCheck() error {
 		case "false":
 			logger.Info("env var ENABLE_TRADING=false — order-placement tools gated (hosted safe mode)")
 		default:
-			logger.Warn("env var ENABLE_TRADING value unrecognized; treating as false",
-				"value", raw, "valid", "true|false")
+			recordErr(fmt.Errorf("ENABLE_TRADING %q is invalid; must be \"true\" or \"false\" (case-insensitive)", raw))
+			logger.Error("env var ENABLE_TRADING invalid value", "value", raw, "valid", "true|false")
 		}
 	} else {
 		logger.Info("env var ENABLE_TRADING not set — defaulting to false (order-placement gated)")
+	}
+
+	// --- FLY_REGION ---
+	//
+	// Set by Fly.io at runtime (e.g. "bom" for Mumbai). Exposed via
+	// server_version tool and used as a correlation field in logs. If
+	// an operator sets it manually on non-Fly infra and gets the format
+	// wrong (uppercase, underscores, digits), downstream dashboards that
+	// group by region will silently split our metrics into two buckets.
+	// Validate format so the mistake is visible. Empty is fine — local
+	// dev / non-Fly deployments don't set it.
+	if raw := os.Getenv("FLY_REGION"); raw != "" {
+		if !flyRegionPattern.MatchString(raw) {
+			recordErr(fmt.Errorf("FLY_REGION %q is invalid; expected 3-4 lowercase letters (e.g. \"bom\", \"sin\", \"ord\")", raw))
+			logger.Error("env var FLY_REGION invalid format", "value", raw, "pattern", "^[a-z]{3,4}$")
+		} else {
+			logger.Info("env var FLY_REGION set", "value", raw)
+		}
+	}
+
+	// --- AUDIT_HASH_PUBLISH_* inventory ---
+	//
+	// The hash-chain publisher (kc/audit/hashpublish.go) speaks raw S3
+	// SigV4 to an external bucket (R2). Misconfiguring ANY of these
+	// quietly disables the publisher — you lose the external tamper-
+	// evidence anchor that SEBI CSCRF audit requires. Worse, a half-
+	// configured set (endpoint + bucket but no access key) used to log
+	// "disabled (no storage configured)" with no hint at what's missing.
+	//
+	// Rules:
+	//   - All four core vars (ENDPOINT, BUCKET, ACCESS_KEY, SECRET_KEY)
+	//     must be set OR all four unset. Partial configuration errors.
+	//   - ENDPOINT must survive the SSRF guard (delegated to
+	//     audit.ValidateS3Endpoint — the same check StartHashPublisher
+	//     runs, so we fail at envcheck instead of later at startup).
+	//   - BUCKET must be a non-empty string (empty value != unset).
+	//   - ACCESS_KEY / SECRET_KEY must be non-empty.
+	//
+	// Interval is validated below (separate block, already present).
+	hashEndpoint := os.Getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT")
+	hashBucket := os.Getenv("AUDIT_HASH_PUBLISH_BUCKET")
+	hashAccessKey := os.Getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY")
+	hashSecretKey := os.Getenv("AUDIT_HASH_PUBLISH_SECRET_KEY")
+
+	hashKeys := map[string]string{
+		"AUDIT_HASH_PUBLISH_S3_ENDPOINT": hashEndpoint,
+		"AUDIT_HASH_PUBLISH_BUCKET":      hashBucket,
+		"AUDIT_HASH_PUBLISH_ACCESS_KEY":  hashAccessKey,
+		"AUDIT_HASH_PUBLISH_SECRET_KEY":  hashSecretKey,
+	}
+	var hashSet, hashMissing []string
+	for k, v := range hashKeys {
+		if strings.TrimSpace(v) == "" {
+			hashMissing = append(hashMissing, k)
+		} else {
+			hashSet = append(hashSet, k)
+		}
+	}
+
+	switch {
+	case len(hashSet) == 0:
+		// Fully unset — publisher is disabled, no-op. This is the common
+		// local-dev path. Don't log every time; the publisher itself
+		// logs one "disabled" line at startup.
+	case len(hashMissing) > 0:
+		// Partial config — operator forgot some vars. Stable-sort the
+		// missing keys so the error message is deterministic for tests
+		// (map iteration order is randomized by Go runtime).
+		sortedMissing := append([]string{}, hashMissing...)
+		sort.Strings(sortedMissing)
+		recordErr(fmt.Errorf("AUDIT_HASH_PUBLISH_* partially configured; set all of [%s] or none (missing: [%s])",
+			strings.Join([]string{
+				"AUDIT_HASH_PUBLISH_S3_ENDPOINT",
+				"AUDIT_HASH_PUBLISH_BUCKET",
+				"AUDIT_HASH_PUBLISH_ACCESS_KEY",
+				"AUDIT_HASH_PUBLISH_SECRET_KEY",
+			}, ", "),
+			strings.Join(sortedMissing, ", "),
+		))
+		logger.Error("env var AUDIT_HASH_PUBLISH_* partial configuration",
+			"set", hashSet, "missing", sortedMissing)
+	default:
+		// All four set — validate endpoint against SSRF guard now, so
+		// the operator sees the failure at envcheck rather than later
+		// from StartHashPublisher's one-line error log.
+		if err := audit.ValidateS3Endpoint(hashEndpoint); err != nil {
+			recordErr(fmt.Errorf("AUDIT_HASH_PUBLISH_S3_ENDPOINT blocked by SSRF guard: %w", err))
+			logger.Error("env var AUDIT_HASH_PUBLISH_S3_ENDPOINT rejected",
+				"value", hashEndpoint, "error", err)
+		} else {
+			logger.Info("env var AUDIT_HASH_PUBLISH_* fully configured",
+				"endpoint", hashEndpoint,
+				"bucket", hashBucket,
+				"access_key", maskSecret(hashAccessKey))
+		}
 	}
 
 	// --- AUDIT_HASH_PUBLISH_INTERVAL ---
