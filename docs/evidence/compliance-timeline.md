@@ -13,7 +13,7 @@ Format: `YYYY-MM-DD — counterparty — action`
 - **Purpose:** Inform Zerodha Kite Connect team that we operate a self-hosted MCP bridge using their developer API; describe our BYO-app model and risk controls
 - **Draft location:** `docs/drafts/zerodha-email.md` (if drafted)
 - **Expected response window:** 5-10 business days based on kiteconnect@zerodha.com published SLA
-- **Owner:** Sundeep (g.karthick.renusharmafoundation@gmail.com)
+- **Owner:** Sundeep (<product-email-placeholder>)
 
 ## 2026-04-XX — Spice Route Legal — consultation
 

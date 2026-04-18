@@ -42,6 +42,6 @@ Sundeep Govarthinam — Bengaluru, India. 2+ years active Kite Connect developer
 
 ## Contact
 
-- Email: g.karthick.renusharmafoundation@gmail.com
+- Email: <product-email-placeholder> <!-- TODO: replace with product email before publishing -->
 - GitHub: https://github.com/Sundeepg98
 - Project: https://github.com/Sundeepg98/kite-mcp-server

@@ -3,7 +3,7 @@
 **Status:** Ready to send. Minor personalization only.
 **To:** kiteconnect@zerodha.com
 **CC:** talk@rainmatter.com
-**From:** g.karthick.renusharmafoundation@gmail.com
+**From:** <product-email-placeholder> <!-- TODO: replace with product email before publishing -->
 **Subject:** Compliance notification — kite-mcp-server (per-user BYO-key architecture)
 
 ---
@@ -31,7 +31,7 @@ Appreciate a response within two weeks if feasible, so I can plan accordingly.
 
 Regards,
 Sundeep Govarthinam
-g.karthick.renusharmafoundation@gmail.com
+<product-email-placeholder> <!-- TODO: replace with product email before publishing -->
 Repository: https://github.com/Sundeepg98/kite-mcp-server
 
 ---
