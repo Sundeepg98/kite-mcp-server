@@ -5,9 +5,24 @@
 #   ./scripts/smoke-test.sh                                # defaults to https://kite-mcp-server.fly.dev
 #   ./scripts/smoke-test.sh https://other-host.example     # test a custom URL
 #
-# Exits 0 if all checks pass, 1 if any fail. Runs 9 checks in ~5-15s total.
+# Exits 0 if all checks pass, 1 if any fail. Runs 13 checks in ~5-15s total.
 # POSIX-ish; works under Git Bash on Windows. Requires curl. Uses jq if present,
 # falls back to grep otherwise.
+#
+# Covers (in order):
+#   1. /healthz 200
+#   2. /healthz?format=json parses + status ok/degraded
+#   3. /.well-known/oauth-authorization-server metadata
+#   4. /.well-known/oauth-protected-resource metadata
+#   5. Landing page contains static egress IP (209.71.68.157)
+#   6. /mcp rejects unauthenticated requests (401/405, not 500)
+#   7. /oauth/authorize with no params returns 400
+#   8. /oauth/authorize with valid params 302s to kite.zerodha.com
+#   9. /healthz warm response time <500ms
+#  10. Landing page signals Path 2 compliance (read-only hosted mode)
+#  11. Landing page advertises new session tools (concall / FII-DII / peer-compare)
+#  12. /healthz tool count >=84 (new tools landed in deploy)
+#  13. /healthz?format=json anomaly_cache component (graceful — warns if absent)
 
 set -u
 
@@ -223,6 +238,91 @@ if [ "$max_ms" -lt 500 ]; then
   ok "/healthz warm response under 500ms" "(max=${max_ms}ms across 5)"
 else
   bad "/healthz warm response over 500ms" "(max=${max_ms}ms; samples:${samples})"
+fi
+
+# ---------- 10. Landing page signals Path 2 compliance ----------
+# The hosted build (ENABLE_TRADING=false) strips ~19 order-placement tools to
+# stay within NSE/INVG/69255 Path 2 (third-party algo execution framework).
+# The landing page documents this so users know which surface they're on.
+# Reuses $LANDING_HTML already fetched in check 5 — no extra request.
+if [ ! -s "$LANDING_HTML" ]; then
+  warn "Landing HTML not available — skipping Path 2 compliance check" "(check 5 failed)"
+elif grep -qi "path 2" "$LANDING_HTML" && grep -qi "read-only" "$LANDING_HTML"; then
+  ok "Landing page signals Path 2 compliance" "(read-only hosted mode documented)"
+else
+  bad "Landing page missing Path 2 / read-only text" "(ENABLE_TRADING gating may not be documented)"
+fi
+
+# ---------- 11. Landing page advertises new session tools ----------
+# Session 2026-04 shipped analyze_concall, get_fii_dii_flow, peer_compare,
+# server_version. The landing page mentions these by human-readable names;
+# this check fails if a deploy lands without the refreshed copy.
+if [ ! -s "$LANDING_HTML" ]; then
+  warn "Landing HTML not available — skipping new-tools advert check" "(check 5 failed)"
+else
+  missing=""
+  grep -qi "concall" "$LANDING_HTML" || missing="${missing} concall"
+  grep -qi "fii.\?dii\|fii/dii\|FII" "$LANDING_HTML" || missing="${missing} FII/DII"
+  grep -qi "peer.\?compare\|peer-compare" "$LANDING_HTML" || missing="${missing} peer-compare"
+  if [ -z "$missing" ]; then
+    ok "Landing page advertises new tools" "(concall, FII/DII, peer-compare)"
+  else
+    bad "Landing page missing new-tool copy" "(missing:${missing} — refresh landing.html)"
+  fi
+fi
+
+# ---------- 12. /healthz tool count covers the new surface ----------
+# The legacy /healthz (no ?format=json) exposes the total registered-tool count
+# via the top-level `tools` key. This is mcp.GetAllTools() BEFORE ENABLE_TRADING
+# gating, so every deploy should return ~111. Session 2026-04 added 4 tools, so
+# we threshold at 84 (previous floor ~80 + 4 new tools shipped).
+#
+# Reuses $HEALTH_BODY from check 1 — no extra request.
+if [ ! -s "$HEALTH_BODY" ]; then
+  warn "healthz body not available — skipping tool-count check" "(check 1 failed)"
+else
+  tools_count="$(json_get tools "$HEALTH_BODY")"
+  # json_get returns "" for missing, also possible if value is a number.
+  # Fallback: grep integer value from flat JSON.
+  if [ -z "$tools_count" ]; then
+    tools_count="$(grep -oE '"tools"[[:space:]]*:[[:space:]]*[0-9]+' "$HEALTH_BODY" 2>/dev/null | grep -oE '[0-9]+$' | head -1)"
+  fi
+  if [ -z "$tools_count" ]; then
+    bad "/healthz response missing 'tools' count" "(cannot verify new-tool surface)"
+  elif [ "$tools_count" -ge 84 ]; then
+    ok "Tool count covers new surface" "(tools=${tools_count}, floor=84)"
+  else
+    bad "Tool count below floor" "(tools=${tools_count}, expected >=84 — new tools may be missing)"
+  fi
+fi
+
+# ---------- 13. /healthz?format=json anomaly_cache component (graceful) ----------
+# The anomaly-cache component surfaces the μ+3σ baseline cache status from the
+# RiskGuard stack. It ships in a later deploy — Agent 103's work. Missing is
+# OK (warn, don't fail); present with non-ok status is a real problem.
+if [ ! -s "$HEALTH_JSON" ]; then
+  warn "healthz JSON not available — skipping anomaly_cache check" "(check 2 failed)"
+elif [ "$HAVE_JQ" -eq 1 ]; then
+  if jq -e '.components | has("anomaly_cache")' <"$HEALTH_JSON" >/dev/null 2>&1; then
+    ac_status="$(jq -r '.components.anomaly_cache.status // "unknown"' <"$HEALTH_JSON" 2>/dev/null)"
+    case "$ac_status" in
+      ok|unknown)
+        ok "anomaly_cache component present" "(status=${ac_status})"
+        ;;
+      *)
+        bad "anomaly_cache component unhealthy" "(status=${ac_status})"
+        ;;
+    esac
+  else
+    warn "anomaly_cache component not yet in /healthz" "(deploy may pre-date Agent 103's work — skipping)"
+  fi
+else
+  # grep fallback — only check key presence (can't parse nested status reliably)
+  if grep -q "anomaly_cache" "$HEALTH_JSON"; then
+    ok "anomaly_cache component present" "(install jq for nested status check)"
+  else
+    warn "anomaly_cache component not yet in /healthz" "(deploy may pre-date Agent 103's work — skipping)"
+  fi
 fi
 
 # ---------- summary ----------
