@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 
 	"github.com/zerodha/kite-mcp-server/kc/templates"
@@ -28,6 +29,17 @@ type KiteExchanger interface {
 // KiteTokenChecker checks whether the Kite trading token for a given email is still valid.
 // Returns true if the token is valid (or no token cached yet), false if expired.
 type KiteTokenChecker func(email string) bool
+
+// ConsentRecorder captures the DPDP Act 2023 consent-grant event that occurs
+// when a user completes the Kite OAuth flow — at callback time we know the
+// email (via Kite token exchange) plus the IP/UA/timestamp, which is the
+// minimum record the Data Protection Board may request in an audit.
+//
+// Implementations must be non-blocking and best-effort: the OAuth callback
+// should not fail just because consent logging is unavailable. Implementations
+// are expected to swallow or log their own errors — the callback ignores the
+// return value.
+type ConsentRecorder func(email, ipAddress, userAgent string)
 
 // AdminUserStore provides user lookup, password verification, and auto-provisioning for login.
 // Implemented by users.Store to avoid direct import of the users package.
@@ -73,6 +85,7 @@ type Handler struct {
 	exchanger        KiteExchanger
 	logger           *slog.Logger
 	kiteTokenChecker KiteTokenChecker
+	consentRecorder  ConsentRecorder
 	userStore        AdminUserStore
 	registry         KeyRegistry
 	googleSSO        *GoogleSSOConfig
@@ -148,6 +161,15 @@ func (h *Handler) LoadClientsFromDB() error {
 // mcp-remote to re-authenticate (which includes a fresh Kite login).
 func (h *Handler) SetKiteTokenChecker(checker KiteTokenChecker) {
 	h.kiteTokenChecker = checker
+}
+
+// SetConsentRecorder registers a callback that persists a DPDP Act 2023
+// consent-grant event. The Handler invokes it once per successful OAuth
+// callback, after the email is known. When nil (default), consent recording
+// is disabled — appropriate for DevMode or clients that don't need the audit
+// trail. Production deployments must wire this to a durable store.
+func (h *Handler) SetConsentRecorder(rec ConsentRecorder) {
+	h.consentRecorder = rec
 }
 
 // SetRegistry sets the key registry for zero-config onboarding.
@@ -286,4 +308,25 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.logger.Error("Failed to write JSON response", "error", err)
 	}
+}
+
+// clientIP extracts the best-effort client IP for audit records. Fly.io sets
+// Fly-Client-IP to the real client IP — prefer it when present. Otherwise
+// strip the port from r.RemoteAddr (e.g. "127.0.0.1:12345" → "127.0.0.1") so
+// logs don't carry ephemeral source ports.
+//
+// Returns "" when both sources are empty — callers should still record the
+// consent event (the other fields carry sufficient weight).
+func clientIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if flyIP := r.Header.Get("Fly-Client-IP"); flyIP != "" {
+		return flyIP
+	}
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
+	}
+	return ip
 }
