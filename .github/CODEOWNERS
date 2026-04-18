@@ -1,0 +1,33 @@
+# CODEOWNERS — auto-request review on PRs
+# Solo project today; paths grouped by sensitivity so review discipline holds as contributors join.
+
+# Global owner (fallback)
+*                               @Sundeepg98
+
+# Security-critical paths — require explicit owner review even if contributors join
+/SECURITY.md                    @Sundeepg98
+/TERMS.md                       @Sundeepg98
+/PRIVACY.md                     @Sundeepg98
+/LICENSE                        @Sundeepg98
+/NOTICE                         @Sundeepg98
+/oauth/                         @Sundeepg98
+/kc/riskguard/                  @Sundeepg98
+/kc/audit/                      @Sundeepg98
+/app/envcheck.go                @Sundeepg98
+/app/requestid.go               @Sundeepg98
+/fly.toml                       @Sundeepg98
+/Dockerfile                     @Sundeepg98
+/Dockerfile.selfhost            @Sundeepg98
+
+# Compliance paths
+/docs/incident-response.md      @Sundeepg98
+/docs/evidence/                 @Sundeepg98
+/docs/drafts/                   @Sundeepg98
+
+# CI / release infrastructure
+/.github/workflows/             @Sundeepg98
+/server.json                    @Sundeepg98
+/funding.json                   @Sundeepg98
+
+# Billing / tier gating
+/kc/billing/                    @Sundeepg98
