@@ -155,7 +155,22 @@ func (s *Store) Record(entry *ToolCall) error {
 	if err != nil {
 		return fmt.Errorf("audit: record tool call: %w", err)
 	}
+
+	// If this row is an order-affecting tool call, drop the user's anomaly
+	// baseline cache so the next UserOrderStats query re-reads fresh data.
+	// Non-order tools (get_ltp, get_holdings, etc.) do not invalidate —
+	// they have no effect on the mean/stdev of order values.
+	if entry.Email != "" && isOrderTool(entry.ToolName) {
+		s.statsCache.Invalidate(entry.Email)
+	}
 	return nil
+}
+
+// isOrderTool reports whether the given tool name affects the anomaly
+// baseline computed by UserOrderStats. Kept aligned with the IN-clause
+// used in the SQL query in anomaly.go.
+func isOrderTool(name string) bool {
+	return name == "place_order" || name == "modify_order"
 }
 
 // --- SSE Listener support for real-time activity streaming ---

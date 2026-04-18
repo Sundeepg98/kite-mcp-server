@@ -68,6 +68,11 @@ type Store struct {
 
 	listenerMu        sync.RWMutex
 	activityListeners map[string]chan *ToolCall
+
+	// statsCache backs UserOrderStats with a 15-minute TTL to avoid
+	// re-running the 30-day scan on every place_order. See anomaly_cache.go
+	// for the eviction policy and invalidation hooks.
+	statsCache *statsCache
 }
 
 // DroppedCount returns the number of audit entries that have been dropped
@@ -84,9 +89,32 @@ func (s *Store) incDropped() {
 	s.droppedMu.Unlock()
 }
 
-// New creates a new audit Store using the given database handle.
+// statsCacheTTL is the freshness window for the UserOrderStats cache.
+// Kept as a package var (not const) so tests can shrink it if ever needed,
+// though current tests drive the cache directly via newStatsCache.
+var statsCacheTTL = 15 * time.Minute
+
+// New creates a new audit Store using the given database handle. The
+// in-memory UserOrderStats cache is initialised here with the default
+// 15-minute TTL.
 func New(db *alerts.DB) *Store {
-	return &Store{db: db}
+	return &Store{
+		db:         db,
+		statsCache: newStatsCache(statsCacheTTL),
+	}
+}
+
+// StatsCacheHitRate exposes the UserOrderStats cache hit ratio for
+// monitoring endpoints. Returns 0 before any queries have been made.
+func (s *Store) StatsCacheHitRate() float64 {
+	return s.statsCache.cacheHitRate()
+}
+
+// InvalidateStatsCache drops cached UserOrderStats entries for the given
+// email. Called automatically on Record() for order-writing tools, but
+// exposed publicly for tests and callers that bypass Record().
+func (s *Store) InvalidateStatsCache(email string) {
+	s.statsCache.Invalidate(email)
 }
 
 // SetLogger assigns a structured logger for background worker diagnostics.

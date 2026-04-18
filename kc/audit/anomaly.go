@@ -37,6 +37,14 @@ func (s *Store) UserOrderStats(email string, days int) (mean, stdev, count float
 	if days <= 0 {
 		days = 30
 	}
+
+	// Serve from in-memory TTL cache when fresh. See anomaly_cache.go for
+	// the invalidation story: writes to tool_calls via Record() drop the
+	// user's cache so the next check sees the new order.
+	if m, s2, n, ok := s.statsCache.Get(email, days); ok {
+		return m, s2, n
+	}
+
 	queryEmail := s.hmacEmail(email)
 	since := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour)
 
@@ -69,7 +77,10 @@ func (s *Store) UserOrderStats(email string, days int) (mean, stdev, count float
 	n := float64(len(values))
 	if n < minBaselineOrders {
 		// Below the floor — let the caller know the raw count but suppress
-		// the statistics so the anomaly check skips cleanly.
+		// the statistics so the anomaly check skips cleanly. Still worth
+		// caching: a user with 2 historical orders will get the same
+		// (0, 0, 2) answer for the next 15 minutes without re-scanning.
+		s.statsCache.Set(email, days, 0, 0, n)
 		return 0, 0, n
 	}
 
@@ -85,6 +96,7 @@ func (s *Store) UserOrderStats(email string, days int) (mean, stdev, count float
 		sqSum += d * d
 	}
 	stdev = math.Sqrt(sqSum / n)
+	s.statsCache.Set(email, days, mean, stdev, n)
 	return mean, stdev, n
 }
 
