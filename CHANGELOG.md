@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP Registry manifest (`server.json`) for listing on modelcontextprotocol.io (`142a5e1`)
 - Per-user rate limiting (email-based), complementing existing per-IP limits (`0b1724d`)
 - CHANGELOG.md
+- Evidence package skeleton — pre-built SEBI/regulatory response templates for incident-response handoff
+- Claude plugin marketplace scaffold (`.claude-plugin` + `.mcp.json`) for discoverable plugin distribution
+- Pre-deploy 5-minute operator checklist — last-mile verification runbook before `flyctl deploy`
+- `server_version` MCP tool — git SHA + build time + region reported inline for debugging and audit
+- Opt-in pre-commit git hooks (gofmt / vet / build) with an install script
+- Anomaly-detection `BaselineProvider` wired to `audit.Store` at startup so per-user rolling baselines persist across restarts
+- Kite daily token-refresh runbook (6 AM IST expiry) — user-visible re-auth guidance
+- Monitoring and observability guide — Prometheus labels, log grep recipes, Fly.io metrics panels
+- `test-race` CI workflow running `go test -race` across concurrency-heavy packages
 
 ### Changed
 - README rewritten with trust signals, compliance framing, and self-hosted fork positioning
@@ -31,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardcoded local paths updated after project relocation (`b253f74`)
 - Tool rename follow-up (SEBI Path 1 compliance framing): `pre_trade_check` -> `order_risk_report`, `tax_harvest_analysis` -> `tax_loss_analysis`. Descriptions rewritten in factual voice with "Not investment advice." disclaimer appended. Behavior unchanged.
 - Lint cleanup sweeps — idiom modernization, `strings.Builder.Fprintf`, drop unnecessary `fmt.Sprintf` in Telegram package
+- README gained a Documentation section cross-linking the new session docs, runbooks, and blog post
+- Modernization sweep: `interface{}` → `any` across tests, plus `range N` int-range idiom
+- 15-minute TTL cache on `UserOrderStats` in the audit path — reduces SQLite pressure on every order placement
 
 ### Fixed
 - Audit buffer drop log spam; now logs `Warn` only every 100 drops under sustained overflow (`4a37f10`)
@@ -50,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete MIT attribution — Dockerfile `LICENSE` copy, `NOTICE` file, and landing-page footer attribution
 - Per-user rate limiting (`X-RateLimit-Scope: user`) blocks credential-stuffing and multi-IP abuse (`0b1724d`)
 - Audit log injection via malicious watchlist/symbol names is now prevented (`0b1724d`)
+- OAuth consent ordering verified + SSRF blocklist added on the audit-publish endpoint
+- `testing.F` fuzz harnesses added for `ArgParser`, widget data injection, and the Telegram command parser
+- Weekly `gosec` + `govulncheck` CI scans with SARIF output wired into GitHub Code Scanning
 
 ## [1.0.0] — 2026-04-02
 
