@@ -147,6 +147,14 @@ func (h *Handler) HandleKiteOAuthCallback(w http.ResponseWriter, r *http.Request
 		} else {
 			h.logger.Debug("SSO dashboard cookie set", "email", ssoEmail)
 		}
+
+		// DPDP Act 2023 consent log: record a grant event now that we know
+		// the email + request metadata. Best-effort — the recorder logs
+		// its own errors; we don't fail the OAuth callback on log failures.
+		// See kc/audit.ConsentRecorder wiring in app/wire.go.
+		if h.consentRecorder != nil {
+			h.consentRecorder(ssoEmail, clientIP(r), r.UserAgent())
+		}
 	}
 
 	parsed, parseErr := url.Parse(st.RedirectURI)

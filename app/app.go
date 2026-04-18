@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -39,6 +40,7 @@ type App struct {
 	logBuffer      *ops.LogBuffer
 	rateLimiters   *rateLimiters
 	auditStore     *audit.Store
+	consentStore   *audit.ConsentStore
 	scheduler      *scheduler.Scheduler
 	telegramBot    *tgbot.BotHandler
 	// riskGuard is the initialized risk-management engine. nil means it
@@ -420,6 +422,50 @@ func (app *App) RunServer() error {
 		if regStore := kcManager.RegistryStoreConcrete(); regStore != nil {
 			app.oauthHandler.SetRegistry(&registryAdapter{store: regStore})
 			app.logger.Info("Key registry wired into OAuth handler", "entries", regStore.Count())
+		}
+
+		// DPDP Act 2023 consent log: persist a grant event on every successful
+		// OAuth callback. noDeref guard: the store is nil in DevMode without
+		// ALERT_DB_PATH, in which case the recorder is a no-op and the
+		// handler's SetConsentRecorder keeps consentRecorder = nil.
+		if app.consentStore != nil {
+			logger := app.logger
+			consentStore := app.consentStore
+			app.oauthHandler.SetConsentRecorder(func(email, ip, ua string) {
+				// Scopes granted at OAuth: aligned with the 4 categories surfaced
+				// in the privacy notice (app/legal.go §1.2). noticeVersion tracks
+				// app/legal.go — bump when the notice copy changes.
+				const noticeVersion = "1.0"
+				scopes := []string{"profile", "trading", "alerts", "telegram"}
+				scopeJSON, _ := json.Marshal(scopes)
+				// proofHash binds the notice version to the action. An auditor
+				// re-hashing our legal.go notice + this action string must get
+				// the same digest — that's the evidence of what the user saw.
+				proof := audit.ComputeProofHash(
+					"kite-mcp-privacy-notice/v"+noticeVersion,
+					"grant scopes="+string(scopeJSON)+" method=oauth_callback",
+				)
+				entry := &audit.ConsentLogEntry{
+					UserEmailHash: audit.HashEmail(email),
+					TimestampUTC:  time.Now().UTC(),
+					IPAddress:     ip,
+					UserAgent:     ua,
+					NoticeVersion: noticeVersion,
+					ConsentAction: audit.ConsentActionGrant,
+					Scope:         string(scopeJSON),
+					Method:        audit.ConsentMethodOAuthCallback,
+					ProofHash:     proof,
+				}
+				if err := consentStore.Insert(entry); err != nil {
+					// Fail-open: log and move on. OAuth must not break on a
+					// consent-log outage — the tool-call audit still captures
+					// the authentication event.
+					logger.Error("Failed to record DPDP consent", "email_hash", entry.UserEmailHash, "error", err)
+					return
+				}
+				logger.Debug("DPDP consent grant recorded", "email_hash", entry.UserEmailHash, "notice_version", noticeVersion)
+			})
+			app.logger.Info("DPDP consent recorder wired into OAuth handler")
 		}
 
 		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)

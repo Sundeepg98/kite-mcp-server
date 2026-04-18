@@ -110,6 +110,24 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		return nil, nil, fmt.Errorf("audit trail required in production: no alert DB configured (set ALERT_DB_PATH)")
 	}
 
+	// Initialize DPDP Act 2023 consent log (separate table from tool-call audit).
+	// Shares the alerts.DB connection pool — no new *sql.DB. Fails open in
+	// DevMode (matches the tool-call audit behaviour above) but fails hard in
+	// production: a missing consent log is a compliance gap the Data Protection
+	// Board may flag during an audit.
+	if alertDB := kcManager.AlertDB(); alertDB != nil {
+		app.consentStore = audit.NewConsentStore(alertDB)
+		if err := app.consentStore.InitTable(); err != nil {
+			if !app.DevMode {
+				return nil, nil, fmt.Errorf("consent log required in production: init table: %w", err)
+			}
+			app.logger.Error("Failed to initialize consent log table (DevMode: continuing)", "error", err)
+			app.consentStore = nil
+		} else {
+			app.logger.Info("DPDP consent log enabled")
+		}
+	}
+
 	// Initialize riskguard for financial safety controls.
 	//
 	// H2 fix (phase 2i): LoadLimits failure used to silently fall back to
