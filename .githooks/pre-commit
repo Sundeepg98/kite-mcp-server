@@ -1,0 +1,38 @@
+#!/bin/sh
+# Pre-commit hook for kite-mcp-server
+# Install via: ./scripts/install-git-hooks.sh
+
+set -e
+
+STAGED_GO=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+if [ -z "$STAGED_GO" ]; then
+  echo "pre-commit: no Go files staged, skipping checks"
+  exit 0
+fi
+
+echo "pre-commit: running gofmt..."
+UNFORMATTED=$(gofmt -l $STAGED_GO)
+if [ -n "$UNFORMATTED" ]; then
+  echo "pre-commit: FAIL - these files need gofmt:"
+  echo "$UNFORMATTED"
+  echo "Run: gofmt -w $STAGED_GO"
+  exit 1
+fi
+
+echo "pre-commit: running go vet on changed packages..."
+CHANGED_PKGS=$(echo "$STAGED_GO" | xargs -n1 dirname | sort -u)
+for PKG in $CHANGED_PKGS; do
+  (cd "$PKG" && go vet .) || {
+    echo "pre-commit: FAIL - go vet failed in $PKG"
+    exit 1
+  }
+done
+
+echo "pre-commit: running go build ./..."
+go build ./... || {
+  echo "pre-commit: FAIL - build broken"
+  exit 1
+}
+
+echo "pre-commit: OK"
