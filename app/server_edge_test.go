@@ -1339,6 +1339,100 @@ func TestBuildHealthzReport_RiskGuardNil(t *testing.T) {
 	assert.Equal(t, "disabled", report.Components["audit"].Status)
 }
 
+// TestBuildHealthzReport_AnomalyCachePresent verifies the anomaly_cache
+// component is surfaced in the rich report when the audit store is wired.
+// Fresh store has no traffic (hit rate 0), which is treated as "ok" so we
+// don't fire a false alarm during cold start right after a deploy.
+func TestBuildHealthzReport_AnomalyCachePresent(t *testing.T) {
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	auditStore := audit.New(db)
+	require.NoError(t, auditStore.InitTable())
+
+	app := NewApp(testLogger())
+	app.auditStore = auditStore
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	report := app.buildHealthzReport()
+
+	cache, ok := report.Components["anomaly_cache"]
+	require.True(t, ok, "anomaly_cache component must be present when auditStore is wired")
+	assert.Equal(t, "ok", cache.Status,
+		"fresh cache with no traffic should report ok (cold-start safe)")
+	require.NotNil(t, cache.MaxEntries, "MaxEntries must be populated")
+	assert.Equal(t, int64(audit.DefaultMaxStatsCacheEntries), *cache.MaxEntries,
+		"MaxEntries should mirror the audit package default")
+	// Fresh cache: no hits or misses yet, hit rate is zero.
+	require.NotNil(t, cache.HitRate, "HitRate must be populated even when zero")
+	assert.InDelta(t, 0.0, *cache.HitRate, 0.0001)
+	// Top-level status is still ok — anomaly cache "ok" on cold start
+	// does not degrade the overall report.
+	assert.Equal(t, "ok", report.Status)
+}
+
+// TestBuildHealthzReport_AnomalyCacheOmittedWhenAuditNil verifies the
+// anomaly_cache component is omitted (not surfaced as "disabled") when the
+// audit store is nil. The audit component already reports "disabled" in
+// that case — surfacing anomaly_cache separately would be noise.
+func TestBuildHealthzReport_AnomalyCacheOmittedWhenAuditNil(t *testing.T) {
+	app := NewApp(testLogger())
+	app.auditStore = nil
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	report := app.buildHealthzReport()
+
+	_, ok := report.Components["anomaly_cache"]
+	assert.False(t, ok, "anomaly_cache must be omitted when auditStore is nil")
+	// Audit itself is still surfaced as disabled.
+	assert.Equal(t, "disabled", report.Components["audit"].Status)
+}
+
+// TestSetupMux_Healthz_JSONFormat_AnomalyCacheShape verifies the JSON wire
+// shape includes hit_rate and max_entries fields for the anomaly_cache
+// component. Operators shell-parse this without a Go struct on the other
+// side, so the exact JSON keys matter.
+func TestSetupMux_Healthz_JSONFormat_AnomalyCacheShape(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	auditStore := audit.New(db)
+	require.NoError(t, auditStore.InitTable())
+	auditStore.StartWorker()
+	t.Cleanup(auditStore.Stop)
+
+	app := NewApp(testLogger())
+	app.auditStore = auditStore
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=json", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	components, ok := body["components"].(map[string]any)
+	require.True(t, ok, "components must be a map")
+	cache, ok := components["anomaly_cache"].(map[string]any)
+	require.True(t, ok, "components.anomaly_cache must be a JSON object")
+
+	assert.Equal(t, "ok", cache["status"])
+	// JSON numbers unmarshal to float64 — check the field exists and matches.
+	assert.Contains(t, cache, "hit_rate")
+	assert.Contains(t, cache, "max_entries")
+	assert.EqualValues(t, audit.DefaultMaxStatsCacheEntries, cache["max_entries"])
+}
+
 // ===========================================================================
 // setupMux — favicon endpoint
 // ===========================================================================

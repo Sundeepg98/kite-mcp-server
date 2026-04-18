@@ -21,6 +21,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
@@ -533,10 +534,19 @@ func (app *App) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 // healthzComponent is a single entry in the healthz components map.
+//
+// Field usage is component-specific: audit sets DroppedCount, anomaly_cache
+// sets HitRate + MaxEntries, etc. Pointer fields distinguish "not set by
+// this component" (nil → omitted from JSON) from "set, value happens to
+// be zero" (non-nil zero → emitted). Operators parse the wire format
+// without a Go struct, so `hit_rate: 0` needs to render even on a cold
+// start when the cache has yet to be hit.
 type healthzComponent struct {
-	Status       string `json:"status"`
-	DroppedCount int64  `json:"dropped_count,omitempty"`
-	Note         string `json:"note,omitempty"`
+	Status       string   `json:"status"`
+	DroppedCount int64    `json:"dropped_count,omitempty"`
+	HitRate      *float64 `json:"hit_rate,omitempty"`
+	MaxEntries   *int64   `json:"max_entries,omitempty"`
+	Note         string   `json:"note,omitempty"`
 }
 
 // healthzReport is the shape returned by /healthz?format=json.
@@ -552,8 +562,8 @@ type healthzReport struct {
 // is sourced from state populated at startup.
 func (app *App) buildHealthzReport() healthzReport {
 	components := map[string]healthzComponent{
-		"audit":             app.auditComponentStatus(),
-		"riskguard":         app.riskguardComponentStatus(),
+		"audit":     app.auditComponentStatus(),
+		"riskguard": app.riskguardComponentStatus(),
 		"kite_connectivity": {
 			Status: "unknown",
 			Note:   "not checked — no active session to probe",
@@ -562,6 +572,14 @@ func (app *App) buildHealthzReport() healthzReport {
 			Status: "unknown",
 			Note:   "external binary — no in-process accessor available",
 		},
+	}
+
+	// anomaly_cache is only surfaced when the audit store is wired — if
+	// audit is nil the cache doesn't exist either, and reporting a second
+	// "disabled" entry would be noise. The audit component above already
+	// signals the underlying failure.
+	if app.auditStore != nil {
+		components["anomaly_cache"] = app.anomalyCacheComponentStatus()
 	}
 
 	// Top-level status degrades if any component is not ok/unknown.
@@ -620,6 +638,47 @@ func (app *App) riskguardComponentStatus() healthzComponent {
 		}
 	}
 	return healthzComponent{Status: "ok"}
+}
+
+// anomalyCacheHitRateDegradedThreshold is the hit-rate floor below which
+// the UserOrderStats cache is flagged as degraded. Under steady state an
+// active user fires multiple anomaly checks per 15-minute window, so the
+// cache should hit well above 50%. A sustained sub-50% rate indicates the
+// invalidation logic is firing too aggressively or the cache is thrashing
+// on eviction — both worth an operator glance.
+const anomalyCacheHitRateDegradedThreshold = 0.5
+
+// anomalyCacheComponentStatus reports the UserOrderStats cache health.
+//
+// Hit rate classification:
+//   - hit_rate == 0: no traffic yet (cold start, fresh deploy, idle
+//     server). Report "ok" — we'd otherwise false-alarm every restart.
+//   - hit_rate > threshold: healthy, traffic is repeated enough that
+//     the cache is earning its keep.
+//   - 0 < hit_rate <= threshold: cache is not amortising the 30-day
+//     SQL scan; surface as degraded so ops can investigate.
+//
+// The caller guarantees app.auditStore != nil before invoking this.
+func (app *App) anomalyCacheComponentStatus() healthzComponent {
+	rate := app.auditStore.StatsCacheHitRate()
+	maxEntries := int64(audit.DefaultMaxStatsCacheEntries)
+	c := healthzComponent{
+		HitRate:    &rate,
+		MaxEntries: &maxEntries,
+	}
+	switch {
+	case rate == 0:
+		// No traffic sampled yet (or pure-miss cold start). Treat as
+		// healthy — otherwise every post-deploy window reports degraded.
+		c.Status = "ok"
+		c.Note = "no traffic yet — hit rate will populate as orders flow"
+	case rate > anomalyCacheHitRateDegradedThreshold:
+		c.Status = "ok"
+	default:
+		c.Status = "degraded"
+		c.Note = "hit rate below 50% — cache thrashing or aggressive invalidation"
+	}
+	return c
 }
 
 // registerTelegramWebhook registers the Telegram bot webhook endpoint and
