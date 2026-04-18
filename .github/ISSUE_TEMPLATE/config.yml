@@ -4,8 +4,14 @@ contact_links:
     url: https://github.com/Sundeepg98/kite-mcp-server/discussions
     about: Ask questions, share strategies, discuss ideas with other users.
   - name: Security vulnerability
-    url: https://github.com/Sundeepg98/kite-mcp-server/security/policy
-    about: Please do NOT file security issues publicly — see our security policy.
+    url: https://github.com/Sundeepg98/kite-mcp-server/blob/master/SECURITY.md
+    about: Read SECURITY.md for disclosure process — do NOT file a public issue for security
+  - name: Compliance / legal
+    url: mailto:g.karthick.renusharmafoundation@gmail.com
+    about: For regulator / legal inquiries
+  - name: Zerodha Kite Connect issues
+    url: https://kite.trade/forum/
+    about: If the issue is with Kite Connect itself (not our wrapper), ask Zerodha's forum
   - name: Kite Connect API reference
     url: https://kite.trade/docs/connect/v3/
     about: Questions about the underlying Zerodha API belong with Zerodha support.

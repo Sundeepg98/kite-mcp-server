@@ -1,0 +1,65 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please search existing issues first.
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: What happened? What did you expect?
+      placeholder: When I call `place_order` with valid args, I get...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Server version (git SHA or tag)
+      description: Run the `server_version` MCP tool, paste output
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Fly.io hosted (kite-mcp-server.fly.dev)
+        - Local self-hosted (ENABLE_TRADING=false)
+        - Local self-hosted (ENABLE_TRADING=true)
+        - Docker
+        - Other (describe in details)
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      description: Claude Desktop, Claude Code, Cursor, ChatGPT, etc.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / error messages
+      description: Redact any PII. Include X-Request-ID if you have it.
+      render: text
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues for duplicates
+          required: true
+        - label: I have redacted any PII or credentials from logs
+          required: true
