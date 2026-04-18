@@ -1,15 +1,15 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.sundeepg98/kite-mcp-server",
-  "title": "Kite Trading MCP Server",
-  "description": "Zerodha MCP for algorithmic developers - execution, safety, backtesting. Free and open-source.",
+  "title": "MCP Server for Zerodha Kite Connect API",
+  "description": "Open-source MCP server for Zerodha Kite Connect. Portfolio, market data, backtesting, alerts.",
   "websiteUrl": "https://kite-mcp-server.fly.dev",
   "repository": {
     "url": "https://github.com/Sundeepg98/kite-mcp-server",
     "source": "github",
     "id": "1164168480"
   },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "remotes": [
     {
       "type": "streamable-http",
@@ -20,15 +20,16 @@
     "io.modelcontextprotocol.registry/publisher-provided": {
       "license": "MIT",
       "categories": ["trading", "finance", "brokerage"],
-      "keywords": ["zerodha", "kite", "india", "nse", "bse", "algo-trading", "options", "backtesting", "paper-trading"],
+      "keywords": ["zerodha", "kite-connect", "india", "nse", "bse", "options", "backtesting", "paper-trading"],
       "capabilities": {
         "tools": 80,
         "paperTrading": true,
-        "orderPlacement": true,
+        "orderPlacement": false,
+        "orderPlacementSelfHostedOnly": true,
         "backtesting": true,
         "optionsGreeks": true,
         "telegramAlerts": true,
-        "riskGuardChecks": 8
+        "riskGuardChecks": 9
       },
       "authentication": "oauth2-pkce",
       "requires": "Zerodha Kite Connect developer app (per-user)",
