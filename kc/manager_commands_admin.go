@@ -216,6 +216,27 @@ func (m *Manager) registerAlertCommands() error {
 		return err
 	}
 
+	// CreateCompositeAlertCommand — composite alert persistence wired per
+	// the Option B design (shared alerts table with alert_type='composite').
+	// Shares the same instrument resolver as single alerts.
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.CreateCompositeAlertCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.CreateCompositeAlertCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		if m.alertStore == nil {
+			return nil, fmt.Errorf("cqrs: alert store not configured")
+		}
+		uc := usecases.NewCreateCompositeAlertUseCase(
+			m.alertStore,
+			&adminBatchInstrumentResolver{m: m},
+			m.Logger,
+		)
+		return uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SetupTelegramCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SetupTelegramCommand)
 		if !ok {

@@ -38,6 +38,25 @@ const (
 // ValidDirections re-exports the domain's validation set.
 var ValidDirections = domain.ValidDirections
 
+// CompositeCondition is a type alias for the domain composite condition —
+// keeps callers who import only kc/alerts working without pulling domain.
+type CompositeCondition = domain.CompositeCondition
+
+// CompositeLogic is a type alias for the domain composite logic operator.
+type CompositeLogic = domain.CompositeLogic
+
+// AlertType is a type alias for the domain alert type discriminator.
+type AlertType = domain.AlertType
+
+// Composite logic constants — re-exported so alerts.CompositeLogicAnd etc.
+// resolve without the caller needing to import kc/domain.
+const (
+	CompositeLogicAnd  = domain.CompositeLogicAnd
+	CompositeLogicAny  = domain.CompositeLogicAny
+	AlertTypeSingle    = domain.AlertTypeSingle
+	AlertTypeComposite = domain.AlertTypeComposite
+)
+
 // IsPercentageDirection re-exports the domain helper.
 func IsPercentageDirection(d Direction) bool {
 	return domain.IsPercentageDirection(d)
@@ -133,6 +152,67 @@ func (s *Store) AddWithReferencePrice(email, tradingsymbol, exchange string, ins
 	if s.db != nil {
 		if err := s.db.SaveAlert(alert); err != nil {
 			s.logger.Error("Failed to persist alert", "id", alert.ID, "error", err)
+		}
+	}
+	return alert.ID, nil
+}
+
+// AddComposite creates a new composite alert — an alert that combines
+// 2+ per-instrument conditions via AND/ANY logic — and returns its ID.
+//
+// Composite alerts live in the same `alerts` table as single-leg alerts
+// (Option B from the session handoff) with alert_type='composite', a
+// JSON-encoded conditions payload, and the top-level Direction/TargetPrice
+// fields intentionally zero — the evaluator walks Conditions instead.
+//
+// Returns an error if conditions is empty or the user has reached
+// MaxAlertsPerUser. Business-logic validation (min/max legs, operator
+// compatibility, reference-price requirements) lives in the use case and
+// is assumed to have already run — this method only guards persistence
+// invariants.
+func (s *Store) AddComposite(email, name string, logic CompositeLogic, conds []CompositeCondition) (string, error) {
+	if len(conds) == 0 {
+		return "", fmt.Errorf("composite alert requires at least one condition")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.alerts[email]) >= MaxAlertsPerUser {
+		return "", fmt.Errorf("maximum number of alerts (%d) reached for this user", MaxAlertsPerUser)
+	}
+
+	// Use the first leg as the "anchor" for InstrumentToken/Tradingsymbol/
+	// Direction/TargetPrice so legacy columns stay populated and GetByToken
+	// still finds the alert via its primary leg. The anchor direction also
+	// satisfies any legacy CHECK(direction IN (...)) constraint that
+	// pre-composite DBs may still carry (SQLite cannot drop CHECK via
+	// ALTER). The evaluator branches on AlertType before inspecting these
+	// fields, so composites are not evaluated as single-leg alerts.
+	anchor := conds[0]
+
+	alert := &Alert{
+		ID:              uuid.New().String()[:8],
+		Email:           email,
+		Tradingsymbol:   anchor.Tradingsymbol,
+		Exchange:        anchor.Exchange,
+		InstrumentToken: anchor.InstrumentToken,
+		TargetPrice:     anchor.Value,
+		Direction:       anchor.Operator,
+		ReferencePrice:  anchor.ReferencePrice,
+		CreatedAt:       time.Now(),
+		AlertType:       AlertTypeComposite,
+		CompositeName:   name,
+		CompositeLogic:  logic,
+		// Copy conditions to prevent the caller mutating shared state after
+		// the fact — same deep-copy policy as List().
+		Conditions: append([]CompositeCondition(nil), conds...),
+	}
+
+	s.alerts[email] = append(s.alerts[email], alert)
+	if s.db != nil {
+		if err := s.db.SaveAlert(alert); err != nil {
+			s.logger.Error("Failed to persist composite alert", "id", alert.ID, "error", err)
 		}
 	}
 	return alert.ID, nil

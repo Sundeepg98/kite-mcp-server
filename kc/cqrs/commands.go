@@ -116,6 +116,29 @@ type DeleteAlertCommand struct {
 	AlertID string `json:"alert_id"`
 }
 
+// CompositeConditionSpec is one leg of a composite alert as it arrives
+// from the MCP tool surface. The spec carries no instrument token — the
+// use case resolves symbols to tokens via the InstrumentResolver so tool
+// handlers can stay agnostic of the instruments store.
+type CompositeConditionSpec struct {
+	Exchange       string  `json:"exchange"`
+	Tradingsymbol  string  `json:"tradingsymbol"`
+	Operator       string  `json:"operator"` // above, below, drop_pct, rise_pct
+	Value          float64 `json:"value"`
+	ReferencePrice float64 `json:"reference_price,omitempty"`
+}
+
+// CreateCompositeAlertCommand requests creating a composite alert whose
+// conditions are combined by the given logic (AND/ANY). The command is
+// validated in the use case layer — tool handlers should not pre-validate
+// beyond required-field checks.
+type CreateCompositeAlertCommand struct {
+	Email      string                   `json:"email"`
+	Name       string                   `json:"name"`
+	Logic      string                   `json:"logic"` // AND or ANY
+	Conditions []CompositeConditionSpec `json:"conditions"`
+}
+
 // --- Telegram commands ---
 
 // SetupTelegramCommand requests registering a user's Telegram chat ID.

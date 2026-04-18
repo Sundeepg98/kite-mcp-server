@@ -83,5 +83,15 @@ func migrateAlerts(db *sql.DB) error {
 	// SQLite returns an error if the column already exists; ignore it.
 	db.Exec(`ALTER TABLE alerts ADD COLUMN notification_sent_at TEXT`) // #nosec G104 -- idempotent migration
 
+	// Composite alert columns (Option B from the session handoff). Legacy
+	// single-leg alerts leave these NULL; loader normalizes alert_type to
+	// 'single' when NULL/empty. All ALTER TABLE ADD COLUMN statements are
+	// idempotent — SQLite returns an error if the column already exists,
+	// which we ignore since the goal is "column present after call".
+	db.Exec(`ALTER TABLE alerts ADD COLUMN alert_type TEXT DEFAULT 'single'`) // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE alerts ADD COLUMN composite_logic TEXT`)              // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE alerts ADD COLUMN composite_name TEXT`)               // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE alerts ADD COLUMN conditions_json TEXT`)              // #nosec G104 -- idempotent migration
+
 	return nil
 }

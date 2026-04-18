@@ -43,14 +43,18 @@ CREATE TABLE IF NOT EXISTS alerts (
     tradingsymbol        TEXT NOT NULL,
     exchange             TEXT NOT NULL,
     instrument_token     INTEGER NOT NULL,
-    target_price         REAL NOT NULL,
-    direction            TEXT NOT NULL CHECK(direction IN ('above','below','drop_pct','rise_pct')),
+    target_price         REAL NOT NULL DEFAULT 0,
+    direction            TEXT NOT NULL DEFAULT 'above',
     triggered            INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT NOT NULL,
     triggered_at         TEXT,
     triggered_price      REAL,
     reference_price      REAL,
-    notification_sent_at TEXT
+    notification_sent_at TEXT,
+    alert_type           TEXT NOT NULL DEFAULT 'single',
+    composite_logic      TEXT,
+    composite_name       TEXT,
+    conditions_json      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_email ON alerts(email);
 

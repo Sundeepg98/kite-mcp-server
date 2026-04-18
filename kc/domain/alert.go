@@ -38,11 +38,66 @@ func IsPercentageDirection(d Direction) bool {
 	return d == DirectionDropPct || d == DirectionRisePct
 }
 
+// AlertType distinguishes a single-leg alert from a composite (multi-leg)
+// alert. Stored in the `alert_type` column of the alerts table.
+type AlertType string
+
+const (
+	// AlertTypeSingle is the default — a plain single-instrument, single-
+	// condition alert. Existing pre-composite rows are normalized to this
+	// value on load.
+	AlertTypeSingle AlertType = "single"
+	// AlertTypeComposite is a multi-leg alert that combines 2+ conditions
+	// across instruments via CompositeLogic (AND/ANY). Composite rows carry
+	// a non-empty Conditions slice; the top-level Direction/TargetPrice
+	// fields are ignored by the evaluator.
+	AlertTypeComposite AlertType = "composite"
+)
+
+// CompositeLogic describes how the per-leg Conditions are combined.
+// AND = every leg must satisfy its condition simultaneously.
+// ANY = any single leg firing triggers the composite.
+type CompositeLogic string
+
+const (
+	// CompositeLogicAnd requires every leg to satisfy its condition.
+	CompositeLogicAnd CompositeLogic = "AND"
+	// CompositeLogicAny fires as soon as any single leg's condition is met.
+	CompositeLogicAny CompositeLogic = "ANY"
+)
+
+// ValidCompositeLogics is the set of accepted CompositeLogic values —
+// mirrors ValidDirections and simplifies caller validation.
+var ValidCompositeLogics = map[CompositeLogic]bool{
+	CompositeLogicAnd: true,
+	CompositeLogicAny: true,
+}
+
+// CompositeCondition is one leg of a composite alert. Every leg targets a
+// distinct instrument with its own operator + threshold. `ReferencePrice`
+// is required for percentage-change operators (drop_pct/rise_pct).
+//
+// This type is the on-disk wire format for the `conditions_json` column.
+// Tag renames are schema breaks — add a migration if you rename.
+type CompositeCondition struct {
+	Exchange        string    `json:"exchange"`
+	Tradingsymbol   string    `json:"tradingsymbol"`
+	InstrumentToken uint32    `json:"instrument_token"`
+	Operator        Direction `json:"operator"`
+	Value           float64   `json:"value"`
+	ReferencePrice  float64   `json:"reference_price,omitempty"`
+}
+
 // Alert represents a price alert for a specific instrument. Rich domain
 // entity with lifecycle behavior — the 8 methods below are the canonical
 // definition of "what it means for an alert to trigger / fire / need
 // notification". Persistence is handled by kc/alerts.Store which wraps
 // this entity.
+//
+// Composite alerts reuse the same table (Option B per session handoff):
+// AlertType = AlertTypeComposite, CompositeLogic + Conditions populated,
+// and the top-level Direction/TargetPrice ignored by the evaluator.
+// Single-leg alerts leave the composite fields zero-valued.
 type Alert struct {
 	ID                 string    `json:"id"`
 	Email              string    `json:"email"`
@@ -57,6 +112,20 @@ type Alert struct {
 	TriggeredAt        time.Time `json:"triggered_at,omitempty"`
 	TriggeredPrice     float64   `json:"triggered_price,omitempty"`
 	NotificationSentAt time.Time `json:"notification_sent_at,omitempty"`
+
+	// Composite alert fields (populated only when AlertType == AlertTypeComposite).
+	// These live alongside the single-leg fields in the same row — Option B
+	// from the session handoff. A NULL alert_type in the DB is normalized
+	// to AlertTypeSingle on load.
+	AlertType      AlertType            `json:"alert_type,omitempty"`
+	CompositeName  string               `json:"composite_name,omitempty"`
+	CompositeLogic CompositeLogic       `json:"composite_logic,omitempty"`
+	Conditions     []CompositeCondition `json:"conditions,omitempty"`
+}
+
+// IsComposite returns true if this alert aggregates 2+ conditions.
+func (a *Alert) IsComposite() bool {
+	return a.AlertType == AlertTypeComposite
 }
 
 // ShouldTrigger checks if the current price meets this alert's trigger condition.

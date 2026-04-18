@@ -2,15 +2,25 @@ package alerts
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // LoadAlerts reads all alerts from the database grouped by email.
+// Composite columns (alert_type, composite_logic, composite_name,
+// conditions_json) are read via COALESCE so pre-composite rows decode
+// cleanly with AlertTypeSingle. A malformed conditions_json fails loudly
+// so data corruption is surfaced rather than silently producing a broken
+// Alert — callers decide whether to halt startup or skip the row.
 func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 	rows, err := d.db.Query(`SELECT id, email, tradingsymbol, exchange, instrument_token,
 		target_price, direction, triggered, created_at, triggered_at, triggered_price,
-		reference_price, notification_sent_at FROM alerts`)
+		reference_price, notification_sent_at,
+		COALESCE(alert_type, 'single'), composite_logic, composite_name, conditions_json
+		FROM alerts`)
 	if err != nil {
 		return nil, fmt.Errorf("query alerts: %w", err)
 	}
@@ -27,11 +37,16 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 			trigPrice          sql.NullFloat64
 			referencePrice     sql.NullFloat64
 			notificationSentAt sql.NullString
+			alertType          string
+			compositeLogic     sql.NullString
+			compositeName      sql.NullString
+			conditionsJSON     sql.NullString
 		)
 		if err := rows.Scan(&a.ID, &a.Email, &a.Tradingsymbol, &a.Exchange,
 			&a.InstrumentToken, &a.TargetPrice, &dir, &triggeredI,
 			&createdAtS, &triggeredAt, &trigPrice, &referencePrice,
-			&notificationSentAt); err != nil {
+			&notificationSentAt,
+			&alertType, &compositeLogic, &compositeName, &conditionsJSON); err != nil {
 			return nil, fmt.Errorf("scan alert: %w", err)
 		}
 		a.Direction = Direction(dir)
@@ -54,6 +69,28 @@ func (d *DB) LoadAlerts() (map[string][]*Alert, error) {
 		}
 		if notificationSentAt.Valid {
 			a.NotificationSentAt, _ = time.Parse(time.RFC3339, notificationSentAt.String)
+		}
+
+		// Normalize composite fields. Pre-composite rows have empty
+		// alert_type / NULL composite_* and decode as single-leg.
+		switch alertType {
+		case "", string(domain.AlertTypeSingle):
+			a.AlertType = domain.AlertTypeSingle
+		default:
+			a.AlertType = domain.AlertType(alertType)
+		}
+		if compositeLogic.Valid {
+			a.CompositeLogic = domain.CompositeLogic(compositeLogic.String)
+		}
+		if compositeName.Valid {
+			a.CompositeName = compositeName.String
+		}
+		if conditionsJSON.Valid && conditionsJSON.String != "" {
+			var conds []domain.CompositeCondition
+			if err := json.Unmarshal([]byte(conditionsJSON.String), &conds); err != nil {
+				return nil, fmt.Errorf("decode conditions_json for alert %s: %w", a.ID, err)
+			}
+			a.Conditions = conds
 		}
 		out[a.Email] = append(out[a.Email], &a)
 	}

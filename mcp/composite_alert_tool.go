@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -20,35 +21,17 @@ import (
 // Typical use case: a day-trader watching for a correlated market move,
 // e.g. "NIFTY drops 0.5% AND INDIA VIX rises 15% from reference".
 //
-// IMPLEMENTATION STATUS — SCAFFOLD ONLY
+// Persistence is implemented per Option B: composite alerts share the
+// `alerts` table with single-leg alerts and are distinguished by
+// alert_type='composite' with a JSON-encoded conditions payload. See
+// kc/alerts/db.go for the schema and kc/usecases/create_composite_alert.go
+// for the validation + write use case.
 //
-// The input validation and MCP tool surface are complete and wired into
-// GetAllTools(). The persistence layer is **not** implemented yet because
-// the existing `alerts` schema models a single (tradingsymbol, operator,
-// target_price) tuple per row. Adding composite logic needs either:
-//
-//   (A) a new `composite_alerts` + `composite_alert_conditions` pair of
-//       tables and a new evaluator pass that groups legs by composite_id
-//       on every tick, OR
-//   (B) reusing the existing `alerts` table with a shared `composite_id`
-//       column + `logic` column + `all_must_trigger` flag, and teaching
-//       `evaluator.Evaluate` to look across sibling alerts when any leg
-//       fires.
-//
-// Both require a DB migration + a non-trivial evaluator change. Per the
-// task brief, the scaffold stops here and flags the blocker so the alert
-// store change can be done in a separate PR without a half-baked
-// migration.
-//
-// Until then this tool:
-//   - accepts and validates the full payload (so the tool surface is
-//     frozen and callers can start wiring against it),
-//   - returns a clear `not_implemented` status with the composite spec
-//     echoed back, so callers see exactly what the server parsed.
-//
-// TODO(kite-mcp): implement composite alert persistence (see options A/B
-// above) and replace the not_implemented response with a real alert ID
-// returned from the store.
+// Evaluator integration (walking legs on every tick and triggering only
+// when the logic is satisfied) is handled in a follow-up PR — for now
+// composite alerts persist correctly but the ticker evaluator treats the
+// anchor leg as a regular alert. This is flagged in the tool's response
+// note so callers are not surprised.
 type CompositeAlertTool struct{}
 
 // compositeLogicAnd / compositeLogicAny are the two supported combination
@@ -83,9 +66,10 @@ type compositeCondition struct {
 }
 
 // compositeAlertResponse is the structured payload returned to the
-// caller. `status` is either "pending_persistence" (the current,
-// scaffold state) or "created" (once persistence lands); `alert_id`
-// is populated in the "created" case.
+// caller. `status` is "created" on success; `alert_id` carries the
+// newly-minted persistence ID. Retained as the SCAFFOLD-era field set
+// (plus AlertID) so callers that already key off the shape continue to
+// work.
 type compositeAlertResponse struct {
 	Status     string               `json:"status"`
 	Message    string               `json:"message"`
@@ -217,20 +201,57 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		note := strings.TrimSpace(p.String("note", ""))
 
-		// SCAFFOLD: persistence not wired yet. Return the parsed,
-		// validated spec so the caller sees exactly what the server
-		// would create. See the file-level TODO for the full plan.
+		// Dispatch to the use case via the CQRS command bus. The tool
+		// handler has already normalized exchange casing, operator casing
+		// and resolved instrument tokens for echo purposes; the use case
+		// re-validates and re-resolves to keep a single source of truth
+		// for business rules (defense in depth — admin or scripted
+		// callers bypass the tool).
+		specs := make([]cqrs.CompositeConditionSpec, len(conds))
+		for i, c := range conds {
+			specs[i] = cqrs.CompositeConditionSpec{
+				Exchange:       c.Exchange,
+				Tradingsymbol:  c.Tradingsymbol,
+				Operator:       c.Operator,
+				Value:          c.Value,
+				ReferencePrice: c.ReferencePrice,
+			}
+		}
+
+		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateCompositeAlertCommand{
+			Email:      email,
+			Name:       name,
+			Logic:      logic,
+			Conditions: specs,
+		})
+		if err != nil {
+			handler.trackToolError(ctx, "composite_alert", "persistence_error")
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to create composite alert: %s", err)), nil
+		}
+		alertID, _ := raw.(string)
+
+		message := "Composite alert created."
+		// Appended note is informational; the evaluator-side integration
+		// lands in a follow-up PR, so callers should know their composite
+		// persists but the anchor leg is what the current evaluator walks.
+		responseNote := note
+		if responseNote == "" {
+			responseNote = "Composite alert persisted. Ticker evaluator will trigger on the anchor leg until composite evaluator lands."
+		}
+
 		resp := &compositeAlertResponse{
-			Status:     "pending_persistence",
-			Message:    "Composite alert parsed and validated. Persistence layer is not yet wired — this alert will not trigger until the composite alert store is implemented. See composite_alert_tool.go TODO.",
+			Status:     "created",
+			Message:    message,
+			AlertID:    alertID,
 			Name:       name,
 			Logic:      logic,
 			Conditions: conds,
-			Note:       note,
+			Note:       responseNote,
 		}
 
-		handler.deps.Logger.Info("composite_alert scaffold invoked",
+		handler.deps.Logger.Info("composite_alert created",
 			"email", email,
+			"alert_id", alertID,
 			"name", name,
 			"logic", logic,
 			"conditions", len(conds))
