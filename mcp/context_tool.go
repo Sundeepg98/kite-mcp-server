@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -183,14 +183,14 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		var details []positionDetail
 
 		for _, p := range positions.Net {
-			if p.Quantity != 0 {
+			pos := domain.NewPositionFromBroker(p)
+			if pos.IsOpen() {
 				openCount++
 				totalPnL += p.PnL
 
-				switch strings.ToUpper(p.Product) {
-				case "MIS":
+				if pos.IsIntraday() {
 					misCount++
-				case "NRML":
+				} else if p.Product == domain.ProductNRML {
 					nrmlCount++
 				}
 
@@ -245,12 +245,13 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		var pending, executed, rejected int
 
 		for _, o := range orders {
-			switch strings.ToUpper(o.Status) {
-			case "COMPLETE":
+			ord := domain.NewOrderFromBroker(o)
+			switch {
+			case ord.IsComplete():
 				executed++
-			case "REJECTED":
+			case ord.IsRejected():
 				rejected++
-			case "OPEN", "TRIGGER PENDING", "AMO REQ RECEIVED":
+			case ord.IsPending():
 				pending++
 			}
 		}

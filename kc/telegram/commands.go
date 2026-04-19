@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // escapeHTML escapes HTML special characters.
@@ -276,11 +277,11 @@ func (h *BotHandler) handleOrders(_ int64, email string) string {
 		o := orders[i]
 		var statusEmoji string
 		switch strings.ToUpper(o.Status) {
-		case "COMPLETE":
+		case domain.OrderStatusComplete:
 			statusEmoji = "\u2705"
-		case "REJECTED":
+		case domain.OrderStatusRejected:
 			statusEmoji = "\u274C"
-		case "CANCELLED":
+		case domain.OrderStatusCancelled:
 			statusEmoji = "\U0001F6AB"
 		default:
 			statusEmoji = "\u23F3"

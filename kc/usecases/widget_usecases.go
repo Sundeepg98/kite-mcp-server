@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // --- Interfaces ---
@@ -287,18 +288,21 @@ func (uc *GetOrdersForWidgetUseCase) Execute(ctx context.Context, query cqrs.Get
 	var completed, pending, rejected int
 	var totalBuyVal, totalSellVal float64
 	for _, o := range orders {
-		switch o.Status {
-		case "COMPLETE":
+		// Reuse the Order entity's lifecycle checks by constructing a minimal
+		// broker.Order shim — only Status is needed for bucketing.
+		ord := domain.NewOrderFromBroker(broker.Order{Status: o.Status})
+		switch {
+		case ord.IsComplete():
 			completed++
 			val := o.AveragePrice * o.FilledQuantity
-			if o.Side == "BUY" {
+			if o.Side == domain.TransactionBuy {
 				totalBuyVal += val
 			} else {
 				totalSellVal += val
 			}
-		case "OPEN", "TRIGGER PENDING", "VALIDATION PENDING":
+		case ord.IsPending():
 			pending++
-		case "REJECTED", "CANCELLED":
+		case ord.IsRejected() || ord.IsCancelled():
 			rejected++
 		}
 	}

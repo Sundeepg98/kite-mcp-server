@@ -162,7 +162,7 @@ func (d *DashboardHandler) userContext(r *http.Request) (email, role string, tok
 		role = "admin"
 	}
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
-	tokenValid = hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt)
+	tokenValid = hasToken && !kc.ToDomainSession(email, tokenEntry).IsExpired()
 	return
 }
 

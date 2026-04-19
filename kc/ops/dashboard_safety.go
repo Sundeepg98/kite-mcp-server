@@ -82,7 +82,7 @@ func (h *SafetyHandler) buildSafetyData(email string) map[string]any {
 	limits := guard.GetEffectiveLimits(email)
 
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
-	sessionActive := hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt)
+	sessionActive := hasToken && !kc.ToDomainSession(email, tokenEntry).IsExpired()
 	_, hasCreds := d.manager.CredentialStore().Get(email)
 
 	return map[string]any{

@@ -167,6 +167,39 @@ func TestOrder_IsPending(t *testing.T) {
 	}
 }
 
+func TestOrder_IsComplete_IsRejected_IsCancelled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		status    string
+		complete  bool
+		rejected  bool
+		cancelled bool
+	}{
+		{"complete", "COMPLETE", true, false, false},
+		{"rejected", "REJECTED", false, true, false},
+		{"cancelled", "CANCELLED", false, false, true},
+		{"open", "OPEN", false, false, false},
+		{"trigger pending", "TRIGGER PENDING", false, false, false},
+		{"lowercase complete", "complete", true, false, false}, // case-insensitive
+		{"lowercase rejected", "rejected", false, true, false},
+		{"lowercase cancelled", "cancelled", false, false, true},
+		{"padded complete", "  COMPLETE  ", true, false, false}, // trimmed
+		{"empty", "", false, false, false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			o := NewOrderFromBroker(broker.Order{Status: tc.status})
+			assert.Equal(t, tc.complete, o.IsComplete(), "IsComplete")
+			assert.Equal(t, tc.rejected, o.IsRejected(), "IsRejected")
+			assert.Equal(t, tc.cancelled, o.IsCancelled(), "IsCancelled")
+		})
+	}
+}
+
 func TestToDomainOrder(t *testing.T) {
 	t.Parallel()
 

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // ============================================================================
@@ -40,13 +42,13 @@ type OrdersTableData struct {
 
 func statusBadgeClass(status string) string {
 	switch strings.ToUpper(status) {
-	case "COMPLETE":
+	case domain.OrderStatusComplete:
 		return "status-complete"
-	case "CANCELLED":
+	case domain.OrderStatusCancelled:
 		return "status-cancelled"
-	case "REJECTED":
+	case domain.OrderStatusRejected:
 		return "status-rejected"
-	case "OPEN", "TRIGGER PENDING":
+	case domain.OrderStatusOpen, domain.OrderStatusTriggerPending:
 		return "status-open"
 	default:
 		return "status-pending"

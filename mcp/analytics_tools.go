@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
@@ -401,6 +402,9 @@ func computePositionAnalysis(netPositions []broker.Position) *positionAnalysisRe
 	entries := make([]positionEntry, 0, len(netPositions))
 
 	for _, p := range netPositions {
+		// Use the rich Position entity for broker-reported PnL; the
+		// DTO still supplies the display fields.
+		pos := domain.NewPositionFromBroker(p)
 		entry := positionEntry{
 			Symbol:       p.Tradingsymbol,
 			Exchange:     p.Exchange,
@@ -408,11 +412,11 @@ func computePositionAnalysis(netPositions []broker.Position) *positionAnalysisRe
 			Quantity:     p.Quantity,
 			AveragePrice: roundTo2(p.AveragePrice),
 			LastPrice:    roundTo2(p.LastPrice),
-			PnL:          roundTo2(p.PnL),
+			PnL:          roundTo2(pos.PnL().Amount),
 		}
 		entries = append(entries, entry)
 
-		totalPnL += p.PnL
+		totalPnL += pos.PnL().Amount
 
 		group, ok := productMap[p.Product]
 		if !ok {
@@ -423,7 +427,7 @@ func computePositionAnalysis(netPositions []broker.Position) *positionAnalysisRe
 			productMap[p.Product] = group
 		}
 		group.Count++
-		group.TotalPnL += p.PnL
+		group.TotalPnL += pos.PnL().Amount
 		group.Positions = append(group.Positions, entry)
 	}
 

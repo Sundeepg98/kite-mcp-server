@@ -115,6 +115,25 @@ func (o Order) IsPending() bool {
 		s == OrderStatusAMOReqReceived
 }
 
+// IsComplete reports whether the order reached the COMPLETE state.
+// Case-insensitive — matches the broker's reported status regardless of
+// casing variations observed on edge transports.
+func (o Order) IsComplete() bool {
+	return o.normalizedStatus() == OrderStatusComplete
+}
+
+// IsRejected reports whether the order reached the REJECTED state.
+// Case-insensitive.
+func (o Order) IsRejected() bool {
+	return o.normalizedStatus() == OrderStatusRejected
+}
+
+// IsCancelled reports whether the order reached the CANCELLED state.
+// Case-insensitive.
+func (o Order) IsCancelled() bool {
+	return o.normalizedStatus() == OrderStatusCancelled
+}
+
 // FillPercentage returns the percentage of the order quantity that has been
 // filled, in the range [0, 100]. Returns 0 when Quantity is zero (avoids a
 // divide-by-zero) and clamps to 100 when FilledQuantity > Quantity (which

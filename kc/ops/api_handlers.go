@@ -67,7 +67,7 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasToken {
-		expired := kc.IsKiteTokenExpired(tokenEntry.StoredAt)
+		expired := kc.ToDomainSession(email, tokenEntry).IsExpired()
 		resp.KiteToken = tokenStatus{
 			Valid:    !expired,
 			StoredAt: tokenEntry.StoredAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -126,7 +126,7 @@ func (h *SafetyHandler) safetyStatus(w http.ResponseWriter, r *http.Request) {
 	limits := guard.GetEffectiveLimits(email)
 
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
-	sessionActive := hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt)
+	sessionActive := hasToken && !kc.ToDomainSession(email, tokenEntry).IsExpired()
 	_, hasCreds := d.manager.CredentialStore().Get(email)
 
 	d.writeJSON(w, map[string]any{

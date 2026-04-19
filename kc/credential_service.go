@@ -125,12 +125,15 @@ func (cs *CredentialService) HasGlobalCredentials() bool {
 }
 
 // IsTokenValid returns true if the user has a cached Kite token that has not expired.
+// Delegates to domain.Session.IsExpired via the ToDomainSession converter so the
+// 06:00 IST refresh rule lives on the rich entity rather than being re-derived
+// here.
 func (cs *CredentialService) IsTokenValid(email string) bool {
 	entry, ok := cs.tokenStore.Get(email)
 	if !ok {
 		return false
 	}
-	return !IsKiteTokenExpired(entry.StoredAt)
+	return !ToDomainSession(email, entry).IsExpired()
 }
 
 // BackfillRegistryFromCredentials syncs existing credentials into the registry.
