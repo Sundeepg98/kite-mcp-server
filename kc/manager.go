@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
-	"net/url"
-	"os/exec"
-	"runtime"
 	"time"
 
 	"github.com/zerodha/gokiteconnect/v4/models"
@@ -542,94 +539,15 @@ func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error)
 	})
 }
 
-// ---------------------------------------------------------------------------
-// Service accessors (Clean Architecture)
-// ---------------------------------------------------------------------------
-
-// CredentialSvc returns the credential resolution service.
-func (m *Manager) CredentialSvc() *CredentialService {
-	return m.credentialSvc
-}
-
-// SessionSvc returns the session lifecycle service.
-func (m *Manager) SessionSvc() *SessionService {
-	return m.sessionSvc
-}
-
-// CommandBus returns the CQRS command bus for write-side dispatches.
-func (m *Manager) CommandBus() *cqrs.InMemoryBus {
-	return m.commandBus
-}
-
-// QueryBus returns the CQRS query bus for read-side dispatches.
-func (m *Manager) QueryBus() *cqrs.InMemoryBus {
-	return m.queryBus
-}
-
-// PortfolioSvc returns the portfolio query service.
-func (m *Manager) PortfolioSvc() *PortfolioService {
-	return m.portfolioSvc
-}
-
-// OrderSvc returns the order management service.
-func (m *Manager) OrderSvc() *OrderService {
-	return m.orderSvc
-}
-
-// AlertSvc returns the alert lifecycle service.
-func (m *Manager) AlertSvc() *AlertService {
-	return m.alertSvc
-}
-
-// FamilyService returns the family billing service, or nil if not configured.
-func (m *Manager) FamilyService() *FamilyService {
-	return m.familyService
-}
-
-// SetFamilyService sets the family billing service.
-func (m *Manager) SetFamilyService(fs *FamilyService) {
-	m.familyService = fs
-}
-
-// IsLocalMode returns true when running in STDIO mode (local process, not remote HTTP).
-func (m *Manager) IsLocalMode() bool {
-	return m.appMode == "" || m.appMode == "stdio"
-}
-
-// ExternalURL returns the configured external URL (e.g. "https://kite-mcp-server.fly.dev").
-func (m *Manager) ExternalURL() string {
-	return m.externalURL
-}
-
-// AdminSecretPath returns the configured admin secret path.
-func (m *Manager) AdminSecretPath() string {
-	return m.adminSecretPath
-}
-
-// OpenBrowser opens the given URL in the user's default browser.
-// Only works in local/STDIO mode where the server runs on the user's machine.
-func (m *Manager) OpenBrowser(rawURL string) error {
-	if !m.IsLocalMode() {
-		return nil
-	}
-
-	// Validate URL scheme to prevent command injection via crafted URIs
-	parsed, err := url.Parse(rawURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("invalid URL scheme: only http and https are allowed")
-	}
-
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL) // #nosec G204 -- URL is validated above (scheme whitelist)
-	case "darwin":
-		cmd = exec.Command("open", rawURL) // #nosec G204 -- URL is validated above (scheme whitelist)
-	default:
-		cmd = exec.Command("xdg-open", rawURL) // #nosec G204 -- URL is validated above (scheme whitelist)
-	}
-	return cmd.Start()
-}
+// Service accessors (CredentialSvc, SessionSvc, PortfolioSvc, OrderSvc,
+// AlertSvc, FamilyService + SetFamilyService, CommandBus, QueryBus,
+// SessionManager, ManagedSessionSvc, SessionSigner, UpdateSessionSignerExpiry,
+// SetMCPServer, MCPServer) live in kc/manager_accessors.go — pure
+// field-returning passthroughs.
+//
+// IsLocalMode, ExternalURL, AdminSecretPath, DevMode, APIKey, and
+// OpenBrowser live in kc/config_manager.go — pure config accessors +
+// the local-mode browser opener.
 
 // initializeTemplates sets up HTML templates
 func (m *Manager) initializeTemplates() error {
@@ -654,26 +572,6 @@ func (m *Manager) initializeSessionSigner(customSigner *SessionSigner) error {
 	}
 	m.sessionSigner = signer
 	return nil
-}
-
-// DevMode returns true if the server is running in development mode with mock broker.
-func (m *Manager) DevMode() bool {
-	return m.devMode
-}
-
-// APIKey returns the global Kite API key.
-func (m *Manager) APIKey() string {
-	return m.apiKey
-}
-
-// SetMCPServer stores a reference to the MCP server for elicitation support.
-func (m *Manager) SetMCPServer(srv any) {
-	m.mcpServer = srv
-}
-
-// MCPServer returns the stored MCP server reference, or nil.
-func (m *Manager) MCPServer() any {
-	return m.mcpServer
 }
 
 // truncKey safely returns the first n characters of a string, or the whole string if shorter.
@@ -741,26 +639,6 @@ func (m *Manager) Shutdown() {
 	m.Instruments.Shutdown()
 
 	m.Logger.Info("Kite manager shutdown complete")
-}
-
-// SessionManager returns the MCP session manager instance
-func (m *Manager) SessionManager() *SessionRegistry {
-	return m.sessionManager
-}
-
-// ManagedSessionSvc returns the thin session facade for active-count and terminate-by-email.
-func (m *Manager) ManagedSessionSvc() *ManagedSessionService {
-	return m.managedSessionSvc
-}
-
-// SessionSigner returns the session signer instance
-func (m *Manager) SessionSigner() *SessionSigner {
-	return m.sessionSigner
-}
-
-// UpdateSessionSignerExpiry updates the signature expiry duration
-func (m *Manager) UpdateSessionSignerExpiry(duration time.Duration) {
-	m.sessionSigner.SetSignatureExpiry(duration)
 }
 
 func setupTemplates() (map[string]*template.Template, error) {
