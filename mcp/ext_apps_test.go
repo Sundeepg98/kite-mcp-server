@@ -48,6 +48,25 @@ func TestWithAppUI(t *testing.T) {
 		assert.Equal(t, "ui://kite-mcp/portfolio", uri)
 	})
 
+	t.Run("sets OpenAI Apps SDK openai/outputTemplate key to same URI", func(t *testing.T) {
+		// ChatGPT Apps SDK reads the resource URI from _meta["openai/outputTemplate"].
+		// Must mirror ui/resourceUri exactly so both Claude.ai and ChatGPT render the widget.
+		tool := gomcp.NewTool("test_tool", gomcp.WithDescription("test"))
+		result := withAppUI(tool, "ui://kite-mcp/portfolio")
+
+		require.NotNil(t, result.Meta)
+		require.NotNil(t, result.Meta.AdditionalFields)
+
+		openAIURI, ok := result.Meta.AdditionalFields["openai/outputTemplate"].(string)
+		require.True(t, ok, "expected openai/outputTemplate to be string")
+		assert.Equal(t, "ui://kite-mcp/portfolio", openAIURI)
+
+		// Must equal the ui/resourceUri value — they reference the same MCP resource.
+		uiURI, _ := result.Meta.AdditionalFields["ui/resourceUri"].(string)
+		assert.Equal(t, uiURI, openAIURI,
+			"openai/outputTemplate must mirror ui/resourceUri (same ui:// resource)")
+	})
+
 	t.Run("empty URI returns tool unchanged", func(t *testing.T) {
 		tool := gomcp.NewTool("test_tool", gomcp.WithDescription("test"))
 		result := withAppUI(tool, "")
@@ -72,6 +91,11 @@ func TestWithAppUI(t *testing.T) {
 		uri, ok := meta["ui/resourceUri"].(string)
 		require.True(t, ok, "expected flat ui/resourceUri key in _meta")
 		assert.Equal(t, "ui://kite-mcp/orders", uri)
+
+		// OpenAI Apps SDK key mirrors the value.
+		openAIURI, ok := meta["openai/outputTemplate"].(string)
+		require.True(t, ok, "expected openai/outputTemplate in serialized _meta")
+		assert.Equal(t, "ui://kite-mcp/orders", openAIURI)
 	})
 }
 
@@ -359,15 +383,17 @@ func TestStripUIResourceURIFromTools(t *testing.T) {
 	t.Run("removes ui/resourceUri from _meta and preserves siblings", func(t *testing.T) {
 		tool1 := gomcp.NewTool("t1", gomcp.WithDescription("x"))
 		tool1.Meta = &gomcp.Meta{AdditionalFields: map[string]any{
-			"ui/resourceUri": "ui://kite-mcp/portfolio",
-			"other":          "keep-me",
+			"ui/resourceUri":        "ui://kite-mcp/portfolio",
+			"openai/outputTemplate": "ui://kite-mcp/portfolio",
+			"other":                 "keep-me",
 		}}
 		tool2 := gomcp.NewTool("t2", gomcp.WithDescription("y"))
 		// No meta — should pass through unchanged.
 
 		tool3 := gomcp.NewTool("t3", gomcp.WithDescription("z"))
 		tool3.Meta = &gomcp.Meta{AdditionalFields: map[string]any{
-			"ui/resourceUri": "ui://kite-mcp/orders",
+			"ui/resourceUri":        "ui://kite-mcp/orders",
+			"openai/outputTemplate": "ui://kite-mcp/orders",
 		}}
 
 		tools := []gomcp.Tool{tool1, tool2, tool3}
@@ -375,20 +401,24 @@ func TestStripUIResourceURIFromTools(t *testing.T) {
 
 		require.Len(t, stripped, 3)
 
-		// tool1: ui/resourceUri gone, sibling preserved.
+		// tool1: both widget keys gone, sibling preserved.
 		require.NotNil(t, stripped[0].Meta)
 		_, hasUI := stripped[0].Meta.AdditionalFields["ui/resourceUri"]
 		assert.False(t, hasUI, "ui/resourceUri should be stripped from tool1")
+		_, hasOpenAI := stripped[0].Meta.AdditionalFields["openai/outputTemplate"]
+		assert.False(t, hasOpenAI, "openai/outputTemplate should be stripped from tool1")
 		assert.Equal(t, "keep-me", stripped[0].Meta.AdditionalFields["other"])
 
 		// tool2: never had meta — still nil.
 		assert.Nil(t, stripped[1].Meta)
 
-		// tool3: meta had only ui/resourceUri; whatever remains MUST NOT
-		// carry ui/resourceUri.
+		// tool3: meta had only widget keys; whatever remains MUST NOT
+		// carry either one.
 		if stripped[2].Meta != nil {
 			_, hasUI := stripped[2].Meta.AdditionalFields["ui/resourceUri"]
 			assert.False(t, hasUI, "ui/resourceUri should be stripped from tool3")
+			_, hasOpenAI := stripped[2].Meta.AdditionalFields["openai/outputTemplate"]
+			assert.False(t, hasOpenAI, "openai/outputTemplate should be stripped from tool3")
 		}
 
 		// Original input must be unchanged — UI-capable sessions still see it.
@@ -396,6 +426,9 @@ func TestStripUIResourceURIFromTools(t *testing.T) {
 		assert.Equal(t, "ui://kite-mcp/portfolio",
 			tools[0].Meta.AdditionalFields["ui/resourceUri"],
 			"strip must NOT mutate the caller's tools (concurrent sessions share them)")
+		assert.Equal(t, "ui://kite-mcp/portfolio",
+			tools[0].Meta.AdditionalFields["openai/outputTemplate"],
+			"strip must NOT mutate the caller's openai/outputTemplate either")
 	})
 
 	t.Run("returns tools unchanged if none have ui/resourceUri", func(t *testing.T) {
@@ -420,15 +453,19 @@ func TestUIMetadataGating_JSONOutput(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(data), `"ui/resourceUri":"ui://kite-mcp/portfolio"`,
 			"UI-capable client path should see the resource URI")
+		assert.Contains(t, string(data), `"openai/outputTemplate":"ui://kite-mcp/portfolio"`,
+			"UI-capable client path should also see the OpenAI Apps SDK key")
 	})
 
-	t.Run("gated tool omits ui/resourceUri from serialized _meta", func(t *testing.T) {
+	t.Run("gated tool omits both widget keys from serialized _meta", func(t *testing.T) {
 		tool := withAppUI(gomcp.NewTool("t", gomcp.WithDescription("x")), "ui://kite-mcp/portfolio")
 		stripped := stripUIResourceURIFromTools([]gomcp.Tool{tool})[0]
 		data, err := json.Marshal(stripped)
 		require.NoError(t, err)
 		assert.NotContains(t, string(data), `ui/resourceUri`,
 			"non-UI client path must not see any ui/resourceUri key")
+		assert.NotContains(t, string(data), `openai/outputTemplate`,
+			"non-UI client path must not see any openai/outputTemplate key")
 		assert.NotContains(t, string(data), `ui://kite-mcp/portfolio`,
 			"and must not see the resource URI value either")
 	})

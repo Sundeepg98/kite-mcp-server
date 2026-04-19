@@ -38,7 +38,10 @@ const UICapabilityExtensionKey = "io.modelcontextprotocol/ui"
 
 // uiMetaKey is the flat `_meta` key that points a tool response at a
 // ui:// resource. Kept in sync with withAppUI's key below.
-const uiMetaKey = "ui/resourceUri"
+const (
+	uiMetaKey     = "ui/resourceUri"
+	openAIMetaKey = "openai/outputTemplate"
+)
 
 // clientSupportsUI reports whether the given client capabilities
 // advertise MCP Apps widget support.
@@ -90,10 +93,12 @@ func stripUIResourceURIFromTools(tools []gomcp.Tool) []gomcp.Tool {
 	out := make([]gomcp.Tool, len(tools))
 	for i, t := range tools {
 		if t.Meta != nil && t.Meta.AdditionalFields != nil {
-			if _, ok := t.Meta.AdditionalFields[uiMetaKey]; ok {
+			_, hasUI := t.Meta.AdditionalFields[uiMetaKey]
+			_, hasOpenAI := t.Meta.AdditionalFields[openAIMetaKey]
+			if hasUI || hasOpenAI {
 				newFields := make(map[string]any, len(t.Meta.AdditionalFields))
 				for k, v := range t.Meta.AdditionalFields {
-					if k == uiMetaKey {
+					if k == uiMetaKey || k == openAIMetaKey {
 						continue
 					}
 					newFields[k] = v
@@ -336,13 +341,19 @@ var pagePathToResourceURI = map[string]string{
 // withAppUI sets the flat _meta["ui/resourceUri"] key on a tool definition.
 // Claude.ai only recognizes this flat format (not nested _meta.ui.resourceUri).
 // The ext-apps SDK's getToolUiResourceUri() accepts both formats.
+//
+// The OpenAI Apps SDK reads the same resource URI from `_meta["openai/outputTemplate"]`
+// (see developers.openai.com/apps-sdk/build/mcp-server), so we set both keys to
+// the same value — unlocking ChatGPT widget rendering with zero additional hosting.
+// Both keys reference the same ui:// MCP resource served with MIME `text/html;profile=mcp-app`.
 func withAppUI(t gomcp.Tool, resourceURI string) gomcp.Tool {
 	if resourceURI == "" {
 		return t
 	}
 	t.Meta = &gomcp.Meta{
 		AdditionalFields: map[string]any{
-			"ui/resourceUri": resourceURI,
+			uiMetaKey:     resourceURI,
+			openAIMetaKey: resourceURI,
 		},
 	}
 	return t
