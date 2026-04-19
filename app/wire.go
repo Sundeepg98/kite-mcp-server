@@ -327,6 +327,17 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		"set_alert":       10,
 	})
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(toolRateLimiter.Middleware()))
+
+	// SIGHUP hot-reload for per-tool rate-limit caps. Operators can
+	// retune throttles mid-incident without redeploying: edit
+	// KITE_RATELIMIT, signal the process, and the new caps land
+	// atomically with in-flight counters preserved. The goroutine
+	// dies with the process — no shutdown hook needed because it
+	// holds no persistent resources. See app/ratelimit_reload.go for
+	// the env format and design rationale. No-op on Windows where
+	// signal.Notify(SIGHUP) is a platform no-op.
+	_ = startRateLimitReloadLoop(toolRateLimiter, app.logger, nil)
+	app.logger.Info("SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
 	// Skipped entirely in DEV_MODE — all tools are free tier.
 	if stripeKey := os.Getenv("STRIPE_SECRET_KEY"); stripeKey != "" && !app.DevMode {

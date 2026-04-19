@@ -18,6 +18,11 @@ import (
 type TierMultiplierFunc func(email string) int
 
 // ToolRateLimiter tracks per-user, per-tool call rates.
+//
+// All mutable state (counters, limits, tierMult) sits under mu so that
+// SetLimits can swap the limit map atomically while the Middleware goroutine
+// is executing under live traffic — the hot-reload contract invoked via
+// SIGHUP in production.
 type ToolRateLimiter struct {
 	mu       sync.Mutex
 	counters map[string]*rateBucket
@@ -31,11 +36,51 @@ type rateBucket struct {
 }
 
 // NewToolRateLimiter creates a rate limiter with per-tool limits.
+// The input map is copied — callers are free to mutate their copy
+// afterwards without affecting the live limiter.
 func NewToolRateLimiter(limits map[string]int) *ToolRateLimiter {
+	cp := make(map[string]int, len(limits))
+	for k, v := range limits {
+		cp[k] = v
+	}
 	return &ToolRateLimiter{
 		counters: make(map[string]*rateBucket),
-		limits:   limits,
+		limits:   cp,
 	}
+}
+
+// SetLimits replaces the per-tool limit map atomically. Existing in-flight
+// counters (rateBucket entries) are preserved so an operator's config
+// update does not silently reset everyone's window — the *cap* changes,
+// not the current count. Tools removed from the new map fall through as
+// "unlimited" (hasLimit==false in Middleware) on subsequent calls.
+//
+// Wired via SIGHUP in app/wire.go: an operator edits the config source
+// (env var bundle, TOML, etc.) and signals the running process. The
+// reload handler re-parses and calls SetLimits; no restart, no dropped
+// in-flight tool calls.
+func (rl *ToolRateLimiter) SetLimits(limits map[string]int) {
+	cp := make(map[string]int, len(limits))
+	for k, v := range limits {
+		cp[k] = v
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.limits = cp
+}
+
+// CurrentLimits returns a snapshot copy of the per-tool caps currently
+// in effect. Intended for diagnostics (`/admin/ratelimit` handler, tests)
+// — never mutate the returned map, but callers are free to read it
+// concurrently with SetLimits without risk.
+func (rl *ToolRateLimiter) CurrentLimits() map[string]int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	out := make(map[string]int, len(rl.limits))
+	for k, v := range rl.limits {
+		out[k] = v
+	}
+	return out
 }
 
 // WithTierMultiplier attaches a tier resolver after construction so the
@@ -71,16 +116,27 @@ func (rl *ToolRateLimiter) Middleware() server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 			toolName := request.Params.Name
-			baseLimit, hasLimit := rl.limits[toolName]
-			if !hasLimit {
-				return next(ctx, request)
-			}
 
+			// Single critical section: read limit, update counter,
+			// resolve tier multiplier. SetLimits can swap rl.limits
+			// concurrently — without this lock an in-flight call would
+			// race the swap and in Go's map model that is a data race
+			// (not merely a consistency issue).
 			email := oauth.EmailFromContext(ctx)
-			limit := rl.effectiveLimit(baseLimit, email)
 			key := email + ":" + toolName
 
 			rl.mu.Lock()
+			baseLimit, hasLimit := rl.limits[toolName]
+			if !hasLimit {
+				rl.mu.Unlock()
+				return next(ctx, request)
+			}
+			limit := baseLimit
+			if email != "" && rl.tierMult != nil {
+				if mult := rl.tierMult(email); mult > 0 {
+					limit = baseLimit * mult
+				}
+			}
 			bucket, exists := rl.counters[key]
 			now := time.Now()
 			if !exists || now.Sub(bucket.windowStart) > time.Minute {
