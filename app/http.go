@@ -106,6 +106,22 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.rateLimiters.Stop()
 		}
 
+		// Stop the invitation-cleanup goroutine (idempotent no-op if never started).
+		if app.invitationCleanupCancel != nil {
+			app.invitationCleanupCancel()
+		}
+
+		// Stop the paper-trading monitor goroutine (sync.Once-guarded, blocks
+		// until the loop exits so the process can cleanly terminate).
+		if app.paperMonitor != nil {
+			app.paperMonitor.Stop()
+		}
+
+		// Stop the metrics auto-cleanup goroutine (sync.Once-guarded).
+		if app.metrics != nil {
+			app.metrics.Shutdown()
+		}
+
 		app.logger.Info("Server shutdown complete")
 	}()
 }
