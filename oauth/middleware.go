@@ -30,6 +30,18 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 	resourceMetadataURL := h.config.ExternalURL + "/.well-known/oauth-protected-resource"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			// CORS preflight — respond directly without auth. Browser-based MCP
+			// clients send OPTIONS before the authenticated POST; returning 401
+			// here kills the request before it ever carries credentials.
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id, Mcp-Protocol-Version")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		auth := r.Header.Get("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 			w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+resourceMetadataURL+`"`)

@@ -429,3 +429,66 @@ func TestRequireAuthBrowser_ExpiredCookie(t *testing.T) {
 		t.Errorf("Status = %d, want 302", rr.Code)
 	}
 }
+
+// TestRequireAuth_CORSPreflight verifies that OPTIONS /mcp requests bypass
+// authentication and return a 204 No Content with permissive CORS headers.
+// Browser-based MCP clients send OPTIONS before the authenticated POST; a 401
+// on preflight aborts the request before credentials are ever carried.
+func TestRequireAuth_CORSPreflight(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	innerCalled := false
+	handler := h.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		innerCalled = true
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	// Deliberately no Authorization header — preflight never carries creds.
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if innerCalled {
+		t.Error("Inner handler should not be called for CORS preflight (short-circuit expected)")
+	}
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("Status = %d, want 204", rr.Code)
+	}
+	if origin := rr.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", origin, "*")
+	}
+	if methods := rr.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(methods, "POST") || !strings.Contains(methods, "OPTIONS") {
+		t.Errorf("Access-Control-Allow-Methods = %q, must include POST and OPTIONS", methods)
+	}
+	if headers := rr.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(headers, "Authorization") {
+		t.Errorf("Access-Control-Allow-Headers = %q, must include Authorization", headers)
+	}
+	// Regression guard: preflight must NOT emit WWW-Authenticate (it's not a 401).
+	if wwwAuth := rr.Header().Get("WWW-Authenticate"); wwwAuth != "" {
+		t.Errorf("WWW-Authenticate must not be set on preflight, got %q", wwwAuth)
+	}
+}
+
+// TestRequireAuth_PostWithoutAuthStill401 is a regression guard that the
+// CORS preflight short-circuit did not accidentally let unauthenticated POST
+// requests through.
+func TestRequireAuth_PostWithoutAuthStill401(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	handler := h.RequireAuth(echoEmailHandler())
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("Status = %d, want 401 (POST without auth must still fail)", rr.Code)
+	}
+	if wwwAuth := rr.Header().Get("WWW-Authenticate"); !strings.Contains(wwwAuth, "Bearer") {
+		t.Errorf("WWW-Authenticate must be set on 401, got %q", wwwAuth)
+	}
+}
