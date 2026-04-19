@@ -23,6 +23,24 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// newTestApp wraps NewApp(testLogger()) with a t.Cleanup that shuts down the
+// metrics manager (and, once wired, any other App-owned background goroutines
+// created in NewApp itself). Tests that additionally call initializeServices
+// must still invoke cleanupInitializeServices for the services started there.
+//
+// Preferred over `NewApp(testLogger())` for new tests — catches leaks by
+// default.
+func newTestApp(t *testing.T) *App {
+	t.Helper()
+	app := NewApp(testLogger())
+	t.Cleanup(func() {
+		if app.metrics != nil {
+			app.metrics.Shutdown()
+		}
+	})
+	return app
+}
+
 // newTestManager creates a kc.Manager in DevMode with empty instruments.
 // For tests that don't need a SQLite DB.
 func newTestManager(t *testing.T) *kc.Manager {
@@ -60,14 +78,38 @@ func newTestAuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 }
 
 // cleanupInitializeServices stops background goroutines started by initializeServices.
+// Call order mirrors setupGracefulShutdown (reverse of start order) so shutdown
+// semantics match production. Every Shutdown call is idempotent (sync.Once or
+// nil-guard) so invoking this helper after RunServer has already shut down is safe.
 func cleanupInitializeServices(app *App, mgr *kc.Manager) {
 	if app.scheduler != nil {
 		app.scheduler.Stop()
 	}
+	if app.hashPublisherCancel != nil {
+		app.hashPublisherCancel()
+	}
 	if app.auditStore != nil {
 		app.auditStore.Stop()
 	}
+	if app.telegramBot != nil {
+		app.telegramBot.Shutdown()
+	}
 	mgr.Shutdown()
+	if app.oauthHandler != nil {
+		app.oauthHandler.Close()
+	}
+	if app.rateLimiters != nil {
+		app.rateLimiters.Stop()
+	}
+	if app.invitationCleanupCancel != nil {
+		app.invitationCleanupCancel()
+	}
+	if app.paperMonitor != nil {
+		app.paperMonitor.Stop()
+	}
+	if app.metrics != nil {
+		app.metrics.Shutdown()
+	}
 }
 
 // ---------------------------------------------------------------------------
