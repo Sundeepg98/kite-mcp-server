@@ -88,9 +88,76 @@ type ToolAroundHook func(ctx context.Context, req mcp.CallToolRequest, next Tool
 var (
 	beforeHooks []ToolHook
 	afterHooks  []ToolHook
-	aroundHooks []ToolAroundHook
+	// aroundHooks holds ToolAroundHook values paired with a global
+	// registration sequence number (aroundSeqCounter). The sequence
+	// lets HookMiddleware interleave immutable and mutable around-hooks
+	// by true registration order — first-registered becomes the
+	// outermost wrapper regardless of which kind.
+	aroundHooks []aroundHookEntry
 	hooksMu     sync.RWMutex
+	// aroundSeqCounter is incremented on every OnToolExecution or
+	// OnToolExecutionMutable call. Guarded by aroundSeqMu to keep
+	// the counter monotonic across the two registrar sites.
+	aroundSeqCounter uint64
+	aroundSeqMu      sync.Mutex
 )
+
+// aroundHookEntry tags an immutable ToolAroundHook with its global
+// registration sequence so HookMiddleware can interleave it with
+// ToolMutableAroundHook entries in true registration order.
+type aroundHookEntry struct {
+	hook ToolAroundHook
+	seq  uint64
+}
+
+// nextAroundSeq returns the next global registration sequence
+// number. Shared between OnToolExecution and OnToolExecutionMutable
+// so both registrars read from the same monotonic source.
+func nextAroundSeq() uint64 {
+	aroundSeqMu.Lock()
+	defer aroundSeqMu.Unlock()
+	aroundSeqCounter++
+	return aroundSeqCounter
+}
+
+// mergedAroundEntry is the unified view used by HookMiddleware to
+// compose a single around-hook chain regardless of whether each
+// entry mutates the request. Exactly one of immutable/mutable is
+// non-nil per entry.
+type mergedAroundEntry struct {
+	seq       uint64
+	immutable ToolAroundHook
+	mutable   ToolMutableAroundHook
+}
+
+// mergedAroundChain returns the combined around-hook chain sorted
+// by global registration sequence (ascending — first-registered
+// first). Called once per tool invocation; the snapshot is
+// concurrency-safe against concurrent Register calls.
+func mergedAroundChain() []mergedAroundEntry {
+	// Snapshot immutable side.
+	hooksMu.RLock()
+	immutable := make([]aroundHookEntry, len(aroundHooks))
+	copy(immutable, aroundHooks)
+	hooksMu.RUnlock()
+	// Snapshot mutable side.
+	mutable := mutableAroundHookEntries()
+
+	out := make([]mergedAroundEntry, 0, len(immutable)+len(mutable))
+	for _, e := range immutable {
+		out = append(out, mergedAroundEntry{seq: e.seq, immutable: e.hook})
+	}
+	for _, e := range mutable {
+		out = append(out, mergedAroundEntry{seq: e.seq, mutable: e.hook})
+	}
+	// Stable ascending sort by seq (small N in practice — ~tens of hooks).
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j-1].seq > out[j].seq; j-- {
+			out[j-1], out[j] = out[j], out[j-1]
+		}
+	}
+	return out
+}
 
 // OnBeforeToolExecution registers a hook called before any tool runs.
 func OnBeforeToolExecution(hook ToolHook) {
@@ -122,9 +189,12 @@ func OnToolExecution(hook ToolAroundHook) {
 	if hook == nil {
 		return
 	}
+	// Acquire the global sequence FIRST to preserve registration
+	// order across both immutable and mutable registrars.
+	seq := nextAroundSeq()
 	hooksMu.Lock()
 	defer hooksMu.Unlock()
-	aroundHooks = append(aroundHooks, hook)
+	aroundHooks = append(aroundHooks, aroundHookEntry{hook: hook, seq: seq})
 }
 
 // RunBeforeHooks executes all before hooks. Returns first error.
@@ -180,12 +250,23 @@ func safeRunAfterHook(hook ToolHook, ctx context.Context, toolName string, args 
 }
 
 // ClearHooks removes all registered hooks (useful for testing).
+// Clears the before, after, around, AND mutable-around registries —
+// every hook surface the package exposes — so a single call in a
+// test's defer rewinds the whole state. Also resets the global
+// aroundSeqCounter so tests that assert specific sequence values
+// (rare, but supported) get a predictable counter.
 func ClearHooks() {
 	hooksMu.Lock()
-	defer hooksMu.Unlock()
 	beforeHooks = beforeHooks[:0]
 	afterHooks = afterHooks[:0]
-	aroundHooks = aroundHooks[:0]
+	aroundHooks = nil
+	hooksMu.Unlock()
+	// mutable hooks live in their own file's mutex; keep the lock
+	// ordering consistent (this one first, then mutable).
+	clearMutableAroundHooks()
+	aroundSeqMu.Lock()
+	aroundSeqCounter = 0
+	aroundSeqMu.Unlock()
 }
 
 // HookMiddleware returns a ToolHandlerMiddleware that runs registered
@@ -212,23 +293,31 @@ func HookMiddleware() server.ToolHandlerMiddleware {
 			if err := RunBeforeHooks(ctx, request.Params.Name, request.GetArguments()); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Hook blocked execution: %s", err.Error())), nil
 			}
-			// Build the around chain around the real handler. Snapshot
-			// the around-hook slice under the reader lock so a concurrent
-			// registration doesn't mutate the chain mid-invocation.
-			hooksMu.RLock()
-			chain := append([]ToolAroundHook(nil), aroundHooks...)
-			hooksMu.RUnlock()
+			// Build the around chain around the real handler.
+			// Immutable and mutable around-hooks are interleaved by
+			// their GLOBAL registration sequence (see aroundSeq in
+			// registry.go / mutable_request.go). First-registered
+			// ends up as the outermost wrapper — matches HTTP
+			// middleware convention and gives plugin authors a
+			// single intuitive rule regardless of hook kind.
+			merged := mergedAroundChain()
 
-			// wrap composes the chain right-to-left so that chain[0]
-			// ends up as the outermost wrapper — matching the
-			// "first registered = outer" convention used by mcp-go's
-			// ToolHandlerMiddleware and HTTP middleware stacks.
+			// Compose right-to-left.
 			handler := ToolHandlerNext(next)
-			for i := len(chain) - 1; i >= 0; i-- {
-				hook := chain[i]
+			for i := len(merged) - 1; i >= 0; i-- {
+				entry := merged[i]
 				inner := handler
-				handler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-					return safeInvokeAroundHook(hook, ctx, req, inner)
+				if entry.mutable != nil {
+					hook := entry.mutable
+					handler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+						m := NewMutableCallToolRequest(req)
+						return safeInvokeMutableAroundHook(hook, ctx, m, inner)
+					}
+				} else {
+					hook := entry.immutable
+					handler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+						return safeInvokeAroundHook(hook, ctx, req, inner)
+					}
 				}
 			}
 
