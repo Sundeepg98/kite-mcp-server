@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
-	"time"
 
-	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
@@ -52,7 +50,13 @@ type Config struct {
 	InstrumentsSkipFetch bool
 }
 
-// New creates a new kc Manager with the given configuration
+// New creates a new kc Manager with the given configuration.
+//
+// The body is a thin orchestrator over the init* helpers in
+// kc/manager_init.go. Each helper is documented at its declaration site;
+// the order below is load-bearing — downstream phases read state that
+// earlier phases wrote. Do not reorder without re-reading the helper
+// docs.
 func New(cfg Config) (*Manager, error) {
 	// Validate required fields
 	if cfg.Logger == nil {
@@ -62,347 +66,34 @@ func New(cfg Config) (*Manager, error) {
 		cfg.Logger.Warn("No Kite API credentials configured")
 	}
 
-	// Create or use provided instruments manager
-	var instrumentsManager *instruments.Manager
-	if cfg.InstrumentsManager != nil {
-		instrumentsManager = cfg.InstrumentsManager
-	} else {
-		instrumentsCfg := instruments.Config{
-			UpdateConfig: cfg.InstrumentsConfig,
-			Logger:       cfg.Logger,
-		}
-		// Test-isolation seam: when InstrumentsSkipFetch is true, pass an
-		// empty TestData map so instruments.New skips the HTTP fetch. This
-		// keeps the full Manager wiring exercised (registries, services,
-		// event dispatcher) while eliminating the external dependency that
-		// causes flaky CI under api.kite.trade rate limits.
-		if cfg.InstrumentsSkipFetch {
-			instrumentsCfg.TestData = map[uint32]*instruments.Instrument{}
-		}
-		var err error
-		instrumentsManager, err = instruments.New(instrumentsCfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create instruments manager: %w", err)
-		}
+	instrumentsManager, err := initInstrumentsManager(cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	m := &Manager{
-		apiKey:            cfg.APIKey,
-		apiSecret:         cfg.APISecret,
-		accessToken:       cfg.AccessToken,
-		Logger:            cfg.Logger,
-		metrics:           cfg.Metrics,
-		appMode:           cfg.AppMode,
-		externalURL:       cfg.ExternalURL,
-		adminSecretPath:   cfg.AdminSecretPath,
-		devMode:           cfg.DevMode,
-		kiteClientFactory: &defaultKiteClientFactory{},
-		tokenStore:        NewKiteTokenStore(),
-		credentialStore:   NewKiteCredentialStore(),
-		commandBus:        cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
-		queryBus:          cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
-	}
+	m := newEmptyManager(cfg)
 
-	// Initialize the decomposed facades. They hold a back-pointer to Manager,
-	// so each accessor reads the current field value (no stale snapshot).
-	m.stores = newStoreRegistry(m)
-	m.eventing = newEventingService(m)
-	m.brokers = newBrokerServices(m)
-	m.scheduling = newSchedulingService(m)
-	m.sessionLifecycle = newSessionLifecycleService(m)
-
-	// Initialize alert system: store → notifier → evaluator → ticker
-	m.alertStore = alerts.NewStore(func(alert *alerts.Alert, currentPrice float64) {
-		if m.telegramNotifier != nil {
-			m.telegramNotifier.Notify(alert, currentPrice)
-		}
-		// Log alert trigger to audit trail for SSE browser notifications.
-		if m.auditStore != nil {
-			now := time.Now()
-			m.auditStore.Enqueue(&audit.ToolCall{
-				CallID:        fmt.Sprintf("alert-%s-%d", alert.ID, now.UnixNano()),
-				Email:         alert.Email,
-				ToolName:      "alert_triggered",
-				ToolCategory:  "notification",
-				InputSummary:  fmt.Sprintf("%s:%s %s %.2f", alert.Exchange, alert.Tradingsymbol, alert.Direction, alert.TargetPrice),
-				OutputSummary: fmt.Sprintf("Triggered at %.2f, notified via Telegram", currentPrice),
-				StartedAt:     now,
-				CompletedAt:   now,
-			})
-		}
-		// Dispatch domain event for alert trigger.
-		if m.eventDispatcher != nil {
-			m.eventDispatcher.Dispatch(domain.AlertTriggeredEvent{
-				Email:        alert.Email,
-				AlertID:      alert.ID,
-				Instrument:   domain.NewInstrumentKey(alert.Exchange, alert.Tradingsymbol),
-				TargetPrice:  domain.NewINR(alert.TargetPrice),
-				CurrentPrice: domain.NewINR(currentPrice),
-				Direction:    string(alert.Direction),
-				Timestamp:    time.Now().UTC(),
-			})
-		}
-	})
-	m.alertStore.SetLogger(cfg.Logger)
-
-	// Optional: SQLite persistence for alerts
-	if cfg.AlertDBPath != "" {
-		alertDB, dbErr := alerts.OpenDB(cfg.AlertDBPath)
-		if dbErr != nil {
-			cfg.Logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
-		} else {
-			m.alertDB = alertDB
-			// Set up credential encryption if a secret is provided
-			if cfg.EncryptionSecret != "" {
-				encKey, encErr := alerts.EnsureEncryptionSalt(alertDB, cfg.EncryptionSecret)
-				if encErr != nil {
-					cfg.Logger.Error("Failed to derive encryption key with salt", "error", encErr)
-				} else {
-					alertDB.SetEncryptionKey(encKey)
-					cfg.Logger.Info("Credential encryption enabled (with HKDF salt)")
-				}
-			}
-			m.alertStore.SetDB(alertDB)
-			if err := m.alertStore.LoadFromDB(); err != nil {
-				cfg.Logger.Error("Failed to load alerts from DB", "error", err)
-			} else {
-				cfg.Logger.Info("Alerts loaded from database", "path", cfg.AlertDBPath)
-			}
-			// Token persistence: share the same DB
-			m.tokenStore.SetDB(alertDB)
-			m.tokenStore.SetLogger(cfg.Logger)
-			if err := m.tokenStore.LoadFromDB(); err != nil {
-				cfg.Logger.Error("Failed to load tokens from DB", "error", err)
-			} else {
-				cfg.Logger.Info("Tokens loaded from database", "count", m.tokenStore.Count())
-			}
-			// Credential persistence: share the same DB
-			m.credentialStore.SetDB(alertDB)
-			m.credentialStore.SetLogger(cfg.Logger)
-			if err := m.credentialStore.LoadFromDB(); err != nil {
-				cfg.Logger.Error("Failed to load credentials from DB", "error", err)
-			} else {
-				cfg.Logger.Info("Credentials loaded from database", "count", m.credentialStore.Count())
-			}
-		}
-	}
-
-	// Wire credential → token invalidation: when a user's API key changes,
-	// delete the cached Kite token (it was issued for the old app).
-	m.credentialStore.OnTokenInvalidate(func(email string) {
-		m.tokenStore.Delete(email)
-	})
-
-	if cfg.TelegramBotToken != "" {
-		notifier, tgErr := alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
-		if tgErr != nil {
-			cfg.Logger.Warn("Telegram notifier failed to initialize", "error", tgErr)
-		} else {
-			m.telegramNotifier = notifier
-		}
-	}
-
-	m.alertEvaluator = alerts.NewEvaluator(m.alertStore, cfg.Logger)
-
-	// Initialize trailing stop manager
-	m.trailingStopMgr = alerts.NewTrailingStopManager(cfg.Logger)
-	if m.alertDB != nil {
-		m.trailingStopMgr.SetDB(m.alertDB)
-		if err := m.trailingStopMgr.LoadFromDB(); err != nil {
-			cfg.Logger.Error("Failed to load trailing stops from DB", "error", err)
-		}
-	}
-
-	// Initialize watchlist store
-	m.watchlistStore = watchlist.NewStore()
-	m.watchlistStore.SetLogger(cfg.Logger)
-	if m.alertDB != nil {
-		if err := watchlist.InitTables(m.alertDB); err != nil {
-			cfg.Logger.Error("Failed to create watchlist tables", "error", err)
-		} else {
-			m.watchlistStore.SetDB(m.alertDB)
-			if err := m.watchlistStore.LoadFromDB(); err != nil {
-				cfg.Logger.Error("Failed to load watchlists from DB", "error", err)
-			} else {
-				cfg.Logger.Info("Watchlists loaded from database")
-			}
-		}
-	}
-
-	// Initialize user store (RBAC, lifecycle)
-	m.userStore = users.NewStore()
-	m.userStore.SetLogger(cfg.Logger)
-	if m.alertDB != nil {
-		m.userStore.SetDB(m.alertDB)
-		if err := m.userStore.InitTable(); err != nil {
-			cfg.Logger.Error("Failed to create users table", "error", err)
-		} else if err := m.userStore.LoadFromDB(); err != nil {
-			cfg.Logger.Error("Failed to load users from DB", "error", err)
-		} else {
-			cfg.Logger.Info("Users loaded from database", "count", m.userStore.Count())
-		}
-	}
-	// Initialize key registry store (zero-config onboarding)
-	m.registryStore = registry.New()
-	m.registryStore.SetLogger(cfg.Logger)
-	if m.alertDB != nil {
-		m.registryStore.SetDB(m.alertDB)
-		if err := m.registryStore.LoadFromDB(); err != nil {
-			cfg.Logger.Error("Failed to load registry from DB", "error", err)
-		} else {
-			cfg.Logger.Info("App registry loaded from database", "count", m.registryStore.Count())
-		}
-	}
-
-	// Initialize focused services (Clean Architecture)
-	m.credentialSvc = NewCredentialService(CredentialServiceConfig{
-		APIKey:          cfg.APIKey,
-		APISecret:       cfg.APISecret,
-		AccessToken:     cfg.AccessToken,
-		CredentialStore: m.credentialStore,
-		TokenStore:      m.tokenStore,
-		RegistryStore:   m.registryStore,
-		Logger:          cfg.Logger,
-	})
-
-	// Backfill registry from existing credentials (handles pre-registry self-provisioned keys)
-	m.credentialSvc.BackfillRegistryFromCredentials()
-
-	// Wire the order modifier: creates a Kite client from cached tokens
-	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
-		apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
-		accessToken := m.credentialSvc.GetAccessTokenForEmail(email)
-		if accessToken == "" {
-			return nil, fmt.Errorf("no Kite access token for %s", email)
-		}
-		client := m.kiteClientFactory.NewClientWithToken(apiKey, accessToken)
-		return client, nil
-	})
-
-	// Wire trailing stop modification notification to Telegram
-	m.trailingStopMgr.SetOnModify(func(ts *alerts.TrailingStop, oldStop, newStop float64) {
-		// Log trailing stop modification to audit trail for SSE browser notifications.
-		if m.auditStore != nil {
-			now := time.Now()
-			trailDesc := fmt.Sprintf("%.2f", ts.TrailAmount)
-			if ts.TrailPct > 0 {
-				trailDesc = fmt.Sprintf("%.1f%%", ts.TrailPct)
-			}
-			m.auditStore.Enqueue(&audit.ToolCall{
-				CallID:        fmt.Sprintf("trail-%s-%d", ts.ID, now.UnixNano()),
-				Email:         ts.Email,
-				ToolName:      "trailing_stop_modified",
-				ToolCategory:  "notification",
-				InputSummary:  fmt.Sprintf("%s:%s SL moved %.2f -> %.2f", ts.Exchange, ts.Tradingsymbol, oldStop, newStop),
-				OutputSummary: fmt.Sprintf("High: %.2f, Trail: %s", ts.HighWaterMark, trailDesc),
-				StartedAt:     now,
-				CompletedAt:   now,
-			})
-		}
-
-		if m.telegramNotifier == nil {
-			return
-		}
-		chatID, ok := m.alertStore.GetTelegramChatID(ts.Email)
-		if !ok {
-			return
-		}
-		arrow := "\u2B06\uFE0F" // up arrow
-		if newStop < oldStop {
-			arrow = "\u2B07\uFE0F" // down arrow
-		}
-		msg := fmt.Sprintf(
-			"%s <b>Trailing Stop Modified</b>\n\n"+
-				"%s:%s (%s)\n"+
-				"SL: \u20B9%.2f \u2192 \u20B9%.2f\n"+
-				"High water mark: \u20B9%.2f\n"+
-				"Modifications: %d",
-			arrow,
-			ts.Exchange, ts.Tradingsymbol, ts.Direction,
-			oldStop, newStop,
-			ts.HighWaterMark,
-			ts.ModifyCount,
-		)
-		if err := m.telegramNotifier.SendHTMLMessage(chatID, msg); err != nil {
-			m.Logger.Warn("Failed to send trailing stop Telegram notification",
-				"email", ts.Email, "error", err)
-		}
-	})
-
-	// Initialize ticker with alert evaluator + trailing stop manager as OnTick callbacks
-	m.tickerService = ticker.New(ticker.Config{
-		Logger: cfg.Logger,
-		OnTick: func(email string, tick models.Tick) {
-			m.alertEvaluator.Evaluate(email, tick)
-			m.trailingStopMgr.Evaluate(email, tick)
-		},
-	})
+	m.initAlertSystem(cfg)
+	m.initPersistence(cfg)
+	m.initCredentialWiring()
+	m.initTelegramNotifier(cfg)
+	m.initAlertEvaluator(cfg)
+	m.initTrailingStop(cfg)
+	m.initSideStores(cfg)
+	m.initCredentialService(cfg) // also wires trailing-stop order modifier
+	m.initTickerService(cfg)
 
 	if err := m.initializeTemplates(); err != nil {
 		return nil, fmt.Errorf("failed to initialize Kite manager: %w", err)
 	}
-
 	if err := m.initializeSessionSigner(cfg.SessionSigner); err != nil {
 		return nil, fmt.Errorf("failed to initialize session signer: %w", err)
 	}
 
-	m.Instruments = instrumentsManager
-	m.scheduling.initialize()
-
-	// Initialize session service (uses credential service + session manager)
-	var metricsImpl metricsTracker
-	if cfg.Metrics != nil {
-		metricsImpl = cfg.Metrics
-	}
-	m.sessionSvc = NewSessionService(SessionServiceConfig{
-		CredentialSvc: m.credentialSvc,
-		TokenStore:    m.tokenStore,
-		SessionSigner: m.sessionSigner,
-		Logger:        cfg.Logger,
-		Metrics:       metricsImpl,
-		DevMode:       cfg.DevMode,
-	})
-	m.sessionSvc.SetSessionManager(m.sessionManager)
-	m.managedSessionSvc = NewManagedSessionService(m.sessionManager)
-
-	// Initialize portfolio and order services
-	m.portfolioSvc = NewPortfolioService(m.sessionSvc, cfg.Logger)
-	m.orderSvc = NewOrderService(m.sessionSvc, cfg.Logger)
-
-	// Initialize alert service (wraps alert-related components)
-	m.alertSvc = NewAlertService(AlertServiceConfig{
-		AlertStore:       m.alertStore,
-		AlertEvaluator:   m.alertEvaluator,
-		TrailingStopMgr:  m.trailingStopMgr,
-		TelegramNotifier: m.telegramNotifier,
-	})
-
-	// Session persistence: share the same DB (if available)
-	if m.alertDB != nil {
-		m.sessionManager.SetDB(&sessionDBAdapter{db: m.alertDB})
-		if err := m.sessionManager.LoadFromDB(); err != nil {
-			cfg.Logger.Error("Failed to load sessions from DB", "error", err)
-		} else {
-			cfg.Logger.Info("Sessions loaded from database")
-		}
-	}
-
-	// Wire token rotation observer: when a user's token changes, update their ticker
-	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
-		if m.tickerService.IsRunning(email) {
-			apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
-			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
-				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
-			} else {
-				m.Logger.Info("Ticker token rotated automatically", "email", email)
-			}
-		}
-	})
-
-	// Initialize the read-side projection. The projector is empty until
-	// SetEventDispatcher wires it to a real dispatcher in app/wire.go; tests
-	// that skip dispatcher setup still get a usable empty projector.
-	m.projector = eventsourcing.NewProjector()
+	m.initFocusedServices(cfg, instrumentsManager)
+	m.initSessionPersistence(cfg)
+	m.initTokenRotation()
+	m.initProjector()
 
 	// Register CQRS handlers on the bus. Tool handlers dispatch queries through
 	// manager.QueryBus() rather than constructing use cases inline.
