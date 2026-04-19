@@ -16,9 +16,7 @@ import (
 // and the downstream tool handler MUST be skipped.
 func TestOnToolExecution_SubstituteResult(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	handlerCalled := false
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handlerCalled = true
@@ -51,9 +49,7 @@ func TestOnToolExecution_SubstituteResult(t *testing.T) {
 // handler's result and can return it (or a transformation of it).
 func TestOnToolExecution_CallsNext(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	handlerCalled := false
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handlerCalled = true
@@ -90,9 +86,7 @@ func TestOnToolExecution_CallsNext(t *testing.T) {
 // client gets a well-formed response instead of a disconnect.
 func TestOnToolExecution_PanicRecovered(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	handlerCalled := false
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handlerCalled = true
@@ -123,9 +117,7 @@ func TestOnToolExecution_PanicRecovered(t *testing.T) {
 // outermost wrapper, matches how HTTP middleware chains read.)
 func TestOnToolExecution_ChainedHooks(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	order := []string{}
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		order = append(order, "handler")
@@ -163,9 +155,7 @@ func TestOnToolExecution_ChainedHooks(t *testing.T) {
 // subsequent around-hooks AND the handler are both skipped.
 func TestOnToolExecution_ShortCircuitSkipsLaterHooks(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	secondCalled := false
 	handlerCalled := false
 
@@ -203,6 +193,7 @@ func TestOnToolExecution_ShortCircuitSkipsLaterHooks(t *testing.T) {
 // OnAfterToolExecution contract.
 func TestOnBeforeAfterSemanticsPreserved(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	t.Run("before hook still blocks via error return", func(t *testing.T) {
 		ClearHooks()
 		defer ClearHooks()
@@ -259,9 +250,7 @@ func TestOnBeforeAfterSemanticsPreserved(t *testing.T) {
 // cannot crash the middleware.
 func TestOnBeforePanicRecovered(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		panic("before-hook panic")
 	})
@@ -276,9 +265,7 @@ func TestOnBeforePanicRecovered(t *testing.T) {
 // simply be swallowed).
 func TestOnAfterPanicRecovered(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	secondCalled := false
 	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		panic("after-hook panic")

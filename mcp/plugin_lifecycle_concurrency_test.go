@@ -18,11 +18,7 @@ import (
 // and Shutdown (which would block any registration).
 func TestConcurrentRegisterDuringReload(t *testing.T) {
 	t.Parallel()
-	ClearPluginLifecycles()
-	ClearPluginHealth()
-	defer ClearPluginLifecycles()
-	defer ClearPluginHealth()
-
+	LockDefaultRegistryForTest(t)
 	// Pre-register a slow lifecycle whose Shutdown holds for 50ms
 	// so we have a window during which to try registering in
 	// parallel.
@@ -63,9 +59,7 @@ func TestConcurrentRegisterDuringReload(t *testing.T) {
 // interleaving.
 func TestShutdownDuringInflightSafeCall(t *testing.T) {
 	t.Parallel()
-	ClearPluginHealth()
-	defer ClearPluginHealth()
-
+	LockDefaultRegistryForTest(t)
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -95,11 +89,7 @@ func TestShutdownDuringInflightSafeCall(t *testing.T) {
 // listing every panic.
 func TestInitPluginRegistries_AllPanicsCollected(t *testing.T) {
 	t.Parallel()
-	ClearPluginLifecycles()
-	ClearPluginHealth()
-	defer ClearPluginLifecycles()
-	defer ClearPluginHealth()
-
+	LockDefaultRegistryForTest(t)
 	const N = 5
 	var panicCount atomic.Int32
 	for i := 0; i < N; i++ {
@@ -130,9 +120,7 @@ func TestInitPluginRegistries_AllPanicsCollected(t *testing.T) {
 // siblings from running.
 func TestShutdownReverseOrder_PanicsIsolated(t *testing.T) {
 	t.Parallel()
-	ClearPluginLifecycles()
-	defer ClearPluginLifecycles()
-
+	LockDefaultRegistryForTest(t)
 	var order []string
 	var mu sync.Mutex
 	record := func(s string) {
@@ -175,6 +163,7 @@ func TestShutdownReverseOrder_PanicsIsolated(t *testing.T) {
 // runtime assertions are secondary.
 func TestSafeCall_GenericTypeInference(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	// string result
 	s, err := SafeCall("str", func() (string, error) { return "hi", nil })
 	assert.NoError(t, err)
@@ -209,16 +198,8 @@ func TestSafeCall_GenericTypeInference(t *testing.T) {
 // registry is added without wiring it into the manifest.
 func TestPluginManifest_CrossRegistryIntegration(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	// Reset everything to known state.
-	ClearPluginLifecycles()
-	ClearPluginHealth()
-	ClearPluginSBOM()
-	ClearPluginInfo()
-	ClearPluginMiddleware()
-	ClearPluginWidgets()
-	ClearPluginEventSubscriptions()
-	ClearHooks()
-	ClearPlugins()
 	defer func() {
 		ClearPluginLifecycles()
 		ClearPluginHealth()

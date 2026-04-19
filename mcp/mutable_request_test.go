@@ -15,6 +15,7 @@ import (
 // (mutations don't leak back to the original request).
 func TestMutableCallToolRequest_Basic(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	orig := mcp.CallToolRequest{}
 	orig.Params.Name = "place_order"
 	orig.Params.Arguments = map[string]any{"symbol": "INFY", "qty": float64(10)}
@@ -40,6 +41,7 @@ func TestMutableCallToolRequest_Basic(t *testing.T) {
 // primitives round-trip values correctly.
 func TestMutableCallToolRequest_SetGetDelete(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	m := NewMutableCallToolRequest(mcp.CallToolRequest{})
 
 	// Empty-state Get.
@@ -72,6 +74,7 @@ func TestMutableCallToolRequest_SetGetDelete(t *testing.T) {
 // a map reference.
 func TestMutableCallToolRequest_ArgumentsSnapshot(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	orig := mcp.CallToolRequest{}
 	orig.Params.Arguments = map[string]any{"a": 1}
 	m := NewMutableCallToolRequest(orig)
@@ -89,6 +92,7 @@ func TestMutableCallToolRequest_ArgumentsSnapshot(t *testing.T) {
 // handler sees mutations.
 func TestMutableCallToolRequest_ToRequest(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	orig := mcp.CallToolRequest{}
 	orig.Params.Name = "place_order"
 	orig.Params.Arguments = map[string]any{"qty": float64(1)}
@@ -110,9 +114,7 @@ func TestMutableCallToolRequest_ToRequest(t *testing.T) {
 // plugin depth to 100%.
 func TestOnToolExecutionMutable_HookRewritesArg(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	var handlerSawQty float64
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
@@ -143,9 +145,7 @@ func TestOnToolExecutionMutable_HookRewritesArg(t *testing.T) {
 // sensitive field before the handler sees it.
 func TestOnToolExecutionMutable_HookDeletesArg(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	var handlerSawSecret bool
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		_, ok := req.GetArguments()["secret"]
@@ -172,9 +172,7 @@ func TestOnToolExecutionMutable_HookDeletesArg(t *testing.T) {
 // default / derived value.
 func TestOnToolExecutionMutable_HookAddsArg(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	var handlerSawInjected string
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if v, ok := req.GetArguments()["injected"].(string); ok {
@@ -204,9 +202,7 @@ func TestOnToolExecutionMutable_HookAddsArg(t *testing.T) {
 // propagate.
 func TestOnToolExecutionMutable_PanicRecovered(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	handlerCalled := false
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handlerCalled = true
@@ -235,9 +231,7 @@ func TestOnToolExecutionMutable_PanicRecovered(t *testing.T) {
 // and into the handler.
 func TestOnToolExecutionMutable_ChainsWithImmutable(t *testing.T) {
 	t.Parallel()
-	ClearHooks()
-	defer ClearHooks()
-
+	LockDefaultRegistryForTest(t)
 	immutableSawQty := float64(-1)
 	handlerSawQty := float64(-1)
 	next := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -275,6 +269,7 @@ func TestOnToolExecutionMutable_ChainsWithImmutable(t *testing.T) {
 // Arguments still gets a functional wrapper (Set creates the map).
 func TestOnToolExecutionMutable_NilArguments(t *testing.T) {
 	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	orig := mcp.CallToolRequest{}
 	orig.Params.Arguments = nil // missing entirely
 

@@ -17,9 +17,8 @@ import (
 // Close() method fires, and the (now-dead) subprocess proxy gets
 // relaunched on the NEXT evaluation.
 func TestWatchPluginBinary_FiresOnWrite(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmp := t.TempDir()
 	binary := filepath.Join(tmp, "fake-plugin")
 	require.NoError(t, os.WriteFile(binary, []byte("v1"), 0o755))
@@ -58,9 +57,8 @@ func TestWatchPluginBinary_FiresOnWrite(t *testing.T) {
 // WRITE then CHMOD on Linux). The watcher must debounce to at most
 // one Close() per debounce window (default 250ms).
 func TestWatchPluginBinary_DebouncesRapidWrites(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmp := t.TempDir()
 	binary := filepath.Join(tmp, "fake-plugin")
 	require.NoError(t, os.WriteFile(binary, []byte("v1"), 0o755))
@@ -97,9 +95,8 @@ func TestWatchPluginBinary_DebouncesRapidWrites(t *testing.T) {
 // back to the file still triggers a close (fsnotify fires on
 // WRITE syscall regardless of content). Documented behaviour.
 func TestWatchPluginBinary_NoopOnNoChange(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmp := t.TempDir()
 	binary := filepath.Join(tmp, "fake-plugin")
 	contents := []byte("stable")
@@ -131,9 +128,8 @@ func TestWatchPluginBinary_NoopOnNoChange(t *testing.T) {
 // stops the goroutine and drops all subscriptions. Subsequent
 // writes do NOT fire Close(). Verifies no goroutine leak.
 func TestWatchPluginBinary_StopCleansUp(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmp := t.TempDir()
 	binary := filepath.Join(tmp, "fake-plugin")
 	require.NoError(t, os.WriteFile(binary, []byte("v1"), 0o755))
@@ -163,9 +159,8 @@ func TestWatchPluginBinary_StopCleansUp(t *testing.T) {
 // watched at different paths; write to one fires only that
 // plugin's Close, not the other.
 func TestWatchPluginBinary_MultiplePluginsIndependent(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmp := t.TempDir()
 	binA := filepath.Join(tmp, "plugin-a")
 	binB := filepath.Join(tmp, "plugin-b")
@@ -193,9 +188,8 @@ func TestWatchPluginBinary_MultiplePluginsIndependent(t *testing.T) {
 // TestWatchPluginBinary_RejectsInvalid — empty path or nil
 // reloadable both fail at registration.
 func TestWatchPluginBinary_RejectsInvalid(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Error(t, WatchPluginBinary("", &stubReloadable{}))
 	assert.Error(t, WatchPluginBinary("/some/path", nil))
 }
@@ -204,8 +198,8 @@ func TestWatchPluginBinary_RejectsInvalid(t *testing.T) {
 // no-op rather than an error (production code may re-init during
 // a hot-reload cycle).
 func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
-	ClearPluginWatches()
-	defer ClearPluginWatches()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	defer StopPluginBinaryWatcher()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -222,6 +216,10 @@ func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
 // contract: "true" (case-insensitive) enables, anything else
 // disables.
 func TestPluginWatcherEnvGating(t *testing.T) {
+	// Not t.Parallel() — subtests use t.Setenv which is incompatible
+	// with a parallel parent. This test mutates an env var, not the
+	// plugin registry, so it doesn't need LockDefaultRegistryForTest
+	// either.
 	cases := []struct {
 		env  string
 		want bool

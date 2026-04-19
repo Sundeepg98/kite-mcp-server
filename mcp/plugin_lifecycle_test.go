@@ -14,6 +14,8 @@ import (
 // panic and returns it as an error. This is the primary safety
 // primitive used by every plugin-invocation site.
 func TestSafeInvoke_PanicRecovered(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := SafeInvoke("test_plugin", func() error {
 		panic("boom")
 	})
@@ -26,6 +28,8 @@ func TestSafeInvoke_PanicRecovered(t *testing.T) {
 // returns an error must have that error surfaced unchanged (no
 // double-wrap).
 func TestSafeInvoke_ErrorPassthrough(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	sentinel := errors.New("sentinel")
 	err := SafeInvoke("test", func() error { return sentinel })
 	assert.ErrorIs(t, err, sentinel)
@@ -33,6 +37,8 @@ func TestSafeInvoke_ErrorPassthrough(t *testing.T) {
 
 // TestSafeInvoke_SuccessNilErr — a clean path returns nil.
 func TestSafeInvoke_SuccessNilErr(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := SafeInvoke("test", func() error { return nil })
 	assert.NoError(t, err)
 }
@@ -41,6 +47,8 @@ func TestSafeInvoke_SuccessNilErr(t *testing.T) {
 // when a plugin function returns a value plus an error (e.g. widget
 // handlers, around-hooks).
 func TestSafeCall_PanicRecovered(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	result, err := SafeCall("test", func() (int, error) {
 		panic("kaboom")
 	})
@@ -51,6 +59,8 @@ func TestSafeCall_PanicRecovered(t *testing.T) {
 
 // TestSafeCall_Passthrough — happy path returns the value.
 func TestSafeCall_Passthrough(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	result, err := SafeCall("test", func() (int, error) { return 42, nil })
 	assert.NoError(t, err)
 	assert.Equal(t, 42, result)
@@ -59,9 +69,8 @@ func TestSafeCall_Passthrough(t *testing.T) {
 // TestPluginHealth_RegisterAndRead — a plugin records its health
 // via ReportPluginHealth; PluginHealth() returns a snapshot.
 func TestPluginHealth_RegisterAndRead(t *testing.T) {
-	ClearPluginHealth()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	ReportPluginHealth("my_plugin", HealthStatus{
 		State:   HealthStateOK,
 		Message: "all green",
@@ -77,9 +86,8 @@ func TestPluginHealth_RegisterAndRead(t *testing.T) {
 // (ok -> degraded -> failed). Each ReportPluginHealth replaces the
 // prior entry (last-wins).
 func TestPluginHealth_StateTransitions(t *testing.T) {
-	ClearPluginHealth()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	ReportPluginHealth("p", HealthStatus{State: HealthStateOK})
 	ReportPluginHealth("p", HealthStatus{State: HealthStateDegraded, Message: "slow"})
 	ReportPluginHealth("p", HealthStatus{State: HealthStateFailed, Message: "crashed"})
@@ -92,9 +100,8 @@ func TestPluginHealth_StateTransitions(t *testing.T) {
 // TestPluginHealth_TimestampAuto — ReportPluginHealth stamps LastChecked
 // automatically if caller leaves it zero.
 func TestPluginHealth_TimestampAuto(t *testing.T) {
-	ClearPluginHealth()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	before := time.Now()
 	ReportPluginHealth("p", HealthStatus{State: HealthStateOK})
 	after := time.Now()
@@ -107,9 +114,8 @@ func TestPluginHealth_TimestampAuto(t *testing.T) {
 // TestInitPluginRegistries_InvokesAll — calling InitPluginRegistries
 // triggers Init on each registered PluginLifecycle.
 func TestInitPluginRegistries_InvokesAll(t *testing.T) {
-	ClearPluginLifecycles()
-	defer ClearPluginLifecycles()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var initCount int
 	RegisterPluginLifecycle("a", &stubLifecycle{
 		initFn: func(ctx context.Context) error { initCount++; return nil },
@@ -127,11 +133,8 @@ func TestInitPluginRegistries_InvokesAll(t *testing.T) {
 // panics must NOT prevent other plugins from initialising. The
 // panicking plugin is marked Failed in health; others stay OK.
 func TestInitPluginRegistries_PanicsIsolated(t *testing.T) {
-	ClearPluginLifecycles()
-	ClearPluginHealth()
-	defer ClearPluginLifecycles()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var bothCalled bool
 	RegisterPluginLifecycle("panicker", &stubLifecycle{
 		initFn: func(ctx context.Context) error {
@@ -159,9 +162,8 @@ func TestInitPluginRegistries_PanicsIsolated(t *testing.T) {
 // in the reverse order of Init so stateful teardown mirrors setup
 // (standard for lifecycle managers).
 func TestShutdownPluginRegistries_ReverseOrder(t *testing.T) {
-	ClearPluginLifecycles()
-	defer ClearPluginLifecycles()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var order []string
 	RegisterPluginLifecycle("first", &stubLifecycle{
 		shutdownFn: func(ctx context.Context) error {
@@ -192,9 +194,8 @@ func TestShutdownPluginRegistries_ReverseOrder(t *testing.T) {
 // coordinated shutdown + init, used by the "edit plugin code, hit
 // SIGHUP" dev loop.
 func TestReloadPluginRegistries_ShutdownThenInit(t *testing.T) {
-	ClearPluginLifecycles()
-	defer ClearPluginLifecycles()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var sequence []string
 	RegisterPluginLifecycle("p", &stubLifecycle{
 		initFn: func(ctx context.Context) error {
@@ -215,9 +216,8 @@ func TestReloadPluginRegistries_ShutdownThenInit(t *testing.T) {
 // TestPluginManifest_IncludesHealth — GetPluginManifest now carries
 // a Health map so one endpoint surfaces everything the admin needs.
 func TestPluginManifest_IncludesHealth(t *testing.T) {
-	ClearPluginHealth()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	ReportPluginHealth("x", HealthStatus{State: HealthStateOK, Message: "alive"})
 	m := GetPluginManifest()
 	assert.Contains(t, m.Health, "x")

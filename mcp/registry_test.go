@@ -10,8 +10,10 @@ import (
 )
 
 func TestPluginRegistry(t *testing.T) {
-	// Clean state
-	ClearPlugins()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
+	// Clean state — LockDefaultRegistryForTest guarantees the
+	// registry is empty on entry and calls Reset in t.Cleanup.
 	assert.Equal(t, 0, PluginCount())
 
 	// Register a plugin
@@ -27,23 +29,18 @@ func TestPluginRegistry(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, count, "server_metrics should appear twice (built-in + plugin)")
-
-	// Cleanup
-	ClearPlugins()
-	assert.Equal(t, 0, PluginCount())
 }
 
 func TestRegisterMultiplePlugins(t *testing.T) {
-	ClearPlugins()
-	defer ClearPlugins()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	RegisterPlugins(&ServerMetricsTool{}, &AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
 }
 
 func TestPluginCountAfterClear(t *testing.T) {
-	ClearPlugins()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	RegisterPlugin(&ServerMetricsTool{})
 	RegisterPlugin(&AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
@@ -55,14 +52,11 @@ func TestPluginCountAfterClear(t *testing.T) {
 	baseCount := len(GetAllTools())
 	RegisterPlugin(&ServerMetricsTool{})
 	assert.Equal(t, baseCount+1, len(GetAllTools()))
-
-	ClearPlugins()
 }
 
 func TestPluginToolsAppearInGetAllTools(t *testing.T) {
-	ClearPlugins()
-	defer ClearPlugins()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	baseTools := GetAllTools()
 	baseCount := len(baseTools)
 
@@ -75,9 +69,8 @@ func TestPluginToolsAppearInGetAllTools(t *testing.T) {
 }
 
 func TestBeforeHook(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	called := false
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		called = true
@@ -91,9 +84,8 @@ func TestBeforeHook(t *testing.T) {
 }
 
 func TestBeforeHookBlocksOnError(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	errBlocked := errors.New("blocked by hook")
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errBlocked
@@ -112,9 +104,8 @@ func TestBeforeHookBlocksOnError(t *testing.T) {
 }
 
 func TestAfterHook(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var capturedTool string
 	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		capturedTool = toolName
@@ -126,9 +117,8 @@ func TestAfterHook(t *testing.T) {
 }
 
 func TestAfterHookContinuesOnError(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	secondCalled := false
 	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("first hook fails")
@@ -143,8 +133,8 @@ func TestAfterHookContinuesOnError(t *testing.T) {
 }
 
 func TestClearHooks(t *testing.T) {
-	ClearHooks()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("should not run")
 	})
@@ -152,6 +142,7 @@ func TestClearHooks(t *testing.T) {
 		return errors.New("should not run")
 	})
 
+	// Exercise the CLEAR — this test exists to prove ClearHooks wipes state.
 	ClearHooks()
 
 	// No hooks should run

@@ -18,9 +18,8 @@ import (
 // the test honest as widgets are added — each new widget commit appends
 // its URI below.
 func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := RegisterBuiltinWidgetPack(nil, nil, nil)
 	require.NoError(t, err)
 
@@ -50,9 +49,8 @@ func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
 // resources/list response" generalised: each real widget must actually
 // produce output.
 func TestRegisterBuiltinWidgetPack_HandlersReturnValidHTML(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterBuiltinWidgetPack(nil, nil, nil))
 
 	for _, w := range ListPluginWidgets() {
@@ -79,9 +77,8 @@ func TestRegisterBuiltinWidgetPack_HandlersReturnValidHTML(t *testing.T) {
 // RegisterWidget semantics). Guards against double-init bugs during
 // app start + test setup.
 func TestRegisterBuiltinWidgetPack_Idempotent(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterBuiltinWidgetPack(nil, nil, nil))
 	countAfterFirst := PluginWidgetCount()
 	require.NoError(t, RegisterBuiltinWidgetPack(nil, nil, nil))
@@ -95,6 +92,8 @@ func TestRegisterBuiltinWidgetPack_Idempotent(t *testing.T) {
 // the codebase (portfolio / activity / orders all handle nil manager
 // without crashing).
 func TestSectorDonutData_HandlesNilManager(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	data := sectorDonutWidgetData(nil, "user@test.com")
 	b, err := json.Marshal(data)
 	require.NoError(t, err)
@@ -109,12 +108,16 @@ func TestSectorDonutData_HandlesNilManager(t *testing.T) {
 // widget data function; a nil manager yields an error shape rather
 // than a panic.
 func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	data := pnlSparklineWidgetData(nil, "user@test.com")
 	assert.NotNil(t, data, "even nil manager yields a response object")
 }
 
 // TestMarginGaugeData_HandlesNilManager — nil-safe contract.
 func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	data := marginGaugeWidgetData(nil, "user@test.com")
 	assert.NotNil(t, data)
 }
@@ -124,6 +127,8 @@ func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
 // for the Fly.io bom region) and the Kite developer-console URL.
 // SEBI Apr 2026 compliance surface.
 func TestIPWhitelistData_StaticFields(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	data := ipWhitelistWidgetData(nil, "user@test.com")
 	b, err := json.Marshal(data)
 	require.NoError(t, err)
@@ -134,6 +139,8 @@ func TestIPWhitelistData_StaticFields(t *testing.T) {
 
 // TestReturnsMatrixData_HandlesNilManager — nil-safe contract.
 func TestReturnsMatrixData_HandlesNilManager(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	data := returnsMatrixWidgetData(nil, "user@test.com")
 	assert.NotNil(t, data)
 }

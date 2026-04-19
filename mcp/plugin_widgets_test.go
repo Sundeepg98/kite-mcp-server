@@ -14,9 +14,8 @@ import (
 // a plugin registers a ui:// resource and it appears in the plugin
 // widget registry, retrievable by URI.
 func TestRegisterWidget_BasicRegistration(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	handler := func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 		return []gomcp.ResourceContents{
 			gomcp.TextResourceContents{
@@ -41,9 +40,8 @@ func TestRegisterWidget_BasicRegistration(t *testing.T) {
 // "handler is called and its output is returned" flow. This is the
 // behavioural test the brief asks for.
 func TestRegisterWidget_HandlerInvoked(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	called := false
 	RegisterWidget("ui://test-plugin/greeter", "Greeter", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 		called = true
@@ -76,9 +74,8 @@ func TestRegisterWidget_HandlerInvoked(t *testing.T) {
 // URL are rejected so malformed registrations surface at wire-up
 // rather than at first resource fetch.
 func TestRegisterWidget_RejectsInvalidURI(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	cases := []struct {
 		name string
 		uri  string
@@ -104,9 +101,8 @@ func TestRegisterWidget_RejectsInvalidURI(t *testing.T) {
 // error that must fail loudly at registration rather than NPE on
 // first access.
 func TestRegisterWidget_RejectsNilHandler(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := RegisterWidget("ui://test-plugin/nil", "Nil", nil)
 	assert.Error(t, err)
 }
@@ -115,9 +111,8 @@ func TestRegisterWidget_RejectsNilHandler(t *testing.T) {
 // resources/list with their Name, which clients render in menus.
 // An empty name would produce a blank menu entry.
 func TestRegisterWidget_RejectsEmptyName(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := RegisterWidget("ui://test-plugin/noname", "", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 		return nil, nil
 	})
@@ -128,9 +123,8 @@ func TestRegisterWidget_RejectsEmptyName(t *testing.T) {
 // URI replaces the handler (matches the lifecycle pattern used by the
 // Telegram plugin-commands registry).
 func TestRegisterWidget_DuplicateURI_LastWins(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	_ = RegisterWidget("ui://test-plugin/dup", "First", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 		return []gomcp.ResourceContents{gomcp.TextResourceContents{Text: "first"}}, nil
 	})
@@ -155,9 +149,8 @@ func TestRegisterWidget_DuplicateURI_LastWins(t *testing.T) {
 // a plugin hijacking them could serve arbitrary HTML into the
 // Claude.ai iframe, breaking our CSP guarantees.
 func TestRegisterWidget_NoConflictWithBuiltins(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	// Try every built-in URI.
 	for _, res := range appResources {
 		err := RegisterWidget(res.URI, "Hijack Attempt", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
@@ -173,9 +166,8 @@ func TestRegisterWidget_NoConflictWithBuiltins(t *testing.T) {
 // If ListPluginWidgets ever stops returning registered widgets, the
 // server silently loses the feature.
 func TestRegisterWidget_AppearsInListPluginWidgets(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	_ = RegisterWidget("ui://plugin-a/x", "A", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 		return nil, nil
 	})
@@ -198,9 +190,8 @@ func TestRegisterWidget_AppearsInListPluginWidgets(t *testing.T) {
 // registry must tolerate concurrent RegisterWidget calls without
 // deadlock or data race. Run under -race to validate.
 func TestRegisterWidget_ConcurrentRegistration(t *testing.T) {
-	ClearPluginWidgets()
-	defer ClearPluginWidgets()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	const N = 20
 	done := make(chan struct{}, N)
 	for i := 0; i < N; i++ {

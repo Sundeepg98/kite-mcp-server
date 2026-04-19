@@ -14,9 +14,8 @@ import (
 // middleware compose around a handler in Order() ascending — low order
 // wraps outermost, high order sits closest to the handler.
 func TestRegisterMiddleware_WrapsInOrder(t *testing.T) {
-	ClearPluginMiddleware()
-	defer ClearPluginMiddleware()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var seen []string
 	mk := func(label string) server.ToolHandlerMiddleware {
 		return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
@@ -47,8 +46,8 @@ func TestRegisterMiddleware_WrapsInOrder(t *testing.T) {
 // TestRegisterMiddleware_RejectsNil — nil mw and empty name both fail
 // at registration so the problem surfaces at wire-up not on first call.
 func TestRegisterMiddleware_RejectsNil(t *testing.T) {
-	ClearPluginMiddleware()
-	defer ClearPluginMiddleware()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Error(t, RegisterMiddleware("", nil, 0))
 	assert.Error(t, RegisterMiddleware("has_name_nil_mw", nil, 0))
 	assert.Error(t, RegisterMiddleware("", func(n server.ToolHandlerFunc) server.ToolHandlerFunc { return n }, 0))
@@ -57,9 +56,8 @@ func TestRegisterMiddleware_RejectsNil(t *testing.T) {
 // TestRegisterMiddleware_DuplicateNameReplaces — last-wins semantics
 // matching the pattern used by RegisterWidget and plugin_commands.
 func TestRegisterMiddleware_DuplicateNameReplaces(t *testing.T) {
-	ClearPluginMiddleware()
-	defer ClearPluginMiddleware()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	var firstCalled, secondCalled bool
 	require.NoError(t, RegisterMiddleware("dup",
 		func(n server.ToolHandlerFunc) server.ToolHandlerFunc {
@@ -88,9 +86,8 @@ func TestRegisterMiddleware_DuplicateNameReplaces(t *testing.T) {
 // TestListPluginMiddleware confirms the listing API returns registered
 // entries in Order ascending — the order they will execute.
 func TestListPluginMiddleware(t *testing.T) {
-	ClearPluginMiddleware()
-	defer ClearPluginMiddleware()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	noop := func(n server.ToolHandlerFunc) server.ToolHandlerFunc { return n }
 	require.NoError(t, RegisterMiddleware("b", noop, 500))
 	require.NoError(t, RegisterMiddleware("a", noop, 100))
@@ -108,9 +105,8 @@ func TestListPluginMiddleware(t *testing.T) {
 // middleware is registered, PluginMiddlewareChain() is a
 // transparent passthrough around next.
 func TestRegisterMiddleware_EmptyChainPassthrough(t *testing.T) {
-	ClearPluginMiddleware()
-	defer ClearPluginMiddleware()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	called := false
 	base := server.ToolHandlerFunc(func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		called = true
@@ -126,11 +122,8 @@ func TestRegisterMiddleware_EmptyChainPassthrough(t *testing.T) {
 // Failed in PluginHealth. Sibling middleware and the handler above it
 // are unaffected.
 func TestRegisterMiddleware_PanicRecoveredPerLayer(t *testing.T) {
-	ClearPluginMiddleware()
-	ClearPluginHealth()
-	defer ClearPluginMiddleware()
-	defer ClearPluginHealth()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterMiddleware("panicker",
 		func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 			return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

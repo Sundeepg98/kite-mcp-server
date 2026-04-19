@@ -12,9 +12,8 @@ import (
 // TestRegisterPluginSBOM_StoresAndLists — happy path: register an
 // SBOM entry, read it back via ListPluginSBOM.
 func TestRegisterPluginSBOM_StoresAndLists(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	entry := PluginSBOMEntry{
 		Name:     "my_plugin",
 		Version:  "1.0.0",
@@ -32,9 +31,8 @@ func TestRegisterPluginSBOM_StoresAndLists(t *testing.T) {
 // TestRegisterPluginSBOM_RejectsInvalid — empty Name, empty Checksum
 // are authoring errors and fail at registration.
 func TestRegisterPluginSBOM_RejectsInvalid(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Error(t, RegisterPluginSBOM(PluginSBOMEntry{Name: "", Checksum: "sha256:x"}))
 	assert.Error(t, RegisterPluginSBOM(PluginSBOMEntry{Name: "x", Checksum: ""}))
 }
@@ -42,9 +40,8 @@ func TestRegisterPluginSBOM_RejectsInvalid(t *testing.T) {
 // TestRegisterPluginSBOM_LastWinsOnDuplicate — matches the other
 // plugin-registries' lifecycle semantics.
 func TestRegisterPluginSBOM_LastWinsOnDuplicate(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterPluginSBOM(PluginSBOMEntry{Name: "p", Checksum: "sha256:old"}))
 	require.NoError(t, RegisterPluginSBOM(PluginSBOMEntry{Name: "p", Checksum: "sha256:new"}))
 
@@ -56,6 +53,8 @@ func TestRegisterPluginSBOM_LastWinsOnDuplicate(t *testing.T) {
 // TestChecksumBytes — produces a deterministic SHA-256 hex digest
 // with the "sha256:" prefix we use throughout the SBOM surface.
 func TestChecksumBytes(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	got := ChecksumBytes([]byte("hello"))
 	// echo -n 'hello' | sha256sum ->
 	// 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
@@ -66,6 +65,8 @@ func TestChecksumBytes(t *testing.T) {
 // TestChecksumFile — hashes a real file. Uses the standard library's
 // deterministic SHA-256 output.
 func TestChecksumFile(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	tmpFile := filepath.Join(t.TempDir(), "hello.txt")
 	require.NoError(t, os.WriteFile(tmpFile, []byte("hello"), 0o644))
 
@@ -77,6 +78,8 @@ func TestChecksumFile(t *testing.T) {
 // TestChecksumFile_Missing — a missing file surfaces a clean error,
 // not a panic.
 func TestChecksumFile_Missing(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	_, err := ChecksumFile(filepath.Join(t.TempDir(), "does-not-exist"))
 	assert.Error(t, err)
 }
@@ -85,9 +88,8 @@ func TestChecksumFile_Missing(t *testing.T) {
 // carries SBOM entries alongside health + counts. One endpoint
 // answers "is this plugin the version I signed off on?".
 func TestPluginManifest_IncludesSBOM(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterPluginSBOM(PluginSBOMEntry{
 		Name:     "x",
 		Checksum: "sha256:deadbeef",
@@ -102,9 +104,8 @@ func TestPluginManifest_IncludesSBOM(t *testing.T) {
 
 // TestPluginSBOMCount — tracking counter for admin surface.
 func TestPluginSBOMCount(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Equal(t, 0, PluginSBOMCount())
 	_ = RegisterPluginSBOM(PluginSBOMEntry{Name: "a", Checksum: "sha256:1"})
 	_ = RegisterPluginSBOM(PluginSBOMEntry{Name: "b", Checksum: "sha256:2"})
@@ -116,9 +117,8 @@ func TestPluginSBOMCount(t *testing.T) {
 // without signatures exist legitimately (compile-time plugins that
 // don't go through a signing key).
 func TestPluginSBOM_OptionalSignatureField(t *testing.T) {
-	ClearPluginSBOM()
-	defer ClearPluginSBOM()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterPluginSBOM(PluginSBOMEntry{
 		Name:     "unsigned",
 		Checksum: "sha256:nosig",

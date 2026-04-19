@@ -14,9 +14,8 @@ import (
 // TestRegisterPluginInfo_Basic — register a plugin manifest and
 // confirm it's retrievable via ListPlugins.
 func TestRegisterPluginInfo_Basic(t *testing.T) {
-	ClearPluginInfo()
-	defer ClearPluginInfo()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	err := RegisterPluginInfo(PluginInfo{
 		Name:        "example_plugin",
 		Version:     "1.0.0",
@@ -33,9 +32,8 @@ func TestRegisterPluginInfo_Basic(t *testing.T) {
 
 // TestRegisterPluginInfo_RejectsEmpty — name and version are required.
 func TestRegisterPluginInfo_RejectsEmpty(t *testing.T) {
-	ClearPluginInfo()
-	defer ClearPluginInfo()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Error(t, RegisterPluginInfo(PluginInfo{Name: "", Version: "1.0.0"}))
 	assert.Error(t, RegisterPluginInfo(PluginInfo{Name: "x", Version: ""}))
 }
@@ -43,9 +41,8 @@ func TestRegisterPluginInfo_RejectsEmpty(t *testing.T) {
 // TestRegisterPluginInfo_DuplicateReplaces — last-wins matches other
 // plugin registries.
 func TestRegisterPluginInfo_DuplicateReplaces(t *testing.T) {
-	ClearPluginInfo()
-	defer ClearPluginInfo()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterPluginInfo(PluginInfo{Name: "p", Version: "1.0.0"}))
 	require.NoError(t, RegisterPluginInfo(PluginInfo{Name: "p", Version: "2.0.0"}))
 
@@ -57,9 +54,8 @@ func TestRegisterPluginInfo_DuplicateReplaces(t *testing.T) {
 // TestListPlugins_SortedByName — returns plugins in sorted name order
 // for deterministic admin display.
 func TestListPlugins_SortedByName(t *testing.T) {
-	ClearPluginInfo()
-	defer ClearPluginInfo()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	require.NoError(t, RegisterPluginInfo(PluginInfo{Name: "zulu", Version: "1.0.0"}))
 	require.NoError(t, RegisterPluginInfo(PluginInfo{Name: "alpha", Version: "1.0.0"}))
 	require.NoError(t, RegisterPluginInfo(PluginInfo{Name: "mike", Version: "1.0.0"}))
@@ -76,13 +72,9 @@ func TestListPlugins_SortedByName(t *testing.T) {
 // Telegram commands, routes, event subs). This is the single-call
 // "what does this deployment have?" surface.
 func TestGetPluginManifest(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	// Clear everything to a known state.
-	ClearPluginInfo()
-	ClearPlugins()
-	ClearHooks()
-	ClearPluginWidgets()
-	ClearPluginMiddleware()
-	ClearPluginEventSubscriptions()
 	defer func() {
 		ClearPluginInfo()
 		ClearPlugins()
@@ -118,9 +110,8 @@ func TestGetPluginManifest(t *testing.T) {
 
 // TestPluginCountInfo — coverage/count test for the admin endpoint.
 func TestPluginCountInfo(t *testing.T) {
-	ClearPluginInfo()
-	defer ClearPluginInfo()
-
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 	assert.Equal(t, 0, PluginInfoCount())
 	_ = RegisterPluginInfo(PluginInfo{Name: "a", Version: "1.0.0"})
 	_ = RegisterPluginInfo(PluginInfo{Name: "b", Version: "1.0.0"})
