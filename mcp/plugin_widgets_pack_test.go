@@ -34,6 +34,7 @@ func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
 	expectedWidgetURIs := []string{
 		"ui://kite-mcp/sector-donut",
 		"ui://kite-mcp/pnl-sparkline",
+		"ui://kite-mcp/margin-gauge",
 	}
 	for _, want := range expectedWidgetURIs {
 		assert.True(t, uris[want], "expected widget %q to be registered", want)
@@ -108,4 +109,10 @@ func TestSectorDonutData_HandlesNilManager(t *testing.T) {
 func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
 	data := pnlSparklineWidgetData(nil, "user@test.com")
 	assert.NotNil(t, data, "even nil manager yields a response object")
+}
+
+// TestMarginGaugeData_HandlesNilManager — nil-safe contract.
+func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
+	data := marginGaugeWidgetData(nil, "user@test.com")
+	assert.NotNil(t, data)
 }

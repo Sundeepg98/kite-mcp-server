@@ -68,6 +68,12 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			TemplateHTML: pnlSparklineTemplateHTML,
 			DataFunc:     pnlSparklineWidgetData,
 		},
+		{
+			URI:          "ui://kite-mcp/margin-gauge",
+			Name:         "Margin Utilization Gauge",
+			TemplateHTML: marginGaugeTemplateHTML,
+			DataFunc:     marginGaugeWidgetData,
+		},
 	}
 	for _, def := range defs {
 		def := def // capture
