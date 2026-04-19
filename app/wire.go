@@ -36,21 +36,26 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// to isolate the test suite from external API rate limits. Never set
 	// in production.
 	skipInstrumentsFetch := strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true")
-	kcManager, err := kc.New(kc.Config{
-		APIKey:               app.Config.KiteAPIKey,
-		APISecret:            app.Config.KiteAPISecret,
-		AccessToken:          app.Config.KiteAccessToken,
-		Logger:               app.logger,
-		Metrics:              app.metrics,
-		TelegramBotToken:     app.Config.TelegramBotToken,
-		AlertDBPath:          app.Config.AlertDBPath,
-		AppMode:              app.Config.AppMode,
-		ExternalURL:          app.Config.ExternalURL,
-		AdminSecretPath:      app.Config.AdminSecretPath,
-		EncryptionSecret:     app.Config.OAuthJWTSecret,
-		DevMode:              app.DevMode,
-		InstrumentsSkipFetch: skipInstrumentsFetch,
-	})
+
+	// Migrated to kc.NewWithOptions — the functional-options pattern
+	// aligns with the rest of the codebase (testutil/kcfixture,
+	// kc/ticker/config.go, kc/scheduler/provider.go). Each With* helper
+	// documents the one field it sets; granular setters compose cleanly
+	// at the composition-root boundary.
+	kcManager, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(app.logger),
+		kc.WithKiteCredentials(app.Config.KiteAPIKey, app.Config.KiteAPISecret),
+		kc.WithAccessToken(app.Config.KiteAccessToken),
+		kc.WithMetrics(app.metrics),
+		kc.WithTelegramBotToken(app.Config.TelegramBotToken),
+		kc.WithAlertDBPath(app.Config.AlertDBPath),
+		kc.WithAppMode(app.Config.AppMode),
+		kc.WithExternalURL(app.Config.ExternalURL),
+		kc.WithAdminSecretPath(app.Config.AdminSecretPath),
+		kc.WithEncryptionSecret(app.Config.OAuthJWTSecret),
+		kc.WithDevMode(app.DevMode),
+		kc.WithInstrumentsSkipFetch(skipInstrumentsFetch),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
 	}

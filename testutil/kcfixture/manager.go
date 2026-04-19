@@ -5,6 +5,7 @@
 package kcfixture
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -143,16 +144,17 @@ func NewTestManager(t *testing.T, opts ...Option) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	cfg := kc.Config{
-		APIKey:             o.apiKey,
-		APISecret:          o.apiSecret,
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            o.devMode,
-		AlertDBPath:        o.alertDB,
-	}
-
-	mgr, err := kc.New(cfg)
+	// Migrated to kc.NewWithOptions — aligns with kcfixture's own
+	// functional-options pattern (see Option, WithAPIKeySecret, etc.
+	// above in this file). The granular setters compose cleanly; the
+	// legacy kc.Config literal is gone from the fixture.
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials(o.apiKey, o.apiSecret),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(o.devMode),
+		kc.WithAlertDBPath(o.alertDB),
+	)
 	require.NoError(t, err)
 
 	if o.riskGuard {

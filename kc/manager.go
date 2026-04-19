@@ -1,6 +1,7 @@
 package kc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
@@ -52,13 +53,51 @@ type Config struct {
 
 // New creates a new kc Manager with the given configuration.
 //
-// The body is a thin orchestrator over the init* helpers in
-// kc/manager_init.go. Each helper is documented at its declaration site;
-// the order below is load-bearing — downstream phases read state that
-// earlier phases wrote. Do not reorder without re-reading the helper
-// docs.
+// Deprecated: prefer NewWithOptions(ctx, opts...) which uses the
+// functional-options pattern consistent with the rest of the codebase
+// (testutil/kcfixture, kc/ticker/config.go, kc/scheduler/provider.go).
+// This function is retained as a thin backward-compat shim because
+// 40+ test files across app/, mcp/, and kc/ops/ call it directly with
+// literal kc.Config{…} structs; forcing all of them to migrate at once
+// would ripple through three scopes owned by other active agents.
+//
+// New is equivalent to NewWithOptions(context.Background(), WithConfig(cfg)).
+// It validates cfg.Logger is non-nil (matching pre-shim behaviour) before
+// delegating — preserving the error class "logger is required" so
+// existing tests that rely on that exact error message keep passing.
 func New(cfg Config) (*Manager, error) {
-	// Validate required fields
+	if cfg.Logger == nil {
+		return nil, errors.New("logger is required")
+	}
+	return NewWithOptions(context.Background(), WithConfig(cfg))
+}
+
+// NewWithOptions creates a new kc Manager from a base context plus a
+// list of functional options. Primary constructor for the Manager —
+// backward-compat paths flow through New(Config) above.
+//
+// The body is a thin orchestrator over the init* helpers in
+// kc/manager_init.go. Each helper is documented at its declaration
+// site; the order below is load-bearing — downstream phases read
+// state that earlier phases wrote. Do not reorder without re-reading
+// the helper docs.
+//
+// ctx is currently stashed on the options payload for future use
+// (cancellable init, tracing spans, deadline propagation); no init
+// phase consumes it yet, but the plumbing is in place so that flip
+// does not later become a breaking change.
+func NewWithOptions(ctx context.Context, opts ...Option) (*Manager, error) {
+	o := &options{Ctx: ctx}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	if o.Ctx == nil {
+		o.Ctx = context.Background()
+	}
+
+	cfg := o.Config
 	if cfg.Logger == nil {
 		return nil, errors.New("logger is required")
 	}
