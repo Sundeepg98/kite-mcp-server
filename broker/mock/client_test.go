@@ -10,6 +10,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	c := New()
 	if c == nil {
 		t.Fatal("New() returned nil")
@@ -20,6 +21,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestBrokerNameOverride(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.BrokerNameVal = broker.Zerodha
 	if c.BrokerName() != broker.Zerodha {
@@ -28,6 +30,7 @@ func TestBrokerNameOverride(t *testing.T) {
 }
 
 func TestGetProfile(t *testing.T) {
+	t.Parallel()
 	c := New()
 	p, err := c.GetProfile()
 	if err != nil {
@@ -39,6 +42,7 @@ func TestGetProfile(t *testing.T) {
 }
 
 func TestSetAndGetProfile(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := broker.Profile{
 		UserID:   "TEST01",
@@ -57,6 +61,7 @@ func TestSetAndGetProfile(t *testing.T) {
 }
 
 func TestGetMargins(t *testing.T) {
+	t.Parallel()
 	c := New()
 	m, err := c.GetMargins()
 	if err != nil {
@@ -68,6 +73,7 @@ func TestGetMargins(t *testing.T) {
 }
 
 func TestSetAndGetHoldings(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.Holding{
 		{
@@ -101,6 +107,7 @@ func TestSetAndGetHoldings(t *testing.T) {
 }
 
 func TestSetAndGetPositions(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := broker.Positions{
 		Day: []broker.Position{
@@ -121,6 +128,7 @@ func TestSetAndGetPositions(t *testing.T) {
 }
 
 func TestPlaceOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 
 	// Place a LIMIT order (stays OPEN).
@@ -157,6 +165,7 @@ func TestPlaceOrder(t *testing.T) {
 }
 
 func TestPlaceMarketOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetPrices(map[string]float64{"NSE:INFY": 1600})
 
@@ -197,6 +206,7 @@ func TestPlaceMarketOrder(t *testing.T) {
 }
 
 func TestModifyOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 
 	resp, _ := c.PlaceOrder(broker.OrderParams{
@@ -224,6 +234,7 @@ func TestModifyOrder(t *testing.T) {
 }
 
 func TestModifyNonExistentOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.ModifyOrder("nonexistent", broker.OrderParams{Price: 100})
 	if err == nil {
@@ -232,6 +243,7 @@ func TestModifyNonExistentOrder(t *testing.T) {
 }
 
 func TestModifyFilledOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetPrices(map[string]float64{"NSE:X": 100})
 	resp, _ := c.PlaceOrder(broker.OrderParams{
@@ -245,6 +257,7 @@ func TestModifyFilledOrder(t *testing.T) {
 }
 
 func TestCancelOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 
 	resp, _ := c.PlaceOrder(broker.OrderParams{
@@ -269,6 +282,7 @@ func TestCancelOrder(t *testing.T) {
 }
 
 func TestCancelNonExistentOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.CancelOrder("nonexistent", "regular")
 	if err == nil {
@@ -277,6 +291,7 @@ func TestCancelNonExistentOrder(t *testing.T) {
 }
 
 func TestCancelAlreadyCancelledOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, _ := c.PlaceOrder(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "A", TransactionType: "BUY",
@@ -290,6 +305,7 @@ func TestCancelAlreadyCancelledOrder(t *testing.T) {
 }
 
 func TestGetOrderHistory(t *testing.T) {
+	t.Parallel()
 	c := New()
 
 	resp, _ := c.PlaceOrder(broker.OrderParams{
@@ -310,6 +326,7 @@ func TestGetOrderHistory(t *testing.T) {
 }
 
 func TestGetOrderHistoryNotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.GetOrderHistory("unknown")
 	if err == nil {
@@ -318,6 +335,7 @@ func TestGetOrderHistoryNotFound(t *testing.T) {
 }
 
 func TestGetLTP(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetPrices(map[string]float64{
 		"NSE:RELIANCE": 2500,
@@ -337,6 +355,7 @@ func TestGetLTP(t *testing.T) {
 }
 
 func TestGetOHLC(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetOHLC(map[string]broker.OHLC{
 		"NSE:RELIANCE": {Open: 2480, High: 2520, Low: 2470, Close: 2500, LastPrice: 2500},
@@ -352,6 +371,7 @@ func TestGetOHLC(t *testing.T) {
 }
 
 func TestGetHistoricalData(t *testing.T) {
+	t.Parallel()
 	c := New()
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
@@ -378,6 +398,7 @@ func TestGetHistoricalData(t *testing.T) {
 }
 
 func TestGetHistoricalData5Minute(t *testing.T) {
+	t.Parallel()
 	c := New()
 	from := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC) // 1 hour = 12 five-minute candles + 1 (inclusive)
@@ -396,6 +417,7 @@ func TestGetHistoricalData5Minute(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestErrorInjection(t *testing.T) {
+	t.Parallel()
 	injected := errors.New("injected error")
 
 	tests := []struct {
@@ -441,6 +463,7 @@ func TestErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConcurrency(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetPrices(map[string]float64{"NSE:RELIANCE": 2500})
 
@@ -505,6 +528,7 @@ func TestConcurrency(t *testing.T) {
 }
 
 func TestInterfaceCompliance(t *testing.T) {
+	t.Parallel()
 	// Verify that New() returns something usable as broker.Client.
 	var client broker.Client = New()
 	if client.BrokerName() != "mock" {
@@ -513,6 +537,7 @@ func TestInterfaceCompliance(t *testing.T) {
 }
 
 func TestSetTrades(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.Trade{
 		{TradeID: "T1", OrderID: "O1", Tradingsymbol: "RELIANCE", Quantity: 10, Price: 2500},
@@ -528,6 +553,7 @@ func TestSetTrades(t *testing.T) {
 }
 
 func TestSetMargins(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := broker.Margins{
 		Equity: broker.SegmentMargin{Available: 500000, Used: 100000, Total: 600000},

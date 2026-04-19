@@ -9,6 +9,7 @@ import (
 )
 
 func TestDeriveEncryptionKey(t *testing.T) {
+	t.Parallel()
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
 	assert.Len(t, key, 32)
@@ -25,11 +26,13 @@ func TestDeriveEncryptionKey(t *testing.T) {
 }
 
 func TestDeriveEncryptionKeyEmpty(t *testing.T) {
+	t.Parallel()
 	_, err := DeriveEncryptionKey("")
 	assert.Error(t, err)
 }
 
 func TestEncryptDecryptRoundTrip(t *testing.T) {
+	t.Parallel()
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
 
@@ -43,6 +46,7 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 }
 
 func TestEncryptProducesUniqueCiphertexts(t *testing.T) {
+	t.Parallel()
 	key, _ := DeriveEncryptionKey("test-secret")
 	ct1, _ := encrypt(key, "same-value")
 	ct2, _ := encrypt(key, "same-value")
@@ -51,6 +55,7 @@ func TestEncryptProducesUniqueCiphertexts(t *testing.T) {
 }
 
 func TestDecryptWrongKey(t *testing.T) {
+	t.Parallel()
 	key1, _ := DeriveEncryptionKey("secret-1")
 	key2, _ := DeriveEncryptionKey("secret-2")
 
@@ -63,6 +68,7 @@ func TestDecryptWrongKey(t *testing.T) {
 }
 
 func TestDecryptPlaintextFallback(t *testing.T) {
+	t.Parallel()
 	key, _ := DeriveEncryptionKey("test-secret")
 
 	// Non-hex string returns as-is (plaintext migration path)
@@ -75,6 +81,7 @@ func TestDecryptPlaintextFallback(t *testing.T) {
 }
 
 func TestDeriveEncryptionKeyWithSalt(t *testing.T) {
+	t.Parallel()
 	salt := []byte("0123456789abcdef0123456789abcdef")
 
 	key, err := DeriveEncryptionKeyWithSalt("test-secret", salt)
@@ -103,11 +110,13 @@ func TestDeriveEncryptionKeyWithSalt(t *testing.T) {
 }
 
 func TestDeriveEncryptionKeyWithSaltEmpty(t *testing.T) {
+	t.Parallel()
 	_, err := DeriveEncryptionKeyWithSalt("", []byte("salt"))
 	assert.Error(t, err)
 }
 
 func TestEnsureEncryptionSalt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// First call: generates salt, returns salted key
@@ -132,6 +141,7 @@ func TestEnsureEncryptionSalt(t *testing.T) {
 }
 
 func TestEnsureEncryptionSaltMigration(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Pre-populate with data encrypted using legacy nil-salt key
@@ -172,6 +182,7 @@ func TestEnsureEncryptionSaltMigration(t *testing.T) {
 }
 
 func TestEnsureEncryptionSaltEmptySecret(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := EnsureEncryptionSalt(db, "")
 	assert.Error(t, err)
@@ -180,6 +191,7 @@ func TestEnsureEncryptionSaltEmptySecret(t *testing.T) {
 // encrypt/decrypt edge cases for coverage.
 
 func TestEncrypt_InvalidKeyLength(t *testing.T) {
+	t.Parallel()
 	// AES requires 16, 24, or 32 byte keys. A 5-byte key triggers aes.NewCipher error.
 	_, err := encrypt([]byte("short"), "plaintext")
 	require.Error(t, err)
@@ -187,6 +199,7 @@ func TestEncrypt_InvalidKeyLength(t *testing.T) {
 }
 
 func TestDecrypt_InvalidKeyLength(t *testing.T) {
+	t.Parallel()
 	// Valid hex but wrong-length AES key.
 	result := decrypt([]byte("short"), "4142434445464748") // valid hex
 	// Returns hex-as-is since aes.NewCipher fails (plaintext fallback).
@@ -194,6 +207,7 @@ func TestDecrypt_InvalidKeyLength(t *testing.T) {
 }
 
 func TestDecrypt_TooShortData(t *testing.T) {
+	t.Parallel()
 	key, _ := DeriveEncryptionKey("s")
 	// Valid hex that decodes to less than nonce-size bytes (12 for AES-256-GCM).
 	result := decrypt(key, "aabb")
@@ -201,11 +215,13 @@ func TestDecrypt_TooShortData(t *testing.T) {
 }
 
 func TestEncrypt_NilKey(t *testing.T) {
+	t.Parallel()
 	_, err := encrypt(nil, "plaintext")
 	require.Error(t, err)
 }
 
 func TestEnsureEncryptionSalt_CorruptSaltInDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Store invalid hex as salt.
 	require.NoError(t, db.SetConfig(hkdfSaltConfigKey, "not-valid-hex!!!"))
@@ -216,6 +232,7 @@ func TestEnsureEncryptionSalt_CorruptSaltInDB(t *testing.T) {
 }
 
 func TestReEncryptTable_EmptyValues(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key1, _ := DeriveEncryptionKey("old")
 	key2, _ := DeriveEncryptionKey("new")

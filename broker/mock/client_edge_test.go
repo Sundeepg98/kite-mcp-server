@@ -15,6 +15,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestSetOrders(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.Order{
 		{OrderID: "ORD1", Status: "COMPLETE", Tradingsymbol: "INFY"},
@@ -35,6 +36,7 @@ func TestSetOrders(t *testing.T) {
 }
 
 func TestSetAndGetQuotes(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetQuotes(map[string]broker.Quote{
 		"NSE:INFY":     {LastPrice: 1500, Volume: 100000},
@@ -57,6 +59,7 @@ func TestSetAndGetQuotes(t *testing.T) {
 }
 
 func TestGetQuotes_Subset(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetQuotes(map[string]broker.Quote{
 		"NSE:INFY": {LastPrice: 1500},
@@ -77,6 +80,7 @@ func TestGetQuotes_Subset(t *testing.T) {
 }
 
 func TestGetQuotes_Unknown(t *testing.T) {
+	t.Parallel()
 	c := New()
 	quotes, err := c.GetQuotes("NSE:UNKNOWN")
 	if err != nil {
@@ -88,6 +92,7 @@ func TestGetQuotes_Unknown(t *testing.T) {
 }
 
 func TestGetQuotes_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("quotes error")
 	c.GetQuotesErr = injected
@@ -98,6 +103,7 @@ func TestGetQuotes_ErrorInjection(t *testing.T) {
 }
 
 func TestGetOrderTrades(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetTrades([]broker.Trade{
 		{TradeID: "T1", OrderID: "ORD1", Tradingsymbol: "INFY", Quantity: 10, Price: 1500},
@@ -118,6 +124,7 @@ func TestGetOrderTrades(t *testing.T) {
 }
 
 func TestGetOrderTrades_NotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.GetOrderTrades("nonexistent")
 	if err == nil {
@@ -126,6 +133,7 @@ func TestGetOrderTrades_NotFound(t *testing.T) {
 }
 
 func TestGetOrderTrades_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("order trades error")
 	c.GetOrderTradesErr = injected
@@ -140,6 +148,7 @@ func TestGetOrderTrades_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetGTTs(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.GTTOrder{
 		{ID: 1, Type: "single", Status: "active"},
@@ -157,6 +166,7 @@ func TestSetGTTs(t *testing.T) {
 }
 
 func TestGetGTTs(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.SetGTTs([]broker.GTTOrder{
 		{ID: 1, Type: "single", Status: "active"},
@@ -175,6 +185,7 @@ func TestGetGTTs(t *testing.T) {
 }
 
 func TestGetGTTs_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("gtt error")
 	c.GetGTTsErr = injected
@@ -185,6 +196,7 @@ func TestGetGTTs_ErrorInjection(t *testing.T) {
 }
 
 func TestPlaceGTT_Single(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, err := c.PlaceGTT(broker.GTTParams{
 		Type:            "single",
@@ -227,6 +239,7 @@ func TestPlaceGTT_Single(t *testing.T) {
 }
 
 func TestPlaceGTT_TwoLeg(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, err := c.PlaceGTT(broker.GTTParams{
 		Type:              "two-leg",
@@ -268,6 +281,7 @@ func TestPlaceGTT_TwoLeg(t *testing.T) {
 }
 
 func TestPlaceGTT_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("place gtt error")
 	c.PlaceGTTErr = injected
@@ -278,6 +292,7 @@ func TestPlaceGTT_ErrorInjection(t *testing.T) {
 }
 
 func TestModifyGTT(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, _ := c.PlaceGTT(broker.GTTParams{
 		Type:          "single",
@@ -307,6 +322,7 @@ func TestModifyGTT(t *testing.T) {
 }
 
 func TestModifyGTT_NotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.ModifyGTT(99999, broker.GTTParams{})
 	if err == nil {
@@ -315,6 +331,7 @@ func TestModifyGTT_NotFound(t *testing.T) {
 }
 
 func TestModifyGTT_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("modify gtt error")
 	c.ModifyGTTErr = injected
@@ -325,6 +342,7 @@ func TestModifyGTT_ErrorInjection(t *testing.T) {
 }
 
 func TestDeleteGTT(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, _ := c.PlaceGTT(broker.GTTParams{
 		Type:          "single",
@@ -348,6 +366,7 @@ func TestDeleteGTT(t *testing.T) {
 }
 
 func TestDeleteGTT_NotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.DeleteGTT(99999)
 	if err == nil {
@@ -356,6 +375,7 @@ func TestDeleteGTT_NotFound(t *testing.T) {
 }
 
 func TestDeleteGTT_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("delete gtt error")
 	c.DeleteGTTErr = injected
@@ -370,6 +390,7 @@ func TestDeleteGTT_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPlaceGTT_IncrementingIDs(t *testing.T) {
+	t.Parallel()
 	c := New()
 	var ids []int
 	for i := 0; i < 3; i++ {
@@ -399,6 +420,7 @@ func TestPlaceGTT_IncrementingIDs(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewDemoClient(t *testing.T) {
+	t.Parallel()
 	c := NewDemoClient()
 	if c == nil {
 		t.Fatal("NewDemoClient() returned nil")
@@ -445,6 +467,7 @@ func TestNewDemoClient(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPlaceOrder_MarketNoLTP(t *testing.T) {
+	t.Parallel()
 	c := New()
 	// No prices set — MARKET order should fall back to params.Price.
 	resp, err := c.PlaceOrder(broker.OrderParams{
@@ -492,6 +515,7 @@ func TestPlaceOrder_MarketNoLTP(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestModifyOrder_TriggerPriceAndOrderType(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, _ := c.PlaceOrder(broker.OrderParams{
 		Exchange:      "NSE",
@@ -523,6 +547,7 @@ func TestModifyOrder_TriggerPriceAndOrderType(t *testing.T) {
 }
 
 func TestModifyOrder_QuantityOnly(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, _ := c.PlaceOrder(broker.OrderParams{
 		Exchange:      "NSE",
@@ -557,6 +582,7 @@ func TestModifyOrder_QuantityOnly(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetHistoricalData_15Minute(t *testing.T) {
+	t.Parallel()
 	c := New()
 	from := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC) // 1 hour = 4 fifteen-minute candles + 1 (inclusive) = 5
@@ -576,6 +602,7 @@ func TestGetHistoricalData_15Minute(t *testing.T) {
 }
 
 func TestGetHistoricalData_60Minute(t *testing.T) {
+	t.Parallel()
 	c := New()
 	from := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC) // 3 hours = 3 hourly candles + 1 (inclusive) = 4
@@ -594,6 +621,7 @@ func TestGetHistoricalData_60Minute(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGTTs_ReturnsCopy(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.PlaceGTT(broker.GTTParams{
 		Type: "single", Exchange: "NSE", Tradingsymbol: "INFY",
@@ -615,6 +643,7 @@ func TestGTTs_ReturnsCopy(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConvertPosition(t *testing.T) {
+	t.Parallel()
 	c := New()
 	ok, err := c.ConvertPosition(broker.ConvertPositionParams{
 		Exchange:        "NSE",
@@ -634,6 +663,7 @@ func TestConvertPosition(t *testing.T) {
 }
 
 func TestConvertPosition_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("convert position error")
 	c.ConvertPositionErr = injected
@@ -651,6 +681,7 @@ func TestConvertPosition_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetAndGetMFOrders(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.MFOrder{
 		{OrderID: "MF1", Tradingsymbol: "INF846K01DP8", Status: "COMPLETE", Amount: 5000},
@@ -670,6 +701,7 @@ func TestSetAndGetMFOrders(t *testing.T) {
 }
 
 func TestGetMFOrders_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("mf orders error")
 	c.GetMFOrdersErr = injected
@@ -680,6 +712,7 @@ func TestGetMFOrders_ErrorInjection(t *testing.T) {
 }
 
 func TestPlaceMFOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, err := c.PlaceMFOrder(broker.MFOrderParams{
 		Tradingsymbol:   "INF846K01DP8",
@@ -703,6 +736,7 @@ func TestPlaceMFOrder(t *testing.T) {
 }
 
 func TestPlaceMFOrder_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("place mf error")
 	c.PlaceMFOrderErr = injected
@@ -713,6 +747,7 @@ func TestPlaceMFOrder_ErrorInjection(t *testing.T) {
 }
 
 func TestCancelMFOrder(t *testing.T) {
+	t.Parallel()
 	c := New()
 	placed, _ := c.PlaceMFOrder(broker.MFOrderParams{
 		Tradingsymbol:   "INF846K01DP8",
@@ -733,6 +768,7 @@ func TestCancelMFOrder(t *testing.T) {
 }
 
 func TestCancelMFOrder_NotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.CancelMFOrder("nonexistent")
 	if err == nil {
@@ -741,6 +777,7 @@ func TestCancelMFOrder_NotFound(t *testing.T) {
 }
 
 func TestCancelMFOrder_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("cancel mf error")
 	c.CancelMFOrderErr = injected
@@ -755,6 +792,7 @@ func TestCancelMFOrder_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetAndGetMFSIPs(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.MFSIP{
 		{SIPID: "SIP1", Tradingsymbol: "INF846K01DP8", Frequency: "monthly", Status: "ACTIVE"},
@@ -770,6 +808,7 @@ func TestSetAndGetMFSIPs(t *testing.T) {
 }
 
 func TestGetMFSIPs_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("mf sips error")
 	c.GetMFSIPsErr = injected
@@ -780,6 +819,7 @@ func TestGetMFSIPs_ErrorInjection(t *testing.T) {
 }
 
 func TestPlaceMFSIP(t *testing.T) {
+	t.Parallel()
 	c := New()
 	resp, err := c.PlaceMFSIP(broker.MFSIPParams{
 		Tradingsymbol: "INF846K01DP8",
@@ -801,6 +841,7 @@ func TestPlaceMFSIP(t *testing.T) {
 }
 
 func TestPlaceMFSIP_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("place sip error")
 	c.PlaceMFSIPErr = injected
@@ -811,6 +852,7 @@ func TestPlaceMFSIP_ErrorInjection(t *testing.T) {
 }
 
 func TestCancelMFSIP(t *testing.T) {
+	t.Parallel()
 	c := New()
 	placed, _ := c.PlaceMFSIP(broker.MFSIPParams{
 		Tradingsymbol: "INF846K01DP8",
@@ -832,6 +874,7 @@ func TestCancelMFSIP(t *testing.T) {
 }
 
 func TestCancelMFSIP_NotFound(t *testing.T) {
+	t.Parallel()
 	c := New()
 	_, err := c.CancelMFSIP("nonexistent")
 	if err == nil {
@@ -840,6 +883,7 @@ func TestCancelMFSIP_NotFound(t *testing.T) {
 }
 
 func TestCancelMFSIP_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("cancel sip error")
 	c.CancelMFSIPErr = injected
@@ -854,6 +898,7 @@ func TestCancelMFSIP_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetAndGetMFHoldings(t *testing.T) {
+	t.Parallel()
 	c := New()
 	want := []broker.MFHolding{
 		{Tradingsymbol: "INF846K01DP8", Folio: "123", Quantity: 100.5, PnL: 500.25},
@@ -869,6 +914,7 @@ func TestSetAndGetMFHoldings(t *testing.T) {
 }
 
 func TestGetMFHoldings_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("mf holdings error")
 	c.GetMFHoldingsErr = injected
@@ -883,6 +929,7 @@ func TestGetMFHoldings_ErrorInjection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetOrderMargins(t *testing.T) {
+	t.Parallel()
 	c := New()
 	result, err := c.GetOrderMargins([]broker.OrderMarginParam{
 		{Exchange: "NSE", Tradingsymbol: "INFY", TransactionType: "BUY", Quantity: 10},
@@ -900,6 +947,7 @@ func TestGetOrderMargins(t *testing.T) {
 }
 
 func TestGetOrderMargins_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("order margins error")
 	c.GetOrderMarginsErr = injected
@@ -910,6 +958,7 @@ func TestGetOrderMargins_ErrorInjection(t *testing.T) {
 }
 
 func TestGetBasketMargins(t *testing.T) {
+	t.Parallel()
 	c := New()
 	result, err := c.GetBasketMargins([]broker.OrderMarginParam{
 		{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10},
@@ -928,6 +977,7 @@ func TestGetBasketMargins(t *testing.T) {
 }
 
 func TestGetBasketMargins_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("basket margins error")
 	c.GetBasketMarginsErr = injected
@@ -938,6 +988,7 @@ func TestGetBasketMargins_ErrorInjection(t *testing.T) {
 }
 
 func TestGetOrderCharges(t *testing.T) {
+	t.Parallel()
 	c := New()
 	result, err := c.GetOrderCharges([]broker.OrderChargesParam{
 		{OrderID: "ORD1", Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10, AveragePrice: 1500},
@@ -955,6 +1006,7 @@ func TestGetOrderCharges(t *testing.T) {
 }
 
 func TestGetOrderCharges_ErrorInjection(t *testing.T) {
+	t.Parallel()
 	c := New()
 	injected := errors.New("order charges error")
 	c.GetOrderChargesErr = injected

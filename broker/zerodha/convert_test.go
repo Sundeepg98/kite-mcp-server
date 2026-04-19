@@ -10,6 +10,7 @@ import (
 )
 
 func TestConvertProfile(t *testing.T) {
+	t.Parallel()
 	kp := kiteconnect.UserProfile{
 		UserID:    "AB1234",
 		UserName:  "Test User",
@@ -42,6 +43,7 @@ func TestConvertProfile(t *testing.T) {
 }
 
 func TestConvertHoldings(t *testing.T) {
+	t.Parallel()
 	kh := kiteconnect.Holdings{
 		{
 			Tradingsymbol:       "INFY",
@@ -104,6 +106,7 @@ func TestConvertHoldings(t *testing.T) {
 }
 
 func TestConvertHoldingsEmpty(t *testing.T) {
+	t.Parallel()
 	holdings := convertHoldings(kiteconnect.Holdings{})
 	if len(holdings) != 0 {
 		t.Errorf("len = %d, want 0", len(holdings))
@@ -111,6 +114,7 @@ func TestConvertHoldingsEmpty(t *testing.T) {
 }
 
 func TestConvertPositions(t *testing.T) {
+	t.Parallel()
 	kp := kiteconnect.Positions{
 		Day: []kiteconnect.Position{
 			{
@@ -155,6 +159,7 @@ func TestConvertPositions(t *testing.T) {
 }
 
 func TestConvertOrders(t *testing.T) {
+	t.Parallel()
 	ts := models.Time{Time: time.Date(2026, 4, 3, 9, 30, 0, 0, time.UTC)}
 	ko := kiteconnect.Orders{
 		{
@@ -210,6 +215,7 @@ func TestConvertOrders(t *testing.T) {
 }
 
 func TestConvertTrades(t *testing.T) {
+	t.Parallel()
 	kt := kiteconnect.Trades{
 		{
 			TradeID:         "TRD001",
@@ -246,6 +252,7 @@ func TestConvertTrades(t *testing.T) {
 }
 
 func TestConvertOrderParamsToKite(t *testing.T) {
+	t.Parallel()
 	bp := broker.OrderParams{
 		Exchange:         "NSE",
 		Tradingsymbol:    "INFY",
@@ -288,6 +295,7 @@ func TestConvertOrderParamsToKite(t *testing.T) {
 }
 
 func TestConvertOrderParamsDefaultVariety(t *testing.T) {
+	t.Parallel()
 	bp := broker.OrderParams{
 		Exchange: "NSE",
 		// Variety is empty
@@ -301,6 +309,7 @@ func TestConvertOrderParamsDefaultVariety(t *testing.T) {
 }
 
 func TestConvertLTP(t *testing.T) {
+	t.Parallel()
 	kl := kiteconnect.QuoteLTP{
 		"NSE:INFY": {
 			InstrumentToken: 408065,
@@ -326,6 +335,7 @@ func TestConvertLTP(t *testing.T) {
 }
 
 func TestConvertOHLC(t *testing.T) {
+	t.Parallel()
 	ko := kiteconnect.QuoteOHLC{
 		"NSE:INFY": {
 			InstrumentToken: 408065,
@@ -363,6 +373,7 @@ func TestConvertOHLC(t *testing.T) {
 }
 
 func TestConvertHistoricalData(t *testing.T) {
+	t.Parallel()
 	ts := models.Time{Time: time.Date(2026, 4, 1, 9, 15, 0, 0, time.UTC)}
 	kh := []kiteconnect.HistoricalData{
 		{
@@ -393,6 +404,7 @@ func TestConvertHistoricalData(t *testing.T) {
 }
 
 func TestConvertSegmentMargin(t *testing.T) {
+	t.Parallel()
 	km := kiteconnect.Margins{
 		Enabled: true,
 		Net:     100000,
@@ -427,6 +439,7 @@ func TestConvertSegmentMargin(t *testing.T) {
 }
 
 func TestBrokerName(t *testing.T) {
+	t.Parallel()
 	c := &Client{}
 	if c.BrokerName() != broker.Zerodha {
 		t.Errorf("BrokerName = %q, want %q", c.BrokerName(), broker.Zerodha)
@@ -434,6 +447,7 @@ func TestBrokerName(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	kite := kiteconnect.New("test-api-key")
 	c := New(kite)
 	if c == nil {
@@ -451,6 +465,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestKite(t *testing.T) {
+	t.Parallel()
 	kite := kiteconnect.New("test-api-key")
 	c := New(kite)
 	if c.Kite() != kite {
@@ -459,6 +474,7 @@ func TestKite(t *testing.T) {
 }
 
 func TestConvertMargins(t *testing.T) {
+	t.Parallel()
 	km := kiteconnect.AllMargins{
 		Equity: kiteconnect.Margins{
 			Available: kiteconnect.AvailableMargins{
@@ -504,6 +520,7 @@ func TestConvertMargins(t *testing.T) {
 }
 
 func TestConvertQuotes(t *testing.T) {
+	t.Parallel()
 	kq := kiteconnect.Quote{
 		"NSE:RELIANCE": {
 			InstrumentToken:   738561,
@@ -581,6 +598,7 @@ func TestConvertQuotes(t *testing.T) {
 }
 
 func TestConvertQuotesEmpty(t *testing.T) {
+	t.Parallel()
 	quotes := convertQuotes(kiteconnect.Quote{})
 	if len(quotes) != 0 {
 		t.Errorf("len = %d, want 0", len(quotes))
@@ -588,6 +606,7 @@ func TestConvertQuotesEmpty(t *testing.T) {
 }
 
 func TestConvertGTTs(t *testing.T) {
+	t.Parallel()
 	ts := models.Time{Time: time.Date(2026, 4, 5, 10, 0, 0, 0, time.UTC)}
 	kgtts := kiteconnect.GTTs{
 		{
@@ -653,6 +672,7 @@ func TestConvertGTTs(t *testing.T) {
 }
 
 func TestConvertGTTsEmpty(t *testing.T) {
+	t.Parallel()
 	gtts := convertGTTs(kiteconnect.GTTs{})
 	if len(gtts) != 0 {
 		t.Errorf("len = %d, want 0", len(gtts))
@@ -660,6 +680,7 @@ func TestConvertGTTsEmpty(t *testing.T) {
 }
 
 func TestConvertGTTParamsToKite_Single(t *testing.T) {
+	t.Parallel()
 	bp := broker.GTTParams{
 		Exchange:        "NSE",
 		Tradingsymbol:   "INFY",
@@ -691,6 +712,7 @@ func TestConvertGTTParamsToKite_Single(t *testing.T) {
 }
 
 func TestConvertGTTParamsToKite_TwoLeg(t *testing.T) {
+	t.Parallel()
 	bp := broker.GTTParams{
 		Exchange:          "NSE",
 		Tradingsymbol:     "RELIANCE",
@@ -716,6 +738,7 @@ func TestConvertGTTParamsToKite_TwoLeg(t *testing.T) {
 }
 
 func TestConvertGTTParamsToKite_InvalidType(t *testing.T) {
+	t.Parallel()
 	bp := broker.GTTParams{
 		Exchange:      "NSE",
 		Tradingsymbol: "INFY",

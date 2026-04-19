@@ -10,6 +10,7 @@ import (
 // recognizable User-Agent causes the generated session to be tagged with
 // the matching ClientHint.
 func TestClientHintResolver_WithUserAgent(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 
@@ -36,6 +37,7 @@ func TestClientHintResolver_WithUserAgent(t *testing.T) {
 // "unknown") so the distinction between "no request context" and "known
 // unrecognized client" is preserved.
 func TestClientHintResolver_NilRequest(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 
@@ -57,6 +59,7 @@ func TestClientHintResolver_NilRequest(t *testing.T) {
 // recognize still produces a session; it just carries the "unknown" hint
 // instead of a specific client marker.
 func TestClientHintResolver_UnknownUserAgent(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 
@@ -78,6 +81,7 @@ func TestClientHintResolver_UnknownUserAgent(t *testing.T) {
 // wrapped manager forwards Validate calls to the underlying registry so
 // existing session lifecycle logic is untouched.
 func TestClientHintResolver_DelegatesValidate(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 
@@ -98,6 +102,7 @@ func TestClientHintResolver_DelegatesValidate(t *testing.T) {
 // TestClientHintResolver_DelegatesTerminate verifies Terminate round-trip
 // through the resolver wrapper.
 func TestClientHintResolver_DelegatesTerminate(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 
@@ -130,6 +135,7 @@ func TestClientHintResolver_DelegatesTerminate(t *testing.T) {
 // though they share the underlying registry. This is the whole point of
 // the request-scoped wrapper.
 func TestClientHintResolver_EachRequestGetsOwnHint(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	resolver := NewClientHintResolver(reg)
 

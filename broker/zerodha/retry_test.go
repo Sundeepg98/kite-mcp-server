@@ -6,6 +6,7 @@ import (
 )
 
 func TestRetryOnTransient_Success(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	result, err := retryOnTransient(func() (string, error) {
 		calls++
@@ -23,6 +24,7 @@ func TestRetryOnTransient_Success(t *testing.T) {
 }
 
 func TestRetryOnTransient_NonTransientError(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := retryOnTransient(func() (string, error) {
 		calls++
@@ -37,6 +39,7 @@ func TestRetryOnTransient_NonTransientError(t *testing.T) {
 }
 
 func TestRetryOnTransient_TimeoutRetry(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	result, err := retryOnTransient(func() (string, error) {
 		calls++
@@ -57,6 +60,7 @@ func TestRetryOnTransient_TimeoutRetry(t *testing.T) {
 }
 
 func TestRetryOnTransient_ConnectionRetry(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	result, err := retryOnTransient(func() (int, error) {
 		calls++
@@ -77,6 +81,7 @@ func TestRetryOnTransient_ConnectionRetry(t *testing.T) {
 }
 
 func TestRetryOnTransient_EOFRetry(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := retryOnTransient(func() (string, error) {
 		calls++
@@ -92,6 +97,7 @@ func TestRetryOnTransient_EOFRetry(t *testing.T) {
 }
 
 func TestRetryOnTransient_ZeroRetries(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	_, err := retryOnTransient(func() (string, error) {
 		calls++

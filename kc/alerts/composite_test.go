@@ -27,6 +27,7 @@ import (
 // AND logic round-trips through SaveAlert -> LoadAlerts with every field
 // (logic, conditions, name) intact.
 func TestAlertDB_SaveAndLoadComposite_AND(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	conds := []domain.CompositeCondition{
@@ -85,6 +86,7 @@ func TestAlertDB_SaveAndLoadComposite_AND(t *testing.T) {
 // TestAlertDB_SaveAndLoadComposite_OR verifies an ANY-logic composite
 // round-trips correctly and preserves leg ordering.
 func TestAlertDB_SaveAndLoadComposite_OR(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	conds := []domain.CompositeCondition{
@@ -130,6 +132,7 @@ func TestAlertDB_SaveAndLoadComposite_OR(t *testing.T) {
 // backwards compatibility. The DB returns alert_type='single' and NULL
 // for the composite_* and conditions_json columns.
 func TestAlertDB_SingleAlertHasNilCompositeFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	alert := &Alert{
@@ -165,6 +168,7 @@ func TestAlertDB_SingleAlertHasNilCompositeFields(t *testing.T) {
 // silently returning a broken Alert. Loading should fail loudly so the
 // operator notices corruption.
 func TestAlertDB_CompositeConditionsJSON_Malformed(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Insert a row with garbage JSON via raw SQL, bypassing SaveAlert's
@@ -187,6 +191,7 @@ func TestAlertDB_CompositeConditionsJSON_Malformed(t *testing.T) {
 // composite schema: an existing DB without alert_type/composite_* columns
 // gets them added with safe defaults when opened by OpenDB.
 func TestAlertMigration_AddCompositeColumns(t *testing.T) {
+	t.Parallel()
 	// Simulate an old database that has the alerts table but no composite columns.
 	raw, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
@@ -240,6 +245,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 // TestStore_AddComposite_AND exercises the high-level Store.AddComposite
 // API: it should persist the composite alert and make it visible via List.
 func TestStore_AddComposite_AND(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	conds := []domain.CompositeCondition{
@@ -269,6 +275,7 @@ func TestStore_AddComposite_AND(t *testing.T) {
 
 // TestStore_AddComposite_OR mirrors the AND happy path for ANY logic.
 func TestStore_AddComposite_OR(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	conds := []domain.CompositeCondition{
@@ -290,6 +297,7 @@ func TestStore_AddComposite_OR(t *testing.T) {
 // TestStore_AddComposite_RejectsEmptyConditions ensures the store rejects
 // malformed input up-front (defense in depth — the use case validates too).
 func TestStore_AddComposite_RejectsEmptyConditions(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	_, err := s.AddComposite("u@example.com", "empty", domain.CompositeLogicAnd, nil)
@@ -303,6 +311,7 @@ func TestStore_AddComposite_RejectsEmptyConditions(t *testing.T) {
 // are counted towards the same MaxAlertsPerUser ceiling as single alerts
 // (per-user quota is per-row, not per-type).
 func TestStore_AddComposite_EnforcesMaxAlertsPerUser(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	email := "capped@example.com"
 
@@ -323,6 +332,7 @@ func TestStore_AddComposite_EnforcesMaxAlertsPerUser(t *testing.T) {
 // TestStore_AddComposite_PersistsToDB verifies write-through persistence:
 // the composite alert must survive a LoadFromDB round-trip.
 func TestStore_AddComposite_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -364,6 +374,7 @@ func assertColumnExists(t *testing.T, db *sql.DB, table, column string) {
 // (conditions_json) against accidental schema drift. If a future refactor
 // renames a JSON tag, this test fails and flags the need for a migration.
 func TestCompositeCondition_JSONRoundtrip(t *testing.T) {
+	t.Parallel()
 	orig := []domain.CompositeCondition{
 		{
 			Exchange:        "NSE",

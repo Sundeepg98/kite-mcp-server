@@ -61,6 +61,7 @@ func recordingConstructor(fake *fakeKiteSDK, recordedKeys *[]string) func(apiKey
 // --- Factory tests ---
 
 func TestFactory_Create_UsesInjectedSDKConstructor(t *testing.T) {
+	t.Parallel()
 	fake := &fakeKiteSDK{}
 	var keys []string
 	factory := NewFactory(WithSDKConstructor(recordingConstructor(fake, &keys)))
@@ -82,6 +83,7 @@ func TestFactory_Create_UsesInjectedSDKConstructor(t *testing.T) {
 }
 
 func TestFactory_CreateWithToken_SetsAccessTokenOnFakeSDK(t *testing.T) {
+	t.Parallel()
 	fake := &fakeKiteSDK{}
 	var keys []string
 	factory := NewFactory(WithSDKConstructor(recordingConstructor(fake, &keys)))
@@ -102,6 +104,7 @@ func TestFactory_CreateWithToken_SetsAccessTokenOnFakeSDK(t *testing.T) {
 }
 
 func TestFactory_DefaultConstructor_UsedWhenNoOverride(t *testing.T) {
+	t.Parallel()
 	// No WithSDKConstructor: factory must fall back to the real
 	// defaultKiteSDKConstructor. We can't safely exercise it
 	// (it would make network calls), but we can assert it's wired
@@ -113,6 +116,7 @@ func TestFactory_DefaultConstructor_UsedWhenNoOverride(t *testing.T) {
 }
 
 func TestFactory_BrokerName_Zerodha(t *testing.T) {
+	t.Parallel()
 	factory := NewFactory(WithSDKConstructor(recordingConstructor(&fakeKiteSDK{}, new([]string))))
 	if got, want := string(factory.BrokerName()), "zerodha"; got != want {
 		t.Errorf("BrokerName = %q, want %q", got, want)
@@ -122,6 +126,7 @@ func TestFactory_BrokerName_Zerodha(t *testing.T) {
 // --- Auth tests ---
 
 func TestAuth_GetLoginURL_UsesInjectedSDK(t *testing.T) {
+	t.Parallel()
 	fake := &fakeKiteSDK{getLoginURLResponse: "https://kite.example/login?v=3&api_key=auth_key"}
 	var keys []string
 	auth := NewAuth(WithSDKConstructor(recordingConstructor(fake, &keys)))
@@ -139,6 +144,7 @@ func TestAuth_GetLoginURL_UsesInjectedSDK(t *testing.T) {
 }
 
 func TestAuth_ExchangeToken_HappyPath(t *testing.T) {
+	t.Parallel()
 	fake := &fakeKiteSDK{
 		generateSessionResult: kiteconnect.UserSession{
 			UserProfile: kiteconnect.UserProfile{
@@ -181,6 +187,7 @@ func TestAuth_ExchangeToken_HappyPath(t *testing.T) {
 }
 
 func TestAuth_ExchangeToken_PropagatesSDKError(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("kite: invalid request token")
 	fake := &fakeKiteSDK{generateSessionError: sdkErr}
 	auth := NewAuth(WithSDKConstructor(recordingConstructor(fake, new([]string))))
@@ -192,6 +199,7 @@ func TestAuth_ExchangeToken_PropagatesSDKError(t *testing.T) {
 }
 
 func TestAuth_InvalidateToken_SetsAccessTokenThenInvalidates(t *testing.T) {
+	t.Parallel()
 	fake := &fakeKiteSDK{invalidateAccessResponse: true}
 	var keys []string
 	auth := NewAuth(WithSDKConstructor(recordingConstructor(fake, &keys)))
@@ -211,6 +219,7 @@ func TestAuth_InvalidateToken_SetsAccessTokenThenInvalidates(t *testing.T) {
 }
 
 func TestAuth_InvalidateToken_PropagatesError(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("kite: token already invalid")
 	fake := &fakeKiteSDK{invalidateAccessError: sdkErr}
 	auth := NewAuth(WithSDKConstructor(recordingConstructor(fake, new([]string))))
@@ -222,6 +231,7 @@ func TestAuth_InvalidateToken_PropagatesError(t *testing.T) {
 }
 
 func TestAuth_DefaultConstructor_UsedWhenNoOverride(t *testing.T) {
+	t.Parallel()
 	auth := NewAuth()
 	if auth.sdkConstructor == nil {
 		t.Fatal("default NewAuth must seed a non-nil sdkConstructor")

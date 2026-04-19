@@ -10,6 +10,7 @@ import (
 // the expected normalized hint. These cases mirror the real UAs seen in
 // production traffic from each supported MCP client surface.
 func TestDetectClientHintFromUserAgent(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		userAgent string
@@ -67,6 +68,7 @@ func TestDetectClientHintFromUserAgent(t *testing.T) {
 // or unrecognized. This path matters for clients that register via the
 // /oauth/register endpoint before issuing an MCP call.
 func TestDetectClientHintFromOAuthMetadata(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		oauthClientName string
@@ -97,6 +99,7 @@ func TestDetectClientHintFromOAuthMetadata(t *testing.T) {
 // initialize payload's clientInfo.name when both User-Agent and OAuth
 // metadata are absent or unrecognized.
 func TestDetectClientHintFromMCPInitialize(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name               string
 		mcpClientInfoName string
@@ -131,6 +134,7 @@ func TestDetectClientHintFromMCPInitialize(t *testing.T) {
 // the MCP initialize name is self-reported by the client and can be empty
 // or truncated across transports.
 func TestDetectClientHintPrecedence(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name              string
 		userAgent         string
@@ -191,6 +195,7 @@ func TestDetectClientHintPrecedence(t *testing.T) {
 // that can arise when the mcp-go library calls ResolveSessionIdManager
 // from the idle-TTL sweeper path (see vendor streamable_http.go comments).
 func TestDetectClientHintFromRequest(t *testing.T) {
+	t.Parallel()
 	t.Run("nil_request", func(t *testing.T) {
 		got := ClientHintFromRequest(nil)
 		if got != "" {
@@ -235,6 +240,7 @@ func TestDetectClientHintFromRequest(t *testing.T) {
 // output is always a valid normalized hint suitable for persisting as-is:
 // lowercase, no whitespace, drawn from a closed enum.
 func TestDetectClientHintNormalized(t *testing.T) {
+	t.Parallel()
 	validHints := map[string]struct{}{
 		"claude-desktop": {},
 		"claude-code":    {},
@@ -271,6 +277,7 @@ func TestDetectClientHintNormalized(t *testing.T) {
 // the hint into the MCPSession. This test codifies the contract that a
 // hint passed in is retrievable intact via GetSession.
 func TestSessionRegistry_GenerateWithDataAndHint_Populates(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 	hint := "claude-desktop"
 
@@ -292,6 +299,7 @@ func TestSessionRegistry_GenerateWithDataAndHint_Populates(t *testing.T) {
 // empty hint is accepted without error — callers that have no request
 // context (SSE, stdio, sweeper) must still be able to generate sessions.
 func TestSessionRegistry_GenerateWithDataAndHint_EmptyHint(t *testing.T) {
+	t.Parallel()
 	reg := NewSessionRegistry(testLogger())
 
 	sessionID := reg.GenerateWithDataAndHint(&KiteSessionData{Email: "u@x.com"}, "")
