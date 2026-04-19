@@ -16,6 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
+	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
@@ -57,6 +58,14 @@ type App struct {
 	// hashPublisherCancel cancels the audit hash-chain publisher goroutine
 	// at shutdown. nil when the publisher is disabled (no storage configured).
 	hashPublisherCancel context.CancelFunc
+	// paperMonitor runs the paper-trading order-fill monitor when paper
+	// trading is enabled. nil otherwise. Stopped via paperMonitor.Stop()
+	// during graceful shutdown (sync.Once-guarded — safe to call twice).
+	paperMonitor *papertrading.Monitor
+	// invitationCleanupCancel signals the invitation-cleanup goroutine to
+	// exit. nil when the goroutine was never started (no alert DB). Cancel
+	// is idempotent — calling it twice is a no-op.
+	invitationCleanupCancel context.CancelFunc
 }
 
 // StatusPageData holds template data for the status page

@@ -347,13 +347,24 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		kcManager.SetFamilyService(famSvc)
 
 		// Background cleanup of expired invitations (runs every 6 hours).
+		// The goroutine is stoppable via app.invitationCleanupCancel, which is
+		// invoked during graceful shutdown. Without it, the goroutine leaks
+		// across every NewApp()+initializeServices call in tests (282 tests
+		// in the app package).
+		invCtx, invCancel := context.WithCancel(context.Background())
+		app.invitationCleanupCancel = invCancel
 		go func() {
 			ticker := time.NewTicker(6 * time.Hour)
 			defer ticker.Stop()
-			for range ticker.C {
-				if is := kcManager.InvitationStore(); is != nil {
-					if n := is.CleanupExpired(); n > 0 {
-						app.logger.Info("Cleaned up expired invitations", "count", n)
+			for {
+				select {
+				case <-invCtx.Done():
+					return
+				case <-ticker.C:
+					if is := kcManager.InvitationStore(); is != nil {
+						if n := is.CleanupExpired(); n > 0 {
+							app.logger.Info("Cleaned up expired invitations", "count", n)
+						}
 					}
 				}
 			}
@@ -397,10 +408,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	kcManager.SetMCPServer(mcpServer)
 
 	// Wire paper trading LTP provider and start the background monitor.
+	// The monitor reference is stored on the App so that graceful shutdown
+	// (and test cleanup) can call paperMonitor.Stop() — without this, each
+	// NewApp+initializeServices call leaks the monitor goroutine.
 	if paperEngine != nil {
 		paperEngine.SetLTPProvider(&paperLTPAdapter{manager: kcManager})
-		paperMonitor := papertrading.NewMonitor(paperEngine, 5*time.Second, app.logger)
-		paperMonitor.Start()
+		app.paperMonitor = papertrading.NewMonitor(paperEngine, 5*time.Second, app.logger)
+		app.paperMonitor.Start()
 		app.logger.Info("Paper trading engine and monitor initialized")
 	}
 
