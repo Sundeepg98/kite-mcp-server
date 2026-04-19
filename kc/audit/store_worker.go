@@ -92,11 +92,20 @@ func (s *Store) Enqueue(entry *ToolCall) {
 }
 
 // Stop gracefully drains the buffer and waits for completion.
+//
+// Stop is idempotent: calling it multiple times is safe and only the first
+// call closes the worker channel. This guards against the case where more
+// than one graceful-shutdown path (e.g. the HTTP signal handler and a test
+// teardown) both try to Stop the same Store, which would otherwise produce
+// `panic: close of closed channel`.
 func (s *Store) Stop() {
-	if s.writeCh != nil {
+	if s.writeCh == nil {
+		return
+	}
+	s.stopOnce.Do(func() {
 		close(s.writeCh)
 		<-s.done
-	}
+	})
 }
 
 // Record inserts a tool call entry into the audit log.

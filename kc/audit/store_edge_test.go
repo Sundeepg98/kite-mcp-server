@@ -941,6 +941,26 @@ func TestStop_NoWorker(t *testing.T) {
 	s.Stop() // should not panic
 }
 
+// TestStore_Stop_Idempotent verifies Stop() is safe to call multiple times.
+// Regression test for `panic: close of closed channel` surfaced when both the
+// HTTP graceful-shutdown signal handler (app/http.go) and the test teardown
+// for TestSetupGracefulShutdown_SignalTriggersShutdown invoked Stop() on the
+// same Store instance.
+func TestStore_Stop_Idempotent(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+	s.StartWorker()
+
+	// Two sequential Stop() calls must not panic. The second call must also
+	// return promptly (the first call already drained and joined the worker).
+	s.Stop()
+	s.Stop()
+
+	// A third call for good measure — sync.Once guarantees all calls after
+	// the first are no-ops.
+	s.Stop()
+}
+
 // ===========================================================================
 // Closed DB error paths — store operations on closed databases
 // ===========================================================================

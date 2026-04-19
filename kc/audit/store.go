@@ -69,6 +69,12 @@ type Store struct {
 	listenerMu        sync.RWMutex
 	activityListeners map[string]chan *ToolCall
 
+	// stopOnce guards Stop() so the write channel is only closed once even
+	// when multiple graceful-shutdown paths (signal handler + test teardown)
+	// both invoke Stop on the same Store instance. Without this, the second
+	// close of s.writeCh would panic with "close of closed channel".
+	stopOnce sync.Once
+
 	// statsCache backs UserOrderStats with a 15-minute TTL to avoid
 	// re-running the 30-day scan on every place_order. See anomaly_cache.go
 	// for the eviction policy and invalidation hooks.
