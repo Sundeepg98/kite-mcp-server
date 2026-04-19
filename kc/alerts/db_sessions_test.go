@@ -16,6 +16,7 @@ import (
 // LoadSessions — empty
 // ===========================================================================
 func TestLoadSessions_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	sessions, err := db.LoadSessions()
 	require.NoError(t, err)
@@ -28,6 +29,7 @@ func TestLoadSessions_Empty(t *testing.T) {
 // LoadSessions — skip stale encrypted row (bad session_id_enc)
 // ===========================================================================
 func TestLoadSessions_SkipCorruptEncryptedRow(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -61,6 +63,7 @@ func TestLoadSessions_SkipCorruptEncryptedRow(t *testing.T) {
 // LoadSessions — bad created_at timestamp
 // ===========================================================================
 func TestLoadSessions_BadCreatedAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// No encryption — session_id stored as-is
 	_, err := db.db.Exec(`INSERT INTO mcp_sessions (session_id, email, created_at, expires_at, terminated, session_id_enc) VALUES (?,?,?,?,?,?)`,
@@ -74,6 +77,7 @@ func TestLoadSessions_BadCreatedAt(t *testing.T) {
 
 
 func TestLoadSessions_BadExpiresAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.db.Exec(`INSERT INTO mcp_sessions (session_id, email, created_at, expires_at, terminated, session_id_enc) VALUES (?,?,?,?,?,?)`,
 		"sess2", "user@example.com", time.Now().Format(time.RFC3339), "not-a-date", 0, "")
@@ -90,6 +94,7 @@ func TestLoadSessions_BadExpiresAt(t *testing.T) {
 // DeleteSession — non-existent
 // ===========================================================================
 func TestDeleteSession_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteSession("nonexistent-session")
 	assert.NoError(t, err)
@@ -101,6 +106,7 @@ func TestDeleteSession_NonExistent(t *testing.T) {
 // SaveSession — with encryption (covers encrypt path for session_id_enc)
 // ===========================================================================
 func TestSaveSession_WithEncryption(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -119,6 +125,7 @@ func TestSaveSession_WithEncryption(t *testing.T) {
 
 
 func TestLoadSessions_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadSessions()
 	require.Error(t, err)
@@ -127,6 +134,7 @@ func TestLoadSessions_ClosedDB(t *testing.T) {
 
 
 func TestSaveSession_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SaveSession("s1", "user@example.com", time.Now(), time.Now().Add(time.Hour), false)
 	require.Error(t, err)
@@ -135,6 +143,7 @@ func TestSaveSession_ClosedDB(t *testing.T) {
 
 
 func TestDeleteSession_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteSession("s1")
 	require.Error(t, err)
@@ -147,6 +156,7 @@ func TestDeleteSession_ClosedDB(t *testing.T) {
 // LoadSessions — cover session with terminated=1
 // ===========================================================================
 func TestLoadSessions_TerminatedSession(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 	expires := now.Add(12 * time.Hour)
@@ -161,6 +171,7 @@ func TestLoadSessions_TerminatedSession(t *testing.T) {
 
 
 func TestSaveSession_EncryptError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.SetEncryptionKey([]byte("bad"))
 	err := db.SaveSession("sid", "u@t.com", time.Now(), time.Now().Add(time.Hour), false)

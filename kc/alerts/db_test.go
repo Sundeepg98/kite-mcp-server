@@ -27,6 +27,7 @@ func openTestDB(t *testing.T) *DB {
 // SetConfig / GetConfig
 // ===========================================================================
 func TestSetConfig_Success(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.SetConfig("test_key", "test_value")
 	require.NoError(t, err)
@@ -38,6 +39,7 @@ func TestSetConfig_Success(t *testing.T) {
 
 
 func TestGetConfig_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.GetConfig("missing_key")
 	assert.ErrorIs(t, err, sql.ErrNoRows)
@@ -45,6 +47,7 @@ func TestGetConfig_NonExistent(t *testing.T) {
 
 
 func TestSetConfig_Upsert(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SetConfig("k", "v1"))
 	require.NoError(t, db.SetConfig("k", "v2"))
@@ -59,6 +62,7 @@ func TestSetConfig_Upsert(t *testing.T) {
 // SaveTrailingStop — all optional fields populated
 // ===========================================================================
 func TestSaveTrailingStop_AllFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -87,6 +91,7 @@ func TestSaveTrailingStop_AllFields(t *testing.T) {
 // LoadTrailingStops — empty
 // ===========================================================================
 func TestLoadTrailingStops_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	stops, err := db.LoadTrailingStops()
 	require.NoError(t, err)
@@ -99,6 +104,7 @@ func TestLoadTrailingStops_Empty(t *testing.T) {
 // LoadTrailingStops — only active stops returned
 // ===========================================================================
 func TestLoadTrailingStops_OnlyActive(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -130,6 +136,7 @@ func TestLoadTrailingStops_OnlyActive(t *testing.T) {
 // DeactivateTrailingStop — non-existent
 // ===========================================================================
 func TestDeactivateTrailingStop_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeactivateTrailingStop("nonexistent")
 	assert.NoError(t, err)
@@ -141,6 +148,7 @@ func TestDeactivateTrailingStop_NonExistent(t *testing.T) {
 // UpdateTrailingStop — non-existent
 // ===========================================================================
 func TestUpdateTrailingStop_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.UpdateTrailingStop("nonexistent", 100, 90, 1)
 	assert.NoError(t, err)
@@ -152,6 +160,7 @@ func TestUpdateTrailingStop_NonExistent(t *testing.T) {
 // SaveDailyPnL — duplicate key (upsert)
 // ===========================================================================
 func TestSaveDailyPnL_DuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	entry := &DailyPnLEntry{
 		Date: "2026-04-01", Email: "user@example.com",
@@ -176,6 +185,7 @@ func TestSaveDailyPnL_DuplicateKey(t *testing.T) {
 // LoadDailyPnL — empty result
 // ===========================================================================
 func TestLoadDailyPnL_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	entries, err := db.LoadDailyPnL("user@example.com", "2026-01-01", "2026-12-31")
 	require.NoError(t, err)
@@ -188,6 +198,7 @@ func TestLoadDailyPnL_Empty(t *testing.T) {
 // SaveRegistryEntry — all fields, duplicate key, encryption
 // ===========================================================================
 func TestSaveRegistryEntry_AllFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 	lastUsed := now.Add(-time.Hour)
@@ -219,6 +230,7 @@ func TestSaveRegistryEntry_AllFields(t *testing.T) {
 
 
 func TestSaveRegistryEntry_NilLastUsedAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -239,6 +251,7 @@ func TestSaveRegistryEntry_NilLastUsedAt(t *testing.T) {
 
 
 func TestSaveRegistryEntry_DuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -262,6 +275,7 @@ func TestSaveRegistryEntry_DuplicateKey(t *testing.T) {
 
 
 func TestSaveRegistryEntry_WithEncryption(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -296,6 +310,7 @@ func TestSaveRegistryEntry_WithEncryption(t *testing.T) {
 // LoadRegistryEntries — empty
 // ===========================================================================
 func TestLoadRegistryEntries_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	entries, err := db.LoadRegistryEntries()
 	require.NoError(t, err)
@@ -308,6 +323,7 @@ func TestLoadRegistryEntries_Empty(t *testing.T) {
 // LoadRegistryEntries — bad timestamps (covers fallback branches)
 // ===========================================================================
 func TestLoadRegistryEntries_BadTimestamps(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.db.Exec(`INSERT INTO app_registry (id, api_key, api_secret, assigned_to, label, status, registered_by, source, last_used_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		"reg-bad", "k1", "s1", "", "", "active", "", "admin", "bad-date", "bad-date", "bad-date")
@@ -328,6 +344,7 @@ func TestLoadRegistryEntries_BadTimestamps(t *testing.T) {
 // DeleteRegistryEntry — non-existent
 // ===========================================================================
 func TestDeleteRegistryEntry_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteRegistryEntry("nonexistent")
 	assert.NoError(t, err)
@@ -339,6 +356,7 @@ func TestDeleteRegistryEntry_NonExistent(t *testing.T) {
 // migrateRegistryCheckConstraint — idempotency
 // ===========================================================================
 func TestMigrateRegistryCheckConstraint_Idempotent(t *testing.T) {
+	t.Parallel()
 	// First migration: OpenDB already ran it. Run it again — should be no-op.
 	db := openTestDB(t)
 
@@ -350,6 +368,7 @@ func TestMigrateRegistryCheckConstraint_Idempotent(t *testing.T) {
 
 
 func TestMigrateRegistryCheckConstraint_OldSchema(t *testing.T) {
+	t.Parallel()
 	// Create a raw DB with old schema (without 'invalid' in CHECK constraint)
 	rawDB, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
@@ -402,6 +421,7 @@ func TestMigrateRegistryCheckConstraint_OldSchema(t *testing.T) {
 
 
 func TestMigrateRegistryCheckConstraint_NoTable(t *testing.T) {
+	t.Parallel()
 	// If the table doesn't exist, migration should return nil
 	rawDB, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
@@ -417,6 +437,7 @@ func TestMigrateRegistryCheckConstraint_NoTable(t *testing.T) {
 // migrateAlerts — idempotency and partial migration
 // ===========================================================================
 func TestMigrateAlerts_Idempotent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// The migration already ran in OpenDB. Run it again.
 	err := migrateAlerts(db.db)
@@ -425,6 +446,7 @@ func TestMigrateAlerts_Idempotent(t *testing.T) {
 
 
 func TestMigrateAlerts_AlreadyHasColumns(t *testing.T) {
+	t.Parallel()
 	// When reference_price and notification_sent_at already exist,
 	// migration should be a no-op
 	rawDB, err := sql.Open("sqlite", ":memory:")
@@ -459,6 +481,7 @@ func TestMigrateAlerts_AlreadyHasColumns(t *testing.T) {
 // EnsureEncryptionSalt — corrupt salt in config
 // ===========================================================================
 func TestEnsureEncryptionSalt_CorruptSalt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Manually store a corrupt (non-hex) salt
@@ -475,6 +498,7 @@ func TestEnsureEncryptionSalt_CorruptSalt(t *testing.T) {
 // hashSessionID — without encryption key (fallback)
 // ===========================================================================
 func TestHashSessionID_NoKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// No encryption key set
 	result := db.hashSessionID("my-session-id")
@@ -483,6 +507,7 @@ func TestHashSessionID_NoKey(t *testing.T) {
 
 
 func TestHashSessionID_WithKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -499,6 +524,7 @@ func TestHashSessionID_WithKey(t *testing.T) {
 // ExecDDL / ExecInsert / ExecResult / QueryRow / RawQuery / Close
 // ===========================================================================
 func TestExecDDL(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.ExecDDL(`CREATE TABLE test_ddl (id TEXT PRIMARY KEY)`)
 	require.NoError(t, err)
@@ -512,6 +538,7 @@ func TestExecDDL(t *testing.T) {
 
 
 func TestExecInsert(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.ExecDDL(`CREATE TABLE test_insert (id TEXT, val TEXT)`))
 	err := db.ExecInsert(`INSERT INTO test_insert (id, val) VALUES (?, ?)`, "1", "hello")
@@ -525,6 +552,7 @@ func TestExecInsert(t *testing.T) {
 
 
 func TestExecResult(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.ExecDDL(`CREATE TABLE test_result (id TEXT)`))
 	require.NoError(t, db.ExecInsert(`INSERT INTO test_result (id) VALUES (?)`, "1"))
@@ -538,6 +566,7 @@ func TestExecResult(t *testing.T) {
 
 
 func TestRawQuery(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("a@x.com", 111))
 	require.NoError(t, db.SaveTelegramChatID("b@x.com", 222))
@@ -562,18 +591,21 @@ func TestRawQuery(t *testing.T) {
 // Evaluator boundary conditions — exactly at target price
 // ===========================================================================
 func TestShouldTrigger_ExactlyAtAboveTarget(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionAbove, TargetPrice: 100}
 	assert.True(t, a.ShouldTrigger( 100)) // >= target
 }
 
 
 func TestShouldTrigger_ExactlyAtBelowTarget(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionBelow, TargetPrice: 100}
 	assert.True(t, a.ShouldTrigger( 100)) // <= target
 }
 
 
 func TestShouldTrigger_DropPctExactly(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: 1000}
 	// Exactly 5% drop: (1000 - 950) / 1000 * 100 = 5.0
 	assert.True(t, a.ShouldTrigger( 950))
@@ -581,6 +613,7 @@ func TestShouldTrigger_DropPctExactly(t *testing.T) {
 
 
 func TestShouldTrigger_RisePctExactly(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 1000}
 	// Exactly 10% rise: (1100 - 1000) / 1000 * 100 = 10.0
 	assert.True(t, a.ShouldTrigger( 1100))
@@ -588,6 +621,7 @@ func TestShouldTrigger_RisePctExactly(t *testing.T) {
 
 
 func TestShouldTrigger_DropPctJustUnder(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: 1000}
 	// 4.9% drop: (1000 - 951) / 1000 * 100 = 4.9
 	assert.False(t, a.ShouldTrigger( 951))
@@ -595,6 +629,7 @@ func TestShouldTrigger_DropPctJustUnder(t *testing.T) {
 
 
 func TestShouldTrigger_RisePctJustUnder(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 1000}
 	// 9.9% rise: (1099 - 1000) / 1000 * 100 = 9.9
 	assert.False(t, a.ShouldTrigger( 1099))
@@ -602,24 +637,28 @@ func TestShouldTrigger_RisePctJustUnder(t *testing.T) {
 
 
 func TestShouldTrigger_RisePctZeroReference(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionRisePct, TargetPrice: 10.0, ReferencePrice: 0}
 	assert.False(t, a.ShouldTrigger( 1100))
 }
 
 
 func TestShouldTrigger_DropPctNegativeReference(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionDropPct, TargetPrice: 5.0, ReferencePrice: -100}
 	assert.False(t, a.ShouldTrigger( 50))
 }
 
 
 func TestShouldTrigger_AboveJustBelow(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionAbove, TargetPrice: 100}
 	assert.False(t, a.ShouldTrigger( 99.99))
 }
 
 
 func TestShouldTrigger_BelowJustAbove(t *testing.T) {
+	t.Parallel()
 	a := &Alert{Direction: DirectionBelow, TargetPrice: 100}
 	assert.False(t, a.ShouldTrigger( 100.01))
 }
@@ -630,6 +669,7 @@ func TestShouldTrigger_BelowJustAbove(t *testing.T) {
 // Store — non-existent paths for DB-backed operations
 // ===========================================================================
 func TestStore_MarkTriggered_NonExistentID_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 	ok := s.MarkTriggered("nonexistent-id", 1600.0)
@@ -638,6 +678,7 @@ func TestStore_MarkTriggered_NonExistentID_DB(t *testing.T) {
 
 
 func TestStore_MarkTriggered_AlreadyTriggered_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	id, _ := s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 	ok := s.MarkTriggered(id, 1600.0)
@@ -650,6 +691,7 @@ func TestStore_MarkTriggered_AlreadyTriggered_DB(t *testing.T) {
 
 
 func TestStore_MarkNotificationSent_NonExistentID_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// Should not panic
 	s.MarkNotificationSent("nonexistent-id", time.Now())
@@ -657,6 +699,7 @@ func TestStore_MarkNotificationSent_NonExistentID_DB(t *testing.T) {
 
 
 func TestStore_DeleteByEmail_NoAlerts_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// Should not panic
 	s.DeleteByEmail("nobody@example.com")
@@ -664,6 +707,7 @@ func TestStore_DeleteByEmail_NoAlerts_DB(t *testing.T) {
 
 
 func TestStore_GetByToken_NoMatch_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 	matches := s.GetByToken(999999) // non-existent token
@@ -672,6 +716,7 @@ func TestStore_GetByToken_NoMatch_DB(t *testing.T) {
 
 
 func TestStore_GetByToken_OnlyActive_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	id, _ := s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 
@@ -685,6 +730,7 @@ func TestStore_GetByToken_OnlyActive_DB(t *testing.T) {
 
 
 func TestStore_ActiveCount_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.Add("user@example.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 	id2, _ := s.Add("user@example.com", "TCS", "NSE", 2953217, 4000.0, DirectionBelow)
@@ -700,6 +746,7 @@ func TestStore_ActiveCount_DB(t *testing.T) {
 
 
 func TestStore_ListAll_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.Add("a@x.com", "INFY", "NSE", 408065, 1500.0, DirectionAbove)
 	s.Add("b@x.com", "TCS", "NSE", 2953217, 4000.0, DirectionBelow)
@@ -712,6 +759,7 @@ func TestStore_ListAll_DB(t *testing.T) {
 
 
 func TestStore_ListAllTelegram_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.SetTelegramChatID("a@x.com", 111)
 	s.SetTelegramChatID("b@x.com", 222)
@@ -724,6 +772,7 @@ func TestStore_ListAllTelegram_DB(t *testing.T) {
 
 
 func TestStore_GetEmailByChatID_DB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	s.SetTelegramChatID("user@example.com", 12345)
 
@@ -738,6 +787,7 @@ func TestStore_GetEmailByChatID_DB(t *testing.T) {
 
 
 func TestStore_LoadFromDB_NilDB_DB(t *testing.T) {
+	t.Parallel()
 	s := NewStore(nil)
 	// No DB set — should return nil
 	err := s.LoadFromDB()
@@ -750,6 +800,7 @@ func TestStore_LoadFromDB_NilDB_DB(t *testing.T) {
 // DB Close
 // ===========================================================================
 func TestDB_Close(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.Close()
 	assert.NoError(t, err)
@@ -761,6 +812,7 @@ func TestDB_Close(t *testing.T) {
 // Encrypt/Decrypt exported wrappers
 // ===========================================================================
 func TestEncryptDecrypt_Exported(t *testing.T) {
+	t.Parallel()
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
 
@@ -773,6 +825,7 @@ func TestEncryptDecrypt_Exported(t *testing.T) {
 
 
 func TestDecrypt_EmptyInput(t *testing.T) {
+	t.Parallel()
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
 
@@ -782,6 +835,7 @@ func TestDecrypt_EmptyInput(t *testing.T) {
 
 
 func TestDecrypt_TruncatedHex(t *testing.T) {
+	t.Parallel()
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
 
@@ -804,6 +858,7 @@ func closedTestDB(t *testing.T) *DB {
 
 
 func TestSetConfig_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SetConfig("k", "v")
 	require.Error(t, err)
@@ -812,6 +867,7 @@ func TestSetConfig_ClosedDB(t *testing.T) {
 
 
 func TestSaveTrailingStop_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	ts := &TrailingStop{
 		ID: "ts-err", Email: "user@example.com", Exchange: "NSE",
@@ -826,6 +882,7 @@ func TestSaveTrailingStop_ClosedDB(t *testing.T) {
 
 
 func TestLoadTrailingStops_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadTrailingStops()
 	require.Error(t, err)
@@ -834,6 +891,7 @@ func TestLoadTrailingStops_ClosedDB(t *testing.T) {
 
 
 func TestDeactivateTrailingStop_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeactivateTrailingStop("ts1")
 	require.Error(t, err)
@@ -842,6 +900,7 @@ func TestDeactivateTrailingStop_ClosedDB(t *testing.T) {
 
 
 func TestUpdateTrailingStop_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.UpdateTrailingStop("ts1", 100, 90, 1)
 	require.Error(t, err)
@@ -850,6 +909,7 @@ func TestUpdateTrailingStop_ClosedDB(t *testing.T) {
 
 
 func TestSaveDailyPnL_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	entry := &DailyPnLEntry{Date: "2026-04-01", Email: "user@example.com"}
 	err := db.SaveDailyPnL(entry)
@@ -859,6 +919,7 @@ func TestSaveDailyPnL_ClosedDB(t *testing.T) {
 
 
 func TestLoadDailyPnL_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadDailyPnL("user@example.com", "2026-01-01", "2026-12-31")
 	require.Error(t, err)
@@ -867,6 +928,7 @@ func TestLoadDailyPnL_ClosedDB(t *testing.T) {
 
 
 func TestLoadRegistryEntries_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadRegistryEntries()
 	require.Error(t, err)
@@ -875,6 +937,7 @@ func TestLoadRegistryEntries_ClosedDB(t *testing.T) {
 
 
 func TestSaveRegistryEntry_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	entry := &RegistryDBEntry{
 		ID: "reg-err", APIKey: "k1", APISecret: "s1",
@@ -888,6 +951,7 @@ func TestSaveRegistryEntry_ClosedDB(t *testing.T) {
 
 
 func TestDeleteRegistryEntry_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteRegistryEntry("reg1")
 	require.Error(t, err)
@@ -900,6 +964,7 @@ func TestDeleteRegistryEntry_ClosedDB(t *testing.T) {
 // migrateAlerts — error path: check reference_price fails
 // ===========================================================================
 func TestMigrateAlerts_ClosedDB(t *testing.T) {
+	t.Parallel()
 	rawDB, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 	// Create alerts table first
@@ -917,6 +982,7 @@ func TestMigrateAlerts_ClosedDB(t *testing.T) {
 // migrateRegistryCheckConstraint — error paths
 // ===========================================================================
 func TestMigrateRegistryCheckConstraint_WithData(t *testing.T) {
+	t.Parallel()
 	// Test that migration preserves multiple rows of data
 	rawDB, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
@@ -957,6 +1023,7 @@ func TestMigrateRegistryCheckConstraint_WithData(t *testing.T) {
 // SaveRegistryEntry — encryption error-path coverage for both api_key and api_secret
 // ===========================================================================
 func TestSaveRegistryEntry_EncryptionBothFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -987,6 +1054,7 @@ func TestSaveRegistryEntry_EncryptionBothFields(t *testing.T) {
 // GetConfig — covers the success path that was missing
 // ===========================================================================
 func TestGetConfig_Success(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SetConfig("mykey", "myvalue"))
 	val, err := db.GetConfig("mykey")
@@ -1000,6 +1068,7 @@ func TestGetConfig_Success(t *testing.T) {
 // LoadTrailingStops — with deactivated_at and last_modified_at populated
 // ===========================================================================
 func TestLoadTrailingStops_WithOptionalDates(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -1028,6 +1097,7 @@ func TestLoadTrailingStops_WithOptionalDates(t *testing.T) {
 // Store — DB persistence: error logging paths with DB
 // ===========================================================================
 func TestStore_AddWithDB_Persistence(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1046,6 +1116,7 @@ func TestStore_AddWithDB_Persistence(t *testing.T) {
 
 
 func TestStore_SetTelegramChatID_WithDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1060,6 +1131,7 @@ func TestStore_SetTelegramChatID_WithDB(t *testing.T) {
 
 
 func TestStore_DeleteByEmail_WithDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1083,6 +1155,7 @@ func TestStore_DeleteByEmail_WithDB(t *testing.T) {
 
 
 func TestStore_MarkTriggered_WithDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1101,6 +1174,7 @@ func TestStore_MarkTriggered_WithDB(t *testing.T) {
 
 
 func TestStore_MarkNotificationSent_WithDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1122,6 +1196,7 @@ func TestStore_MarkNotificationSent_WithDB(t *testing.T) {
 // Evaluator — additional edge cases
 // ===========================================================================
 func TestEvaluator_AlreadyTriggered_NoDoubleNotify(t *testing.T) {
+	t.Parallel()
 	var notifyCount int
 	s := NewStore(func(a *Alert, price float64) {
 		notifyCount++
@@ -1141,6 +1216,7 @@ func TestEvaluator_AlreadyTriggered_NoDoubleNotify(t *testing.T) {
 
 
 func TestEvaluator_MultipleAlertsSameToken(t *testing.T) {
+	t.Parallel()
 	var notified []string
 	s := NewStore(func(a *Alert, price float64) {
 		notified = append(notified, a.ID)
@@ -1157,6 +1233,7 @@ func TestEvaluator_MultipleAlertsSameToken(t *testing.T) {
 
 
 func TestEvaluator_RisePctWithReference(t *testing.T) {
+	t.Parallel()
 	var notified []*Alert
 	s := NewStore(func(a *Alert, price float64) {
 		notified = append(notified, a)
@@ -1176,6 +1253,7 @@ func TestEvaluator_RisePctWithReference(t *testing.T) {
 // ValidDirections
 // ===========================================================================
 func TestValidDirections_DBCoverage(t *testing.T) {
+	t.Parallel()
 	assert.True(t, ValidDirections[DirectionAbove])
 	assert.True(t, ValidDirections[DirectionBelow])
 	assert.True(t, ValidDirections[DirectionDropPct])
@@ -1189,6 +1267,7 @@ func TestValidDirections_DBCoverage(t *testing.T) {
 // Store — DB error logging paths (closed DB triggers error -> logger.Error)
 // ===========================================================================
 func TestStore_LoadFromDB_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1202,6 +1281,7 @@ func TestStore_LoadFromDB_ClosedDB(t *testing.T) {
 
 
 func TestStore_Add_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1216,6 +1296,7 @@ func TestStore_Add_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestStore_Delete_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1233,6 +1314,7 @@ func TestStore_Delete_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestStore_DeleteByEmail_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1248,6 +1330,7 @@ func TestStore_DeleteByEmail_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestStore_MarkTriggered_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1262,6 +1345,7 @@ func TestStore_MarkTriggered_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestStore_MarkNotificationSent_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1276,6 +1360,7 @@ func TestStore_MarkNotificationSent_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestStore_SetTelegramChatID_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(nil)
 	s.SetDB(db)
@@ -1292,12 +1377,14 @@ func TestStore_SetTelegramChatID_ClosedDB_LogsError(t *testing.T) {
 // PnLSnapshotService — error paths
 // ===========================================================================
 func TestPnLSnapshotService_NilDB(t *testing.T) {
+	t.Parallel()
 	svc := NewPnLSnapshotService(nil, nil, nil, defaultTestLogger())
 	assert.Nil(t, svc)
 }
 
 
 func TestPnLSnapshotService_SetBrokerProviderNil(t *testing.T) {
+	t.Parallel()
 	var svc *PnLSnapshotService
 	// SetBrokerProvider on nil service should not panic
 	svc.SetBrokerProvider(nil)
@@ -1305,6 +1392,7 @@ func TestPnLSnapshotService_SetBrokerProviderNil(t *testing.T) {
 
 
 func TestPnLJournal_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	svc := NewPnLSnapshotService(db, nil, nil, defaultTestLogger())
 	db.db.Close()
@@ -1316,6 +1404,7 @@ func TestPnLJournal_ClosedDB(t *testing.T) {
 
 
 func TestPnLJournal_StreakTracking(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	svc := NewPnLSnapshotService(db, nil, nil, defaultTestLogger())
 
@@ -1356,6 +1445,7 @@ func (g *testCredentialGetter) GetAPIKey(email string) string {
 	return g.keys[email]
 }
 func TestTakeSnapshots_Success(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Set up a user with a telegram chat ID
@@ -1385,6 +1475,7 @@ func TestTakeSnapshots_Success(t *testing.T) {
 
 
 func TestTakeSnapshots_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	tokens := &mockTokenChecker{}
 	creds := &testCredentialGetter{}
@@ -1398,6 +1489,7 @@ func TestTakeSnapshots_ClosedDB(t *testing.T) {
 
 
 func TestTakeSnapshots_NoToken(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 12345))
 
@@ -1411,6 +1503,7 @@ func TestTakeSnapshots_NoToken(t *testing.T) {
 
 
 func TestTakeSnapshots_ExpiredToken(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 12345))
 
@@ -1432,6 +1525,7 @@ func TestTakeSnapshots_ExpiredToken(t *testing.T) {
 
 
 func TestTakeSnapshots_NoAPIKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 12345))
 
@@ -1452,6 +1546,7 @@ func TestTakeSnapshots_NoAPIKey(t *testing.T) {
 
 
 func TestTakeSnapshots_BrokerError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 12345))
 
@@ -1482,6 +1577,7 @@ func TestTakeSnapshots_BrokerError(t *testing.T) {
 // PnL buildPnLEntry edge cases
 // ===========================================================================
 func TestBuildPnLEntry_BothErrors_DBCov(t *testing.T) {
+	t.Parallel()
 	entry := buildPnLEntry("2026-04-01", "user@example.com", nil, assert.AnError,
 		kiteconnect.Positions{}, assert.AnError)
 	assert.Equal(t, "2026-04-01", entry.Date)
@@ -1492,6 +1588,7 @@ func TestBuildPnLEntry_BothErrors_DBCov(t *testing.T) {
 
 
 func TestBuildPnLEntry_WithData(t *testing.T) {
+	t.Parallel()
 	holdings := []kiteconnect.Holding{
 		{Tradingsymbol: "INFY", DayChange: 500},
 		{Tradingsymbol: "TCS", DayChange: -200},
@@ -1512,6 +1609,7 @@ func TestBuildPnLEntry_WithData(t *testing.T) {
 
 
 func TestSaveTrailingStop_MinimalFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	ts := &TrailingStop{
 		ID: "ts-min", Email: "user@example.com", Exchange: "NSE",
@@ -1532,6 +1630,7 @@ func TestSaveTrailingStop_MinimalFields(t *testing.T) {
 
 
 func TestSaveRegistryEntry_Error(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.Close()
 	err := db.SaveRegistryEntry(&RegistryDBEntry{

@@ -16,6 +16,7 @@ import (
 // LoadTokens — empty
 // ===========================================================================
 func TestLoadTokens_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	tokens, err := db.LoadTokens()
 	require.NoError(t, err)
@@ -28,6 +29,7 @@ func TestLoadTokens_Empty(t *testing.T) {
 // LoadTokens — bad stored_at (covers fallback to zero time)
 // ===========================================================================
 func TestLoadTokens_BadStoredAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.db.Exec(`INSERT INTO kite_tokens (email, access_token, user_id, user_name, stored_at) VALUES (?,?,?,?,?)`,
 		"user@example.com", "tok1", "uid1", "User1", "bad-date")
@@ -45,6 +47,7 @@ func TestLoadTokens_BadStoredAt(t *testing.T) {
 // SaveToken — duplicate key (upsert)
 // ===========================================================================
 func TestSaveToken_DuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -63,6 +66,7 @@ func TestSaveToken_DuplicateKey(t *testing.T) {
 // DeleteToken — non-existent
 // ===========================================================================
 func TestDeleteToken_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteToken("nobody@example.com")
 	assert.NoError(t, err)
@@ -74,6 +78,7 @@ func TestDeleteToken_NonExistent(t *testing.T) {
 // SaveToken — with encryption
 // ===========================================================================
 func TestSaveToken_WithEncryption(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -97,6 +102,7 @@ func TestSaveToken_WithEncryption(t *testing.T) {
 
 
 func TestLoadTokens_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadTokens()
 	require.Error(t, err)
@@ -105,6 +111,7 @@ func TestLoadTokens_ClosedDB(t *testing.T) {
 
 
 func TestSaveToken_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SaveToken("user@example.com", "tok1", "uid1", "User1", time.Now())
 	require.Error(t, err)
@@ -113,6 +120,7 @@ func TestSaveToken_ClosedDB(t *testing.T) {
 
 
 func TestDeleteToken_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteToken("user@example.com")
 	require.Error(t, err)
@@ -126,6 +134,7 @@ func TestDeleteToken_ClosedDB(t *testing.T) {
 // We can't easily force encrypt to fail, but covering the normal enc path helps
 // ===========================================================================
 func TestSaveToken_EncryptionDuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -148,6 +157,7 @@ func TestSaveToken_EncryptionDuplicateKey(t *testing.T) {
 // Encryption-error paths in Save* functions (invalid key length).
 // ===========================================================================
 func TestSaveToken_EncryptError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.SetEncryptionKey([]byte("bad")) // invalid AES key length
 	err := db.SaveToken("u@t.com", "tok", "uid", "name", time.Now())

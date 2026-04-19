@@ -13,6 +13,7 @@ import (
 
 
 func TestAlertCRUD_WithReferencePrice(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	alert := &Alert{
@@ -46,6 +47,7 @@ func TestAlertCRUD_WithReferencePrice(t *testing.T) {
 
 
 func TestAlertCRUD_WithoutReferencePrice(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	alert := &Alert{
@@ -76,6 +78,7 @@ func TestAlertCRUD_WithoutReferencePrice(t *testing.T) {
 
 
 func TestAlertCRUD_RisePct(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	alert := &Alert{
@@ -105,6 +108,7 @@ func TestAlertCRUD_RisePct(t *testing.T) {
 
 
 func TestAlertMigration_AddReferencePrice(t *testing.T) {
+	t.Parallel()
 	// Simulate an old database without the reference_price column.
 	// Create a DB with old schema, then open it with OpenDB which runs migration.
 	db, err := sql.Open("sqlite", ":memory:")
@@ -153,6 +157,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 
 func TestDailyPnLCRUD(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Save
@@ -217,6 +222,7 @@ func TestDailyPnLCRUD(t *testing.T) {
 
 
 func TestTrailingStopDBCRUD(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	ts := &TrailingStop{
@@ -274,6 +280,7 @@ func TestTrailingStopDBCRUD(t *testing.T) {
 // DeleteAlert — non-existent ID (SQL DELETE on missing row is no-op)
 // ===========================================================================
 func TestDeleteAlert_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Don't insert anything
 	err := db.DeleteAlert("nonexistent@example.com", "nonexistent_id")
@@ -283,6 +290,7 @@ func TestDeleteAlert_NonExistent(t *testing.T) {
 
 
 func TestDeleteAlertsByEmail_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteAlertsByEmail("nobody@example.com")
 	assert.NoError(t, err)
@@ -293,6 +301,7 @@ func TestDeleteAlertsByEmail_NonExistent(t *testing.T) {
 // LoadAlerts — empty result set
 // ===========================================================================
 func TestLoadAlerts_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	alerts, err := db.LoadAlerts()
 	assert.NoError(t, err)
@@ -304,6 +313,7 @@ func TestLoadAlerts_Empty(t *testing.T) {
 // LoadAlerts — corrupt data (bad timestamps)
 // ===========================================================================
 func TestLoadAlerts_BadCreatedAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Insert an alert with a bad created_at timestamp directly
 	_, err := db.db.Exec(`INSERT INTO alerts (id, email, tradingsymbol, exchange, instrument_token,
@@ -319,6 +329,7 @@ func TestLoadAlerts_BadCreatedAt(t *testing.T) {
 
 
 func TestLoadAlerts_BadTriggeredAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Format(time.RFC3339)
 	_, err := db.db.Exec(`INSERT INTO alerts (id, email, tradingsymbol, exchange, instrument_token,
@@ -337,6 +348,7 @@ func TestLoadAlerts_BadTriggeredAt(t *testing.T) {
 // SaveAlert — all optional fields populated (triggered, trigPrice, refPrice, notifSentAt)
 // ===========================================================================
 func TestSaveAlert_AllFieldsPopulated(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -376,6 +388,7 @@ func TestSaveAlert_AllFieldsPopulated(t *testing.T) {
 // SaveAlert — duplicate key (INSERT OR REPLACE should upsert)
 // ===========================================================================
 func TestSaveAlert_DuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -401,6 +414,7 @@ func TestSaveAlert_DuplicateKey(t *testing.T) {
 // UpdateAlertNotification — non-existent ID
 // ===========================================================================
 func TestUpdateAlertNotification_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Should not error (UPDATE on missing row affects 0 rows)
 	err := db.UpdateAlertNotification("nonexistent", time.Now())
@@ -409,6 +423,7 @@ func TestUpdateAlertNotification_NonExistent(t *testing.T) {
 
 
 func TestDeleteAlert_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteAlert("user@example.com", "id1")
 	require.Error(t, err)
@@ -417,6 +432,7 @@ func TestDeleteAlert_ClosedDB(t *testing.T) {
 
 
 func TestDeleteAlertsByEmail_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteAlertsByEmail("user@example.com")
 	require.Error(t, err)
@@ -425,6 +441,7 @@ func TestDeleteAlertsByEmail_ClosedDB(t *testing.T) {
 
 
 func TestUpdateAlertNotification_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.UpdateAlertNotification("id1", time.Now())
 	require.Error(t, err)
@@ -433,6 +450,7 @@ func TestUpdateAlertNotification_ClosedDB(t *testing.T) {
 
 
 func TestLoadAlerts_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadAlerts()
 	require.Error(t, err)
@@ -441,6 +459,7 @@ func TestLoadAlerts_ClosedDB(t *testing.T) {
 
 
 func TestSaveAlert_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	alert := &Alert{
 		ID: "err1", Email: "user@example.com", Tradingsymbol: "INFY",
@@ -457,6 +476,7 @@ func TestSaveAlert_ClosedDB(t *testing.T) {
 // TrailingStopManager — DB error logging paths
 // ===========================================================================
 func TestTrailingStopManager_LoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	err := m.LoadFromDB()
 	assert.NoError(t, err)
@@ -464,6 +484,7 @@ func TestTrailingStopManager_LoadFromDB_NilDB(t *testing.T) {
 
 
 func TestTrailingStopManager_LoadFromDB_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	m := NewTrailingStopManager(defaultTestLogger())
 	m.SetDB(db)
@@ -476,6 +497,7 @@ func TestTrailingStopManager_LoadFromDB_ClosedDB(t *testing.T) {
 
 
 func TestTrailingStopManager_Add_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	m := NewTrailingStopManager(defaultTestLogger())
 	m.SetDB(db)
@@ -492,6 +514,7 @@ func TestTrailingStopManager_Add_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestTrailingStopManager_Cancel_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	m := NewTrailingStopManager(defaultTestLogger())
 	m.SetDB(db)
@@ -511,6 +534,7 @@ func TestTrailingStopManager_Cancel_ClosedDB_LogsError(t *testing.T) {
 
 
 func TestTrailingStopManager_Cancel_NotFound(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	err := m.Cancel("user@example.com", "nonexistent")
 	require.Error(t, err)
@@ -519,6 +543,7 @@ func TestTrailingStopManager_Cancel_NotFound(t *testing.T) {
 
 
 func TestTrailingStopManager_Cancel_WrongEmail(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	ts := &TrailingStop{
 		Email: "user@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
@@ -534,6 +559,7 @@ func TestTrailingStopManager_Cancel_WrongEmail(t *testing.T) {
 
 
 func TestTrailingStopManager_Cancel_AlreadyInactive(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	ts := &TrailingStop{
 		Email: "user@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
@@ -552,6 +578,7 @@ func TestTrailingStopManager_Cancel_AlreadyInactive(t *testing.T) {
 
 
 func TestTrailingStopManager_CancelByEmail_ClosedDB_LogsError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	m := NewTrailingStopManager(defaultTestLogger())
 	m.SetDB(db)
@@ -573,6 +600,7 @@ func TestTrailingStopManager_CancelByEmail_ClosedDB_LogsError(t *testing.T) {
 // TrailingStopManager — Add validation
 // ===========================================================================
 func TestTrailingStopManager_Add_NoOrderID(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	_, err := m.Add(&TrailingStop{
 		Email: "user@example.com", Direction: "long", TrailAmount: 20,
@@ -584,6 +612,7 @@ func TestTrailingStopManager_Add_NoOrderID(t *testing.T) {
 
 
 func TestTrailingStopManager_Add_InvalidDirection(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	_, err := m.Add(&TrailingStop{
 		Email: "user@example.com", OrderID: "ORD1", Direction: "invalid",
@@ -595,6 +624,7 @@ func TestTrailingStopManager_Add_InvalidDirection(t *testing.T) {
 
 
 func TestTrailingStopManager_Add_NoTrail(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	_, err := m.Add(&TrailingStop{
 		Email: "user@example.com", OrderID: "ORD1", Direction: "long",
@@ -606,6 +636,7 @@ func TestTrailingStopManager_Add_NoTrail(t *testing.T) {
 
 
 func TestTrailingStopManager_Add_ZeroCurrentStop(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	_, err := m.Add(&TrailingStop{
 		Email: "user@example.com", OrderID: "ORD1", Direction: "long",
@@ -617,6 +648,7 @@ func TestTrailingStopManager_Add_ZeroCurrentStop(t *testing.T) {
 
 
 func TestTrailingStopManager_Add_ZeroHWM(t *testing.T) {
+	t.Parallel()
 	m := NewTrailingStopManager(defaultTestLogger())
 	_, err := m.Add(&TrailingStop{
 		Email: "user@example.com", OrderID: "ORD1", Direction: "long",

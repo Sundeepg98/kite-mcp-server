@@ -16,6 +16,7 @@ import (
 // LoadCredentials — empty
 // ===========================================================================
 func TestLoadCredentials_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	creds, err := db.LoadCredentials()
 	require.NoError(t, err)
@@ -28,6 +29,7 @@ func TestLoadCredentials_Empty(t *testing.T) {
 // LoadCredentials — bad stored_at (covers fallback to zero time)
 // ===========================================================================
 func TestLoadCredentials_BadStoredAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.db.Exec(`INSERT INTO kite_credentials (email, api_key, api_secret, stored_at) VALUES (?,?,?,?)`,
 		"user@example.com", "key1", "secret1", "bad-date")
@@ -45,6 +47,7 @@ func TestLoadCredentials_BadStoredAt(t *testing.T) {
 // DeleteCredential — non-existent
 // ===========================================================================
 func TestDeleteCredential_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteCredential("nobody@example.com")
 	assert.NoError(t, err)
@@ -56,6 +59,7 @@ func TestDeleteCredential_NonExistent(t *testing.T) {
 // SaveCredential — encryption of both api_key and api_secret
 // ===========================================================================
 func TestSaveCredential_EncryptionBothFields(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -82,6 +86,7 @@ func TestSaveCredential_EncryptionBothFields(t *testing.T) {
 
 
 func TestLoadCredentials_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadCredentials()
 	require.Error(t, err)
@@ -90,6 +95,7 @@ func TestLoadCredentials_ClosedDB(t *testing.T) {
 
 
 func TestSaveCredential_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SaveCredential("user@example.com", "k1", "s1", "k1", time.Now())
 	require.Error(t, err)
@@ -98,6 +104,7 @@ func TestSaveCredential_ClosedDB(t *testing.T) {
 
 
 func TestDeleteCredential_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteCredential("user@example.com")
 	require.Error(t, err)
@@ -110,6 +117,7 @@ func TestDeleteCredential_ClosedDB(t *testing.T) {
 // SaveCredential with encryption — duplicate key
 // ===========================================================================
 func TestSaveCredential_EncryptionDuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -127,6 +135,7 @@ func TestSaveCredential_EncryptionDuplicateKey(t *testing.T) {
 
 
 func TestSaveCredential_EncryptError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.SetEncryptionKey([]byte("bad"))
 	err := db.SaveCredential("u@t.com", "key", "secret", "app", time.Now())
@@ -136,6 +145,7 @@ func TestSaveCredential_EncryptError(t *testing.T) {
 
 
 func TestSaveCredential_EncryptSecretError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Use a 16-byte key so aes.NewCipher succeeds for the first encrypt call
 	// (api_key) but we can't easily make only the second fail. Instead test

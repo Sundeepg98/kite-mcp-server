@@ -15,6 +15,7 @@ import (
 // DeleteTelegramChatID — non-existent
 // ===========================================================================
 func TestDeleteTelegramChatID_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteTelegramChatID("nobody@example.com")
 	assert.NoError(t, err)
@@ -26,6 +27,7 @@ func TestDeleteTelegramChatID_NonExistent(t *testing.T) {
 // LoadTelegramChatIDs — empty
 // ===========================================================================
 func TestLoadTelegramChatIDs_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	ids, err := db.LoadTelegramChatIDs()
 	require.NoError(t, err)
@@ -38,6 +40,7 @@ func TestLoadTelegramChatIDs_Empty(t *testing.T) {
 // SaveTelegramChatID — duplicate key (upsert)
 // ===========================================================================
 func TestSaveTelegramChatID_DuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 111))
 	require.NoError(t, db.SaveTelegramChatID("user@example.com", 222))
@@ -49,6 +52,7 @@ func TestSaveTelegramChatID_DuplicateKey(t *testing.T) {
 
 
 func TestDeleteTelegramChatID_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteTelegramChatID("user@example.com")
 	require.Error(t, err)
@@ -57,6 +61,7 @@ func TestDeleteTelegramChatID_ClosedDB(t *testing.T) {
 
 
 func TestLoadTelegramChatIDs_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadTelegramChatIDs()
 	require.Error(t, err)
@@ -65,6 +70,7 @@ func TestLoadTelegramChatIDs_ClosedDB(t *testing.T) {
 
 
 func TestSaveTelegramChatID_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SaveTelegramChatID("user@example.com", 123)
 	require.Error(t, err)
@@ -73,6 +79,7 @@ func TestSaveTelegramChatID_ClosedDB(t *testing.T) {
 
 
 func TestLoadTelegramChatIDs_ClosedDB_ErrorPath(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.Close()
 	_, err := db.LoadTelegramChatIDs()

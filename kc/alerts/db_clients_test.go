@@ -16,6 +16,7 @@ import (
 // LoadClients — empty
 // ===========================================================================
 func TestLoadClients_Empty(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	clients, err := db.LoadClients()
 	require.NoError(t, err)
@@ -28,6 +29,7 @@ func TestLoadClients_Empty(t *testing.T) {
 // LoadClients — bad created_at (covers fallback to zero time)
 // ===========================================================================
 func TestLoadClients_BadCreatedAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	_, err := db.db.Exec(`INSERT INTO oauth_clients (client_id, client_secret, redirect_uris, client_name, created_at, is_kite_key) VALUES (?,?,?,?,?,?)`,
 		"c1", "secret1", `["http://localhost"]`, "App1", "bad-date", 0)
@@ -45,6 +47,7 @@ func TestLoadClients_BadCreatedAt(t *testing.T) {
 // SaveClient — with IsKiteAPIKey=true
 // ===========================================================================
 func TestSaveClient_IsKiteKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	now := time.Now().Truncate(time.Second)
 
@@ -63,6 +66,7 @@ func TestSaveClient_IsKiteKey(t *testing.T) {
 // DeleteClient — non-existent
 // ===========================================================================
 func TestDeleteClient_NonExistent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	err := db.DeleteClient("nonexistent-client")
 	assert.NoError(t, err)
@@ -74,6 +78,7 @@ func TestDeleteClient_NonExistent(t *testing.T) {
 // SaveClient — with encryption
 // ===========================================================================
 func TestSaveClient_WithEncryption(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -95,6 +100,7 @@ func TestSaveClient_WithEncryption(t *testing.T) {
 
 
 func TestLoadClients_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	_, err := db.LoadClients()
 	require.Error(t, err)
@@ -103,6 +109,7 @@ func TestLoadClients_ClosedDB(t *testing.T) {
 
 
 func TestSaveClient_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.SaveClient("c1", "secret", `["http://localhost"]`, "App1", time.Now(), false)
 	require.Error(t, err)
@@ -111,6 +118,7 @@ func TestSaveClient_ClosedDB(t *testing.T) {
 
 
 func TestDeleteClient_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := closedTestDB(t)
 	err := db.DeleteClient("c1")
 	require.Error(t, err)
@@ -123,6 +131,7 @@ func TestDeleteClient_ClosedDB(t *testing.T) {
 // SaveClient with encryption — duplicate key (covers encrypt on non-empty)
 // ===========================================================================
 func TestSaveClient_EncryptionDuplicateKey(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	key, err := DeriveEncryptionKey("test-secret")
 	require.NoError(t, err)
@@ -140,6 +149,7 @@ func TestSaveClient_EncryptionDuplicateKey(t *testing.T) {
 
 
 func TestSaveClient_EncryptError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.SetEncryptionKey([]byte("bad"))
 	err := db.SaveClient("cid", "csecret", `["http://localhost"]`, "name", time.Now(), false)
