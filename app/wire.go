@@ -266,6 +266,27 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		kcManager.SetPaperEngine(paperEngine)
 	}
 
+	// Wire the OrderFilledEvent real-flow bridge. The fill watcher
+	// subscribes to OrderPlacedEvent and polls broker.GetOrderHistory
+	// until the order reaches COMPLETE or the budget expires. Stopgap
+	// until a push channel (postback URL or ticker order-update feed)
+	// lands — see kc/fill_watcher.go for the full design note.
+	//
+	// Only wired when we have a sessionSvc to resolve per-email brokers.
+	// In DEV_MODE (no real sessions), the resolver is still usable; the
+	// mock broker satisfies broker.Client the same way a real one does.
+	if resolver := kc.FillWatcherResolverFromSessionSvc(kcManager.SessionSvc()); resolver != nil {
+		fillWatcher := kc.NewFillWatcher(kc.FillWatcherConfig{
+			Resolver:   resolver,
+			Dispatcher: eventDispatcher,
+			Logger:     app.logger,
+			// Clock defaults to testutil.RealClock{}; poll/budget use
+			// production defaults (5s / 60s).
+		})
+		fillWatcher.Start()
+		app.logger.Info("OrderFilledEvent fill-watcher wired (stopgap pre-websocket)")
+	}
+
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
 	var serverOpts []server.ServerOption
