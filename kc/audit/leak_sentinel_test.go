@@ -1,34 +1,29 @@
 package audit
 
 import (
-	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"go.uber.org/goleak"
 )
 
-// leak_sentinel_test.go — guards against goroutine leaks from Store's
-// StartWorker/Stop lifecycle. StartWorker spawns a drain goroutine that
-// ranges over writeCh until Stop closes it; the goroutine signals exit
-// by closing s.done, which Stop waits on. A refactor that drops the
-// close(s.writeCh) or the <-s.done join would leak one goroutine per
-// worker start.
+// leak_sentinel_test.go — goroutine-leak sentinel for the audit
+// Store.StartWorker/Stop lifecycle. StartWorker spawns a drain
+// goroutine that ranges over writeCh until Stop closes it; the
+// goroutine signals exit by closing s.done, which Stop waits on.
+// A refactor that drops either side of that handshake would leak
+// one goroutine per worker start.
 //
-// Pattern mirrors app/leak_sentinel_test.go (no external goleak dep):
-// delta-of-NumGoroutine across repeated cycles with a small tolerance.
-//
-// Note: this test deliberately does NOT use openTestStore(t) because
-// t.Cleanup defers the DB.Close until test completion, which means 20
-// cycles accumulate 20 open SQLite databases (each with its own pool /
-// background goroutines) during the measurement window. We open+close
-// each DB within the loop so the sentinel measures only the Store
-// worker goroutine.
+// Uses go.uber.org/goleak VerifyNone at test end — precise stack
+// traces on any leak; replaces the earlier runtime.NumGoroutine
+// tolerance pattern.
 
-// newShortLivedStore opens an in-memory DB, inits the audit table, and
-// returns the Store plus a close function the caller must invoke before
-// the next cycle. This is the in-loop analogue of openTestStore.
+// newShortLivedStore opens an in-memory DB, inits the audit table,
+// and returns the Store plus a close function the caller must invoke
+// before the next cycle. Closing within the loop prevents SQLite
+// connection-pool goroutines from accumulating.
 func newShortLivedStore(t *testing.T) (*Store, func()) {
 	t.Helper()
 	db, err := alerts.OpenDB(":memory:")
@@ -38,23 +33,17 @@ func newShortLivedStore(t *testing.T) (*Store, func()) {
 	return s, func() { db.Close() }
 }
 
-// TestGoroutineLeakSentinel_StoreWorker verifies that 20 StartWorker()
-// + Stop() cycles do not accumulate goroutines. A missing close or
-// missing join in Stop() would leak one drain goroutine per cycle.
+// TestGoroutineLeakSentinel_StoreWorker verifies that 10
+// StartWorker+Stop cycles leave no goroutines behind.
 func TestGoroutineLeakSentinel_StoreWorker(t *testing.T) {
-	// Warmup: one full cycle to settle SQLite / time lazy init BEFORE
-	// the baseline is captured. Without warmup the first DB open can
-	// leave registered finalizers that skew NumGoroutine upward.
-	warm, closeWarm := newShortLivedStore(t)
-	warm.StartWorker()
-	warm.Stop()
-	closeWarm()
-	runtime.GC()
-	time.Sleep(100 * time.Millisecond)
+	defer goleak.VerifyNone(t,
+		goleak.IgnoreTopFunction("testing.(*T).Parallel"),
+		// modernc.org/sqlite spawns internal goroutines that outlive
+		// the DB close on some platforms; tolerate them.
+		goleak.IgnoreAnyFunction("modernc.org/sqlite.(*conn).run"),
+	)
 
-	baseline := runtime.NumGoroutine()
-
-	const cycles = 20
+	const cycles = 10
 	for i := 0; i < cycles; i++ {
 		s, closeDB := newShortLivedStore(t)
 		s.StartWorker()
@@ -68,21 +57,8 @@ func TestGoroutineLeakSentinel_StoreWorker(t *testing.T) {
 			StartedAt:   time.Now(),
 			CompletedAt: time.Now(),
 		})
-		time.Sleep(5 * time.Millisecond)
-		s.Stop()
-		closeDB() // release SQLite connection/goroutines in-loop
-	}
-	runtime.GC()
-	time.Sleep(100 * time.Millisecond)
-	after := runtime.NumGoroutine()
-
-	delta := after - baseline
-	// Tolerance 3 for GC helpers / test runtime noise. Without the
-	// close+join pair in Stop(), delta would climb to ~20.
-	const tolerance = 3
-	if delta > tolerance {
-		t.Errorf("audit Store worker goroutine leak: baseline=%d after=%d delta=%d exceeds tolerance=%d",
-			baseline, after, delta, tolerance)
+		s.Stop() // Stop drains and waits for worker goroutine to exit
+		closeDB()
 	}
 }
 

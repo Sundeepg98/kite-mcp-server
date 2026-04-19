@@ -3,43 +3,44 @@ package ticker
 import (
 	"log/slog"
 	"os"
-	"runtime"
 	"testing"
-	"time"
+
+	"go.uber.org/goleak"
 )
 
-// leak_sentinel_test.go — guards against goroutine leaks from Service's
-// New/Shutdown lifecycle. Today New() does not spawn goroutines (each
-// Start(email) starts a per-user WebSocket goroutine via the external
-// kiteticker library, which requires a live broker connection and is
-// not exercised here). Shutdown cancels every user's context.
+// leak_sentinel_test.go — goroutine-leak sentinel for the ticker
+// package. Forward-looking: Service.New today does not spawn its own
+// goroutines (per-user WebSocket goroutines via kiteticker require a
+// live broker connection and aren't exercised in unit tests).
 //
-// This sentinel is a forward-looking guard: if a refactor ever adds a
-// background goroutine to the Service itself (e.g. a health-check
-// goroutine, a global reconnect supervisor, a cross-user tick fanout),
-// the delta-of-NumGoroutine assertion will catch a missing cleanup
-// path before it ships.
-//
-// Pattern mirrors app/leak_sentinel_test.go (no external goleak dep).
+// Uses go.uber.org/goleak VerifyNone at test end for precise stack
+// traces on any leak; replaces the earlier runtime.NumGoroutine-delta
+// pattern which required per-cycle warmup sleeps.
 
 func leakTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 }
 
-// TestGoroutineLeakSentinel_Service verifies that 20 New()+Shutdown()
-// cycles do not accumulate goroutines beyond test-runtime noise. If a
-// future refactor adds a per-Service background goroutine without a
-// matching Shutdown hook, delta will grow by one per cycle.
+// TestGoroutineLeakSentinel_Service verifies that New+Shutdown cycles
+// leave no goroutines behind. If a future refactor adds a
+// per-Service background goroutine without a matching Shutdown hook,
+// goleak.VerifyNone catches it with the exact leaking function.
 func TestGoroutineLeakSentinel_Service(t *testing.T) {
-	// Warmup: one construct/shutdown pair to settle lazy package init.
-	warm := New(Config{Logger: leakTestLogger()})
-	warm.Shutdown()
-	runtime.GC()
-	time.Sleep(50 * time.Millisecond)
-
-	baseline := runtime.NumGoroutine()
-
-	const cycles = 20
+	defer goleak.VerifyNone(t,
+		goleak.IgnoreTopFunction("testing.(*T).Parallel"),
+		// Other ticker tests in the same package call Service.Start,
+		// which spawns `go func() { t.ServeWithContext(ctx) }()`. The
+		// goroutine exits when ctx is cancelled, but under parallel
+		// package execution it may outlive the test that spawned it
+		// and still be visible to this sentinel's VerifyNone. Ignoring
+		// the specific ServeWithContext frame means a real leak in
+		// New/Shutdown (this sentinel's contract) still fires.
+		goleak.IgnoreAnyFunction("github.com/zerodha/gokiteconnect/v4/ticker.(*Ticker).ServeWithContext"),
+		goleak.IgnoreAnyFunction("github.com/zerodha/gokiteconnect/v4/ticker.(*Ticker).start"),
+		goleak.IgnoreAnyFunction("github.com/gorilla/websocket.(*Conn).NextReader"),
+		goleak.IgnoreAnyFunction("net/http.(*http2ClientConn).readLoop"),
+	)
+	const cycles = 10
 	for i := 0; i < cycles; i++ {
 		svc := New(Config{Logger: leakTestLogger()})
 		// Touch a read method so the sentinel exercises a real API
@@ -48,25 +49,10 @@ func TestGoroutineLeakSentinel_Service(t *testing.T) {
 		_ = svc.IsRunning("nobody@example.com")
 		svc.Shutdown()
 	}
-	runtime.GC()
-	time.Sleep(100 * time.Millisecond)
-	after := runtime.NumGoroutine()
-
-	delta := after - baseline
-	// Tolerance 3 for GC helpers / test runtime noise. If a future
-	// refactor adds a leaky background goroutine to the Service
-	// constructor, delta will climb to ~20.
-	const tolerance = 3
-	if delta > tolerance {
-		t.Errorf("ticker Service goroutine leak: baseline=%d after=%d delta=%d exceeds tolerance=%d",
-			baseline, after, delta, tolerance)
-	}
 }
 
 // TestServiceShutdownIdempotent locks in that Shutdown can be called
-// multiple times without panic. Today Shutdown just clears a map
-// under mu; a refactor that added channel close() calls without a
-// sync.Once guard would break this contract silently.
+// multiple times without panic.
 func TestServiceShutdownIdempotent(t *testing.T) {
 	svc := New(Config{Logger: leakTestLogger()})
 	// Triple Shutdown — must not panic.
