@@ -43,7 +43,7 @@ func p100AuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 // ---------------------------------------------------------------------------
 
 func TestServeLegalPages_TemplateExecuteError_Push100(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	// Template with no "legal" definition → ExecuteTemplate("legal",...) fails
 	badTmpl := template.Must(template.New("not_legal").Parse("{{.Missing}}"))
 	app.legalTemplate = badTmpl
@@ -69,7 +69,7 @@ func TestServeLegalPages_TemplateExecuteError_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServeStatusPage_LandingTemplateExecuteError_Push100(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	// Template that defines "base" but references an undefined field via method call
 	tmpl := template.Must(template.New("base").Parse("{{.NonExistentMethod}}"))
 	app.landingTemplate = tmpl
@@ -91,7 +91,7 @@ func TestServeStatusPage_LandingTemplateExecuteError_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServeStatusPage_WriteTo_Push100(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 	mux := http.NewServeMux()
 	app.serveStatusPage(mux)
@@ -132,7 +132,7 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 		logger:          testLogger(),
 	}
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.auditStore = p100AuditStore(t, db)
 	app.rateLimiters = newRateLimiters()
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
@@ -168,7 +168,7 @@ func TestInitializeServices_AuditEncryption_Push100(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "test-encryption-key-at-least-32-chars!!")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.OAuthJWTSecret = "test-encryption-key-at-least-32-chars!!"
@@ -202,7 +202,7 @@ func TestInitializeServices_RiskGuardFreezeAndAutoFreeze_Push100(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.AdminEmails = "admin@test.com"
@@ -457,7 +457,7 @@ func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.oauthHandler = handler
 	app.Config.AdminEmails = "adminp@test.com"
@@ -481,7 +481,7 @@ func TestSetupMux_AdminSecretPathFallback_Push100(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "")
 
 	mgr := p100Manager(t)
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.oauthHandler = nil // no OAuth
 	app.Config.AdminSecretPath = "test-admin-secret"
@@ -510,7 +510,7 @@ func TestSetupMux_PricingPage_PremiumTier_Push100(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "")
 
 	mgr := p100Manager(t)
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
@@ -543,7 +543,7 @@ func TestSetupMux_StripeWebhookBillingStore_Push100(t *testing.T) {
 		mgr.SetBillingStore(bs)
 	}
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -569,7 +569,7 @@ func TestSetupMux_StripeWebhookNoBilling_Push100(t *testing.T) {
 	t.Setenv("STRIPE_SECRET_KEY", "") // No billing store
 
 	mgr := p100Manager(t)
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
@@ -618,7 +618,7 @@ func TestSetupMux_AcceptInvite_AllPaths_Push100(t *testing.T) {
 		}))
 	}
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
@@ -666,7 +666,7 @@ func TestRunServer_InitServicesError_Push100(t *testing.T) {
 	t.Setenv("ADMIN_EMAILS", "")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = false
 	app.Config.KiteAPIKey = ""
 	app.Config.KiteAPISecret = ""
@@ -695,7 +695,7 @@ func TestRunServer_OAuthWiring_Push100(t *testing.T) {
 	t.Setenv("STRIPE_SECRET_KEY", "")
 	t.Setenv("APP_MODE", "hybrid")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
@@ -724,7 +724,7 @@ func TestRunServer_OAuthWiring_Push100(t *testing.T) {
 
 func TestInitializeServices_TemplateInitSuccess_Push100(t *testing.T) {
 	// Verify initStatusPageTemplate sets all three templates correctly
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
 	assert.NotNil(t, app.statusTemplate)
@@ -777,7 +777,7 @@ func TestGetSecretByAPIKey_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServeHTTPServer_CloseImmediately_Push100(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	srv := &http.Server{Addr: "127.0.0.1:0", Handler: http.NewServeMux()}
 	go app.serveHTTPServer(srv)
 	time.Sleep(30 * time.Millisecond)
@@ -789,7 +789,7 @@ func TestServeHTTPServer_CloseImmediately_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStartServer_AllValidModes_Push100(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 
 	// Invalid mode
 	app.Config.AppMode = "UNKNOWN"
@@ -898,7 +898,7 @@ func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.oauthHandler = handler
 	app.Config.AdminEmails = ""
@@ -925,7 +925,7 @@ func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
 
 func TestRegisterTelegramWebhook_JWTSecretNoNotifier_Push100(t *testing.T) {
 	mgr := p100Manager(t)
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
 	app.Config.ExternalURL = "https://test.example.com"
 	mux := http.NewServeMux()

@@ -21,7 +21,7 @@ func TestLoadConfig_MissingAPIKey(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "")
 	t.Setenv("OAUTH_JWT_SECRET", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -34,7 +34,7 @@ func TestLoadConfig_MissingAPISecret(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "")
 	t.Setenv("OAUTH_JWT_SECRET", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -46,7 +46,7 @@ func TestLoadConfig_ValidCredentials(t *testing.T) {
 	t.Setenv("KITE_API_KEY", "test_key")
 	t.Setenv("KITE_API_SECRET", "test_secret")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	if err != nil {
@@ -68,7 +68,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	t.Setenv("KITE_API_KEY", "test_key")
 	t.Setenv("KITE_API_SECRET", "test_secret")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	if err != nil {
@@ -106,7 +106,7 @@ func TestStartServer_InvalidMode(t *testing.T) {
 }
 
 func TestNewApp(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 
 	if app == nil {
 		t.Error("Expected non-nil app")
@@ -121,7 +121,7 @@ func TestNewApp(t *testing.T) {
 }
 
 func TestSetVersion(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	testVersion := "v1.2.3"
 
 	app.SetVersion(testVersion)
@@ -227,7 +227,7 @@ func TestDeriveAggregateID(t *testing.T) {
 // ===========================================================================
 
 func TestInitStatusPageTemplate_Success(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.initStatusPageTemplate()
 	// Should succeed since templates are embedded
 	assert.NoError(t, err)
@@ -241,7 +241,7 @@ func TestInitStatusPageTemplate_Success(t *testing.T) {
 // ===========================================================================
 
 func TestServeLegalPages_NilTemplate(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.legalTemplate = nil
 	mux := http.NewServeMux()
 	// Should not panic
@@ -254,7 +254,7 @@ func TestServeLegalPages_NilTemplate(t *testing.T) {
 }
 
 func TestServeLegalPages_WithTemplate(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.initStatusPageTemplate()
 	require.NoError(t, err)
 
@@ -280,7 +280,7 @@ func TestServeLegalPages_WithTemplate(t *testing.T) {
 // ===========================================================================
 
 func TestServeStatusPage_NonRootPath(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	_ = app.initStatusPageTemplate()
 	mux := http.NewServeMux()
 	app.serveStatusPage(mux)
@@ -293,7 +293,7 @@ func TestServeStatusPage_NonRootPath(t *testing.T) {
 }
 
 func TestServeStatusPage_Root_NoTemplates(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.landingTemplate = nil
 	app.statusTemplate = nil
 	mux := http.NewServeMux()
@@ -308,7 +308,7 @@ func TestServeStatusPage_Root_NoTemplates(t *testing.T) {
 }
 
 func TestServeStatusPage_Root_WithLandingTemplate(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.initStatusPageTemplate()
 	require.NoError(t, err)
 	app.Config.AppMode = "http"
