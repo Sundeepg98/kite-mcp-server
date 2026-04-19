@@ -169,6 +169,42 @@ func TestMonitor_StartStop(t *testing.T) {
 	monitor.Stop()
 }
 
+// TestMonitor_StopIdempotent verifies Stop is safe to call multiple times —
+// once from cleanupInitializeServices in tests, once from setupGracefulShutdown
+// in production. A second close() on a nil chan panics; the sync.Once guard
+// prevents that.
+func TestMonitor_StopIdempotent(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{})
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	monitor := NewMonitor(engine, 50*time.Millisecond, logger)
+	monitor.Start()
+	time.Sleep(20 * time.Millisecond)
+	// Calling Stop multiple times must not panic.
+	monitor.Stop()
+	monitor.Stop()
+	monitor.Stop()
+}
+
+// TestMonitor_StopWithoutStart verifies Stop on a Monitor that was never
+// Started returns immediately (does not deadlock waiting for a never-closing
+// doneCh).
+func TestMonitor_StopWithoutStart(t *testing.T) {
+	engine, _ := testEngineWithStore(t, map[string]float64{})
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	monitor := NewMonitor(engine, 50*time.Millisecond, logger)
+	done := make(chan struct{})
+	go func() {
+		monitor.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// expected — Stop returned quickly.
+	case <-time.After(1 * time.Second):
+		t.Fatal("Monitor.Stop() deadlocked when Start was never called")
+	}
+}
+
 func TestMonitor_Tick_InsufficientCash(t *testing.T) {
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 100)) // very small cash

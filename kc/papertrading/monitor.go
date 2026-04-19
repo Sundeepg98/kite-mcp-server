@@ -2,6 +2,7 @@ package papertrading
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -11,6 +12,9 @@ type Monitor struct {
 	engine   *PaperEngine
 	interval time.Duration
 	stopCh   chan struct{}
+	doneCh   chan struct{}
+	stopOnce sync.Once
+	started  bool
 	logger   *slog.Logger
 }
 
@@ -20,23 +24,39 @@ func NewMonitor(engine *PaperEngine, interval time.Duration, logger *slog.Logger
 		engine:   engine,
 		interval: interval,
 		stopCh:   make(chan struct{}),
+		doneCh:   make(chan struct{}),
 		logger:   logger,
 	}
 }
 
-// Start launches the monitor goroutine.
+// Start launches the monitor goroutine. Calling Start more than once is a
+// programming error; the redundant goroutine leaks. Callers should create a
+// new Monitor instead.
 func (m *Monitor) Start() {
+	m.started = true
 	go m.loop()
 	m.logger.Info("paper trading monitor started", "interval", m.interval)
 }
 
-// Stop signals the monitor goroutine to exit.
+// Stop signals the monitor goroutine to exit and waits for it to terminate.
+// It is safe to call Stop multiple times — only the first call closes the
+// stop channel and waits for the loop; subsequent calls are no-ops (sync.Once guard).
+//
+// If Start was never called, Stop is a pure no-op and returns immediately.
 func (m *Monitor) Stop() {
-	close(m.stopCh)
-	m.logger.Info("paper trading monitor stopped")
+	m.stopOnce.Do(func() {
+		close(m.stopCh)
+		// Only wait for the loop goroutine when Start was actually called;
+		// otherwise doneCh is never closed and we'd block forever.
+		if m.started {
+			<-m.doneCh
+		}
+		m.logger.Info("paper trading monitor stopped")
+	})
 }
 
 func (m *Monitor) loop() {
+	defer close(m.doneCh)
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
