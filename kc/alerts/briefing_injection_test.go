@@ -12,21 +12,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/testutil"
 )
 
 // testKiteFactory implements alerts.KiteClientFactory, producing clients that
-// hit the mock Kite HTTP server instead of the real API.
+// hit the mock Kite HTTP server instead of the real API. Returns a
+// zerodha.KiteSDK wrapping a real *kiteconnect.Client whose base URL is
+// pointed at the httptest server.
 type testKiteFactory struct {
 	baseURL string
 }
 
-func (f *testKiteFactory) NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client {
-	c := kiteconnect.New(apiKey)
-	c.SetAccessToken(accessToken)
-	c.SetBaseURI(f.baseURL)
-	return c
+func (f *testKiteFactory) NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK {
+	sdk := zerodha.NewKiteSDK(apiKey)
+	sdk.SetAccessToken(accessToken)
+	sdk.SetBaseURI(f.baseURL)
+	return sdk
 }
 
 func TestDefaultBrokerProvider_GetHoldings_SuccessViaFactory(t *testing.T) {

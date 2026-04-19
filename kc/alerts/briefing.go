@@ -10,6 +10,7 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
@@ -32,16 +33,19 @@ type defaultBrokerProvider struct {
 	factory KiteClientFactory
 }
 
-// KiteClientFactory creates Kite API clients (mirrors kc.KiteClientFactory for briefing use).
+// KiteClientFactory creates Kite API clients (mirrors kc.KiteClientFactory
+// for briefing use). Returns the hexagonal zerodha.KiteSDK port rather
+// than the concrete *kiteconnect.Client so briefing + pnl services can
+// be exercised off-HTTP with zerodha.MockKiteSDK.
 type KiteClientFactory interface {
-	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
+	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
 }
 
 // errNoKiteClientFactory is returned when defaultBrokerProvider is used without a factory.
 // Production code always wires a factory via the Manager; only misconfigured tests hit this.
 var errNoKiteClientFactory = fmt.Errorf("alerts: no KiteClientFactory configured")
 
-func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) (*kiteconnect.Client, error) {
+func (d *defaultBrokerProvider) newClient(apiKey, accessToken string) (zerodha.KiteSDK, error) {
 	if d.factory == nil {
 		return nil, errNoKiteClientFactory
 	}

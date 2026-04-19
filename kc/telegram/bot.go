@@ -16,7 +16,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -32,10 +32,12 @@ type TelegramLookup interface {
 }
 
 // KiteClientFactory creates Kite API clients. Mirrors kc.KiteClientFactory
-// to avoid a circular import between kc and kc/telegram.
+// to avoid a circular import between kc and kc/telegram. Returns the
+// hexagonal zerodha.KiteSDK port rather than the concrete SDK client so
+// trading commands can be exercised off-HTTP with zerodha.MockKiteSDK.
 type KiteClientFactory interface {
-	NewClient(apiKey string) *kiteconnect.Client
-	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
+	NewClient(apiKey string) zerodha.KiteSDK
+	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
 }
 
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
@@ -96,7 +98,7 @@ type BotHandler struct {
 	// kiteBaseURI overrides the Kite API base URL (for testing).
 	kiteBaseURI string
 
-	// kiteClientFactory creates kiteconnect.Client instances. Required for trading.
+	// kiteClientFactory creates zerodha.KiteSDK instances. Required for trading.
 	kiteClientFactory KiteClientFactory
 
 	// tradingEnabled mirrors app.Config.EnableTrading. When false the
@@ -408,10 +410,14 @@ func (h *BotHandler) allowCommand(chatID int64) bool {
 	return true
 }
 
-// newKiteClient creates a Kite Connect client for the given email using
+// newKiteClient creates a Kite SDK client for the given email using
 // stored credentials and token. Returns nil and an error message if
-// credentials are missing or the token is expired.
-func (h *BotHandler) newKiteClient(email string) (*kiteconnect.Client, string) {
+// credentials are missing or the token is expired. The return type is
+// the zerodha.KiteSDK port so command handlers depend on the broker
+// interface rather than the concrete gokiteconnect client — test
+// builds can swap in zerodha.MockKiteSDK via the factory without
+// standing up an httptest server.
+func (h *BotHandler) newKiteClient(email string) (zerodha.KiteSDK, string) {
 	apiKey := h.manager.GetAPIKeyForEmail(email)
 	if apiKey == "" {
 		return nil, "No API key found. Please re-login via MCP."

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
@@ -24,17 +24,18 @@ import (
 
 // testKiteClientFactory is a trivial factory used by tests; it mirrors the
 // behavior of kc.defaultKiteClientFactory without importing the parent kc
-// package (which would create an import cycle).
+// package (which would create an import cycle). It returns zerodha.KiteSDK
+// to match the production factory contract.
 type testKiteClientFactory struct{}
 
-func (testKiteClientFactory) NewClient(apiKey string) *kiteconnect.Client {
-	return kiteconnect.New(apiKey)
+func (testKiteClientFactory) NewClient(apiKey string) zerodha.KiteSDK {
+	return zerodha.NewKiteSDK(apiKey)
 }
 
-func (testKiteClientFactory) NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client {
-	c := kiteconnect.New(apiKey)
-	c.SetAccessToken(accessToken)
-	return c
+func (testKiteClientFactory) NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK {
+	sdk := zerodha.NewKiteSDK(apiKey)
+	sdk.SetAccessToken(accessToken)
+	return sdk
 }
 
 // ---------------------------------------------------------------------------
