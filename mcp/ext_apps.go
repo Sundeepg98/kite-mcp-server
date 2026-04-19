@@ -495,16 +495,17 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 // Manager. This is a test-isolation requirement — widget tests use a
 // locally-constructed audit store that isn't attached to the Manager.
 //
-// The path-to-100 escape-hatch research flagged these four call sites
-// as "direct usecase calls that should go through the bus". They
-// intentionally don't: the bus handler would have to resolve the audit
-// store from the Manager, which breaks the test contract. Documented
-// here instead of silently leaving them as mismatched escapes.
+// These four DataFuncs now dispatch through the QueryBus via
+// manager.QueryBus().DispatchWithResult(ctx, GetXxxForWidgetQuery{...}),
+// inheriting uniform audit logging and latency tracking (see
+// server_metrics tool). To preserve the test contract, the caller-
+// supplied auditStore rides on ctx via cqrs.WithWidgetAuditStore; the
+// handler in kc/manager_queries_escapes.go reads ctx first and falls
+// back to manager.AuditStoreConcrete() for production callers.
 
 // portfolioData fetches holdings + positions via the portfolio widget use case.
 func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
-	uc := usecases.NewGetPortfolioForWidgetUseCase(manager.SessionSvc(), manager.Logger)
-	result, err := uc.Execute(context.Background(), cqrs.GetWidgetPortfolioQuery{Email: email})
+	result, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioForWidgetQuery{Email: email})
 	if err != nil {
 		return map[string]string{"error": err.Error()}
 	}
@@ -512,12 +513,23 @@ func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
 }
 
 // activityData fetches recent audit trail entries via the activity widget use case.
-func activityData(_ *kc.Manager, auditStore *audit.Store, email string) any {
+func activityData(manager *kc.Manager, auditStore *audit.Store, email string) any {
 	if auditStore == nil {
 		return nil
 	}
-	uc := usecases.NewGetActivityForWidgetUseCase(auditStore, slog.Default())
-	result, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: email})
+	if manager == nil {
+		// Defensive fallback: tests historically called activityData(nil, nil, ...).
+		// The nil-auditStore check above covers that case; this guard is for
+		// hypothetical future callers that pass a store without a manager.
+		uc := usecases.NewGetActivityForWidgetUseCase(auditStore, slog.Default())
+		result, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: email})
+		if err != nil {
+			return nil
+		}
+		return result
+	}
+	ctx := cqrs.WithWidgetAuditStore(context.Background(), auditStore)
+	result, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetActivityForWidgetQuery{Email: email})
 	if err != nil {
 		return nil
 	}
@@ -529,8 +541,8 @@ func ordersData(manager *kc.Manager, auditStore *audit.Store, email string) any 
 	if auditStore == nil {
 		return nil
 	}
-	uc := usecases.NewGetOrdersForWidgetUseCase(manager.SessionSvc(), auditStore, manager.Logger)
-	result, err := uc.Execute(context.Background(), cqrs.GetWidgetOrdersQuery{Email: email})
+	ctx := cqrs.WithWidgetAuditStore(context.Background(), auditStore)
+	result, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrdersForWidgetQuery{Email: email})
 	if err != nil {
 		return nil
 	}
@@ -542,8 +554,7 @@ func alertsData(manager *kc.Manager, _ *audit.Store, email string) any {
 	if manager.AlertStore() == nil {
 		return nil
 	}
-	uc := usecases.NewGetAlertsForWidgetUseCase(manager.SessionSvc(), manager.AlertStore(), manager.Logger)
-	result, err := uc.Execute(context.Background(), cqrs.GetWidgetAlertsQuery{Email: email})
+	result, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetAlertsForWidgetQuery{Email: email})
 	if err != nil {
 		return nil
 	}

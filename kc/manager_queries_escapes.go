@@ -18,6 +18,9 @@ import (
 // Covered here:
 //   - GetOrderMarginsQuery, GetBasketMarginsQuery, GetOrderChargesQuery
 //     (margin_tools.go)
+//   - GetPortfolioForWidgetQuery, GetActivityForWidgetQuery,
+//     GetOrdersForWidgetQuery, GetAlertsForWidgetQuery
+//     (mcp/ext_apps.go widget DataFuncs)
 //
 // Not covered — intentionally left as direct calls:
 //   - mcp/common.go:88 — WithTokenRefresh middleware helper, hot path that
@@ -29,10 +32,14 @@ import (
 //   - mcp/setup_tools.go:455 — OpenDashboard is already a Query via the
 //     earlier CQRS migration; the direct call here is inside a redirect
 //     flow that runs synchronously in HTTP, not a tool handler.
-//   - mcp/ext_apps.go × 4 widget DataFuncs — take auditStore as an explicit
-//     caller parameter for test isolation; bus dispatch would have to
-//     resolve the store off the Manager, breaking the test contract.
-//     Documented in ext_apps.go above the DataFunc definitions.
+//
+// Widget handlers resolve the audit store in a two-step fallback:
+//  1. cqrs.WidgetAuditStoreFromContext — populated by the ext_apps
+//     DataFuncs to honor a test-scoped store that isn't attached to the
+//     Manager (the widget tests construct a local audit.Store and pass it
+//     as a parameter; the bus must respect that).
+//  2. m.AuditStoreConcrete() — production fallback when ctx carries no
+//     explicit store (e.g. future non-widget callers of these queries).
 //
 // Called from Manager.registerCQRSHandlers, after the batch D remaining
 // queries are registered.
@@ -61,6 +68,71 @@ func (m *Manager) registerEscapeQueries() error {
 		return uc.Execute(ctx, q)
 	}); err != nil {
 		return err
+	}
+
+	// --- Widget queries ---
+
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPortfolioForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetPortfolioForWidgetQuery)
+		uc := usecases.NewGetPortfolioForWidgetUseCase(m.resolverFromContext(ctx), m.Logger)
+		return uc.Execute(ctx, cqrs.GetWidgetPortfolioQuery{Email: q.Email})
+	}); err != nil {
+		return err
+	}
+
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetActivityForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetActivityForWidgetQuery)
+		store := m.widgetAuditStoreFromCtxOrManager(ctx)
+		if store == nil {
+			return nil, nil
+		}
+		uc := usecases.NewGetActivityForWidgetUseCase(store, m.Logger)
+		return uc.Execute(ctx, cqrs.GetWidgetActivityQuery{Email: q.Email})
+	}); err != nil {
+		return err
+	}
+
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetOrdersForWidgetQuery)
+		store := m.widgetAuditStoreFromCtxOrManager(ctx)
+		if store == nil {
+			return nil, nil
+		}
+		uc := usecases.NewGetOrdersForWidgetUseCase(m.resolverFromContext(ctx), store, m.Logger)
+		return uc.Execute(ctx, cqrs.GetWidgetOrdersQuery{Email: q.Email})
+	}); err != nil {
+		return err
+	}
+
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetAlertsForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.GetAlertsForWidgetQuery)
+		alertStore := m.AlertStore()
+		if alertStore == nil {
+			return nil, nil
+		}
+		uc := usecases.NewGetAlertsForWidgetUseCase(m.resolverFromContext(ctx), alertStore, m.Logger)
+		return uc.Execute(ctx, cqrs.GetWidgetAlertsQuery{Email: q.Email})
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// widgetAuditStoreFromCtxOrManager returns the audit store attached to ctx
+// by the ext_apps widget DataFuncs (to honor a test-scoped store), falling
+// back to the Manager's attached audit store. Returns nil when neither is
+// present; widget handlers short-circuit to a nil result so the upstream
+// MCP App widget renders its empty state.
+func (m *Manager) widgetAuditStoreFromCtxOrManager(ctx context.Context) usecases.WidgetAuditStore {
+	if v := cqrs.WidgetAuditStoreFromContext(ctx); v != nil {
+		if s, ok := v.(usecases.WidgetAuditStore); ok {
+			return s
+		}
+	}
+	if s := m.AuditStoreConcrete(); s != nil {
+		// Return the concrete store which satisfies WidgetAuditStore.
+		return s
 	}
 	return nil
 }
