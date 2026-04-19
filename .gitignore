@@ -91,3 +91,24 @@ kite-mcp-server-*
 *.out
 tmp/
 *.html
+
+# Root-level build/test artifacts (pre-launch hygiene — leading / anchors to repo root only)
+/*.out
+/*.exe
+/*.cov
+/coverage.out
+/coverage.html
+/app_*.html
+/kite-mcp-server
+/kite-mcp-test*
+
+# Root-level scratch notes and test dumps (not the canonical docs — those live in .research/ or docs/)
+/admin.md
+/api.md
+/ch.md
+/mod.md
+/req.md
+/gen_ref.md
+/mcp_schema.json
+/test_err.txt
+/test_out.txt

@@ -1,0 +1,44 @@
+runtime: container
+
+build:
+  dockerfile: Dockerfile
+  dockerBuildPath: .
+
+startCommand:
+  type: http
+  configSchema:
+    type: object
+    required:
+      - OAUTH_JWT_SECRET
+      - EXTERNAL_URL
+    properties:
+      OAUTH_JWT_SECRET:
+        type: string
+        title: OAuth JWT Secret
+        description: HKDF seed for AES-256-GCM key derivation + JWT signing. Generate with `openssl rand -hex 32`. Rotating invalidates all stored OAuth clients, cached Kite tokens, sessions.
+        minLength: 32
+      EXTERNAL_URL:
+        type: string
+        title: External URL
+        description: Public HTTPS origin (no trailing slash). Used as OAuth issuer.
+        format: uri
+        pattern: "^https://"
+      ADMIN_EMAILS:
+        type: string
+        title: Admin Emails
+        description: Comma-separated emails for /admin/ops access.
+        default: ""
+      ALERT_DB_PATH:
+        type: string
+        title: SQLite DB Path
+        description: Holds alerts, encrypted tokens/credentials, OAuth clients, audit trail. On Fly.io must live on mounted volume.
+        default: "/data/alerts.db"
+      TELEGRAM_BOT_TOKEN:
+        type: string
+        title: Telegram Bot Token
+        default: ""
+      ENABLE_TRADING:
+        type: boolean
+        title: Enable Trading Tools
+        description: Gates 18 order-placement tools. Set false for read-only (hosted Path-2) mode.
+        default: false
