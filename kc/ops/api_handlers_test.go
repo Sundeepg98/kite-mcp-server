@@ -43,14 +43,13 @@ func newFullTestDashboard(t *testing.T, kiteBaseURL string) *DashboardHandler {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 

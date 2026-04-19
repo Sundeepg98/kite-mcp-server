@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,13 +32,12 @@ func newTestDashboard(t *testing.T) *DashboardHandler {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -864,13 +864,12 @@ func newDashboardWithMockKite(t *testing.T, mockURL string) *DashboardHandler {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "dash_key",
-		APISecret:          "dash_secret",
-		Logger:             logger,
-		InstrumentsManager: instrMgr,
-		DevMode:            false,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("dash_key", "dash_secret"),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithDevMode(false),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 

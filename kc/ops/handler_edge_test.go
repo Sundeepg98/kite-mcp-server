@@ -43,14 +43,13 @@ func newPush100OpsHandler(t *testing.T) *Handler {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -71,14 +70,13 @@ func newPush100OpsHandlerFull(t *testing.T) *Handler {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -1333,14 +1331,13 @@ func TestPush100_ServeSafetyPageSSR_WithRiskGuard(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -1373,14 +1370,13 @@ func TestPush100_ServePaperPageSSR_WithEngine(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -1417,14 +1413,13 @@ func TestPush100_ServeAlertsPageSSR_WithAlerts(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -1473,14 +1468,13 @@ func TestPush100_ServeOrdersPageSSR_WithAuditData(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -1876,14 +1870,13 @@ func newPush100Dashboard(t *testing.T) (*DashboardHandler, *kc.Manager) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_api_key",
-		APISecret:          "test_api_secret",
-		Logger:             logger,
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_api_key", "test_api_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
