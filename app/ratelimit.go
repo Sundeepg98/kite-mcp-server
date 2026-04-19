@@ -110,6 +110,11 @@ type rateLimiters struct {
 	mcpUser        *userRateLimiter // MCP endpoints, keyed by authenticated email
 	done           chan struct{}  // closed during shutdown to stop the cleanup goroutine
 	cleanupInterval time.Duration // injectable for testing (default 10 min)
+	// stopOnce guards Stop() so rl.done is only closed once even when
+	// multiple graceful-shutdown paths (signal handler + test teardown)
+	// both invoke Stop on the same rateLimiters instance. Without this,
+	// the second close of rl.done would panic with "close of closed channel".
+	stopOnce sync.Once
 }
 
 // newRateLimiters creates rate limiters for each endpoint group and starts
@@ -149,8 +154,16 @@ func newRateLimiters() *rateLimiters {
 }
 
 // Stop signals the cleanup goroutine to exit.
+//
+// Stop is idempotent: calling it multiple times is safe and only the first
+// call closes the cleanup channel. This guards against the case where more
+// than one graceful-shutdown path (e.g. the HTTP signal handler and a test
+// teardown) both try to Stop the same rateLimiters instance, which would
+// otherwise produce `panic: close of closed channel`.
 func (rl *rateLimiters) Stop() {
-	close(rl.done)
+	rl.stopOnce.Do(func() {
+		close(rl.done)
+	})
 }
 
 // rateLimit returns middleware that limits requests per client IP.

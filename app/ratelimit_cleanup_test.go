@@ -117,6 +117,25 @@ func TestRateLimiters_StopStopsGoroutine(t *testing.T) {
 	}
 }
 
+// TestRateLimiters_Stop_Idempotent verifies Stop() is safe to call multiple times.
+// Regression test for `panic: close of closed channel` surfaced when both the
+// HTTP graceful-shutdown signal handler (app/http.go) and the test teardown
+// for TestSetupGracefulShutdown_WithAllComponents invoked Stop() on the same
+// rateLimiters instance (reported on v1.2.0 Release workflow).
+func TestRateLimiters_Stop_Idempotent(t *testing.T) {
+	t.Parallel()
+	rl := newRateLimiters()
+
+	// Two sequential Stop() calls must not panic. The second call must also
+	// return promptly (sync.Once short-circuits after the first close).
+	rl.Stop()
+	rl.Stop()
+
+	// A third call for good measure — sync.Once guarantees all calls after
+	// the first are no-ops.
+	rl.Stop()
+}
+
 // countLimiters returns the number of entries in an ipRateLimiter.
 func countLimiters(l *ipRateLimiter) int {
 	l.mu.RLock()
