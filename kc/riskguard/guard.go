@@ -207,11 +207,23 @@ type Guard struct {
 	globalFrozenBy string
 	globalFrozenAt     time.Time
 	globalFrozenReason string
+	// checks is the ordered chain evaluated by CheckOrder. Built-ins are
+	// pre-registered by NewGuard; plugins add rules via RegisterCheck. The
+	// slice is kept sorted by Check.Order() ascending so iteration preserves
+	// evaluation order. Guarded by mu (writer-lock on RegisterCheck; reader
+	// snapshot on CheckOrder).
+	checks []Check
 }
 
-// NewGuard creates a new Guard with system defaults.
+// NewGuard creates a new Guard with system defaults. All built-in risk
+// checks (kill switch, confirmation, order-value, quantity, daily count,
+// per-second rate, per-minute rate, idempotency-key dup, time-based dup,
+// daily value, anomaly, off-hours) are pre-registered in their canonical
+// order — see check.go for the stable Order() constants and the
+// builtinChecks() list. Additional checks can be wired via
+// Guard.RegisterCheck before the guard sees its first order.
 func NewGuard(logger *slog.Logger) *Guard {
-	return &Guard{
+	g := &Guard{
 		trackers:  make(map[string]*UserTracker),
 		limits:    make(map[string]*UserLimits),
 		logger:    logger,
@@ -219,6 +231,78 @@ func NewGuard(logger *slog.Logger) *Guard {
 		dedup:     NewDedup(DefaultDedupTTL),
 		perSecond: newPerSecondCounter(),
 	}
+	for _, c := range builtinChecks(g) {
+		g.insertCheckLocked(c)
+	}
+	return g
+}
+
+// RegisterCheck installs a Check into the ordered chain. Safe to call
+// concurrently with CheckOrder — the writer locks mu, and the reader
+// path takes a snapshot under a reader-lock. Duplicate Name() values
+// are allowed (last-registered wins at its Order position) but not
+// encouraged; use distinct snake_case names to keep logs searchable.
+//
+// Typical usage: called once during app wiring, before the MCP server
+// accepts its first tool call. Plugins that want to add a check
+// dynamically (e.g. per-user) should still register at startup and
+// gate inside Evaluate() on req.Email.
+func (g *Guard) RegisterCheck(c Check) {
+	if c == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.insertCheckLocked(c)
+}
+
+// insertCheckLocked appends c to g.checks and re-sorts by Order ascending.
+// Caller must hold g.mu.
+//
+// Sort stability matters: when two checks share the same Order() value,
+// the later-registered one runs after the earlier one. This keeps
+// registration order as a secondary tiebreaker, which is what users
+// expect ("my third custom check at 650 runs after my first custom
+// check at 650").
+func (g *Guard) insertCheckLocked(c Check) {
+	g.checks = append(g.checks, c)
+	// Insertion-sort bubble: walk backward swapping while the previous
+	// check has a strictly greater Order(). This is O(n) per insert,
+	// O(n²) overall — fine for the ~12 built-ins + handful of plugins.
+	// (A full sort.SliceStable would also work; this is simpler.)
+	for i := len(g.checks) - 1; i > 0; i-- {
+		if g.checks[i-1].Order() > g.checks[i].Order() {
+			g.checks[i-1], g.checks[i] = g.checks[i], g.checks[i-1]
+			continue
+		}
+		break
+	}
+}
+
+// ListCheckNames returns the Name() of every registered check in
+// evaluation order. Intended for admin tooling ("show me the active
+// risk chain"), audit, and tests. Snapshot: safe for concurrent use
+// with RegisterCheck, but the returned slice is a copy.
+func (g *Guard) ListCheckNames() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	names := make([]string, len(g.checks))
+	for i, c := range g.checks {
+		names[i] = c.Name()
+	}
+	return names
+}
+
+// snapshotChecks returns a copy of the current check chain under a reader
+// lock. Used by CheckOrder to evaluate without holding the lock across
+// per-check evaluation (checks may take the writer-lock themselves for
+// tracker bookkeeping, so CheckOrder must not hold it).
+func (g *Guard) snapshotChecks() []Check {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make([]Check, len(g.checks))
+	copy(out, g.checks)
+	return out
 }
 
 // SetClock overrides the time source (for testing).
@@ -317,9 +401,31 @@ type OrderCheckRequest struct {
 	ClientOrderID string
 }
 
-// CheckOrder runs all safety checks in sequence. Returns on first failure.
-// If a limit check fails and the circuit breaker is enabled, the rejection is recorded
-// and the user may be auto-frozen after repeated violations.
+// CheckOrder evaluates the registered check chain in Order ascending.
+// The first Check returning Allowed=false wins and short-circuits.
+//
+// Built-in rule precedence (see Order* constants in check.go):
+//   100  kill_switch                (policy — no auto-freeze)
+//   200  confirmation_required      (policy — no auto-freeze)
+//   300  order_value                (limit)
+//   400  quantity_limit             (limit)
+//   500  daily_order_count          (limit)
+//   600  per_second_rate            (limit — SEBI Apr 2026 defence)
+//   700  rate_limit                 (limit — per-minute)
+//   800  client_order_id_duplicate  (limit — idempotency key)
+//   900  duplicate_order            (limit — time-based params hash)
+//  1000  daily_value                (limit)
+//  1100  anomaly_multiplier         (limit — rolling baseline)
+//  1200  off_hours                  (limit — 02:00–06:00 IST)
+//
+// Global freeze is evaluated BEFORE the chain because it blocks every
+// user unconditionally and precedes any per-user check.
+//
+// For any Check whose RecordOnRejection()==true, a rejection is logged
+// to the user's recent-rejections sliding window; three such rejections
+// within autoFreezeWindow trigger an auto-freeze. Policy checks (kill
+// switch, confirmation gate) return false so they don't drive a user
+// toward a lockout for an error they didn't make.
 func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 	// 0. Global freeze — blocks ALL users before any per-user checks.
 	if g.IsGloballyFrozen() {
@@ -332,109 +438,29 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 
 	email := strings.ToLower(req.Email)
 
-	// 1. Kill switch — not a limit violation, so no auto-freeze logic here
-	if r := g.checkKillSwitch(email); !r.Allowed {
-		return r
-	}
-	// 1b. Confirmation gate — blocks silent prompt-injection auto-execution.
-	//     Runs AFTER kill-switch so a frozen user still gets "frozen" (do not
-	//     leak freeze state via differentiated error codes).
-	if r := g.checkConfirmationRequired(req); !r.Allowed {
-		return r
-	}
-	// 2. Order value
-	if r := g.checkOrderValue(req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
+	// Snapshot the chain so per-check calls that themselves take g.mu
+	// (tracker bookkeeping) do not deadlock against a writer.
+	for _, c := range g.snapshotChecks() {
+		r := c.Evaluate(req)
+		if r.Allowed {
+			continue
+		}
+		if c.RecordOnRejection() {
+			g.recordRejection(email)
+			if frozen := g.checkAutoFreeze(email); frozen {
+				r.Message += " [Account auto-frozen due to repeated violations]"
+			}
 		}
 		return r
 	}
-	// 3. Quantity limit
-	if r := g.checkQuantityLimit(req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 4. Daily order count
-	if r := g.checkDailyOrderCount(email); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 5a. Per-calendar-second rate cap (9/sec defensive — SEBI Apr 2026
-	//     retail-algo threshold is 10/sec; broker enforces at the 11th.
-	//     Capping at 9 guarantees 1-order headroom. Runs BEFORE the
-	//     per-minute check because 10 orders in one second would all pass
-	//     the 10/min allowance yet breach the sub-second SEBI threshold.
-	if r := g.checkPerSecondRate(email); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 5b. Order rate limit (per minute)
-	if r := g.checkRateLimit(email); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 6a. Idempotency-key duplicate (client_order_id). Runs before the
-	//     time-based duplicate check because it is the most definitive
-	//     signal: a user-supplied key reused within TTL is unambiguously a
-	//     retry. This is the primary defence against mcp-remote retries
-	//     after a 504 gateway timeout re-submitting the same intent.
-	if r := g.checkClientOrderIDDuplicate(req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 6b. Duplicate order detection (time-based, params-hash)
-	if r := g.checkDuplicateOrder(email, req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 7. Daily cumulative placed value
-	if r := g.checkDailyValue(email, req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 8. Anomaly detection — rolling 30-day baseline (mean + 3σ AND 10× mean).
-	//    Catches the "sub-cap layering"-adjacent attack where a single order
-	//    slips under the static cap but is wildly outside the user's history.
-	if r := g.checkAnomalyMultiplier(req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-	// 9. Off-hours hard-block (02:00–06:00 IST) unless AllowOffHours=true.
-	if r := g.checkOffHours(req); !r.Allowed {
-		g.recordRejection(email)
-		if frozen := g.checkAutoFreeze(email); frozen {
-			r.Message += " [Account auto-frozen due to repeated violations]"
-		}
-		return r
-	}
-
 	return CheckResult{Allowed: true}
 }
+
+// lowerEmail normalises the caller email to lowercase for lookup paths
+// shared by the Check adapters in check.go. Kept in guard.go because the
+// adapters are the only callers and the function is a one-liner; moving
+// it to a util file would be premature abstraction.
+func lowerEmail(email string) string { return strings.ToLower(email) }
 
 // RecordOrder records a successful order for all tracking: daily count, rate window, duplicate detection, and daily value.
 func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
