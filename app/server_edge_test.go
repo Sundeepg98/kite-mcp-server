@@ -260,6 +260,14 @@ func TestRunServer_HybridMode_Cov(t *testing.T) {
 	app := NewApp(testLogger())
 	app.DevMode = true
 	app.Config.AppMode = ModeHybrid
+	// Inject shutdownCh so we can signal RunServer to shut down without
+	// an OS signal. Without this, ListenAndServe blocks forever, the
+	// graceful-shutdown goroutine never fires, and all background
+	// cleanup routines (DB openers, metric/audit workers, instruments
+	// scheduler) leak past test completion — on slow CI runners those
+	// leaked goroutines tip the parent package -timeout 120s over the
+	// edge.
+	app.shutdownCh = make(chan struct{})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -278,10 +286,13 @@ func TestRunServer_HybridMode_Cov(t *testing.T) {
 		resp.Body.Close()
 	}
 
+	// Trigger graceful shutdown; wait for RunServer to unwind so all
+	// background goroutines are joined before the test returns.
+	close(app.shutdownCh)
 	select {
-	case err := <-errCh:
-		_ = err
-	case <-time.After(2 * time.Second):
+	case <-errCh:
+	case <-time.After(15 * time.Second):
+		t.Fatal("RunServer did not return within 15s after shutdown signal")
 	}
 }
 
@@ -298,6 +309,9 @@ func TestRunServer_SSEMode_Cov(t *testing.T) {
 	app := NewApp(testLogger())
 	app.DevMode = true
 	app.Config.AppMode = ModeSSE
+	// See TestRunServer_HybridMode_Cov for the rationale behind injecting
+	// shutdownCh — same goroutine-leak class.
+	app.shutdownCh = make(chan struct{})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -316,10 +330,12 @@ func TestRunServer_SSEMode_Cov(t *testing.T) {
 		resp.Body.Close()
 	}
 
+	// Trigger graceful shutdown and wait for RunServer to return.
+	close(app.shutdownCh)
 	select {
-	case err := <-errCh:
-		_ = err
-	case <-time.After(2 * time.Second):
+	case <-errCh:
+	case <-time.After(15 * time.Second):
+		t.Fatal("RunServer did not return within 15s after shutdown signal")
 	}
 }
 
@@ -342,6 +358,8 @@ func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
 	app.Config.ExternalURL = "https://test.example.com"
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.AdminEmails = "admin@test.com"
+	// See TestRunServer_HybridMode_Cov for the rationale.
+	app.shutdownCh = make(chan struct{})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -361,10 +379,12 @@ func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
 		resp.Body.Close()
 	}
 
+	// Trigger graceful shutdown and wait for RunServer to return.
+	close(app.shutdownCh)
 	select {
-	case err := <-errCh:
-		_ = err
-	case <-time.After(2 * time.Second):
+	case <-errCh:
+	case <-time.After(15 * time.Second):
+		t.Fatal("RunServer did not return within 15s after shutdown signal")
 	}
 }
 
