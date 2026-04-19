@@ -7,6 +7,7 @@ package app
 // - makeEventPersister
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -376,13 +377,12 @@ func TestBriefingCredAdapter_PerUserKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "global_key",
-		APISecret:          "global_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("global_key", "global_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+	)
 	require.NoError(t, err)
 	defer mgr.Shutdown()
 

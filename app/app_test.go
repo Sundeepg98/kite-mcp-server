@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -595,13 +596,12 @@ func TestBriefingCredAdapter_GetAPIKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+	)
 	require.NoError(t, err)
 	defer mgr.Shutdown()
 

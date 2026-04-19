@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"testing"
@@ -22,14 +23,13 @@ func newShutdownTestManager(t *testing.T) *kc.Manager {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	return mgr
 }

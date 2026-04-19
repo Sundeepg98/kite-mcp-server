@@ -939,14 +939,13 @@ func TestSetupMux_AcceptInvite_MissingToken(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		AlertDBPath:        ":memory:",
-		InstrumentsManager: instrMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithAlertDBPath(":memory:"),
+		kc.WithInstrumentsManager(instrMgr),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -1288,14 +1287,13 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		AlertDBPath:        ":memory:",
-		InstrumentsManager: instrMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithAlertDBPath(":memory:"),
+		kc.WithInstrumentsManager(instrMgr),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -1871,12 +1869,13 @@ func TestInitScheduler_WithPnLSnapshot(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
-	mgr, err := kc.New(kc.Config{
-		APIKey: "tk", APISecret: "ts",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("tk", "ts"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 	app := newTestApp(t)
@@ -2783,12 +2782,13 @@ func TestSetupMux_AcceptInvite_ValidToken(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -2850,12 +2850,13 @@ func TestSetupMux_AcceptInvite_ExpiredToken(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -4979,12 +4980,13 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -5243,12 +5245,13 @@ func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -5321,12 +5324,13 @@ func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
@@ -5697,12 +5701,11 @@ func TestRegisterTelegramWebhook_MissingSecret(t *testing.T) {
 
 func TestInitScheduler_NoTasks_Minimal(t *testing.T) {
 	// Use a manager WITHOUT AlertDB so no PnL snapshot task is added.
-	mgr, err := kc.New(kc.Config{
-		APIKey:    "test_key",
-		APISecret: "test_secret",
-		Logger:    testLogger(),
-		DevMode:   true,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 

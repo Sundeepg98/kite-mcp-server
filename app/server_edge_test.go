@@ -1036,12 +1036,13 @@ func TestInitScheduler_AuditOnly_NoTelegram(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey: "tk", APISecret: "ts",
-		Logger: testLogger(), DevMode: true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:        ":memory:",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("tk", "ts"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 

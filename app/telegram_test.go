@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -67,15 +68,14 @@ func newTelegramTestManager(t *testing.T, tgServerURL string) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:           "test_key",
-		APISecret:        "test_secret",
-		Logger:           testLogger(),
-		DevMode:          true,
-		InstrumentsManager: instrMgr,
-		AlertDBPath:      ":memory:",
-		TelegramBotToken: "fake-telegram-token",
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		kc.WithAlertDBPath(":memory:"),
+		kc.WithTelegramBotToken("fake-telegram-token"),
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 	return mgr
@@ -116,14 +116,13 @@ func TestRegisterTelegramWebhook_NilNotifier_Inject(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             testLogger(),
-		DevMode:            true,
-		InstrumentsManager: instrMgr,
-		// No TelegramBotToken → TelegramNotifier() is nil
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(testLogger()),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithDevMode(true),
+		kc.WithInstrumentsManager(instrMgr),
+		// No WithTelegramBotToken → TelegramNotifier() is nil
+	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
