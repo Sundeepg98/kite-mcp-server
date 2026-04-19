@@ -1,0 +1,94 @@
+package riskguard
+
+import (
+	"strings"
+	"time"
+)
+
+// trackers.go — per-user in-memory bookkeeping: the UserTracker sliding
+// windows (recent orders, rejections, duplicate signatures) and the
+// UserStatus read-side snapshot. Extracted from guard.go in the 2026-04
+// cohesion split so the mutable per-user state lives in one focused
+// file, separate from check-pipeline orchestration (guard.go), limits
+// persistence (limits.go), and freeze lifecycle (lifecycle.go).
+//
+// Pure file move — no behavior change.
+
+// recentOrder captures the signature of a placed order for duplicate detection.
+type recentOrder struct {
+	Exchange        string
+	Tradingsymbol   string
+	TransactionType string
+	Quantity        int
+	PlacedAt        time.Time
+}
+
+// UserTracker holds in-memory per-user trading state.
+type UserTracker struct {
+	DailyOrderCount  int
+	DayResetAt       time.Time
+	RecentOrders     []time.Time   // sliding window for rate limiting
+	RecentParams     []recentOrder // sliding window for duplicate detection
+	DailyPlacedValue float64       // cumulative order value placed today
+	RecentRejections []time.Time   // sliding window for circuit breaker auto-freeze
+}
+
+// UserStatus holds a snapshot of a user's current risk state for read-only reporting.
+type UserStatus struct {
+	DailyOrderCount  int       `json:"daily_order_count"`
+	DailyPlacedValue float64   `json:"daily_placed_value"`
+	IsFrozen         bool      `json:"is_frozen"`
+	FrozenBy         string    `json:"frozen_by"`
+	FrozenReason     string    `json:"frozen_reason"`
+	FrozenAt         time.Time `json:"frozen_at,omitempty"`
+}
+
+// GetUserStatus returns a snapshot of the user's current daily order count,
+// placed value, and freeze state.
+func (g *Guard) GetUserStatus(email string) UserStatus {
+	email = strings.ToLower(email)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	t := g.getOrCreateTracker(email)
+	g.maybeResetDay(t)
+
+	status := UserStatus{
+		DailyOrderCount:  t.DailyOrderCount,
+		DailyPlacedValue: t.DailyPlacedValue,
+	}
+	if l, ok := g.limits[email]; ok {
+		status.IsFrozen = l.TradingFrozen
+		status.FrozenBy = l.FrozenBy
+		status.FrozenReason = l.FrozenReason
+		status.FrozenAt = l.FrozenAt
+	}
+	return status
+}
+
+// getOrCreateTracker returns the per-email tracker, creating it on demand.
+// Caller must hold g.mu (writer) — the tracker map itself is guarded by mu.
+func (g *Guard) getOrCreateTracker(email string) *UserTracker {
+	t, ok := g.trackers[email]
+	if !ok {
+		t = &UserTracker{DayResetAt: time.Now()}
+		g.trackers[email] = t
+	}
+	return t
+}
+
+// maybeResetDay resets the daily counter if we've crossed 9:15 AM IST since
+// last reset. Uses g.clock so tests can drive the reset deterministically.
+func (g *Guard) maybeResetDay(t *UserTracker) {
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+	now := g.clock().In(ist)
+	resetTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
+	// If before 9:15 today, use yesterday's 9:15
+	if now.Before(resetTime) {
+		resetTime = resetTime.AddDate(0, 0, -1)
+	}
+	if t.DayResetAt.Before(resetTime) {
+		t.DailyOrderCount = 0
+		t.DailyPlacedValue = 0
+		t.DayResetAt = now
+	}
+}
