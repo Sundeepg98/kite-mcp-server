@@ -33,6 +33,7 @@ func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
 	}
 	expectedWidgetURIs := []string{
 		"ui://kite-mcp/sector-donut",
+		"ui://kite-mcp/pnl-sparkline",
 	}
 	for _, want := range expectedWidgetURIs {
 		assert.True(t, uris[want], "expected widget %q to be registered", want)
@@ -99,4 +100,12 @@ func TestSectorDonutData_HandlesNilManager(t *testing.T) {
 	assert.True(t,
 		strings.Contains(j, "unavailable") || strings.Contains(j, "error"),
 		"nil manager should yield an explicit error/unavailable flag; got %s", j)
+}
+
+// TestPnLSparklineData_HandlesNilManager — nil-safe like every other
+// widget data function; a nil manager yields an error shape rather
+// than a panic.
+func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
+	data := pnlSparklineWidgetData(nil, "user@test.com")
+	assert.NotNil(t, data, "even nil manager yields a response object")
 }

@@ -62,6 +62,12 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			TemplateHTML: sectorDonutTemplateHTML,
 			DataFunc:     sectorDonutWidgetData,
 		},
+		{
+			URI:          "ui://kite-mcp/pnl-sparkline",
+			Name:         "P&L Sparkline",
+			TemplateHTML: pnlSparklineTemplateHTML,
+			DataFunc:     pnlSparklineWidgetData,
+		},
 	}
 	for _, def := range defs {
 		def := def // capture
