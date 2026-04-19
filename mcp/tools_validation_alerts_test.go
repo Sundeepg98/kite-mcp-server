@@ -11,6 +11,7 @@ import (
 
 
 func TestDeleteAlert_MissingAlertID(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "delete_alert", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "delete_alert without alert_id should fail")
@@ -19,6 +20,7 @@ func TestDeleteAlert_MissingAlertID(t *testing.T) {
 
 
 func TestSetTrailingStop_InvalidDirection(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
 		"instrument":   "NSE:INFY",
@@ -32,6 +34,7 @@ func TestSetTrailingStop_InvalidDirection(t *testing.T) {
 
 
 func TestSetTrailingStop_NegativeTrailAmount(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "set_trailing_stop", "trader@example.com", map[string]any{
 		"instrument":   "NSE:INFY",
@@ -45,6 +48,7 @@ func TestSetTrailingStop_NegativeTrailAmount(t *testing.T) {
 
 
 func TestSetAlert_InvalidDirection(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "set_alert", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
@@ -57,6 +61,7 @@ func TestSetAlert_InvalidDirection(t *testing.T) {
 
 
 func TestPlaceNativeAlert_InstrumentMissingRHSAttribute(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_native_alert", "trader@example.com", map[string]any{
 		"name":              "Cross alert",
@@ -76,6 +81,7 @@ func TestPlaceNativeAlert_InstrumentMissingRHSAttribute(t *testing.T) {
 
 
 func TestModifyNativeAlert_ATOEmptyBasket(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	result := callToolDevMode(t, mgr, "modify_native_alert", "dev@example.com", map[string]any{
 		"uuid":          "test-uuid",
@@ -95,6 +101,7 @@ func TestModifyNativeAlert_ATOEmptyBasket(t *testing.T) {
 
 
 func TestSetAlert_ValidDirection_PassesDirectionCheck(t *testing.T) {
+	t.Parallel()
 	// These should pass the direction validation but fail later on instrument resolution
 	mgr := newTestManager(t)
 	for _, dir := range []string{"above", "below"} {
@@ -112,6 +119,7 @@ func TestSetAlert_ValidDirection_PassesDirectionCheck(t *testing.T) {
 
 
 func TestSetAlert_RisePctRequiresReferencePrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "set_alert", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",

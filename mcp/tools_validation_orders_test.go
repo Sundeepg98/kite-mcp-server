@@ -10,6 +10,7 @@ import (
 
 
 func TestPlaceOrder_IcebergWithLegsButNoQty(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_order", "trader@example.com", map[string]any{
 		"variety":          "iceberg",
@@ -29,6 +30,7 @@ func TestPlaceOrder_IcebergWithLegsButNoQty(t *testing.T) {
 
 
 func TestModifyOrder_MissingVariety(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "modify_order", "trader@example.com", map[string]any{
 		"order_id":   "123456",
@@ -41,6 +43,7 @@ func TestModifyOrder_MissingVariety(t *testing.T) {
 
 
 func TestModifyOrder_MissingOrderType(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "modify_order", "trader@example.com", map[string]any{
 		"variety":  "regular",
@@ -53,6 +56,7 @@ func TestModifyOrder_MissingOrderType(t *testing.T) {
 
 
 func TestCloseAllPositions_MissingConfirm(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "close_all_positions", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError)
@@ -61,6 +65,7 @@ func TestCloseAllPositions_MissingConfirm(t *testing.T) {
 
 
 func TestCancelOrder_MissingVariety(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "cancel_order", "trader@example.com", map[string]any{
 		"order_id": "12345",
@@ -72,6 +77,7 @@ func TestCancelOrder_MissingVariety(t *testing.T) {
 
 
 func TestPlaceGTTOrder_TwoLegMissingLowerTrigger(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":            "NSE",
@@ -89,6 +95,7 @@ func TestPlaceGTTOrder_TwoLegMissingLowerTrigger(t *testing.T) {
 
 
 func TestConvertPosition_MissingNewProduct(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "convert_position", "trader@example.com", map[string]any{
 		"exchange":         "NSE",

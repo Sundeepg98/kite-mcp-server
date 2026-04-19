@@ -10,6 +10,7 @@ import (
 
 
 func TestGetHistoricalData_MissingInstrumentToken(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_historical_data", "trader@example.com", map[string]any{
 		"from_date": "2024-01-01 00:00:00",
@@ -23,6 +24,7 @@ func TestGetHistoricalData_MissingInstrumentToken(t *testing.T) {
 
 
 func TestOptionsStrategy_InvalidStrategy(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "invalid_strategy",
@@ -36,6 +38,7 @@ func TestOptionsStrategy_InvalidStrategy(t *testing.T) {
 
 
 func TestGetLTP_TooManyInstruments(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	insts := make([]any, 501)
 	for i := range insts {
@@ -50,6 +53,7 @@ func TestGetLTP_TooManyInstruments(t *testing.T) {
 
 
 func TestGetOHLC_TooManyInstruments(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	insts := make([]any, 501)
 	for i := range insts {
@@ -64,6 +68,7 @@ func TestGetOHLC_TooManyInstruments(t *testing.T) {
 
 
 func TestOptionsStrategy_BullCallSpreadInvalidStrikes(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bull_call_spread",
@@ -78,6 +83,7 @@ func TestOptionsStrategy_BullCallSpreadInvalidStrikes(t *testing.T) {
 
 
 func TestOptionsStrategy_InvalidExpiry(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "straddle",
@@ -91,6 +97,7 @@ func TestOptionsStrategy_InvalidExpiry(t *testing.T) {
 
 
 func TestOptionsStrategy_BearPutSpreadInvalidStrikes(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "bear_put_spread",
@@ -105,6 +112,7 @@ func TestOptionsStrategy_BearPutSpreadInvalidStrikes(t *testing.T) {
 
 
 func TestOptionsStrategy_IronCondorMissingStrikes(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "iron_condor",
@@ -120,6 +128,7 @@ func TestOptionsStrategy_IronCondorMissingStrikes(t *testing.T) {
 
 
 func TestOptionsStrategy_ButterflyBadOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "butterfly",
@@ -135,6 +144,7 @@ func TestOptionsStrategy_ButterflyBadOrder(t *testing.T) {
 
 
 func TestBacktestStrategy_MissingStrategy(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "historical_price_analyzer", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
@@ -146,6 +156,7 @@ func TestBacktestStrategy_MissingStrategy(t *testing.T) {
 
 
 func TestTechnicalIndicators_MissingIndicators(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "technical_indicators", "trader@example.com", map[string]any{
 		"instrument": "NSE:INFY",
@@ -157,6 +168,7 @@ func TestTechnicalIndicators_MissingIndicators(t *testing.T) {
 
 
 func TestOptionsStrategy_StrangleMissingStrike2(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "options_payoff_builder", "trader@example.com", map[string]any{
 		"strategy":   "strangle",

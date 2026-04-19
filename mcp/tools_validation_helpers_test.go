@@ -20,6 +20,7 @@ func TestArgParser_RawReturnsOriginalMap(t *testing.T) {
 
 
 func TestNewToolHandler_NotNil(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	assert.NotNil(t, handler)
@@ -27,6 +28,7 @@ func TestNewToolHandler_NotNil(t *testing.T) {
 
 
 func TestTrackToolCall_NoMetrics(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	// Should not panic even without metrics enabled
@@ -37,6 +39,7 @@ func TestTrackToolCall_NoMetrics(t *testing.T) {
 
 
 func TestTrackToolError_NoMetrics(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	assert.NotPanics(t, func() {
@@ -145,6 +148,7 @@ func TestSafeAssertStringArray_NonArrayNonString(t *testing.T) {
 
 
 func TestMarshalResponse_SliceData(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	data := []string{"a", "b", "c"}
@@ -156,6 +160,7 @@ func TestMarshalResponse_SliceData(t *testing.T) {
 
 
 func TestMarshalResponse_NilData(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	result, err := handler.MarshalResponse(nil, "test")
@@ -211,6 +216,7 @@ func TestIsAlphanumeric_Unicode(t *testing.T) {
 
 
 func TestAllToolsHaveOpenWorldAnnotation(t *testing.T) {
+	t.Parallel()
 	for _, td := range GetAllTools() {
 		toolDef := td.Tool()
 		// Every tool should have annotations defined (non-nil struct)
@@ -221,6 +227,7 @@ func TestAllToolsHaveOpenWorldAnnotation(t *testing.T) {
 
 
 func TestGetAllTools_ReturnsToolInterface(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	for _, tool := range tools {
 		// Each tool should implement Tool interface
@@ -235,6 +242,7 @@ func TestGetAllTools_ReturnsToolInterface(t *testing.T) {
 
 
 func TestValidationError_Fields(t *testing.T) {
+	t.Parallel()
 	err := ValidationError{Parameter: "exchange", Message: "must be NSE or BSE"}
 	assert.Equal(t, "exchange", err.Parameter)
 	assert.Equal(t, "must be NSE or BSE", err.Message)
@@ -243,6 +251,7 @@ func TestValidationError_Fields(t *testing.T) {
 
 
 func TestParsePaginationParams_NegativeLimit(t *testing.T) {
+	t.Parallel()
 	p := ParsePaginationParams(map[string]any{
 		"limit": float64(-5),
 	})
@@ -251,6 +260,7 @@ func TestParsePaginationParams_NegativeLimit(t *testing.T) {
 
 
 func TestParsePaginationParams_ExactMax(t *testing.T) {
+	t.Parallel()
 	p := ParsePaginationParams(map[string]any{
 		"limit": float64(500),
 	})
@@ -259,6 +269,7 @@ func TestParsePaginationParams_ExactMax(t *testing.T) {
 
 
 func TestParsePaginationParams_AboveMax(t *testing.T) {
+	t.Parallel()
 	p := ParsePaginationParams(map[string]any{
 		"limit": float64(501),
 	})
@@ -267,6 +278,7 @@ func TestParsePaginationParams_AboveMax(t *testing.T) {
 
 
 func TestConfirmSchema_Structure(t *testing.T) {
+	t.Parallel()
 	assert.NotNil(t, confirmSchema)
 	assert.Equal(t, "object", confirmSchema["type"])
 	props, ok := confirmSchema["properties"].(map[string]any)
@@ -280,6 +292,7 @@ func TestConfirmSchema_Structure(t *testing.T) {
 
 
 func TestWriteTools_AdditionalChecks(t *testing.T) {
+	t.Parallel()
 	// Delete account is write
 	assert.True(t, writeTools["delete_my_account"])
 	// Paper toggle is write
@@ -294,24 +307,28 @@ func TestWriteTools_AdditionalChecks(t *testing.T) {
 
 
 func TestRequestConfirmation_NilServer(t *testing.T) {
+	t.Parallel()
 	err := requestConfirmation(context.Background(), nil, "confirm?")
 	assert.NoError(t, err, "nil server should fail open")
 }
 
 
 func TestRequestConfirmation_WrongType(t *testing.T) {
+	t.Parallel()
 	err := requestConfirmation(context.Background(), "not a server", "confirm?")
 	assert.NoError(t, err, "wrong type should fail open")
 }
 
 
 func TestValidateRequired_NonEmptyInterfaceSlice(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{"items": []any{"a", "b"}}
 	assert.NoError(t, ValidateRequired(args, "items"))
 }
 
 
 func TestIdempotentToolAnnotations(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	idempotentTools := []string{
 		"get_holdings", "get_positions", "get_profile", "get_margins",
@@ -336,6 +353,7 @@ func TestIdempotentToolAnnotations(t *testing.T) {
 
 
 func TestErrorMessages_ContainActionableText(t *testing.T) {
+	t.Parallel()
 	assert.Contains(t, ErrAuthRequired, "log in")
 	assert.Contains(t, ErrAdminRequired, "restricted")
 	assert.Contains(t, ErrConfirmRequired, "true")
@@ -343,6 +361,7 @@ func TestErrorMessages_ContainActionableText(t *testing.T) {
 
 
 func TestSafeAssertString_NumericInput(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "42", SafeAssertString(42, "default"))
 	assert.Equal(t, "3.14", SafeAssertString(3.14, "default"))
 	assert.Equal(t, "true", SafeAssertString(true, "default"))
@@ -350,6 +369,7 @@ func TestSafeAssertString_NumericInput(t *testing.T) {
 
 
 func TestAllToolDefinitions_HaveValidSchema(t *testing.T) {
+	t.Parallel()
 	tools := GetAllTools()
 	for _, td := range tools {
 		toolDef := td.Tool()
@@ -363,6 +383,7 @@ func TestAllToolDefinitions_HaveValidSchema(t *testing.T) {
 
 
 func TestInstrumentResolverAdapter_NotFound(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	adapter := &instrumentResolverAdapter{mgr: mgr.Instruments}
 	_, err := adapter.GetInstrumentToken("NSE", "NONEXISTENT")
@@ -371,6 +392,7 @@ func TestInstrumentResolverAdapter_NotFound(t *testing.T) {
 
 
 func TestInstrumentResolverAdapter_Type(t *testing.T) {
+	t.Parallel()
 	// Verify that the adapter implements the right interface pattern
 	mgr := newTestManager(t)
 	adapter := &instrumentResolverAdapter{mgr: mgr.Instruments}

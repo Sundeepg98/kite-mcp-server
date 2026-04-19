@@ -12,6 +12,7 @@ import (
 
 
 func TestPreTradeCheck_MissingExchange(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"tradingsymbol":    "INFY",
@@ -27,6 +28,7 @@ func TestPreTradeCheck_MissingExchange(t *testing.T) {
 
 
 func TestToolDefinitions_Coverage(t *testing.T) {
+	t.Parallel()
 	// These are tools whose Tool() method may not yet be covered
 	toolTypes := []Tool{
 		&PaperTradingToggleTool{},
@@ -52,6 +54,7 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 
 
 func TestResolveWatchlist_NotFound(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	wl := resolveWatchlist(mgr, "user@test.com", "nonexistent")
 	assert.Nil(t, wl)
@@ -59,6 +62,7 @@ func TestResolveWatchlist_NotFound(t *testing.T) {
 
 
 func TestSessionBrokerResolver_ReturnsSameClient(t *testing.T) {
+	t.Parallel()
 	resolver := &sessionBrokerResolver{client: nil}
 	client, err := resolver.GetBrokerForEmail("any@email.com")
 	assert.NoError(t, err)
@@ -67,6 +71,7 @@ func TestSessionBrokerResolver_ReturnsSameClient(t *testing.T) {
 
 
 func TestGetOrderMargins_SLMWithoutTriggerPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "get_order_margins", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -82,6 +87,7 @@ func TestGetOrderMargins_SLMWithoutTriggerPrice(t *testing.T) {
 
 
 func TestPreTradeCheck_MissingTradingsymbol(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "order_risk_report", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
