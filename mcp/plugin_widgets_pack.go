@@ -80,6 +80,12 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			TemplateHTML: ipWhitelistTemplateHTML,
 			DataFunc:     ipWhitelistWidgetData,
 		},
+		{
+			URI:          "ui://kite-mcp/returns-matrix",
+			Name:         "Multi-Day Returns Matrix",
+			TemplateHTML: returnsMatrixTemplateHTML,
+			DataFunc:     returnsMatrixWidgetData,
+		},
 	}
 	for _, def := range defs {
 		def := def // capture

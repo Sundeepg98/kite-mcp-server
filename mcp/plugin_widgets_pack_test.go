@@ -36,6 +36,7 @@ func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
 		"ui://kite-mcp/pnl-sparkline",
 		"ui://kite-mcp/margin-gauge",
 		"ui://kite-mcp/ip-whitelist-status",
+		"ui://kite-mcp/returns-matrix",
 	}
 	for _, want := range expectedWidgetURIs {
 		assert.True(t, uris[want], "expected widget %q to be registered", want)
@@ -129,4 +130,10 @@ func TestIPWhitelistData_StaticFields(t *testing.T) {
 	j := string(b)
 	assert.Contains(t, j, "209.71.68.157", "static egress IP must be present")
 	assert.Contains(t, j, "kite.trade", "Kite console URL must be present")
+}
+
+// TestReturnsMatrixData_HandlesNilManager — nil-safe contract.
+func TestReturnsMatrixData_HandlesNilManager(t *testing.T) {
+	data := returnsMatrixWidgetData(nil, "user@test.com")
+	assert.NotNil(t, data)
 }
