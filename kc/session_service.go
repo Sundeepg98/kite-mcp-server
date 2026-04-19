@@ -133,7 +133,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 	kc := NewKiteConnect(apiKey)
 	kd := &KiteSessionData{
 		Kite:   kc,
-		Broker: zerodha.New(kc.Client),
+		Broker: zerodha.NewFromSDK(kc.Client),
 		Email:  email,
 	}
 
@@ -212,7 +212,7 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 		}
 		ss.logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
 		kiteData.Kite = NewKiteConnect(ss.credentialSvc.GetAPIKeyForEmail(resolvedEmail))
-		kiteData.Broker = zerodha.New(kiteData.Kite.Client)
+		kiteData.Broker = zerodha.NewFromSDK(kiteData.Kite.Client)
 		// Apply cached token if available
 		if resolvedEmail != "" {
 			if entry, ok := ss.tokenStore.Get(resolvedEmail); ok {
@@ -500,5 +500,5 @@ func (ss *SessionService) GetBrokerForEmail(email string) (broker.Client, error)
 	}
 	kc := NewKiteConnect(apiKey)
 	kc.Client.SetAccessToken(accessToken)
-	return zerodha.New(kc.Client), nil
+	return zerodha.NewFromSDK(kc.Client), nil
 }

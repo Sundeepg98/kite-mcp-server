@@ -1,40 +1,41 @@
 package kc
 
 import (
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 )
 
 // KiteClientFactory creates Kite API clients. Inject a mock in tests by
-// pointing the returned *kiteconnect.Client at an httptest server.
+// returning any zerodha.KiteSDK implementation (e.g. zerodha.MockKiteSDK)
+// that replays canned responses without touching HTTP.
 //
 // This factory is used by background services (briefing, pnl snapshots,
 // telegram bot) that run outside MCP tool handlers and therefore don't
-// have access to a session-pinned broker. All three consumers still take
-// *kiteconnect.Client directly; the honest type-layer consolidation
-// (converting them to broker.Client) is multi-day follow-up work.
-//
-// For now this factory routes through broker/zerodha.NewKiteClient so
-// the kiteconnect.New call site is exactly one in the whole codebase —
-// matching the hexagonal-100 claim the path-to-100-final research said
-// was a lie when there were two parallel factories.
+// have access to a session-pinned broker. The return type is now the
+// broker-owned zerodha.KiteSDK interface rather than the raw SDK
+// *kiteconnect.Client. Collapsing the SDK type behind an interface was
+// the residual Hexagonal-100 gap flagged by path-to-100-final:
+// background services can now be exercised off-HTTP with the same mock
+// the broker adapter uses, and the concrete kiteconnect.New call site
+// is confined to broker/zerodha — the single-seam guarantee the
+// hexagonal claim always promised.
 type KiteClientFactory interface {
-	NewClient(apiKey string) *kiteconnect.Client
-	NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client
+	NewClient(apiKey string) zerodha.KiteSDK
+	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
 }
 
 // defaultKiteClientFactory is the production implementation. It
-// delegates to broker/zerodha.NewKiteClient so every concrete SDK
-// client — MCP tool path and background-service path alike —
-// originates from the same seam.
+// delegates to broker/zerodha.NewKiteSDK so every SDK client — MCP
+// tool path and background-service path alike — originates from the
+// same seam. Returning zerodha.KiteSDK (an interface) means consumers
+// depend on the port, not on *kiteconnect.Client directly.
 type defaultKiteClientFactory struct{}
 
-func (f *defaultKiteClientFactory) NewClient(apiKey string) *kiteconnect.Client {
-	return zerodha.NewKiteClient(apiKey)
+func (f *defaultKiteClientFactory) NewClient(apiKey string) zerodha.KiteSDK {
+	return zerodha.NewKiteSDK(apiKey)
 }
 
-func (f *defaultKiteClientFactory) NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client {
-	kc := zerodha.NewKiteClient(apiKey)
-	kc.SetAccessToken(accessToken)
-	return kc
+func (f *defaultKiteClientFactory) NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK {
+	sdk := zerodha.NewKiteSDK(apiKey)
+	sdk.SetAccessToken(accessToken)
+	return sdk
 }

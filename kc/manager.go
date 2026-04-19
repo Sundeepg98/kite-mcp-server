@@ -12,10 +12,10 @@ import (
 	"runtime"
 	"time"
 
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
@@ -698,11 +698,17 @@ func (m *Manager) registerCQRSHandlers() error {
 // (orderAggregateToProjectionResult, reconstituteOrderHistory,
 // reconstituteAlertHistory) live in kc/manager_reconstitution.go.
 
-// KiteConnect wraps the Kite Connect client
+// KiteConnect wraps the Kite Connect client.
+//
+// The Client field holds a zerodha.KiteSDK (interface) rather than a
+// concrete *kiteconnect.Client so background services and tool handlers
+// both consume the same hexagonal port — the broker-owned interface
+// collapses the former two SDK construction sites (kc/kite_client.go
+// and broker/zerodha/sdk_adapter.go) into one, and lets tests swap in
+// zerodha.MockKiteSDK without touching HTTP.
 type KiteConnect struct {
-	// Add fields here
-	// Client is the authenticated Kite Connect client. Exported because 23+ tool handlers access it directly.
-	Client *kiteconnect.Client
+	// Client is the authenticated Kite SDK. Exported because 23+ tool handlers access it directly.
+	Client zerodha.KiteSDK
 }
 
 // NewKiteConnect creates a new KiteConnect instance.
@@ -788,7 +794,7 @@ type Manager struct {
 	eventStore        *eventsourcing.EventStore   // optional: domain audit log (append-only, not used for state reconstitution)
 	projector         *eventsourcing.Projector    // read-side projection of order/alert/position aggregates; subscribes to eventDispatcher
 	mcpServer         any                         // *server.MCPServer — stored as any to avoid circular import
-	kiteClientFactory KiteClientFactory           // creates kiteconnect.Client instances; mockable in tests
+	kiteClientFactory KiteClientFactory           // creates zerodha.KiteSDK instances; mockable in tests
 	commandBus        *cqrs.InMemoryBus           // CQRS command bus (nil until wired by app/wire.go)
 	queryBus          *cqrs.InMemoryBus           // CQRS query bus (nil until wired by app/wire.go)
 	appMode           string

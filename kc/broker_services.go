@@ -18,7 +18,7 @@ func newBrokerServices(m *Manager) *BrokerServices {
 	return &BrokerServices{m: m}
 }
 
-// KiteClientFactory returns the factory used to create kiteconnect.Client instances.
+// KiteClientFactory returns the factory used to create zerodha.KiteSDK instances.
 func (b *BrokerServices) KiteClientFactory() KiteClientFactory { return b.m.kiteClientFactory }
 
 // SetKiteClientFactory overrides the default factory. Intended for tests.
@@ -78,7 +78,7 @@ func (b *BrokerServices) SetRiskGuard(guard *riskguard.Guard) { b.m.riskGuard = 
 // Brokers returns the broker services group.
 func (m *Manager) Brokers() *BrokerServices { return m.brokers }
 
-// KiteClientFactory returns the factory used to create kiteconnect.Client instances.
+// KiteClientFactory returns the factory used to create zerodha.KiteSDK instances.
 func (m *Manager) KiteClientFactory() KiteClientFactory { return m.brokers.KiteClientFactory() }
 
 // SetKiteClientFactory overrides the default factory. Intended for tests.
