@@ -485,7 +485,32 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 		registered++
 	}
 
-	logger.Info("MCP App widget resources registered", "count", registered)
+	// Also install every plugin-registered widget (see plugin_widgets.go).
+	// Plugins supply their own ResourceContents — we don't template or
+	// inject data for them; they're responsible for their own HTML
+	// generation. The only safety net is that RegisterWidget rejects
+	// URIs that collide with built-ins, so a plugin cannot hijack the
+	// portfolio/activity/orders widgets.
+	pluginWidgets := ListPluginWidgets()
+	for _, pw := range pluginWidgets {
+		pw := pw // capture
+		srv.AddResource(
+			gomcp.Resource{
+				URI:      pw.URI,
+				Name:     pw.Name,
+				MIMEType: ResourceMIMEType,
+			},
+			func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
+				return pw.Handler(ctx, req)
+			},
+		)
+	}
+	if len(pluginWidgets) > 0 {
+		logger.Info("Plugin widget resources registered", "count", len(pluginWidgets))
+	}
+
+	logger.Info("MCP App widget resources registered",
+		"builtin", registered, "plugin", len(pluginWidgets))
 }
 
 // --- Data functions for each widget ---
