@@ -66,6 +66,12 @@ var markdownRenderer = goldmark.New(
 // shared markdownRenderer. The result is typed as template.HTML so it
 // can be injected into the legal.html template via {{.Content}} without
 // double-escaping.
+//
+// #nosec G203 -- md is exclusively build-time //go:embed'd legal-doc
+// markdown (kc/legaldocs/TERMS.md, PRIVACY.md), never user input. The
+// html.WithUnsafe() renderer option is documented above; the template.HTML
+// cast is intentional so Go's html/template does not double-escape the
+// already-HTML markdown output.
 func renderMarkdown(md []byte) (template.HTML, error) {
 	var buf bytes.Buffer
 	if err := markdownRenderer.Convert(md, &buf); err != nil {

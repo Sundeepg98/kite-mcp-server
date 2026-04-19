@@ -318,6 +318,9 @@ var appResources = []appResource{
 }
 
 // pagePathToResourceURI maps dashboard URL paths to ui:// resource URIs.
+// #nosec G101 -- values are ui:// MCP resource URI constants (widget
+// identifiers per the MCP Apps spec), not credentials. gosec's regex
+// trips on the URI scheme pattern but there is nothing secret here.
 var pagePathToResourceURI = map[string]string{
 	"/dashboard":             "ui://kite-mcp/portfolio",
 	"/dashboard/activity":    "ui://kite-mcp/activity",

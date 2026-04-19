@@ -200,13 +200,20 @@ func (m *MockKiteServer) handleInstruments() http.HandlerFunc {
 }
 
 // writeEnvelope writes the Kite API JSON envelope: {"status":"success","data":...}
+//
+// Encode failures are ignored: this is a test-only mock, and the only way
+// Encode can fail here is if the client disconnects mid-write — in which
+// case the test calling into this mock will observe the failure via its
+// own HTTP-level assertion (status code / body), which is the correct
+// signal. Returning or logging the error from a background httptest
+// handler goroutine would only add noise.
 func writeEnvelope(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	resp := map[string]any{
 		"status": "success",
 		"data":   data,
 	}
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104 -- test-only mock; write errors signal client disconnect and are surfaced via the caller's HTTP assertions
 }
 
 // ---------------------------------------------------------------------------

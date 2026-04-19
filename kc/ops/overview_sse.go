@@ -108,6 +108,12 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 }
 
 // writeSSEEvent writes a named SSE event with multiline data support.
+//
+// #nosec G705 -- payload is pre-rendered HTML produced by html/template
+// (via renderFragment); auto-escaping is applied at template execution.
+// The SSE `data:` prefix is a wire-protocol framing context, not an HTML
+// rendering context, so the %s interpolation here is re-emitting already-
+// escaped bytes verbatim. There is no new injection surface.
 func writeSSEEvent(w http.ResponseWriter, event, payload string) {
 	fmt.Fprintf(w, "event: %s\n", event)
 	for line := range strings.SplitSeq(payload, "\n") {
