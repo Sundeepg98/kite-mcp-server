@@ -30,13 +30,11 @@ func TestRegisterTaskProvider_TasksAppearAfterStart(t *testing.T) {
 		t.Fatalf("expected 0 tasks before Start, got %d", len(s.tasks))
 	}
 
-	// Start collects provider tasks, then launches the tick loop.
+	// Start collects provider tasks synchronously before launching the
+	// tick loop goroutine, so ListTaskNames is safe to call immediately
+	// after Start returns — no wait needed.
 	s.Start()
 	defer s.Stop()
-
-	// Give the goroutine a moment to settle (but collection happens
-	// synchronously in Start before the goroutine launches).
-	time.Sleep(20 * time.Millisecond)
 
 	names := s.ListTaskNames()
 	if len(names) != 2 {
@@ -80,14 +78,8 @@ func TestRegisterTaskProvider_TasksFireOnSchedule(t *testing.T) {
 	defer s.Stop()
 
 	s.tick()
-	time.Sleep(40 * time.Millisecond) // let task goroutines finish
-
-	if calledA.Load() != 1 {
-		t.Fatalf("expected fire_a to run once, got %d", calledA.Load())
-	}
-	if calledB.Load() != 1 {
-		t.Fatalf("expected fire_b to run once, got %d", calledB.Load())
-	}
+	pollCount(t, &calledA, 1, "expected fire_a to run once")
+	pollCount(t, &calledB, 1, "expected fire_b to run once")
 }
 
 // TestRegisterTaskProvider_CombinesWithAdd verifies that provider tasks
@@ -119,14 +111,8 @@ func TestRegisterTaskProvider_CombinesWithAdd(t *testing.T) {
 	wed := time.Date(2026, 4, 8, 9, 0, 0, 0, kolkataLoc)
 	s.SetClock(func() time.Time { return wed })
 	s.tick()
-	time.Sleep(40 * time.Millisecond)
-
-	if calledBuiltin.Load() != 1 {
-		t.Fatalf("builtin task should have fired; got %d", calledBuiltin.Load())
-	}
-	if calledPlugin.Load() != 1 {
-		t.Fatalf("plugin task should have fired; got %d", calledPlugin.Load())
-	}
+	pollCount(t, &calledBuiltin, 1, "builtin task should have fired")
+	pollCount(t, &calledPlugin, 1, "plugin task should have fired")
 
 	names := s.ListTaskNames()
 	if len(names) != 2 {
@@ -160,9 +146,10 @@ func TestRegisterTaskProvider_MultipleProvidersCollected(t *testing.T) {
 
 	s.RegisterTaskProvider(pA)
 	s.RegisterTaskProvider(pB)
+	// Tasks() is called synchronously inside Start before the goroutine
+	// launches, so the counters are correct as soon as Start returns.
 	s.Start()
 	defer s.Stop()
-	time.Sleep(20 * time.Millisecond)
 
 	if pACalls.Load() != 1 {
 		t.Errorf("provider A.Tasks() should be called once at Start; got %d", pACalls.Load())
@@ -186,9 +173,9 @@ func TestRegisterTaskProvider_NilProviderIgnored(t *testing.T) {
 	var p *stubProvider
 	s.RegisterTaskProvider(p)
 
+	// Start collects tasks synchronously — no wait needed.
 	s.Start()
 	defer s.Stop()
-	time.Sleep(10 * time.Millisecond)
 
 	if len(s.ListTaskNames()) != 0 {
 		t.Fatalf("nil provider must contribute 0 tasks")

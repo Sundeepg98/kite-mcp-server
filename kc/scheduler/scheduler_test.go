@@ -37,8 +37,11 @@ func TestStartStop(t *testing.T) {
 	s := New(testLogger())
 	s.Add(Task{Name: "noop", Hour: 99, Minute: 99, Fn: func() {}})
 	s.Start()
-	// Give the goroutine time to start.
-	time.Sleep(50 * time.Millisecond)
+	// Start() + Stop() are lifecycle-only; the goroutine's scheduling
+	// window isn't observable via any counter, but close(s.done) is
+	// synchronous and the loop select exits on that signal. No wait
+	// needed — Stop() returns only after the loop goroutine observes
+	// the close.
 	s.Stop()
 	// Double stop should not panic.
 	s.Stop()
@@ -53,19 +56,13 @@ func TestTickSkipsWeekend(t *testing.T) {
 	sat := time.Date(2026, 4, 4, 10, 0, 0, 0, kolkataLoc) // Saturday
 	s.SetClock(func() time.Time { return sat })
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if called.Load() != 0 {
-		t.Fatal("task should NOT run on Saturday")
-	}
+	ensureNoIncrement(t, &called, 0, "task should NOT run on Saturday")
 
 	// Inject Sunday 10:00 AM IST.
 	sun := time.Date(2026, 4, 5, 10, 0, 0, 0, kolkataLoc) // Sunday
 	s.SetClock(func() time.Time { return sun })
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if called.Load() != 0 {
-		t.Fatal("task should NOT run on Sunday")
-	}
+	ensureNoIncrement(t, &called, 0, "task should NOT run on Sunday")
 
 	// Verify the helper recognises weekends.
 	if !IsWeekend(sat) {
@@ -97,17 +94,11 @@ func TestDeduplication(t *testing.T) {
 
 	// First tick should fire the task.
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if called.Load() != 1 {
-		t.Fatalf("expected 1 call, got %d", called.Load())
-	}
+	pollCount(t, &called, 1, "first tick should run the task")
 
 	// Second tick at the same minute should be deduplicated.
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if called.Load() != 1 {
-		t.Fatalf("expected still 1 call after dedup, got %d", called.Load())
-	}
+	ensureNoIncrement(t, &called, 1, "second tick at same minute should be deduped")
 }
 
 func TestTaskPanicRecovery(t *testing.T) {
@@ -124,9 +115,12 @@ func TestTaskPanicRecovery(t *testing.T) {
 		Fn:     func() { panic("boom") },
 	})
 
-	// tick should not panic (recovery is in the goroutine).
+	// tick should not panic (recovery is in the goroutine). The task
+	// panics internally; we just need to give the goroutine a bounded
+	// window to execute its recover path. 50ms is ample and the test
+	// asserts no-panic by virtue of reaching here.
 	s.tick()
-	time.Sleep(50 * time.Millisecond) // let goroutine finish
+	time.Sleep(50 * time.Millisecond) // bounded wait for recover to run
 }
 
 func TestIsMarketHoliday(t *testing.T) {
@@ -343,11 +337,7 @@ func TestTick_Weekday_TaskRuns(t *testing.T) {
 
 	s.Add(Task{Name: "weekday_test", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if ran.Load() != 1 {
-		t.Fatalf("task should run on weekday at matching time; ran %d times", ran.Load())
-	}
+	pollCount(t, &ran, 1, "task should run on weekday at matching time")
 }
 
 func TestTick_Weekend_NoExecution(t *testing.T) {
@@ -360,11 +350,7 @@ func TestTick_Weekend_NoExecution(t *testing.T) {
 
 	s.Add(Task{Name: "weekend_noop", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if ran.Load() != 0 {
-		t.Fatal("task should NOT run on weekend")
-	}
+	ensureNoIncrement(t, &ran, 0, "task should NOT run on weekend")
 }
 
 func TestTick_Holiday_NoExecution(t *testing.T) {
@@ -377,11 +363,7 @@ func TestTick_Holiday_NoExecution(t *testing.T) {
 
 	s.Add(Task{Name: "holiday_noop", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if ran.Load() != 0 {
-		t.Fatal("task should NOT run on market holiday")
-	}
+	ensureNoIncrement(t, &ran, 0, "task should NOT run on market holiday")
 }
 
 func TestTick_WrongTime_NoExecution(t *testing.T) {
@@ -394,11 +376,7 @@ func TestTick_WrongTime_NoExecution(t *testing.T) {
 
 	s.Add(Task{Name: "wrong_time", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if ran.Load() != 0 {
-		t.Fatal("task should NOT run when current time does not match task time")
-	}
+	ensureNoIncrement(t, &ran, 0, "task should NOT run when current time does not match task time")
 }
 
 func TestTick_MultipleTasksSameTime(t *testing.T) {
@@ -411,14 +389,8 @@ func TestTick_MultipleTasksSameTime(t *testing.T) {
 	s.Add(Task{Name: "task_a", Hour: 9, Minute: 15, Fn: func() { countA.Add(1) }})
 	s.Add(Task{Name: "task_b", Hour: 9, Minute: 15, Fn: func() { countB.Add(1) }})
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if countA.Load() != 1 {
-		t.Fatalf("task_a should run once, ran %d", countA.Load())
-	}
-	if countB.Load() != 1 {
-		t.Fatalf("task_b should run once, ran %d", countB.Load())
-	}
+	pollCount(t, &countA, 1, "task_a should run once")
+	pollCount(t, &countB, 1, "task_b should run once")
 }
 
 func TestTick_Dedup_AcrossTicks(t *testing.T) {
@@ -431,24 +403,15 @@ func TestTick_Dedup_AcrossTicks(t *testing.T) {
 	s.Add(Task{Name: "dedup_clock", Hour: 10, Minute: 30, Fn: func() { ran.Add(1) }})
 
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if ran.Load() != 1 {
-		t.Fatalf("first tick: expected 1, got %d", ran.Load())
-	}
+	pollCount(t, &ran, 1, "first tick: expected 1")
 
 	// Same time, second tick — should be deduped.
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if ran.Load() != 1 {
-		t.Fatalf("second tick: expected still 1, got %d", ran.Load())
-	}
+	ensureNoIncrement(t, &ran, 1, "second tick: expected still 1 after dedup")
 
 	// Advance to next day (Thursday) — should run again.
 	thursday := time.Date(2026, 4, 9, 10, 30, 0, 0, kolkataLoc)
 	s.SetClock(func() time.Time { return thursday })
 	s.tick()
-	time.Sleep(20 * time.Millisecond)
-	if ran.Load() != 2 {
-		t.Fatalf("next day tick: expected 2, got %d", ran.Load())
-	}
+	pollCount(t, &ran, 2, "next day tick: expected 2")
 }
