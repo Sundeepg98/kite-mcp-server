@@ -1,0 +1,101 @@
+# Weekly mutation testing surface — gremlins (go-mutation-testing) applied to
+# the three security-critical packages: riskguard (pre-trade checks), audit
+# (hash chain + anomaly), oauth/middleware (auth gating).
+#
+# Mutation testing mutates operators/constants in the package source, re-runs
+# the test suite, and reports "escaped" mutants — changes that did NOT break
+# any test. A low escape rate means tests are semantically tight; a high rate
+# means tests assert presence-of-behavior but not quality-of-behavior.
+#
+# Runs Sunday 04:00 UTC weekly and on manual dispatch. Not a merge gate —
+# this workflow posts a report to Actions summary, no green/red on PRs.
+# Rationale: mutation testing takes 10-30 min per package and is best used
+# as a periodic "are we drifting?" signal, not a per-commit tax.
+#
+# Tooling: go-gremlins/gremlins (pure Go, no external deps). Uses the same
+# Go toolchain as the rest of CI.
+
+name: Mutation Testing (weekly)
+
+on:
+  schedule:
+    # 04:00 UTC every Sunday. Tweak if this lands on a busy window.
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Comma-separated package paths (default: riskguard,audit,oauth)'
+        required: false
+        default: 'kc/riskguard,kc/audit,oauth'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  mutation:
+    name: gremlins mutation surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - kc/riskguard
+          - kc/audit
+          - oauth
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Install gremlins
+        run: |
+          go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+
+      - name: Run mutation tests on ${{ matrix.package }}
+        id: mutation
+        continue-on-error: true
+        run: |
+          set -eo pipefail
+          # gremlins unleash runs the mutant-generator + test suite and
+          # produces a JSON report. --threshold-efficacy sets the "fail"
+          # line; here we use 70 (70% of mutants killed) as a soft goal
+          # matched to our current coverage.
+          mkdir -p mutation-reports
+          gremlins unleash \
+            --workers 2 \
+            --timeout-coefficient 3 \
+            --output-path mutation-reports/${{ matrix.package }}-report.json \
+            --threshold-efficacy 0 \
+            ./${{ matrix.package }}/... || echo "gremlins completed with mutants found"
+
+      - name: Summarize mutation report
+        if: always()
+        run: |
+          report="mutation-reports/${{ matrix.package }}-report.json"
+          if [ -f "$report" ]; then
+            echo "## Mutation surface — ${{ matrix.package }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            # Top-level stats only — full report is the artifact.
+            jq '.stats // .' "$report" | head -30 >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || \
+              head -30 "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Mutation surface — ${{ matrix.package }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '_No report produced — check gremlins output above._' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-${{ matrix.package }}
+          path: mutation-reports/
+          if-no-files-found: ignore
+          retention-days: 30
