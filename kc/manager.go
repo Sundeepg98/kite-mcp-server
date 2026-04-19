@@ -21,7 +21,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
@@ -549,30 +548,9 @@ func NewManager(apiKey, apiSecret string, logger *slog.Logger) (*Manager, error)
 // OpenBrowser live in kc/config_manager.go — pure config accessors +
 // the local-mode browser opener.
 
-// initializeTemplates sets up HTML templates
-func (m *Manager) initializeTemplates() error {
-	templates, err := setupTemplates()
-	if err != nil {
-		return fmt.Errorf("failed to setup templates: %w", err)
-	}
-	m.templates = templates
-	return nil
-}
-
-// initializeSessionSigner sets up HMAC session signing
-func (m *Manager) initializeSessionSigner(customSigner *SessionSigner) error {
-	if customSigner != nil {
-		m.sessionSigner = customSigner
-		return nil
-	}
-
-	signer, err := NewSessionSigner()
-	if err != nil {
-		return fmt.Errorf("failed to create session signer: %w", err)
-	}
-	m.sessionSigner = signer
-	return nil
-}
+// initializeTemplates, initializeSessionSigner, Shutdown, setupTemplates,
+// and the sessionDBAdapter bridge live in kc/manager_lifecycle.go —
+// the Manager's startup/shutdown surface.
 
 // truncKey safely returns the first n characters of a string, or the whole string if shorter.
 func truncKey(s string, n int) string {
@@ -580,82 +558,6 @@ func truncKey(s string, n int) string {
 		return s
 	}
 	return s[:n]
-}
-
-// sessionDBAdapter bridges alerts.DB to the SessionDB interface expected by SessionRegistry.
-type sessionDBAdapter struct {
-	db *alerts.DB
-}
-
-func (a *sessionDBAdapter) SaveSession(sessionID, email string, createdAt, expiresAt time.Time, terminated bool) error {
-	return a.db.SaveSession(sessionID, email, createdAt, expiresAt, terminated)
-}
-
-func (a *sessionDBAdapter) LoadSessions() ([]*SessionLoadEntry, error) {
-	entries, err := a.db.LoadSessions()
-	if err != nil {
-		return nil, err
-	}
-	result := make([]*SessionLoadEntry, len(entries))
-	for i, e := range entries {
-		result[i] = &SessionLoadEntry{
-			SessionID:  e.SessionID,
-			Email:      e.Email,
-			CreatedAt:  e.CreatedAt,
-			ExpiresAt:  e.ExpiresAt,
-			Terminated: e.Terminated,
-		}
-	}
-	return result, nil
-}
-
-func (a *sessionDBAdapter) DeleteSession(sessionID string) error {
-	return a.db.DeleteSession(sessionID)
-}
-
-// Shutdown gracefully shuts down the manager and all its components
-func (m *Manager) Shutdown() {
-	m.Logger.Info("Shutting down Kite manager...")
-
-	// Stop session cleanup routines
-	m.sessionManager.StopCleanupRoutine()
-
-	// Shutdown metrics manager (stops cleanup routine)
-	if m.metrics != nil {
-		m.metrics.Shutdown()
-	}
-
-	// Shutdown ticker service (stops all WebSocket connections)
-	m.tickerService.Shutdown()
-
-	// Close alert DB after ticker (ticker's OnTick writes through to DB)
-	if m.alertDB != nil {
-		if err := m.alertDB.Close(); err != nil {
-			m.Logger.Error("Failed to close alert DB", "error", err)
-		}
-	}
-
-	// Shutdown instruments manager (stops scheduler)
-	m.Instruments.Shutdown()
-
-	m.Logger.Info("Kite manager shutdown complete")
-}
-
-func setupTemplates() (map[string]*template.Template, error) {
-	out := map[string]*template.Template{}
-
-	templateList := []string{indexTemplate}
-
-	for _, templateName := range templateList {
-		// Parse template with base template for composition support
-		templ, err := template.ParseFS(templates.FS, "base.html", templateName)
-		if err != nil {
-			return out, fmt.Errorf("error parsing %s: %w", templateName, err)
-		}
-		out[templateName] = templ
-	}
-
-	return out, nil
 }
 
 // HandleKiteCallback, handleCallbackError, extractCallbackParams,
