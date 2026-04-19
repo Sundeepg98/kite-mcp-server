@@ -234,3 +234,85 @@ var _ Check = (*stubCheck)(nil)
 // Silence unused imports when the file is compiled standalone (fmt used
 // for future test assertions).
 var _ = fmt.Sprintf
+
+// TestPanickingCheckFailsClosed confirms the safeEvaluate net: a
+// buggy Check whose Evaluate panics does NOT crash CheckOrder and
+// does NOT silently allow the order. The rejection uses reason
+// "check_panic" so the ops page can filter for it.
+//
+// Fail-closed is deliberate — a rejected order can be retried; a
+// silently-allowed bad order carries financial consequences. See
+// safeEvaluate doc in guard.go.
+func TestPanickingCheckFailsClosed(t *testing.T) {
+	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	g.RegisterCheck(&stubCheck{
+		name:  "stub.panicker",
+		order: 50,
+		fn: func(req OrderCheckRequest) CheckResult {
+			panic("plugin bug")
+		},
+	})
+
+	r := g.CheckOrder(OrderCheckRequest{
+		Email:     "user@test.com",
+		ToolName:  "place_order",
+		Confirmed: true,
+		Quantity:  1,
+		Price:     100,
+	})
+
+	if r.Allowed {
+		t.Fatal("panicking check must fail closed (Allowed=false), not silently allow")
+	}
+	if r.Reason != "check_panic" {
+		t.Errorf("expected Reason=check_panic; got %q", r.Reason)
+	}
+	if !contains(r.Message, "stub.panicker") {
+		t.Errorf("expected message to name the panicking check; got %q", r.Message)
+	}
+	if !contains(r.Message, "plugin bug") {
+		t.Errorf("expected message to include the panic value; got %q", r.Message)
+	}
+}
+
+// TestPanickingCheckDoesNotBlockSubsequentCalls — a panic in one
+// CheckOrder call must not leave the Guard in a bad state; the next
+// call with the same panicking check still returns the panic
+// rejection cleanly (no deadlock, no corrupted tracker).
+func TestPanickingCheckDoesNotBlockSubsequentCalls(t *testing.T) {
+	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	g.RegisterCheck(&stubCheck{
+		name:  "stub.panicker",
+		order: 50,
+		fn: func(req OrderCheckRequest) CheckResult {
+			panic("once more")
+		},
+	})
+
+	for i := 0; i < 3; i++ {
+		r := g.CheckOrder(OrderCheckRequest{
+			Email:     "user@test.com",
+			ToolName:  "place_order",
+			Confirmed: true,
+		})
+		if r.Allowed {
+			t.Fatalf("call %d: panicking check must keep failing closed", i)
+		}
+		if r.Reason != "check_panic" {
+			t.Fatalf("call %d: expected Reason=check_panic; got %q", i, r.Reason)
+		}
+	}
+}
+
+// contains is a test-local string-contains helper so we don't pull
+// in the testify assert package for the two assertions above.
+func contains(haystack, needle string) bool {
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
+}

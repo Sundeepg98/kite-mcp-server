@@ -441,7 +441,7 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 	// Snapshot the chain so per-check calls that themselves take g.mu
 	// (tracker bookkeeping) do not deadlock against a writer.
 	for _, c := range g.snapshotChecks() {
-		r := c.Evaluate(req)
+		r := safeEvaluate(g.logger, c, req)
 		if r.Allowed {
 			continue
 		}
@@ -454,6 +454,41 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 		return r
 	}
 	return CheckResult{Allowed: true}
+}
+
+// safeEvaluate runs Check.Evaluate with panic recovery. A panicking
+// custom check is treated as a REJECTION (fail-closed) so a buggy
+// plugin cannot silently wave bad orders through. The panic is logged
+// and recorded with ReasonAutoFreeze-adjacent semantics:
+// Allowed=false, Reason="check_panic", Message containing the check
+// name and panic value. Built-in checks never panic in practice
+// (their bodies are deterministic arithmetic on UserLimits), so this
+// net is almost exclusively for third-party / user-written checks.
+//
+// Why fail-closed not fail-open: the riskguard layer is the last
+// defence before an order hits the broker. Letting a buggy plugin
+// silently allow the order is a worse outcome than falsely
+// rejecting one — a rejected order can be retried; a placed order
+// carries financial consequences.
+func safeEvaluate(logger *slog.Logger, c Check, req OrderCheckRequest) (result CheckResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			name := "<nil>"
+			if c != nil {
+				name = c.Name()
+			}
+			if logger != nil {
+				logger.Error("riskguard: Check.Evaluate panicked",
+					"check", name, "panic", r)
+			}
+			result = CheckResult{
+				Allowed: false,
+				Reason:  "check_panic",
+				Message: fmt.Sprintf("risk check %q panicked: %v", name, r),
+			}
+		}
+	}()
+	return c.Evaluate(req)
 }
 
 // lowerEmail normalises the caller email to lowercase for lookup paths
