@@ -15,6 +15,7 @@ import (
 // GTT tools: pre-session validation
 // ---------------------------------------------------------------------------
 func TestPlaceGTTOrder_MissingRequired(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	// No params at all → should fail on required fields
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{})
@@ -24,6 +25,7 @@ func TestPlaceGTTOrder_MissingRequired(t *testing.T) {
 
 
 func TestPlaceGTTOrder_MissingTradingsymbol(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -39,6 +41,7 @@ func TestPlaceGTTOrder_MissingTradingsymbol(t *testing.T) {
 
 
 func TestPlaceGTTOrder_SingleLegMissingTriggerValue(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -55,6 +58,7 @@ func TestPlaceGTTOrder_SingleLegMissingTriggerValue(t *testing.T) {
 
 
 func TestPlaceGTTOrder_TwoLegMissingUpperTrigger(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":            "NSE",
@@ -72,6 +76,7 @@ func TestPlaceGTTOrder_TwoLegMissingUpperTrigger(t *testing.T) {
 
 
 func TestPlaceGTTOrder_InvalidTriggerType(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_gtt_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",
@@ -87,6 +92,7 @@ func TestPlaceGTTOrder_InvalidTriggerType(t *testing.T) {
 
 
 func TestDeleteGTTOrder_MissingTriggerID(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "delete_gtt_order", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "delete_gtt_order without trigger_id should fail")
@@ -95,6 +101,7 @@ func TestDeleteGTTOrder_MissingTriggerID(t *testing.T) {
 
 
 func TestModifyGTTOrder_MissingRequired(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "modify_gtt_order", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "modify_gtt_order with no params should fail validation")
@@ -103,6 +110,7 @@ func TestModifyGTTOrder_MissingRequired(t *testing.T) {
 
 
 func TestModifyGTTOrder_MissingTriggerID(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "modify_gtt_order", "trader@example.com", map[string]any{
 		"exchange":         "NSE",

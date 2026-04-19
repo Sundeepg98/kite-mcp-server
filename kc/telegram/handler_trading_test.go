@@ -23,6 +23,7 @@ import (
 // handleSetAlert — full coverage
 // ===========================================================================
 func TestHandleSetAlert_Success(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
@@ -48,6 +49,7 @@ func TestHandleSetAlert_Success(t *testing.T) {
 
 
 func TestHandleSetAlert_InstrumentNotFound(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
@@ -63,6 +65,7 @@ func TestHandleSetAlert_InstrumentNotFound(t *testing.T) {
 
 
 func TestHandleSetAlert_BelowDirection(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
@@ -85,6 +88,7 @@ func TestHandleSetAlert_BelowDirection(t *testing.T) {
 // handleQuick — edge cases
 // ===========================================================================
 func TestHandleQuick_LimitBadPrice2(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
@@ -96,6 +100,7 @@ func TestHandleQuick_LimitBadPrice2(t *testing.T) {
 
 
 func TestHandleQuick_InvalidQuantity2(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
@@ -107,6 +112,7 @@ func TestHandleQuick_InvalidQuantity2(t *testing.T) {
 
 
 func TestHandleSell_LimitSuccess2(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
@@ -118,6 +124,7 @@ func TestHandleSell_LimitSuccess2(t *testing.T) {
 
 
 func TestHandleBuy_NegativePrice2(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
@@ -132,6 +139,7 @@ func TestHandleBuy_NegativePrice2(t *testing.T) {
 // handleSetAlert — percentage direction > 100% rejection
 // ===========================================================================
 func TestHandleSetAlert_PercentageOver100(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.instrMgr = newTestInstrumentsManager(t)
 	h, _ := newTestBotHandler(mgr)
@@ -145,6 +153,7 @@ func TestHandleSetAlert_PercentageOver100(t *testing.T) {
 
 
 func TestHandleSetAlert_PercentageValid(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
@@ -170,6 +179,7 @@ func TestHandleSetAlert_PercentageValid(t *testing.T) {
 // handleSetAlert — drop_pct direction with percentage display
 // ===========================================================================
 func TestHandleSetAlert_DropPct(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
@@ -192,6 +202,7 @@ func TestHandleSetAlert_DropPct(t *testing.T) {
 // handleSetAlert — BSE fallback path
 // ===========================================================================
 func TestHandleSetAlert_BSEFallback(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	// Create instruments manager with only BSE instrument.
 	bseData := map[uint32]*instruments.Instrument{
@@ -233,6 +244,7 @@ func TestHandleSetAlert_BSEFallback(t *testing.T) {
 // handleOrderCommand — paper trading mode label in confirmation
 // ===========================================================================
 func TestHandleBuy_PaperTradingMode(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dbPath := filepath.Join(t.TempDir(), "paper2.db")
@@ -257,6 +269,7 @@ func TestHandleBuy_PaperTradingMode(t *testing.T) {
 
 
 func TestHandleQuick_PaperTradingMode(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dbPath := filepath.Join(t.TempDir(), "paper3.db")

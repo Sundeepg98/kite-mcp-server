@@ -16,6 +16,7 @@ import (
 
 // --- LIMIT order with no LTP: stays open even without LTP error ---
 func TestPlaceOrder_LimitNoLTP(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{}) // no prices
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -31,6 +32,7 @@ func TestPlaceOrder_LimitNoLTP(t *testing.T) {
 
 
 func TestPlaceOrder_LimitSellNoLTP(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{}) // no prices
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -47,6 +49,7 @@ func TestPlaceOrder_LimitSellNoLTP(t *testing.T) {
 
 // --- Variety default ---
 func TestPlaceOrder_DefaultVariety(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -65,6 +68,7 @@ func TestPlaceOrder_DefaultVariety(t *testing.T) {
 
 
 func TestPlaceOrder_DBError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -90,6 +94,7 @@ func TestPlaceOrder_DBError(t *testing.T) {
 // PlaceOrder MARKET: InsertOrder error on REJECTED path (line 173)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_Market_InsertRejectedError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, nil)
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 	engine.SetLTPProvider(&errorLTP{})
@@ -111,6 +116,7 @@ func TestPlaceOrder_Market_InsertRejectedError(t *testing.T) {
 // PlaceOrder LIMIT: InsertOrder error on REJECTED (insufficient cash) path (line 199-201)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_Limit_InsertRejectedError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 10)) // very low cash
 
@@ -130,6 +136,7 @@ func TestPlaceOrder_Limit_InsertRejectedError(t *testing.T) {
 // PlaceOrder SL: InsertOrder error (line 214-216)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_SL_InsertError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -155,6 +162,7 @@ func TestPlaceOrder_SL_InsertError(t *testing.T) {
 // updatePosition: GetPositions error (line 286-288)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_UpdatePositionError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -175,6 +183,7 @@ func TestPlaceOrder_UpdatePositionError(t *testing.T) {
 // updateHolding: GetHoldings error (line 370-372)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_UpdateHoldingError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -195,6 +204,7 @@ func TestPlaceOrder_UpdateHoldingError(t *testing.T) {
 // PlaceOrder LIMIT with insert error on OPEN path (line 206-208)
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_Limit_InsertOpenError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, nil)
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 	engine.SetLTPProvider(&errorLTP{}) // LTP error → can't check marketability → go to OPEN path
@@ -231,6 +241,7 @@ func (p *partialLTP) GetLTP(instruments ...string) (map[string]float64, error) {
 	return result, nil
 }
 func TestPlaceOrder_MarketLTPUnavailable(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil) // nil prices → GetLTP returns empty map
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -251,6 +262,7 @@ func TestPlaceOrder_MarketLTPUnavailable(t *testing.T) {
 // PlaceOrder — LIMIT BUY with insufficient cash → REJECTED
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_LimitBUY_InsufficientCash(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 100)) // only ₹100
 
@@ -269,6 +281,7 @@ func TestPlaceOrder_LimitBUY_InsufficientCash(t *testing.T) {
 // PlaceOrder — unsupported order type
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_UnsupportedOrderType(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -285,6 +298,7 @@ func TestPlaceOrder_UnsupportedOrderType(t *testing.T) {
 // PlaceOrder — LIMIT SELL immediately marketable → fillOrder SELL path
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_LimitSELL_ImmediatelyMarketable(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -309,6 +323,7 @@ func TestPlaceOrder_LimitSELL_ImmediatelyMarketable(t *testing.T) {
 // PlaceOrder — LIMIT with LTP error → still stored as OPEN
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_Limit_LTPError_StillOpenBUY(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil)
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -327,6 +342,7 @@ func TestPlaceOrder_Limit_LTPError_StillOpenBUY(t *testing.T) {
 // PlaceOrder — validation errors
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_MissingExchange(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil)
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -340,6 +356,7 @@ func TestPlaceOrder_MissingExchange(t *testing.T) {
 
 
 func TestPlaceOrder_InvalidTransactionType(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil)
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -353,6 +370,7 @@ func TestPlaceOrder_InvalidTransactionType(t *testing.T) {
 
 
 func TestPlaceOrder_ZeroQuantity(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil)
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -366,6 +384,7 @@ func TestPlaceOrder_ZeroQuantity(t *testing.T) {
 
 
 func TestPlaceOrder_NotEnabled_Final(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, nil)
 	// Don't enable paper trading
 
@@ -382,6 +401,7 @@ func TestPlaceOrder_NotEnabled_Final(t *testing.T) {
 // PlaceOrder — SL and SL-M order types
 // ---------------------------------------------------------------------------
 func TestPlaceOrder_SLM_Push(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -397,6 +417,7 @@ func TestPlaceOrder_SLM_Push(t *testing.T) {
 
 
 func TestPlaceOrder_SL_Push(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 

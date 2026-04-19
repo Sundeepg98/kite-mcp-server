@@ -12,6 +12,7 @@ import (
 
 // --- ModifyOrder extra coverage ---
 func TestModifyOrder_AllFields(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -44,6 +45,7 @@ func TestModifyOrder_AllFields(t *testing.T) {
 
 
 func TestModifyOrder_BecomesMarketable(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -72,6 +74,7 @@ func TestModifyOrder_BecomesMarketable(t *testing.T) {
 
 
 func TestModifyOrder_SellBecomesMarketable(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -103,6 +106,7 @@ func TestModifyOrder_SellBecomesMarketable(t *testing.T) {
 
 
 func TestModifyOrder_NonOpenOrder(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -123,6 +127,7 @@ func TestModifyOrder_NonOpenOrder(t *testing.T) {
 
 
 func TestModifyOrder_NotFound(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -133,6 +138,7 @@ func TestModifyOrder_NotFound(t *testing.T) {
 
 // --- CancelOrder extra coverage ---
 func TestCancelOrder_WrongUser(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -151,6 +157,7 @@ func TestCancelOrder_WrongUser(t *testing.T) {
 
 
 func TestCancelOrder_NotFound(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -163,6 +170,7 @@ func TestCancelOrder_NotFound(t *testing.T) {
 // ModifyOrder: GetAccount error during modify+fill (line 462-464)
 // ---------------------------------------------------------------------------
 func TestModifyOrder_GetAccountError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -195,6 +203,7 @@ func TestModifyOrder_GetAccountError(t *testing.T) {
 // ModifyOrder: ExecInsert error in update (line 479-481)
 // ---------------------------------------------------------------------------
 func TestModifyOrder_UpdateError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -221,6 +230,7 @@ func TestModifyOrder_UpdateError(t *testing.T) {
 // CancelOrder: UpdateOrderStatus error (line 498-500)
 // ---------------------------------------------------------------------------
 func TestCancelOrder_UpdateError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -239,6 +249,7 @@ func TestCancelOrder_UpdateError(t *testing.T) {
 
 
 func TestModifyOrder_MarketableAfterModify_BUY(t *testing.T) {
+	t.Parallel()
 	prices := map[string]float64{"NSE:SBIN": 500}
 	engine := testEngineWithLTP(t, prices)
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
@@ -275,6 +286,7 @@ func TestModifyOrder_MarketableAfterModify_BUY(t *testing.T) {
 
 
 func TestModifyOrder_MarketableAfterModify_SELL(t *testing.T) {
+	t.Parallel()
 	// LTP=500. LIMIT SELL at 600 is NOT marketable (LTP < price).
 	// After modify to 400, LTP >= price → marketable → auto-fill.
 	prices := map[string]float64{"NSE:SBIN": 500}
@@ -315,6 +327,7 @@ func TestModifyOrder_MarketableAfterModify_SELL(t *testing.T) {
 // ModifyOrder — wrong email / already cancelled
 // ---------------------------------------------------------------------------
 func TestModifyOrder_WrongEmail(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -332,6 +345,7 @@ func TestModifyOrder_WrongEmail(t *testing.T) {
 
 
 func TestModifyOrder_CancelledOrder(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -357,6 +371,7 @@ func TestModifyOrder_CancelledOrder(t *testing.T) {
 // CancelOrder — wrong email / already filled
 // ---------------------------------------------------------------------------
 func TestCancelOrder_WrongEmail(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -374,6 +389,7 @@ func TestCancelOrder_WrongEmail(t *testing.T) {
 
 
 func TestCancelOrder_AlreadyFilled(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -396,6 +412,7 @@ func TestCancelOrder_AlreadyFilled(t *testing.T) {
 // ModifyOrder — change order_type and trigger_price
 // ---------------------------------------------------------------------------
 func TestModifyOrder_ChangeOrderType(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 

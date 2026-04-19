@@ -19,6 +19,7 @@ import (
 // handleStatus — covered via existing test, but adding expired/valid paths
 // ===========================================================================
 func TestHandleStatus_ValidCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -43,6 +44,7 @@ func TestHandleStatus_ValidCredentials(t *testing.T) {
 
 
 func TestHandleStatus_ExpiredCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -61,6 +63,7 @@ func TestHandleStatus_ExpiredCredentials(t *testing.T) {
 
 
 func TestHandleStatus_MissingCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store

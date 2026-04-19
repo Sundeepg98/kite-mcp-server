@@ -19,6 +19,7 @@ import (
 // Store tests
 // ---------------------------------------------------------------------------
 func TestSetSubscription_Create(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	sub := &Subscription{
@@ -39,6 +40,7 @@ func TestSetSubscription_Create(t *testing.T) {
 
 
 func TestSetSubscription_Update(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	// Create initial subscription.
@@ -64,6 +66,7 @@ func TestSetSubscription_Update(t *testing.T) {
 
 
 func TestSetSubscription_EmailNormalization(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	err := s.SetSubscription(&Subscription{
@@ -85,6 +88,7 @@ func TestSetSubscription_EmailNormalization(t *testing.T) {
 
 
 func TestSetSubscription_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	err := s.SetSubscription(&Subscription{
 		AdminEmail: "",
@@ -99,6 +103,7 @@ func TestSetSubscription_EmptyEmail(t *testing.T) {
 // Additional coverage tests: LoadFromDB, InitTable, nil-DB edges
 // ---------------------------------------------------------------------------
 func TestLoadFromDB_EmptyDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -115,6 +120,7 @@ func TestLoadFromDB_EmptyDB(t *testing.T) {
 
 
 func TestLoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
 	// Store with nil DB — LoadFromDB should be a no-op.
 	s := newTestStore()
 	err := s.LoadFromDB()
@@ -123,6 +129,7 @@ func TestLoadFromDB_NilDB(t *testing.T) {
 
 
 func TestInitTable_NilDB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// InitTable with nil DB should return nil (no-op).
 	err := s.InitTable()
@@ -131,6 +138,7 @@ func TestInitTable_NilDB(t *testing.T) {
 
 
 func TestInitTable_Idempotent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -152,6 +160,7 @@ func TestInitTable_Idempotent(t *testing.T) {
 
 
 func TestGetSubscription_NonExistent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	got := s.GetSubscription("nonexistent@example.com")
 	assert.Nil(t, got, "TestGetSubscription_NonExistent: got")
@@ -159,6 +168,7 @@ func TestGetSubscription_NonExistent(t *testing.T) {
 
 
 func TestSetSubscription_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -190,6 +200,7 @@ func TestSetSubscription_PersistsToDB(t *testing.T) {
 
 
 func TestSetSubscription_WithExpiresAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -216,6 +227,7 @@ func TestSetSubscription_WithExpiresAt(t *testing.T) {
 
 
 func TestIsEventProcessed_NilDB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// IsEventProcessed with nil DB should always return false.
 	assert.False(t, s.IsEventProcessed("evt_any"))
@@ -223,6 +235,7 @@ func TestIsEventProcessed_NilDB(t *testing.T) {
 
 
 func TestMarkEventProcessed_NilDB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// MarkEventProcessed with nil DB should return nil (no-op).
 	err := s.MarkEventProcessed("evt_any", "test.event")
@@ -231,6 +244,7 @@ func TestMarkEventProcessed_NilDB(t *testing.T) {
 
 
 func TestLoadFromDB_MultipleSubscriptions(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -280,6 +294,7 @@ func TestLoadFromDB_MultipleSubscriptions(t *testing.T) {
 
 // TestSetSubscription_WhitespaceEmail tests that whitespace-only email is rejected.
 func TestSetSubscription_WhitespaceEmail(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	err := s.SetSubscription(&Subscription{
 		AdminEmail: "   ",
@@ -293,6 +308,7 @@ func TestSetSubscription_WhitespaceEmail(t *testing.T) {
 // TestInitTable_Migration tests the InitTable migration path where the old
 // "email" column needs to be renamed to "admin_email".
 func TestInitTable_Migration(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -333,6 +349,7 @@ func TestInitTable_Migration(t *testing.T) {
 // DB error-path tests to push coverage above 95%
 // ===========================================================================
 func TestSetSubscription_DBWriteError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -352,6 +369,7 @@ func TestSetSubscription_DBWriteError(t *testing.T) {
 
 
 func TestSetSubscription_WithExpiresAtDBRoundTrip(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -373,6 +391,7 @@ func TestSetSubscription_WithExpiresAtDBRoundTrip(t *testing.T) {
 
 
 func TestLoadFromDB_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -386,6 +405,7 @@ func TestLoadFromDB_ClosedDB(t *testing.T) {
 
 
 func TestIsEventProcessed_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -398,6 +418,7 @@ func TestIsEventProcessed_ClosedDB(t *testing.T) {
 
 
 func TestInitTable_ClosedDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := NewStore(db, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	db.Close()

@@ -81,6 +81,7 @@ func newTestBotWithFakeAPI(t *testing.T, email string) (*BotHandler, *mockHTTPCl
 // handlePrice — successful API call paths
 // ===========================================================================
 func TestHandlePrice_SuccessfulQuote(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -116,6 +117,7 @@ func TestHandlePrice_SuccessfulQuote(t *testing.T) {
 
 
 func TestHandlePrice_APIReturnsError(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -130,6 +132,7 @@ func TestHandlePrice_APIReturnsError(t *testing.T) {
 
 
 func TestHandlePrice_SymbolNotInQuote(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -144,6 +147,7 @@ func TestHandlePrice_SymbolNotInQuote(t *testing.T) {
 
 
 func TestHandlePrice_WithExchangePrefix(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -167,6 +171,7 @@ func TestHandlePrice_WithExchangePrefix(t *testing.T) {
 
 
 func TestHandlePrice_ZeroClosePrice(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -197,6 +202,7 @@ func TestHandlePrice_ZeroClosePrice(t *testing.T) {
 // handlePrices — successful multi-symbol paths
 // ===========================================================================
 func TestHandlePrices_MultipleSymbols(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -234,6 +240,7 @@ func TestHandlePrices_MultipleSymbols(t *testing.T) {
 
 
 func TestHandlePrices_PartialNotFound(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -256,6 +263,7 @@ func TestHandlePrices_PartialNotFound(t *testing.T) {
 
 
 func TestHandlePrices_ZeroClosePrice(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -278,6 +286,7 @@ func TestHandlePrices_ZeroClosePrice(t *testing.T) {
 
 
 func TestHandlePrices_APIFailure(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -292,6 +301,7 @@ func TestHandlePrices_APIFailure(t *testing.T) {
 
 
 func TestHandlePrices_WhitespaceSymbols(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -317,6 +327,7 @@ func TestHandlePrices_WhitespaceSymbols(t *testing.T) {
 // handleMyWatchlist — various paths
 // ===========================================================================
 func TestHandleMyWatchlist_EmptyWatchlistList(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := watchlist.NewStore()
 	mgr := newMockKiteManager()
@@ -336,6 +347,7 @@ func TestHandleMyWatchlist_EmptyWatchlistList(t *testing.T) {
 
 
 func TestHandleMyWatchlist_WithItemsAndLTP(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := watchlist.NewStore()
 	wlID, err := store.CreateWatchlist(email, "My Stocks")
@@ -389,6 +401,7 @@ func TestHandleMyWatchlist_WithItemsAndLTP(t *testing.T) {
 
 
 func TestHandleMyWatchlist_NoKiteClient_ShowsItems(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := watchlist.NewStore()
 	wlID, err := store.CreateWatchlist(email, "Test WL")
@@ -414,6 +427,7 @@ func TestHandleMyWatchlist_NoKiteClient_ShowsItems(t *testing.T) {
 
 
 func TestHandleMyWatchlist_EmptyWatchlistItems(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := watchlist.NewStore()
 	_, err := store.CreateWatchlist(email, "Empty WL")
@@ -441,6 +455,7 @@ func TestHandleMyWatchlist_EmptyWatchlistItems(t *testing.T) {
 // executeConfirmedOrder paths
 // ===========================================================================
 func TestExecuteConfirmedOrder_NoPendingOrder(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -460,6 +475,7 @@ func TestExecuteConfirmedOrder_NoPendingOrder(t *testing.T) {
 
 
 func TestExecuteConfirmedOrder_EmailMismatch(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -483,6 +499,7 @@ func TestExecuteConfirmedOrder_EmailMismatch(t *testing.T) {
 
 
 func TestExecuteConfirmedOrder_PlacesOrder(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -517,6 +534,7 @@ func TestExecuteConfirmedOrder_PlacesOrder(t *testing.T) {
 
 
 func TestExecuteConfirmedOrder_NilMessage(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -536,6 +554,7 @@ func TestExecuteConfirmedOrder_NilMessage(t *testing.T) {
 // ServeHTTP integration tests for handler commands
 // ===========================================================================
 func TestServeHTTP_PriceCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -581,6 +600,7 @@ func TestServeHTTP_PriceCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_PortfolioCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -627,6 +647,7 @@ func TestServeHTTP_PortfolioCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_OrdersCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -673,6 +694,7 @@ func TestServeHTTP_OrdersCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_PnLCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -716,6 +738,7 @@ func TestServeHTTP_PnLCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_PositionsCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -758,6 +781,7 @@ func TestServeHTTP_PositionsCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_PricesCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -808,6 +832,7 @@ func TestServeHTTP_PricesCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 
 	store := watchlist.NewStore()
@@ -864,6 +889,7 @@ func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 // sendHTML / sendHTMLWithKeyboard / answerCallback / editMessage error paths
 // ===========================================================================
 func TestSendHTML_BotError(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -883,6 +909,7 @@ func TestSendHTML_BotError(t *testing.T) {
 
 
 func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -901,6 +928,7 @@ func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
 
 
 func TestAnswerCallback_BotError(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -918,6 +946,7 @@ func TestAnswerCallback_BotError(t *testing.T) {
 
 
 func TestEditMessage_BotError(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -978,6 +1007,7 @@ func newTestInstrumentsManager(t *testing.T) *instruments.Manager {
 // executeConfirmedOrder — riskguard blocking
 // ===========================================================================
 func TestExecuteConfirmedOrder_RiskguardBlocks(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1019,6 +1049,7 @@ func TestExecuteConfirmedOrder_RiskguardBlocks(t *testing.T) {
 // executeConfirmedOrder — riskguard blocks + nil message
 // ===========================================================================
 func TestExecuteConfirmedOrder_RiskguardBlocksNilMessage(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1054,6 +1085,7 @@ func TestExecuteConfirmedOrder_RiskguardBlocksNilMessage(t *testing.T) {
 // executeConfirmedOrder — paper trading success
 // ===========================================================================
 func TestExecuteConfirmedOrder_PaperTradingSuccess(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1104,6 +1136,7 @@ func TestExecuteConfirmedOrder_PaperTradingSuccess(t *testing.T) {
 // executeConfirmedOrder — real order failure (Kite API error)
 // ===========================================================================
 func TestExecuteConfirmedOrder_RealOrderAPIFailure(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1138,6 +1171,7 @@ func TestExecuteConfirmedOrder_RealOrderAPIFailure(t *testing.T) {
 // executeConfirmedOrder — real order success with riskguard recording
 // ===========================================================================
 func TestExecuteConfirmedOrder_RealOrderWithRiskguard(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1180,6 +1214,7 @@ func TestExecuteConfirmedOrder_RealOrderWithRiskguard(t *testing.T) {
 // executeConfirmedOrder — no kite client (expired token)
 // ===========================================================================
 func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	// No API key set → newKiteClient returns nil.
@@ -1214,6 +1249,7 @@ func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
 // executeConfirmedOrder — no kite client + nil message
 // ===========================================================================
 func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 
 	h, _ := newTestBotHandler(mgr)
@@ -1243,6 +1279,7 @@ func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
 // executeConfirmedOrder — real order success + nil message
 // ===========================================================================
 func TestExecuteConfirmedOrder_SuccessNilMessage(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1276,6 +1313,7 @@ func TestExecuteConfirmedOrder_SuccessNilMessage(t *testing.T) {
 // handleAlerts — percentage direction display
 // ===========================================================================
 func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
 	store.Add(email, "RELIANCE", "NSE", 256265, 5.0, alerts.DirectionDropPct)
@@ -1300,6 +1338,7 @@ func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
 
 
 func TestHandleAlerts_MixedDirections(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
 	store.Add(email, "RELIANCE", "NSE", 256265, 2700, alerts.DirectionAbove)
@@ -1322,6 +1361,7 @@ func TestHandleAlerts_MixedDirections(t *testing.T) {
 
 
 func TestHandleAlerts_NoAlerts(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
 
@@ -1342,6 +1382,7 @@ func TestHandleAlerts_NoAlerts(t *testing.T) {
 // ServeHTTP — callback query path
 // ===========================================================================
 func TestServeHTTP_CallbackQuery(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1371,6 +1412,7 @@ func TestServeHTTP_CallbackQuery(t *testing.T) {
 
 
 func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1400,6 +1442,7 @@ func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
 
 
 func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	// No registered users.
 
@@ -1428,6 +1471,7 @@ func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
 
 
 func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 
 	h, _ := newTestBotHandler(mgr)
@@ -1455,6 +1499,7 @@ func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
 // ServeHTTP — empty text message
 // ===========================================================================
 func TestServeHTTP_EmptyTextMessage(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1487,6 +1532,7 @@ func TestServeHTTP_EmptyTextMessage(t *testing.T) {
 // ServeHTTP — rate limit exceeded
 // ===========================================================================
 func TestServeHTTP_RateLimitExceeded(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1521,6 +1567,7 @@ func TestServeHTTP_RateLimitExceeded(t *testing.T) {
 // ServeHTTP — unknown command
 // ===========================================================================
 func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1552,6 +1599,7 @@ func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
 // ServeHTTP — /watchlist command (backward compat for /prices)
 // ===========================================================================
 func TestServeHTTP_WatchlistCommand(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.close()
@@ -1599,6 +1647,7 @@ func TestServeHTTP_WatchlistCommand(t *testing.T) {
 // handlePrices — edge cases
 // ===========================================================================
 func TestHandlePrices_AllWhitespace2(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1615,6 +1664,7 @@ func TestHandlePrices_AllWhitespace2(t *testing.T) {
 // cancelPendingOrder path
 // ===========================================================================
 func TestCancelPendingOrder(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1645,6 +1695,7 @@ func TestCancelPendingOrder(t *testing.T) {
 
 
 func TestCancelPendingOrder_NilMessage(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 
 	h, _ := newTestBotHandler(mgr)
@@ -1664,6 +1715,7 @@ func TestCancelPendingOrder_NilMessage(t *testing.T) {
 // handleMyWatchlist — items with target entry/exit and valid LTP
 // ===========================================================================
 func TestHandleMyWatchlist_WithTargets(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -1711,6 +1763,7 @@ func TestHandleMyWatchlist_WithTargets(t *testing.T) {
 // ServeHTTP — /buy and /sell command integration (covers the nil-reply path)
 // ===========================================================================
 func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1739,6 +1792,7 @@ func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_SellCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1767,6 +1821,7 @@ func TestServeHTTP_SellCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1795,6 +1850,7 @@ func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
@@ -1825,6 +1881,7 @@ func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
 
 
 func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
 	store.Add(email, "RELIANCE", "NSE", 256265, 2700, alerts.DirectionAbove)
@@ -1860,6 +1917,7 @@ func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
 // ServeHTTP — confirm_order callback integration
 // ===========================================================================
 func TestServeHTTP_ConfirmOrderCallback(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()

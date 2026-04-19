@@ -16,6 +16,7 @@ import (
 
 // --- Monitor fill edge cases ---
 func TestMonitor_Tick_SellOrder(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -50,6 +51,7 @@ func TestMonitor_Tick_SellOrder(t *testing.T) {
 
 
 func TestMonitor_Tick_SLOrder(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -76,6 +78,7 @@ func TestMonitor_Tick_SLOrder(t *testing.T) {
 
 
 func TestMonitor_Tick_SLMOrder(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -104,6 +107,7 @@ func TestMonitor_Tick_SLMOrder(t *testing.T) {
 
 
 func TestMonitor_Tick_MultipleOrdersDifferentInstruments(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500, "NSE:SBIN": 800})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -143,6 +147,7 @@ func TestMonitor_Tick_MultipleOrdersDifferentInstruments(t *testing.T) {
 
 
 func TestMonitor_Tick_LTPProviderError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -176,6 +181,7 @@ func TestMonitor_Tick_LTPProviderError(t *testing.T) {
 
 // --- Monitor fill: SELL fills add cash ---
 func TestMonitor_Tick_SellFillAddsCash(t *testing.T) {
+	t.Parallel()
 	engine, store := testEngineWithStore(t, map[string]float64{"NSE:RELIANCE": 2500})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -193,6 +199,7 @@ func TestMonitor_Tick_SellFillAddsCash(t *testing.T) {
 
 
 func TestMonitorFill_InsufficientCash(t *testing.T) {
+	t.Parallel()
 	// LTP starts at 500. LIMIT BUY at 400 won't fill yet.
 	engine := push100Engine(t, map[string]float64{"NSE:SBIN": 500, "NSE:RELIANCE": 2000})
 	require.NoError(t, engine.Enable(push100Email, 10_000))
@@ -245,6 +252,7 @@ func TestMonitorFill_InsufficientCash(t *testing.T) {
 // fillOrder: InsertOrder error on BUY REJECTED in fillOrder (line 233-235)
 // ---------------------------------------------------------------------------
 func TestFillOrder_InsertRejectedBUY(t *testing.T) {
+	t.Parallel()
 	// fillOrder BUY REJECTED path: cost > CashBalance → InsertOrder of rejected order
 	// We need InsertOrder to fail, so drop orders table first.
 	engine, db := gapEngine(t, map[string]float64{"NSE:EXPENSIVE": 50000})
@@ -266,6 +274,7 @@ func TestFillOrder_InsertRejectedBUY(t *testing.T) {
 // Monitor fill(): BUY rejected (insufficient cash, line 159)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_BUYRejected(t *testing.T) {
+	t.Parallel()
 	engine, _ := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1000)) // very low cash
 
@@ -315,6 +324,7 @@ func TestMonitorFill_BUYRejected(t *testing.T) {
 // Monitor fill(): UpdateOrderStatus error (line 169-172)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_UpdateOrderStatusError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -345,6 +355,7 @@ func TestMonitorFill_UpdateOrderStatusError(t *testing.T) {
 // Monitor fill(): UpdateCashBalance error (line 180-183)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_UpdateCashBalanceError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -375,6 +386,7 @@ func TestMonitorFill_UpdateCashBalanceError(t *testing.T) {
 // Monitor fill(): updatePosition error (line 188-191)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_UpdatePositionError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -399,6 +411,7 @@ func TestMonitorFill_UpdatePositionError(t *testing.T) {
 // Monitor fill(): updateHolding error (line 195-198)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_UpdateHoldingError(t *testing.T) {
+	t.Parallel()
 	engine, db := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -423,6 +436,7 @@ func TestMonitorFill_UpdateHoldingError(t *testing.T) {
 // Monitor fill(): SELL path in monitor (covers CNC holding update via monitor)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_SELL_CNC(t *testing.T) {
+	t.Parallel()
 	engine, _ := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -457,6 +471,7 @@ func TestMonitorFill_SELL_CNC(t *testing.T) {
 // Monitor fill(): MIS product (no holding update, line 194 skipped)
 // ---------------------------------------------------------------------------
 func TestMonitorFill_MIS_NoHoldingUpdate(t *testing.T) {
+	t.Parallel()
 	engine, _ := gapEngine(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(gapEmail, 1_000_000))
 
@@ -489,6 +504,7 @@ func TestMonitorFill_MIS_NoHoldingUpdate(t *testing.T) {
 // Monitor tick() — GetAllOpenOrders error
 // ---------------------------------------------------------------------------
 func TestMonitorTick_OpenOrdersError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -513,6 +529,7 @@ func TestMonitorTick_OpenOrdersError(t *testing.T) {
 // Monitor tick() — LTP miss for some instruments
 // ---------------------------------------------------------------------------
 func TestMonitorTick_LTPMiss(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -544,6 +561,7 @@ func TestMonitorTick_LTPMiss(t *testing.T) {
 // Monitor tick() — shouldFill returns false (price not right)
 // ---------------------------------------------------------------------------
 func TestMonitorTick_ShouldFillFalse(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -570,6 +588,7 @@ func TestMonitorTick_ShouldFillFalse(t *testing.T) {
 // Monitor fill() — SELL path (exercises cash addition, no cash check)
 // ---------------------------------------------------------------------------
 func TestMonitorTick_FillSELL_CNC(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -605,6 +624,7 @@ func TestMonitorTick_FillSELL_CNC(t *testing.T) {
 // Monitor tick() — LTP error path
 // ---------------------------------------------------------------------------
 func TestMonitorTick_LTPError(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(finalEmail, 1_000_000))
 
@@ -628,6 +648,7 @@ func TestMonitorTick_LTPError(t *testing.T) {
 // Monitor — tick with open LIMIT order that becomes marketable
 // ---------------------------------------------------------------------------
 func TestMonitor_FillLimitOrder_Push(t *testing.T) {
+	t.Parallel()
 	// LTP starts at 600 — LIMIT BUY at 500 is NOT fillable (ltp > price)
 	prices := map[string]float64{"NSE:SBIN": 600}
 	engine := testEngineWithLTP(t, prices)
@@ -656,6 +677,7 @@ func TestMonitor_FillLimitOrder_Push(t *testing.T) {
 
 
 func TestMonitor_FillSLOrder_Push(t *testing.T) {
+	t.Parallel()
 	engine := testEngineWithLTP(t, map[string]float64{"NSE:SBIN": 500})
 	require.NoError(t, engine.Enable(pushEmail, 1_000_000))
 
@@ -691,6 +713,7 @@ func TestMonitor_FillSLOrder_Push(t *testing.T) {
 
 
 func TestMonitor_InsufficientCashRejectsBUY(t *testing.T) {
+	t.Parallel()
 	// Use SL order type — it is not checked against cash at placement time
 	// (SL orders go straight to OPEN regardless of cash).
 	// Then when monitor fills it, the cash check in monitor.fill() triggers rejection.

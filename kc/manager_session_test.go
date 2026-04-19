@@ -9,6 +9,7 @@ import (
 
 
 func TestManagerGenerateSession(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -38,6 +39,7 @@ func TestManagerGenerateSession(t *testing.T) {
 
 
 func TestManagerGetSession(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -76,6 +78,7 @@ func TestManagerGetSession(t *testing.T) {
 
 
 func TestClearSession(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -105,6 +108,7 @@ func TestClearSession(t *testing.T) {
 
 
 func TestSessionLoginURL(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -140,6 +144,7 @@ func TestSessionLoginURL(t *testing.T) {
 
 
 func TestCompleteSession(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -167,6 +172,7 @@ func TestCompleteSession(t *testing.T) {
 
 
 func TestGetActiveSessionCount(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -206,6 +212,7 @@ func TestGetActiveSessionCount(t *testing.T) {
 
 
 func TestManagerCleanupExpiredSessions(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -230,6 +237,7 @@ func TestManagerCleanupExpiredSessions(t *testing.T) {
 
 
 func TestSessionManager(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -248,6 +256,7 @@ func TestSessionManager(t *testing.T) {
 
 
 func TestStopCleanupRoutine(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -259,6 +268,7 @@ func TestStopCleanupRoutine(t *testing.T) {
 
 
 func TestGetOrCreateSession(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)
@@ -305,6 +315,7 @@ func TestGetOrCreateSession(t *testing.T) {
 
 // TestExternalSessionIDFromErrorLog tests the exact session ID from the error log
 func TestExternalSessionIDFromErrorLog(t *testing.T) {
+	t.Parallel()
 	manager, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("Expected no error creating manager, got: %v", err)

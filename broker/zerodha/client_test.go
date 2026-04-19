@@ -1738,6 +1738,7 @@ func TestClient_GetOrderCharges_Error(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFactory_BrokerName(t *testing.T) {
+	t.Parallel()
 	f := NewFactory()
 	if f.BrokerName() != broker.Zerodha {
 		t.Errorf("BrokerName = %q, want %q", f.BrokerName(), broker.Zerodha)
@@ -1745,6 +1746,7 @@ func TestFactory_BrokerName(t *testing.T) {
 }
 
 func TestFactory_Create(t *testing.T) {
+	t.Parallel()
 	f := NewFactory()
 	c, err := f.Create("test_api_key")
 	if err != nil {
@@ -1756,6 +1758,7 @@ func TestFactory_Create(t *testing.T) {
 }
 
 func TestFactory_CreateWithToken(t *testing.T) {
+	t.Parallel()
 	f := NewFactory()
 	c, err := f.CreateWithToken("test_api_key", "test_access_token")
 	if err != nil {
@@ -1767,6 +1770,7 @@ func TestFactory_CreateWithToken(t *testing.T) {
 }
 
 func TestAuth_GetLoginURL(t *testing.T) {
+	t.Parallel()
 	a := NewAuth()
 	url := a.GetLoginURL("test_api_key")
 	if url == "" {
@@ -1778,6 +1782,7 @@ func TestAuth_GetLoginURL(t *testing.T) {
 }
 
 func TestAuth_ExchangeToken_Error(t *testing.T) {
+	t.Parallel()
 	// ExchangeToken with invalid credentials should fail (no real server)
 	a := NewAuth()
 	_, err := a.ExchangeToken("bad_key", "bad_secret", "bad_token")
@@ -1787,6 +1792,7 @@ func TestAuth_ExchangeToken_Error(t *testing.T) {
 }
 
 func TestAuth_InvalidateToken_Error(t *testing.T) {
+	t.Parallel()
 	// InvalidateToken with invalid credentials should fail
 	a := NewAuth()
 	err := a.InvalidateToken("bad_key", "bad_token")

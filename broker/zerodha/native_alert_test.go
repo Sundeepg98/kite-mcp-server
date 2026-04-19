@@ -16,6 +16,7 @@ import (
 // --- convert helpers ---
 
 func TestConvertNativeAlertParamsToKite(t *testing.T) {
+	t.Parallel()
 	p := broker.NativeAlertParams{
 		Name:             "Test",
 		Type:             "simple",
@@ -39,6 +40,7 @@ func TestConvertNativeAlertParamsToKite(t *testing.T) {
 }
 
 func TestConvertNativeAlertParamsToKite_WithBasket(t *testing.T) {
+	t.Parallel()
 	basketJSON := `{"name":"test_basket","type":"ato","tags":["tag1"],"items":[]}`
 	p := broker.NativeAlertParams{
 		Name:       "ATO Alert",
@@ -55,6 +57,7 @@ func TestConvertNativeAlertParamsToKite_WithBasket(t *testing.T) {
 }
 
 func TestConvertNativeAlertParamsToKite_InvalidBasketJSON(t *testing.T) {
+	t.Parallel()
 	p := broker.NativeAlertParams{
 		Name:       "ATO Alert",
 		BasketJSON: "not json",
@@ -66,6 +69,7 @@ func TestConvertNativeAlertParamsToKite_InvalidBasketJSON(t *testing.T) {
 }
 
 func TestConvertNativeAlert(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	a := kiteconnect.Alert{
 		UUID:             "test-uuid",
@@ -95,6 +99,7 @@ func TestConvertNativeAlert(t *testing.T) {
 }
 
 func TestConvertNativeAlerts(t *testing.T) {
+	t.Parallel()
 	alerts := []kiteconnect.Alert{
 		{UUID: "a1", Name: "Alert 1"},
 		{UUID: "a2", Name: "Alert 2"},
@@ -109,6 +114,7 @@ func TestConvertNativeAlerts(t *testing.T) {
 }
 
 func TestConvertNativeAlertHistory(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	history := []kiteconnect.AlertHistory{
 		{

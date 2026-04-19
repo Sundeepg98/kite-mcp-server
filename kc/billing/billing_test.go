@@ -29,6 +29,7 @@ func newTestStore() *Store {
 
 
 func TestGetTier_Active(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
@@ -48,6 +49,7 @@ func TestGetTier_Active(t *testing.T) {
 
 
 func TestGetTier_Expired(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
@@ -63,6 +65,7 @@ func TestGetTier_Expired(t *testing.T) {
 
 
 func TestGetTier_Canceled(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	_ = s.SetSubscription(&Subscription{
@@ -77,6 +80,7 @@ func TestGetTier_Canceled(t *testing.T) {
 
 
 func TestGetTier_NonExistent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	assert.Equal(t, TierFree, s.GetTier("nobody@example.com"),
@@ -85,6 +89,7 @@ func TestGetTier_NonExistent(t *testing.T) {
 
 
 func TestConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	const goroutines = 50
 
@@ -126,6 +131,7 @@ func TestConcurrentAccess(t *testing.T) {
 // Tiers tests
 // ---------------------------------------------------------------------------
 func TestRequiredTier_AllToolsMapped(t *testing.T) {
+	t.Parallel()
 	// Verify the toolTiers map is populated and every entry maps to a valid tier.
 	// The cross-package check (every tool in GetAllTools has a tier) lives in
 	// mcp/common_test.go to avoid an import cycle.
@@ -143,6 +149,7 @@ func TestRequiredTier_AllToolsMapped(t *testing.T) {
 
 
 func TestRequiredTier_UnknownToolDefaultsFree(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, TierFree, RequiredTier("nonexistent_tool_xyz"),
 		"unknown tools should default to TierFree")
 }
@@ -163,6 +170,7 @@ func openTestDB(t *testing.T) *alerts.DB {
 
 
 func TestGetTierForUser_FamilyInheritance(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -200,6 +208,7 @@ func TestGetTierForUser_FamilyInheritance(t *testing.T) {
 
 
 func TestMaxUsers_Persistence(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -225,6 +234,7 @@ func TestMaxUsers_Persistence(t *testing.T) {
 
 
 func TestGetTierForUser_ExpiredAdmin(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -250,6 +260,7 @@ func TestGetTierForUser_ExpiredAdmin(t *testing.T) {
 
 
 func TestSubscriptionUpdate_StatusChange(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -283,6 +294,7 @@ func TestSubscriptionUpdate_StatusChange(t *testing.T) {
 
 
 func TestEventIdempotency(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -303,6 +315,7 @@ func TestEventIdempotency(t *testing.T) {
 
 
 func TestEffectiveTier_OtherTiers(t *testing.T) {
+	t.Parallel()
 	// Non-SoloPro tiers should return themselves.
 	assert.Equal(t, TierFree, TierFree.EffectiveTier())
 	assert.Equal(t, TierPro, TierPro.EffectiveTier())
@@ -324,6 +337,7 @@ func passthrough(_ context.Context, _ gomcp.CallToolRequest) (*gomcp.CallToolRes
 // GetTier with TierSoloPro subscription
 // ---------------------------------------------------------------------------
 func TestGetTier_SoloPro(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "solo@example.com",
@@ -336,12 +350,14 @@ func TestGetTier_SoloPro(t *testing.T) {
 
 
 func TestGetEmailByCustomerID_NotFound(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	assert.Equal(t, "", s.GetEmailByCustomerID("cus_nonexistent"))
 }
 
 
 func TestHasExplicitTier(t *testing.T) {
+	t.Parallel()
 	assert.True(t, HasExplicitTier("place_order"), "place_order should have explicit tier")
 	assert.True(t, HasExplicitTier("get_holdings"), "get_holdings should have explicit tier")
 	assert.False(t, HasExplicitTier("nonexistent_tool_xyz"), "unknown tool should not have explicit tier")
@@ -352,6 +368,7 @@ func TestHasExplicitTier(t *testing.T) {
 // Webhook helper function tests (pure functions, no Stripe API calls)
 // ---------------------------------------------------------------------------
 func TestMapPriceToTier(t *testing.T) {
+	t.Parallel()
 	pricePro := "price_pro_123"
 	pricePremium := "price_premium_456"
 	priceSoloPro := "price_solo_789"
@@ -372,6 +389,7 @@ func TestMapPriceToTier(t *testing.T) {
 
 
 func TestMapStripeStatus(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, StatusActive, mapStripeStatus("active"))
 	assert.Equal(t, StatusTrialing, mapStripeStatus("trialing"))
 	assert.Equal(t, StatusPastDue, mapStripeStatus("past_due"))
@@ -384,6 +402,7 @@ func TestMapStripeStatus(t *testing.T) {
 
 
 func TestExtractPriceID(t *testing.T) {
+	t.Parallel()
 	// Nil subscription → empty.
 	session := &stripe.CheckoutSession{}
 	assert.Equal(t, "", extractPriceID(session))
@@ -405,6 +424,7 @@ func TestExtractPriceID(t *testing.T) {
 
 
 func TestGetEmailByCustomerID_Empty(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// No subscriptions exist — should return empty string.
 	assert.Equal(t, "", s.GetEmailByCustomerID(""))
@@ -412,6 +432,7 @@ func TestGetEmailByCustomerID_Empty(t *testing.T) {
 
 
 func TestGetTierForUser_NilAdminEmailFn(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// With nil adminEmailFn, should just return TierFree for unknown user.
 	assert.Equal(t, TierFree, s.GetTierForUser("nobody@example.com", nil))
@@ -419,6 +440,7 @@ func TestGetTierForUser_NilAdminEmailFn(t *testing.T) {
 
 
 func TestGetTierForUser_AdminEmailFnReturnsSameEmail(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -434,6 +456,7 @@ func TestGetTierForUser_AdminEmailFnReturnsSameEmail(t *testing.T) {
 
 
 func TestGetTierForUser_AdminEmailFnReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	adminEmailFn := func(email string) string {
 		return ""
@@ -443,6 +466,7 @@ func TestGetTierForUser_AdminEmailFnReturnsEmpty(t *testing.T) {
 
 
 func TestMaxUsers_DefaultsToOne(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -472,6 +496,7 @@ func TestMaxUsers_DefaultsToOne(t *testing.T) {
 
 
 func TestInitEventLogTable_NilDB(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// InitEventLogTable with nil DB should return nil (no-op).
 	err := s.InitEventLogTable()
@@ -480,6 +505,7 @@ func TestInitEventLogTable_NilDB(t *testing.T) {
 
 
 func TestInitEventLogTable_Idempotent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -496,6 +522,7 @@ func TestInitEventLogTable_Idempotent(t *testing.T) {
 
 
 func TestGetTier_PastDue(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "pastdue@example.com",
@@ -508,6 +535,7 @@ func TestGetTier_PastDue(t *testing.T) {
 
 
 func TestGetTier_Trialing(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "trial@example.com",
@@ -520,6 +548,7 @@ func TestGetTier_Trialing(t *testing.T) {
 
 
 func TestGetTier_TrialingButExpired(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "trialexp@example.com",
@@ -533,6 +562,7 @@ func TestGetTier_TrialingButExpired(t *testing.T) {
 
 
 func TestGetTier_FutureExpiry(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "future@example.com",
@@ -546,6 +576,7 @@ func TestGetTier_FutureExpiry(t *testing.T) {
 
 
 func TestGetEmailByCustomerID_MultipleSubscriptions(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail:       "first@example.com",
@@ -606,6 +637,7 @@ func makeCheckoutPayload(eventID, email, customerID, subID string) []byte {
 // TestMapPriceToTier_EmptyConfigPrices tests mapPriceToTier when all config prices are empty
 // but priceID matches one of them (empty string match).
 func TestMapPriceToTier_EmptyConfigPrices(t *testing.T) {
+	t.Parallel()
 	// When pricePremium/pricePro/priceSoloPro are all empty and priceID is empty,
 	// the switch will match case "" (pricePremium=""), but since pricePremium is empty,
 	// it falls through. Same for pricePro. Then priceID "" → TierFree.

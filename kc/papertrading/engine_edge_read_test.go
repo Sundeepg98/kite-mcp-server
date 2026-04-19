@@ -15,6 +15,7 @@ import (
 
 // --- GetOrders when disabled ---
 func TestGetOrders_WhenDisabled(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, map[string]float64{})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -27,6 +28,7 @@ func TestGetOrders_WhenDisabled(t *testing.T) {
 
 // --- GetPositions with no LTP provider ---
 func TestGetPositions_NoLTPProvider(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, nil)
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -41,6 +43,7 @@ func TestGetPositions_NoLTPProvider(t *testing.T) {
 
 // --- GetHoldings with no LTP provider ---
 func TestGetHoldings_NoLTPProvider(t *testing.T) {
+	t.Parallel()
 	engine, _ := testEngineWithStore(t, nil)
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -53,6 +56,7 @@ func TestGetHoldings_NoLTPProvider(t *testing.T) {
 
 // --- LTP provider error in GetPositions/GetHoldings ---
 func TestGetPositions_LTPError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -80,6 +84,7 @@ func TestGetPositions_LTPError(t *testing.T) {
 
 
 func TestGetHoldings_LTPError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -105,6 +110,7 @@ func TestGetHoldings_LTPError(t *testing.T) {
 
 
 func TestGetOrders_DBError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -121,6 +127,7 @@ func TestGetOrders_DBError(t *testing.T) {
 
 
 func TestGetPositions_DBError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -137,6 +144,7 @@ func TestGetPositions_DBError(t *testing.T) {
 
 
 func TestGetHoldings_DBError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 

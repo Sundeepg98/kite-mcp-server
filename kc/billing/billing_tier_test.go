@@ -18,6 +18,7 @@ import (
 
 
 func TestTierOrdering(t *testing.T) {
+	t.Parallel()
 	assert.Less(t, TierFree, TierPro, "Free should be less than Pro")
 	assert.Less(t, TierPro, TierPremium, "Pro should be less than Premium")
 	assert.Less(t, TierFree, TierPremium, "Free should be less than Premium")
@@ -28,6 +29,7 @@ func TestTierOrdering(t *testing.T) {
 // Tier method tests (EffectiveTier, String)
 // ---------------------------------------------------------------------------
 func TestTierSoloPro_EffectiveTier(t *testing.T) {
+	t.Parallel()
 	// TierSoloPro should map down to TierPro for tool-access checks.
 	assert.Equal(t, TierPro, TierSoloPro.EffectiveTier(),
 		"TierSoloPro.EffectiveTier() should return TierPro")
@@ -35,11 +37,13 @@ func TestTierSoloPro_EffectiveTier(t *testing.T) {
 
 
 func TestTierSoloPro_StringRepresentation(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "solo_pro", TierSoloPro.String())
 }
 
 
 func TestTierString_AllTiers(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "free", TierFree.String())
 	assert.Equal(t, "pro", TierPro.String())
 	assert.Equal(t, "premium", TierPremium.String())
@@ -48,6 +52,7 @@ func TestTierString_AllTiers(t *testing.T) {
 
 
 func TestMiddleware_TierSoloPro(t *testing.T) {
+	t.Parallel()
 	// A SoloPro user should be able to call a Pro tool because
 	// EffectiveTier maps SoloPro → Pro.
 	s := newTestStore()
@@ -77,6 +82,7 @@ func TestMiddleware_TierSoloPro(t *testing.T) {
 
 
 func TestMiddleware_FreeUserBlockedFromProTool(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	// No subscription set — defaults to TierFree.
 
@@ -99,6 +105,7 @@ func TestMiddleware_FreeUserBlockedFromProTool(t *testing.T) {
 
 
 func TestMiddleware_FreeUserAllowedFreeTool(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 
 	mw := Middleware(s, nil)
@@ -115,6 +122,7 @@ func TestMiddleware_FreeUserAllowedFreeTool(t *testing.T) {
 
 
 func TestMiddleware_NoEmail(t *testing.T) {
+	t.Parallel()
 	// Unauthenticated requests pass through (auth middleware handles rejection).
 	s := newTestStore()
 
@@ -132,6 +140,7 @@ func TestMiddleware_NoEmail(t *testing.T) {
 
 
 func TestMiddleware_PremiumUserAccessesPremiumTool(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "premium@example.com",
@@ -153,6 +162,7 @@ func TestMiddleware_PremiumUserAccessesPremiumTool(t *testing.T) {
 
 
 func TestMiddleware_ProUserBlockedFromPremiumTool(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "pro@example.com",
@@ -177,6 +187,7 @@ func TestMiddleware_ProUserBlockedFromPremiumTool(t *testing.T) {
 
 
 func TestMiddleware_FamilyInheritance(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -210,6 +221,7 @@ func TestMiddleware_FamilyInheritance(t *testing.T) {
 
 
 func TestMiddleware_GetTierForUser_WithAdminEmailFn(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)

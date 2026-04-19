@@ -15,6 +15,7 @@ import (
 // MF tools: pre-session validation
 // ---------------------------------------------------------------------------
 func TestPlaceMFOrder_MissingRequired(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "place_mf_order with no params should fail validation")
@@ -23,6 +24,7 @@ func TestPlaceMFOrder_MissingRequired(t *testing.T) {
 
 
 func TestPlaceMFOrder_MissingTradingsymbol(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
 		"transaction_type": "BUY",
@@ -35,6 +37,7 @@ func TestPlaceMFOrder_MissingTradingsymbol(t *testing.T) {
 
 
 func TestPlaceMFOrder_BuyRequiresAmount(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
 		"tradingsymbol":    "INF209K01YS2",
@@ -47,6 +50,7 @@ func TestPlaceMFOrder_BuyRequiresAmount(t *testing.T) {
 
 
 func TestPlaceMFOrder_SellRequiresQuantity(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_order", "trader@example.com", map[string]any{
 		"tradingsymbol":    "INF209K01YS2",
@@ -59,6 +63,7 @@ func TestPlaceMFOrder_SellRequiresQuantity(t *testing.T) {
 
 
 func TestPlaceMFSIP_MissingRequired(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_sip", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "place_mf_sip with no params should fail validation")
@@ -67,6 +72,7 @@ func TestPlaceMFSIP_MissingRequired(t *testing.T) {
 
 
 func TestPlaceMFSIP_ZeroAmount(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "place_mf_sip", "trader@example.com", map[string]any{
 		"tradingsymbol": "INF209K01YS2",
@@ -80,6 +86,7 @@ func TestPlaceMFSIP_ZeroAmount(t *testing.T) {
 
 
 func TestCancelMFOrder_MissingOrderID(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "cancel_mf_order", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "cancel_mf_order without order_id should fail")
@@ -88,6 +95,7 @@ func TestCancelMFOrder_MissingOrderID(t *testing.T) {
 
 
 func TestCancelMFSIP_MissingSIPID(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	result := callToolWithManager(t, mgr, "cancel_mf_sip", "trader@example.com", map[string]any{})
 	assert.True(t, result.IsError, "cancel_mf_sip without sip_id should fail")

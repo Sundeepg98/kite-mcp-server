@@ -18,6 +18,7 @@ import (
 // handlePortfolio — full body coverage
 // ===========================================================================
 func TestHandlePortfolio_SuccessfulHoldings(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -59,6 +60,7 @@ func TestHandlePortfolio_SuccessfulHoldings(t *testing.T) {
 
 
 func TestHandlePortfolio_EmptyHoldings(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -74,6 +76,7 @@ func TestHandlePortfolio_EmptyHoldings(t *testing.T) {
 
 
 func TestHandlePortfolio_APIFailure(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -87,6 +90,7 @@ func TestHandlePortfolio_APIFailure(t *testing.T) {
 
 
 func TestHandlePortfolio_AllZeroDayChange(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -115,6 +119,7 @@ func TestHandlePortfolio_AllZeroDayChange(t *testing.T) {
 // handlePositions — full body coverage
 // ===========================================================================
 func TestHandlePositions_LongAndShort(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -167,6 +172,7 @@ func TestHandlePositions_LongAndShort(t *testing.T) {
 
 
 func TestHandlePositions_AllClosed(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -192,6 +198,7 @@ func TestHandlePositions_AllClosed(t *testing.T) {
 
 
 func TestHandlePositions_APIFailure(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -208,6 +215,7 @@ func TestHandlePositions_APIFailure(t *testing.T) {
 // handleOrders — full body coverage
 // ===========================================================================
 func TestHandleOrders_MultipleStatuses(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -249,6 +257,7 @@ func TestHandleOrders_MultipleStatuses(t *testing.T) {
 
 
 func TestHandleOrders_EmptyList(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -264,6 +273,7 @@ func TestHandleOrders_EmptyList(t *testing.T) {
 
 
 func TestHandleOrders_PaginationOver10(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -290,6 +300,7 @@ func TestHandleOrders_PaginationOver10(t *testing.T) {
 
 
 func TestHandleOrders_CancelledAndPendingStatus(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -328,6 +339,7 @@ func TestHandleOrders_CancelledAndPendingStatus(t *testing.T) {
 // handlePnL — full body coverage
 // ===========================================================================
 func TestHandlePnL_HoldingsAndPositions(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -361,6 +373,7 @@ func TestHandlePnL_HoldingsAndPositions(t *testing.T) {
 
 
 func TestHandlePnL_HoldingsUnavailable(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -380,6 +393,7 @@ func TestHandlePnL_HoldingsUnavailable(t *testing.T) {
 
 
 func TestHandlePnL_PositionsUnavailable(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -396,6 +410,7 @@ func TestHandlePnL_PositionsUnavailable(t *testing.T) {
 
 
 func TestHandlePnL_BothUnavailable(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
