@@ -42,10 +42,10 @@ jobs:
         run: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
 
       - name: Generate SBOM (JSON)
-        run: cyclonedx-gomod mod -licenses -json -output-file kite-mcp-sbom.cdx.json
+        run: cyclonedx-gomod mod -licenses -json -output kite-mcp-sbom.cdx.json
 
       - name: Generate SBOM (XML, human-readable)
-        run: cyclonedx-gomod mod -licenses -output-file kite-mcp-sbom.cdx.xml
+        run: cyclonedx-gomod mod -licenses -output kite-mcp-sbom.cdx.xml
 
       - name: Upload SBOM (branch / manual run)
         uses: actions/upload-artifact@v4
