@@ -221,7 +221,9 @@ func TestRiskguardMiddleware_BlocksOverValueOrder(t *testing.T) {
 	// Authenticated context.
 	ctx := oauth.ContextWithEmail(context.Background(), "trader@example.com")
 
-	// Order worth Rs 10,00,000 > limit of Rs 5,00,000.
+	// Order worth Rs 10,00,000 > per-order cap of Rs 50,000.
+	// `confirm: true` passes the default-on require-confirm gate so this
+	// test exercises the value-limit branch rather than the confirmation gate.
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
 	req.Params.Arguments = map[string]any{
@@ -231,6 +233,7 @@ func TestRiskguardMiddleware_BlocksOverValueOrder(t *testing.T) {
 		"order_type":       "LIMIT",
 		"quantity":         float64(100),
 		"price":            float64(10000),
+		"confirm":          true,
 	}
 
 	result, err := handler(ctx, req)
@@ -256,7 +259,8 @@ func TestRiskguardMiddleware_AllowsValidOrder(t *testing.T) {
 
 	ctx := oauth.ContextWithEmail(context.Background(), "trader@example.com")
 
-	// Small valid order.
+	// Small valid order. `confirm: true` satisfies the default-on
+	// require-confirm gate (see kc/riskguard/guard.go SystemDefaults).
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "place_order"
 	req.Params.Arguments = map[string]any{
@@ -266,6 +270,7 @@ func TestRiskguardMiddleware_AllowsValidOrder(t *testing.T) {
 		"order_type":       "LIMIT",
 		"quantity":         float64(5),
 		"price":            float64(1500),
+		"confirm":          true,
 	}
 
 	result, err := handler(ctx, req)
@@ -375,6 +380,7 @@ func TestRiskguardMiddleware_RecordsSuccessfulOrder(t *testing.T) {
 		"order_type":       "LIMIT",
 		"quantity":         float64(5),
 		"price":            float64(1500),
+		"confirm":          true,
 	}
 
 	result, err := handler(ctx, req)

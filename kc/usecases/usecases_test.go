@@ -1604,10 +1604,11 @@ func TestModifyOrder_WithRiskguard(t *testing.T) {
 	uc := NewModifyOrderUseCase(resolver, guard, events, testLogger())
 
 	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email:    "test@example.com",
-		OrderID:  "ORD-42",
-		Quantity: 1,
-		Price:    domain.NewINR(100.0),
+		Email:     "test@example.com",
+		OrderID:   "ORD-42",
+		Quantity:  1,
+		Price:     domain.NewINR(100.0),
+		Confirmed: true,
 	})
 
 	require.NoError(t, err)

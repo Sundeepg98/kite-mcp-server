@@ -174,6 +174,10 @@ func TestFullChain_ProUserValidOrder(t *testing.T) {
 		"order_type":       "LIMIT",
 		"quantity":         float64(5),
 		"price":            float64(1500),
+		// `confirm: true` satisfies the default-on RequireConfirmAllOrders
+		// riskguard gate — without it the order is blocked with
+		// reason=confirmation_required before reaching the handler.
+		"confirm": true,
 	}
 
 	result, err := chain(ctx, req)
@@ -339,13 +343,15 @@ func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
 	// Small pause between calls to avoid SQLite busy
 	time.Sleep(50 * time.Millisecond)
 
-	// 2. Valid order (passes billing + riskguard, reaches handler)
+	// 2. Valid order (passes billing + riskguard, reaches handler).
+	// `confirm: true` bypasses the default-on RequireConfirmAllOrders gate.
 	req2 := gomcp.CallToolRequest{}
 	req2.Params.Name = "place_order"
 	req2.Params.Arguments = map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY",
 		"transaction_type": "BUY", "order_type": "LIMIT",
 		"quantity": float64(1), "price": float64(1500),
+		"confirm": true,
 	}
 	result2, err := chain(ctx, req2)
 	require.NoError(t, err)
@@ -353,13 +359,14 @@ func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	// 3. Over-value order (passes billing, blocked by riskguard)
+	// 3. Over-value order (passes billing + confirmation gate, blocked on value).
 	req3 := gomcp.CallToolRequest{}
 	req3.Params.Name = "place_order"
 	req3.Params.Arguments = map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
 		"transaction_type": "BUY", "order_type": "LIMIT",
 		"quantity": float64(200), "price": float64(10000),
+		"confirm": true,
 	}
 	result3, err := chain(ctx, req3)
 	require.NoError(t, err)
@@ -502,6 +509,9 @@ func TestFullChain_DuplicateOrderDetection(t *testing.T) {
 			"order_type":       "LIMIT",
 			"quantity":         float64(5),
 			"price":            float64(1500),
+			// `confirm: true` satisfies the default-on RequireConfirmAllOrders
+			// gate so the duplicate-order branch can be exercised.
+			"confirm": true,
 		}
 		return req
 	}

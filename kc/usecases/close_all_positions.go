@@ -128,6 +128,8 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 		}
 
 		// Riskguard check per order.
+		// close_all_positions is an exit derived from a confirmed tool
+		// call, so each synthetic order is Confirmed by construction.
 		if uc.riskguard != nil {
 			result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
 				Email:           email,
@@ -136,6 +138,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 				Tradingsymbol:   p.Tradingsymbol,
 				TransactionType: txnType,
 				Quantity:        qty,
+				Confirmed:       true,
 			})
 			if !result.Allowed {
 				entry.Error = fmt.Sprintf("blocked by riskguard: %s", result.Message)

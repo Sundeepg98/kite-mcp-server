@@ -181,6 +181,10 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Validity:        orderParams.Validity,
 				Variety:         orderParams.Variety,
 				Tag:             orderParams.Tag,
+				// Elicitation at line ~156 has already gated this dispatch,
+				// so the downstream riskguard re-check can be told the user
+				// has acknowledged the order.
+				Confirmed: true,
 			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to place order", "error", err)
@@ -318,6 +322,9 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Validity:         orderParams.Validity,
 				DisclosedQty:     orderParams.DisclosedQty,
 				MarketProtection: orderParams.MarketProtection,
+				// Elicitation already gated this dispatch — see note in
+				// the PlaceOrderCommand dispatch site above.
+				Confirmed: true,
 			})
 			if err != nil {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)

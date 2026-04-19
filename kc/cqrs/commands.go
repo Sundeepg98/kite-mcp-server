@@ -25,6 +25,11 @@ type PlaceOrderCommand struct {
 	Validity        string              `json:"validity,omitempty"`
 	Variety         string              `json:"variety,omitempty"`
 	Tag             string              `json:"tag,omitempty"`
+	// Confirmed signals the user explicitly acknowledged this order (via MCP
+	// elicitation or the `confirm: true` tool arg). Threaded down to the
+	// riskguard OrderCheckRequest so the default-on RequireConfirmAllOrders
+	// gate does not block the dispatched command.
+	Confirmed bool `json:"confirmed,omitempty"`
 }
 
 // CancelOrderCommand requests cancelling an existing order.
@@ -47,6 +52,9 @@ type ModifyOrderCommand struct {
 	Validity         string       `json:"validity,omitempty"`
 	DisclosedQty     int          `json:"disclosed_quantity,omitempty"`
 	MarketProtection float64      `json:"market_protection,omitempty"`
+	// Confirmed — see PlaceOrderCommand.Confirmed. Satisfies the
+	// RequireConfirmAllOrders riskguard gate on re-check.
+	Confirmed bool `json:"confirmed,omitempty"`
 }
 
 // --- GTT commands ---

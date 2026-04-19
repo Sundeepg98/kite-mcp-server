@@ -67,6 +67,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 
 	// 2. Run riskguard checks (if configured).
 	// Modify orders still need rate-limit and daily-count checks.
+	// Confirmed is threaded through ModifyOrderCommand from the MCP handler.
 	if uc.riskguard != nil {
 		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
 			Email:     cmd.Email,
@@ -74,6 +75,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 			OrderType: cmd.OrderType,
 			Quantity:  cmd.Quantity,
 			Price:     price,
+			Confirmed: cmd.Confirmed,
 		})
 		if !result.Allowed {
 			uc.logger.Warn("Modify order blocked by riskguard",

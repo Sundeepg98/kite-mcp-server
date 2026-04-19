@@ -104,6 +104,9 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 	}
 
 	// 5. Run riskguard checks (if configured).
+	// close_position is an exit derived from a confirmed tool call (the user
+	// invoked close_position with elicitation already gating the MCP
+	// boundary), so the synthetic order is Confirmed by construction.
 	if uc.riskguard != nil {
 		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
 			Email:           email,
@@ -112,6 +115,7 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 			Tradingsymbol:   matched.Tradingsymbol,
 			TransactionType: txnType,
 			Quantity:        qty,
+			Confirmed:       true,
 		})
 		if !result.Allowed {
 			uc.logger.Warn("Close position blocked by riskguard",

@@ -80,6 +80,8 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	}
 
 	// 2. Run riskguard checks (if configured).
+	// Confirmed is threaded through PlaceOrderCommand from the MCP handler
+	// (where elicitation + `confirm: true` arg already satisfied the gate).
 	if uc.riskguard != nil {
 		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
 			Email:           cmd.Email,
@@ -90,6 +92,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Quantity:        qty,
 			Price:           price,
 			OrderType:       cmd.OrderType,
+			Confirmed:       cmd.Confirmed,
 		})
 		if !result.Allowed {
 			uc.logger.Warn("Order blocked by riskguard",

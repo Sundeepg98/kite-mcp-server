@@ -34,6 +34,12 @@ func testLogger() *slog.Logger {
 }
 
 // testPlaceCmd builds a PlaceOrderCommand from raw values for test convenience.
+// Confirmed defaults to true because production callers (mcp/post_tools.go)
+// always set it true after elicitation — tests that assert downstream
+// riskguard checks (value, dedup, count, etc.) need to pass the
+// RequireConfirmAllOrders gate first. Tests that specifically exercise the
+// confirmation gate should build a PlaceOrderCommand inline with
+// `Confirmed: false`.
 func testPlaceCmd(email, exchange, symbol, txnType, orderType, product string, qty int, price float64) cqrs.PlaceOrderCommand {
 	q, _ := domain.NewQuantity(qty)
 	return cqrs.PlaceOrderCommand{
@@ -44,6 +50,7 @@ func testPlaceCmd(email, exchange, symbol, txnType, orderType, product string, q
 		Price:           domain.NewINR(price),
 		OrderType:       orderType,
 		Product:         product,
+		Confirmed:       true,
 	}
 }
 

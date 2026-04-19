@@ -1746,18 +1746,22 @@ func TestInitializeServices_WithAlertDB(t *testing.T) {
 }
 
 func TestInitializeServices_WithEncryption(t *testing.T) {
+	// OAUTH_JWT_SECRET must be >=32 bytes (HMAC-SHA256 security floor) —
+	// envcheck.go enforces this. Short test secrets fail the env gate
+	// before initializeServices gets to run.
+	const testJWTSecret = "test-jwt-secret-for-encryption-minimum-32-bytes-long"
 	t.Setenv("DEV_MODE", "true")
 	t.Setenv("KITE_API_KEY", "test_key")
 	t.Setenv("KITE_API_SECRET", "test_secret")
 	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-for-enc")
+	t.Setenv("OAUTH_JWT_SECRET", testJWTSecret)
 	t.Setenv("EXTERNAL_URL", "https://test.example.com")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 	t.Setenv("ADMIN_EMAILS", "admin@test.com")
 	app := NewApp(testLogger())
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-for-enc"
+	app.Config.OAuthJWTSecret = testJWTSecret
 	app.Config.ExternalURL = "https://test.example.com"
 	app.Config.AdminEmails = "admin@test.com"
 	mgr, mcpServer, err := app.initializeServices()
@@ -2664,10 +2668,13 @@ func TestInitScheduler_AuditAndPnL(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunServer_InvalidOAuthConfig_MissingExternalURL(t *testing.T) {
+	// JWT must be >=32 bytes to pass the env gate so the EXTERNAL_URL
+	// branch is the actual failure surface under test.
+	const testJWTSecret = "valid-secret-for-test-32-bytes-min-length-ok"
 	t.Setenv("DEV_MODE", "true")
 	t.Setenv("KITE_API_KEY", "test_key")
 	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "valid-secret-for-test")
+	t.Setenv("OAUTH_JWT_SECRET", testJWTSecret)
 	t.Setenv("EXTERNAL_URL", "") // missing → Validate() fails
 	t.Setenv("APP_MODE", "http")
 	t.Setenv("STRIPE_SECRET_KEY", "")
@@ -2676,15 +2683,17 @@ func TestRunServer_InvalidOAuthConfig_MissingExternalURL(t *testing.T) {
 	app := NewApp(testLogger())
 	app.DevMode = true
 	app.Config.AppMode = ModeHTTP
-	app.Config.OAuthJWTSecret = "valid-secret-for-test"
+	app.Config.OAuthJWTSecret = testJWTSecret
 	app.Config.ExternalURL = "" // force validation error
 	app.Config.AppHost = "127.0.0.1"
 	app.Config.AppPort = "0"
 
 	err := app.RunServer()
-	// Should fail because ExternalURL is empty → oauth.Config.Validate() fails
+	// Should fail because ExternalURL is empty → oauth.Config.Validate()
+	// returns "invalid OAuth config: ExternalURL is required".
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "OAuth")
+	assert.Contains(t, err.Error(), "ExternalURL")
 }
 
 // ---------------------------------------------------------------------------
@@ -4653,7 +4662,9 @@ func TestRunServer_InvalidMode(t *testing.T) {
 
 	err := app.RunServer()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid APP_MODE")
+	// envcheck.go formats this as `APP_MODE "xxx" unknown; valid: …`.
+	assert.Contains(t, err.Error(), "APP_MODE")
+	assert.Contains(t, err.Error(), "unknown")
 }
 
 // ---------------------------------------------------------------------------
