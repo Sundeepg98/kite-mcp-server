@@ -77,7 +77,7 @@ To the maximum extent permitted by law:
 
 ## 8. Governing law and disputes
 
-These Terms are governed by the laws of **India**. Any dispute will first be addressed through **30 days of good-faith negotiation** with the Grievance Officer at `<your product email>`.
+These Terms are governed by the laws of **India**. Any dispute will first be addressed through **30 days of good-faith negotiation** with the Grievance Officer at `sundeepg8@gmail.com`.
 
 If unresolved, the dispute will be referred to **arbitration under the Arbitration and Conciliation Act, 1996**, before a **sole arbitrator** appointed by mutual agreement, with the **seat at Bengaluru** and proceedings in **English**. Matters arising under the Securities Contracts (Regulation) Act, 1956 or the SEBI Act, 1992 remain with the appropriate regulator, including SEBI and the Securities Appellate Tribunal (SAT).
 
@@ -85,7 +85,7 @@ If unresolved, the dispute will be referred to **arbitration under the Arbitrati
 
 ## 9. Termination
 
-- **You can stop** using the Service at any time via the self-service account deletion in the dashboard and/or by emailing `<your product email>`.
+- **You can stop** using the Service at any time via the self-service account deletion in the dashboard and/or by emailing `sundeepg8@gmail.com`.
 - **We may suspend or terminate** your access for violations of these Terms, security concerns, or compelled legal actions.
 - **If we shut down the Service**, we will give at least **30 days' notice** and make a **data export** available to you during that window.
 
@@ -100,5 +100,5 @@ Revisions are versioned using semantic versioning. For **material changes**, we 
 ## 11. Contact
 
 - **Operator:** Sundeep Govarthinam (sole proprietorship, India)
-- **Email:** `<your product email>`
+- **Email:** `sundeepg8@gmail.com`
 - **Repository:** https://github.com/Sundeepg98/kite-mcp-server

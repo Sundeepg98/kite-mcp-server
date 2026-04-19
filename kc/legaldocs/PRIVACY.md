@@ -4,7 +4,7 @@
 
 # Privacy Notice — kite-mcp-server
 
-**Last updated:** `<YYYY-MM-DD>`
+**Last updated:** `2026-04-19`
 
 This Privacy Notice describes how personal data is processed by the hosted instance of **kite-mcp-server** at `https://kite-mcp-server.fly.dev`. It is written to meet the minimum content requirements of Rule 3(1) of the Digital Personal Data Protection Rules, 2025, read with the Digital Personal Data Protection Act, 2023 ("DPDP").
 
@@ -15,7 +15,7 @@ This Privacy Notice describes how personal data is processed by the hosted insta
 The hosted instance is operated by **Sundeep Govarthinam**, a sole proprietorship based in India ("we", "us", "the Operator"). For DPDP purposes, the Operator is the **Data Fiduciary** for personal data processed through the hosted instance.
 
 - **Grievance Officer:** Sundeep Govarthinam
-- **Contact:** `<your product email>`
+- **Contact:** `sundeepg8@gmail.com`
 - **Source code:** https://github.com/Sundeepg98/kite-mcp-server
 
 If you self-host the code from the repository, **you are your own Data Fiduciary** and this notice does not apply to your deployment.
@@ -119,7 +119,7 @@ Revisions to this notice are versioned using semantic versioning. For **material
 ## 11. Contact
 
 - **Grievance Officer:** Sundeep Govarthinam
-- **Email:** `<your product email>`
+- **Email:** `sundeepg8@gmail.com`
 - **Repository:** https://github.com/Sundeepg98/kite-mcp-server
 
 Self-hosted deployments of the open-source code are outside the scope of this notice; operators of those deployments are their own Data Fiduciary and must publish their own privacy notice.

@@ -7,7 +7,7 @@ contact_links:
     url: https://github.com/Sundeepg98/kite-mcp-server/blob/master/SECURITY.md
     about: Read SECURITY.md for disclosure process — do NOT file a public issue for security
   - name: Compliance / legal
-    url: mailto:<your product email>
+    url: mailto:sundeepg8@gmail.com
     about: For regulator / legal inquiries
   - name: Zerodha Kite Connect issues
     url: https://kite.trade/forum/
