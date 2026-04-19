@@ -500,7 +500,20 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 				MIMEType: ResourceMIMEType,
 			},
 			func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
-				return pw.Handler(ctx, req)
+				// SafeCall wraps the plugin handler with panic
+				// recovery; a buggy widget renders as an error
+				// payload rather than taking down the MCP
+				// ReadResource surface.
+				contents, err := SafeCall(pw.URI, func() ([]gomcp.ResourceContents, error) {
+					return pw.Handler(ctx, req)
+				})
+				if err != nil {
+					ReportPluginHealth(pw.URI, HealthStatus{
+						State:   HealthStateFailed,
+						Message: "widget handler panic: " + err.Error(),
+					})
+				}
+				return contents, err
 			},
 		)
 	}

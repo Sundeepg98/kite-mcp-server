@@ -95,7 +95,20 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			// an unauthenticated shape — so we don't short-circuit
 			// here. Keeps "anonymous preview" behaviour consistent
 			// with the ext_apps.go built-in widget contract.
-			data := def.DataFunc(manager, email)
+			//
+			// Panic-isolated via SafeCall: a buggy DataFunc renders
+			// as an error panel inside the widget rather than
+			// crashing the ReadResource request.
+			data, err := SafeCall(def.URI, func() (any, error) {
+				return def.DataFunc(manager, email), nil
+			})
+			if err != nil {
+				data = map[string]any{"error": err.Error()}
+				ReportPluginHealth(def.URI, HealthStatus{
+					State:   HealthStateFailed,
+					Message: "DataFunc panicked: " + err.Error(),
+				})
+			}
 			html := injectData(def.TemplateHTML, data)
 			return []gomcp.ResourceContents{
 				gomcp.TextResourceContents{

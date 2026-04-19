@@ -118,12 +118,13 @@ func ClearPluginMiddleware() {
 // wrapped the chain). Adding built-in middleware above this point
 // never shifts plugin middleware relative to the handler.
 //
-// Panic recovery: individual plugin middleware are NOT wrapped in a
-// defer/recover here. A middleware that panics deserves to surface
-// loudly — the recovery net is at the around-hook layer
-// (OnToolExecution), which runs INSIDE this chain. Keeping panic
-// policy in one place (around-hook) prevents subtle
-// "where-is-the-error-coming-from" debugging sessions.
+// Panic recovery: each plugin middleware is wrapped by safeWrapMiddleware,
+// which inserts a per-layer defer-recover. A panicking middleware
+// surfaces as an IsError=true CallToolResult and is marked Failed in
+// PluginHealth; the sibling middleware and the handler-chain above it
+// are unaffected. This gives every plugin-contributed middleware the
+// same crash-isolation contract as the around-hook layer, without
+// requiring plugin authors to remember to install their own recover.
 func PluginMiddlewareChain() server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		entries := ListPluginMiddleware()
@@ -134,9 +135,37 @@ func PluginMiddlewareChain() server.ToolHandlerMiddleware {
 		// as the outermost wrapper.
 		handler := next
 		for i := len(entries) - 1; i >= 0; i-- {
-			handler = entries[i].Middleware(handler)
+			handler = safeWrapMiddleware(entries[i], handler)
 		}
 		return handler
+	}
+}
+
+// safeWrapMiddleware applies entry.Middleware to inner, wrapping the
+// resulting handler with a defer-recover. The recovery surface:
+//
+//   - result = IsError=true CallToolResult naming the plugin and
+//     panic value (MCP client sees a clean error, not a dropped
+//     connection);
+//   - err = nil (the failure IS the result — matches the around-hook
+//     panic contract in registry.go);
+//   - PluginHealth records HealthStateFailed for the plugin name so
+//     the admin panel lights up red.
+func safeWrapMiddleware(entry PluginMiddlewareEntry, inner server.ToolHandlerFunc) server.ToolHandlerFunc {
+	wrapped := entry.Middleware(inner)
+	return func(ctx context.Context, req mcp.CallToolRequest) (result *mcp.CallToolResult, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				ReportPluginHealth(entry.Name, HealthStatus{
+					State:   HealthStateFailed,
+					Message: "middleware panic: " + fmt.Sprint(r),
+				})
+				result = mcp.NewToolResultError(
+					fmt.Sprintf("plugin middleware %q panicked: %v", entry.Name, r))
+				err = nil
+			}
+		}()
+		return wrapped(ctx, req)
 	}
 }
 

@@ -120,3 +120,38 @@ func TestRegisterMiddleware_EmptyChainPassthrough(t *testing.T) {
 	_, _ = wrapped(context.Background(), mcp.CallToolRequest{})
 	assert.True(t, called, "empty chain must call handler unchanged")
 }
+
+// TestRegisterMiddleware_PanicRecoveredPerLayer — a plugin middleware
+// that panics surfaces as an IsError=true CallToolResult and is marked
+// Failed in PluginHealth. Sibling middleware and the handler above it
+// are unaffected.
+func TestRegisterMiddleware_PanicRecoveredPerLayer(t *testing.T) {
+	ClearPluginMiddleware()
+	ClearPluginHealth()
+	defer ClearPluginMiddleware()
+	defer ClearPluginHealth()
+
+	require.NoError(t, RegisterMiddleware("panicker",
+		func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+			return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				panic("mw boom")
+			}
+		}, 100))
+
+	handlerCalled := false
+	base := server.ToolHandlerFunc(func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		handlerCalled = true
+		return mcp.NewToolResultText("ok"), nil
+	})
+	result, err := PluginMiddlewareChain()(base)(context.Background(), mcp.CallToolRequest{})
+
+	require.NoError(t, err, "panic must not propagate as err")
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "panic surfaces as IsError result")
+	assert.False(t, handlerCalled, "handler under a panicking mw must not be called")
+
+	// PluginHealth records the failure.
+	health := PluginHealth()
+	require.Contains(t, health, "panicker")
+	assert.Equal(t, HealthStateFailed, health["panicker"].State)
+}
