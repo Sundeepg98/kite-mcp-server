@@ -422,7 +422,7 @@ func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
 	app.Config.AppPort = fmt.Sprintf("%d", port)
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.RunServer() }()
-	time.Sleep(500 * time.Millisecond)
+	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
 	resp, _ := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
 	if resp != nil {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -537,7 +537,7 @@ func TestRunServer_WithOAuth(t *testing.T) {
 		errCh <- app.RunServer()
 	}()
 
-	time.Sleep(600 * time.Millisecond)
+	waitForServerReady(t, "127.0.0.1:"+strconv.Itoa(port))
 
 	base := "http://127.0.0.1:" + strconv.Itoa(port)
 
@@ -652,16 +652,10 @@ func TestRunServer_FullDevMode(t *testing.T) {
 		errCh <- app.RunServer()
 	}()
 
-	// Wait for server to start
-	var resp *http.Response
+	// Wait for server to start via TCP-accept dial (1-5ms typical).
+	waitForServerReady(t, "127.0.0.1:"+portStr)
 	baseURL := "http://127.0.0.1:" + portStr
-	for i := 0; i < 30; i++ {
-		time.Sleep(200 * time.Millisecond)
-		resp, err = http.Get(baseURL + "/healthz")
-		if err == nil {
-			break
-		}
-	}
+	resp, err := http.Get(baseURL + "/healthz")
 
 	if resp != nil {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -733,15 +727,10 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 		errCh <- app.RunServer()
 	}()
 
+	// Wait for server readiness via TCP-accept dial (1-5ms typical).
+	waitForServerReady(t, "127.0.0.1:"+portStr)
 	baseURL := "http://127.0.0.1:" + portStr
-	var resp *http.Response
-	for i := 0; i < 30; i++ {
-		time.Sleep(200 * time.Millisecond)
-		resp, err = http.Get(baseURL + "/healthz")
-		if err == nil {
-			break
-		}
-	}
+	resp, err := http.Get(baseURL + "/healthz")
 
 	if resp != nil {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -813,15 +802,13 @@ func TestRunServer_SSEMode(t *testing.T) {
 		errCh <- app.RunServer()
 	}()
 
+	// Wait for server readiness via TCP-accept dial (1-5ms typical).
+	waitForServerReady(t, "127.0.0.1:"+portStr)
 	baseURL := "http://127.0.0.1:" + portStr
-	for i := 0; i < 30; i++ {
-		time.Sleep(200 * time.Millisecond)
-		resp, err := http.Get(baseURL + "/healthz")
-		if err == nil {
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-			resp.Body.Close()
-			break
-		}
+	resp, err := http.Get(baseURL + "/healthz")
+	if err == nil {
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
 	}
 
 	select {
@@ -858,15 +845,13 @@ func TestRunServer_HybridMode(t *testing.T) {
 		errCh <- app.RunServer()
 	}()
 
+	// Wait for server readiness via TCP-accept dial (1-5ms typical).
+	waitForServerReady(t, "127.0.0.1:"+portStr)
 	baseURL := "http://127.0.0.1:" + portStr
-	for i := 0; i < 30; i++ {
-		time.Sleep(200 * time.Millisecond)
-		resp, err := http.Get(baseURL + "/healthz")
-		if err == nil {
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-			resp.Body.Close()
-			break
-		}
+	resp, err := http.Get(baseURL + "/healthz")
+	if err == nil {
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
 	}
 
 	select {
@@ -1135,8 +1120,8 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 		}
 	}()
 
-	// Wait for the server to be ready
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the server to be ready (dial-poll, 1-5ms typical).
+	waitForServerReady(t, addr)
 
 	// Setup graceful shutdown
 	app.setupGracefulShutdown(srv, mgr)
@@ -1620,7 +1605,7 @@ func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
 		}
 		close(serverDone)
 	}()
-	time.Sleep(50 * time.Millisecond)
+	waitForServerReady(t, srv.Addr)
 
 	app.setupGracefulShutdown(srv, mgr)
 
