@@ -55,10 +55,22 @@ func New(logger *slog.Logger) *Scheduler {
 }
 
 // SetClock overrides the time source (for testing).
-func (s *Scheduler) SetClock(c Clock) { s.clock = c }
+// Safe to call concurrently with a running scheduler; tick() reads the
+// clock under s.mu.
+func (s *Scheduler) SetClock(c Clock) {
+	s.mu.Lock()
+	s.clock = c
+	s.mu.Unlock()
+}
 
 // SetTickInterval overrides the loop tick interval (for testing).
-func (s *Scheduler) SetTickInterval(d time.Duration) { s.tickInterval = d }
+// Must be called before Start — the loop caches the interval at launch
+// and won't observe later changes.
+func (s *Scheduler) SetTickInterval(d time.Duration) {
+	s.mu.Lock()
+	s.tickInterval = d
+	s.mu.Unlock()
+}
 
 // Add registers a task. Must be called before Start.
 func (s *Scheduler) Add(task Task) {
@@ -91,7 +103,10 @@ func (s *Scheduler) Stop() {
 
 // loop is the main ticker loop, running at tickInterval (default 60s).
 func (s *Scheduler) loop() {
-	ticker := time.NewTicker(s.tickInterval)
+	s.mu.Lock()
+	interval := s.tickInterval
+	s.mu.Unlock()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	// Check immediately on start so we don't wait up to 60s for the first tick.
@@ -140,7 +155,10 @@ func IsTradingDay(t time.Time) bool {
 
 // tick evaluates all tasks against the current IST time.
 func (s *Scheduler) tick() {
-	now := s.clock().In(kolkataLoc)
+	s.mu.Lock()
+	clock := s.clock
+	s.mu.Unlock()
+	now := clock().In(kolkataLoc)
 
 	// Skip weekends and market holidays.
 	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
