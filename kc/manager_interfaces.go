@@ -2,6 +2,7 @@ package kc
 
 import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -235,6 +236,22 @@ type MetricsRecorder interface {
 
 	// IncrementDailyMetric increments a daily metric counter.
 	IncrementDailyMetric(key string)
+}
+
+// CommandBusProvider exposes the CQRS command bus for write dispatches.
+// Handlers depend on this narrow port rather than pulling the full
+// *Manager to reach CommandBus() — closes the last composition-root leak
+// for write-side bus consumers.
+type CommandBusProvider interface {
+	CommandBus() *cqrs.InMemoryBus
+}
+
+// QueryBusProvider exposes the CQRS query bus for read dispatches.
+// Paired with CommandBusProvider; most tool handlers will depend on
+// both because the same closure often issues a command then a confirming
+// query.
+type QueryBusProvider interface {
+	QueryBus() *cqrs.InMemoryBus
 }
 
 // ManagerLifecycle manages the lifecycle of the Manager and its sub-components.

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 )
 
 // ToolHandlerDeps holds the injected services for ToolHandler, replacing
@@ -45,6 +46,12 @@ type ToolHandlerDeps struct {
 	MCPServer      kc.MCPServerProvider
 	BrokerResolver kc.BrokerResolverProvider
 	TrailingStop   kc.TrailingStopManagerProvider
+
+	// CQRS bus providers — handlers that dispatch commands/queries
+	// depend on these narrow ports rather than pulling the full
+	// *Manager through manager.CommandBus() / manager.QueryBus().
+	CommandBusP kc.CommandBusProvider
+	QueryBusP   kc.QueryBusProvider
 }
 
 // ToolHandler provides common functionality for all MCP tools.
@@ -89,6 +96,31 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			MCPServer:      manager,
 			BrokerResolver: manager,
 			TrailingStop:   manager,
+			CommandBusP:    manager,
+			QueryBusP:      manager,
 		},
 	}
+}
+
+// ---------------------------------------------------------------------
+// Narrow accessors on *ToolHandler — handlers reach through these
+// rather than through h.manager.X(). Each accessor returns the
+// relevant narrow provider's value, threading through ToolHandlerDeps
+// so the underlying Manager stays behind an interface surface.
+// ---------------------------------------------------------------------
+
+// CommandBus returns the CQRS command bus. Prefer over h.manager.CommandBus().
+func (h *ToolHandler) CommandBus() *cqrs.InMemoryBus {
+	return h.deps.CommandBusP.CommandBus()
+}
+
+// QueryBus returns the CQRS query bus. Prefer over h.manager.QueryBus().
+func (h *ToolHandler) QueryBus() *cqrs.InMemoryBus {
+	return h.deps.QueryBusP.QueryBus()
+}
+
+// Logger returns the structured logger. Preferred accessor so handlers
+// can log without reaching through h.manager.Logger.
+func (h *ToolHandler) Logger() *slog.Logger {
+	return h.deps.Logger
 }

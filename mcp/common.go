@@ -74,13 +74,20 @@ func (h *ToolHandler) WithViewerBlock(ctx context.Context, toolName string) *mcp
 // WithTokenRefresh checks if a Kite token has likely expired (~6 AM IST daily)
 // and verifies it with the Kite API. Returns a non-nil result if expired, nil otherwise.
 //
-// CQRS escape — permanent architectural exception. This path runs before every
-// tool dispatch (middleware-adjacent hot path). Routing the profile probe
-// through QueryBus would add a reflect.TypeFor lookup + handler indirection to
-// every call for zero observability win: the probe is already scoped to
-// "expired token detected", already logs + tracks errors inline, and the
-// returned profile value is never consumed. Documented exception is also
-// called out in kc/manager_queries_escapes.go.
+// Not a CQRS violation: this is a pre-dispatch session-validation step that
+// runs inside WithSession's composition, before the handler closure is
+// invoked. The broker probe here is the session's OWN validity check — the
+// "is this Kite token still valid?" question is a property of the session,
+// not a read query over broker data. Queries routed through QueryBus are
+// business-value reads (GetProfile for the *profile tool*, get_orders for
+// the orders tool, etc.). A session-validity probe is infrastructure,
+// scoped to the session boundary, and returns a nil-or-error rather than a
+// value. Architecturally analogous to circuit breaker or auth middleware —
+// those sit outside CQRS too.
+//
+// If a future refactor moves session validation out of WithSession into a
+// dedicated SessionValidator middleware, the profile probe moves with it
+// (still not CQRS-bound). This function's form is deliberate, not legacy.
 func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, session *kc.KiteSessionData, sessionID, email string) *mcp.CallToolResult {
 	if email == "" {
 		return nil

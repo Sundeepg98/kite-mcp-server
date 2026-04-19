@@ -24,10 +24,15 @@ import (
 //   - ValidateLoginQuery, OpenDashboardQuery
 //     (mcp/setup_tools.go Login pre-dispatch + OpenDashboard validate)
 //
-// Not covered — intentionally left as direct calls:
-//   - mcp/common.go:88 — WithTokenRefresh middleware helper, hot path that
-//     runs before every tool dispatch; adding bus dispatch adds latency to
-//     every call for no observability win. Permanent architectural exception.
+// Out of CQRS scope (not an escape):
+//   - mcp/common.go WithTokenRefresh — a pre-dispatch session-validity
+//     probe that runs inside WithSession's composition, before the handler
+//     closure. The profile call here is infrastructure (is the token still
+//     valid?) not a business-value read, analogous to auth or circuit
+//     breaker middleware. Queries on QueryBus are reads for the *profile
+//     tool*, *orders tool*, etc. — not for session validation. See the
+//     function's doc comment in mcp/common.go for the long-form
+//     architectural reasoning.
 //
 // Widget handlers resolve the audit store in a two-step fallback:
 //  1. cqrs.WidgetAuditStoreFromContext — populated by the ext_apps
