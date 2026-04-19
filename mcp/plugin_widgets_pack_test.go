@@ -35,6 +35,7 @@ func TestRegisterBuiltinWidgetPack_RegistersExpectedWidgets(t *testing.T) {
 		"ui://kite-mcp/sector-donut",
 		"ui://kite-mcp/pnl-sparkline",
 		"ui://kite-mcp/margin-gauge",
+		"ui://kite-mcp/ip-whitelist-status",
 	}
 	for _, want := range expectedWidgetURIs {
 		assert.True(t, uris[want], "expected widget %q to be registered", want)
@@ -115,4 +116,17 @@ func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
 func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
 	data := marginGaugeWidgetData(nil, "user@test.com")
 	assert.NotNil(t, data)
+}
+
+// TestIPWhitelistData_StaticFields confirms the IP whitelist widget
+// emits the deployment's static egress IP (209.71.68.157 by default
+// for the Fly.io bom region) and the Kite developer-console URL.
+// SEBI Apr 2026 compliance surface.
+func TestIPWhitelistData_StaticFields(t *testing.T) {
+	data := ipWhitelistWidgetData(nil, "user@test.com")
+	b, err := json.Marshal(data)
+	require.NoError(t, err)
+	j := string(b)
+	assert.Contains(t, j, "209.71.68.157", "static egress IP must be present")
+	assert.Contains(t, j, "kite.trade", "Kite console URL must be present")
 }

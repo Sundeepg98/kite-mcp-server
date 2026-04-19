@@ -74,6 +74,12 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			TemplateHTML: marginGaugeTemplateHTML,
 			DataFunc:     marginGaugeWidgetData,
 		},
+		{
+			URI:          "ui://kite-mcp/ip-whitelist-status",
+			Name:         "IP Whitelist Status",
+			TemplateHTML: ipWhitelistTemplateHTML,
+			DataFunc:     ipWhitelistWidgetData,
+		},
 	}
 	for _, def := range defs {
 		def := def // capture
