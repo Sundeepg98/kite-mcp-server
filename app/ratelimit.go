@@ -97,6 +97,41 @@ func (l *userRateLimiter) cleanup() {
 	l.mu.Unlock()
 }
 
+// rlClock is the minimal time-source abstraction the rate-limiter cleanup
+// goroutine needs. Production uses rlRealClock (the zero-value default);
+// tests inject a fake via newRateLimiters(withClock(...)) so the cleanup
+// goroutine can be driven synchronously without time.Sleep.
+//
+// Defined locally rather than imported from testutil to avoid a
+// test-util → production dependency in the prod build graph; any type
+// that structurally satisfies this interface (testutil.FakeClock does)
+// can be passed in by tests.
+type rlClock interface {
+	NewTicker(d time.Duration) rlTicker
+}
+
+// rlTicker is the minimal ticker abstraction the cleanup loop needs.
+type rlTicker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+// rlRealClock wraps time.NewTicker so production code uses the stdlib
+// directly. Zero-value is ready to use.
+type rlRealClock struct{}
+
+func (rlRealClock) NewTicker(d time.Duration) rlTicker {
+	return &rlRealTicker{t: time.NewTicker(d)}
+}
+
+type rlRealTicker struct {
+	t    *time.Ticker
+	once sync.Once
+}
+
+func (r *rlRealTicker) C() <-chan time.Time { return r.t.C }
+func (r *rlRealTicker) Stop()               { r.once.Do(r.t.Stop) }
+
 // rateLimiters holds all per-endpoint-group rate limiters.
 type rateLimiters struct {
 	auth           *ipRateLimiter // /oauth/register, /oauth/authorize, /auth/browser-login
@@ -110,6 +145,7 @@ type rateLimiters struct {
 	mcpUser        *userRateLimiter // MCP endpoints, keyed by authenticated email
 	done           chan struct{}  // closed during shutdown to stop the cleanup goroutine
 	cleanupInterval time.Duration // injectable for testing (default 10 min)
+	clock          rlClock       // injectable for testing (default rlRealClock{})
 	// stopOnce guards Stop() so rl.done is only closed once even when
 	// multiple graceful-shutdown paths (signal handler + test teardown)
 	// both invoke Stop on the same rateLimiters instance. Without this,
@@ -117,9 +153,29 @@ type rateLimiters struct {
 	stopOnce sync.Once
 }
 
+// rateLimiterOption configures rateLimiters at construction. Variadic so
+// existing no-arg callers stay unchanged; tests pass withClock(fake) to
+// drive cleanup deterministically.
+type rateLimiterOption func(*rateLimiters)
+
+// withClock overrides the time source used by the cleanup goroutine.
+// Only rateLimiters_test.go uses this today; production always gets the
+// default rlRealClock.
+func withClock(c rlClock) rateLimiterOption {
+	return func(rl *rateLimiters) { rl.clock = c }
+}
+
+// withCleanupInterval overrides the cleanup cadence. Must be set before
+// newRateLimiters starts its goroutine, so it lives on the option chain
+// rather than the struct field (the struct field stays mutable for
+// back-compat with the hand-rolled loops still present in some tests).
+func withCleanupInterval(d time.Duration) rateLimiterOption {
+	return func(rl *rateLimiters) { rl.cleanupInterval = d }
+}
+
 // newRateLimiters creates rate limiters for each endpoint group and starts
 // a background goroutine that clears stale entries every 10 minutes.
-func newRateLimiters() *rateLimiters {
+func newRateLimiters(opts ...rateLimiterOption) *rateLimiters {
 	rl := &rateLimiters{
 		auth:            newIPRateLimiter(rate.Limit(2), 5),   // 2/sec, burst 5
 		token:           newIPRateLimiter(rate.Limit(5), 10),   // 5/sec, burst 10
@@ -132,13 +188,21 @@ func newRateLimiters() *rateLimiters {
 		mcpUser:         newUserRateLimiter(rate.Limit(20), 40),
 		done:            make(chan struct{}),
 		cleanupInterval: 10 * time.Minute,
+		clock:           rlRealClock{},
 	}
+	for _, opt := range opts {
+		opt(rl)
+	}
+	// Create the ticker synchronously so any clock port (RealClock or
+	// FakeClock) has it registered before the goroutine starts and
+	// before any test code runs Advance. This closes a race where a
+	// fast test Advance-before-NewTicker would drop ticks.
+	ticker := rl.clock.NewTicker(rl.cleanupInterval)
 	go func() {
-		ticker := time.NewTicker(rl.cleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C:
+			case <-ticker.C():
 				rl.auth.cleanup()
 				rl.token.cleanup()
 				rl.mcp.cleanup()
