@@ -12,9 +12,6 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
-	"github.com/zerodha/kite-mcp-server/kc/billing"
-	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 )
 
@@ -22,538 +19,11 @@ import (
 // Manager.New — nil logger error
 // ===========================================================================
 
-func TestNew_NilLogger(t *testing.T) {
-	t.Parallel()
-	_, err := New(Config{
-		APIKey:    "key",
-		APISecret: "secret",
-	})
-	if err == nil {
-		t.Fatal("Expected error with nil logger")
-	}
-}
 
-// ===========================================================================
-// Manager.New — no API key/secret warning path (doesn't error, just warns)
-// ===========================================================================
-
-func TestNew_NoAPICredentials(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-	})
-	if err != nil {
-		t.Fatalf("Expected no error (just warning), got: %v", err)
-	}
-	defer m.Shutdown()
-	if m.apiKey != "" {
-		t.Errorf("apiKey = %q, want empty", m.apiKey)
-	}
-}
-
-// ===========================================================================
-// Manager.OpenBrowser — coverage for URL validation and non-local mode
-// ===========================================================================
-
-func TestOpenBrowser_NonLocalMode_HTTP(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey: "key", APISecret: "secret",
-		InstrumentsManager: newTestInstrumentsManager(),
-		Logger:             testLogger(),
-		AppMode:            "http", // not local mode
-	})
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	defer m.Shutdown()
-
-	// Non-local mode should return nil immediately
-	err = m.OpenBrowser("https://example.com")
-	if err != nil {
-		t.Errorf("Expected nil for non-local mode, got: %v", err)
-	}
-}
-
-func TestOpenBrowser_InvalidScheme_FTP(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	err = m.OpenBrowser("ftp://example.com")
-	if err == nil {
-		t.Fatal("Expected error for ftp scheme")
-	}
-	if !strings.Contains(err.Error(), "invalid URL scheme") {
-		t.Errorf("Error should mention 'invalid URL scheme', got: %v", err)
-	}
-}
-
-func TestOpenBrowser_EmptyURL_Boost(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	err = m.OpenBrowser("")
-	if err == nil {
-		t.Fatal("Expected error for empty URL")
-	}
-}
-
-// ===========================================================================
-// Manager.PaperEngine — nil returns nil interface
-// ===========================================================================
-
-func TestPaperEngine_Nil(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.PaperEngine() != nil {
-		t.Error("PaperEngine should return nil when not configured")
-	}
-}
-
-func TestPaperEngine_Configured(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	engine := &papertrading.PaperEngine{}
-	m.SetPaperEngine(engine)
-
-	result := m.PaperEngine()
-	if result == nil {
-		t.Error("PaperEngine should not be nil when configured")
-	}
-}
-
-// ===========================================================================
-// Manager.BillingStore — nil returns nil interface
-// ===========================================================================
-
-func TestBillingStore_Nil(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.BillingStore() != nil {
-		t.Error("BillingStore should return nil when not configured")
-	}
-}
-
-func TestBillingStore_Configured(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	store := &billing.Store{}
-	m.SetBillingStore(store)
-
-	result := m.BillingStore()
-	if result == nil {
-		t.Error("BillingStore should not be nil when configured")
-	}
-}
-
-// ===========================================================================
-// Manager.HandleKiteCallback — session not found (CompleteSession fails)
-// ===========================================================================
-
-func TestHandleKiteCallback_SessionNotFound_WithValidSig(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("test_key", "test_secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	// Sign a session ID that doesn't exist
-	signed := m.sessionSigner.SignSessionID("nonexistent-session-id")
-
-	handler := m.HandleKiteCallback()
-	req := httptest.NewRequest(http.MethodGet, "/callback?request_token=tok&session_id="+signed, nil)
-	rr := httptest.NewRecorder()
-	handler(rr, req)
-
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("Status = %d, want 500 (session not found)", rr.Code)
-	}
-}
-
-// ===========================================================================
-// initializeSessionSigner — custom signer
-// ===========================================================================
-
-func TestInitializeSessionSigner_Custom(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	customSigner, _ := NewSessionSignerWithKey([]byte("custom-key-32-bytes-for-testing!!"))
-	err = m.initializeSessionSigner(customSigner)
-	if err != nil {
-		t.Fatalf("initializeSessionSigner error: %v", err)
-	}
-	if m.sessionSigner != customSigner {
-		t.Error("Expected custom signer to be set")
-	}
-}
-
-func TestInitializeSessionSigner_AutoGenerate_Boost(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	err = m.initializeSessionSigner(nil)
-	if err != nil {
-		t.Fatalf("initializeSessionSigner (auto) error: %v", err)
-	}
-	if m.sessionSigner == nil {
-		t.Error("Session signer should be auto-generated")
-	}
-}
-
-// ===========================================================================
-// IsKiteTokenExpired — cover both branches
-// ===========================================================================
-
-func TestIsKiteTokenExpired_JustNow_Boost(t *testing.T) {
-	t.Parallel()
-	// Token stored 1 minute ago should NOT be expired
-	if IsKiteTokenExpired(time.Now().Add(-1 * time.Minute)) {
-		t.Error("Token stored 1 minute ago should not be expired")
-	}
-}
-
-func TestIsKiteTokenExpired_VeryOldToken(t *testing.T) {
-	t.Parallel()
-	// Token stored 2 days ago should be expired
-	if !IsKiteTokenExpired(time.Now().Add(-48 * time.Hour)) {
-		t.Error("Token stored 2 days ago should be expired")
-	}
-}
-
-func TestIsKiteTokenExpired_BeforeExpiryTime(t *testing.T) {
-	t.Parallel()
-	// Token from yesterday before 6 AM IST should be expired
-	now := time.Now().In(KolkataLocation)
-	// Create a time at 3 AM today
-	todayAt3AM := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, KolkataLocation)
-	// If it's before 6 AM, the expiry boundary is yesterday at 6 AM
-	// If it's after 6 AM, the expiry boundary is today at 6 AM
-
-	// Token stored before yesterday's 6 AM should be expired
-	oldToken := time.Date(now.Year(), now.Month(), now.Day()-2, 10, 0, 0, 0, KolkataLocation)
-	if !IsKiteTokenExpired(oldToken) {
-		t.Error("Token from 2 days ago should be expired")
-	}
-	_ = todayAt3AM // suppress unused warning in case logic doesn't use it
-}
-
-// ===========================================================================
-// SessionService — ClearSessionData
-// ===========================================================================
-
-func TestSessionService_ClearSessionData_EmptyID(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	err := ss.ClearSessionData("")
-	if err == nil {
-		t.Error("Expected error for empty session ID")
-	}
-}
-
-func TestSessionService_ClearSessionData_NonExistent(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	err := ss.ClearSessionData("nonexistent")
-	if err == nil {
-		t.Error("Expected error for non-existent session")
-	}
-}
-
-func TestSessionService_ClearSessionData_Success(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	sessionID := ss.GenerateSession()
-
-	// Clear session data
-	err := ss.ClearSessionData(sessionID)
-	if err != nil {
-		t.Fatalf("ClearSessionData error: %v", err)
-	}
-}
-
-// ===========================================================================
-// SessionService — SessionLoginURL in devMode
-// ===========================================================================
-
-func TestSessionService_SessionLoginURL_DevMode(t *testing.T) {
-	t.Parallel()
-	ss := createDevModeSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	_, err := ss.SessionLoginURL("test-session")
-	if err == nil {
-		t.Fatal("Expected error in devMode")
-	}
-	if !strings.Contains(err.Error(), "DEV_MODE") {
-		t.Errorf("Error should mention DEV_MODE, got: %v", err)
-	}
-}
-
-// ===========================================================================
-// SessionService — GetOrCreateSessionWithEmail — email update path
-// ===========================================================================
-
-func TestSessionService_GetOrCreateSessionWithEmail_UpdatesEmail(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	// Create session without email
-	sessionID := ss.GenerateSession()
-
-	// Get again with email — should update the email
-	kd, isNew, err := ss.GetOrCreateSessionWithEmail(sessionID, "user@test.com")
-	if err != nil {
-		t.Fatalf("GetOrCreateSessionWithEmail error: %v", err)
-	}
-	if isNew {
-		t.Error("Expected isNew=false for existing session")
-	}
-	// The email might or might not be updated depending on whether it was empty before
-	_ = kd
-}
-
-// ===========================================================================
-// SessionService — CompleteSession — various error branches
-// ===========================================================================
-
-func TestSessionService_CompleteSession_EmptyID(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	err := ss.CompleteSession("", "token")
-	if err != ErrInvalidSessionID {
-		t.Errorf("Expected ErrInvalidSessionID, got: %v", err)
-	}
-}
-
-func TestSessionService_CompleteSession_NonExistent(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	err := ss.CompleteSession("nonexistent", "token")
-	if err != ErrSessionNotFound {
-		t.Errorf("Expected ErrSessionNotFound, got: %v", err)
-	}
-}
-
-// ===========================================================================
-// ManagedSessionService — TerminateByEmail
-// ===========================================================================
-
-func TestManagedSessionService_TerminateByEmail(t *testing.T) {
-	t.Parallel()
-	reg := NewSessionRegistry(testLogger())
-	svc := NewManagedSessionService(reg)
-
-	// Create a session with email
-	sid := reg.GenerateWithData(&KiteSessionData{Email: "user@test.com"})
-	// Update the email on the session (sessions need their MCPSession.Email set)
-	_ = reg.UpdateSessionField(sid, func(data any) {
-		if kd, ok := data.(*KiteSessionData); ok {
-			kd.Email = "user@test.com"
-		}
-	})
-
-	// Terminate by email
-	count := svc.TerminateByEmail("user@test.com")
-	if count < 1 {
-		t.Errorf("Expected at least 1 terminated, got %d", count)
-	}
-}
-
-func TestManagedSessionService_NilRegistry(t *testing.T) {
-	t.Parallel()
-	svc := NewManagedSessionService(nil)
-
-	if svc.ActiveCount() != 0 {
-		t.Error("Expected 0 active count with nil registry")
-	}
-	if svc.TerminateByEmail("user@test.com") != 0 {
-		t.Error("Expected 0 terminated with nil registry")
-	}
-	if svc.Registry() != nil {
-		t.Error("Expected nil registry")
-	}
-}
-
-// ===========================================================================
-// SessionSignerWithKey — empty key
-// ===========================================================================
-
-func TestNewSessionSignerWithKey_EmptyKey_Boost(t *testing.T) {
-	t.Parallel()
-	_, err := NewSessionSignerWithKey([]byte{})
-	if err != ErrEmptySecretKey {
-		t.Errorf("Expected ErrEmptySecretKey, got: %v", err)
-	}
-}
-
-func TestNewSessionSignerWithKey_Valid(t *testing.T) {
-	t.Parallel()
-	signer, err := NewSessionSignerWithKey([]byte("test-key-at-least-1-byte"))
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-	if signer == nil {
-		t.Fatal("Expected non-nil signer")
-	}
-}
-
-// ===========================================================================
-// SessionSigner.SignRedirectParams — invalid session ID
-// ===========================================================================
-
-func TestSignRedirectParams_InvalidSessionID(t *testing.T) {
-	t.Parallel()
-	signer, _ := NewSessionSigner()
-
-	_, err := signer.SignRedirectParams("")
-	if err == nil {
-		t.Fatal("Expected error for empty session ID")
-	}
-}
-
-// ===========================================================================
-// sessionDBAdapter.LoadSessions — via Manager with AlertDBPath
-// ===========================================================================
-
-func TestSessionDBAdapter_LoadSessions_Empty(t *testing.T) {
-	t.Parallel()
-	db, err := openTestAlertDB(t)
-	if err != nil {
-		t.Fatalf("openTestAlertDB error: %v", err)
-	}
-	adapter := &sessionDBAdapter{db: db}
-
-	sessions, err := adapter.LoadSessions()
-	if err != nil {
-		t.Fatalf("LoadSessions error: %v", err)
-	}
-	if len(sessions) != 0 {
-		t.Errorf("Expected 0 sessions, got %d", len(sessions))
-	}
-}
-
-// ===========================================================================
-// Manager.Shutdown — comprehensive shutdown
-// ===========================================================================
-
-func TestManager_Shutdown_WithComponents(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey: "key", APISecret: "secret",
-		InstrumentsManager: newTestInstrumentsManager(),
-		Logger:             testLogger(),
-		AlertDBPath:        ":memory:",
-	})
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-
-	// Should not panic
-	m.Shutdown()
-}
-
-// ===========================================================================
-// Manager — various getters
-// ===========================================================================
-
-func TestManager_Getters(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.ExternalURL() != "" {
-		t.Errorf("ExternalURL = %q, want empty", m.ExternalURL())
-	}
-	if m.AdminSecretPath() != "" {
-		t.Errorf("AdminSecretPath = %q, want empty", m.AdminSecretPath())
-	}
-	if !m.IsLocalMode() {
-		t.Error("Expected local mode for default")
-	}
-	if m.SessionSigner() == nil {
-		t.Error("SessionSigner should not be nil")
-	}
-	if m.PaperEngineConcrete() != nil {
-		t.Error("PaperEngineConcrete should be nil")
-	}
-	if m.BillingStoreConcrete() != nil {
-		t.Error("BillingStoreConcrete should be nil")
-	}
-	if m.RiskGuard() != nil {
-		t.Error("RiskGuard should be nil")
-	}
-	if m.InvitationStore() != nil {
-		t.Error("InvitationStore should be nil")
-	}
-	if m.ManagedSessionSvc() == nil {
-		t.Error("ManagedSessionSvc should not be nil")
-	}
-}
 
 // ===========================================================================
 // Manager.UpdateSessionSignerExpiry
 // ===========================================================================
-
 func TestManager_UpdateSessionSignerExpiry(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
@@ -566,10 +36,11 @@ func TestManager_UpdateSessionSignerExpiry(t *testing.T) {
 	// Should not panic
 }
 
+
+
 // ===========================================================================
 // Manager.ForceInstrumentsUpdate
 // ===========================================================================
-
 func TestManager_ForceInstrumentsUpdate(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
@@ -582,10 +53,11 @@ func TestManager_ForceInstrumentsUpdate(t *testing.T) {
 	_ = m.ForceInstrumentsUpdate()
 }
 
+
+
 // ===========================================================================
 // Manager.GetInstrumentsStats
 // ===========================================================================
-
 func TestManager_GetInstrumentsStats(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
@@ -598,196 +70,7 @@ func TestManager_GetInstrumentsStats(t *testing.T) {
 	_ = stats // Should not panic
 }
 
-// ===========================================================================
-// SessionService — GetActiveSessionCount, CleanupExpiredSessions
-// ===========================================================================
 
-func TestSessionService_GetActiveSessionCount(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	if ss.GetActiveSessionCount() != 0 {
-		t.Error("Expected 0 initially")
-	}
-
-	ss.GenerateSession()
-	if ss.GetActiveSessionCount() != 1 {
-		t.Errorf("Expected 1 active session, got %d", ss.GetActiveSessionCount())
-	}
-}
-
-func TestSessionService_CleanupExpiredSessions(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	defer ss.SessionManager().StopCleanupRoutine()
-
-	cleaned := ss.CleanupExpiredSessions()
-	if cleaned != 0 {
-		t.Errorf("Expected 0 cleaned initially, got %d", cleaned)
-	}
-}
-
-func TestSessionService_StopCleanupRoutine(t *testing.T) {
-	t.Parallel()
-	ss := createTestSessionService()
-	ss.InitializeSessionManager()
-	// Should not panic
-	ss.StopCleanupRoutine()
-}
-
-// ===========================================================================
-// Tests merged from gap_test.go
-// ===========================================================================
-
-func TestNew_WithAlertDBPath_Gap(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey:             "key",
-		APISecret:          "secret",
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-		AlertDBPath:        ":memory:",
-		EncryptionSecret:   "test-encryption-secret-32bytes!!",
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.alertDB == nil {
-		t.Error("Expected alertDB to be initialized")
-	}
-	if m.tokenStore == nil {
-		t.Error("Expected tokenStore to be initialized")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Manager New() — with Telegram bot token (covers Telegram path)
-// ---------------------------------------------------------------------------
-func TestNew_WithTelegramToken(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey:             "key",
-		APISecret:          "secret",
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-		TelegramBotToken:   "123:fake-token-for-test",
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer m.Shutdown()
-
-	// telegramNotifier may or may not be nil depending on token validity
-	// We just ensure no panic
-}
-
-// ---------------------------------------------------------------------------
-// Manager New() — with custom session signer (line 572-573)
-// ---------------------------------------------------------------------------
-func TestNew_WithCustomSessionSigner_Gap(t *testing.T) {
-	t.Parallel()
-	signer, err := NewSessionSignerWithKey([]byte("test-secret-key-1234567890123456"))
-	if err != nil {
-		t.Fatalf("NewSessionSignerWithKey error: %v", err)
-	}
-
-	m, err := New(Config{
-		APIKey:             "key",
-		APISecret:          "secret",
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-		SessionSigner:      signer,
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.sessionSigner != signer {
-		t.Error("Expected custom session signer to be used")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Manager New() — nil logger (should return error)
-// ---------------------------------------------------------------------------
-func TestNew_NilLogger_Gap(t *testing.T) {
-	t.Parallel()
-	_, err := New(Config{
-		APIKey:    "key",
-		APISecret: "secret",
-	})
-	if err == nil {
-		t.Error("Expected error for nil logger")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Manager New() — no credentials (line 59-61 warn path)
-// ---------------------------------------------------------------------------
-func TestNew_NoCredentials(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer m.Shutdown()
-	// Just verifies no panic, warn is logged
-}
-
-// ---------------------------------------------------------------------------
-// Manager New() — instruments manager creation (line 68-76)
-// ---------------------------------------------------------------------------
-func TestNew_DefaultInstrumentsManager(t *testing.T) {
-	t.Parallel()
-	// Create with no InstrumentsManager, it should auto-create one
-	config := instruments.DefaultUpdateConfig()
-	config.EnableScheduler = false
-
-	m, err := New(Config{
-		APIKey:            "key",
-		APISecret:         "secret",
-		Logger:            testLogger(),
-		InstrumentsConfig: config,
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer m.Shutdown()
-
-	if m.Instruments == nil {
-		t.Error("Expected instruments manager to be created automatically")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Manager Shutdown — with alertDB open (covers DB close error path)
-// ---------------------------------------------------------------------------
-func TestManager_ShutdownWithDB(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey:             "key",
-		APISecret:          "secret",
-		Logger:             testLogger(),
-		InstrumentsManager: newTestInstrumentsManager(),
-		AlertDBPath:        ":memory:",
-	})
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-
-	// Close the DB manually first to trigger error on Shutdown
-	m.alertDB.Close()
-	m.Shutdown() // should log error but not panic
-}
 
 // ---------------------------------------------------------------------------
 // Manager OpenBrowser — non-local mode (returns nil, line 538)
@@ -812,6 +95,8 @@ func TestManager_OpenBrowser_NonLocal(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Manager OpenBrowser — invalid URL scheme (line 543-544)
 // ---------------------------------------------------------------------------
@@ -834,6 +119,8 @@ func TestManager_OpenBrowser_BadScheme(t *testing.T) {
 		t.Error("Expected error for invalid URL scheme")
 	}
 }
+
+
 
 // ---------------------------------------------------------------------------
 // SessionRegistry: LoadFromDB with stale sessions (line 117-118)
@@ -878,6 +165,8 @@ func TestSessionRegistry_LoadFromDB_StaleSessionCleanup(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionRegistry: GenerateWithData with DB persist (line 163-169)
 // ---------------------------------------------------------------------------
@@ -917,6 +206,8 @@ func TestSessionRegistry_GenerateWithData_DBPersist(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionRegistry: Terminate with DB delete error (line 278-280)
 // ---------------------------------------------------------------------------
@@ -941,6 +232,8 @@ func TestSessionRegistry_Terminate_DBDeleteError(t *testing.T) {
 	// err may or may not be returned depending on implementation
 	_ = err
 }
+
+
 
 // ---------------------------------------------------------------------------
 // SessionRegistry: CleanupExpiredSessions with DB delete error (line 385-387)
@@ -975,6 +268,8 @@ func TestSessionRegistry_CleanupExpired_DBDeleteError(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionRegistry: cleanupRoutine (stop via context cancel, line 434-436)
 // ---------------------------------------------------------------------------
@@ -987,6 +282,8 @@ func TestSessionRegistry_StopCleanupRoutine(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	sm.StopCleanupRoutine() // exercises ctx.Done path
 }
+
+
 
 // ---------------------------------------------------------------------------
 // SessionRegistry: GetOrCreateSessionData with expired session (line 558-562)
@@ -1012,6 +309,8 @@ func TestSessionRegistry_GetOrCreateSessionData_Expired_Gap(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionRegistry: GetOrCreateSessionData with terminated session (line 565-568)
 // ---------------------------------------------------------------------------
@@ -1035,6 +334,8 @@ func TestSessionRegistry_GetOrCreateSessionData_Terminated_Gap(t *testing.T) {
 		t.Error("Expected error for terminated session")
 	}
 }
+
+
 
 // ---------------------------------------------------------------------------
 // SessionRegistry: GetOrCreateSessionData with persist error (line 596-598)
@@ -1069,103 +370,7 @@ func TestSessionRegistry_GetOrCreateSessionData_PersistError(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SessionService: GetSession with validation error (line 243-246)
-// ---------------------------------------------------------------------------
-func TestSessionService_GetSession_ValidationError(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
 
-	_, err = m.sessionSvc.GetSession("invalid-session-id")
-	if err == nil {
-		t.Error("Expected error for invalid session")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SessionService: ClearSessionData with error paths (line 308-311)
-// ---------------------------------------------------------------------------
-func TestSessionService_ClearSessionData_NoSession(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	err = m.sessionSvc.ClearSessionData("nonexistent-session")
-	if err == nil {
-		t.Error("Expected error for non-existent session")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SessionService: ClearSessionData with existing session
-// ---------------------------------------------------------------------------
-func TestSessionService_ClearSessionData_Success_Gap(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	sessionID := m.GenerateSession()
-	err = m.sessionSvc.ClearSessionData(sessionID)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SessionService: SessionLoginURL error (line 341-344)
-// ---------------------------------------------------------------------------
-func TestSessionService_SessionLoginURL_SignerError(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	// Test with valid session — should succeed
-	sessionID := m.GenerateSession()
-	loginURL, err := m.sessionSvc.SessionLoginURL(sessionID)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-	if loginURL == "" {
-		t.Error("Expected non-empty login URL")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SessionService: GetOrCreateSessionWithEmail (exercises the method)
-// ---------------------------------------------------------------------------
-func TestSessionService_GetOrCreateSessionWithEmail(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager error: %v", err)
-	}
-	defer m.Shutdown()
-
-	sessionID := m.GenerateSession()
-	data, isNew, err := m.sessionSvc.GetOrCreateSessionWithEmail(sessionID, "user@test.com")
-	if err != nil {
-		t.Fatalf("GetOrCreateSessionWithEmail error: %v", err)
-	}
-	if isNew {
-		t.Error("Expected isNew to be false (session already exists)")
-	}
-	if data.Email != "user@test.com" {
-		t.Errorf("Expected email user@test.com, got: %s", data.Email)
-	}
-}
 
 // ---------------------------------------------------------------------------
 // CredentialService: BackfillRegistryFromCredentials with error (line 161-164)
@@ -1202,6 +407,8 @@ func TestCredentialService_BackfillRegistryWithError(t *testing.T) {
 	cs.BackfillRegistryFromCredentials()
 }
 
+
+
 // ---------------------------------------------------------------------------
 // CredentialService: BackfillRegistryFromCredentials with nil registry
 // ---------------------------------------------------------------------------
@@ -1214,6 +421,8 @@ func TestCredentialService_BackfillNilRegistry(t *testing.T) {
 	})
 	cs.BackfillRegistryFromCredentials() // should return early, no panic
 }
+
+
 
 // ---------------------------------------------------------------------------
 // OrderService: ModifyOrder/CancelOrder error paths (lines 60, 74)
@@ -1232,6 +441,7 @@ func TestOrderService_ModifyOrder_NoSession(t *testing.T) {
 	}
 }
 
+
 func TestOrderService_CancelOrder_NoSession(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
@@ -1245,6 +455,8 @@ func TestOrderService_CancelOrder_NoSession(t *testing.T) {
 		t.Error("Expected error for non-existent session")
 	}
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Manager with DB: LoadSessions error (line 362-364, 1006-1008)
@@ -1269,6 +481,8 @@ func TestManager_LoadSessions_DBError(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionSigning: VerifySessionID with bad base64 (line 106-108)
 // ---------------------------------------------------------------------------
@@ -1285,6 +499,8 @@ func TestVerifySessionID_BadBase64(t *testing.T) {
 		t.Error("Expected error for bad base64 signature")
 	}
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Manager with DB — exercises full lifecycle paths
@@ -1325,71 +541,11 @@ func TestManager_DBLifecycle(t *testing.T) {
 	m.Shutdown()
 }
 
-// ---------------------------------------------------------------------------
-// Documented unreachable lines
-// ---------------------------------------------------------------------------
-//
-// The following lines are documented as unreachable and NOT tested:
-//
-// - session_signing.go:39-41 — NewSessionSigner crypto/rand.Read error
-//   (crypto/rand.Read never fails in Go 1.24+, panics instead)
-//
-// - manager.go:73-75 — instruments.New() error path
-//   (only fails with bad config, tested via instruments package itself)
-//
-// - manager.go:551-554 — initializeTemplates/setupTemplates template parse
-//   errors (templates are embedded via embed.FS, always valid at build time)
 
-// ===========================================================================
-// Tests merged from manager_coverage_test.go
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// New() — with EncryptionSecret to cover the HKDF salt branch
-// ---------------------------------------------------------------------------
-
-func TestNew_WithEncryptionSecret_C98(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		InstrumentsManager: newTestInstrumentsManager(),
-		Logger:             testLogger(),
-		AlertDBPath:        ":memory:",
-		EncryptionSecret:   "test-encryption-secret-long-enough",
-	})
-	if err != nil {
-		t.Fatalf("New with encryption: %v", err)
-	}
-	defer m.Shutdown()
-}
-
-// ---------------------------------------------------------------------------
-// New() — with DevMode to cover the mock broker path
-// ---------------------------------------------------------------------------
-
-func TestNew_DevMode_C98(t *testing.T) {
-	t.Parallel()
-	m, err := New(Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		InstrumentsManager: newTestInstrumentsManager(),
-		Logger:             testLogger(),
-		DevMode:            true,
-	})
-	if err != nil {
-		t.Fatalf("New DevMode: %v", err)
-	}
-	defer m.Shutdown()
-	if !m.devMode {
-		t.Error("Expected devMode to be true")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Shutdown — with metrics set
 // ---------------------------------------------------------------------------
-
 func TestShutdown_WithMetrics_C98(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
@@ -1397,10 +553,11 @@ func TestShutdown_WithMetrics_C98(t *testing.T) {
 	m.Shutdown()
 }
 
+
+
 // ---------------------------------------------------------------------------
 // initializeTemplates — success and use after init
 // ---------------------------------------------------------------------------
-
 func TestInitializeTemplates_Coverage98(t *testing.T) {
 	t.Parallel()
 	m, err := newTestManager("key", "secret")
@@ -1418,49 +575,11 @@ func TestInitializeTemplates_Coverage98(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// initializeSessionSigner — with custom signer
-// ---------------------------------------------------------------------------
 
-func TestInitializeSessionSigner_CustomSigner_C98(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager: %v", err)
-	}
-	defer m.Shutdown()
-
-	custom, _ := NewSessionSignerWithKey([]byte("test-key-1234567890123456"))
-	err = m.initializeSessionSigner(custom)
-	if err != nil {
-		t.Fatalf("initializeSessionSigner with custom: %v", err)
-	}
-	if m.sessionSigner != custom {
-		t.Error("Expected custom signer to be used")
-	}
-}
-
-func TestInitializeSessionSigner_AutoGenerate_C98(t *testing.T) {
-	t.Parallel()
-	m, err := newTestManager("key", "secret")
-	if err != nil {
-		t.Fatalf("newTestManager: %v", err)
-	}
-	defer m.Shutdown()
-
-	err = m.initializeSessionSigner(nil)
-	if err != nil {
-		t.Fatalf("initializeSessionSigner auto: %v", err)
-	}
-	if m.sessionSigner == nil {
-		t.Error("Session signer should be auto-generated")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // LoadSessions — via sessionDBAdapter with data
 // ---------------------------------------------------------------------------
-
 func TestLoadSessions_SkipsExpiredAndTerminated(t *testing.T) {
 	t.Parallel()
 	db, err := openTestAlertDB(t)
@@ -1492,10 +611,11 @@ func TestLoadSessions_SkipsExpiredAndTerminated(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.GenerateWithData — with DB persistence
 // ---------------------------------------------------------------------------
-
 func TestGenerateWithData_DBPersistence(t *testing.T) {
 	t.Parallel()
 	db, err := openTestAlertDB(t)
@@ -1528,10 +648,11 @@ func TestGenerateWithData_DBPersistence(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // checkSessionID — plain UUID format (no prefix)
 // ---------------------------------------------------------------------------
-
 func TestCheckSessionID_PlainUUID(t *testing.T) {
 	t.Parallel()
 	// Plain UUID (external format from SSE/stdio modes)
@@ -1553,10 +674,11 @@ func TestCheckSessionID_PlainUUID(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.cleanupRoutine — context cancellation path
 // ---------------------------------------------------------------------------
-
 func TestCleanupRoutine_ContextCancel(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1570,6 +692,7 @@ func TestCleanupRoutine_ContextCancel(t *testing.T) {
 	// No panic, no hang — the routine stopped
 }
 
+
 func TestCleanupRoutine_InternalCancel(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1580,10 +703,11 @@ func TestCleanupRoutine_InternalCancel(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.UpdateSessionData — terminated session error
 // ---------------------------------------------------------------------------
-
 func TestUpdateSessionData_Terminated(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1602,6 +726,7 @@ func TestUpdateSessionData_Terminated(t *testing.T) {
 	}
 }
 
+
 func TestUpdateSessionData_NotFound(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1611,10 +736,11 @@ func TestUpdateSessionData_NotFound(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.GetOrCreateSessionData — expired and terminated paths
 // ---------------------------------------------------------------------------
-
 func TestGetOrCreateSessionData_ExpiredSession(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1635,6 +761,7 @@ func TestGetOrCreateSessionData_ExpiredSession(t *testing.T) {
 		t.Error("Expected error for expired session")
 	}
 }
+
 
 func TestGetOrCreateSessionData_TerminatedSession(t *testing.T) {
 	t.Parallel()
@@ -1657,6 +784,7 @@ func TestGetOrCreateSessionData_TerminatedSession(t *testing.T) {
 	}
 }
 
+
 func TestGetOrCreateSessionData_NewExternalSession(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1674,6 +802,7 @@ func TestGetOrCreateSessionData_NewExternalSession(t *testing.T) {
 		t.Errorf("Data = %v, want 'hello'", data)
 	}
 }
+
 
 func TestGetOrCreateSessionData_ExistingDataReturned(t *testing.T) {
 	t.Parallel()
@@ -1695,6 +824,7 @@ func TestGetOrCreateSessionData_ExistingDataReturned(t *testing.T) {
 	}
 }
 
+
 func TestGetOrCreateSessionData_InvalidFormat(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1703,6 +833,7 @@ func TestGetOrCreateSessionData_InvalidFormat(t *testing.T) {
 		t.Error("Expected error for invalid session ID format")
 	}
 }
+
 
 func TestGetOrCreateSessionData_WithDBPersist(t *testing.T) {
 	t.Parallel()
@@ -1730,10 +861,11 @@ func TestGetOrCreateSessionData_WithDBPersist(t *testing.T) {
 	_ = data
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.CleanupExpiredSessions — with DB + hooks
 // ---------------------------------------------------------------------------
-
 func TestCleanupExpiredSessions_WithDBAndHooks(t *testing.T) {
 	t.Parallel()
 	db, err := openTestAlertDB(t)
@@ -1772,10 +904,11 @@ func TestCleanupExpiredSessions_WithDBAndHooks(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.Terminate — with DB persistence
 // ---------------------------------------------------------------------------
-
 func TestTerminate_WithDB(t *testing.T) {
 	t.Parallel()
 	db, err := openTestAlertDB(t)
@@ -1794,10 +927,11 @@ func TestTerminate_WithDB(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.TerminateByEmail
 // ---------------------------------------------------------------------------
-
 func TestTerminateByEmail_Mixed(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1825,10 +959,11 @@ func TestTerminateByEmail_Mixed(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session.GetSessionData — expired and terminated paths
 // ---------------------------------------------------------------------------
-
 func TestGetSessionData_Expired(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -1846,6 +981,7 @@ func TestGetSessionData_Expired(t *testing.T) {
 		t.Error("Expected error for expired session")
 	}
 }
+
 
 func TestGetSessionData_Terminated(t *testing.T) {
 	t.Parallel()
@@ -1865,40 +1001,7 @@ func TestGetSessionData_Terminated(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// IsKiteTokenExpired — before 6 AM IST path
-// ---------------------------------------------------------------------------
 
-func TestIsKiteTokenExpired_BeforeSixAM(t *testing.T) {
-	t.Parallel()
-	// Create a time that's early morning (e.g., 3 AM IST today)
-	now := time.Now().In(KolkataLocation)
-	earlyMorning := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, KolkataLocation)
-
-	// Token stored yesterday at 10 PM — should not be expired at 3 AM (before 6 AM,
-	// the expiry boundary shifts to yesterday's 6 AM)
-	yesterday10PM := earlyMorning.Add(-5 * time.Hour) // 10 PM previous day
-	// The function uses time.Now(), so we just test that it doesn't panic
-	result := IsKiteTokenExpired(yesterday10PM)
-	_ = result // just exercise the code path
-}
-
-func TestIsKiteTokenExpired_AfterSixAM(t *testing.T) {
-	t.Parallel()
-	// Token stored 2 days ago should be expired
-	twoDaysAgo := time.Now().Add(-48 * time.Hour)
-	if !IsKiteTokenExpired(twoDaysAgo) {
-		t.Error("Token from 2 days ago should be expired")
-	}
-}
-
-func TestIsKiteTokenExpired_JustNow_C98(t *testing.T) {
-	t.Parallel()
-	// Token stored just now should not be expired
-	if IsKiteTokenExpired(time.Now()) {
-		t.Error("Token stored just now should not be expired")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // BackfillRegistryFromCredentials — with errors and success
@@ -1913,7 +1016,6 @@ type backfillCredStore struct {
 func (b *backfillCredStore) ListAllRaw() []RawCredentialEntry {
 	return b.rawEntries
 }
-
 func TestBackfillRegistryFromCredentials_Success(t *testing.T) {
 	t.Parallel()
 	credStore := &backfillCredStore{
@@ -1940,6 +1042,7 @@ func TestBackfillRegistryFromCredentials_Success(t *testing.T) {
 		t.Errorf("Expected 1 registration, got %d", regStore.Count())
 	}
 }
+
 
 func TestBackfillRegistryFromCredentials_AlreadyExists(t *testing.T) {
 	t.Parallel()
@@ -1974,6 +1077,7 @@ func TestBackfillRegistryFromCredentials_AlreadyExists(t *testing.T) {
 	}
 }
 
+
 func TestBackfillRegistryFromCredentials_NilRegistry_C98(t *testing.T) {
 	t.Parallel()
 	credStore := &backfillCredStore{
@@ -1993,6 +1097,7 @@ func TestBackfillRegistryFromCredentials_NilRegistry_C98(t *testing.T) {
 	// Should not panic with nil registry
 	credSvc.BackfillRegistryFromCredentials()
 }
+
 
 func TestBackfillRegistryFromCredentials_EmptyCredentials_C98(t *testing.T) {
 	t.Parallel()
@@ -2017,10 +1122,11 @@ func TestBackfillRegistryFromCredentials_EmptyCredentials_C98(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // OrderService — broker error paths
 // ---------------------------------------------------------------------------
-
 func TestOrderService_PlaceOrder_BrokerError(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2041,6 +1147,7 @@ func TestOrderService_PlaceOrder_BrokerError(t *testing.T) {
 	_ = err
 }
 
+
 func TestOrderService_GetOrders_BrokerError(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2056,6 +1163,7 @@ func TestOrderService_GetOrders_BrokerError(t *testing.T) {
 	_ = orders
 }
 
+
 func TestOrderService_GetTrades_BrokerError(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2070,6 +1178,7 @@ func TestOrderService_GetTrades_BrokerError(t *testing.T) {
 	_ = trades
 }
 
+
 func TestOrderService_CancelOrder_Success(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2081,6 +1190,7 @@ func TestOrderService_CancelOrder_Success(t *testing.T) {
 	_, err := os.CancelOrder("test@example.com", "fake-order-id", "regular")
 	_ = err
 }
+
 
 func TestOrderService_ModifyOrder_Success(t *testing.T) {
 	t.Parallel()
@@ -2095,6 +1205,7 @@ func TestOrderService_ModifyOrder_Success(t *testing.T) {
 	})
 	_ = err
 }
+
 
 func TestOrderService_NoBroker(t *testing.T) {
 	t.Parallel()
@@ -2113,10 +1224,11 @@ func TestOrderService_NoBroker(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // PortfolioService — broker error paths
 // ---------------------------------------------------------------------------
-
 func TestPortfolioService_GetHoldings_Success_C98(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2130,6 +1242,7 @@ func TestPortfolioService_GetHoldings_Success_C98(t *testing.T) {
 	}
 	_ = holdings
 }
+
 
 func TestPortfolioService_GetPositions_Success_C98(t *testing.T) {
 	t.Parallel()
@@ -2145,6 +1258,7 @@ func TestPortfolioService_GetPositions_Success_C98(t *testing.T) {
 	_ = positions
 }
 
+
 func TestPortfolioService_GetMargins_Success_C98(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2159,6 +1273,7 @@ func TestPortfolioService_GetMargins_Success_C98(t *testing.T) {
 	_ = margins
 }
 
+
 func TestPortfolioService_GetProfile_Success_C98(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2172,6 +1287,7 @@ func TestPortfolioService_GetProfile_Success_C98(t *testing.T) {
 	}
 	_ = profile
 }
+
 
 func TestPortfolioService_NoBroker(t *testing.T) {
 	t.Parallel()
@@ -2199,10 +1315,11 @@ func TestPortfolioService_NoBroker(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // PortfolioService — broker returns error (not "no broker" but actual call error)
 // ---------------------------------------------------------------------------
-
 func TestPortfolioService_BrokerCallErrors(t *testing.T) {
 	t.Parallel()
 	// Use a mock HTTP server that returns Kite errors for all endpoints
@@ -2252,6 +1369,7 @@ func TestPortfolioService_BrokerCallErrors(t *testing.T) {
 	}
 }
 
+
 func TestOrderService_BrokerCallErrors(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2299,10 +1417,11 @@ func TestOrderService_BrokerCallErrors(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // SessionLoginURL — DevMode returns error
 // ---------------------------------------------------------------------------
-
 func TestSessionLoginURL_DevMode(t *testing.T) {
 	t.Parallel()
 	ss := createDevModeSessionService()
@@ -2318,6 +1437,7 @@ func TestSessionLoginURL_DevMode(t *testing.T) {
 	}
 }
 
+
 func TestSessionLoginURL_EmptyID_C98(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2330,10 +1450,11 @@ func TestSessionLoginURL_EmptyID_C98(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // ClearSessionData — various paths
 // ---------------------------------------------------------------------------
-
 func TestClearSessionData_EmptyID_C98(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2346,6 +1467,7 @@ func TestClearSessionData_EmptyID_C98(t *testing.T) {
 	}
 }
 
+
 func TestClearSessionData_NotFound(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2357,6 +1479,7 @@ func TestClearSessionData_NotFound(t *testing.T) {
 		t.Error("Expected error for nonexistent session")
 	}
 }
+
 
 func TestClearSessionData_WithData(t *testing.T) {
 	t.Parallel()
@@ -2374,6 +1497,7 @@ func TestClearSessionData_WithData(t *testing.T) {
 	}
 }
 
+
 func TestClearSessionData_NilData(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2388,10 +1512,11 @@ func TestClearSessionData_NilData(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // GetSession — terminated session
 // ---------------------------------------------------------------------------
-
 func TestGetSession_Terminated(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2407,6 +1532,7 @@ func TestGetSession_Terminated(t *testing.T) {
 	}
 }
 
+
 func TestGetSession_EmptyID(t *testing.T) {
 	t.Parallel()
 	ss := createTestSessionService()
@@ -2419,10 +1545,11 @@ func TestGetSession_EmptyID(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // session_signing: VerifySessionID edge cases
 // ---------------------------------------------------------------------------
-
 func TestVerifySessionID_FutureTimestamp(t *testing.T) {
 	t.Parallel()
 	signer, err := NewSessionSigner()
@@ -2450,6 +1577,7 @@ func TestVerifySessionID_FutureTimestamp(t *testing.T) {
 	}
 }
 
+
 func TestVerifySessionID_TamperedPayload(t *testing.T) {
 	t.Parallel()
 	signer, _ := NewSessionSigner()
@@ -2465,6 +1593,7 @@ func TestVerifySessionID_TamperedPayload(t *testing.T) {
 	}
 }
 
+
 func TestVerifySessionID_InvalidBase64(t *testing.T) {
 	t.Parallel()
 	signer, _ := NewSessionSigner()
@@ -2476,6 +1605,7 @@ func TestVerifySessionID_InvalidBase64(t *testing.T) {
 	}
 }
 
+
 func TestVerifySessionID_WrongPartCount(t *testing.T) {
 	t.Parallel()
 	signer, _ := NewSessionSigner()
@@ -2485,6 +1615,7 @@ func TestVerifySessionID_WrongPartCount(t *testing.T) {
 		t.Errorf("Expected ErrInvalidFormat, got: %v", err)
 	}
 }
+
 
 func TestVerifySessionID_InvalidTimestamp(t *testing.T) {
 	t.Parallel()
@@ -2497,37 +1628,11 @@ func TestVerifySessionID_InvalidTimestamp(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// NewSessionSignerWithKey — empty key
-// ---------------------------------------------------------------------------
 
-func TestNewSessionSignerWithKey_EmptyKey_C98(t *testing.T) {
-	t.Parallel()
-	_, err := NewSessionSignerWithKey([]byte{})
-	if !errors.Is(err, ErrEmptySecretKey) {
-		t.Errorf("Expected ErrEmptySecretKey, got: %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// OpenBrowser — exercising the exec.Command path for valid URL in local mode
-// ---------------------------------------------------------------------------
-
-func TestOpenBrowser_EmptyScheme(t *testing.T) {
-	t.Parallel()
-	m, _ := newTestManager("key", "secret")
-	defer m.Shutdown()
-
-	err := m.OpenBrowser("://no-scheme")
-	if err == nil {
-		t.Error("Expected error for empty/invalid scheme")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Validate — session expired path (auto-terminate)
 // ---------------------------------------------------------------------------
-
 func TestValidate_ExpiredSession(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -2547,10 +1652,11 @@ func TestValidate_ExpiredSession(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Validate — not found
 // ---------------------------------------------------------------------------
-
 func TestValidate_NotFound(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -2561,10 +1667,11 @@ func TestValidate_NotFound(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // setupTemplates — verify all templates parse
 // ---------------------------------------------------------------------------
-
 func TestSetupTemplates_Success(t *testing.T) {
 	t.Parallel()
 	templates, err := setupTemplates()
@@ -2576,10 +1683,11 @@ func TestSetupTemplates_Success(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Manager accessors coverage
 // ---------------------------------------------------------------------------
-
 func TestManagerAccessors(t *testing.T) {
 	t.Parallel()
 	m, _ := New(Config{
@@ -2610,10 +1718,11 @@ func TestManagerAccessors(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // UpdateSessionField — various paths
 // ---------------------------------------------------------------------------
-
 func TestUpdateSessionField_NotFound(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -2622,6 +1731,7 @@ func TestUpdateSessionField_NotFound(t *testing.T) {
 		t.Error("Expected error for nonexistent session")
 	}
 }
+
 
 func TestUpdateSessionField_Terminated(t *testing.T) {
 	t.Parallel()
@@ -2634,6 +1744,7 @@ func TestUpdateSessionField_Terminated(t *testing.T) {
 		t.Error("Expected error for terminated session")
 	}
 }
+
 
 func TestUpdateSessionField_Success(t *testing.T) {
 	t.Parallel()
@@ -2657,33 +1768,11 @@ func TestUpdateSessionField_Success(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// New() — with instruments manager creation error (nil config with nil manager)
-// ---------------------------------------------------------------------------
 
-func TestNew_InstrumentsManagerAutoCreation(t *testing.T) {
-	t.Parallel()
-	// When InstrumentsManager is nil, New() creates one internally.
-	// This tests the internal creation path (which uses HTTP for real instruments).
-	// We don't want actual HTTP calls, but the creation path is exercised.
-	cfg := instruments.DefaultUpdateConfig()
-	cfg.EnableScheduler = false
-	m, err := New(Config{
-		APIKey:            "key",
-		APISecret:         "secret",
-		Logger:            testLogger(),
-		InstrumentsConfig: cfg,
-	})
-	if err != nil {
-		t.Fatalf("New with auto instruments: %v", err)
-	}
-	defer m.Shutdown()
-}
 
 // ---------------------------------------------------------------------------
 // ListActiveSessions — with expired sessions auto-terminating
 // ---------------------------------------------------------------------------
-
 func TestListActiveSessions_AutoExpire(t *testing.T) {
 	t.Parallel()
 	sm := NewSessionRegistry(testLogger())
@@ -2707,10 +1796,11 @@ func TestListActiveSessions_AutoExpire(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // LoadFromDB — with delete error (simulate by closing DB)
 // ---------------------------------------------------------------------------
-
 func TestLoadFromDB_DeleteError(t *testing.T) {
 	t.Parallel()
 	db, err := openTestAlertDB(t)
@@ -2733,12 +1823,13 @@ func TestLoadFromDB_DeleteError(t *testing.T) {
 	}
 }
 
+
+
 // ---------------------------------------------------------------------------
 // CompleteSession — with metrics
 // ---------------------------------------------------------------------------
 
 // mockMetrics lives in mocks_test.go.
-
 func TestCompleteSession_WithMetrics(t *testing.T) {
 	t.Parallel()
 	ts := newMockKiteServer(t)

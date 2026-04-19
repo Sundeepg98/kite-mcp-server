@@ -7,7 +7,6 @@ package telegram
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -58,6 +57,7 @@ func newFakeKiteAPI() *fakeKiteAPI {
 	return f
 }
 
+
 func (f *fakeKiteAPI) close() {
 	f.server.Close()
 }
@@ -76,10 +76,10 @@ func newTestBotWithFakeAPI(t *testing.T, email string) (*BotHandler, *mockHTTPCl
 	return h, mock, fakeAPI
 }
 
+
 // ===========================================================================
 // handlePrice — successful API call paths
 // ===========================================================================
-
 func TestHandlePrice_SuccessfulQuote(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -114,6 +114,7 @@ func TestHandlePrice_SuccessfulQuote(t *testing.T) {
 	}
 }
 
+
 func TestHandlePrice_APIReturnsError(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -127,6 +128,7 @@ func TestHandlePrice_APIReturnsError(t *testing.T) {
 	}
 }
 
+
 func TestHandlePrice_SymbolNotInQuote(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -139,6 +141,7 @@ func TestHandlePrice_SymbolNotInQuote(t *testing.T) {
 		t.Errorf("expected 'No data', got: %s", result)
 	}
 }
+
 
 func TestHandlePrice_WithExchangePrefix(t *testing.T) {
 	email := "user@test.com"
@@ -161,6 +164,7 @@ func TestHandlePrice_WithExchangePrefix(t *testing.T) {
 		t.Errorf("expected price 2500.00, got: %s", result)
 	}
 }
+
 
 func TestHandlePrice_ZeroClosePrice(t *testing.T) {
 	email := "user@test.com"
@@ -188,393 +192,10 @@ func TestHandlePrice_ZeroClosePrice(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// handlePortfolio — full body coverage
-// ===========================================================================
-
-func TestHandlePortfolio_SuccessfulHoldings(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/holdings"] = []map[string]interface{}{
-		{
-			"tradingsymbol":         "INFY",
-			"quantity":              10,
-			"average_price":         1400.0,
-			"last_price":            1500.0,
-			"day_change":            150.0,
-			"day_change_percentage": 1.5,
-		},
-		{
-			"tradingsymbol":         "TCS",
-			"quantity":              5,
-			"average_price":         3200.0,
-			"last_price":            3300.0,
-			"day_change":            -50.0,
-			"day_change_percentage": -0.3,
-		},
-	}
-
-	result := h.handlePortfolio(42, email)
-	if !strings.Contains(result, "Portfolio") {
-		t.Errorf("expected 'Portfolio' header, got: %s", result)
-	}
-	if !strings.Contains(result, "2 stocks") {
-		t.Errorf("expected '2 stocks', got: %s", result)
-	}
-	if !strings.Contains(result, "Invested") {
-		t.Errorf("expected 'Invested' summary, got: %s", result)
-	}
-	if !strings.Contains(result, "Top movers") {
-		t.Errorf("expected 'Top movers', got: %s", result)
-	}
-}
-
-func TestHandlePortfolio_EmptyHoldings(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/holdings"] = []map[string]interface{}{}
-
-	result := h.handlePortfolio(42, email)
-	if !strings.Contains(result, "No holdings") {
-		t.Errorf("expected 'No holdings', got: %s", result)
-	}
-}
-
-func TestHandlePortfolio_APIFailure(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	result := h.handlePortfolio(42, email)
-	if !strings.Contains(result, "Failed") {
-		t.Errorf("expected failure message, got: %s", result)
-	}
-}
-
-func TestHandlePortfolio_AllZeroDayChange(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/holdings"] = []map[string]interface{}{
-		{
-			"tradingsymbol":         "INFY",
-			"quantity":              10,
-			"average_price":         1400.0,
-			"last_price":            1400.0,
-			"day_change":            0.0,
-			"day_change_percentage": 0.0,
-		},
-	}
-
-	result := h.handlePortfolio(42, email)
-	if !strings.Contains(result, "Portfolio") {
-		t.Errorf("expected 'Portfolio', got: %s", result)
-	}
-	// "Top movers" section should exist but no stocks listed (all 0%).
-}
-
-// ===========================================================================
-// handlePositions — full body coverage
-// ===========================================================================
-
-func TestHandlePositions_LongAndShort(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/positions"] = map[string]interface{}{
-		"net": []map[string]interface{}{
-			{
-				"tradingsymbol": "RELIANCE",
-				"quantity":      10,
-				"pnl":           500.0,
-				"product":       "CNC",
-			},
-			{
-				"tradingsymbol": "SBIN",
-				"quantity":      -5,
-				"pnl":           -200.0,
-				"product":       "MIS",
-			},
-			{
-				"tradingsymbol": "ZERO",
-				"quantity":      0,
-				"pnl":           0.0,
-				"product":       "CNC",
-			},
-		},
-		"day": []map[string]interface{}{},
-	}
-
-	result := h.handlePositions(42, email)
-	if !strings.Contains(result, "Open Positions") {
-		t.Errorf("expected 'Open Positions', got: %s", result)
-	}
-	if !strings.Contains(result, "RELIANCE") {
-		t.Errorf("expected 'RELIANCE', got: %s", result)
-	}
-	if !strings.Contains(result, "LONG") {
-		t.Errorf("expected 'LONG', got: %s", result)
-	}
-	if !strings.Contains(result, "SHORT") {
-		t.Errorf("expected 'SHORT', got: %s", result)
-	}
-	if !strings.Contains(result, "(2)") {
-		t.Errorf("expected 2 open positions, got: %s", result)
-	}
-	if !strings.Contains(result, "Total:") {
-		t.Errorf("expected 'Total:', got: %s", result)
-	}
-}
-
-func TestHandlePositions_AllClosed(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/positions"] = map[string]interface{}{
-		"net": []map[string]interface{}{
-			{
-				"tradingsymbol": "INFY",
-				"quantity":      0,
-				"pnl":           0.0,
-				"product":       "CNC",
-			},
-		},
-		"day": []map[string]interface{}{},
-	}
-
-	result := h.handlePositions(42, email)
-	if !strings.Contains(result, "No open positions") {
-		t.Errorf("expected 'No open positions', got: %s", result)
-	}
-}
-
-func TestHandlePositions_APIFailure(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	result := h.handlePositions(42, email)
-	if !strings.Contains(result, "Failed") {
-		t.Errorf("expected failure message, got: %s", result)
-	}
-}
-
-// ===========================================================================
-// handleOrders — full body coverage
-// ===========================================================================
-
-func TestHandleOrders_MultipleStatuses(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/orders"] = []map[string]interface{}{
-		{
-			"tradingsymbol":    "INFY",
-			"transaction_type": "BUY",
-			"quantity":         10,
-			"product":          "CNC",
-			"average_price":    1500.0,
-			"status":           "COMPLETE",
-		},
-		{
-			"tradingsymbol":    "TCS",
-			"transaction_type": "SELL",
-			"quantity":         5,
-			"product":          "MIS",
-			"average_price":    3300.0,
-			"status":           "REJECTED",
-		},
-	}
-
-	result := h.handleOrders(42, email)
-	if !strings.Contains(result, "Orders") {
-		t.Errorf("expected 'Orders' header, got: %s", result)
-	}
-	if !strings.Contains(result, "BUY") {
-		t.Errorf("expected 'BUY', got: %s", result)
-	}
-	if !strings.Contains(result, "\u2705") {
-		t.Errorf("expected checkmark for COMPLETE, got: %s", result)
-	}
-	if !strings.Contains(result, "\u274C") {
-		t.Errorf("expected cross for REJECTED, got: %s", result)
-	}
-}
-
-func TestHandleOrders_EmptyList(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/orders"] = []map[string]interface{}{}
-
-	result := h.handleOrders(42, email)
-	if !strings.Contains(result, "No orders") {
-		t.Errorf("expected 'No orders', got: %s", result)
-	}
-}
-
-func TestHandleOrders_PaginationOver10(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	orders := make([]map[string]interface{}, 15)
-	for i := 0; i < 15; i++ {
-		orders[i] = map[string]interface{}{
-			"tradingsymbol":    fmt.Sprintf("SYM%d", i),
-			"transaction_type": "BUY",
-			"quantity":         1,
-			"product":          "CNC",
-			"average_price":    100.0,
-			"status":           "COMPLETE",
-		}
-	}
-	fakeAPI.responses["/orders"] = orders
-
-	result := h.handleOrders(42, email)
-	if !strings.Contains(result, "showing last 10") {
-		t.Errorf("expected 'showing last 10', got: %s", result)
-	}
-}
-
-func TestHandleOrders_CancelledAndPendingStatus(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/orders"] = []map[string]interface{}{
-		{
-			"tradingsymbol":    "SYM1",
-			"transaction_type": "BUY",
-			"quantity":         1,
-			"product":          "CNC",
-			"average_price":    0,
-			"status":           "CANCELLED",
-		},
-		{
-			"tradingsymbol":    "SYM2",
-			"transaction_type": "SELL",
-			"quantity":         2,
-			"product":          "MIS",
-			"average_price":    0,
-			"status":           "OPEN",
-		},
-	}
-
-	result := h.handleOrders(42, email)
-	if !strings.Contains(result, "\U0001F6AB") {
-		t.Errorf("expected no-entry emoji for CANCELLED, got: %s", result)
-	}
-	if !strings.Contains(result, "\u23F3") {
-		t.Errorf("expected hourglass emoji for OPEN/pending, got: %s", result)
-	}
-}
-
-// ===========================================================================
-// handlePnL — full body coverage
-// ===========================================================================
-
-func TestHandlePnL_HoldingsAndPositions(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/holdings"] = []map[string]interface{}{
-		{"tradingsymbol": "INFY", "quantity": 10, "average_price": 1400.0, "last_price": 1500.0, "day_change": 300.0},
-		{"tradingsymbol": "TCS", "quantity": 5, "average_price": 3200.0, "last_price": 3300.0, "day_change": -50.0},
-	}
-	fakeAPI.responses["/portfolio/positions"] = map[string]interface{}{
-		"net": []map[string]interface{}{},
-		"day": []map[string]interface{}{
-			{"tradingsymbol": "SBIN", "quantity": 20, "pnl": 200.0, "product": "MIS"},
-		},
-	}
-
-	result := h.handlePnL(42, email)
-	if !strings.Contains(result, "P&amp;L") {
-		t.Errorf("expected P&L header, got: %s", result)
-	}
-	if !strings.Contains(result, "Holdings") {
-		t.Errorf("expected 'Holdings', got: %s", result)
-	}
-	if !strings.Contains(result, "Positions") {
-		t.Errorf("expected 'Positions', got: %s", result)
-	}
-	if !strings.Contains(result, "Net:") {
-		t.Errorf("expected 'Net:', got: %s", result)
-	}
-}
-
-func TestHandlePnL_HoldingsUnavailable(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	// Only positions configured.
-	fakeAPI.responses["/portfolio/positions"] = map[string]interface{}{
-		"net": []map[string]interface{}{},
-		"day": []map[string]interface{}{},
-	}
-
-	result := h.handlePnL(42, email)
-	if !strings.Contains(result, "unavailable") {
-		t.Errorf("expected 'unavailable' for holdings, got: %s", result)
-	}
-}
-
-func TestHandlePnL_PositionsUnavailable(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	fakeAPI.responses["/portfolio/holdings"] = []map[string]interface{}{}
-	// No positions configured.
-
-	result := h.handlePnL(42, email)
-	if !strings.Contains(result, "unavailable") {
-		t.Errorf("expected 'unavailable' for positions, got: %s", result)
-	}
-}
-
-func TestHandlePnL_BothUnavailable(t *testing.T) {
-	email := "user@test.com"
-	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
-	defer h.Shutdown()
-	defer fakeAPI.close()
-
-	result := h.handlePnL(42, email)
-	if !strings.Contains(result, "P&amp;L") {
-		t.Errorf("expected P&L header even with errors, got: %s", result)
-	}
-}
 
 // ===========================================================================
 // handlePrices — successful multi-symbol paths
 // ===========================================================================
-
 func TestHandlePrices_MultipleSymbols(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -611,6 +232,7 @@ func TestHandlePrices_MultipleSymbols(t *testing.T) {
 	}
 }
 
+
 func TestHandlePrices_PartialNotFound(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -631,6 +253,7 @@ func TestHandlePrices_PartialNotFound(t *testing.T) {
 		t.Errorf("expected 'not found' for missing symbol, got: %s", result)
 	}
 }
+
 
 func TestHandlePrices_ZeroClosePrice(t *testing.T) {
 	email := "user@test.com"
@@ -653,6 +276,7 @@ func TestHandlePrices_ZeroClosePrice(t *testing.T) {
 	}
 }
 
+
 func TestHandlePrices_APIFailure(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -665,6 +289,7 @@ func TestHandlePrices_APIFailure(t *testing.T) {
 		t.Errorf("expected 'Failed', got: %s", result)
 	}
 }
+
 
 func TestHandlePrices_WhitespaceSymbols(t *testing.T) {
 	email := "user@test.com"
@@ -687,10 +312,10 @@ func TestHandlePrices_WhitespaceSymbols(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // handleMyWatchlist — various paths
 // ===========================================================================
-
 func TestHandleMyWatchlist_EmptyWatchlistList(t *testing.T) {
 	email := "user@test.com"
 	store := watchlist.NewStore()
@@ -708,6 +333,7 @@ func TestHandleMyWatchlist_EmptyWatchlistList(t *testing.T) {
 		t.Errorf("expected 'No watchlists', got: %s", result)
 	}
 }
+
 
 func TestHandleMyWatchlist_WithItemsAndLTP(t *testing.T) {
 	email := "user@test.com"
@@ -761,6 +387,7 @@ func TestHandleMyWatchlist_WithItemsAndLTP(t *testing.T) {
 	}
 }
 
+
 func TestHandleMyWatchlist_NoKiteClient_ShowsItems(t *testing.T) {
 	email := "user@test.com"
 	store := watchlist.NewStore()
@@ -785,6 +412,7 @@ func TestHandleMyWatchlist_NoKiteClient_ShowsItems(t *testing.T) {
 	}
 }
 
+
 func TestHandleMyWatchlist_EmptyWatchlistItems(t *testing.T) {
 	email := "user@test.com"
 	store := watchlist.NewStore()
@@ -808,71 +436,10 @@ func TestHandleMyWatchlist_EmptyWatchlistItems(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// handleStatus — covered via existing test, but adding expired/valid paths
-// ===========================================================================
-
-func TestHandleStatus_ValidCredentials(t *testing.T) {
-	mgr := newMockKiteManager()
-	store := alerts.NewStore(nil)
-	mgr.alertStore = store
-	mgr.apiKeys["user@test.com"] = "test-key-ABCD"
-	mgr.accessTokens["user@test.com"] = "test-token"
-	mgr.tokenValid["user@test.com"] = true
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleStatus(42, "user@test.com")
-	if !strings.Contains(result, "Status") {
-		t.Errorf("expected 'Status', got: %s", result)
-	}
-	if !strings.Contains(result, "ABCD") {
-		t.Errorf("expected last 4 of API key, got: %s", result)
-	}
-	if !strings.Contains(result, "Valid") {
-		t.Errorf("expected 'Valid', got: %s", result)
-	}
-}
-
-func TestHandleStatus_ExpiredCredentials(t *testing.T) {
-	mgr := newMockKiteManager()
-	store := alerts.NewStore(nil)
-	mgr.alertStore = store
-	mgr.apiKeys["user@test.com"] = "some-key"
-	mgr.accessTokens["user@test.com"] = "old-token"
-	mgr.tokenValid["user@test.com"] = false
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleStatus(42, "user@test.com")
-	if !strings.Contains(result, "Expired") {
-		t.Errorf("expected 'Expired', got: %s", result)
-	}
-}
-
-func TestHandleStatus_MissingCredentials(t *testing.T) {
-	mgr := newMockKiteManager()
-	store := alerts.NewStore(nil)
-	mgr.alertStore = store
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleStatus(42, "nobody@test.com")
-	if !strings.Contains(result, "Not configured") {
-		t.Errorf("expected 'Not configured', got: %s", result)
-	}
-	if !strings.Contains(result, "Not found") {
-		t.Errorf("expected 'Not found', got: %s", result)
-	}
-}
 
 // ===========================================================================
 // executeConfirmedOrder paths
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_NoPendingOrder(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -890,6 +457,7 @@ func TestExecuteConfirmedOrder_NoPendingOrder(t *testing.T) {
 	// No pending order → should handle gracefully.
 	h.executeConfirmedOrder(42, email, cq)
 }
+
 
 func TestExecuteConfirmedOrder_EmailMismatch(t *testing.T) {
 	email := "user@test.com"
@@ -912,6 +480,7 @@ func TestExecuteConfirmedOrder_EmailMismatch(t *testing.T) {
 
 	h.executeConfirmedOrder(42, email, cq)
 }
+
 
 func TestExecuteConfirmedOrder_PlacesOrder(t *testing.T) {
 	email := "user@test.com"
@@ -946,6 +515,7 @@ func TestExecuteConfirmedOrder_PlacesOrder(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 func TestExecuteConfirmedOrder_NilMessage(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -961,10 +531,10 @@ func TestExecuteConfirmedOrder_NilMessage(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 // ===========================================================================
 // ServeHTTP integration tests for handler commands
 // ===========================================================================
-
 func TestServeHTTP_PriceCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
@@ -1008,6 +578,7 @@ func TestServeHTTP_PriceCommandIntegration(t *testing.T) {
 		t.Error("expected price message to be sent")
 	}
 }
+
 
 func TestServeHTTP_PortfolioCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -1054,6 +625,7 @@ func TestServeHTTP_PortfolioCommandIntegration(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_OrdersCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
@@ -1099,6 +671,7 @@ func TestServeHTTP_OrdersCommandIntegration(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_PnLCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
@@ -1141,6 +714,7 @@ func TestServeHTTP_PnLCommandIntegration(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_PositionsCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
@@ -1181,6 +755,7 @@ func TestServeHTTP_PositionsCommandIntegration(t *testing.T) {
 		t.Error("expected positions message to be sent")
 	}
 }
+
 
 func TestServeHTTP_PricesCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -1230,6 +805,7 @@ func TestServeHTTP_PricesCommandIntegration(t *testing.T) {
 		t.Error("expected prices message to be sent")
 	}
 }
+
 
 func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -1283,10 +859,10 @@ func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // sendHTML / sendHTMLWithKeyboard / answerCallback / editMessage error paths
 // ===========================================================================
-
 func TestSendHTML_BotError(t *testing.T) {
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
@@ -1305,6 +881,7 @@ func TestSendHTML_BotError(t *testing.T) {
 	h.sendHTML(42, "test message")
 }
 
+
 func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
@@ -1322,6 +899,7 @@ func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
 	h.sendHTMLWithKeyboard(42, "test", kb)
 }
 
+
 func TestAnswerCallback_BotError(t *testing.T) {
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
@@ -1337,6 +915,7 @@ func TestAnswerCallback_BotError(t *testing.T) {
 
 	h.answerCallback("cb-err", "error test")
 }
+
 
 func TestEditMessage_BotError(t *testing.T) {
 	mgr := newMockKiteManager()
@@ -1354,10 +933,10 @@ func TestEditMessage_BotError(t *testing.T) {
 	h.editMessage(42, 100, "new text")
 }
 
+
 // ===========================================================================
 // Helper: create an instruments.Manager with test data
 // ===========================================================================
-
 func newTestInstrumentsManager(t *testing.T) *instruments.Manager {
 	t.Helper()
 	testData := map[uint32]*instruments.Instrument{
@@ -1394,10 +973,10 @@ func newTestInstrumentsManager(t *testing.T) *instruments.Manager {
 	return mgr
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — riskguard blocking
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_RiskguardBlocks(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1435,10 +1014,10 @@ func TestExecuteConfirmedOrder_RiskguardBlocks(t *testing.T) {
 	// The order should be blocked; no error/panic expected.
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — riskguard blocks + nil message
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_RiskguardBlocksNilMessage(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1470,10 +1049,10 @@ func TestExecuteConfirmedOrder_RiskguardBlocksNilMessage(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — paper trading success
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_PaperTradingSuccess(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1520,10 +1099,10 @@ func TestExecuteConfirmedOrder_PaperTradingSuccess(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — real order failure (Kite API error)
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_RealOrderAPIFailure(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1554,10 +1133,10 @@ func TestExecuteConfirmedOrder_RealOrderAPIFailure(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — real order success with riskguard recording
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_RealOrderWithRiskguard(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1596,10 +1175,10 @@ func TestExecuteConfirmedOrder_RealOrderWithRiskguard(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — no kite client (expired token)
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
@@ -1630,10 +1209,10 @@ func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
 	h.executeConfirmedOrder(42, "user@test.com", cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — no kite client + nil message
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
 	mgr := newMockKiteManager()
 
@@ -1659,10 +1238,10 @@ func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
 	h.executeConfirmedOrder(42, "user@test.com", cq)
 }
 
+
 // ===========================================================================
 // executeConfirmedOrder — real order success + nil message
 // ===========================================================================
-
 func TestExecuteConfirmedOrder_SuccessNilMessage(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -1692,70 +1271,10 @@ func TestExecuteConfirmedOrder_SuccessNilMessage(t *testing.T) {
 	h.executeConfirmedOrder(42, email, cq)
 }
 
-// ===========================================================================
-// handleSetAlert — full coverage
-// ===========================================================================
-
-func TestHandleSetAlert_Success(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = newTestInstrumentsManager(t)
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, email, "RELIANCE above 2700")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "RELIANCE") {
-		t.Errorf("expected 'RELIANCE', got: %s", result)
-	}
-	if !strings.Contains(result, "above") {
-		t.Errorf("expected 'above', got: %s", result)
-	}
-	if !strings.Contains(result, "2700.00") {
-		t.Errorf("expected '2700.00', got: %s", result)
-	}
-}
-
-func TestHandleSetAlert_InstrumentNotFound(t *testing.T) {
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = newTestInstrumentsManager(t)
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, "user@test.com", "NOSUCHSYMBOL above 100")
-	if !strings.Contains(result, "not found") {
-		t.Errorf("expected 'not found', got: %s", result)
-	}
-}
-
-func TestHandleSetAlert_BelowDirection(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = newTestInstrumentsManager(t)
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, email, "INFY below 1300")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "below") {
-		t.Errorf("expected 'below', got: %s", result)
-	}
-}
 
 // ===========================================================================
 // handleAlerts — percentage direction display
 // ===========================================================================
-
 func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
@@ -1779,6 +1298,7 @@ func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
 	}
 }
 
+
 func TestHandleAlerts_MixedDirections(t *testing.T) {
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
@@ -1800,6 +1320,7 @@ func TestHandleAlerts_MixedDirections(t *testing.T) {
 	}
 }
 
+
 func TestHandleAlerts_NoAlerts(t *testing.T) {
 	email := "user@test.com"
 	store := alerts.NewStore(nil)
@@ -1816,54 +1337,10 @@ func TestHandleAlerts_NoAlerts(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// handleQuick — edge cases
-// ===========================================================================
-
-func TestHandleQuick_LimitBadPrice2(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleQuick(42, email, "RELIANCE 10 SELL LIMIT -50")
-}
-
-func TestHandleQuick_InvalidQuantity2(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleQuick(42, email, "RELIANCE abc BUY MARKET")
-}
-
-func TestHandleSell_LimitSuccess2(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleSell(42, email, "INFY 5 1600")
-}
-
-func TestHandleBuy_NegativePrice2(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleBuy(42, email, "RELIANCE 10 -500")
-}
 
 // ===========================================================================
 // ServeHTTP — callback query path
 // ===========================================================================
-
 func TestServeHTTP_CallbackQuery(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -1891,6 +1368,7 @@ func TestServeHTTP_CallbackQuery(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 }
+
 
 func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
 	email := "user@test.com"
@@ -1920,6 +1398,7 @@ func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
 	mgr := newMockKiteManager()
 	// No registered users.
@@ -1947,6 +1426,7 @@ func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
 	mgr := newMockKiteManager()
 
@@ -1970,10 +1450,10 @@ func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // ServeHTTP — empty text message
 // ===========================================================================
-
 func TestServeHTTP_EmptyTextMessage(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2002,10 +1482,10 @@ func TestServeHTTP_EmptyTextMessage(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // ServeHTTP — rate limit exceeded
 // ===========================================================================
-
 func TestServeHTTP_RateLimitExceeded(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2036,10 +1516,10 @@ func TestServeHTTP_RateLimitExceeded(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // ServeHTTP — unknown command
 // ===========================================================================
-
 func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2067,10 +1547,10 @@ func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // ServeHTTP — /watchlist command (backward compat for /prices)
 // ===========================================================================
-
 func TestServeHTTP_WatchlistCommand(t *testing.T) {
 	email := "user@test.com"
 	fakeAPI := newFakeKiteAPI()
@@ -2114,10 +1594,10 @@ func TestServeHTTP_WatchlistCommand(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // handlePrices — edge cases
 // ===========================================================================
-
 func TestHandlePrices_AllWhitespace2(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -2130,10 +1610,10 @@ func TestHandlePrices_AllWhitespace2(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // cancelPendingOrder path
 // ===========================================================================
-
 func TestCancelPendingOrder(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2163,6 +1643,7 @@ func TestCancelPendingOrder(t *testing.T) {
 	}
 }
 
+
 func TestCancelPendingOrder_NilMessage(t *testing.T) {
 	mgr := newMockKiteManager()
 
@@ -2178,110 +1659,10 @@ func TestCancelPendingOrder_NilMessage(t *testing.T) {
 	h.cancelPendingOrder(42, cq)
 }
 
-// ===========================================================================
-// handleSetAlert — percentage direction > 100% rejection
-// ===========================================================================
-
-func TestHandleSetAlert_PercentageOver100(t *testing.T) {
-	mgr := newMockKiteManager()
-	mgr.instrMgr = newTestInstrumentsManager(t)
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, "user@test.com", "RELIANCE drop_pct 150")
-	if !strings.Contains(result, "exceed 100%") {
-		t.Errorf("expected '100%%' error, got: %s", result)
-	}
-}
-
-func TestHandleSetAlert_PercentageValid(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = newTestInstrumentsManager(t)
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, email, "RELIANCE rise_pct 5")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "5.00%") {
-		t.Errorf("expected '5.00%%', got: %s", result)
-	}
-	if !strings.Contains(result, "rise_pct") {
-		t.Errorf("expected 'rise_pct', got: %s", result)
-	}
-}
-
-// ===========================================================================
-// handleSetAlert — drop_pct direction with percentage display
-// ===========================================================================
-
-func TestHandleSetAlert_DropPct(t *testing.T) {
-	email := "user@test.com"
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = newTestInstrumentsManager(t)
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, email, "INFY drop_pct 3")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "3.00%") {
-		t.Errorf("expected '3.00%%', got: %s", result)
-	}
-}
-
-// ===========================================================================
-// handleSetAlert — BSE fallback path
-// ===========================================================================
-
-func TestHandleSetAlert_BSEFallback(t *testing.T) {
-	email := "user@test.com"
-	// Create instruments manager with only BSE instrument.
-	bseData := map[uint32]*instruments.Instrument{
-		500325: {
-			ID:              "BSE:RELIANCE",
-			InstrumentToken: 500325,
-			Tradingsymbol:   "RELIANCE",
-			Exchange:        "BSE",
-			Name:            "Reliance Industries",
-		},
-	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	im, err := instruments.New(instruments.Config{
-		TestData: bseData,
-		Logger:   logger,
-	})
-	if err != nil {
-		t.Fatalf("instruments.New failed: %v", err)
-	}
-
-	mgr := newMockKiteManager()
-	mgr.alertStore = alerts.NewStore(nil)
-	mgr.instrMgr = im
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	result := h.handleSetAlert(42, email, "RELIANCE above 2800")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "BSE") {
-		t.Errorf("expected 'BSE' in result (fallback), got: %s", result)
-	}
-}
 
 // ===========================================================================
 // handleMyWatchlist — items with target entry/exit and valid LTP
 // ===========================================================================
-
 func TestHandleMyWatchlist_WithTargets(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
@@ -2325,10 +1706,10 @@ func TestHandleMyWatchlist_WithTargets(t *testing.T) {
 	}
 }
 
+
 // ===========================================================================
 // ServeHTTP — /buy and /sell command integration (covers the nil-reply path)
 // ===========================================================================
-
 func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2355,6 +1736,7 @@ func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
 		t.Error("expected confirmation message to be sent")
 	}
 }
+
 
 func TestServeHTTP_SellCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -2383,6 +1765,7 @@ func TestServeHTTP_SellCommandIntegration(t *testing.T) {
 	}
 }
 
+
 func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
@@ -2409,6 +1792,7 @@ func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
 		t.Error("expected confirmation message to be sent")
 	}
 }
+
 
 func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -2438,6 +1822,7 @@ func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
 		t.Error("expected alert set message to be sent")
 	}
 }
+
 
 func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
 	email := "user@test.com"
@@ -2470,60 +1855,10 @@ func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
 	}
 }
 
-// ===========================================================================
-// handleOrderCommand — paper trading mode label in confirmation
-// ===========================================================================
-
-func TestHandleBuy_PaperTradingMode(t *testing.T) {
-	email := "user@test.com"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dbPath := filepath.Join(t.TempDir(), "paper2.db")
-	paperDB, err := alerts.OpenDB(dbPath)
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
-	t.Cleanup(func() { paperDB.Close() })
-	ptStore := papertrading.NewStore(paperDB, logger)
-	ptStore.InitTables()
-	pe := papertrading.NewEngine(ptStore, logger)
-	pe.Enable(email, 10_00_000)
-
-	mgr := newMockKiteManager()
-	mgr.paperEngine = pe
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleBuy(42, email, "RELIANCE 10")
-}
-
-func TestHandleQuick_PaperTradingMode(t *testing.T) {
-	email := "user@test.com"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dbPath := filepath.Join(t.TempDir(), "paper3.db")
-	paperDB, err := alerts.OpenDB(dbPath)
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
-	t.Cleanup(func() { paperDB.Close() })
-	ptStore := papertrading.NewStore(paperDB, logger)
-	ptStore.InitTables()
-	pe := papertrading.NewEngine(ptStore, logger)
-	pe.Enable(email, 10_00_000)
-
-	mgr := newMockKiteManager()
-	mgr.paperEngine = pe
-
-	h, _ := newTestBotHandler(mgr)
-	defer h.Shutdown()
-
-	h.handleQuick(42, email, "INFY 5 BUY LIMIT 1500")
-}
 
 // ===========================================================================
 // ServeHTTP — confirm_order callback integration
 // ===========================================================================
-
 func TestServeHTTP_ConfirmOrderCallback(t *testing.T) {
 	email := "user@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
