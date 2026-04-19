@@ -106,6 +106,13 @@ type PluginManifest struct {
 	MiddlewareCount        int
 	WidgetCount            int
 	EventSubscriptionCount int
+	// Health surfaces per-plugin ok/degraded/failed state, populated
+	// by ReportPluginHealth (see plugin_lifecycle.go). Gives the
+	// admin surface a single "is anything red?" snapshot.
+	Health                 map[string]HealthStatus
+	// LifecycleCount is the number of registries participating in
+	// the Init/Shutdown/Reload coordination.
+	LifecycleCount         int
 }
 
 // GetPluginManifest returns a snapshot of every plugin-contributed
@@ -124,6 +131,8 @@ func GetPluginManifest() PluginManifest {
 		MiddlewareCount:        PluginMiddlewareCount(),
 		WidgetCount:            PluginWidgetCount(),
 		EventSubscriptionCount: PluginEventSubscriptionCount(),
+		Health:                 PluginHealth(),
+		LifecycleCount:         PluginLifecycleCount(),
 	}
 }
 
