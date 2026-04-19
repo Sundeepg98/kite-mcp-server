@@ -78,7 +78,7 @@ func TestUserOrderStats_SteadyBaseline(t *testing.T) {
 	}
 
 	mean, stdev, count := s.UserOrderStats(email, 30)
-	assert.Equal(t, 10.0, count)
+	assert.Equal(t, 10.0, count, "TestUserOrderStats_SteadyBaseline: want=%v got=%v", 10.0, count)
 	assert.InDelta(t, 5000.0, mean, 0.01, "mean of 10x Rs 5000 orders should be 5000")
 	assert.InDelta(t, 0.0, stdev, 0.01, "zero variance series must have stdev 0")
 }
@@ -103,9 +103,9 @@ func TestUserOrderStats_VariedBaseline(t *testing.T) {
 	}
 
 	mean, stdev, count := s.UserOrderStats(email, 30)
-	assert.Equal(t, 5.0, count)
-	assert.InDelta(t, 3000.0, mean, 0.1)
-	assert.InDelta(t, 1414.21, stdev, 1.0)
+	assert.Equal(t, 5.0, count, "TestUserOrderStats_VariedBaseline: want=%v got=%v", 5.0, count)
+	assert.InDelta(t, 3000.0, mean, 0.1, "TestUserOrderStats_VariedBaseline: want=%v got=%v", 3000.0, mean, 0.1)
+	assert.InDelta(t, 1414.21, stdev, 1.0, "TestUserOrderStats_VariedBaseline: want=%v got=%v", 1414.21, stdev, 1.0)
 }
 
 // TestUserOrderStats_WindowExcludesOldOrders confirms the days-parameter
@@ -151,7 +151,7 @@ func TestUserOrderStats_OnlyOrderTools(t *testing.T) {
 
 	mean, _, count := s.UserOrderStats(email, 30)
 	assert.Equal(t, 5.0, count, "only place_order/modify_order rows should count")
-	assert.InDelta(t, 1000.0, mean, 1.0)
+	assert.InDelta(t, 1000.0, mean, 1.0, "TestUserOrderStats_OnlyOrderTools: want=%v got=%v", 1000.0, mean, 1.0)
 }
 
 // TestUserOrderStats_ModifyOrderCounted verifies that modify_order rows are
@@ -180,7 +180,7 @@ func TestUserOrderStats_UnknownUser(t *testing.T) {
 	s := openTestStore(t)
 
 	mean, stdev, count := s.UserOrderStats("ghost@nowhere.com", 30)
-	assert.Equal(t, 0.0, mean)
-	assert.Equal(t, 0.0, stdev)
-	assert.Equal(t, 0.0, count)
+	assert.Equal(t, 0.0, mean, "TestUserOrderStats_UnknownUser: want=%v got=%v", 0.0, mean)
+	assert.Equal(t, 0.0, stdev, "TestUserOrderStats_UnknownUser: want=%v got=%v", 0.0, stdev)
+	assert.Equal(t, 0.0, count, "TestUserOrderStats_UnknownUser: want=%v got=%v", 0.0, count)
 }

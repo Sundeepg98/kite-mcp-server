@@ -87,7 +87,7 @@ func TestPosition_UnrealizedPnL(t *testing.T) {
 				AveragePrice: tc.averagePrice,
 			})
 			got := p.UnrealizedPnL(NewINR(tc.ltp))
-			assert.InDelta(t, tc.want, got.Amount, 0.001)
+			assert.InDelta(t, tc.want, got.Amount, 0.001, "TestPosition_UnrealizedPnL: want=%v got=%v", tc.want, got.Amount, 0.001)
 			assert.Equal(t, "INR", got.Currency)
 		})
 	}
@@ -98,7 +98,7 @@ func TestPosition_PnL(t *testing.T) {
 
 	p := NewPositionFromBroker(broker.Position{PnL: 1234.5})
 	got := p.PnL()
-	assert.InDelta(t, 1234.5, got.Amount, 0.001)
+	assert.InDelta(t, 1234.5, got.Amount, 0.001, "TestPosition_PnL: want=%v got=%v", 1234.5, got.Amount, 0.001)
 	assert.Equal(t, "INR", got.Currency)
 }
 

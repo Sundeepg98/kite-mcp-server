@@ -164,7 +164,7 @@ func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 	// Simulate retry — exact same ClientOrderID.
 	r2 := g.CheckOrder(req)
 	assert.False(t, r2.Allowed, "retry with same client_order_id must be blocked")
-	assert.Equal(t, ReasonDuplicateOrder, r2.Reason)
+	assert.Equal(t, ReasonDuplicateOrder, r2.Reason, "TestGuard_CheckOrder_DuplicateClientOrderID_Blocked: want=%v got=%v", ReasonDuplicateOrder, r2.Reason)
 }
 
 // TestGuard_CheckOrder_ClientOrderID_DifferentUsers verifies that two users
@@ -227,13 +227,13 @@ func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
 
 	// First submission — handler runs.
 	r1, err := handler(ctx, req)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestMiddleware_ClientOrderID_Blocked_OnRetry: err")
 	assert.False(t, r1.IsError, "first submission should succeed")
-	assert.Equal(t, 1, handlerCalls)
+	assert.Equal(t, 1, handlerCalls, "TestMiddleware_ClientOrderID_Blocked_OnRetry: want=%v got=%v", 1, handlerCalls)
 
 	// Simulated retry — same client_order_id, handler MUST NOT run.
 	r2, err := handler(ctx, req)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestMiddleware_ClientOrderID_Blocked_OnRetry: err")
 	assert.True(t, r2.IsError, "retry with same client_order_id must be blocked")
 	assert.Equal(t, 1, handlerCalls, "handler should not be invoked on retry")
 }
@@ -265,11 +265,11 @@ func TestMiddleware_ClientOrderID_ModifyOrder(t *testing.T) {
 	ctx := oauth.ContextWithEmail(context.Background(), "modifier@test.com")
 
 	r1, err := handler(ctx, req)
-	require.NoError(t, err)
-	assert.False(t, r1.IsError)
+	require.NoError(t, err, "TestMiddleware_ClientOrderID_ModifyOrder: err")
+	assert.False(t, r1.IsError, "TestMiddleware_ClientOrderID_ModifyOrder: r1.IsError")
 
 	r2, err := handler(ctx, req)
-	require.NoError(t, err)
-	assert.True(t, r2.IsError)
+	require.NoError(t, err, "TestMiddleware_ClientOrderID_ModifyOrder: err")
+	assert.True(t, r2.IsError, "TestMiddleware_ClientOrderID_ModifyOrder: r2.IsError")
 	assert.Equal(t, 1, handlerCalls, "modify_order retry must be blocked before handler")
 }

@@ -60,12 +60,12 @@ func TestStore_RecordAndList(t *testing.T) {
 
 	// Record
 	err := s.Record(entry)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_RecordAndList: err")
 
 	// List
 	results, total, err := s.List("alice@example.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 1, total)
+	require.NoError(t, err, "TestStore_RecordAndList: err")
+	assert.Equal(t, 1, total, "TestStore_RecordAndList: want=%v got=%v", 1, total)
 	require.Len(t, results, 1)
 
 	got := results[0]
@@ -77,11 +77,11 @@ func TestStore_RecordAndList(t *testing.T) {
 	assert.Equal(t, `{"exchange":"NSE","symbol":"INFY","qty":10}`, got.InputParams)
 	assert.Equal(t, "BUY INFY x10", got.InputSummary)
 	assert.Equal(t, "Order 12345 placed", got.OutputSummary)
-	assert.Equal(t, 256, got.OutputSize)
-	assert.False(t, got.IsError)
+	assert.Equal(t, 256, got.OutputSize, "TestStore_RecordAndList: want=%v got=%v", 256, got.OutputSize)
+	assert.False(t, got.IsError, "TestStore_RecordAndList: got.IsError")
 	assert.Equal(t, "", got.ErrorMessage)
 	assert.Equal(t, "", got.ErrorType)
-	assert.Equal(t, now, got.StartedAt)
+	assert.Equal(t, now, got.StartedAt, "TestStore_RecordAndList: want=%v got=%v", now, got.StartedAt)
 	assert.Equal(t, now.Add(42*time.Millisecond), got.CompletedAt)
 	assert.Equal(t, int64(42), got.DurationMs)
 	assert.True(t, got.ID > 0, "auto-increment ID should be positive")
@@ -116,17 +116,17 @@ func TestStore_ListWithFilters(t *testing.T) {
 
 	// --- Filter by category "order" ---
 	results, total, err := s.List(email, ListOptions{Category: "order"})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
 	assert.Equal(t, 4, total, "4 entries in category 'order'")
 	assert.Len(t, results, 4)
 
 	// --- Filter errors only ---
 	results, total, err = s.List(email, ListOptions{OnlyErrors: true})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
 	assert.Equal(t, 1, total, "1 error entry")
 	require.Len(t, results, 1)
 	assert.Equal(t, "c-4", results[0].CallID)
-	assert.True(t, results[0].IsError)
+	assert.True(t, results[0].IsError, "TestStore_ListWithFilters: results[0].IsError")
 	assert.Equal(t, "insufficient funds", results[0].ErrorMessage)
 	assert.Equal(t, "validation", results[0].ErrorType)
 
@@ -135,13 +135,13 @@ func TestStore_ListWithFilters(t *testing.T) {
 		Since: base.Add(1 * time.Minute),
 		Until: base.Add(3 * time.Minute),
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
 	assert.Equal(t, 3, total, "entries at T+1, T+2, T+3")
 	assert.Len(t, results, 3)
 
 	// --- Pagination: limit 2, offset 0 ---
 	results, total, err = s.List(email, ListOptions{Limit: 2, Offset: 0})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
 	assert.Equal(t, 5, total, "total should be all 5 regardless of limit")
 	assert.Len(t, results, 2, "limited to 2 results")
 	// Results are ordered by started_at DESC, so the newest first.
@@ -150,17 +150,17 @@ func TestStore_ListWithFilters(t *testing.T) {
 
 	// --- Pagination: limit 2, offset 2 ---
 	results, total, err = s.List(email, ListOptions{Limit: 2, Offset: 2})
-	require.NoError(t, err)
-	assert.Equal(t, 5, total)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
+	assert.Equal(t, 5, total, "TestStore_ListWithFilters: want=%v got=%v", 5, total)
 	assert.Len(t, results, 2)
 	assert.Equal(t, "c-2", results[0].CallID)
 	assert.Equal(t, "c-1", results[1].CallID)
 
 	// --- Different user sees nothing ---
 	results, total, err = s.List("stranger@example.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 0, total)
-	assert.Empty(t, results)
+	require.NoError(t, err, "TestStore_ListWithFilters: err")
+	assert.Equal(t, 0, total, "TestStore_ListWithFilters: want=%v got=%v", 0, total)
+	assert.Empty(t, results, "TestStore_ListWithFilters: results")
 }
 
 func TestStore_GetStats(t *testing.T) {
@@ -192,24 +192,24 @@ func TestStore_GetStats(t *testing.T) {
 
 	// Stats for all entries.
 	stats, err := s.GetStats(email, time.Time{}, "", false)
-	require.NoError(t, err)
-	assert.Equal(t, 5, stats.TotalCalls)
-	assert.Equal(t, 1, stats.ErrorCount)
+	require.NoError(t, err, "TestStore_GetStats: err")
+	assert.Equal(t, 5, stats.TotalCalls, "TestStore_GetStats: want=%v got=%v", 5, stats.TotalCalls)
+	assert.Equal(t, 1, stats.ErrorCount, "TestStore_GetStats: want=%v got=%v", 1, stats.ErrorCount)
 	assert.InDelta(t, 160.0, stats.AvgLatencyMs, 0.5) // (100+200+300+50+150)/5 = 160
 	assert.Equal(t, "get_holdings", stats.TopTool)
-	assert.Equal(t, 3, stats.TopToolCount)
+	assert.Equal(t, 3, stats.TopToolCount, "TestStore_GetStats: want=%v got=%v", 3, stats.TopToolCount)
 
 	// Stats with a since filter (only entries at T+2min and later).
 	stats, err = s.GetStats(email, base.Add(2*time.Minute), "", false)
-	require.NoError(t, err)
-	assert.Equal(t, 3, stats.TotalCalls)
-	assert.Equal(t, 1, stats.ErrorCount)
+	require.NoError(t, err, "TestStore_GetStats: err")
+	assert.Equal(t, 3, stats.TotalCalls, "TestStore_GetStats: want=%v got=%v", 3, stats.TotalCalls)
+	assert.Equal(t, 1, stats.ErrorCount, "TestStore_GetStats: want=%v got=%v", 1, stats.ErrorCount)
 
 	// Stats for a different user — empty.
 	stats, err = s.GetStats("nobody@example.com", time.Time{}, "", false)
-	require.NoError(t, err)
-	assert.Equal(t, 0, stats.TotalCalls)
-	assert.Equal(t, 0, stats.ErrorCount)
+	require.NoError(t, err, "TestStore_GetStats: err")
+	assert.Equal(t, 0, stats.TotalCalls, "TestStore_GetStats: want=%v got=%v", 0, stats.TotalCalls)
+	assert.Equal(t, 0, stats.ErrorCount, "TestStore_GetStats: want=%v got=%v", 0, stats.ErrorCount)
 	assert.Equal(t, "", stats.TopTool)
 }
 
@@ -228,8 +228,8 @@ func TestStore_EnqueueAndWorker(t *testing.T) {
 
 	// Verify the entry was written.
 	results, total, err := s.List("worker@example.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 1, total)
+	require.NoError(t, err, "TestStore_EnqueueAndWorker: err")
+	assert.Equal(t, 1, total, "TestStore_EnqueueAndWorker: want=%v got=%v", 1, total)
 	require.Len(t, results, 1)
 	assert.Equal(t, "enq-001", results[0].CallID)
 }
@@ -245,8 +245,8 @@ func TestStore_EnqueueWithoutWorker(t *testing.T) {
 	s.Enqueue(entry)
 
 	results, total, err := s.List("sync@example.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 1, total)
+	require.NoError(t, err, "TestStore_EnqueueWithoutWorker: err")
+	assert.Equal(t, 1, total, "TestStore_EnqueueWithoutWorker: want=%v got=%v", 1, total)
 	require.Len(t, results, 1)
 	assert.Equal(t, "sync-001", results[0].CallID)
 }
@@ -265,19 +265,19 @@ func TestStore_DeleteOlderThan(t *testing.T) {
 
 	// Verify both exist
 	results, total, err := s.List("retention@test.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 2, total)
+	require.NoError(t, err, "TestStore_DeleteOlderThan: err")
+	assert.Equal(t, 2, total, "TestStore_DeleteOlderThan: want=%v got=%v", 2, total)
 	assert.Len(t, results, 2)
 
 	// Delete entries older than 50 days ago
 	cutoff := now.Add(-50 * 24 * time.Hour)
 	deleted, err := s.DeleteOlderThan(cutoff)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_DeleteOlderThan: err")
 	assert.Equal(t, int64(1), deleted, "expected 1 row deleted")
 
 	// Verify only the new entry remains
 	results, total, err = s.List("retention@test.com", ListOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_DeleteOlderThan: err")
 	assert.Equal(t, 1, total, "expected 1 remaining")
 	require.Len(t, results, 1)
 	assert.Equal(t, "new-001", results[0].CallID)
@@ -289,7 +289,7 @@ func TestStore_DeleteOlderThan_NoRows(t *testing.T) {
 
 	// Nothing to delete on an empty table
 	deleted, err := s.DeleteOlderThan(time.Now())
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_DeleteOlderThan_NoRows: err")
 	assert.Equal(t, int64(0), deleted)
 }
 
@@ -302,7 +302,7 @@ func TestStore_RecordDuplicate(t *testing.T) {
 
 	// First insert.
 	err := s.Record(entry)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestStore_RecordDuplicate: err")
 
 	// Second insert with the same call_id should not error (INSERT OR IGNORE).
 	entry2 := makeEntry("dup-001", "carol@example.com", "get_ltp", "query", false, now.Add(time.Second))
@@ -311,9 +311,9 @@ func TestStore_RecordDuplicate(t *testing.T) {
 
 	// Only one row should exist.
 	results, total, err := s.List("carol@example.com", ListOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 1, total)
+	require.NoError(t, err, "TestStore_RecordDuplicate: err")
+	assert.Equal(t, 1, total, "TestStore_RecordDuplicate: want=%v got=%v", 1, total)
 	require.Len(t, results, 1)
 	// The first insert's data should be preserved (IGNORE means the second is dropped).
-	assert.Equal(t, now, results[0].StartedAt)
+	assert.Equal(t, now, results[0].StartedAt, "TestStore_RecordDuplicate: want=%v got=%v", now, results[0].StartedAt)
 }

@@ -27,13 +27,13 @@ func TestSetSubscription_Create(t *testing.T) {
 		Status:     StatusActive,
 	}
 	err := s.SetSubscription(sub)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestSetSubscription_Create: err")
 
 	got := s.GetSubscription("alice@example.com")
-	require.NotNil(t, got)
+	require.NotNil(t, got, "TestSetSubscription_Create: got")
 	assert.Equal(t, "alice@example.com", got.AdminEmail)
-	assert.Equal(t, TierPro, got.Tier)
-	assert.Equal(t, StatusActive, got.Status)
+	assert.Equal(t, TierPro, got.Tier, "TestSetSubscription_Create: want=%v got=%v", TierPro, got.Tier)
+	assert.Equal(t, StatusActive, got.Status, "TestSetSubscription_Create: want=%v got=%v", StatusActive, got.Status)
 	assert.WithinDuration(t, time.Now(), got.UpdatedAt, 2*time.Second)
 }
 
@@ -47,7 +47,7 @@ func TestSetSubscription_Update(t *testing.T) {
 		Tier:       TierPro,
 		Status:     StatusActive,
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestSetSubscription_Update: err")
 
 	// Update to Premium.
 	err = s.SetSubscription(&Subscription{
@@ -55,11 +55,11 @@ func TestSetSubscription_Update(t *testing.T) {
 		Tier:       TierPremium,
 		Status:     StatusActive,
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestSetSubscription_Update: err")
 
 	got := s.GetSubscription("bob@example.com")
-	require.NotNil(t, got)
-	assert.Equal(t, TierPremium, got.Tier)
+	require.NotNil(t, got, "TestSetSubscription_Update: got")
+	assert.Equal(t, TierPremium, got.Tier, "TestSetSubscription_Update: want=%v got=%v", TierPremium, got.Tier)
 }
 
 
@@ -71,16 +71,16 @@ func TestSetSubscription_EmailNormalization(t *testing.T) {
 		Tier:       TierPro,
 		Status:     StatusActive,
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "TestSetSubscription_EmailNormalization: err")
 
 	// Retrieve with different casing — should find the same subscription.
 	got := s.GetSubscription("alice@example.com")
 	require.NotNil(t, got, "lookup with lowercase should find subscription set with mixed case")
-	assert.Equal(t, TierPro, got.Tier)
+	assert.Equal(t, TierPro, got.Tier, "TestSetSubscription_EmailNormalization: want=%v got=%v", TierPro, got.Tier)
 
 	got2 := s.GetSubscription("ALICE@EXAMPLE.COM")
 	require.NotNil(t, got2, "lookup with uppercase should find subscription set with mixed case")
-	assert.Equal(t, TierPro, got2.Tier)
+	assert.Equal(t, TierPro, got2.Tier, "TestSetSubscription_EmailNormalization: want=%v got=%v", TierPro, got2.Tier)
 }
 
 
@@ -106,7 +106,7 @@ func TestLoadFromDB_EmptyDB(t *testing.T) {
 
 	// LoadFromDB on a freshly created (empty) table should return no error.
 	err := s.LoadFromDB()
-	require.NoError(t, err)
+	require.NoError(t, err, "TestLoadFromDB_EmptyDB: err")
 
 	// No subscriptions should be loaded.
 	assert.Nil(t, s.GetSubscription("nobody@example.com"))
@@ -118,7 +118,7 @@ func TestLoadFromDB_NilDB(t *testing.T) {
 	// Store with nil DB — LoadFromDB should be a no-op.
 	s := newTestStore()
 	err := s.LoadFromDB()
-	require.NoError(t, err)
+	require.NoError(t, err, "TestLoadFromDB_NilDB: err")
 }
 
 
@@ -126,7 +126,7 @@ func TestInitTable_NilDB(t *testing.T) {
 	s := newTestStore()
 	// InitTable with nil DB should return nil (no-op).
 	err := s.InitTable()
-	require.NoError(t, err)
+	require.NoError(t, err, "TestInitTable_NilDB: err")
 }
 
 
@@ -146,15 +146,15 @@ func TestInitTable_Idempotent(t *testing.T) {
 		Status:     StatusActive,
 	}))
 	got := s.GetSubscription("idempotent@example.com")
-	require.NotNil(t, got)
-	assert.Equal(t, TierPro, got.Tier)
+	require.NotNil(t, got, "TestInitTable_Idempotent: got")
+	assert.Equal(t, TierPro, got.Tier, "TestInitTable_Idempotent: want=%v got=%v", TierPro, got.Tier)
 }
 
 
 func TestGetSubscription_NonExistent(t *testing.T) {
 	s := newTestStore()
 	got := s.GetSubscription("nonexistent@example.com")
-	assert.Nil(t, got)
+	assert.Nil(t, got, "TestGetSubscription_NonExistent: got")
 }
 
 
@@ -180,12 +180,12 @@ func TestSetSubscription_PersistsToDB(t *testing.T) {
 	require.NoError(t, s2.LoadFromDB())
 
 	got := s2.GetSubscription("persist@example.com")
-	require.NotNil(t, got)
-	assert.Equal(t, TierPremium, got.Tier)
+	require.NotNil(t, got, "TestSetSubscription_PersistsToDB: got")
+	assert.Equal(t, TierPremium, got.Tier, "TestSetSubscription_PersistsToDB: want=%v got=%v", TierPremium, got.Tier)
 	assert.Equal(t, "cus_persist", got.StripeCustomerID)
 	assert.Equal(t, "sub_persist", got.StripeSubID)
-	assert.Equal(t, StatusActive, got.Status)
-	assert.Equal(t, 10, got.MaxUsers)
+	assert.Equal(t, StatusActive, got.Status, "TestSetSubscription_PersistsToDB: want=%v got=%v", StatusActive, got.Status)
+	assert.Equal(t, 10, got.MaxUsers, "TestSetSubscription_PersistsToDB: want=%v got=%v", 10, got.MaxUsers)
 }
 
 
@@ -209,7 +209,7 @@ func TestSetSubscription_WithExpiresAt(t *testing.T) {
 	require.NoError(t, s2.LoadFromDB())
 
 	got := s2.GetSubscription("expiry@example.com")
-	require.NotNil(t, got)
+	require.NotNil(t, got, "TestSetSubscription_WithExpiresAt: got")
 	// Compare within 1 second due to RFC3339 truncation.
 	assert.WithinDuration(t, exp, got.ExpiresAt, 2*time.Second)
 }
@@ -226,7 +226,7 @@ func TestMarkEventProcessed_NilDB(t *testing.T) {
 	s := newTestStore()
 	// MarkEventProcessed with nil DB should return nil (no-op).
 	err := s.MarkEventProcessed("evt_any", "test.event")
-	require.NoError(t, err)
+	require.NoError(t, err, "TestMarkEventProcessed_NilDB: err")
 }
 
 
@@ -262,19 +262,19 @@ func TestLoadFromDB_MultipleSubscriptions(t *testing.T) {
 	require.NoError(t, s2.LoadFromDB())
 
 	subA := s2.GetSubscription("a@example.com")
-	require.NotNil(t, subA)
-	assert.Equal(t, TierPro, subA.Tier)
-	assert.Equal(t, 5, subA.MaxUsers)
+	require.NotNil(t, subA, "TestLoadFromDB_MultipleSubscriptions: subA")
+	assert.Equal(t, TierPro, subA.Tier, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", TierPro, subA.Tier)
+	assert.Equal(t, 5, subA.MaxUsers, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", 5, subA.MaxUsers)
 
 	subB := s2.GetSubscription("b@example.com")
-	require.NotNil(t, subB)
-	assert.Equal(t, TierPremium, subB.Tier)
-	assert.Equal(t, StatusTrialing, subB.Status)
+	require.NotNil(t, subB, "TestLoadFromDB_MultipleSubscriptions: subB")
+	assert.Equal(t, TierPremium, subB.Tier, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", TierPremium, subB.Tier)
+	assert.Equal(t, StatusTrialing, subB.Status, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", StatusTrialing, subB.Status)
 
 	subC := s2.GetSubscription("c@example.com")
-	require.NotNil(t, subC)
-	assert.Equal(t, TierSoloPro, subC.Tier)
-	assert.Equal(t, 1, subC.MaxUsers)
+	require.NotNil(t, subC, "TestLoadFromDB_MultipleSubscriptions: subC")
+	assert.Equal(t, TierSoloPro, subC.Tier, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", TierSoloPro, subC.Tier)
+	assert.Equal(t, 1, subC.MaxUsers, "TestLoadFromDB_MultipleSubscriptions: want=%v got=%v", 1, subC.MaxUsers)
 }
 
 
@@ -306,7 +306,7 @@ func TestInitTable_Migration(t *testing.T) {
 		expires_at         TEXT DEFAULT '',
 		updated_at         TEXT NOT NULL
 	)`)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestInitTable_Migration: err")
 
 	// Insert a row with old schema.
 	err = db.ExecInsert(
@@ -314,7 +314,7 @@ func TestInitTable_Migration(t *testing.T) {
 		 VALUES (?, ?, '', '', 'active', ?)`,
 		"old@example.com", 1, time.Now().Format(time.RFC3339),
 	)
-	require.NoError(t, err)
+	require.NoError(t, err, "TestInitTable_Migration: err")
 
 	// Now call InitTable which should migrate the table.
 	s := NewStore(db, logger)
@@ -324,8 +324,8 @@ func TestInitTable_Migration(t *testing.T) {
 	require.NoError(t, s.LoadFromDB())
 	sub := s.GetSubscription("old@example.com")
 	require.NotNil(t, sub, "migrated subscription should be loadable")
-	assert.Equal(t, TierPro, sub.Tier)
-	assert.Equal(t, StatusActive, sub.Status)
+	assert.Equal(t, TierPro, sub.Tier, "TestInitTable_Migration: want=%v got=%v", TierPro, sub.Tier)
+	assert.Equal(t, StatusActive, sub.Status, "TestInitTable_Migration: want=%v got=%v", StatusActive, sub.Status)
 }
 
 
@@ -346,7 +346,7 @@ func TestSetSubscription_DBWriteError(t *testing.T) {
 		Tier:       TierPro,
 		Status:     StatusActive,
 	})
-	require.Error(t, err)
+	require.Error(t, err, "TestSetSubscription_DBWriteError: err")
 	assert.Contains(t, err.Error(), "persist subscription")
 }
 
@@ -367,7 +367,7 @@ func TestSetSubscription_WithExpiresAtDBRoundTrip(t *testing.T) {
 	s2 := NewStore(db, logger)
 	require.NoError(t, s2.LoadFromDB())
 	got := s2.GetSubscription("noexpiry@example.com")
-	require.NotNil(t, got)
+	require.NotNil(t, got, "TestSetSubscription_WithExpiresAtDBRoundTrip: got")
 	assert.True(t, got.ExpiresAt.IsZero())
 }
 
@@ -380,7 +380,7 @@ func TestLoadFromDB_ClosedDB(t *testing.T) {
 	db.Close()
 
 	err := s.LoadFromDB()
-	require.Error(t, err)
+	require.Error(t, err, "TestLoadFromDB_ClosedDB: err")
 	assert.Contains(t, err.Error(), "query billing")
 }
 
@@ -403,5 +403,5 @@ func TestInitTable_ClosedDB(t *testing.T) {
 	db.Close()
 
 	err := s.InitTable()
-	require.Error(t, err)
+	require.Error(t, err, "TestInitTable_ClosedDB: err")
 }
