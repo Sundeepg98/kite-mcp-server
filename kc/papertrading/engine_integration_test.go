@@ -5,7 +5,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -273,7 +272,6 @@ func TestIntegration_PnLCalculation(t *testing.T) {
 
 	// Price goes up to 550.
 	mc.SetPrices(map[string]float64{"NSE:WIPRO": 550.00})
-	time.Sleep(time.Millisecond) // avoid order ID collision
 
 	// Sell 100 at 550.
 	_, err = engine.PlaceOrder(integrationEmail, map[string]any{
@@ -320,7 +318,6 @@ func TestIntegration_PartialSell(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(time.Millisecond)
 
 	// Sell 40.
 	_, err = engine.PlaceOrder(integrationEmail, map[string]any{
@@ -364,7 +361,6 @@ func TestIntegration_WeightedAverageOnMultipleBuys(t *testing.T) {
 
 	// Price changes to 3200.
 	mc.SetPrices(map[string]float64{"NSE:TCS": 3200.00})
-	time.Sleep(time.Millisecond)
 
 	// Buy 10 more at 3200.
 	_, err = engine.PlaceOrder(integrationEmail, map[string]any{
@@ -554,7 +550,6 @@ func TestIntegration_PriceChangesBetweenOrders(t *testing.T) {
 
 	// Price drops to 1400.
 	mc.SetPrices(map[string]float64{"NSE:HDFCBANK": 1400.00})
-	time.Sleep(time.Millisecond)
 
 	// Buy more at 1400.
 	_, err = engine.PlaceOrder(integrationEmail, map[string]any{
@@ -665,7 +660,6 @@ func TestIntegration_MultipleInstruments(t *testing.T) {
 
 	// Buy all three.
 	for _, sym := range []string{"RELIANCE", "TCS", "INFY"} {
-		time.Sleep(time.Millisecond)
 		_, err := engine.PlaceOrder(integrationEmail, map[string]any{
 			"exchange":         "NSE",
 			"tradingsymbol":    sym,

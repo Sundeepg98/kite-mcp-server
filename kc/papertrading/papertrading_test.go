@@ -302,7 +302,6 @@ func TestShortPosition(t *testing.T) {
 	require.Len(t, positions, 1)
 	assert.Equal(t, -10, positions[0].Quantity)
 
-	time.Sleep(time.Millisecond)
 	// Add to short.
 	_, err = engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
@@ -315,7 +314,6 @@ func TestShortPosition(t *testing.T) {
 	require.Len(t, positions, 1)
 	assert.Equal(t, -15, positions[0].Quantity)
 
-	time.Sleep(time.Millisecond)
 	// Cover and flip to long: buy 20.
 	_, err = engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
@@ -340,7 +338,6 @@ func TestCloseToZero(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(time.Millisecond)
 	_, err = engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
 		"transaction_type": "SELL", "order_type": "MARKET",
@@ -447,7 +444,6 @@ func TestPlaceOrder_SellLimitImmediate(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(time.Millisecond)
 	result, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE",
 		"transaction_type": "SELL", "order_type": "LIMIT",
@@ -751,7 +747,6 @@ func TestHandleClosePosition(t *testing.T) {
 		"product": "MIS", "quantity": 10,
 	})
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond) // avoid order ID collision on Windows
 
 	result, err := handleClosePosition(engine, testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "RELIANCE", "product": "MIS",
@@ -781,13 +776,11 @@ func TestHandleCloseAllPositions(t *testing.T) {
 		"transaction_type": "BUY", "order_type": "MARKET",
 		"product": "MIS", "quantity": 10,
 	})
-	time.Sleep(time.Millisecond)
 	_, _ = engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY",
 		"transaction_type": "BUY", "order_type": "MARKET",
 		"product": "MIS", "quantity": 10,
 	})
-	time.Sleep(time.Millisecond) // avoid order ID collision on Windows
 
 	result, err := handleCloseAllPositions(engine, testEmail)
 	require.NoError(t, err)
@@ -871,7 +864,6 @@ func TestHandleClosePosition_FlatPosition(t *testing.T) {
 		"product": "MIS", "quantity": 10,
 	})
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond)
 	_, err = engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "INFY",
 		"transaction_type": "SELL", "order_type": "MARKET",
@@ -929,7 +921,6 @@ func TestStatus_WithFullData(t *testing.T) {
 		"product": "CNC", "quantity": 5,
 	})
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond) // unique order ID
 
 	// LIMIT order stays open (price < LTP).
 	_, err = engine.PlaceOrder(testEmail, map[string]any{
@@ -999,7 +990,6 @@ func TestMonitor_Fill_SellMIS(t *testing.T) {
 	cashAfterBuy, _ := engine.store.GetAccount(testEmail)
 
 	// Place SELL LIMIT above current LTP (stays OPEN).
-	time.Sleep(time.Millisecond) // unique order ID
 	result, err := engine.PlaceOrder(testEmail, map[string]any{
 		"exchange": "NSE", "tradingsymbol": "WIPRO",
 		"transaction_type": "SELL", "order_type": "LIMIT",
@@ -1100,7 +1090,6 @@ func TestMonitor_Fill_CNC_SellingReducesHoldings(t *testing.T) {
 		"product": "CNC", "quantity": 100,
 	})
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond)
 
 	// Place CNC SELL LIMIT above LTP (stays OPEN).
 	result, err := engine.PlaceOrder(testEmail, map[string]any{

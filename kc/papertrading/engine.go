@@ -4,10 +4,29 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
+
+// orderSeq is a package-scope monotonic counter backing nextOrderID.
+// Paper-trading IDs are process-local (paper trades don't need to survive
+// restarts as a globally-unique namespace), so a single atomic counter
+// is the cheapest correct implementation.
+//
+// Atomic ensures concurrent PlaceOrder / ModifyOrder calls get distinct
+// IDs with no mutex overhead. Replaces the prior time.Now().UnixNano()
+// scheme which collided on Windows (100ns tick resolution) and forced
+// ~57 sites in the test suite to sleep 1ms between successive calls.
+var orderSeq atomic.Uint64
+
+// nextOrderID returns the next unique paper-trading order ID in the
+// format "PAPER_<decimal>". Monotonic, collision-free, no wall-clock
+// dependency.
+func nextOrderID() string {
+	return fmt.Sprintf("PAPER_%d", orderSeq.Add(1))
+}
 
 // LTPProvider fetches last-traded prices for instruments.
 // Instrument format: "EXCHANGE:TRADINGSYMBOL" (e.g. "NSE:RELIANCE").
@@ -153,7 +172,7 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 		return nil, fmt.Errorf("quantity must be positive")
 	}
 
-	orderID := fmt.Sprintf("PAPER_%d", time.Now().UnixNano())
+	orderID := nextOrderID()
 	now := time.Now().UTC()
 
 	order := &Order{
@@ -515,7 +534,7 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 				if err := e.store.UpdateOrderStatus(orderID, "CANCELLED", 0, 0); err != nil {
 					return nil, fmt.Errorf("cancel old order: %w", err)
 				}
-				order.OrderID = fmt.Sprintf("PAPER_%d", time.Now().UnixNano())
+				order.OrderID = nextOrderID()
 				return e.fillOrder(acct, order, ltp)
 			}
 		}

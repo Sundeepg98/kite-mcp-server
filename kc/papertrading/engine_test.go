@@ -211,7 +211,6 @@ func TestSellOrder(t *testing.T) {
 	cashAfterBuy, _ := engine.store.GetAccount(testEmail)
 	assert.InDelta(t, 920_000.0, cashAfterBuy.CashBalance, 0.01) // 1M - 100*800
 
-	time.Sleep(time.Millisecond) // avoid order ID collision on Windows
 
 	// SELL 50.
 	result, err := engine.PlaceOrder(testEmail, map[string]any{
@@ -493,7 +492,6 @@ func TestMonitor_FillSellLimitOrder(t *testing.T) {
 		"product": "MIS", "quantity": 10,
 	})
 	require.NoError(t, err)
-	time.Sleep(time.Millisecond) // Ensure unique nanosecond order ID.
 
 	// Place SELL LIMIT at 3600 (above LTP 3500, so NOT immediately marketable).
 	// This stays OPEN.
