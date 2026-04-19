@@ -227,18 +227,35 @@ func (s *Store) Create(u *User) error {
 		stored.OnboardedBy = "self"
 	}
 	s.users[key] = &stored
+	// Snapshot the fields needed for the DB persist BEFORE releasing the
+	// lock — once released, another goroutine may mutate `stored` via the
+	// same pointer we just put in the map (e.g. UpdateRole writes u.Role
+	// through *s.users[key]), which would race with the DB bind calls
+	// below. Freezing the values now serializes the write + read.
+	var lastLogin string
+	if !stored.LastLogin.IsZero() {
+		lastLogin = stored.LastLogin.Format(time.RFC3339)
+	}
+	var (
+		dbID          = stored.ID
+		dbEmail       = stored.Email
+		dbKiteUID     = stored.KiteUID
+		dbDisplayName = stored.DisplayName
+		dbRole        = stored.Role
+		dbStatus      = stored.Status
+		dbCreatedAt   = stored.CreatedAt.Format(time.RFC3339)
+		dbUpdatedAt   = stored.UpdatedAt.Format(time.RFC3339)
+		dbOnboardedBy = stored.OnboardedBy
+		dbAdminEmail  = stored.AdminEmail
+	)
 	s.mu.Unlock()
 
 	if s.db != nil {
-		var lastLogin string
-		if !stored.LastLogin.IsZero() {
-			lastLogin = stored.LastLogin.Format(time.RFC3339)
-		}
 		err := s.db.ExecInsert(
 			`INSERT OR IGNORE INTO users (id, email, kite_uid, display_name, role, status, created_at, updated_at, last_login, onboarded_by, admin_email) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-			stored.ID, stored.Email, stored.KiteUID, stored.DisplayName, stored.Role, stored.Status,
-			stored.CreatedAt.Format(time.RFC3339), stored.UpdatedAt.Format(time.RFC3339),
-			lastLogin, stored.OnboardedBy, stored.AdminEmail,
+			dbID, dbEmail, dbKiteUID, dbDisplayName, dbRole, dbStatus,
+			dbCreatedAt, dbUpdatedAt,
+			lastLogin, dbOnboardedBy, dbAdminEmail,
 		)
 		if err != nil && s.logger != nil {
 			s.logger.Error("Failed to persist user", "email", key, "error", err)
