@@ -35,18 +35,13 @@ func TestGoroutineLeakSentinel_Billing(t *testing.T) {
 		// cleanup window.
 		goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
 		goleak.IgnoreTopFunction("database/sql.(*DB).connectionResetter"),
-		// Stripe SDK (github.com/stripe/stripe-go) uses net/http HTTP/2
-		// client, which spawns a per-connection readLoop that closes
-		// asynchronously when the idle timer fires (default 90s). When
-		// earlier tests in the package talk to Stripe (checkout-handler
-		// tests use httptest servers; portal-handler tests POST to the
-		// real Stripe API and get 401 back without closing the conn
-		// immediately), the readLoop goroutines linger into this
-		// sentinel's VerifyNone window. This ignore targets the
-		// stdlib function *only*, so a real leak in billing's own
-		// code (which today spawns zero goroutines) would still fire.
-		goleak.IgnoreTopFunction("net/http.(*http2ClientConn).readLoop"),
-		goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+		// The HTTP/2 readLoop ignore that was here previously is now
+		// unnecessary: main_test.go installs a Stripe HTTP client with
+		// DisableKeepAlives=true + IdleConnTimeout=1s, so readLoop
+		// goroutines exit promptly after each Stripe call instead of
+		// the SDK default ~90s idle hold. If a real leak in billing's
+		// own code appears in future, VerifyNone will surface it
+		// immediately — no stdlib-function noise to filter through.
 	)
 
 	// Build 5 stores with in-memory DBs. Each gets the full
