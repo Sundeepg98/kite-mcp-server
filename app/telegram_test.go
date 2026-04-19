@@ -94,7 +94,7 @@ func TestRegisterTelegramWebhook_Success(t *testing.T) {
 	require.NotNil(t, mgr.TelegramNotifier(), "TelegramNotifier must be non-nil")
 	require.NotNil(t, mgr.TelegramNotifier().Bot(), "Bot must be non-nil")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-characters-long"
 	app.Config.ExternalURL = tgServer.URL
 
@@ -127,7 +127,7 @@ func TestRegisterTelegramWebhook_NilNotifier_Inject(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-characters-long"
 	app.Config.ExternalURL = "https://example.com"
 

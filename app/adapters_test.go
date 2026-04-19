@@ -439,7 +439,7 @@ func TestSetupMux_Smoke(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -533,7 +533,7 @@ func TestSetupMux_WithAdminSecretPath(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AdminSecretPath = "/test-secret"
 	_ = app.initStatusPageTemplate()
@@ -560,7 +560,7 @@ func TestSetupMux_DevModePprof(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -588,7 +588,7 @@ func TestLoadConfig_DevModeSkipsCredentials(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "")
 	t.Setenv("OAUTH_JWT_SECRET", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 }
@@ -598,7 +598,7 @@ func TestLoadConfig_AdminEndpointSecretPath(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "s")
 	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/my/secret")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "/my/secret", app.Config.AdminSecretPath)
@@ -610,7 +610,7 @@ func TestLoadConfig_GoogleOAuthCredentials(t *testing.T) {
 	t.Setenv("GOOGLE_CLIENT_ID", "gid")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "gsecret")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "gid", app.Config.GoogleClientID)

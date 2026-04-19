@@ -28,7 +28,7 @@ func TestAnomalyWiring(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "")
 	t.Setenv("STRIPE_SECRET_KEY", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 

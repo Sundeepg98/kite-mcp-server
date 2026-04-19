@@ -46,7 +46,7 @@ func TestSetupGracefulShutdown_ViaShutdownCh(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
 	app.auditStore.StartWorker()
@@ -115,7 +115,7 @@ func TestSetupGracefulShutdown_ViaShutdownCh_NilComponents(t *testing.T) {
 	mgr := newShutdownTestManager(t)
 	t.Cleanup(mgr.Shutdown)
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	// All optional components nil
 	app.scheduler = nil
 	app.auditStore = nil

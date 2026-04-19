@@ -356,7 +356,7 @@ func TestLoadConfig_OAuthWithoutExternalURL(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret")
 	t.Setenv("EXTERNAL_URL", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -371,7 +371,7 @@ func TestLoadConfig_OAuthWithExternalURL(t *testing.T) {
 	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret")
 	t.Setenv("EXTERNAL_URL", "https://example.com")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	// Should succeed: OAuth mode with per-user credentials
@@ -385,7 +385,7 @@ func TestLoadConfig_CustomPortAndHost(t *testing.T) {
 	t.Setenv("APP_HOST", "0.0.0.0")
 	t.Setenv("APP_MODE", "sse")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "9090", app.Config.AppPort)
@@ -394,7 +394,7 @@ func TestLoadConfig_CustomPortAndHost(t *testing.T) {
 }
 
 func TestSetLogBuffer(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	// SetLogBuffer should not panic with nil
 	app.SetLogBuffer(nil)
 	assert.Nil(t, app.logBuffer)
@@ -420,7 +420,7 @@ func TestCookieName(t *testing.T) {
 // ===========================================================================
 
 func TestBuildServerURL(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.Config.AppHost = "0.0.0.0"
 	app.Config.AppPort = "9090"
 	assert.Equal(t, "0.0.0.0:9090", app.buildServerURL())
@@ -429,7 +429,7 @@ func TestBuildServerURL(t *testing.T) {
 func TestBuildServerURL_Default(t *testing.T) {
 	t.Setenv("KITE_API_KEY", "k")
 	t.Setenv("KITE_API_SECRET", "s")
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	_ = app.LoadConfig()
 	assert.Equal(t, "localhost:8080", app.buildServerURL())
 }
@@ -439,7 +439,7 @@ func TestBuildServerURL_Default(t *testing.T) {
 // ===========================================================================
 
 func TestCreateHTTPServer(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	srv := app.createHTTPServer("localhost:8080")
 	assert.NotNil(t, srv)
 	assert.Equal(t, "localhost:8080", srv.Addr)
@@ -474,7 +474,7 @@ func TestSecurityHeaders(t *testing.T) {
 // ===========================================================================
 
 func TestConfigureHTTPClient(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	// Should not panic
 	app.configureHTTPClient()
 }
@@ -505,7 +505,7 @@ func TestLoadConfig_DevMode(t *testing.T) {
 	t.Setenv("KITE_API_SECRET", "")
 	t.Setenv("OAUTH_JWT_SECRET", "")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 
 	// DevMode allows missing credentials
@@ -533,19 +533,19 @@ func TestStatusPageData(t *testing.T) {
 // ===========================================================================
 
 func TestAppStartTime(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	assert.False(t, app.startTime.IsZero())
 }
 
 func TestAppDevMode(t *testing.T) {
 	t.Setenv("DEV_MODE", "true")
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	assert.True(t, app.DevMode)
 }
 
 func TestAppDevMode_False(t *testing.T) {
 	t.Setenv("DEV_MODE", "false")
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	assert.False(t, app.DevMode)
 }
 
@@ -632,7 +632,7 @@ func TestLoadConfig_AllEnvVars(t *testing.T) {
 	t.Setenv("ALERT_DB_PATH", "/tmp/test.db")
 	t.Setenv("ADMIN_EMAILS", "admin@test.com")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 
@@ -654,7 +654,7 @@ func TestLoadConfig_AllEnvVars(t *testing.T) {
 // ===========================================================================
 
 func TestGetStatusData(t *testing.T) {
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	app.Version = "v2.0.0"
 	app.Config.AppMode = "hybrid"
 
@@ -685,7 +685,7 @@ func TestNewApp_ConfigFromEnv(t *testing.T) {
 	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
 
-	app := NewApp(testLogger())
+	app := newTestApp(t)
 	assert.Equal(t, "env_key", app.Config.KiteAPIKey)
 	assert.Equal(t, "env_secret", app.Config.KiteAPISecret)
 	assert.Equal(t, "/secret/path", app.Config.AdminSecretPath)
