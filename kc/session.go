@@ -586,11 +586,17 @@ func (sm *SessionRegistry) GetOrCreateSessionData(sessionID string, createDataFn
 		return nil, false, errors.New(errSessionNotFound)
 	}
 
-	// If data exists and is valid, return it
+	// If data exists and is valid, return it. Capture the reference under the
+	// lock so the return expression does not touch session.Data after Unlock —
+	// without this, the race detector flags a read-after-unlock against a
+	// concurrent UpdateSessionData write even though interface assignment is
+	// atomic (the race is on session.Data's memory word, not on what it points
+	// to). See TestConcurrentSessionModification (kc/session_test.go).
 	if session.Data != nil {
+		data := session.Data
 		sm.logger.Debug("Successfully retrieved existing data for session ID", "session_id", sessionID)
 		sm.mu.Unlock()
-		return session.Data, false, nil
+		return data, false, nil
 	}
 
 	// Create new data using the provided function
