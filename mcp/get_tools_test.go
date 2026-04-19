@@ -18,6 +18,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestMockBroker_GetHoldings(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured holdings", func(t *testing.T) {
 		client := mock.New()
 		holdings := []broker.Holding{
@@ -68,6 +69,7 @@ func TestMockBroker_GetHoldings(t *testing.T) {
 }
 
 func TestMockBroker_GetPositions(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured positions", func(t *testing.T) {
 		client := mock.New()
 		positions := broker.Positions{
@@ -123,6 +125,7 @@ func TestMockBroker_GetPositions(t *testing.T) {
 }
 
 func TestMockBroker_GetMargins(t *testing.T) {
+	t.Parallel()
 	t.Run("returns default margins", func(t *testing.T) {
 		client := mock.New()
 		result, err := client.GetMargins()
@@ -163,6 +166,7 @@ func TestMockBroker_GetMargins(t *testing.T) {
 }
 
 func TestMockBroker_GetProfile(t *testing.T) {
+	t.Parallel()
 	t.Run("returns default profile", func(t *testing.T) {
 		client := mock.New()
 		result, err := client.GetProfile()
@@ -202,6 +206,7 @@ func TestMockBroker_GetProfile(t *testing.T) {
 }
 
 func TestMockBroker_GetOrders(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured orders", func(t *testing.T) {
 		client := mock.New()
 		orders := []broker.Order{
@@ -245,6 +250,7 @@ func TestMockBroker_GetOrders(t *testing.T) {
 }
 
 func TestMockBroker_GetTrades(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured trades", func(t *testing.T) {
 		client := mock.New()
 		trades := []broker.Trade{
@@ -278,6 +284,7 @@ func TestMockBroker_GetTrades(t *testing.T) {
 }
 
 func TestMockBroker_PlaceOrder(t *testing.T) {
+	t.Parallel()
 	t.Run("MARKET order fills immediately", func(t *testing.T) {
 		client := mock.New()
 		client.SetPrices(map[string]float64{
@@ -344,6 +351,7 @@ func TestMockBroker_PlaceOrder(t *testing.T) {
 }
 
 func TestMockBroker_CancelOrder(t *testing.T) {
+	t.Parallel()
 	t.Run("cancels open order", func(t *testing.T) {
 		client := mock.New()
 
@@ -382,6 +390,7 @@ func TestMockBroker_CancelOrder(t *testing.T) {
 }
 
 func TestMockBroker_GetHistoricalData(t *testing.T) {
+	t.Parallel()
 	t.Run("generates daily candles", func(t *testing.T) {
 		client := mock.New()
 		from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -414,6 +423,7 @@ func TestMockBroker_GetHistoricalData(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReadToolDefinitions(t *testing.T) {
+	t.Parallel()
 	readTools := []struct {
 		tool     Tool
 		name     string
@@ -447,6 +457,7 @@ func TestReadToolDefinitions(t *testing.T) {
 }
 
 func TestWriteToolDefinitions(t *testing.T) {
+	t.Parallel()
 	writeToolDefs := []struct {
 		tool Tool
 		name string
@@ -474,6 +485,7 @@ func TestWriteToolDefinitions(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunBacktest_SMACrossover(t *testing.T) {
+	t.Parallel()
 	client := mock.New()
 	from := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -500,6 +512,7 @@ func TestRunBacktest_SMACrossover(t *testing.T) {
 }
 
 func TestRunBacktest_AllStrategies(t *testing.T) {
+	t.Parallel()
 	client := mock.New()
 	from := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -534,6 +547,7 @@ func TestRunBacktest_AllStrategies(t *testing.T) {
 }
 
 func TestComputeMaxDrawdown(t *testing.T) {
+	t.Parallel()
 	t.Run("no trades returns 0", func(t *testing.T) {
 		dd := computeMaxDrawdown(nil, 100000)
 		assert.Equal(t, 0.0, dd)
@@ -570,6 +584,7 @@ func TestComputeMaxDrawdown(t *testing.T) {
 }
 
 func TestComputeSharpeRatio(t *testing.T) {
+	t.Parallel()
 	t.Run("fewer than 2 trades returns 0", func(t *testing.T) {
 		assert.Equal(t, 0.0, computeSharpeRatio(nil, 100000))
 		assert.Equal(t, 0.0, computeSharpeRatio([]BacktestTrade{{PnL: 100}}, 100000))
@@ -600,6 +615,7 @@ func TestComputeSharpeRatio(t *testing.T) {
 }
 
 func TestExtractUnderlyingSymbol(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		expected string
@@ -621,6 +637,7 @@ func TestExtractUnderlyingSymbol(t *testing.T) {
 }
 
 func TestBacktestDefaults(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		strategy string
 		p1       float64
@@ -653,6 +670,7 @@ func TestBacktestDefaults(t *testing.T) {
 }
 
 func TestMockBroker_GetLTP(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured prices", func(t *testing.T) {
 		client := mock.New()
 		client.SetPrices(map[string]float64{
@@ -676,6 +694,7 @@ func TestMockBroker_GetLTP(t *testing.T) {
 }
 
 func TestMockBroker_GetOHLC(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured OHLC", func(t *testing.T) {
 		client := mock.New()
 		client.SetOHLC(map[string]broker.OHLC{
@@ -701,6 +720,7 @@ func TestMockBroker_GetOHLC(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGenerateSignals_SMACrossover(t *testing.T) {
+	t.Parallel()
 	// Create a price series with a clear crossover
 	prices := make([]float64, 100)
 	for i := 0; i < 50; i++ {
@@ -734,6 +754,7 @@ func TestGenerateSignals_SMACrossover(t *testing.T) {
 }
 
 func TestSimulateTrades_ForcesCloseAtEnd(t *testing.T) {
+	t.Parallel()
 	candles := make([]broker.HistoricalCandle, 10)
 	for i := range candles {
 		candles[i] = broker.HistoricalCandle{

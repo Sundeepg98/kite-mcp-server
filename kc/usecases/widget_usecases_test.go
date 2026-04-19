@@ -67,6 +67,7 @@ func (c *positionsErrClient) GetPositions() (broker.Positions, error) {
 // --- GetPortfolioForWidgetUseCase tests ---
 
 func TestGetPortfolioForWidget_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetPortfolioForWidgetUseCase(&mockBrokerResolver{}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetPortfolioQuery{Email: ""})
 	require.Error(t, err)
@@ -74,6 +75,7 @@ func TestGetPortfolioForWidget_EmptyEmail(t *testing.T) {
 }
 
 func TestGetPortfolioForWidget_ResolverError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetPortfolioForWidgetUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetPortfolioQuery{Email: "test@test.com"})
@@ -82,6 +84,7 @@ func TestGetPortfolioForWidget_ResolverError(t *testing.T) {
 }
 
 func TestGetPortfolioForWidget_HoldingsError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{client: &holdingsErrClient{}}
 	uc := NewGetPortfolioForWidgetUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetPortfolioQuery{Email: "test@test.com"})
@@ -90,6 +93,7 @@ func TestGetPortfolioForWidget_HoldingsError(t *testing.T) {
 }
 
 func TestGetPortfolioForWidget_PositionsError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{client: &positionsErrClient{
 		mockBrokerClient: mockBrokerClient{
 			holdings: []broker.Holding{{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000}},
@@ -102,6 +106,7 @@ func TestGetPortfolioForWidget_PositionsError(t *testing.T) {
 }
 
 func TestGetPortfolioForWidget_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		holdings: []broker.Holding{
 			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000, DayChangePct: 2.5},
@@ -146,6 +151,7 @@ func TestGetPortfolioForWidget_Success(t *testing.T) {
 }
 
 func TestGetPortfolioForWidget_EmptyPortfolio(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewGetPortfolioForWidgetUseCase(resolver, testLogger())
@@ -162,6 +168,7 @@ func TestGetPortfolioForWidget_EmptyPortfolio(t *testing.T) {
 // --- GetOrdersForWidgetUseCase tests ---
 
 func TestGetOrdersForWidget_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOrdersForWidgetUseCase(&mockBrokerResolver{}, &mockWidgetAuditStore{}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetOrdersQuery{Email: ""})
 	require.Error(t, err)
@@ -169,6 +176,7 @@ func TestGetOrdersForWidget_EmptyEmail(t *testing.T) {
 }
 
 func TestGetOrdersForWidget_ListOrdersError(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{ordersErr: fmt.Errorf("db error")}
 	uc := NewGetOrdersForWidgetUseCase(&mockBrokerResolver{}, store, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetOrdersQuery{Email: "test@test.com"})
@@ -177,6 +185,7 @@ func TestGetOrdersForWidget_ListOrdersError(t *testing.T) {
 }
 
 func TestGetOrdersForWidget_Success_WithBrokerEnrichment(t *testing.T) {
+	t.Parallel()
 	params, _ := json.Marshal(map[string]any{
 		"tradingsymbol":    "INFY",
 		"exchange":         "NSE",
@@ -227,6 +236,7 @@ func TestGetOrdersForWidget_Success_WithBrokerEnrichment(t *testing.T) {
 }
 
 func TestGetOrdersForWidget_NoBroker_FallsBack(t *testing.T) {
+	t.Parallel()
 	params, _ := json.Marshal(map[string]any{
 		"tradingsymbol":    "INFY",
 		"exchange":         "NSE",
@@ -252,6 +262,7 @@ func TestGetOrdersForWidget_NoBroker_FallsBack(t *testing.T) {
 }
 
 func TestGetOrdersForWidget_EmptyOrders(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{orders: []*audit.ToolCall{}}
 	uc := NewGetOrdersForWidgetUseCase(&mockBrokerResolver{}, store, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.GetWidgetOrdersQuery{Email: "test@test.com"})
@@ -261,6 +272,7 @@ func TestGetOrdersForWidget_EmptyOrders(t *testing.T) {
 }
 
 func TestGetOrdersForWidget_PendingOrders(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{
 		orders: []*audit.ToolCall{
 			{OrderID: "ORD-1", StartedAt: time.Now()},
@@ -285,6 +297,7 @@ func TestGetOrdersForWidget_PendingOrders(t *testing.T) {
 // --- GetAlertsForWidgetUseCase tests ---
 
 func TestGetAlertsForWidget_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetAlertsForWidgetUseCase(&mockBrokerResolver{}, &mockWidgetAlertStore{}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetAlertsQuery{Email: ""})
 	require.Error(t, err)
@@ -292,6 +305,7 @@ func TestGetAlertsForWidget_EmptyEmail(t *testing.T) {
 }
 
 func TestGetAlertsForWidget_Success_ActiveAndTriggered(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	store := &mockWidgetAlertStore{
 		alerts: []*alerts.Alert{
@@ -326,6 +340,7 @@ func TestGetAlertsForWidget_Success_ActiveAndTriggered(t *testing.T) {
 }
 
 func TestGetAlertsForWidget_NoBroker_NoLTPEnrichment(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	store := &mockWidgetAlertStore{
 		alerts: []*alerts.Alert{
@@ -344,6 +359,7 @@ func TestGetAlertsForWidget_NoBroker_NoLTPEnrichment(t *testing.T) {
 }
 
 func TestGetAlertsForWidget_EmptyAlerts(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAlertStore{alerts: []*alerts.Alert{}}
 	uc := NewGetAlertsForWidgetUseCase(&mockBrokerResolver{}, store, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.GetWidgetAlertsQuery{Email: "test@test.com"})
@@ -355,6 +371,7 @@ func TestGetAlertsForWidget_EmptyAlerts(t *testing.T) {
 }
 
 func TestGetAlertsForWidget_AllTriggered(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	store := &mockWidgetAlertStore{
 		alerts: []*alerts.Alert{
@@ -376,6 +393,7 @@ func TestGetAlertsForWidget_AllTriggered(t *testing.T) {
 // --- GetActivityForWidgetUseCase tests ---
 
 func TestGetActivityForWidget_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetActivityForWidgetUseCase(&mockWidgetAuditStore{}, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: ""})
 	require.Error(t, err)
@@ -383,6 +401,7 @@ func TestGetActivityForWidget_EmptyEmail(t *testing.T) {
 }
 
 func TestGetActivityForWidget_ListError(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{listErr: fmt.Errorf("db error")}
 	uc := NewGetActivityForWidgetUseCase(store, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: "test@test.com"})
@@ -391,6 +410,7 @@ func TestGetActivityForWidget_ListError(t *testing.T) {
 }
 
 func TestGetActivityForWidget_Success(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	store := &mockWidgetAuditStore{
 		entries: []*audit.ToolCall{
@@ -430,6 +450,7 @@ func TestGetActivityForWidget_Success(t *testing.T) {
 }
 
 func TestGetActivityForWidget_EmptyActivity(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{
 		entries:    []*audit.ToolCall{},
 		stats:      nil,
@@ -444,6 +465,7 @@ func TestGetActivityForWidget_EmptyActivity(t *testing.T) {
 }
 
 func TestGetActivityForWidget_StatsError_StillReturns(t *testing.T) {
+	t.Parallel()
 	store := &mockWidgetAuditStore{
 		entries: []*audit.ToolCall{
 			{ID: 1, ToolName: "get_ltp", StartedAt: time.Now()},

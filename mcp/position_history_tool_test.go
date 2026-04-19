@@ -33,6 +33,7 @@ import (
 // persists the public format but the legacy deserializer only recognized
 // the internal "PositionOpened" / "PositionClosed" event type strings.
 func TestGetPositionHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	dir := t.TempDir()
@@ -149,6 +150,7 @@ func TestGetPositionHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 // for a position that has never been opened should return Found=false
 // without a top-level error.
 func TestGetPositionHistoryReconstituted_UnknownPositionReturnsNotFound(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	dir := t.TempDir()

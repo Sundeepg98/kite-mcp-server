@@ -171,6 +171,7 @@ func newTestBotHandler(mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
 // ===========================================================================
 
 func TestEscapeHTML(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -190,6 +191,7 @@ func TestEscapeHTML(t *testing.T) {
 }
 
 func TestFormatRupee(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input float64
 		want  string
@@ -211,6 +213,7 @@ func TestFormatRupee(t *testing.T) {
 }
 
 func TestFormatPctChange(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input float64
 		want  string
@@ -229,6 +232,7 @@ func TestFormatPctChange(t *testing.T) {
 }
 
 func TestNormalizeSymbol(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -249,6 +253,7 @@ func TestNormalizeSymbol(t *testing.T) {
 }
 
 func TestFormatVolume(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input uint64
 		want  string
@@ -275,6 +280,7 @@ func TestFormatVolume(t *testing.T) {
 }
 
 func TestAbsInt(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input int
 		want  int
@@ -297,6 +303,7 @@ func TestAbsInt(t *testing.T) {
 // ===========================================================================
 
 func TestParseCommand(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input   string
 		wantCmd string
@@ -331,6 +338,7 @@ func TestParseCommand(t *testing.T) {
 // ===========================================================================
 
 func TestConfirmKeyboard(t *testing.T) {
+	t.Parallel()
 	kb := confirmKeyboard()
 	if len(kb.InlineKeyboard) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(kb.InlineKeyboard))
@@ -362,6 +370,7 @@ func TestConfirmKeyboard(t *testing.T) {
 // ===========================================================================
 
 func TestHandleHelp(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -388,6 +397,7 @@ func TestHandleHelp(t *testing.T) {
 // ===========================================================================
 
 func TestAllowCommand_UnderLimit(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -401,6 +411,7 @@ func TestAllowCommand_UnderLimit(t *testing.T) {
 }
 
 func TestAllowCommand_OverLimit(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -417,6 +428,7 @@ func TestAllowCommand_OverLimit(t *testing.T) {
 }
 
 func TestAllowCommand_DifferentChats(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -436,6 +448,7 @@ func TestAllowCommand_DifferentChats(t *testing.T) {
 // ===========================================================================
 
 func TestPendingOrderLifecycle(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -476,6 +489,7 @@ func TestPendingOrderLifecycle(t *testing.T) {
 }
 
 func TestPendingOrderExpiry(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -494,6 +508,7 @@ func TestPendingOrderExpiry(t *testing.T) {
 }
 
 func TestPendingOrderOverwrite(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -516,6 +531,7 @@ func TestPendingOrderOverwrite(t *testing.T) {
 // ===========================================================================
 
 func TestCleanupStaleEntries_PrunesExpiredOrders(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -547,6 +563,7 @@ func TestCleanupStaleEntries_PrunesExpiredOrders(t *testing.T) {
 }
 
 func TestCleanupStaleEntries_PrunesOldRateWindows(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -577,6 +594,7 @@ func TestCleanupStaleEntries_PrunesOldRateWindows(t *testing.T) {
 // ===========================================================================
 
 func TestShutdown_Idempotent(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 
@@ -590,6 +608,7 @@ func TestShutdown_Idempotent(t *testing.T) {
 // ===========================================================================
 
 func TestNewKiteClient_NoAPIKey(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -604,6 +623,7 @@ func TestNewKiteClient_NoAPIKey(t *testing.T) {
 }
 
 func TestNewKiteClient_NoAccessToken(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.apiKeys["user@test.com"] = "some-key"
 	h, _ := newTestBotHandler(mgr)
@@ -619,6 +639,7 @@ func TestNewKiteClient_NoAccessToken(t *testing.T) {
 }
 
 func TestNewKiteClient_ExpiredToken(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.apiKeys["user@test.com"] = "some-key"
 	mgr.accessTokens["user@test.com"] = "some-token"
@@ -636,6 +657,7 @@ func TestNewKiteClient_ExpiredToken(t *testing.T) {
 }
 
 func TestNewKiteClient_ValidCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.apiKeys["user@test.com"] = "api-key-123"
 	mgr.accessTokens["user@test.com"] = "token-456"
@@ -657,6 +679,7 @@ func TestNewKiteClient_ValidCredentials(t *testing.T) {
 // ===========================================================================
 
 func TestServeHTTP_RejectsNonPOST(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -671,6 +694,7 @@ func TestServeHTTP_RejectsNonPOST(t *testing.T) {
 }
 
 func TestServeHTTP_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -686,6 +710,7 @@ func TestServeHTTP_InvalidJSON(t *testing.T) {
 }
 
 func TestServeHTTP_EmptyUpdate(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -702,6 +727,7 @@ func TestServeHTTP_EmptyUpdate(t *testing.T) {
 }
 
 func TestServeHTTP_UnregisteredUser(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -732,6 +758,7 @@ func TestServeHTTP_UnregisteredUser(t *testing.T) {
 }
 
 func TestServeHTTP_GroupChat_Ignored(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -758,6 +785,7 @@ func TestServeHTTP_GroupChat_Ignored(t *testing.T) {
 }
 
 func TestServeHTTP_RegisteredUser_HelpCommand(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -784,6 +812,7 @@ func TestServeHTTP_RegisteredUser_HelpCommand(t *testing.T) {
 }
 
 func TestServeHTTP_UnknownCommand(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -810,6 +839,7 @@ func TestServeHTTP_UnknownCommand(t *testing.T) {
 }
 
 func TestServeHTTP_EmptyMessage_NoReply(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -836,6 +866,7 @@ func TestServeHTTP_EmptyMessage_NoReply(t *testing.T) {
 }
 
 func TestServeHTTP_RateLimited(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -874,6 +905,7 @@ func TestServeHTTP_RateLimited(t *testing.T) {
 // ===========================================================================
 
 func TestHandleBuy_MissingArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -887,6 +919,7 @@ func TestHandleBuy_MissingArgs(t *testing.T) {
 }
 
 func TestHandleBuy_TooManyArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -899,6 +932,7 @@ func TestHandleBuy_TooManyArgs(t *testing.T) {
 }
 
 func TestHandleBuy_InvalidQty(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -911,6 +945,7 @@ func TestHandleBuy_InvalidQty(t *testing.T) {
 }
 
 func TestHandleBuy_NegativeQty(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -923,6 +958,7 @@ func TestHandleBuy_NegativeQty(t *testing.T) {
 }
 
 func TestHandleBuy_InvalidPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -935,6 +971,7 @@ func TestHandleBuy_InvalidPrice(t *testing.T) {
 }
 
 func TestHandleBuy_MarketOrder_SetsPendingOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -973,6 +1010,7 @@ func TestHandleBuy_MarketOrder_SetsPendingOrder(t *testing.T) {
 }
 
 func TestHandleBuy_LimitOrder_SetsPendingOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1002,6 +1040,7 @@ func TestHandleBuy_LimitOrder_SetsPendingOrder(t *testing.T) {
 }
 
 func TestHandleSell_MarketOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1029,6 +1068,7 @@ func TestHandleSell_MarketOrder(t *testing.T) {
 // ===========================================================================
 
 func TestHandleQuick_MissingArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1041,6 +1081,7 @@ func TestHandleQuick_MissingArgs(t *testing.T) {
 }
 
 func TestHandleQuick_TooManyArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1053,6 +1094,7 @@ func TestHandleQuick_TooManyArgs(t *testing.T) {
 }
 
 func TestHandleQuick_InvalidSide(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1065,6 +1107,7 @@ func TestHandleQuick_InvalidSide(t *testing.T) {
 }
 
 func TestHandleQuick_InvalidType(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1077,6 +1120,7 @@ func TestHandleQuick_InvalidType(t *testing.T) {
 }
 
 func TestHandleQuick_LimitWithoutPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1089,6 +1133,7 @@ func TestHandleQuick_LimitWithoutPrice(t *testing.T) {
 }
 
 func TestHandleQuick_MarketOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1115,6 +1160,7 @@ func TestHandleQuick_MarketOrder(t *testing.T) {
 }
 
 func TestHandleQuick_LimitOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1141,6 +1187,7 @@ func TestHandleQuick_LimitOrder(t *testing.T) {
 }
 
 func TestHandleQuick_CaseInsensitiveSideAndType(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1168,6 +1215,7 @@ func TestHandleQuick_CaseInsensitiveSideAndType(t *testing.T) {
 // ===========================================================================
 
 func TestHandleSetAlert_MissingArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1179,6 +1227,7 @@ func TestHandleSetAlert_MissingArgs(t *testing.T) {
 }
 
 func TestHandleSetAlert_TooFewArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1190,6 +1239,7 @@ func TestHandleSetAlert_TooFewArgs(t *testing.T) {
 }
 
 func TestHandleSetAlert_InvalidDirection(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1201,6 +1251,7 @@ func TestHandleSetAlert_InvalidDirection(t *testing.T) {
 }
 
 func TestHandleSetAlert_InvalidPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1212,6 +1263,7 @@ func TestHandleSetAlert_InvalidPrice(t *testing.T) {
 }
 
 func TestHandleSetAlert_ZeroPrice(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1223,6 +1275,7 @@ func TestHandleSetAlert_ZeroPrice(t *testing.T) {
 }
 
 func TestHandleSetAlert_NoInstrumentsManager(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.instrMgr = nil
 	h, _ := newTestBotHandler(mgr)
@@ -1239,6 +1292,7 @@ func TestHandleSetAlert_NoInstrumentsManager(t *testing.T) {
 // ===========================================================================
 
 func TestHandlePrice_EmptyArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1250,6 +1304,7 @@ func TestHandlePrice_EmptyArgs(t *testing.T) {
 }
 
 func TestHandlePrice_NoAPIKey(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1265,6 +1320,7 @@ func TestHandlePrice_NoAPIKey(t *testing.T) {
 // ===========================================================================
 
 func TestHandlePortfolio_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1276,6 +1332,7 @@ func TestHandlePortfolio_NoCredentials(t *testing.T) {
 }
 
 func TestHandlePositions_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1287,6 +1344,7 @@ func TestHandlePositions_NoCredentials(t *testing.T) {
 }
 
 func TestHandleOrders_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1298,6 +1356,7 @@ func TestHandleOrders_NoCredentials(t *testing.T) {
 }
 
 func TestHandlePnL_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1313,6 +1372,7 @@ func TestHandlePnL_NoCredentials(t *testing.T) {
 // ===========================================================================
 
 func TestHandlePrices_EmptyArgs(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1324,6 +1384,7 @@ func TestHandlePrices_EmptyArgs(t *testing.T) {
 }
 
 func TestHandlePrices_TooManySymbols(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	// handlePrices checks credentials before the count, so we need valid creds.
 	mgr.apiKeys["user@test.com"] = "key"
@@ -1339,6 +1400,7 @@ func TestHandlePrices_TooManySymbols(t *testing.T) {
 }
 
 func TestHandlePrices_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1354,6 +1416,7 @@ func TestHandlePrices_NoCredentials(t *testing.T) {
 // ===========================================================================
 
 func TestHandleMyWatchlist_NilStore(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.watchlistStore = nil
 	h, _ := newTestBotHandler(mgr)
@@ -1370,6 +1433,7 @@ func TestHandleMyWatchlist_NilStore(t *testing.T) {
 // ===========================================================================
 
 func TestHandleAlerts_NoStore(t *testing.T) {
+	t.Parallel()
 	// alertStore is nil — this will panic in production. We test the guard.
 	// Actually the handler calls h.manager.AlertStoreConcrete() which returns nil.
 	// This would panic. In production it's always set. We skip this test.
@@ -1380,6 +1444,7 @@ func TestHandleAlerts_NoStore(t *testing.T) {
 // ===========================================================================
 
 func TestHandleStatus_NoCredentials(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	// Need alertStore to be non-nil for status handler.
 	store := alerts.NewStore(nil)
@@ -1401,6 +1466,7 @@ func TestHandleStatus_NoCredentials(t *testing.T) {
 }
 
 func TestHandleStatus_ValidToken(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -1421,6 +1487,7 @@ func TestHandleStatus_ValidToken(t *testing.T) {
 }
 
 func TestHandleStatus_ExpiredToken(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -1442,6 +1509,7 @@ func TestHandleStatus_ExpiredToken(t *testing.T) {
 // ===========================================================================
 
 func TestHandleAlerts_Empty(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -1455,6 +1523,7 @@ func TestHandleAlerts_Empty(t *testing.T) {
 }
 
 func TestHandleAlerts_WithAlerts(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
@@ -1485,6 +1554,7 @@ func TestHandleAlerts_WithAlerts(t *testing.T) {
 // ===========================================================================
 
 func TestHandleCallbackQuery_NilMessage(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1497,6 +1567,7 @@ func TestHandleCallbackQuery_NilMessage(t *testing.T) {
 }
 
 func TestHandleCallbackQuery_UnregisteredUser(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, mock := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1516,6 +1587,7 @@ func TestHandleCallbackQuery_UnregisteredUser(t *testing.T) {
 }
 
 func TestHandleCallbackQuery_CancelOrder(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -1551,6 +1623,7 @@ func TestHandleCallbackQuery_CancelOrder(t *testing.T) {
 }
 
 func TestHandleCallbackQuery_ConfirmOrder_NoPending(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -1572,6 +1645,7 @@ func TestHandleCallbackQuery_ConfirmOrder_NoPending(t *testing.T) {
 }
 
 func TestHandleCallbackQuery_UnknownAction(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -1595,6 +1669,7 @@ func TestHandleCallbackQuery_UnknownAction(t *testing.T) {
 // ===========================================================================
 
 func TestPendingOrder_Concurrent(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -1614,6 +1689,7 @@ func TestPendingOrder_Concurrent(t *testing.T) {
 }
 
 func TestAllowCommand_Concurrent(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()

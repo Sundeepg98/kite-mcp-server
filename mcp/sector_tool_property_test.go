@@ -37,6 +37,7 @@ import (
 // strings, no whitespace-only values. A refactor that accidentally
 // wipes a sector string would be caught here before landing.
 func TestProperty_StockSectors_EveryEntryHasNonEmptySector(t *testing.T) {
+	t.Parallel()
 	// Not strictly a rapid test (finite map, no generators needed) but
 	// keeping it here so sector correctness lives alongside the rapid
 	// properties. Runs in <1ms.
@@ -55,6 +56,7 @@ func TestProperty_StockSectors_EveryEntryHasNonEmptySector(t *testing.T) {
 // strips suffixes conditionally (e.g. only if uppercase) would break
 // this.
 func TestProperty_NormalizeSymbol_Idempotent(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		s := rapid.String().Draw(t, "raw_symbol")
 		first := normalizeSymbol(s)
@@ -70,6 +72,7 @@ func TestProperty_NormalizeSymbol_Idempotent(t *testing.T) {
 // If future Kite symbol conventions add a new suffix, this property
 // points at the place to update.
 func TestProperty_NormalizeSymbol_StripsKnownSuffixes(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		base := rapid.StringMatching(`[A-Z]{1,10}`).Draw(t, "base")
 		suffix := rapid.SampledFrom([]string{"", "-BE", "-EQ", "-BZ", "-BL"}).
@@ -88,6 +91,7 @@ func TestProperty_NormalizeSymbol_StripsKnownSuffixes(t *testing.T) {
 // combination of known/unknown tickers, zero/negative quantities,
 // zero/negative prices, empty symbols — without panicking.
 func TestProperty_ComputeSectorExposure_NeverPanics(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		n := rapid.IntRange(0, 25).Draw(t, "holdings_count")
 		holdings := make([]broker.Holding, 0, n)
@@ -123,6 +127,7 @@ func TestProperty_ComputeSectorExposure_NeverPanics(t *testing.T) {
 // check fails; a 0.5% tolerance is well within the expected rounding
 // drift across 25 holdings × two-decimal rounds.
 func TestProperty_ComputeSectorExposure_PercentagesSumToHundred(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		// Force a positive-value portfolio: clamp prices and quantities
 		// to strictly positive ranges.
@@ -158,6 +163,7 @@ func TestProperty_ComputeSectorExposure_PercentagesSumToHundred(t *testing.T) {
 // UnmappedStocks list of the same length and no "real" sector slots
 // apart from the "Other" bucket.
 func TestProperty_ComputeSectorExposure_UnknownSymbolsSurfaceAsUnmapped(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		n := rapid.IntRange(1, 10).Draw(t, "holdings_count")
 		holdings := make([]broker.Holding, 0, n)

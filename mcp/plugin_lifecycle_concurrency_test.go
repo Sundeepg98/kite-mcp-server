@@ -17,6 +17,7 @@ import (
 // over the copy rather than holding the registry lock across Init
 // and Shutdown (which would block any registration).
 func TestConcurrentRegisterDuringReload(t *testing.T) {
+	t.Parallel()
 	ClearPluginLifecycles()
 	ClearPluginHealth()
 	defer ClearPluginLifecycles()
@@ -61,6 +62,7 @@ func TestConcurrentRegisterDuringReload(t *testing.T) {
 // stateless, but this verifies callers can reason about the
 // interleaving.
 func TestShutdownDuringInflightSafeCall(t *testing.T) {
+	t.Parallel()
 	ClearPluginHealth()
 	defer ClearPluginHealth()
 
@@ -92,6 +94,7 @@ func TestShutdownDuringInflightSafeCall(t *testing.T) {
 // completion (no early return) AND returns an aggregate error
 // listing every panic.
 func TestInitPluginRegistries_AllPanicsCollected(t *testing.T) {
+	t.Parallel()
 	ClearPluginLifecycles()
 	ClearPluginHealth()
 	defer ClearPluginLifecycles()
@@ -126,6 +129,7 @@ func TestInitPluginRegistries_AllPanicsCollected(t *testing.T) {
 // registration order, and a panic in one Shutdown does NOT prevent
 // siblings from running.
 func TestShutdownReverseOrder_PanicsIsolated(t *testing.T) {
+	t.Parallel()
 	ClearPluginLifecycles()
 	defer ClearPluginLifecycles()
 
@@ -170,6 +174,7 @@ func TestShutdownReverseOrder_PanicsIsolated(t *testing.T) {
 // compile-time check that the generic signature works; the
 // runtime assertions are secondary.
 func TestSafeCall_GenericTypeInference(t *testing.T) {
+	t.Parallel()
 	// string result
 	s, err := SafeCall("str", func() (string, error) { return "hi", nil })
 	assert.NoError(t, err)
@@ -203,6 +208,7 @@ func TestSafeCall_GenericTypeInference(t *testing.T) {
 // all of them. One test, one snapshot — fails loudly if a new
 // registry is added without wiring it into the manifest.
 func TestPluginManifest_CrossRegistryIntegration(t *testing.T) {
+	t.Parallel()
 	// Reset everything to known state.
 	ClearPluginLifecycles()
 	ClearPluginHealth()

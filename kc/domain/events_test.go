@@ -10,6 +10,7 @@ import (
 // --- Money tests ---
 
 func TestNewINR(t *testing.T) {
+	t.Parallel()
 	m := NewINR(1234.56)
 	if m.Amount != 1234.56 {
 		t.Errorf("Amount = %f, want 1234.56", m.Amount)
@@ -20,6 +21,7 @@ func TestNewINR(t *testing.T) {
 }
 
 func TestMoneyAdd(t *testing.T) {
+	t.Parallel()
 	a := NewINR(100.50)
 	b := NewINR(200.25)
 	sum, err := a.Add(b)
@@ -35,6 +37,7 @@ func TestMoneyAdd(t *testing.T) {
 }
 
 func TestMoneyAddMismatchReturnsError(t *testing.T) {
+	t.Parallel()
 	a := NewINR(100)
 	b := Money{Amount: 50, Currency: "USD"}
 	_, err := a.Add(b)
@@ -44,6 +47,7 @@ func TestMoneyAddMismatchReturnsError(t *testing.T) {
 }
 
 func TestMoneySub(t *testing.T) {
+	t.Parallel()
 	a := NewINR(500)
 	b := NewINR(123.45)
 	diff, err := a.Sub(b)
@@ -57,6 +61,7 @@ func TestMoneySub(t *testing.T) {
 }
 
 func TestMoneySubMismatchReturnsError(t *testing.T) {
+	t.Parallel()
 	a := NewINR(100)
 	b := Money{Amount: 50, Currency: "USD"}
 	_, err := a.Sub(b)
@@ -66,6 +71,7 @@ func TestMoneySubMismatchReturnsError(t *testing.T) {
 }
 
 func TestMoneyMultiply(t *testing.T) {
+	t.Parallel()
 	m := NewINR(100).Multiply(2.5)
 	if m.Amount != 250 {
 		t.Errorf("Multiply: got %f, want 250", m.Amount)
@@ -73,6 +79,7 @@ func TestMoneyMultiply(t *testing.T) {
 }
 
 func TestMoneyIsPositive(t *testing.T) {
+	t.Parallel()
 	if !NewINR(10).IsPositive() {
 		t.Error("expected IsPositive for 10")
 	}
@@ -85,6 +92,7 @@ func TestMoneyIsPositive(t *testing.T) {
 }
 
 func TestMoneyIsZero(t *testing.T) {
+	t.Parallel()
 	if !NewINR(0).IsZero() {
 		t.Error("expected IsZero for 0")
 	}
@@ -94,6 +102,7 @@ func TestMoneyIsZero(t *testing.T) {
 }
 
 func TestMoneyIsNegative(t *testing.T) {
+	t.Parallel()
 	if !NewINR(-10).IsNegative() {
 		t.Error("expected IsNegative for -10")
 	}
@@ -103,6 +112,7 @@ func TestMoneyIsNegative(t *testing.T) {
 }
 
 func TestMoneyStringINR(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		amount float64
 		want   string
@@ -126,6 +136,7 @@ func TestMoneyStringINR(t *testing.T) {
 }
 
 func TestMoneyStringOtherCurrency(t *testing.T) {
+	t.Parallel()
 	m := Money{Amount: 99.99, Currency: "USD"}
 	got := m.String()
 	if got != "USD 99.99" {
@@ -136,6 +147,7 @@ func TestMoneyStringOtherCurrency(t *testing.T) {
 // --- Quantity tests ---
 
 func TestNewQuantityValid(t *testing.T) {
+	t.Parallel()
 	q, err := NewQuantity(10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -146,6 +158,7 @@ func TestNewQuantityValid(t *testing.T) {
 }
 
 func TestNewQuantityZeroRejected(t *testing.T) {
+	t.Parallel()
 	_, err := NewQuantity(0)
 	if err == nil {
 		t.Error("expected error for quantity 0")
@@ -153,6 +166,7 @@ func TestNewQuantityZeroRejected(t *testing.T) {
 }
 
 func TestNewQuantityNegativeRejected(t *testing.T) {
+	t.Parallel()
 	_, err := NewQuantity(-5)
 	if err == nil {
 		t.Error("expected error for negative quantity")
@@ -160,6 +174,7 @@ func TestNewQuantityNegativeRejected(t *testing.T) {
 }
 
 func TestQuantityIsValid(t *testing.T) {
+	t.Parallel()
 	q, _ := NewQuantity(10)
 	if !q.IsValid() {
 		t.Error("expected IsValid for quantity 10")
@@ -172,6 +187,7 @@ func TestQuantityIsValid(t *testing.T) {
 }
 
 func TestQuantityString(t *testing.T) {
+	t.Parallel()
 	q, _ := NewQuantity(42)
 	if q.String() != "42" {
 		t.Errorf("String() = %q, want %q", q.String(), "42")
@@ -181,6 +197,7 @@ func TestQuantityString(t *testing.T) {
 // --- InstrumentKey tests ---
 
 func TestNewInstrumentKey(t *testing.T) {
+	t.Parallel()
 	k := NewInstrumentKey("nse", "reliance")
 	if k.Exchange != "NSE" {
 		t.Errorf("Exchange = %q, want NSE", k.Exchange)
@@ -191,6 +208,7 @@ func TestNewInstrumentKey(t *testing.T) {
 }
 
 func TestInstrumentKeyString(t *testing.T) {
+	t.Parallel()
 	k := NewInstrumentKey("NSE", "INFY")
 	if k.String() != "NSE:INFY" {
 		t.Errorf("String() = %q, want NSE:INFY", k.String())
@@ -198,6 +216,7 @@ func TestInstrumentKeyString(t *testing.T) {
 }
 
 func TestInstrumentKeyIsZero(t *testing.T) {
+	t.Parallel()
 	var zero InstrumentKey
 	if !zero.IsZero() {
 		t.Error("expected IsZero for empty key")
@@ -208,6 +227,7 @@ func TestInstrumentKeyIsZero(t *testing.T) {
 }
 
 func TestParseInstrumentKey(t *testing.T) {
+	t.Parallel()
 	k, err := ParseInstrumentKey("NSE:RELIANCE")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -218,6 +238,7 @@ func TestParseInstrumentKey(t *testing.T) {
 }
 
 func TestParseInstrumentKeyLowercase(t *testing.T) {
+	t.Parallel()
 	k, err := ParseInstrumentKey("bse:infy")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -228,6 +249,7 @@ func TestParseInstrumentKeyLowercase(t *testing.T) {
 }
 
 func TestParseInstrumentKeyInvalid(t *testing.T) {
+	t.Parallel()
 	cases := []string{"", "NSE", "NSE:", ":RELIANCE", "RELIANCE"}
 	for _, s := range cases {
 		_, err := ParseInstrumentKey(s)
@@ -240,6 +262,7 @@ func TestParseInstrumentKeyInvalid(t *testing.T) {
 // --- Event interface tests ---
 
 func TestOrderPlacedEventInterface(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := OrderPlacedEvent{
 		Email:           "test@example.com",
@@ -260,6 +283,7 @@ func TestOrderPlacedEventInterface(t *testing.T) {
 }
 
 func TestAlertTriggeredEventInterface(t *testing.T) {
+	t.Parallel()
 	e := AlertTriggeredEvent{Timestamp: time.Now()}
 	var ev Event = e
 	if ev.EventType() != "alert.triggered" {
@@ -268,6 +292,7 @@ func TestAlertTriggeredEventInterface(t *testing.T) {
 }
 
 func TestRiskLimitBreachedEventInterface(t *testing.T) {
+	t.Parallel()
 	e := RiskLimitBreachedEvent{Timestamp: time.Now()}
 	var ev Event = e
 	if ev.EventType() != "risk.limit_breached" {
@@ -276,6 +301,7 @@ func TestRiskLimitBreachedEventInterface(t *testing.T) {
 }
 
 func TestSessionCreatedEventInterface(t *testing.T) {
+	t.Parallel()
 	e := SessionCreatedEvent{Timestamp: time.Now()}
 	var ev Event = e
 	if ev.EventType() != "session.created" {
@@ -284,6 +310,7 @@ func TestSessionCreatedEventInterface(t *testing.T) {
 }
 
 func TestUserFrozenEventInterface(t *testing.T) {
+	t.Parallel()
 	e := UserFrozenEvent{Timestamp: time.Now()}
 	var ev Event = e
 	if ev.EventType() != "user.frozen" {
@@ -294,6 +321,7 @@ func TestUserFrozenEventInterface(t *testing.T) {
 // --- EventDispatcher tests ---
 
 func TestDispatcherSubscribeAndDispatch(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 
 	var received []string
@@ -318,12 +346,14 @@ func TestDispatcherSubscribeAndDispatch(t *testing.T) {
 }
 
 func TestDispatcherNoHandlers(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 	// Should not panic with no handlers registered.
 	d.Dispatch(OrderPlacedEvent{Timestamp: time.Now()})
 }
 
 func TestDispatcherDifferentEventTypes(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 
 	var orderCount, alertCount int
@@ -343,6 +373,7 @@ func TestDispatcherDifferentEventTypes(t *testing.T) {
 }
 
 func TestDispatcherConcurrentSafety(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 
 	var count atomic.Int64
@@ -373,6 +404,7 @@ func TestDispatcherConcurrentSafety(t *testing.T) {
 }
 
 func TestDispatcherConcurrentSubscribeAndDispatch(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 
 	var count atomic.Int64

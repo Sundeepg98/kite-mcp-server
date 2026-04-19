@@ -33,6 +33,7 @@ import (
 //  3. Each snapshot's Status matches the expected lifecycle progression
 //  4. EventCount and final-state fields match the seeded values
 func TestGetOrderHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	// Stand up a fresh event store in a temp DB and attach it to the manager.
@@ -120,6 +121,7 @@ func TestGetOrderHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 // an unknown order should produce a read model with Found=false, not a
 // top-level error.
 func TestGetOrderHistoryReconstituted_UnknownOrderReturnsNotFound(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	dir := t.TempDir()

@@ -25,6 +25,7 @@ import (
 // needs different numbers, update the defaults AND this test in the same
 // commit so the intent is explicit.
 func TestTightenedSystemDefaults(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		got  any
@@ -47,6 +48,7 @@ func TestTightenedSystemDefaults(t *testing.T) {
 // Uses an unconfigured user (no per-user override) so the engine falls back to
 // SystemDefaults.
 func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
+	t.Parallel()
 	// Order-value cap: Rs 50,000 — an order of Rs 49,999 passes value check,
 	// an order of Rs 50,001 fails.
 	t.Run("per-order cap Rs 50,000 enforces", func(t *testing.T) {
@@ -134,6 +136,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 // This is the security-critical check against silent prompt-injection
 // auto-execution.
 func TestRequireConfirmAllOrders(t *testing.T) {
+	t.Parallel()
 	t.Run("fresh guard: unconfirmed order blocked", func(t *testing.T) {
 		g := newTestGuard()
 		// No per-user override — pure SystemDefaults path.

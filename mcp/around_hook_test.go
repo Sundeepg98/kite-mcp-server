@@ -15,6 +15,7 @@ import (
 // a hook can return a synthetic *mcp.CallToolResult WITHOUT invoking next,
 // and the downstream tool handler MUST be skipped.
 func TestOnToolExecution_SubstituteResult(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -49,6 +50,7 @@ func TestOnToolExecution_SubstituteResult(t *testing.T) {
 // an around-hook that delegates to next(ctx, req) receives the real
 // handler's result and can return it (or a transformation of it).
 func TestOnToolExecution_CallsNext(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -87,6 +89,7 @@ func TestOnToolExecution_CallsNext(t *testing.T) {
 // logs (best-effort), and returns an error-shaped CallToolResult so the
 // client gets a well-formed response instead of a disconnect.
 func TestOnToolExecution_PanicRecovered(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -119,6 +122,7 @@ func TestOnToolExecution_PanicRecovered(t *testing.T) {
 // hook is closest to the real handler. (Convention: first registered =
 // outermost wrapper, matches how HTTP middleware chains read.)
 func TestOnToolExecution_ChainedHooks(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -158,6 +162,7 @@ func TestOnToolExecution_ChainedHooks(t *testing.T) {
 // earlier around-hook returns a synthetic result without calling next,
 // subsequent around-hooks AND the handler are both skipped.
 func TestOnToolExecution_ShortCircuitSkipsLaterHooks(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -197,6 +202,7 @@ func TestOnToolExecution_ShortCircuitSkipsLaterHooks(t *testing.T) {
 // layer does NOT break the pre-existing OnBeforeToolExecution /
 // OnAfterToolExecution contract.
 func TestOnBeforeAfterSemanticsPreserved(t *testing.T) {
+	t.Parallel()
 	t.Run("before hook still blocks via error return", func(t *testing.T) {
 		ClearHooks()
 		defer ClearHooks()
@@ -252,6 +258,7 @@ func TestOnBeforeAfterSemanticsPreserved(t *testing.T) {
 // existing before/after hook paths as well — a panicking before-hook
 // cannot crash the middleware.
 func TestOnBeforePanicRecovered(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -268,6 +275,7 @@ func TestOnBeforePanicRecovered(t *testing.T) {
 // crash RunAfterHooks (after-hooks are fire-and-forget; a panic must
 // simply be swallowed).
 func TestOnAfterPanicRecovered(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 

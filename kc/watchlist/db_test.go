@@ -44,6 +44,7 @@ func (d *testDB) QueryRow(query string, args ...any) *sql.Row {
 }
 
 func TestInitTables(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	err := InitTables(db)
 	require.NoError(t, err)
@@ -64,12 +65,14 @@ func TestInitTables(t *testing.T) {
 }
 
 func TestInitTables_Idempotent(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 	require.NoError(t, InitTables(db), "InitTables should be idempotent")
 }
 
 func TestSetDB_And_Persistence(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -116,6 +119,7 @@ func TestSetDB_And_Persistence(t *testing.T) {
 }
 
 func TestDeleteWatchlist_Persistence(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -142,6 +146,7 @@ func TestDeleteWatchlist_Persistence(t *testing.T) {
 }
 
 func TestRemoveItem_Persistence(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -174,12 +179,14 @@ func TestRemoveItem_Persistence(t *testing.T) {
 }
 
 func TestLoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 	err := s.LoadFromDB()
 	assert.NoError(t, err, "LoadFromDB with nil DB should be a no-op")
 }
 
 func TestDeleteByEmail_Persistence(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -203,6 +210,7 @@ func TestDeleteByEmail_Persistence(t *testing.T) {
 }
 
 func TestTimestampUpdate_Persistence(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -234,6 +242,7 @@ func TestTimestampUpdate_Persistence(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadFromDB_EmptyTables(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -245,6 +254,7 @@ func TestLoadFromDB_EmptyTables(t *testing.T) {
 }
 
 func TestLoadFromDB_MultipleWatchlistsAndItems(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -277,6 +287,7 @@ func TestLoadFromDB_MultipleWatchlistsAndItems(t *testing.T) {
 }
 
 func TestDeleteByEmail_Persistence_WithItems(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -300,6 +311,7 @@ func TestDeleteByEmail_Persistence_WithItems(t *testing.T) {
 }
 
 func TestRemoveItem_Persistence_Multiple(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -329,6 +341,7 @@ func TestRemoveItem_Persistence_Multiple(t *testing.T) {
 }
 
 func TestCreateWatchlist_PersistenceMultiple(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -350,6 +363,7 @@ func TestCreateWatchlist_PersistenceMultiple(t *testing.T) {
 }
 
 func TestDeleteWatchlist_NonExistentWatchlist(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -361,6 +375,7 @@ func TestDeleteWatchlist_NonExistentWatchlist(t *testing.T) {
 }
 
 func TestRemoveItem_WrongWatchlist(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -373,6 +388,7 @@ func TestRemoveItem_WrongWatchlist(t *testing.T) {
 }
 
 func TestAddItem_WrongWatchlist_DB(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -399,6 +415,7 @@ func (d *errDB) RawQuery(query string, args ...any) (*sql.Rows, error) {
 func (d *errDB) QueryRow(query string, args ...any) *sql.Row             { return nil }
 
 func TestLoadFromDB_WatchlistsError(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 	s.SetDB(&errDB{})
 	err := s.LoadFromDB()
@@ -426,6 +443,7 @@ func (d *halfErrDB) RawQuery(query string, args ...any) (*sql.Rows, error) {
 func (d *halfErrDB) QueryRow(query string, args ...any) *sql.Row { return d.db.QueryRow(query, args...) }
 
 func TestLoadFromDB_ItemsError(t *testing.T) {
+	t.Parallel()
 	realDB := newTestDB(t)
 	require.NoError(t, InitTables(realDB))
 
@@ -443,6 +461,7 @@ func TestLoadFromDB_ItemsError(t *testing.T) {
 }
 
 func TestDeleteWatchlist_DBErrorOnItems(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -460,6 +479,7 @@ func TestDeleteWatchlist_DBErrorOnItems(t *testing.T) {
 }
 
 func TestCreateWatchlist_DBError(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 	s.SetDB(&errDB{})
 	s.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
@@ -471,6 +491,7 @@ func TestCreateWatchlist_DBError(t *testing.T) {
 }
 
 func TestAddItem_DBError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -490,6 +511,7 @@ func TestAddItem_DBError(t *testing.T) {
 }
 
 func TestRemoveItem_DBError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -513,6 +535,7 @@ func TestRemoveItem_DBError(t *testing.T) {
 }
 
 func TestDeleteByEmail_DBError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -535,6 +558,7 @@ func TestDeleteByEmail_DBError(t *testing.T) {
 // by dropping the real table and recreating it with all column names but NULL
 // values in columns that Go Scan expects non-nil.
 func TestLoadWatchlists_ScanError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 
@@ -556,6 +580,7 @@ func TestLoadWatchlists_ScanError(t *testing.T) {
 // by dropping the real table and recreating it with all column names but NULL
 // values in columns that Go Scan expects non-nil.
 func TestLoadItems_ScanError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	require.NoError(t, InitTables(db))
 

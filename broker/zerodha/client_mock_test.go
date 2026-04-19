@@ -24,6 +24,7 @@ import (
 // --- Happy-path field mapping ---
 
 func TestClientMock_GetProfile_MapsFields(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	mock.GetUserProfileFunc = func() (kiteconnect.UserProfile, error) {
 		return kiteconnect.UserProfile{
@@ -62,6 +63,7 @@ func TestClientMock_GetProfile_MapsFields(t *testing.T) {
 }
 
 func TestClientMock_GetHoldings_MapsFields(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	mock.GetHoldingsFunc = func() (kiteconnect.Holdings, error) {
 		return kiteconnect.Holdings{
@@ -107,6 +109,7 @@ func TestClientMock_GetHoldings_MapsFields(t *testing.T) {
 }
 
 func TestClientMock_PlaceOrder_MapsFieldsAndReturnsOrderID(t *testing.T) {
+	t.Parallel()
 	var capturedVariety string
 	var capturedParams kiteconnect.OrderParams
 	mock := NewMockKiteSDK()
@@ -151,6 +154,7 @@ func TestClientMock_PlaceOrder_MapsFieldsAndReturnsOrderID(t *testing.T) {
 }
 
 func TestClientMock_CancelOrder_UsesDefaultVarietyWhenEmpty(t *testing.T) {
+	t.Parallel()
 	var capturedVariety string
 	mock := NewMockKiteSDK()
 	mock.CancelOrderFunc = func(variety, orderID string, parent *string) (kiteconnect.OrderResponse, error) {
@@ -171,6 +175,7 @@ func TestClientMock_CancelOrder_UsesDefaultVarietyWhenEmpty(t *testing.T) {
 // --- Error propagation (non-transient) ---
 
 func TestClientMock_GetProfile_PropagatesNonTransientError(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	sdkErr := errors.New("TokenException: invalid api_key or access_token")
 	mock.GetUserProfileFunc = func() (kiteconnect.UserProfile, error) {
@@ -189,6 +194,7 @@ func TestClientMock_GetProfile_PropagatesNonTransientError(t *testing.T) {
 }
 
 func TestClientMock_PlaceOrder_PropagatesNonTransientError(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	sdkErr := errors.New("InputException: missing required field")
 	mock.PlaceOrderFunc = func(variety string, p kiteconnect.OrderParams) (kiteconnect.OrderResponse, error) {
@@ -211,6 +217,7 @@ func TestClientMock_PlaceOrder_PropagatesNonTransientError(t *testing.T) {
 // --- Retry behavior on transient errors ---
 
 func TestClientMock_GetProfile_RetriesOnTransientThenSucceeds(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	attempts := 0
 	mock.GetUserProfileFunc = func() (kiteconnect.UserProfile, error) {
@@ -241,6 +248,7 @@ func TestClientMock_GetProfile_RetriesOnTransientThenSucceeds(t *testing.T) {
 }
 
 func TestClientMock_GetOrders_RetriesExhaustedReturnsLastError(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	lastErr := errors.New("read: connection timeout")
 	mock.GetOrdersFunc = func() (kiteconnect.Orders, error) {
@@ -261,6 +269,7 @@ func TestClientMock_GetOrders_RetriesExhaustedReturnsLastError(t *testing.T) {
 // --- Orders, trades, and market data ---
 
 func TestClientMock_GetOrders_MapsOrderList(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	mock.GetOrdersFunc = func() (kiteconnect.Orders, error) {
 		return kiteconnect.Orders{
@@ -304,6 +313,7 @@ func TestClientMock_GetOrders_MapsOrderList(t *testing.T) {
 }
 
 func TestClientMock_GetLTP_PassesInstrumentsThrough(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	var captured []string
 	mock.GetLTPFunc = func(instruments ...string) (kiteconnect.QuoteLTP, error) {
@@ -333,6 +343,7 @@ func TestClientMock_GetLTP_PassesInstrumentsThrough(t *testing.T) {
 // --- GTT (no retry wrapper — non-transient error bubbles straight) ---
 
 func TestClientMock_PlaceGTT_HappyPath(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	var capturedParams kiteconnect.GTTParams
 	mock.PlaceGTTFunc = func(o kiteconnect.GTTParams) (kiteconnect.GTTResponse, error) {
@@ -367,6 +378,7 @@ func TestClientMock_PlaceGTT_HappyPath(t *testing.T) {
 }
 
 func TestClientMock_DeleteGTT_PropagatesError(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	sdkErr := errors.New("NetworkException: gateway timeout")
 	mock.DeleteGTTFunc = func(triggerID int) (kiteconnect.GTTResponse, error) {
@@ -383,6 +395,7 @@ func TestClientMock_DeleteGTT_PropagatesError(t *testing.T) {
 // --- Native alerts ---
 
 func TestClientMock_CreateNativeAlert_HappyPath(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	mock.CreateAlertFunc = func(p kiteconnect.AlertParams) (kiteconnect.Alert, error) {
 		return kiteconnect.Alert{
@@ -418,6 +431,7 @@ func TestClientMock_CreateNativeAlert_HappyPath(t *testing.T) {
 // --- Call log ordering proof ---
 
 func TestClientMock_CallLog_RecordsMethodsInOrder(t *testing.T) {
+	t.Parallel()
 	mock := NewMockKiteSDK()
 	mock.GetUserProfileFunc = func() (kiteconnect.UserProfile, error) {
 		return kiteconnect.UserProfile{UserID: "X"}, nil

@@ -10,23 +10,27 @@ import (
 )
 
 func TestNewTestManager_Default(t *testing.T) {
+	t.Parallel()
 	mgr := NewTestManager(t)
 	assert.NotNil(t, mgr)
 }
 
 func TestNewTestManager_WithDevMode(t *testing.T) {
+	t.Parallel()
 	mgr := NewTestManager(t, WithDevMode())
 	assert.NotNil(t, mgr)
 	assert.True(t, mgr.DevMode())
 }
 
 func TestNewTestManager_WithRiskGuard(t *testing.T) {
+	t.Parallel()
 	mgr := NewTestManager(t, WithRiskGuard())
 	assert.NotNil(t, mgr)
 	assert.NotNil(t, mgr.RiskGuard())
 }
 
 func TestNewTestManager_WithMockKite(t *testing.T) {
+	t.Parallel()
 	srv := testutil.NewMockKiteServer(t)
 	mgr := NewTestManager(t, WithMockKite(srv))
 	assert.NotNil(t, mgr)
@@ -34,12 +38,14 @@ func TestNewTestManager_WithMockKite(t *testing.T) {
 }
 
 func TestNewTestManager_WithAPIKey(t *testing.T) {
+	t.Parallel()
 	mgr := NewTestManager(t, WithAPIKey("custom_key"), WithAPISecret("custom_secret"))
 	assert.NotNil(t, mgr)
 	assert.Equal(t, "custom_key", mgr.APIKey())
 }
 
 func TestNewTestManager_MultipleOptions(t *testing.T) {
+	t.Parallel()
 	srv := testutil.NewMockKiteServer(t)
 	mgr := NewTestManager(t,
 		WithDevMode(),
@@ -54,6 +60,7 @@ func TestNewTestManager_MultipleOptions(t *testing.T) {
 }
 
 func TestDefaultTestData(t *testing.T) {
+	t.Parallel()
 	data := DefaultTestData()
 	assert.Len(t, data, 3)
 	assert.Contains(t, data, uint32(256265))
@@ -66,6 +73,7 @@ func TestDefaultTestData(t *testing.T) {
 // Guard's time source without wall-clock sleeps. This is the smoke test
 // that proves the clock port composes with kcfixture.
 func TestNewTestManager_WithFakeClock(t *testing.T) {
+	t.Parallel()
 	seed := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
 	fc := testutil.NewFakeClock(seed)
 	mgr := NewTestManager(t, WithRiskGuard(), WithFakeClock(fc))

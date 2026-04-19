@@ -27,6 +27,7 @@ import (
 // get_alert_history_reconstituted through the tool handler and asserts
 // the timeline matches.
 func TestGetAlertHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	dir := t.TempDir()
@@ -96,6 +97,7 @@ func TestGetAlertHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 // TestGetAlertHistoryReconstituted_UnknownAlertReturnsNotFound — query for an
 // unknown alert ID should return Found=false with no top-level error.
 func TestGetAlertHistoryReconstituted_UnknownAlertReturnsNotFound(t *testing.T) {
+	t.Parallel()
 	mgr := kcfixture.NewTestManager(t, kcfixture.WithDevMode(), kcfixture.WithRiskGuard())
 
 	dir := t.TempDir()

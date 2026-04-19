@@ -17,6 +17,7 @@ import (
 // This is a middleware-chain integration test: if the handler is missing,
 // mistyped, or built with a nil dependency, the dispatch fails.
 func TestCommandBus_CreateWatchlist_HappyPath(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -43,6 +44,7 @@ func TestCommandBus_CreateWatchlist_HappyPath(t *testing.T) {
 // CommandBus invocations (i.e., each dispatch does NOT instantiate a
 // fresh store).
 func TestCommandBus_CreateWatchlist_DuplicateRejected(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -70,6 +72,7 @@ func TestCommandBus_CreateWatchlist_DuplicateRejected(t *testing.T) {
 // the dispatch, matching the pre-migration behaviour of the MCP tool
 // layer.
 func TestCommandBus_PaperTradingToggle_NilEngine_ReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -99,6 +102,7 @@ func TestCommandBus_PaperTradingToggle_NilEngine_ReturnsError(t *testing.T) {
 //  2. The alert store is non-nil and the alert is persisted
 //  3. The return value shape matches the use case's alert-ID string
 func TestCommandBus_CreateAlert_HappyPath(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -125,6 +129,7 @@ func TestCommandBus_CreateAlert_HappyPath(t *testing.T) {
 // surfaces through the CommandBus — i.e. the handler does NOT swallow
 // errors from the wrapped use case.
 func TestCommandBus_CreateAlert_ValidationError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)

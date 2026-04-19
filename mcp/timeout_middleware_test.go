@@ -10,6 +10,7 @@ import (
 )
 
 func TestTimeoutMiddleware_PassesOnTime(t *testing.T) {
+	t.Parallel()
 	mw := TimeoutMiddleware(1 * time.Second)
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("OK"), nil
@@ -20,6 +21,7 @@ func TestTimeoutMiddleware_PassesOnTime(t *testing.T) {
 }
 
 func TestTimeoutMiddleware_TimesOut(t *testing.T) {
+	t.Parallel()
 	mw := TimeoutMiddleware(50 * time.Millisecond)
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		time.Sleep(200 * time.Millisecond)

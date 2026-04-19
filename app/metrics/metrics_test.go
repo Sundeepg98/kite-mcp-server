@@ -12,6 +12,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		config   Config
@@ -36,6 +37,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestIncrement(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Test initial increment
@@ -59,6 +61,7 @@ func TestIncrement(t *testing.T) {
 }
 
 func TestIncrementBy(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	m.IncrementBy("test_counter", 5)
@@ -73,6 +76,7 @@ func TestIncrementBy(t *testing.T) {
 }
 
 func TestConcurrentIncrement(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	const numGoroutines = 100
 	const incrementsPerGoroutine = 100
@@ -98,6 +102,7 @@ func TestConcurrentIncrement(t *testing.T) {
 }
 
 func TestTrackDailyUser(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Test empty user ID (should be ignored)
@@ -125,6 +130,7 @@ func TestTrackDailyUser(t *testing.T) {
 }
 
 func TestGetDailyUserCount(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Test non-existent date
@@ -143,6 +149,7 @@ func TestGetDailyUserCount(t *testing.T) {
 }
 
 func TestCleanupOldData(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", CleanupRetentionDays: 5})
 
 	// Manually add old data
@@ -177,6 +184,7 @@ func TestCleanupOldData(t *testing.T) {
 }
 
 func TestWritePrometheus(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test-service", HistoricalDays: 3})
 
 	// Add some metrics
@@ -211,6 +219,7 @@ func TestWritePrometheus(t *testing.T) {
 }
 
 func TestHTTPHandler(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	m.Increment("test_metric")
 
@@ -246,6 +255,7 @@ func TestHTTPHandler(t *testing.T) {
 }
 
 func TestAdminHTTPHandler(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		adminPath      string
@@ -306,6 +316,7 @@ func TestAdminHTTPHandler(t *testing.T) {
 }
 
 func TestConcurrentDailyUserTracking(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	const numGoroutines = 50
 	const usersPerGoroutine = 20
@@ -332,6 +343,7 @@ func TestConcurrentDailyUserTracking(t *testing.T) {
 }
 
 func TestFormatMetric(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test-service"})
 	buf := new(bytes.Buffer)
 
@@ -360,6 +372,7 @@ func TestFormatMetric(t *testing.T) {
 }
 
 func TestGetNextCleanupTime(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		now      time.Time
@@ -413,6 +426,7 @@ func TestGetNextCleanupTime(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: true})
 
 	// Should not panic
@@ -424,6 +438,7 @@ func TestShutdown(t *testing.T) {
 }
 
 func TestAutoCleanupDisabled(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: false})
 
 	// Should not have started cleanup routine
@@ -439,6 +454,7 @@ func TestAutoCleanupDisabled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetAllCounters(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	m.Increment("counter_a")
@@ -459,6 +475,7 @@ func TestGetAllCounters(t *testing.T) {
 }
 
 func TestGetAllCounters_Empty(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	counters := m.GetAllCounters()
 	if len(counters) != 0 {
@@ -467,6 +484,7 @@ func TestGetAllCounters_Empty(t *testing.T) {
 }
 
 func TestGetCounterValue_NonExistent(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	if val := m.GetCounterValue("nonexistent"); val != 0 {
 		t.Errorf("expected 0 for nonexistent counter, got %d", val)
@@ -474,6 +492,7 @@ func TestGetCounterValue_NonExistent(t *testing.T) {
 }
 
 func TestTrackDailyUser_TypeAssertionFail(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Manually store a non-userSet value to trigger type assertion failure path.
@@ -487,6 +506,7 @@ func TestTrackDailyUser_TypeAssertionFail(t *testing.T) {
 }
 
 func TestConcurrentMetricWrites(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	const numGoroutines = 50
 	const opsPerGoroutine = 100
@@ -536,6 +556,7 @@ func TestConcurrentMetricWrites(t *testing.T) {
 }
 
 func TestWritePrometheus_NoHistoricalData(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", HistoricalDays: 7})
 
 	// No data at all — should still write today's user count (0).
@@ -551,6 +572,7 @@ func TestWritePrometheus_NoHistoricalData(t *testing.T) {
 }
 
 func TestWritePrometheus_WithHistoricalUserData(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", HistoricalDays: 3})
 
 	// Add historical user data for yesterday.
@@ -576,6 +598,7 @@ func TestWritePrometheus_WithHistoricalUserData(t *testing.T) {
 }
 
 func TestHTTPHandler_WriteError(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	m.Increment("error_test_metric")
 
@@ -593,6 +616,7 @@ func TestHTTPHandler_WriteError(t *testing.T) {
 }
 
 func TestCleanupOldData_NoOldData(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", CleanupRetentionDays: 5})
 
 	// Only add recent data.
@@ -610,6 +634,7 @@ func TestCleanupOldData_NoOldData(t *testing.T) {
 }
 
 func TestStartCleanupRoutine_Shutdown(t *testing.T) {
+	t.Parallel()
 	// Test that auto-cleanup starts and can be shut down.
 	m := New(Config{ServiceName: "test", AutoCleanup: true})
 
@@ -618,6 +643,7 @@ func TestStartCleanupRoutine_Shutdown(t *testing.T) {
 }
 
 func TestIsDailyMetric_EdgeCases(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Single part (no underscore) — not daily.
@@ -637,6 +663,7 @@ func TestIsDailyMetric_EdgeCases(t *testing.T) {
 }
 
 func TestGetAllCounters_ConcurrentRead(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Add some counters.
@@ -661,6 +688,7 @@ func TestGetAllCounters_ConcurrentRead(t *testing.T) {
 // ===========================================================================
 
 func TestCleanupOldData_WithExpiredEntries(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", CleanupRetentionDays: 7})
 
 	// Inject a daily user entry for 30 days ago directly into the sync.Map
@@ -689,6 +717,7 @@ func TestCleanupOldData_WithExpiredEntries(t *testing.T) {
 }
 
 func TestCleanupOldData_NonStringKey(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Inject a non-string key into dailyUsers sync.Map.
@@ -702,6 +731,7 @@ func TestCleanupOldData_NonStringKey(t *testing.T) {
 }
 
 func TestStartCleanupRoutine_StopsOnShutdown(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	m.startCleanupRoutine()
 
@@ -712,6 +742,7 @@ func TestStartCleanupRoutine_StopsOnShutdown(t *testing.T) {
 }
 
 func TestWritePrometheus_WithDailyMetrics(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", HistoricalDays: 3})
 
 	today := time.Now().UTC().Format("2006-01-02")
@@ -748,6 +779,7 @@ func TestWritePrometheus_WithDailyMetrics(t *testing.T) {
 }
 
 func TestWritePrometheus_DailyMetricWithSessionType(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	today := time.Now().UTC().Format("2006-01-02")
@@ -766,6 +798,7 @@ func TestWritePrometheus_DailyMetricWithSessionType(t *testing.T) {
 }
 
 func TestHTTPHandler_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	handler := m.HTTPHandler()
 
@@ -779,6 +812,7 @@ func TestHTTPHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHTTPHandler_GET_ReturnsPrometheus(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 	m.Increment("test_counter")
 
@@ -802,6 +836,7 @@ func TestHTTPHandler_GET_ReturnsPrometheus(t *testing.T) {
 }
 
 func TestIsDailyMetric_MoreEdgeCases(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	// Single part (no underscore).

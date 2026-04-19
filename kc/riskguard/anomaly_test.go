@@ -40,6 +40,7 @@ func (m *mockBaseline) UserOrderStats(_ string, _ int) (float64, float64, float6
 // static guards don't pre-empt the anomaly check — we're isolating the
 // new behaviour.
 func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 1000, count: 20})
 
@@ -65,6 +66,7 @@ func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
 // is below the 10× threshold (even if >3σ away) — allow and let lesser
 // checks catch it.
 func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 500, count: 20})
 	g.mu.Lock()
@@ -84,6 +86,7 @@ func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
 // mean but within μ+3σ (because stdev is huge) must pass — statistical
 // noise is not an anomaly. Both conditions must hold.
 func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	// Huge stdev → μ+3σ is higher than 10×μ.
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 100000, count: 20})
@@ -111,6 +114,7 @@ func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 // historical orders has count < minBaselineOrders → mean=0, stdev=0. The
 // anomaly check must skip (fail open, allow the order).
 func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	g.SetBaselineProvider(&mockBaseline{mean: 0, stdev: 0, count: 2}) // below floor
 	g.mu.Lock()
@@ -133,6 +137,7 @@ func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 // TestCheckAnomalyMultiplier_MarketOrderSkipped: MARKET orders have Price=0
 // at submission → order value is unknown → anomaly check must no-op.
 func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 500, count: 20})
 	g.mu.Lock()
@@ -151,6 +156,7 @@ func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
 // a baseline provider (e.g. tests or dev mode without audit store), the
 // check must be a silent no-op.
 func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	g.mu.Lock()
 	g.limits["np@test.com"] = &UserLimits{
@@ -173,6 +179,7 @@ func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
 // TestCheckOffHours_BlocksAt3AM: 03:00 IST is deep inside the 02:00–06:00
 // block window. Must reject with ReasonOffHoursBlocked.
 func TestCheckOffHours_BlocksAt3AM(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	// 03:00 AM IST on a Wednesday.
@@ -193,6 +200,7 @@ func TestCheckOffHours_BlocksAt3AM(t *testing.T) {
 // TestCheckOffHours_BlocksAtBoundary0200: the window is [02:00, 06:00), so
 // 02:00 IST sharp is blocked and 06:00 IST sharp is allowed.
 func TestCheckOffHours_BlocksAtBoundary0200(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 2, 0, 0, 0, ist) })
@@ -211,6 +219,7 @@ func TestCheckOffHours_BlocksAtBoundary0200(t *testing.T) {
 
 // TestCheckOffHours_AllowsAtBoundary0600: the window ends at 06:00 exclusive.
 func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 6, 0, 0, 0, ist) })
@@ -228,6 +237,7 @@ func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
 
 // TestCheckOffHours_AllowsAtMarketHours: 09:30 IST is peak market hours.
 func TestCheckOffHours_AllowsAtMarketHours(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 9, 30, 0, 0, ist) })
@@ -246,6 +256,7 @@ func TestCheckOffHours_AllowsAtMarketHours(t *testing.T) {
 // TestCheckOffHours_AllowOptIn: a power user with AllowOffHours=true can
 // trade 24/7 — the check becomes a no-op for them.
 func TestCheckOffHours_AllowOptIn(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 3, 0, 0, 0, ist) })
@@ -268,6 +279,7 @@ func TestCheckOffHours_AllowOptIn(t *testing.T) {
 // previous day is 02:30 IST the next day — must be blocked. This catches
 // regressions where someone compares server-local hour instead of IST.
 func TestCheckOffHours_TimezoneCorrectness(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	// UTC clock at 21:00 on Apr 7 → IST 02:30 on Apr 8 (well inside block).
 	utcTime := time.Date(2026, 4, 7, 21, 0, 0, 0, time.UTC)

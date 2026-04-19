@@ -15,6 +15,7 @@ func edgeLogger() *slog.Logger {
 // TestTick_MidnightBoundary verifies that a task scheduled at 00:00 IST
 // fires on a trading day and is correctly deduped at the same minute.
 func TestTick_MidnightBoundary(t *testing.T) {
+	t.Parallel()
 	s := New(edgeLogger())
 	var ran atomic.Int32
 
@@ -41,6 +42,7 @@ func TestTick_MidnightBoundary(t *testing.T) {
 // TestTick_HolidayAfterWeekday verifies that a task runs on a weekday
 // but does NOT run on the following day if it is a market holiday.
 func TestTick_HolidayAfterWeekday(t *testing.T) {
+	t.Parallel()
 	s := New(edgeLogger())
 	var ran atomic.Int32
 
@@ -70,6 +72,7 @@ func TestTick_HolidayAfterWeekday(t *testing.T) {
 // TestTick_MultipleTasksDifferentTimes verifies that only the task whose
 // time matches the current clock fires, not others.
 func TestTick_MultipleTasksDifferentTimes(t *testing.T) {
+	t.Parallel()
 	s := New(edgeLogger())
 	var morningRan, afternoonRan atomic.Int32
 
@@ -109,6 +112,7 @@ func TestTick_MultipleTasksDifferentTimes(t *testing.T) {
 // TestTick_DedupResetsNextTradingDay verifies that dedup tracking resets
 // when the date changes (e.g., Thursday -> next Monday, skipping weekend).
 func TestTick_DedupResetsNextTradingDay(t *testing.T) {
+	t.Parallel()
 	s := New(edgeLogger())
 	var ran atomic.Int32
 
@@ -138,6 +142,7 @@ func TestTick_DedupResetsNextTradingDay(t *testing.T) {
 // TestLoop_TickerBranch exercises the case <-ticker.C branch in loop()
 // by using a fast tick interval and letting the goroutine run briefly.
 func TestLoop_TickerBranch(t *testing.T) {
+	t.Parallel()
 	s := New(edgeLogger())
 	s.SetTickInterval(10 * time.Millisecond) // fast ticker for testing
 

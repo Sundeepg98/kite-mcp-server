@@ -8,6 +8,7 @@ import (
 )
 
 func TestComputeTaxHarvest(t *testing.T) {
+	t.Parallel()
 	t.Run("empty holdings", func(t *testing.T) {
 		resp := computeTaxHarvest([]broker.Holding{}, 0)
 		assert.Equal(t, 0, resp.Summary.HoldingsCount)
@@ -216,6 +217,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 }
 
 func TestTaxHarvestToolDefinition(t *testing.T) {
+	t.Parallel()
 	tool := &TaxHarvestTool{}
 	def := tool.Tool()
 

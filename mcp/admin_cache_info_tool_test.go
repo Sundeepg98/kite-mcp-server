@@ -18,6 +18,7 @@ import (
 // -----------------------------------------------------------------------------
 
 func TestAdminCacheInfo_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -31,6 +32,7 @@ func TestAdminCacheInfo_NonAdminBlocked(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminCacheInfo_UnauthenticatedBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -49,6 +51,7 @@ func TestAdminCacheInfo_UnauthenticatedBlocked(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminCacheInfo_AdminReturnsStructuredResponse(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -98,6 +101,7 @@ func TestAdminCacheInfo_AdminReturnsStructuredResponse(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminCacheInfo_HitRateSanity(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	auditStore := wireAuditForAdminTest(t, mgr)

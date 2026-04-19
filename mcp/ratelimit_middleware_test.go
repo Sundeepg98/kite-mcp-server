@@ -10,6 +10,7 @@ import (
 )
 
 func TestToolRateLimiter(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"test_tool": 2})
 	mw := rl.Middleware()
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -31,6 +32,7 @@ func TestToolRateLimiter(t *testing.T) {
 }
 
 func TestToolRateLimiter_UnlimitedTool(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"limited_tool": 1})
 	mw := rl.Middleware()
 	called := 0
@@ -52,6 +54,7 @@ func TestToolRateLimiter_UnlimitedTool(t *testing.T) {
 }
 
 func TestToolRateLimiter_TierDifferentiation(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"test_tool": 2})
 	rl.WithTierMultiplier(func(email string) int {
 		if email == "premium@test.com" {
@@ -86,6 +89,7 @@ func TestToolRateLimiter_TierDifferentiation(t *testing.T) {
 }
 
 func TestToolRateLimiter_NilTierMultiplierBehavesAsBase(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"test_tool": 1})
 	// no WithTierMultiplier call — nil multiplier
 	mw := rl.Middleware()
@@ -103,6 +107,7 @@ func TestToolRateLimiter_NilTierMultiplierBehavesAsBase(t *testing.T) {
 }
 
 func TestToolRateLimiter_ZeroMultiplierFallsBackToBase(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"test_tool": 1})
 	rl.WithTierMultiplier(func(email string) int { return 0 })
 	mw := rl.Middleware()
@@ -120,6 +125,7 @@ func TestToolRateLimiter_ZeroMultiplierFallsBackToBase(t *testing.T) {
 }
 
 func TestToolRateLimiter_PerUserIsolation(t *testing.T) {
+	t.Parallel()
 	rl := NewToolRateLimiter(map[string]int{"test_tool": 1})
 	mw := rl.Middleware()
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {

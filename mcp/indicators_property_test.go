@@ -42,6 +42,7 @@ func generateConstantSeries(c float64, length int) []float64 {
 
 // TestRSIBounds: RSI is always in [0, 100] for any valid price series.
 func TestRSIBounds(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 20 + rng.Intn(200) // 20 to 219 candles
@@ -73,6 +74,7 @@ func TestRSIBounds(t *testing.T) {
 // so avgGain and avgLoss are both 0 initially, giving RSI=100 (division by zero handling).
 // After the seed period, subsequent RSI values should be consistent.
 func TestRSIConstantPrices(t *testing.T) {
+	t.Parallel()
 	prices := generateConstantSeries(100.0, 50)
 	rsi := computeRSI(prices, 14)
 	if rsi == nil {
@@ -90,6 +92,7 @@ func TestRSIConstantPrices(t *testing.T) {
 
 // TestRSIMonotonicallyIncreasingPrices: If prices only go up, RSI should be 100.
 func TestRSIMonotonicallyIncreasingPrices(t *testing.T) {
+	t.Parallel()
 	prices := make([]float64, 50)
 	for i := range prices {
 		prices[i] = 100.0 + float64(i)
@@ -108,6 +111,7 @@ func TestRSIMonotonicallyIncreasingPrices(t *testing.T) {
 
 // TestSMAOfConstantEqualsConstant: SMA of a constant series equals the constant.
 func TestSMAOfConstantEqualsConstant(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		c := 1 + rng.Float64()*9999
@@ -138,6 +142,7 @@ func TestSMAOfConstantEqualsConstant(t *testing.T) {
 
 // TestSMAIsAverage: SMA at each point equals the arithmetic mean of the window.
 func TestSMAIsAverage(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 30 + rng.Intn(100)
@@ -175,6 +180,7 @@ func TestSMAIsAverage(t *testing.T) {
 
 // TestEMAConvergesToSMA: For a constant series, EMA equals SMA equals the constant.
 func TestEMAConvergesToSMAForConstant(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		c := 1 + rng.Float64()*9999
@@ -210,6 +216,7 @@ func TestEMAConvergesToSMAForConstant(t *testing.T) {
 
 // TestEMASeedIsSMA: The first EMA value equals the SMA over the seed period.
 func TestEMASeedIsSMA(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 30 + rng.Intn(100)
@@ -242,6 +249,7 @@ func TestEMASeedIsSMA(t *testing.T) {
 
 // TestBollingerBandOrdering: upper >= middle >= lower always.
 func TestBollingerBandOrdering(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 25 + rng.Intn(200)
@@ -275,6 +283,7 @@ func TestBollingerBandOrdering(t *testing.T) {
 
 // TestBollingerMiddleIsSMA: The middle band is the SMA.
 func TestBollingerMiddleIsSMA(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 30 + rng.Intn(100)
@@ -306,6 +315,7 @@ func TestBollingerMiddleIsSMA(t *testing.T) {
 // TestBollingerConstantPricesCollapses: For constant prices, stddev=0,
 // so upper = middle = lower = constant.
 func TestBollingerConstantPricesCollapses(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		c := 1 + rng.Float64()*9999
@@ -336,6 +346,7 @@ func TestBollingerConstantPricesCollapses(t *testing.T) {
 
 // TestMACDSignalIsEMAOfMACDLine: The MACD signal is an EMA(9) of the MACD line.
 func TestMACDSignalIsEMAOfMACDLine(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		// Need at least 26 + 9 = 35 candles for full MACD computation
@@ -388,6 +399,7 @@ func TestMACDSignalIsEMAOfMACDLine(t *testing.T) {
 
 // TestMACDHistogramSign: MACD histogram = MACD line - signal line.
 func TestMACDHistogramSign(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		length := 50 + rng.Intn(200)
@@ -428,6 +440,7 @@ func TestMACDHistogramSign(t *testing.T) {
 
 // TestSafeLastValue: Returns 0 for empty slice, last element otherwise.
 func TestSafeLastValue(t *testing.T) {
+	t.Parallel()
 	t.Run("empty slice", func(t *testing.T) {
 		if v := safeLastValue(nil); v != 0 {
 			t.Errorf("expected 0, got %f", v)
@@ -446,6 +459,7 @@ func TestSafeLastValue(t *testing.T) {
 
 // TestIndicatorNilForInsufficientData: All indicators return nil when data is too short.
 func TestIndicatorNilForInsufficientData(t *testing.T) {
+	t.Parallel()
 	short := []float64{100, 101, 102}
 
 	t.Run("RSI nil for short data", func(t *testing.T) {
@@ -477,6 +491,7 @@ func TestIndicatorNilForInsufficientData(t *testing.T) {
 // TestEMAReactsToRecentPricesMoreThanSMA: A spike in recent prices should
 // move EMA more than SMA (EMA puts more weight on recent data).
 func TestEMAReactsToRecentPrices(t *testing.T) {
+	t.Parallel()
 	// Steady prices then a big jump
 	prices := make([]float64, 50)
 	for i := 0; i < 49; i++ {

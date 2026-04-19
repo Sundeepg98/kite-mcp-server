@@ -13,6 +13,7 @@ import (
 // SessionRegistry. This guards against regression in the two-hop
 // adapter chain (app → kc → SessionRegistry).
 func TestClientHintedResolver_WiresThroughToRegistry(t *testing.T) {
+	t.Parallel()
 	reg := kc.NewSessionRegistry(testLogger())
 	resolver := newClientHintedResolver(reg)
 
@@ -36,6 +37,7 @@ func TestClientHintedResolver_WiresThroughToRegistry(t *testing.T) {
 // TestClientHintedResolver_ValidateDelegates verifies Validate is forwarded
 // to the underlying registry without mutation.
 func TestClientHintedResolver_ValidateDelegates(t *testing.T) {
+	t.Parallel()
 	reg := kc.NewSessionRegistry(testLogger())
 	resolver := newClientHintedResolver(reg)
 
@@ -56,6 +58,7 @@ func TestClientHintedResolver_ValidateDelegates(t *testing.T) {
 // TestClientHintedResolver_NilRequest verifies the idle-sweeper path
 // (mcp-go passes nil request to ResolveSessionIdManager).
 func TestClientHintedResolver_NilRequest(t *testing.T) {
+	t.Parallel()
 	reg := kc.NewSessionRegistry(testLogger())
 	resolver := newClientHintedResolver(reg)
 
@@ -69,6 +72,7 @@ func TestClientHintedResolver_NilRequest(t *testing.T) {
 // TestClientHintedResolver_TerminateDelegates verifies Terminate forwards
 // through the two-hop adapter chain to the SessionRegistry.
 func TestClientHintedResolver_TerminateDelegates(t *testing.T) {
+	t.Parallel()
 	reg := kc.NewSessionRegistry(testLogger())
 	resolver := newClientHintedResolver(reg)
 

@@ -13,6 +13,7 @@ import (
 // threshold sits at 9 so the broker-side 10/sec cap always has 1-order
 // headroom before Zerodha would reject the 11th order.
 func TestPerSecondRate_Allows9InOneSecond(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "persec9@test.com"
 
@@ -47,6 +48,7 @@ func TestPerSecondRate_Allows9InOneSecond(t *testing.T) {
 // the same calendar second is rejected. Zerodha's broker-side cap is 10,
 // so our defensive cap at 9 reserves one order of headroom.
 func TestPerSecondRate_Denies10InOneSecond(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "persec10@test.com"
 
@@ -70,6 +72,7 @@ func TestPerSecondRate_Denies10InOneSecond(t *testing.T) {
 // if each second independently hits 9 orders. The spec explicitly says
 // "per calendar clock second", not a rolling 1-second window.
 func TestPerSecondRate_AllowsAcrossSeconds(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "persec-cross@test.com"
 
@@ -110,6 +113,7 @@ func TestPerSecondRate_AllowsAcrossSeconds(t *testing.T) {
 // per-second quota does not starve user B. The counter must be keyed by
 // (email, second), not just second.
 func TestPerSecondRate_IsolatedByEmail(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	userA := "alice@test.com"
 	userB := "bob@test.com"
@@ -150,6 +154,7 @@ func TestPerSecondRate_IsolatedByEmail(t *testing.T) {
 // the check must fail open rather than lock everyone out — the broker's
 // own 10/sec cap still provides the hard stop.
 func TestPerSecondRate_NilCounterFailsOpen(t *testing.T) {
+	t.Parallel()
 	// Struct-literal construction — bypasses NewGuard, so perSecond is nil.
 	g := &Guard{
 		trackers: make(map[string]*UserTracker),
@@ -172,6 +177,7 @@ func TestPerSecondRate_NilCounterFailsOpen(t *testing.T) {
 // fail with the per-second reason, proving the middleware chain consults
 // the new gate.
 func TestPerSecondRate_IntegratedInCheckOrder_Denies10th(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	email := "integrated@test.com"
 

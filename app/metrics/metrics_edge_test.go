@@ -11,6 +11,7 @@ import (
 // TestStartCleanupRoutine_StopsOnChannelClose verifies the startCleanupRoutine
 // goroutine exits when cleanupStop is closed (covering the <-m.cleanupStop path).
 func TestStartCleanupRoutine_StopsOnChannelClose(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: true})
 	// AutoCleanup=true starts the goroutine. Shutdown closes the channel.
 	m.Shutdown()
@@ -21,6 +22,7 @@ func TestStartCleanupRoutine_StopsOnChannelClose(t *testing.T) {
 // TestIsDailyMetric_EmptyBaseName covers the path where splitting the metric
 // key results in a date suffix but an empty base name (e.g. key = "2026-01-01").
 func TestIsDailyMetric_EmptyBaseName(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: false})
 	defer m.Shutdown()
 
@@ -34,6 +36,7 @@ func TestIsDailyMetric_EmptyBaseName(t *testing.T) {
 // TestIsDailyMetric_BadDateFormat covers the path at line 237 where the
 // last part passes the length+dash check but fails the segment-length validation.
 func TestIsDailyMetric_BadDateFormat(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: false})
 	defer m.Shutdown()
 
@@ -47,6 +50,7 @@ func TestIsDailyMetric_BadDateFormat(t *testing.T) {
 // TestWritePrometheus_NonStringKey covers the path where a sync.Map key is not
 // a string (defensive code).
 func TestWritePrometheus_NonStringKey(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: false})
 	defer m.Shutdown()
 
@@ -63,6 +67,7 @@ func TestWritePrometheus_NonStringKey(t *testing.T) {
 // TestHTTPHandler_WriteError covers the path where w.Write returns an error.
 // We simulate this with a failing ResponseWriter.
 func TestHTTPHandler_WriteError_Final(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test", AutoCleanup: false})
 	defer m.Shutdown()
 

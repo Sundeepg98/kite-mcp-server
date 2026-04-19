@@ -10,6 +10,7 @@ import (
 )
 
 func TestInMemoryBus_DispatchWithResult(t *testing.T) {
+	t.Parallel()
 	bus := NewInMemoryBus()
 
 	// Register a handler for GetProfileQuery
@@ -30,6 +31,7 @@ func TestInMemoryBus_DispatchWithResult(t *testing.T) {
 }
 
 func TestInMemoryBus_Dispatch(t *testing.T) {
+	t.Parallel()
 	bus := NewInMemoryBus()
 
 	called := false
@@ -50,6 +52,7 @@ func TestInMemoryBus_Dispatch(t *testing.T) {
 }
 
 func TestInMemoryBus_UnregisteredType(t *testing.T) {
+	t.Parallel()
 	bus := NewInMemoryBus()
 
 	_, err := bus.DispatchWithResult(context.Background(), GetProfileQuery{Email: "test@example.com"})
@@ -62,6 +65,7 @@ func TestInMemoryBus_UnregisteredType(t *testing.T) {
 }
 
 func TestInMemoryBus_DuplicateRegistrationReturnsError(t *testing.T) {
+	t.Parallel()
 	bus := NewInMemoryBus()
 
 	handler := func(ctx context.Context, msg any) (any, error) { return nil, nil }
@@ -82,6 +86,7 @@ func TestInMemoryBus_DuplicateRegistrationReturnsError(t *testing.T) {
 }
 
 func TestInMemoryBus_MiddlewareChain(t *testing.T) {
+	t.Parallel()
 	var order []string
 
 	mw1 := func(next HandlerFunc) HandlerFunc {
@@ -132,6 +137,7 @@ func TestInMemoryBus_MiddlewareChain(t *testing.T) {
 }
 
 func TestInMemoryBus_HandlerError(t *testing.T) {
+	t.Parallel()
 	bus := NewInMemoryBus()
 
 	if err := bus.Register(reflect.TypeFor[GetProfileQuery](), func(ctx context.Context, msg any) (any, error) {
@@ -150,6 +156,7 @@ func TestInMemoryBus_HandlerError(t *testing.T) {
 }
 
 func TestLoggingMiddleware(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	bus := NewInMemoryBus(LoggingMiddleware(logger))
 
@@ -169,6 +176,7 @@ func TestLoggingMiddleware(t *testing.T) {
 }
 
 func TestLoggingMiddleware_ErrorPath(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	bus := NewInMemoryBus(LoggingMiddleware(logger))
 

@@ -64,6 +64,7 @@ func wireAuditForAdminTest(t *testing.T, mgr *kc.Manager) *audit.Store {
 // -----------------------------------------------------------------------------
 
 func TestAdminBaseline_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -79,6 +80,7 @@ func TestAdminBaseline_NonAdminBlocked(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminBaseline_UnauthenticatedBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -94,6 +96,7 @@ func TestAdminBaseline_UnauthenticatedBlocked(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminBaseline_EmailRequired(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -108,6 +111,7 @@ func TestAdminBaseline_EmailRequired(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminBaseline_AdminWithHistory(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	auditStore := wireAuditForAdminTest(t, mgr)
@@ -143,6 +147,7 @@ func TestAdminBaseline_AdminWithHistory(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminBaseline_UnknownUser(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)

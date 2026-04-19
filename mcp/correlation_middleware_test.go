@@ -10,6 +10,7 @@ import (
 )
 
 func TestCorrelationMiddleware_InjectsID(t *testing.T) {
+	t.Parallel()
 	var capturedCtx context.Context
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		capturedCtx = ctx
@@ -29,6 +30,7 @@ func TestCorrelationMiddleware_InjectsID(t *testing.T) {
 }
 
 func TestCorrelationMiddleware_UniquePerCall(t *testing.T) {
+	t.Parallel()
 	var ids []string
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		ids = append(ids, CorrelationIDFromContext(ctx))
@@ -52,6 +54,7 @@ func TestCorrelationMiddleware_UniquePerCall(t *testing.T) {
 }
 
 func TestCorrelationIDFromContext_NoID(t *testing.T) {
+	t.Parallel()
 	id := CorrelationIDFromContext(context.Background())
 	assert.Empty(t, id)
 }

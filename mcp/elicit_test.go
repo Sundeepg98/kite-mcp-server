@@ -10,6 +10,7 @@ import (
 )
 
 func TestBuildOrderConfirmMessage(t *testing.T) {
+	t.Parallel()
 	t.Run("place_order MARKET", func(t *testing.T) {
 		msg := buildOrderConfirmMessage("place_order", map[string]any{
 			"transaction_type": "BUY",
@@ -106,6 +107,7 @@ func TestBuildOrderConfirmMessage(t *testing.T) {
 }
 
 func TestIsConfirmableTool(t *testing.T) {
+	t.Parallel()
 	assert.True(t, isConfirmableTool("place_order"))
 	assert.True(t, isConfirmableTool("modify_order"))
 	assert.True(t, isConfirmableTool("close_position"))
@@ -121,6 +123,7 @@ func TestIsConfirmableTool(t *testing.T) {
 }
 
 func TestParseElicitationError(t *testing.T) {
+	t.Parallel()
 	t.Run("user declined", func(t *testing.T) {
 		err := errors.New("order declined by user")
 		assert.Contains(t, err.Error(), "declined")
@@ -137,16 +140,19 @@ func TestParseElicitationError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRequestConfirmation_NilServerRef(t *testing.T) {
+	t.Parallel()
 	err := requestConfirmation(context.Background(), nil, "test")
 	assert.NoError(t, err, "nil server should fail open")
 }
 
 func TestRequestConfirmation_NonMCPServerType(t *testing.T) {
+	t.Parallel()
 	err := requestConfirmation(context.Background(), "not-a-server", "test")
 	assert.NoError(t, err, "non-MCPServer should fail open")
 }
 
 func TestRequestConfirmation_NoActiveSession(t *testing.T) {
+	t.Parallel()
 	// MCPServer with no active session → ErrNoActiveSession → fail open
 	srv := server.NewMCPServer("test", "1.0", server.WithElicitation())
 	err := requestConfirmation(context.Background(), srv, "Confirm order?")
@@ -154,6 +160,7 @@ func TestRequestConfirmation_NoActiveSession(t *testing.T) {
 }
 
 func TestRequestConfirmation_ElicitationNotEnabled(t *testing.T) {
+	t.Parallel()
 	// MCPServer without elicitation support → ErrElicitationNotSupported → fail open
 	srv := server.NewMCPServer("test", "1.0") // no WithElicitation
 	err := requestConfirmation(context.Background(), srv, "Confirm order?")

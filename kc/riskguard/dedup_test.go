@@ -16,6 +16,7 @@ import (
 // a (email, clientOrderID) pair is accepted (SeenOrAdd returns false meaning
 // "not yet seen — now recorded").
 func TestDedup_SeenOrAdd_FirstCallAllowed(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(15 * time.Minute)
 	assert.False(t, d.SeenOrAdd("user@test.com", "abc-123"),
 		"first call should not be a duplicate")
@@ -24,6 +25,7 @@ func TestDedup_SeenOrAdd_FirstCallAllowed(t *testing.T) {
 // TestDedup_SeenOrAdd_SecondCallBlocked verifies that a second submission of
 // the same (email, clientOrderID) within TTL is flagged as duplicate.
 func TestDedup_SeenOrAdd_SecondCallBlocked(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(15 * time.Minute)
 	assert.False(t, d.SeenOrAdd("user@test.com", "abc-123"), "first call allowed")
 	assert.True(t, d.SeenOrAdd("user@test.com", "abc-123"),
@@ -33,6 +35,7 @@ func TestDedup_SeenOrAdd_SecondCallBlocked(t *testing.T) {
 // TestDedup_SeenOrAdd_AfterTTL verifies that an entry expires after the TTL
 // elapses and the same key can be used again.
 func TestDedup_SeenOrAdd_AfterTTL(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(100 * time.Millisecond)
 	base := time.Date(2026, 4, 17, 10, 0, 0, 0, time.UTC)
 	d.SetClock(func() time.Time { return base })
@@ -47,6 +50,7 @@ func TestDedup_SeenOrAdd_AfterTTL(t *testing.T) {
 // TestDedup_UserScoped verifies that different users with the same
 // clientOrderID do NOT collide (hash is scoped per email).
 func TestDedup_UserScoped(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(15 * time.Minute)
 	assert.False(t, d.SeenOrAdd("alice@test.com", "shared-key"), "alice first call")
 	assert.False(t, d.SeenOrAdd("bob@test.com", "shared-key"),
@@ -59,6 +63,7 @@ func TestDedup_UserScoped(t *testing.T) {
 // TestDedup_DifferentKeysAllowed verifies that different keys for the same
 // user are all allowed independently.
 func TestDedup_DifferentKeysAllowed(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(15 * time.Minute)
 	assert.False(t, d.SeenOrAdd("u@t.com", "key-1"))
 	assert.False(t, d.SeenOrAdd("u@t.com", "key-2"))
@@ -73,6 +78,7 @@ func TestDedup_DifferentKeysAllowed(t *testing.T) {
 // This is the critical race-condition test — mcp-remote retries after 504
 // can fire concurrent requests.
 func TestDedup_Concurrent(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(15 * time.Minute)
 	const N = 50
 	results := make([]bool, N)
@@ -100,6 +106,7 @@ func TestDedup_Concurrent(t *testing.T) {
 // TestDedup_CleanupRemovesStaleEntries verifies that stale entries are purged
 // so the map does not grow without bound.
 func TestDedup_CleanupRemovesStaleEntries(t *testing.T) {
+	t.Parallel()
 	d := NewDedup(50 * time.Millisecond)
 	base := time.Date(2026, 4, 17, 10, 0, 0, 0, time.UTC)
 	d.SetClock(func() time.Time { return base })
@@ -121,6 +128,7 @@ func TestDedup_CleanupRemovesStaleEntries(t *testing.T) {
 // ClientOrderID is empty, the idempotency dedup does not block the order
 // (preserves existing behaviour).
 func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	// Submit twice without ClientOrderID — should both pass the new dedup
 	// check (time-based dedup still applies but that's different signature).
@@ -141,6 +149,7 @@ func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
 // TestGuard_CheckOrder_DuplicateClientOrderID_Blocked verifies that a retry
 // with the same ClientOrderID is blocked with ReasonDuplicateOrder.
 func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	req := OrderCheckRequest{
 		Email: "u@t.com", ToolName: "place_order",
@@ -161,6 +170,7 @@ func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 // TestGuard_CheckOrder_ClientOrderID_DifferentUsers verifies that two users
 // can independently use the same ClientOrderID.
 func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	base := OrderCheckRequest{
 		ToolName: "place_order",
@@ -190,6 +200,7 @@ func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
 // second time with a duplicate_order error. This simulates the mcp-remote
 // "retry after 504" scenario Agent 54 flagged.
 func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -230,6 +241,7 @@ func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
 // TestMiddleware_ClientOrderID_ModifyOrder verifies the same wiring applies to
 // modify_order (which is also listed in orderTools).
 func TestMiddleware_ClientOrderID_ModifyOrder(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 

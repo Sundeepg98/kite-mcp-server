@@ -18,6 +18,7 @@ import (
 // BEFORE every built-in (so even the kill-switch can be preempted by a
 // custom pre-guard if an operator deliberately chooses to).
 func TestRegisterCustomCheck(t *testing.T) {
+	t.Parallel()
 	t.Run("custom check rejects otherwise-valid order", func(t *testing.T) {
 		g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -172,6 +173,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 // from the registration list is a behaviour change that should surface
 // as a failing test.
 func TestBuiltinChecksRegisteredByDefault(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	names := g.ListCheckNames()
 	want := []string{
@@ -244,6 +246,7 @@ var _ = fmt.Sprintf
 // silently-allowed bad order carries financial consequences. See
 // safeEvaluate doc in guard.go.
 func TestPanickingCheckFailsClosed(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	g.RegisterCheck(&stubCheck{
@@ -281,6 +284,7 @@ func TestPanickingCheckFailsClosed(t *testing.T) {
 // call with the same panicking check still returns the panic
 // rejection cleanly (no deadlock, no corrupted tracker).
 func TestPanickingCheckDoesNotBlockSubsequentCalls(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	g.RegisterCheck(&stubCheck{

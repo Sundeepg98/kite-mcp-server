@@ -30,6 +30,7 @@ func makeUser(email, role string) *users.User {
 }
 
 func TestRolegate_ViewerBlocksWriteTool(t *testing.T) {
+	t.Parallel()
 	lookup := &fakeLookup{byEmail: map[string]*users.User{
 		"viewer@family.test": makeUser("viewer@family.test", users.RoleViewer),
 	}}
@@ -57,6 +58,7 @@ func TestRolegate_ViewerBlocksWriteTool(t *testing.T) {
 }
 
 func TestRolegate_ViewerAllowsReadTool(t *testing.T) {
+	t.Parallel()
 	lookup := &fakeLookup{byEmail: map[string]*users.User{
 		"viewer@family.test": makeUser("viewer@family.test", users.RoleViewer),
 	}}
@@ -81,6 +83,7 @@ func TestRolegate_ViewerAllowsReadTool(t *testing.T) {
 }
 
 func TestRolegate_TraderPassesThroughWriteTool(t *testing.T) {
+	t.Parallel()
 	lookup := &fakeLookup{byEmail: map[string]*users.User{
 		"trader@family.test": makeUser("trader@family.test", users.RoleTrader),
 	}}
@@ -92,6 +95,7 @@ func TestRolegate_TraderPassesThroughWriteTool(t *testing.T) {
 }
 
 func TestRolegate_AdminPassesThroughWriteTool(t *testing.T) {
+	t.Parallel()
 	lookup := &fakeLookup{byEmail: map[string]*users.User{
 		"admin@family.test": makeUser("admin@family.test", users.RoleAdmin),
 	}}
@@ -103,6 +107,7 @@ func TestRolegate_AdminPassesThroughWriteTool(t *testing.T) {
 }
 
 func TestRolegate_UnknownUserFailsOpen(t *testing.T) {
+	t.Parallel()
 	// Unknown user — lookup returns (nil, false). Hook must fail-open so
 	// legitimate first-time auth flows don't break. Downstream auth
 	// middleware handles rejection of unknowns.
@@ -115,6 +120,7 @@ func TestRolegate_UnknownUserFailsOpen(t *testing.T) {
 }
 
 func TestRolegate_NoEmailInContextFailsOpen(t *testing.T) {
+	t.Parallel()
 	lookup := &fakeLookup{byEmail: map[string]*users.User{}}
 	hook := Hook(lookup)
 	// No email in ctx — hook should pass through so auth middleware can
@@ -124,6 +130,7 @@ func TestRolegate_NoEmailInContextFailsOpen(t *testing.T) {
 }
 
 func TestRolegate_NilLookupFailsOpen(t *testing.T) {
+	t.Parallel()
 	hook := Hook(nil)
 	ctx := oauth.ContextWithEmail(context.Background(), "viewer@family.test")
 	err := hook(ctx, "place_order", nil)
@@ -131,6 +138,7 @@ func TestRolegate_NilLookupFailsOpen(t *testing.T) {
 }
 
 func TestIsWriteTool(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bool{
 		"place_order":          true,
 		"modify_order":         true,

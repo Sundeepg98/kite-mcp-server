@@ -10,6 +10,7 @@ import (
 // returned by a registered provider are collected when Start() runs and
 // are subsequently visible to the tick loop via ListTaskNames().
 func TestRegisterTaskProvider_TasksAppearAfterStart(t *testing.T) {
+	t.Parallel()
 	s := New(testLogger())
 
 	// Stub provider that returns two tasks at known IST times.
@@ -55,6 +56,7 @@ func TestRegisterTaskProvider_TasksAppearAfterStart(t *testing.T) {
 // IST minute. This is the end-to-end plug-in smoke test: register via
 // the new API, Start, tick — the task runs.
 func TestRegisterTaskProvider_TasksFireOnSchedule(t *testing.T) {
+	t.Parallel()
 	s := New(testLogger())
 
 	var calledA atomic.Int32
@@ -93,6 +95,7 @@ func TestRegisterTaskProvider_TasksFireOnSchedule(t *testing.T) {
 // Use case: a plugin adds tasks via a TaskProvider while app/wire.go
 // continues to register its built-in briefing tasks via Add().
 func TestRegisterTaskProvider_CombinesWithAdd(t *testing.T) {
+	t.Parallel()
 	s := New(testLogger())
 
 	var calledBuiltin atomic.Int32
@@ -135,6 +138,7 @@ func TestRegisterTaskProvider_CombinesWithAdd(t *testing.T) {
 // registration API handles more than one provider. Each provider's
 // Tasks() is called exactly once at Start.
 func TestRegisterTaskProvider_MultipleProvidersCollected(t *testing.T) {
+	t.Parallel()
 	s := New(testLogger())
 
 	var pACalls, pBCalls atomic.Int32
@@ -175,6 +179,7 @@ func TestRegisterTaskProvider_MultipleProvidersCollected(t *testing.T) {
 // fails-open on a nil argument. A misconfigured plugin should not crash
 // scheduler init — it simply contributes no tasks.
 func TestRegisterTaskProvider_NilProviderIgnored(t *testing.T) {
+	t.Parallel()
 	s := New(testLogger())
 	// Explicitly pass a typed-nil. This is the realistic shape (e.g.
 	// a plugin returns a nil *MyProvider when a feature flag is off).

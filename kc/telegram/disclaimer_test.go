@@ -17,6 +17,7 @@ import (
 // core "Not investment advice" language so grep-based compliance
 // audits keep working if the constants are later renamed.
 func TestDisclaimerPrefix_Constants(t *testing.T) {
+	t.Parallel()
 	if !strings.Contains(DisclaimerPrefix, "Not investment advice") {
 		t.Errorf("DisclaimerPrefix missing 'Not investment advice': %q", DisclaimerPrefix)
 	}
@@ -34,6 +35,7 @@ func TestDisclaimerPrefix_Constants(t *testing.T) {
 // TestWithDisclaimer_PrependsPrefix verifies the helper prepends the
 // short banner verbatim.
 func TestWithDisclaimer_PrependsPrefix(t *testing.T) {
+	t.Parallel()
 	body := "Your portfolio is up 2%."
 	got := withDisclaimer(body)
 
@@ -61,6 +63,7 @@ func decodeFormBody(t *testing.T, body string) string {
 // financial command (/portfolio) is dispatched the outbound text on
 // the wire carries the disclaimer banner.
 func TestDisclaimerPrefix_OnFinancialMessage(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -93,6 +96,7 @@ func TestDisclaimerPrefix_OnFinancialMessage(t *testing.T) {
 // disclaimer banner — the help screen is a meta-command, not a
 // financial output, and prefixing it adds noise without legal value.
 func TestHelpCommandNotPrefixed(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -125,6 +129,7 @@ func TestHelpCommandNotPrefixed(t *testing.T) {
 // TestDisclaimerCommand verifies /disclaimer returns the long
 // classification statement.
 func TestDisclaimerCommand(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -161,6 +166,7 @@ func TestDisclaimerCommand(t *testing.T) {
 // TestHandleDisclaimer_ReturnsFullText is a unit-level check that
 // doesn't need the HTTP round-trip.
 func TestHandleDisclaimer_ReturnsFullText(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -175,6 +181,7 @@ func TestHandleDisclaimer_ReturnsFullText(t *testing.T) {
 // confirmation card carries the disclaimer banner — trading
 // confirmations are high-salience financial messages.
 func TestDisclaimerPrefix_OnTradingConfirmation(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -195,6 +202,7 @@ func TestDisclaimerPrefix_OnTradingConfirmation(t *testing.T) {
 // NOT prefixed — they're system errors, not financial messages.
 // (This documents the intended scope; adjust if policy widens.)
 func TestDisclaimerPrefix_NotOnRateLimit(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)

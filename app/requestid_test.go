@@ -13,6 +13,7 @@ import (
 // TestWithRequestID_GeneratesIDWhenAbsent verifies that a fresh UUIDv7
 // is generated and echoed back when the client does not provide a header.
 func TestWithRequestID_GeneratesIDWhenAbsent(t *testing.T) {
+	t.Parallel()
 	var seenID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		seenID = RequestIDFromCtx(r.Context())
@@ -38,6 +39,7 @@ func TestWithRequestID_GeneratesIDWhenAbsent(t *testing.T) {
 // TestWithRequestID_AcceptsValidClientHeader verifies that a valid
 // X-Request-ID sent by the client is preserved end-to-end.
 func TestWithRequestID_AcceptsValidClientHeader(t *testing.T) {
+	t.Parallel()
 	clientID := "018f1e8c-7b8a-7c2f-ab12-3456789abcde" // valid UUID format
 	var seenID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -57,6 +59,7 @@ func TestWithRequestID_AcceptsValidClientHeader(t *testing.T) {
 // TestWithRequestID_RejectsHeaderInjection verifies that CRLF-bearing
 // headers (attempted response-splitting) are replaced with a generated ID.
 func TestWithRequestID_RejectsHeaderInjection(t *testing.T) {
+	t.Parallel()
 	malicious := "legit-id\r\nInjected-Header: evil"
 	var seenID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -85,6 +88,7 @@ func TestWithRequestID_RejectsHeaderInjection(t *testing.T) {
 // TestWithRequestID_RejectsOverlongHeader verifies that a request ID
 // beyond a sane upper bound is discarded.
 func TestWithRequestID_RejectsOverlongHeader(t *testing.T) {
+	t.Parallel()
 	overlong := strings.Repeat("a", 513)
 	var seenID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -105,6 +109,7 @@ func TestWithRequestID_RejectsOverlongHeader(t *testing.T) {
 // short opaque request IDs (common in trace systems) are accepted without
 // forcing UUID format.
 func TestWithRequestID_AcceptsPermissiveFreeformID(t *testing.T) {
+	t.Parallel()
 	clientID := "trace-123_abcDEF"
 	var seenID string
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -122,6 +127,7 @@ func TestWithRequestID_AcceptsPermissiveFreeformID(t *testing.T) {
 
 // TestRequestIDFromCtx_Empty returns empty string when no ID is set.
 func TestRequestIDFromCtx_Empty(t *testing.T) {
+	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	id := RequestIDFromCtx(req.Context())
 	assert.Empty(t, id)
@@ -129,6 +135,7 @@ func TestRequestIDFromCtx_Empty(t *testing.T) {
 
 // TestIsValidRequestID table-drives the validator.
 func TestIsValidRequestID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		value string
@@ -155,6 +162,7 @@ func TestIsValidRequestID(t *testing.T) {
 
 // TestNewRequestID_IsUnique smoke-tests that generated IDs differ.
 func TestNewRequestID_IsUnique(t *testing.T) {
+	t.Parallel()
 	seen := make(map[string]struct{}, 100)
 	for range 100 {
 		id := newRequestID()

@@ -14,6 +14,7 @@ import (
 // --- Command serialization tests ---
 
 func TestPlaceOrderCommandSerialize(t *testing.T) {
+	t.Parallel()
 	qty, _ := domain.NewQuantity(10)
 	cmd := PlaceOrderCommand{
 		Email:           "test@example.com",
@@ -35,6 +36,7 @@ func TestPlaceOrderCommandSerialize(t *testing.T) {
 }
 
 func TestCancelOrderCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := CancelOrderCommand{
 		Email:   "test@example.com",
 		OrderID: "order-123",
@@ -50,6 +52,7 @@ func TestCancelOrderCommandSerialize(t *testing.T) {
 }
 
 func TestModifyOrderCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := ModifyOrderCommand{
 		Email:        "test@example.com",
 		OrderID:      "order-456",
@@ -69,6 +72,7 @@ func TestModifyOrderCommandSerialize(t *testing.T) {
 }
 
 func TestCreateAlertCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := CreateAlertCommand{
 		Email:          "test@example.com",
 		Tradingsymbol:  "INFY",
@@ -88,6 +92,7 @@ func TestCreateAlertCommandSerialize(t *testing.T) {
 }
 
 func TestDeleteAlertCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := DeleteAlertCommand{
 		Email:   "test@example.com",
 		AlertID: "alert-789",
@@ -103,6 +108,7 @@ func TestDeleteAlertCommandSerialize(t *testing.T) {
 }
 
 func TestFreezeUserCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := FreezeUserCommand{
 		Email:    "test@example.com",
 		FrozenBy: "admin",
@@ -119,6 +125,7 @@ func TestFreezeUserCommandSerialize(t *testing.T) {
 }
 
 func TestCreateWatchlistCommandSerialize(t *testing.T) {
+	t.Parallel()
 	cmd := CreateWatchlistCommand{
 		Email: "test@example.com",
 		Name:  "My Watchlist",
@@ -136,6 +143,7 @@ func TestCreateWatchlistCommandSerialize(t *testing.T) {
 // --- Query serialization tests ---
 
 func TestGetPortfolioQuerySerialize(t *testing.T) {
+	t.Parallel()
 	q := GetPortfolioQuery{Email: "test@example.com"}
 
 	b, err := json.Marshal(q)
@@ -148,6 +156,7 @@ func TestGetPortfolioQuerySerialize(t *testing.T) {
 }
 
 func TestGetOrdersQuerySerialize(t *testing.T) {
+	t.Parallel()
 	q := GetOrdersQuery{Email: "test@example.com"}
 
 	b, err := json.Marshal(q)
@@ -160,6 +169,7 @@ func TestGetOrdersQuerySerialize(t *testing.T) {
 }
 
 func TestGetAlertsQuerySerialize(t *testing.T) {
+	t.Parallel()
 	q := GetAlertsQuery{Email: "test@example.com"}
 
 	b, err := json.Marshal(q)
@@ -172,6 +182,7 @@ func TestGetAlertsQuerySerialize(t *testing.T) {
 }
 
 func TestGetHistoricalDataQuerySerialize(t *testing.T) {
+	t.Parallel()
 	q := GetHistoricalDataQuery{
 		InstrumentToken: 738561,
 		Interval:        "day",
@@ -190,6 +201,7 @@ func TestGetHistoricalDataQuerySerialize(t *testing.T) {
 }
 
 func TestGetAuditTrailQuerySerialize(t *testing.T) {
+	t.Parallel()
 	q := GetAuditTrailQuery{
 		Email:      "test@example.com",
 		Limit:      50,
@@ -221,6 +233,7 @@ func (m *mockCommandHandler) Handle(_ context.Context, cmd PlaceOrderCommand) er
 }
 
 func TestCommandHandlerInterface(t *testing.T) {
+	t.Parallel()
 	handler := &mockCommandHandler{}
 	var _ CommandHandler[PlaceOrderCommand] = handler // compile-time check
 
@@ -248,6 +261,7 @@ func (m *mockPlaceOrderHandler) Handle(_ context.Context, cmd PlaceOrderCommand)
 }
 
 func TestCommandHandlerWithResultInterface(t *testing.T) {
+	t.Parallel()
 	handler := &mockPlaceOrderHandler{orderID: "ORD-123"}
 	var _ CommandHandlerWithResult[PlaceOrderCommand, string] = handler
 
@@ -269,6 +283,7 @@ func (m *mockQueryHandler) Handle(_ context.Context, _ GetOrdersQuery) ([]string
 }
 
 func TestQueryHandlerInterface(t *testing.T) {
+	t.Parallel()
 	handler := &mockQueryHandler{result: []string{"order-1", "order-2"}}
 	var _ QueryHandler[GetOrdersQuery, []string] = handler
 

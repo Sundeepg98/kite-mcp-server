@@ -13,6 +13,7 @@ import (
 //   - Empty / malformed input returns (0, 0) so the caller skips Greeks.
 //   - A date in the past returns (0, 0).
 func TestTimeToExpiryYearsFromKiteDate(t *testing.T) {
+	t.Parallel()
 	ist := time.FixedZone("IST", 5*3600+30*60)
 	tomorrow := time.Now().In(ist).Add(24 * time.Hour).Format("2006-01-02")
 	future := time.Now().In(ist).Add(30 * 24 * time.Hour).Format("2006-01-02")
@@ -55,6 +56,7 @@ func TestTimeToExpiryYearsFromKiteDate(t *testing.T) {
 // the entry and leaves the other side untouched. Uses a realistic ATM NIFTY
 // setup so IV solver converges and numbers are sane.
 func TestFillGreeks_CEAndPE(t *testing.T) {
+	t.Parallel()
 	const (
 		spot    = 22000.0
 		strike  = 22000.0
@@ -99,6 +101,7 @@ func TestFillGreeks_CEAndPE(t *testing.T) {
 // solver should bail and leave Greek fields at zero so the widget renders
 // an em-dash rather than a nonsense number.
 func TestFillGreeks_ZeroWhenIVFails(t *testing.T) {
+	t.Parallel()
 	const (
 		spot   = 22000.0
 		strike = 20000.0 // deep ITM call
@@ -117,6 +120,7 @@ func TestFillGreeks_ZeroWhenIVFails(t *testing.T) {
 // TestFillGreeks_IVPercentIsHumanReadable confirms IV is returned as a
 // percent in [0, 500] for typical inputs — the widget renders it with "%".
 func TestFillGreeks_IVPercentIsHumanReadable(t *testing.T) {
+	t.Parallel()
 	const (
 		spot    = 22000.0
 		strike  = 22200.0

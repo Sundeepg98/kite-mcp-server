@@ -9,6 +9,7 @@ import (
 )
 
 func TestDailyMetrics(t *testing.T) {
+	t.Parallel()
 	m := New(Config{
 		ServiceName: "test-service",
 		AutoCleanup: false,
@@ -48,6 +49,7 @@ func TestDailyMetrics(t *testing.T) {
 }
 
 func TestDailyMetricsPrometheusOutput(t *testing.T) {
+	t.Parallel()
 	m := New(Config{
 		ServiceName: "test-service",
 		AutoCleanup: false,
@@ -87,6 +89,7 @@ func TestDailyMetricsPrometheusOutput(t *testing.T) {
 }
 
 func TestIsDailyMetric(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	tests := []struct {
@@ -113,6 +116,7 @@ func TestIsDailyMetric(t *testing.T) {
 }
 
 func TestParseDailyMetric(t *testing.T) {
+	t.Parallel()
 	m := New(Config{ServiceName: "test"})
 
 	tests := []struct {

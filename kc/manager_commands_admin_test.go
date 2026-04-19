@@ -19,6 +19,7 @@ import (
 // use case → riskguard chain is wired: a frozen state only exists if every
 // link in the chain executed.
 func TestCommandBus_AdminFreezeUser_FlipsRiskguard(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -61,6 +62,7 @@ func TestCommandBus_AdminFreezeUser_FlipsRiskguard(t *testing.T) {
 // freeze test but for the global kill switch. Proves the global freeze
 // dispatch path flows through the handler → use case → riskguard chain.
 func TestCommandBus_AdminFreezeGlobal_FlipsGlobalFreeze(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -99,6 +101,7 @@ func TestCommandBus_AdminFreezeGlobal_FlipsGlobalFreeze(t *testing.T) {
 // tickerService nil and we want to prove the handler short-circuits
 // instead of nil-panicking inside the use case.
 func TestCommandBus_StartTicker_NilService_ReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -125,6 +128,7 @@ func TestCommandBus_StartTicker_NilService_ReturnsError(t *testing.T) {
 // riskguard or store assertion — it's a proof that the handler faithfully
 // returns the use case's validation errors rather than swallowing them.
 func TestCommandBus_AdminSuspendUser_ValidationError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)

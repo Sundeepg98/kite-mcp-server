@@ -8,6 +8,7 @@ import (
 )
 
 func TestToolCache_SetGet(t *testing.T) {
+	t.Parallel()
 	c := NewToolCache(1 * time.Second)
 	c.Set("key1", "value1")
 
@@ -17,6 +18,7 @@ func TestToolCache_SetGet(t *testing.T) {
 }
 
 func TestToolCache_Expiry(t *testing.T) {
+	t.Parallel()
 	c := NewToolCache(50 * time.Millisecond)
 	c.Set("key1", "value1")
 
@@ -27,12 +29,14 @@ func TestToolCache_Expiry(t *testing.T) {
 }
 
 func TestToolCache_Miss(t *testing.T) {
+	t.Parallel()
 	c := NewToolCache(1 * time.Second)
 	_, ok := c.Get("nonexistent")
 	assert.False(t, ok)
 }
 
 func TestToolCache_Clear(t *testing.T) {
+	t.Parallel()
 	c := NewToolCache(1 * time.Second)
 	c.Set("k1", "v1")
 	c.Set("k2", "v2")
@@ -42,6 +46,7 @@ func TestToolCache_Clear(t *testing.T) {
 }
 
 func TestCacheKey(t *testing.T) {
+	t.Parallel()
 	key := CacheKey("get_ltp", "user@example.com", "NSE:INFY")
 	assert.Equal(t, "get_ltp:user@example.com:NSE:INFY", key)
 }

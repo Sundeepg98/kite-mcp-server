@@ -78,6 +78,7 @@ func newTokenRefreshManager(t *testing.T) *kc.Manager {
 }
 
 func TestWithTokenRefresh_AlwaysExpired_ProfileOK(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 
@@ -111,6 +112,7 @@ func TestWithTokenRefresh_AlwaysExpired_ProfileOK(t *testing.T) {
 }
 
 func TestWithTokenRefresh_AlwaysExpired_ProfileFails(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 
@@ -145,6 +147,7 @@ func TestWithTokenRefresh_AlwaysExpired_ProfileFails(t *testing.T) {
 }
 
 func TestWithTokenRefresh_NeverExpired(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 
@@ -173,6 +176,7 @@ func TestWithTokenRefresh_NeverExpired(t *testing.T) {
 }
 
 func TestWithTokenRefresh_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 
@@ -192,6 +196,7 @@ func TestWithTokenRefresh_EmptyEmail(t *testing.T) {
 }
 
 func TestWithTokenRefresh_NoTokenInStore(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 
@@ -212,6 +217,7 @@ func TestWithTokenRefresh_NoTokenInStore(t *testing.T) {
 }
 
 func TestWithTokenRefresh_DefaultFn(t *testing.T) {
+	t.Parallel()
 	mgr := newTokenRefreshManager(t)
 	handler := NewToolHandler(mgr)
 

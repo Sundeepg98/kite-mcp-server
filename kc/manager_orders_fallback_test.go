@@ -11,6 +11,7 @@ import (
 )
 
 func TestIsBrokerUnavailable(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bool{
 		// Trigger fallback
 		"rate limit exceeded":          true,
@@ -44,6 +45,7 @@ func TestIsBrokerUnavailable(t *testing.T) {
 }
 
 func TestOrderAggregateToBrokerOrder_FlattensState(t *testing.T) {
+	t.Parallel()
 	// Build aggregate state via the public event dispatcher (same path
 	// the projector uses) so the test doesn't depend on internal event
 	// constructors or private state setters.
@@ -83,12 +85,14 @@ func TestOrderAggregateToBrokerOrder_FlattensState(t *testing.T) {
 }
 
 func TestProjectionOrdersForEmail_EmptyWhenNoProjector(t *testing.T) {
+	t.Parallel()
 	m := &Manager{}
 	out := m.projectionOrdersForEmail("nobody@example.com")
 	assert.Empty(t, out)
 }
 
 func TestProjectionOrdersForEmail_ReturnsMatchingAggregates(t *testing.T) {
+	t.Parallel()
 	proj := eventsourcing.NewProjector()
 	m := &Manager{projector: proj}
 

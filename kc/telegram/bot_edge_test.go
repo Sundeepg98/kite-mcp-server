@@ -34,6 +34,7 @@ import (
 // ===========================================================================
 
 func TestExecuteConfirmedOrder_PaperTradingError(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 	mgr.apiKeys[email] = "test-api-key"
@@ -96,6 +97,7 @@ func TestExecuteConfirmedOrder_PaperTradingError(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestServeHTTP_ReadBodyError(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -122,6 +124,7 @@ func (e *errorReader) Read(p []byte) (int, error) {
 // -----------------------------------------------------------------------
 
 func TestServeHTTP_UnknownCommand_Final(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore.(*mockTelegramLookup).emails[111] = "user@test.com"
 	h, mockHTTP := newTestBotHandler(mgr)
@@ -157,6 +160,7 @@ func TestServeHTTP_UnknownCommand_Final(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestAllowCommand_RateLimitExceeded(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -191,6 +195,7 @@ func TestAllowCommand_RateLimitExceeded(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestHandlePortfolio_ZeroDayChangeSkipped(t *testing.T) {
+	t.Parallel()
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.server.Close()
 
@@ -243,6 +248,7 @@ func TestHandlePortfolio_ZeroDayChangeSkipped(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestHandleOrders_GetOrdersError(t *testing.T) {
+	t.Parallel()
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.server.Close()
 
@@ -271,6 +277,7 @@ func TestHandleOrders_GetOrdersError(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestHandleSetAlert_WithTickerSubscribe(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 
 	// Set up alert store.
@@ -325,6 +332,7 @@ func TestHandleSetAlert_WithTickerSubscribe(t *testing.T) {
 }
 
 func TestHandleSetAlert_InvalidFormat(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
 
@@ -353,6 +361,7 @@ func TestHandleSetAlert_InvalidFormat(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestServeHTTP_StatusCommand(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore.(*mockTelegramLookup).emails[222] = "user@test.com"
 	mgr.alertStore = alerts.NewStore(nil)
@@ -394,6 +403,7 @@ func TestServeHTTP_StatusCommand(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestHandlePortfolio_MoreThan5TopMovers(t *testing.T) {
+	t.Parallel()
 	fakeAPI := newFakeKiteAPI()
 	defer fakeAPI.server.Close()
 
@@ -440,6 +450,7 @@ func TestHandlePortfolio_MoreThan5TopMovers(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestExecuteConfirmedOrder_PaperOrderFail(t *testing.T) {
+	t.Parallel()
 	email := "user@test.com"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dbPath := filepath.Join(t.TempDir(), "paper_fail.db")
@@ -491,6 +502,7 @@ func TestExecuteConfirmedOrder_PaperOrderFail(t *testing.T) {
 // -----------------------------------------------------------------------
 
 func TestHandleSetAlert_MaxAlertsReached(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 
 	alertStore := alerts.NewStore(nil)
@@ -555,6 +567,7 @@ func decodeBody(raw string) string {
 // TestHandleBuy_MarketOrder_ConfirmAndExecute exercises the full flow:
 // /buy RELIANCE 10 → confirmation → executeConfirmedOrder through fakeKiteAPI.
 func TestHandleBuy_MarketOrder_ConfirmAndExecute(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, mock, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -591,6 +604,7 @@ func TestHandleBuy_MarketOrder_ConfirmAndExecute(t *testing.T) {
 
 // TestHandleSell_LimitOrder_ConfirmAndExecute exercises /sell with a limit price.
 func TestHandleSell_LimitOrder_ConfirmAndExecute(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, mock, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -624,6 +638,7 @@ func TestHandleSell_LimitOrder_ConfirmAndExecute(t *testing.T) {
 
 // TestHandleQuick_BuyMarket_ConfirmAndExecute exercises /quick SYMBOL QTY BUY MARKET.
 func TestHandleQuick_BuyMarket_ConfirmAndExecute(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, mock, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -655,6 +670,7 @@ func TestHandleQuick_BuyMarket_ConfirmAndExecute(t *testing.T) {
 
 // TestHandleQuick_SellLimit_ConfirmAndExecute exercises /quick SYMBOL QTY SELL LIMIT PRICE.
 func TestHandleQuick_SellLimit_ConfirmAndExecute(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, mock, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -687,6 +703,7 @@ func TestHandleQuick_SellLimit_ConfirmAndExecute(t *testing.T) {
 // TestExecuteConfirmedOrder_KiteAPIError exercises the error path when
 // the Kite API returns a non-success response for order placement.
 func TestExecuteConfirmedOrder_KiteAPIError(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, mock, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -721,6 +738,7 @@ func TestExecuteConfirmedOrder_KiteAPIError(t *testing.T) {
 // TestExecuteConfirmedOrder_OrderExpired tests the case where the
 // order was already popped (expired or processed) before confirmation.
 func TestExecuteConfirmedOrder_OrderExpired(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -741,6 +759,7 @@ func TestExecuteConfirmedOrder_OrderExpired(t *testing.T) {
 // TestNewKiteClient_KiteBaseURI_Applied verifies that when kiteBaseURI
 // is set on BotHandler, newKiteClient applies it to the client.
 func TestNewKiteClient_KiteBaseURI_Applied(t *testing.T) {
+	t.Parallel()
 	email := "trader@test.com"
 	h, _, fakeAPI := newTestBotWithFakeAPI(t, email)
 	defer h.Shutdown()
@@ -754,6 +773,7 @@ func TestNewKiteClient_KiteBaseURI_Applied(t *testing.T) {
 // TestNewKiteClient_BaseURINotSet tests that newKiteClient works without
 // kiteBaseURI override (production mode) — no crash, no error.
 func TestNewKiteClient_BaseURINotSet(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.apiKeys["prod@test.com"] = "key"
 	mgr.accessTokens["prod@test.com"] = "tok"

@@ -11,6 +11,7 @@ import (
 // time-of-day or nanoseconds. Volume-spike relies on this to decide
 // whether to drop an in-progress candle.
 func TestSameYMD(t *testing.T) {
+	t.Parallel()
 	a := time.Date(2026, 4, 17, 9, 15, 0, 0, time.UTC)
 	b := time.Date(2026, 4, 17, 15, 30, 0, 0, time.UTC)
 	if !sameYMD(a, b) {
@@ -26,6 +27,7 @@ func TestSameYMD(t *testing.T) {
 // TestFilterCompletedCandles verifies we drop only today's candle (the
 // in-progress session) and never an older one.
 func TestFilterCompletedCandles(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 4, 17, 15, 0, 0, 0, time.UTC)
 
 	candles := []broker.HistoricalCandle{
@@ -59,6 +61,7 @@ func TestFilterCompletedCandles(t *testing.T) {
 // TestAverageVolumeAndClose verifies both outputs are plain arithmetic
 // means over the supplied slice — no exponential weighting, no median.
 func TestAverageVolumeAndClose(t *testing.T) {
+	t.Parallel()
 	candles := []broker.HistoricalCandle{
 		{Close: 100, Volume: 1000},
 		{Close: 110, Volume: 2000},

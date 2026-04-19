@@ -17,6 +17,7 @@ import (
 // =============================================================================
 
 func TestDeserializeAlertEvent_BadJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		eventType string
@@ -40,6 +41,7 @@ func TestDeserializeAlertEvent_BadJSON(t *testing.T) {
 }
 
 func TestDeserializeAlertEvent_UnknownType(t *testing.T) {
+	t.Parallel()
 	stored := StoredEvent{
 		AggregateID: "a1",
 		EventType:   "AlertUnknown",
@@ -52,6 +54,7 @@ func TestDeserializeAlertEvent_UnknownType(t *testing.T) {
 }
 
 func TestDeserializeOrderEvent_BadJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		eventType string
@@ -76,6 +79,7 @@ func TestDeserializeOrderEvent_BadJSON(t *testing.T) {
 }
 
 func TestDeserializeOrderEvent_UnknownType(t *testing.T) {
+	t.Parallel()
 	stored := StoredEvent{
 		AggregateID: "o1",
 		EventType:   "OrderBogus",
@@ -88,6 +92,7 @@ func TestDeserializeOrderEvent_UnknownType(t *testing.T) {
 }
 
 func TestDeserializePositionEvent_BadJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		eventType string
@@ -111,6 +116,7 @@ func TestDeserializePositionEvent_BadJSON(t *testing.T) {
 }
 
 func TestDeserializePositionEvent_UnknownType(t *testing.T) {
+	t.Parallel()
 	stored := StoredEvent{
 		AggregateID: "p1",
 		EventType:   "PositionBogus",
@@ -127,6 +133,7 @@ func TestDeserializePositionEvent_UnknownType(t *testing.T) {
 // =============================================================================
 
 func TestLoadAlertFromEvents_DeserializationError(t *testing.T) {
+	t.Parallel()
 	events := []StoredEvent{
 		{
 			AggregateID: "a1",
@@ -142,6 +149,7 @@ func TestLoadAlertFromEvents_DeserializationError(t *testing.T) {
 }
 
 func TestLoadOrderFromEvents_DeserializationError(t *testing.T) {
+	t.Parallel()
 	events := []StoredEvent{
 		{
 			AggregateID: "o1",
@@ -157,6 +165,7 @@ func TestLoadOrderFromEvents_DeserializationError(t *testing.T) {
 }
 
 func TestLoadPositionFromEvents_DeserializationError(t *testing.T) {
+	t.Parallel()
 	events := []StoredEvent{
 		{
 			AggregateID: "p1",
@@ -182,6 +191,7 @@ func (f *fakeEvent) EventType() string    { return "FakeEvent" }
 func (f *fakeEvent) OccurredAt() time.Time { return f.ts }
 
 func TestToAlertStoredEvents_UnknownEventType(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("a-unknown")
 	// Manually inject a fake pending event that won't match any switch case.
 	agg.pending = append(agg.pending, &fakeEvent{ts: time.Now()})
@@ -192,6 +202,7 @@ func TestToAlertStoredEvents_UnknownEventType(t *testing.T) {
 }
 
 func TestToStoredEvents_UnknownEventType(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("o-unknown")
 	agg.pending = append(agg.pending, &fakeEvent{ts: time.Now()})
 
@@ -201,6 +212,7 @@ func TestToStoredEvents_UnknownEventType(t *testing.T) {
 }
 
 func TestToPositionStoredEvents_UnknownEventType(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("p-unknown")
 	agg.pending = append(agg.pending, &fakeEvent{ts: time.Now()})
 
@@ -214,6 +226,7 @@ func TestToPositionStoredEvents_UnknownEventType(t *testing.T) {
 // =============================================================================
 
 func TestCanFill_CancelledState(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("o-can-fill-cancel")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
@@ -231,6 +244,7 @@ func TestCanFill_CancelledState(t *testing.T) {
 // =============================================================================
 
 func TestCanClose_BothBranches(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("p-canclose-both")
 	_ = agg.Open("u@test.com", "RELIANCE", "NSE", "BUY", 10, 2500)
 
@@ -249,6 +263,7 @@ func TestCanClose_BothBranches(t *testing.T) {
 // TestCanClose_UnknownState covers the "not in OPEN state" branch that differs from "already closed".
 // This requires forcing an invalid state that shouldn't occur in normal usage.
 func TestCanClose_UnknownState(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("p-canclose-unknown")
 	// Manually set an invalid status
 	agg.Status = "UNKNOWN"
@@ -296,6 +311,7 @@ func (m *mockRows) Err() error {
 }
 
 func TestScanEvents_ScanError(t *testing.T) {
+	t.Parallel()
 	rows := &mockRows{
 		data:    [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "2026-01-01T00:00:00Z", int64(1)}},
 		scanErr: fmt.Errorf("scan failed"),
@@ -306,6 +322,7 @@ func TestScanEvents_ScanError(t *testing.T) {
 }
 
 func TestScanEvents_BadTimestamp(t *testing.T) {
+	t.Parallel()
 	rows := &mockRows{
 		data: [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "not-a-time", int64(1)}},
 	}
@@ -315,6 +332,7 @@ func TestScanEvents_BadTimestamp(t *testing.T) {
 }
 
 func TestScanEvents_RowsErr(t *testing.T) {
+	t.Parallel()
 	rows := &mockRows{
 		data:    [][]interface{}{}, // no data, but Err returns error
 		iterErr: fmt.Errorf("iteration failed"),
@@ -325,6 +343,7 @@ func TestScanEvents_RowsErr(t *testing.T) {
 }
 
 func TestScanEvents_Success(t *testing.T) {
+	t.Parallel()
 	rows := &mockRows{
 		data: [][]interface{}{
 			{"id1", "agg1", "Order", "OrderPlaced", `{"email":"u@test.com"}`, "2026-01-01T10:00:00Z", int64(1)},
@@ -343,6 +362,7 @@ func TestScanEvents_Success(t *testing.T) {
 // =============================================================================
 
 func TestMarshalPayload_Error(t *testing.T) {
+	t.Parallel()
 	// channels cannot be JSON marshaled
 	_, err := MarshalPayload(make(chan int))
 	assert.Error(t, err)
@@ -354,6 +374,7 @@ func TestMarshalPayload_Error(t *testing.T) {
 // =============================================================================
 
 func TestDeserializeOrderEvent_AllValidTypes(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	tests := []struct {
@@ -394,6 +415,7 @@ func TestDeserializeOrderEvent_AllValidTypes(t *testing.T) {
 }
 
 func TestDeserializeAlertEvent_AllValidTypes(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	tests := []struct {
@@ -428,6 +450,7 @@ func TestDeserializeAlertEvent_AllValidTypes(t *testing.T) {
 }
 
 func TestDeserializePositionEvent_AllValidTypes(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	tests := []struct {
@@ -467,6 +490,7 @@ func TestDeserializePositionEvent_AllValidTypes(t *testing.T) {
 // =============================================================================
 
 func TestInternalEventTypes_OccurredAt(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	tests := []struct {
@@ -496,6 +520,7 @@ func TestInternalEventTypes_OccurredAt(t *testing.T) {
 // =============================================================================
 
 func TestAppend_WithPresetID(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -526,6 +551,7 @@ func TestAppend_WithPresetID(t *testing.T) {
 // =============================================================================
 
 func TestAppend_DBError(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	// Get underlying DB and close it
@@ -545,6 +571,7 @@ func TestAppend_DBError(t *testing.T) {
 }
 
 func TestLoadEvents_DBError(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	// Drop the table to force query error
@@ -556,6 +583,7 @@ func TestLoadEvents_DBError(t *testing.T) {
 }
 
 func TestLoadEventsSince_DBError(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	// Drop the table to force query error
@@ -567,6 +595,7 @@ func TestLoadEventsSince_DBError(t *testing.T) {
 }
 
 func TestNextSequence_DBError(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	// Drop the table to force query error
@@ -578,6 +607,7 @@ func TestNextSequence_DBError(t *testing.T) {
 }
 
 func TestAlertAggregate_FullLifecycleReconstitution(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewAlertAggregate("alert-full")

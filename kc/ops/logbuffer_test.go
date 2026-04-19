@@ -9,6 +9,7 @@ import (
 )
 
 func TestLogBufferAddAndRecent(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(5)
 
 	// Empty buffer
@@ -23,6 +24,7 @@ func TestLogBufferAddAndRecent(t *testing.T) {
 }
 
 func TestLogBufferRingOverflow(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(3)
 
 	// Add 5 entries to a buffer of capacity 3
@@ -39,6 +41,7 @@ func TestLogBufferRingOverflow(t *testing.T) {
 }
 
 func TestLogBufferRecentOrder(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(10)
 	lb.Add(LogEntry{Message: "first"})
 	lb.Add(LogEntry{Message: "second"})
@@ -52,6 +55,7 @@ func TestLogBufferRecentOrder(t *testing.T) {
 }
 
 func TestLogBufferListener(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(10)
 
 	ch := lb.AddListener("test")
@@ -68,6 +72,7 @@ func TestLogBufferListener(t *testing.T) {
 }
 
 func TestLogBufferRemoveListenerCloses(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(10)
 
 	ch := lb.AddListener("test")
@@ -79,6 +84,7 @@ func TestLogBufferRemoveListenerCloses(t *testing.T) {
 }
 
 func TestLogBufferMultipleListeners(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(10)
 
 	ch1 := lb.AddListener("l1")
@@ -104,6 +110,7 @@ func TestLogBufferMultipleListeners(t *testing.T) {
 }
 
 func TestLogBufferSlowListener(t *testing.T) {
+	t.Parallel()
 	lb := NewLogBuffer(10)
 
 	// Create listener with small buffer (default is 100, but we test drop behavior)

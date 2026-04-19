@@ -47,6 +47,7 @@ func newTestManager(t *testing.T) (*TrailingStopManager, *mockModifier) {
 }
 
 func TestTrailingStopAdd(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -73,6 +74,7 @@ func TestTrailingStopAdd(t *testing.T) {
 }
 
 func TestTrailingStopAddValidation(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestManager(t)
 
 	// Missing order_id
@@ -105,6 +107,7 @@ func TestTrailingStopAddValidation(t *testing.T) {
 }
 
 func TestTrailingStopCancel(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -130,6 +133,7 @@ func TestTrailingStopCancel(t *testing.T) {
 }
 
 func TestTrailingStopEvaluateLong(t *testing.T) {
+	t.Parallel()
 	m, mock := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -158,6 +162,7 @@ func TestTrailingStopEvaluateLong(t *testing.T) {
 }
 
 func TestTrailingStopEvaluateLongPct(t *testing.T) {
+	t.Parallel()
 	m, mock := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -177,6 +182,7 @@ func TestTrailingStopEvaluateLongPct(t *testing.T) {
 }
 
 func TestTrailingStopEvaluateNoMoveDown(t *testing.T) {
+	t.Parallel()
 	m, mock := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -195,6 +201,7 @@ func TestTrailingStopEvaluateNoMoveDown(t *testing.T) {
 }
 
 func TestTrailingStopRateLimit(t *testing.T) {
+	t.Parallel()
 	m, mock := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -217,6 +224,7 @@ func TestTrailingStopRateLimit(t *testing.T) {
 }
 
 func TestTrailingStopEvaluateShort(t *testing.T) {
+	t.Parallel()
 	m, mock := newTestManager(t)
 
 	ts := &TrailingStop{
@@ -237,6 +245,7 @@ func TestTrailingStopEvaluateShort(t *testing.T) {
 }
 
 func TestTrailingStopDBPersistence(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	logger := slog.Default()
@@ -278,6 +287,7 @@ func TestTrailingStopDBPersistence(t *testing.T) {
 }
 
 func TestTrailingStopMaxPerUser(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestManager(t)
 
 	// Add 20 trailing stops (the maximum)

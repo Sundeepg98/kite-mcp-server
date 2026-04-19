@@ -8,6 +8,7 @@ import (
 )
 
 func TestWatchlistStore_CreateAndGet(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, err := s.CreateWatchlist("alice@example.com", "Tech Stocks")
@@ -23,6 +24,7 @@ func TestWatchlistStore_CreateAndGet(t *testing.T) {
 }
 
 func TestWatchlistStore_List(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	_, err := s.CreateWatchlist("bob@example.com", "Watchlist A")
@@ -43,6 +45,7 @@ func TestWatchlistStore_List(t *testing.T) {
 }
 
 func TestWatchlistStore_Delete(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, err := s.CreateWatchlist("alice@example.com", "To Delete")
@@ -56,6 +59,7 @@ func TestWatchlistStore_Delete(t *testing.T) {
 }
 
 func TestWatchlistStore_DeleteWrongUser(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, err := s.CreateWatchlist("alice@example.com", "Alice's List")
@@ -70,6 +74,7 @@ func TestWatchlistStore_DeleteWrongUser(t *testing.T) {
 }
 
 func TestWatchlistStore_DeleteNonExistent(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	err := s.DeleteWatchlist("alice@example.com", "nonexistent")
@@ -77,6 +82,7 @@ func TestWatchlistStore_DeleteNonExistent(t *testing.T) {
 }
 
 func TestWatchlistStore_MaxWatchlists(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	for i := 0; i < MaxWatchlistsPerUser; i++ {
@@ -90,6 +96,7 @@ func TestWatchlistStore_MaxWatchlists(t *testing.T) {
 }
 
 func TestWatchlistStore_AddItem(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, err := s.CreateWatchlist("alice@example.com", "Tech")
@@ -111,6 +118,7 @@ func TestWatchlistStore_AddItem(t *testing.T) {
 }
 
 func TestWatchlistStore_AddItem_Duplicate(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Dup Test")
@@ -129,6 +137,7 @@ func TestWatchlistStore_AddItem_Duplicate(t *testing.T) {
 }
 
 func TestWatchlistStore_AddItem_WrongUser(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Alice's List")
@@ -141,6 +150,7 @@ func TestWatchlistStore_AddItem_WrongUser(t *testing.T) {
 }
 
 func TestWatchlistStore_AddItem_NonExistentWatchlist(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	err := s.AddItem("alice@example.com", "nonexistent", &WatchlistItem{
@@ -151,6 +161,7 @@ func TestWatchlistStore_AddItem_NonExistentWatchlist(t *testing.T) {
 }
 
 func TestWatchlistStore_AddItem_MaxItems(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Full")
@@ -172,6 +183,7 @@ func TestWatchlistStore_AddItem_MaxItems(t *testing.T) {
 }
 
 func TestWatchlistStore_RemoveItem(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Remove Test")
@@ -197,6 +209,7 @@ func TestWatchlistStore_RemoveItem(t *testing.T) {
 }
 
 func TestWatchlistStore_RemoveItem_WrongUser(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Protected")
@@ -215,6 +228,7 @@ func TestWatchlistStore_RemoveItem_WrongUser(t *testing.T) {
 }
 
 func TestWatchlistStore_RemoveItem_NotFound(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Test")
@@ -225,6 +239,7 @@ func TestWatchlistStore_RemoveItem_NotFound(t *testing.T) {
 }
 
 func TestWatchlistStore_FindByName(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	s.CreateWatchlist("alice@example.com", "Tech Stocks")
@@ -242,6 +257,7 @@ func TestWatchlistStore_FindByName(t *testing.T) {
 }
 
 func TestWatchlistStore_FindItemBySymbol(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Test")
@@ -262,6 +278,7 @@ func TestWatchlistStore_FindItemBySymbol(t *testing.T) {
 }
 
 func TestWatchlistStore_GetAllItems(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id1, _ := s.CreateWatchlist("alice@example.com", "WL1")
@@ -285,6 +302,7 @@ func TestWatchlistStore_GetAllItems(t *testing.T) {
 }
 
 func TestWatchlistStore_ItemCount(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Count Test")
@@ -304,6 +322,7 @@ func TestWatchlistStore_ItemCount(t *testing.T) {
 }
 
 func TestWatchlistStore_DeleteByEmail(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	s.CreateWatchlist("alice@example.com", "WL1")
@@ -317,6 +336,7 @@ func TestWatchlistStore_DeleteByEmail(t *testing.T) {
 }
 
 func TestWatchlistStore_DeepCopy(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	id, _ := s.CreateWatchlist("alice@example.com", "Copy Test")
@@ -335,6 +355,7 @@ func TestWatchlistStore_DeepCopy(t *testing.T) {
 }
 
 func TestWatchlistStore_ListDeepCopy(t *testing.T) {
+	t.Parallel()
 	s := NewStore()
 
 	s.CreateWatchlist("alice@example.com", "Original")

@@ -36,6 +36,7 @@ func newTestStore(t *testing.T) *EventStore {
 // --- EventStore tests ---
 
 func TestAppendAndLoadEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -73,6 +74,7 @@ func TestAppendAndLoadEvents(t *testing.T) {
 }
 
 func TestLoadByAggregateIDFilters(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -119,6 +121,7 @@ func TestLoadByAggregateIDFilters(t *testing.T) {
 }
 
 func TestNextSequenceAutoIncrements(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	now := time.Now().UTC()
 
@@ -144,6 +147,7 @@ func TestNextSequenceAutoIncrements(t *testing.T) {
 }
 
 func TestLoadEventsSinceFilters(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	t0 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	t1 := t0.Add(time.Hour)
@@ -179,6 +183,7 @@ func TestLoadEventsSinceFilters(t *testing.T) {
 // --- OrderAggregate tests ---
 
 func TestOrderAggregate_PlaceCancelLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-1")
 	assert.Equal(t, OrderStatusNew, agg.Status)
 	assert.Equal(t, 0, agg.Version())
@@ -212,6 +217,7 @@ func TestOrderAggregate_PlaceCancelLifecycle(t *testing.T) {
 }
 
 func TestOrderAggregate_PlaceFillLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-2")
 
 	err := agg.Place(broker.OrderParams{
@@ -235,6 +241,7 @@ func TestOrderAggregate_PlaceFillLifecycle(t *testing.T) {
 }
 
 func TestOrderAggregate_InvalidTransitions(t *testing.T) {
+	t.Parallel()
 	// Cannot cancel a NEW order.
 	agg := NewOrderAggregate("order-3")
 	err := agg.Cancel()
@@ -273,6 +280,7 @@ func TestOrderAggregate_InvalidTransitions(t *testing.T) {
 }
 
 func TestOrderAggregate_PlaceValidation(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-v")
 
 	// Zero quantity.
@@ -300,6 +308,7 @@ func TestOrderAggregate_PlaceValidation(t *testing.T) {
 }
 
 func TestOrderAggregate_FillValidation(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-fv")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
@@ -316,6 +325,7 @@ func TestOrderAggregate_FillValidation(t *testing.T) {
 }
 
 func TestReconstitutFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	// Create and persist an aggregate.
@@ -365,6 +375,7 @@ func TestReconstitutFromEvents(t *testing.T) {
 }
 
 func TestReconstitutePlaceCancelFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewOrderAggregate("order-cancel-recon")
@@ -394,12 +405,14 @@ func TestReconstitutePlaceCancelFromEvents(t *testing.T) {
 }
 
 func TestLoadOrderFromEventsEmpty(t *testing.T) {
+	t.Parallel()
 	_, err := LoadOrderFromEvents(nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no events to load order from")
 }
 
 func TestConcurrentAppendSafety(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	now := time.Now().UTC()
 
@@ -435,6 +448,7 @@ func TestConcurrentAppendSafety(t *testing.T) {
 }
 
 func TestMarshalPayload(t *testing.T) {
+	t.Parallel()
 	p := OrderPlacedPayload{
 		Email:         "test@test.com",
 		Exchange:      "NSE",
@@ -452,6 +466,7 @@ func TestMarshalPayload(t *testing.T) {
 }
 
 func TestClearPendingEvents(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-clear")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "TCS", TransactionType: "BUY",
@@ -464,6 +479,7 @@ func TestClearPendingEvents(t *testing.T) {
 }
 
 func TestAggregateType(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-type-test")
 	assert.Equal(t, "Order", agg.AggregateType())
 	assert.Equal(t, "order-type-test", agg.AggregateID())
@@ -472,6 +488,7 @@ func TestAggregateType(t *testing.T) {
 // --- OrderModified tests ---
 
 func TestOrderAggregate_PlaceModifyFillLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-modify-1")
 
 	err := agg.Place(broker.OrderParams{
@@ -500,6 +517,7 @@ func TestOrderAggregate_PlaceModifyFillLifecycle(t *testing.T) {
 }
 
 func TestOrderAggregate_ModifyMultipleTimes(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-multi-mod")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "INFY", TransactionType: "BUY",
@@ -521,6 +539,7 @@ func TestOrderAggregate_ModifyMultipleTimes(t *testing.T) {
 }
 
 func TestOrderAggregate_ModifyCancelLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-mod-cancel")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "TCS", TransactionType: "SELL",
@@ -538,6 +557,7 @@ func TestOrderAggregate_ModifyCancelLifecycle(t *testing.T) {
 }
 
 func TestOrderAggregate_ModifyInvalidTransitions(t *testing.T) {
+	t.Parallel()
 	// Cannot modify a NEW order.
 	agg := NewOrderAggregate("order-mod-inv-1")
 	err := agg.Modify(10, 100, "")
@@ -568,6 +588,7 @@ func TestOrderAggregate_ModifyInvalidTransitions(t *testing.T) {
 }
 
 func TestOrderAggregate_ModifyValidation(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("order-mod-val")
 	_ = agg.Place(broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
@@ -592,6 +613,7 @@ func TestOrderAggregate_ModifyValidation(t *testing.T) {
 // --- Invariant query method tests ---
 
 func TestCanModifyInvariant(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("inv-modify")
 	assert.Error(t, agg.CanModify(), "NEW should not be modifiable")
 
@@ -603,6 +625,7 @@ func TestCanModifyInvariant(t *testing.T) {
 }
 
 func TestCanCancelInvariant(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("inv-cancel")
 	assert.Error(t, agg.CanCancel(), "NEW should not be cancellable")
 
@@ -617,6 +640,7 @@ func TestCanCancelInvariant(t *testing.T) {
 }
 
 func TestCanFillInvariant(t *testing.T) {
+	t.Parallel()
 	agg := NewOrderAggregate("inv-fill")
 	assert.Error(t, agg.CanFill(), "NEW should not be fillable")
 
@@ -633,6 +657,7 @@ func TestCanFillInvariant(t *testing.T) {
 // --- Modify event reconstitution tests ---
 
 func TestReconstitutePlaceModifyFillFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewOrderAggregate("order-mod-recon")

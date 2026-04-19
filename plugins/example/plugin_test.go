@@ -8,6 +8,7 @@ import (
 )
 
 func TestServerTimeTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
 	tool := &ServerTimeTool{}
 	def := tool.Tool()
 
@@ -20,6 +21,7 @@ func TestServerTimeTool_ToolDefinition(t *testing.T) {
 }
 
 func TestServerTimeTool_Handler(t *testing.T) {
+	t.Parallel()
 	tool := &ServerTimeTool{}
 	handler := tool.Handler(nil) // manager not needed for this tool
 
@@ -45,6 +47,7 @@ func TestServerTimeTool_Handler(t *testing.T) {
 }
 
 func TestServerTimeTool_Annotations(t *testing.T) {
+	t.Parallel()
 	tool := &ServerTimeTool{}
 	def := tool.Tool()
 

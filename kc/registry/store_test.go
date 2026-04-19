@@ -11,6 +11,7 @@ import (
 )
 
 func TestRegisterAndGet(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	reg := &AppRegistration{
@@ -40,6 +41,7 @@ func TestRegisterAndGet(t *testing.T) {
 }
 
 func TestRegisterDuplicate(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	reg := &AppRegistration{
@@ -62,6 +64,7 @@ func TestRegisterDuplicate(t *testing.T) {
 }
 
 func TestGetByEmail(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -114,6 +117,7 @@ func TestGetByEmail(t *testing.T) {
 }
 
 func TestGetByAPIKey(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -135,6 +139,7 @@ func TestGetByAPIKey(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -191,6 +196,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -212,6 +218,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestListAndCount(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	if s.Count() != 0 {
@@ -243,6 +250,7 @@ func TestListAndCount(t *testing.T) {
 }
 
 func TestHasEntries(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	if s.HasEntries() {
@@ -259,6 +267,7 @@ func TestHasEntries(t *testing.T) {
 }
 
 func TestMaskSecret(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -278,6 +287,7 @@ func TestMaskSecret(t *testing.T) {
 }
 
 func TestRegisterValidation(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	// Missing ID
@@ -297,6 +307,7 @@ func TestRegisterValidation(t *testing.T) {
 }
 
 func TestSetLogger(t *testing.T) {
+	t.Parallel()
 	s := New()
 	logger := slog.Default()
 	s.SetLogger(logger)
@@ -304,12 +315,14 @@ func TestSetLogger(t *testing.T) {
 }
 
 func TestSetDB_NilDB(t *testing.T) {
+	t.Parallel()
 	s := New()
 	s.SetDB(nil)
 	// No panic = success. With nil DB, persistence is disabled.
 }
 
 func TestLoadFromDB_NilDB(t *testing.T) {
+	t.Parallel()
 	s := New()
 	// With no DB set, LoadFromDB should be a no-op.
 	err := s.LoadFromDB()
@@ -319,6 +332,7 @@ func TestLoadFromDB_NilDB(t *testing.T) {
 }
 
 func TestUpdateLastUsedAt(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -341,6 +355,7 @@ func TestUpdateLastUsedAt(t *testing.T) {
 }
 
 func TestUpdateLastUsedAt_InactiveKey(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -358,6 +373,7 @@ func TestUpdateLastUsedAt_InactiveKey(t *testing.T) {
 }
 
 func TestMarkStatus(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -384,6 +400,7 @@ func TestMarkStatus(t *testing.T) {
 }
 
 func TestGetByAPIKeyAnyStatus(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -425,6 +442,7 @@ func TestGetByAPIKeyAnyStatus(t *testing.T) {
 }
 
 func TestToDBEntry(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	lastUsed := now.Add(-time.Hour)
 	reg := &AppRegistration{
@@ -479,6 +497,7 @@ func TestToDBEntry(t *testing.T) {
 }
 
 func TestMaskKey(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -498,6 +517,7 @@ func TestMaskKey(t *testing.T) {
 }
 
 func TestGetByEmail_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	s := New()
 	_, ok := s.GetByEmail("")
 	if ok {
@@ -510,6 +530,7 @@ func TestGetByEmail_EmptyEmail(t *testing.T) {
 }
 
 func TestRegisterDefaults(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	reg := &AppRegistration{
@@ -540,6 +561,7 @@ func TestRegisterDefaults(t *testing.T) {
 }
 
 func TestRegisterNormalizesEmail(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	s.Register(&AppRegistration{
@@ -577,6 +599,7 @@ func openTestDB(t *testing.T) *alerts.DB {
 // ---------------------------------------------------------------------------
 
 func TestLoadFromDB_WithData(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 
 	// Persist entries via DB directly.
@@ -656,6 +679,7 @@ func TestLoadFromDB_WithData(t *testing.T) {
 }
 
 func TestLoadFromDB_EmptyDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -672,6 +696,7 @@ func TestLoadFromDB_EmptyDB(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRegister_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -713,6 +738,7 @@ func TestRegister_PersistsToDB(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRegister_ExplicitStatusAndSource(t *testing.T) {
+	t.Parallel()
 	s := New()
 	reg := &AppRegistration{
 		ID:        "app-explicit",
@@ -738,6 +764,7 @@ func TestRegister_ExplicitStatusAndSource(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUpdate_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -765,6 +792,7 @@ func TestUpdate_PersistsToDB(t *testing.T) {
 }
 
 func TestUpdate_EmptyFieldsNoChange(t *testing.T) {
+	t.Parallel()
 	s := New()
 	s.Register(&AppRegistration{
 		ID: "app-noop", APIKey: "k", APISecret: "s",
@@ -793,6 +821,7 @@ func TestUpdate_EmptyFieldsNoChange(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUpdateLastUsedAt_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -819,6 +848,7 @@ func TestUpdateLastUsedAt_PersistsToDB(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMarkStatus_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -845,6 +875,7 @@ func TestMarkStatus_PersistsToDB(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDelete_PersistsToDB(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -872,6 +903,7 @@ func TestDelete_PersistsToDB(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetByEmail_PicksMostRecentUpdate(t *testing.T) {
+	t.Parallel()
 	s := New()
 
 	// Register two entries for the same email. The second one will have a later UpdatedAt.
@@ -900,6 +932,7 @@ func TestGetByEmail_PicksMostRecentUpdate(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRegister_DBErrorNoLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	// Close the DB to force errors.
 	db.Close()
@@ -921,6 +954,7 @@ func TestRegister_DBErrorNoLogger(t *testing.T) {
 }
 
 func TestUpdate_DBErrorNoLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -935,6 +969,7 @@ func TestUpdate_DBErrorNoLogger(t *testing.T) {
 }
 
 func TestUpdateLastUsedAt_DBErrorNoLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -947,6 +982,7 @@ func TestUpdateLastUsedAt_DBErrorNoLogger(t *testing.T) {
 }
 
 func TestMarkStatus_DBErrorNoLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -959,6 +995,7 @@ func TestMarkStatus_DBErrorNoLogger(t *testing.T) {
 }
 
 func TestDelete_DBErrorNoLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -977,6 +1014,7 @@ func TestDelete_DBErrorNoLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRegister_DBErrorWithLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -995,6 +1033,7 @@ func TestRegister_DBErrorWithLogger(t *testing.T) {
 }
 
 func TestDelete_DBErrorWithLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -1016,6 +1055,7 @@ func TestDelete_DBErrorWithLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadFromDB_DBError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	db.Close() // Close to force errors.
 
@@ -1032,6 +1072,7 @@ func TestLoadFromDB_DBError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUpdate_DBErrorWithLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -1053,6 +1094,7 @@ func TestUpdate_DBErrorWithLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestUpdateLastUsedAt_DBErrorWithLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)
@@ -1072,6 +1114,7 @@ func TestUpdateLastUsedAt_DBErrorWithLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMarkStatus_DBErrorWithLogger(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	s := New()
 	s.SetDB(db)

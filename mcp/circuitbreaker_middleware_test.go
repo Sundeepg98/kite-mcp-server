@@ -12,6 +12,7 @@ import (
 )
 
 func TestCircuitBreaker_PassesNonBrokerTools(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(3, 10*time.Second)
 	called := false
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -32,6 +33,7 @@ func TestCircuitBreaker_PassesNonBrokerTools(t *testing.T) {
 }
 
 func TestCircuitBreaker_ClosedState_PassesThrough(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(3, 10*time.Second)
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("ok"), nil
@@ -50,6 +52,7 @@ func TestCircuitBreaker_ClosedState_PassesThrough(t *testing.T) {
 }
 
 func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(3, 10*time.Second)
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return nil, errors.New("kite API connection refused")
@@ -75,6 +78,7 @@ func TestCircuitBreaker_OpensAfterThreshold(t *testing.T) {
 }
 
 func TestCircuitBreaker_RecoversAfterSuccess(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(2, 50*time.Millisecond)
 	callCount := 0
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -108,6 +112,7 @@ func TestCircuitBreaker_RecoversAfterSuccess(t *testing.T) {
 }
 
 func TestCircuitBreaker_SuccessResetsCounter(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(3, 10*time.Second)
 	callCount := 0
 	handler := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -138,6 +143,7 @@ func TestCircuitBreaker_SuccessResetsCounter(t *testing.T) {
 }
 
 func TestCircuitBreaker_IsBrokerTool(t *testing.T) {
+	t.Parallel()
 	cb := NewCircuitBreaker(3, 10*time.Second)
 
 	assert.True(t, cb.isBrokerTool("place_order"))
@@ -149,6 +155,7 @@ func TestCircuitBreaker_IsBrokerTool(t *testing.T) {
 }
 
 func TestIsBrokerError(t *testing.T) {
+	t.Parallel()
 	assert.True(t, isBrokerError(nil, errors.New("kite API error")))
 	assert.True(t, isBrokerError(nil, errors.New("broker connection failed")))
 	assert.True(t, isBrokerError(nil, errors.New("timeout waiting for response")))

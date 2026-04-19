@@ -38,6 +38,7 @@ func (f *fakeBrokerForOrders) PlaceOrder(_ broker.OrderParams) (broker.OrderResp
 // If the CommandBus handler short-circuited the use case or constructed it
 // without a riskguard, the broker would be hit and the test would fail.
 func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -81,6 +82,7 @@ func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
 // CommandBus handler must refuse to run instead of nil-panicking inside
 // the use case.
 func TestCommandBus_SetTrailingStop_NilManager_ReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -107,6 +109,7 @@ func TestCommandBus_SetTrailingStop_NilManager_ReturnsError(t *testing.T) {
 // before calling the use case) and proves the migration preserved the
 // guard at the bus level.
 func TestCommandBus_CancelTrailingStop_NilManager_ReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)

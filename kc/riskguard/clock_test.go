@@ -11,6 +11,7 @@ import (
 // TestMaybeResetDay_BeforeMarketOpen verifies that daily counters are NOT
 // reset when the clock is before 9:15 AM IST on the same day.
 func TestMaybeResetDay_BeforeMarketOpen(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 
@@ -46,6 +47,7 @@ func TestMaybeResetDay_BeforeMarketOpen(t *testing.T) {
 // TestMaybeResetDay_AfterMarketOpen verifies that daily counters ARE reset
 // when the clock crosses 9:15 AM IST.
 func TestMaybeResetDay_AfterMarketOpen(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 
@@ -73,6 +75,7 @@ func TestMaybeResetDay_AfterMarketOpen(t *testing.T) {
 
 // TestMaybeResetDay_ExactlyAt915 verifies boundary behavior at exactly 9:15 AM IST.
 func TestMaybeResetDay_ExactlyAt915(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 
@@ -102,6 +105,7 @@ func TestMaybeResetDay_ExactlyAt915(t *testing.T) {
 // TestMaybeResetDay_SameDayNoDoubleReset verifies that once reset, a second
 // call within the same day does NOT re-reset counters.
 func TestMaybeResetDay_SameDayNoDoubleReset(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(slog.Default())
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 
@@ -135,6 +139,7 @@ func TestMaybeResetDay_SameDayNoDoubleReset(t *testing.T) {
 // TestSetClock_DefaultIsTimeNow verifies that a fresh Guard uses time.Now
 // and that SetClock overrides it.
 func TestSetClock_DefaultIsTimeNow(t *testing.T) {
+	t.Parallel()
 	g := NewGuard(nil)
 
 	// Default clock should return a time close to now.

@@ -12,6 +12,7 @@ import (
 )
 
 func TestQueryDispatcher_DispatchCallsHooks(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	var called bool
@@ -37,6 +38,7 @@ func TestQueryDispatcher_DispatchCallsHooks(t *testing.T) {
 }
 
 func TestQueryDispatcher_MultipleHooks(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	var callOrder []int
@@ -53,6 +55,7 @@ func TestQueryDispatcher_MultipleHooks(t *testing.T) {
 }
 
 func TestQueryDispatcher_ErrorPassedToHooks(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	testErr := errors.New("broker timeout")
@@ -68,6 +71,7 @@ func TestQueryDispatcher_ErrorPassedToHooks(t *testing.T) {
 }
 
 func TestQueryDispatcher_LogsErrorsOnly(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	d := NewQueryDispatcher(logger)
@@ -87,6 +91,7 @@ func TestQueryDispatcher_LogsErrorsOnly(t *testing.T) {
 }
 
 func TestQueryDispatcher_NilLoggerSafe(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	// Should not panic with nil logger, even on error.
@@ -96,6 +101,7 @@ func TestQueryDispatcher_NilLoggerSafe(t *testing.T) {
 }
 
 func TestQueryDispatcher_NoHooksNoPanic(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	require.NotPanics(t, func() {
@@ -104,6 +110,7 @@ func TestQueryDispatcher_NoHooksNoPanic(t *testing.T) {
 }
 
 func TestQueryDispatcher_ConcurrentDispatch(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	var mu sync.Mutex
@@ -129,6 +136,7 @@ func TestQueryDispatcher_ConcurrentDispatch(t *testing.T) {
 }
 
 func TestQueryDispatcher_ConcurrentAddAndDispatch(t *testing.T) {
+	t.Parallel()
 	d := NewQueryDispatcher(nil)
 
 	var wg sync.WaitGroup

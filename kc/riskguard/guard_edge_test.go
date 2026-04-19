@@ -21,6 +21,7 @@ import (
 // =============================================================================
 
 func TestGlobalFreeze_FullLifecycle(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	// Initially not frozen
@@ -72,6 +73,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 }
 
 func TestGlobalFreeze_BlocksBeforeUserChecks(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.FreezeGlobal("admin", "emergency")
 
@@ -90,6 +92,7 @@ func TestGlobalFreeze_BlocksBeforeUserChecks(t *testing.T) {
 // =============================================================================
 
 func TestSetAutoFreezeNotifier(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	var notifiedEmail, notifiedReason string
@@ -132,6 +135,7 @@ func TestSetAutoFreezeNotifier(t *testing.T) {
 // =============================================================================
 
 func TestCheckKillSwitch_EmptyReason(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	// Freeze without a reason
@@ -156,6 +160,7 @@ func TestCheckKillSwitch_EmptyReason(t *testing.T) {
 // =============================================================================
 
 func TestCheckAutoFreeze_AlreadyFrozenNotRefrozen(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "alreadyfrozen@test.com"
 
@@ -189,6 +194,7 @@ func TestCheckAutoFreeze_AlreadyFrozenNotRefrozen(t *testing.T) {
 // =============================================================================
 
 func TestMiddleware_NonOrderToolPassesThrough(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -207,6 +213,7 @@ func TestMiddleware_NonOrderToolPassesThrough(t *testing.T) {
 }
 
 func TestMiddleware_NoEmailPassesThrough(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -225,6 +232,7 @@ func TestMiddleware_NoEmailPassesThrough(t *testing.T) {
 }
 
 func TestMiddleware_BlockedOrder(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.Freeze("blocked@test.com", "admin", "test block")
 	mw := Middleware(g)
@@ -252,6 +260,7 @@ func TestMiddleware_BlockedOrder(t *testing.T) {
 }
 
 func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -284,6 +293,7 @@ func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 }
 
 func TestMiddleware_TriggerPriceFallback(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -311,6 +321,7 @@ func TestMiddleware_TriggerPriceFallback(t *testing.T) {
 }
 
 func TestMiddleware_ErrorResponseNotRecorded(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	mw := Middleware(g)
 
@@ -343,6 +354,7 @@ func TestMiddleware_ErrorResponseNotRecorded(t *testing.T) {
 // =============================================================================
 
 func TestSafeString(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "hello", safeString("hello"))
 	assert.Equal(t, "", safeString(nil))
 	assert.Equal(t, "", safeString(123))
@@ -350,6 +362,7 @@ func TestSafeString(t *testing.T) {
 }
 
 func TestSafeInt(t *testing.T) {
+	t.Parallel()
 	// MCP sends numbers as float64 from JSON
 	assert.Equal(t, 10, safeInt(float64(10)))
 	assert.Equal(t, 42, safeInt(42))
@@ -358,6 +371,7 @@ func TestSafeInt(t *testing.T) {
 }
 
 func TestSafeFloat(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 1500.50, safeFloat(1500.50))
 	assert.Equal(t, 0.0, safeFloat(nil))
 	assert.Equal(t, 0.0, safeFloat("not a number"))
@@ -369,6 +383,7 @@ func TestSafeFloat(t *testing.T) {
 // =============================================================================
 
 func TestPersistLimits_NoDBIsNoop(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	// No DB set, persist should be a no-op
 	g.Freeze("nodb@test.com", "admin", "test")
@@ -377,6 +392,7 @@ func TestPersistLimits_NoDBIsNoop(t *testing.T) {
 }
 
 func TestPersistLimits_WithDB(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -408,6 +424,7 @@ func TestPersistLimits_WithDB(t *testing.T) {
 // =============================================================================
 
 func TestInitTable_NilDB(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	err := g.InitTable()
 	assert.NoError(t, err)
@@ -418,12 +435,14 @@ func TestInitTable_NilDB(t *testing.T) {
 // =============================================================================
 
 func TestLoadLimits_NilDB(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	err := g.LoadLimits()
 	assert.NoError(t, err)
 }
 
 func TestLoadLimits_EmptyDB(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -437,6 +456,7 @@ func TestLoadLimits_EmptyDB(t *testing.T) {
 }
 
 func TestLoadLimits_WithFrozenAtEmpty(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -463,6 +483,7 @@ func TestLoadLimits_WithFrozenAtEmpty(t *testing.T) {
 }
 
 func TestLoadLimits_WithFrozenAtSet(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -492,6 +513,7 @@ func TestLoadLimits_WithFrozenAtSet(t *testing.T) {
 // =============================================================================
 
 func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "resetday@test.com"
 
@@ -519,6 +541,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 }
 
 func TestMaybeResetDay_SameDay_NoReset(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "sameday@test.com"
 
@@ -538,6 +561,7 @@ func TestMaybeResetDay_SameDay_NoReset(t *testing.T) {
 // =============================================================================
 
 func TestGetEffectiveLimits_AllZerosFilled(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	g.mu.Lock()
@@ -557,6 +581,7 @@ func TestGetEffectiveLimits_AllZerosFilled(t *testing.T) {
 // =============================================================================
 
 func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "nodup@test.com"
 
@@ -590,6 +615,7 @@ func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
 // =============================================================================
 
 func TestRecordOrder_WithoutParams(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "noparams@test.com"
 
@@ -610,6 +636,7 @@ func TestRecordOrder_WithoutParams(t *testing.T) {
 // =============================================================================
 
 func TestGetUserStatus_FrozenUser(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "statusfrozen@test.com"
 
@@ -634,6 +661,7 @@ func TestGetUserStatus_FrozenUser(t *testing.T) {
 // =============================================================================
 
 func TestCheckQuantityLimit_NoLookup(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	// No SetFreezeQuantityLookup called => nil
 
@@ -652,6 +680,7 @@ func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 // =============================================================================
 
 func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:ZEROFQ": 0,
@@ -672,6 +701,7 @@ func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 // =============================================================================
 
 func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:INFY": 1800,
@@ -692,6 +722,7 @@ func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
 // =============================================================================
 
 func TestMiddleware_ReturnsToolHandlerMiddleware(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	var mw server.ToolHandlerMiddleware = Middleware(g)
 	assert.NotNil(t, mw)
@@ -702,6 +733,7 @@ func TestMiddleware_ReturnsToolHandlerMiddleware(t *testing.T) {
 // =============================================================================
 
 func TestGlobalFreeze_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	var wg sync.WaitGroup
@@ -735,6 +767,7 @@ func TestGlobalFreeze_ConcurrentAccess(t *testing.T) {
 // =============================================================================
 
 func TestAutoFreezeWithLogger(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	g := NewGuard(logger)
 
@@ -764,6 +797,7 @@ func TestAutoFreezeWithLogger(t *testing.T) {
 // =============================================================================
 
 func TestFreezeGlobal_WithLogger(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	g := NewGuard(logger)
 
@@ -779,6 +813,7 @@ func TestFreezeGlobal_WithLogger(t *testing.T) {
 // =============================================================================
 
 func TestMiddleware_BlockedOrderWithLogger(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	g := NewGuard(logger)
 	g.Freeze("logblocked@test.com", "admin", "log test")
@@ -809,6 +844,7 @@ func TestMiddleware_BlockedOrderWithLogger(t *testing.T) {
 // =============================================================================
 
 func TestPersistLimits_FrozenAtFormatted(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -841,6 +877,7 @@ func TestPersistLimits_FrozenAtFormatted(t *testing.T) {
 // =============================================================================
 
 func TestCheckOrder_AutoFreezeOnQuantityLimit(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "qtyautofreeze@test.com"
 
@@ -873,6 +910,7 @@ func TestCheckOrder_AutoFreezeOnQuantityLimit(t *testing.T) {
 }
 
 func TestCheckOrder_AutoFreezeOnDailyOrderCount(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "dailyautofreeze@test.com"
 
@@ -905,6 +943,7 @@ func TestCheckOrder_AutoFreezeOnDailyOrderCount(t *testing.T) {
 }
 
 func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "rateautofreeze@test.com"
 
@@ -937,6 +976,7 @@ func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
 }
 
 func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "dupautofreeze@test.com"
 
@@ -970,6 +1010,7 @@ func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
 }
 
 func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "valautofreeze@test.com"
 
@@ -1007,6 +1048,7 @@ func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
 // =============================================================================
 
 func TestMaybeResetDay_RecentResetNoChange(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "recentreset@test.com"
 
@@ -1024,6 +1066,7 @@ func TestMaybeResetDay_RecentResetNoChange(t *testing.T) {
 }
 
 func TestMaybeResetDay_OldResetTriggersReset(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "oldreset@test.com"
 
@@ -1046,6 +1089,7 @@ func TestMaybeResetDay_OldResetTriggersReset(t *testing.T) {
 // =============================================================================
 
 func TestInitTable_RunsMigrations(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -1067,6 +1111,7 @@ func TestInitTable_RunsMigrations(t *testing.T) {
 // =============================================================================
 
 func TestLoadLimits_MultipleRows(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()
@@ -1104,6 +1149,7 @@ func TestLoadLimits_MultipleRows(t *testing.T) {
 // =============================================================================
 
 func TestPersistLimits_DBError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -1125,6 +1171,7 @@ func TestPersistLimits_DBError(t *testing.T) {
 // =============================================================================
 
 func TestInitTable_DDLError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -1143,6 +1190,7 @@ func TestInitTable_DDLError(t *testing.T) {
 // =============================================================================
 
 func TestLoadLimits_QueryError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 
@@ -1158,6 +1206,7 @@ func TestLoadLimits_QueryError(t *testing.T) {
 }
 
 func TestPersistLimits_AutoFreezeFlag(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	defer db.Close()

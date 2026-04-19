@@ -33,6 +33,7 @@ func generateValidBSInputs(rng *rand.Rand) validBSInputs {
 
 // TestDeltaBounds: Call delta in [0, 1], Put delta in [-1, 0].
 func TestDeltaBounds(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -61,6 +62,7 @@ func TestDeltaBounds(t *testing.T) {
 
 // TestGammaNonNegative: Gamma >= 0 for any valid inputs.
 func TestGammaNonNegative(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -85,6 +87,7 @@ func TestGammaNonNegative(t *testing.T) {
 // when r >= 0 (which is always true for us).
 // Note: Deep ITM puts can have positive theta when r > 0, so we use a tolerance.
 func TestThetaNonPositiveForLongOptions(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -108,6 +111,7 @@ func TestThetaNonPositiveForLongOptions(t *testing.T) {
 
 // TestVegaNonNegative: Vega >= 0 for all options (calls and puts have same vega).
 func TestVegaNonNegative(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -129,6 +133,7 @@ func TestVegaNonNegative(t *testing.T) {
 
 // TestIVNonNegative: Implied volatility is always >= 0 when found.
 func TestIVNonNegative(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -161,6 +166,7 @@ func TestIVNonNegative(t *testing.T) {
 // TestIVRoundTrip: Computing BS price from known sigma, then recovering IV, should give back sigma.
 // We constrain to near-the-money options where IV recovery is numerically stable.
 func TestIVRoundTrip(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		// Keep S and K within a reasonable ratio to avoid deep ITM/OTM instability.
@@ -216,6 +222,7 @@ func TestIVRoundTrip(t *testing.T) {
 
 // TestPutCallParity: C - P = S - K*exp(-rT) for European options (no dividends).
 func TestPutCallParity(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -248,6 +255,7 @@ func TestPutCallParity(t *testing.T) {
 
 // TestCallPutDeltaRelationship: Call delta - Put delta = 1 (within tolerance).
 func TestCallPutDeltaRelationship(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -275,6 +283,7 @@ func TestCallPutDeltaRelationship(t *testing.T) {
 
 // TestBlackScholesPriceNonNegative: Option prices are always >= 0.
 func TestBlackScholesPriceNonNegative(t *testing.T) {
+	t.Parallel()
 	f := func(seed int64) bool {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
@@ -301,6 +310,7 @@ func TestBlackScholesPriceNonNegative(t *testing.T) {
 
 // TestEdgeCases: T=0 and sigma=0 boundaries.
 func TestBlackScholesEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("at expiry call ITM returns intrinsic", func(t *testing.T) {
 		price := blackScholesPrice(110, 100, 0, 0.05, 0.2, true)
 		if math.Abs(price-10) > 1e-10 {
@@ -361,6 +371,7 @@ func TestBlackScholesEdgeCases(t *testing.T) {
 
 // TestNormalCDFProperties: N(0)=0.5, N(+inf)~1, N(-inf)~0, N(x)+N(-x)=1.
 func TestNormalCDFProperties(t *testing.T) {
+	t.Parallel()
 	t.Run("N(0) = 0.5", func(t *testing.T) {
 		if math.Abs(normalCDF(0)-0.5) > 1e-15 {
 			t.Errorf("normalCDF(0) = %.15f, expected 0.5", normalCDF(0))

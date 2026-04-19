@@ -8,6 +8,7 @@ import (
 // TestAllEventTypes_Interface tests EventType() and OccurredAt() for every
 // concrete domain event type, ensuring 100% method coverage.
 func TestAllEventTypes_Interface(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	tests := []struct {
@@ -46,6 +47,7 @@ func TestAllEventTypes_Interface(t *testing.T) {
 
 // TestOrderModifiedEvent tests the OrderModifiedEvent specifically (was 0% covered).
 func TestOrderModifiedEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := OrderModifiedEvent{
 		Email:     "user@example.com",
@@ -66,6 +68,7 @@ func TestOrderModifiedEvent_Fields(t *testing.T) {
 
 // TestOrderCancelledEvent tests the OrderCancelledEvent specifically (was 0% covered).
 func TestOrderCancelledEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := OrderCancelledEvent{
 		Email:     "user@example.com",
@@ -83,6 +86,7 @@ func TestOrderCancelledEvent_Fields(t *testing.T) {
 
 // TestPositionClosedEvent tests the PositionClosedEvent specifically (was 0% covered).
 func TestPositionClosedEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := PositionClosedEvent{
 		Email:           "user@example.com",
@@ -103,6 +107,7 @@ func TestPositionClosedEvent_Fields(t *testing.T) {
 
 // TestUserSuspendedEvent tests the UserSuspendedEvent specifically (was 0% covered).
 func TestUserSuspendedEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := UserSuspendedEvent{
 		Email:     "suspended@example.com",
@@ -124,6 +129,7 @@ func TestUserSuspendedEvent_Fields(t *testing.T) {
 
 // TestGlobalFreezeEvent tests the GlobalFreezeEvent specifically (was 0% covered).
 func TestGlobalFreezeEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := GlobalFreezeEvent{
 		By:        "admin@example.com",
@@ -141,6 +147,7 @@ func TestGlobalFreezeEvent_Fields(t *testing.T) {
 
 // TestFamilyInvitedEvent tests the FamilyInvitedEvent specifically (was 0% covered).
 func TestFamilyInvitedEvent_Fields(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	e := FamilyInvitedEvent{
 		AdminEmail:   "admin@example.com",
@@ -162,6 +169,7 @@ func TestFamilyInvitedEvent_Fields(t *testing.T) {
 // TestDispatcherSubscribeUnknownEventType dispatches an event type with no handlers
 // to cover the "no handlers found" path in Dispatch.
 func TestDispatcherDispatchUnknownEventType(t *testing.T) {
+	t.Parallel()
 	d := NewEventDispatcher()
 	// Subscribe to one type, dispatch another
 	d.Subscribe("order.placed", func(e Event) {

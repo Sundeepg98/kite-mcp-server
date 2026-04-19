@@ -10,6 +10,7 @@ import (
 // TestProjector_OrderFlow exercises the full place->modify->fill lifecycle on
 // the projector by dispatching public domain events on the EventDispatcher.
 func TestProjector_OrderFlow(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -78,6 +79,7 @@ func TestProjector_OrderFlow(t *testing.T) {
 
 // TestProjector_OrderCancel verifies OrderCancelledEvent flips status.
 func TestProjector_OrderCancel(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -113,6 +115,7 @@ func TestProjector_OrderCancel(t *testing.T) {
 
 // TestProjector_AlertFlow exercises alert lifecycle events.
 func TestProjector_AlertFlow(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -170,6 +173,7 @@ func TestProjector_AlertFlow(t *testing.T) {
 // natural (email, exchange, symbol, product) tuple — positions don't have
 // a broker-assigned unique ID, so we use PositionAggregateID for the join.
 func TestProjector_PositionClose(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -210,6 +214,7 @@ func TestProjector_PositionClose(t *testing.T) {
 // single open→close cycle produces one aggregate with OPEN then CLOSED
 // state.
 func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -307,6 +312,7 @@ func TestProjector_PositionOpenClose_Lifecycle(t *testing.T) {
 // TestProjector_ListActiveOrders checks that PLACED and MODIFIED orders are
 // returned while CANCELLED/FILLED are filtered out.
 func TestProjector_ListActiveOrders(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)
@@ -344,6 +350,7 @@ func TestProjector_ListActiveOrders(t *testing.T) {
 
 // TestProjector_SubscribeNilDispatcher is a no-op and must not panic.
 func TestProjector_SubscribeNilDispatcher(t *testing.T) {
+	t.Parallel()
 	proj := NewProjector()
 	proj.Subscribe(nil)
 	if proj.OrderCount() != 0 {
@@ -354,6 +361,7 @@ func TestProjector_SubscribeNilDispatcher(t *testing.T) {
 // TestProjector_MissingIDIgnored verifies events with empty IDs are silently
 // dropped rather than crashing the projector.
 func TestProjector_MissingIDIgnored(t *testing.T) {
+	t.Parallel()
 	dispatcher := domain.NewEventDispatcher()
 	proj := NewProjector()
 	proj.Subscribe(dispatcher)

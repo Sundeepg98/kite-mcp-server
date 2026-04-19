@@ -9,6 +9,7 @@ import (
 // rate-limit entries where ALL timestamps are older than the cleanup
 // interval (2 minutes).
 func TestCleanupNow_PrunesStaleRateWindow(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -38,6 +39,7 @@ func TestCleanupNow_PrunesStaleRateWindow(t *testing.T) {
 // TestCleanupNow_KeepsFreshRateWindow verifies that CleanupNow does NOT
 // remove rate-limit entries if at least one timestamp is recent.
 func TestCleanupNow_KeepsFreshRateWindow(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -66,6 +68,7 @@ func TestCleanupNow_KeepsFreshRateWindow(t *testing.T) {
 // TestCleanupNow_PrunesExpiredPendingOrders verifies that CleanupNow
 // removes pending orders that have exceeded the TTL (60 seconds).
 func TestCleanupNow_PrunesExpiredPendingOrders(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -99,6 +102,7 @@ func TestCleanupNow_PrunesExpiredPendingOrders(t *testing.T) {
 // TestCleanupNow_KeepsFreshPendingOrders verifies that CleanupNow does
 // NOT remove pending orders that are still within the TTL.
 func TestCleanupNow_KeepsFreshPendingOrders(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -133,6 +137,7 @@ func TestCleanupNow_KeepsFreshPendingOrders(t *testing.T) {
 // TestCleanupNow_EmptyMaps verifies that CleanupNow handles empty maps
 // gracefully without panicking.
 func TestCleanupNow_EmptyMaps(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()

@@ -103,6 +103,7 @@ func familyFixture() (*fakeUserLookup, *fakeChatIDs) {
 // --- tests ---
 
 func TestTelegramNotify_FamilyMemberTradeNotifiesAdmin(t *testing.T) {
+	t.Parallel()
 	u, c := familyFixture()
 	sender := &recordSender{}
 	hook := Hook(Deps{Users: u, ChatIDs: c, Sender: sender, Logger: testLogger()})
@@ -128,6 +129,7 @@ func TestTelegramNotify_FamilyMemberTradeNotifiesAdmin(t *testing.T) {
 }
 
 func TestTelegramNotify_AdminSelfCallNotNotified(t *testing.T) {
+	t.Parallel()
 	u, c := familyFixture()
 	sender := &recordSender{}
 	hook := Hook(Deps{Users: u, ChatIDs: c, Sender: sender, Logger: testLogger()})
@@ -140,6 +142,7 @@ func TestTelegramNotify_AdminSelfCallNotNotified(t *testing.T) {
 }
 
 func TestTelegramNotify_SoloUserNotNotified(t *testing.T) {
+	t.Parallel()
 	u, c := familyFixture()
 	sender := &recordSender{}
 	hook := Hook(Deps{Users: u, ChatIDs: c, Sender: sender, Logger: testLogger()})
@@ -151,6 +154,7 @@ func TestTelegramNotify_SoloUserNotNotified(t *testing.T) {
 }
 
 func TestTelegramNotify_ReadToolNotNotified(t *testing.T) {
+	t.Parallel()
 	u, c := familyFixture()
 	sender := &recordSender{}
 	hook := Hook(Deps{Users: u, ChatIDs: c, Sender: sender, Logger: testLogger()})
@@ -165,6 +169,7 @@ func TestTelegramNotify_ReadToolNotNotified(t *testing.T) {
 }
 
 func TestTelegramNotify_AdminWithoutTelegramSilent(t *testing.T) {
+	t.Parallel()
 	u, _ := familyFixture()
 	// Empty chat store — admin hasn't connected Telegram.
 	c := &fakeChatIDs{byEmail: map[string]int64{}}
@@ -178,6 +183,7 @@ func TestTelegramNotify_AdminWithoutTelegramSilent(t *testing.T) {
 }
 
 func TestTelegramNotify_NotifyPrefixes(t *testing.T) {
+	t.Parallel()
 	cases := map[string]bool{
 		// notify on these
 		"place_order":          true,
@@ -205,6 +211,7 @@ func TestTelegramNotify_NotifyPrefixes(t *testing.T) {
 }
 
 func TestTelegramNotify_SenderErrorDoesNotPropagate(t *testing.T) {
+	t.Parallel()
 	u, c := familyFixture()
 	sender := &recordSender{err: assert.AnError}
 	hook := Hook(Deps{Users: u, ChatIDs: c, Sender: sender, Logger: testLogger()})
@@ -218,6 +225,7 @@ func TestTelegramNotify_SenderErrorDoesNotPropagate(t *testing.T) {
 }
 
 func TestTelegramNotify_NilDepsDisable(t *testing.T) {
+	t.Parallel()
 	sender := &recordSender{}
 	// All combinations of nil deps should fail-open.
 	hooks := []Deps{
@@ -237,6 +245,7 @@ func TestTelegramNotify_NilDepsDisable(t *testing.T) {
 }
 
 func TestTelegramNotify_SanitizeStripsMarkdown(t *testing.T) {
+	t.Parallel()
 	// Underscores are stripped because Telegram MarkdownV2 treats them as
 	// italic markers. "RELIANCE_BE" becomes "RELIANCEBE".
 	assert.Equal(t, "RELIANCEBE", sanitize("RELIANCE_BE"))

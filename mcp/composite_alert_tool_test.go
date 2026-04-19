@@ -34,6 +34,7 @@ func compositeTestManager(t *testing.T) *kc.Manager {
 // and drop_pct/rise_pct cases. Kept table-driven to match this package's
 // existing pattern (see tools_validation_test.go).
 func TestParseCompositeCondition_HappyPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
@@ -122,6 +123,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 // path so a caller always sees the right error pointing at the right
 // leg index.
 func TestParseCompositeCondition_Validation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      interface{}
@@ -225,6 +227,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 // regressions in validation don't accidentally accept (or reject) an
 // exchange silently.
 func TestValidCompositeExchange(t *testing.T) {
+	t.Parallel()
 	valid := []string{"NSE", "NFO", "BSE", "BFO", "MCX", "CDS", "BCD"}
 	for _, e := range valid {
 		if !validCompositeExchange(e) {
@@ -244,6 +247,7 @@ func TestValidCompositeExchange(t *testing.T) {
 // use case → store chain and checks that the response carries a real
 // alert ID and the alert is visible in the store.
 func TestCompositeAlertTool_EndToEnd_AND(t *testing.T) {
+	t.Parallel()
 	mgr := compositeTestManager(t)
 	email := "trader@example.com"
 
@@ -291,6 +295,7 @@ func TestCompositeAlertTool_EndToEnd_AND(t *testing.T) {
 
 // TestCompositeAlertTool_EndToEnd_ANY covers the ANY logic branch.
 func TestCompositeAlertTool_EndToEnd_ANY(t *testing.T) {
+	t.Parallel()
 	mgr := compositeTestManager(t)
 	email := "trader@example.com"
 
@@ -329,6 +334,7 @@ func TestCompositeAlertTool_EndToEnd_ANY(t *testing.T) {
 // instrument-resolution failure back through the tool surface as an
 // error result (not a panic, not a tool-level Go error).
 func TestCompositeAlertTool_EndToEnd_UnknownInstrument(t *testing.T) {
+	t.Parallel()
 	mgr := compositeTestManager(t)
 
 	result := callToolWithManager(t, mgr, "composite_alert", "trader@example.com", map[string]any{
@@ -357,6 +363,7 @@ func TestCompositeAlertTool_EndToEnd_UnknownInstrument(t *testing.T) {
 // TestCompositeAlertTool_EndToEnd_MissingEmail matches the existing
 // no-auth guard (OAuth is required for every per-user tool).
 func TestCompositeAlertTool_EndToEnd_MissingEmail(t *testing.T) {
+	t.Parallel()
 	mgr := compositeTestManager(t)
 
 	result := callToolWithManager(t, mgr, "composite_alert", "", map[string]any{
@@ -377,6 +384,7 @@ func TestCompositeAlertTool_EndToEnd_MissingEmail(t *testing.T) {
 // renames a field (e.g. Conditions -> Legs) the compile will pass but the
 // dispatch will blow up at runtime — this test catches the rename early.
 func TestCompositeAlertTool_CQRSCommandShape(t *testing.T) {
+	t.Parallel()
 	// Static shape check — if the fields rename, this fails at compile time
 	// before the tests even run.
 	_ = cqrs.CreateCompositeAlertCommand{

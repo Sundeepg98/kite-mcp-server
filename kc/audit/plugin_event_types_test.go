@@ -10,6 +10,7 @@ import (
 // TestRegisterEventType_Basic — happy path: register a new plugin
 // event type and confirm it appears in ListEventTypes.
 func TestRegisterEventType_Basic(t *testing.T) {
+	t.Parallel()
 	ClearPluginEventTypes()
 	defer ClearPluginEventTypes()
 
@@ -29,6 +30,7 @@ func TestRegisterEventType_Basic(t *testing.T) {
 // TestRegisterEventType_RejectsEmpty — empty name, empty description,
 // and empty category all fail at registration.
 func TestRegisterEventType_RejectsEmpty(t *testing.T) {
+	t.Parallel()
 	ClearPluginEventTypes()
 	defer ClearPluginEventTypes()
 
@@ -41,6 +43,7 @@ func TestRegisterEventType_RejectsEmpty(t *testing.T) {
 // cannot be shadowed. This keeps the audit category namespace clean
 // for SEBI compliance reporting.
 func TestRegisterEventType_ReservedCategories(t *testing.T) {
+	t.Parallel()
 	ClearPluginEventTypes()
 	defer ClearPluginEventTypes()
 
@@ -57,6 +60,7 @@ func TestRegisterEventType_ReservedCategories(t *testing.T) {
 // TestRegisterEventType_DuplicateReplaces — last-wins matches the
 // pattern used across RegisterWidget / RegisterMiddleware.
 func TestRegisterEventType_DuplicateReplaces(t *testing.T) {
+	t.Parallel()
 	ClearPluginEventTypes()
 	defer ClearPluginEventTypes()
 
@@ -75,6 +79,7 @@ func TestRegisterEventType_DuplicateReplaces(t *testing.T) {
 // TestEventTypeCount tracks registry size — used by the admin plugin
 // listing endpoint.
 func TestEventTypeCount(t *testing.T) {
+	t.Parallel()
 	ClearPluginEventTypes()
 	defer ClearPluginEventTypes()
 

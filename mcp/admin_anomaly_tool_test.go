@@ -100,6 +100,7 @@ func seedBlockedNonAnomaly(t *testing.T, s *audit.Store, email, callID string) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -113,6 +114,7 @@ func TestAdminAnomalyFlags_NonAdminBlocked(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_Unauthenticated(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -127,6 +129,7 @@ func TestAdminAnomalyFlags_Unauthenticated(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_EmptyWindow(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	s := wireAuditForAdminTest(t, mgr)
@@ -154,6 +157,7 @@ func TestAdminAnomalyFlags_EmptyWindow(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_AdminWithFlags(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	s := wireAuditForAdminTest(t, mgr)
@@ -215,6 +219,7 @@ func TestAdminAnomalyFlags_AdminWithFlags(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_HoursArgDefaultsTo24(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	_ = wireAuditForAdminTest(t, mgr)
@@ -247,6 +252,7 @@ func TestAdminAnomalyFlags_HoursArgDefaultsTo24(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestAdminAnomalyFlags_NoAuditStore(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	// Intentionally do NOT call wireAuditForAdminTest.

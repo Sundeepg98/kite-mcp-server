@@ -14,6 +14,7 @@ func newTestGuard() *Guard {
 }
 
 func TestCheckKillSwitch(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	t.Run("unfrozen user passes", func(t *testing.T) {
@@ -39,6 +40,7 @@ func TestCheckKillSwitch(t *testing.T) {
 }
 
 func TestCheckOrderValue(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	// Tightened Free-tier default: Rs 50,000 per order. Tests updated to reflect
@@ -83,6 +85,7 @@ func (m *mockFreezeQty) GetFreezeQuantity(exchange, symbol string) (uint32, bool
 }
 
 func TestCheckQuantityLimit(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:RELIANCE": 1800,
@@ -119,6 +122,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 }
 
 func TestCheckDailyOrderCount(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	t.Run("under limit passes", func(t *testing.T) {
@@ -140,6 +144,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 }
 
 func TestRecordOrder(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	g.RecordOrder("u@t.com")
 	g.RecordOrder("u@t.com")
@@ -152,6 +157,7 @@ func TestRecordOrder(t *testing.T) {
 }
 
 func TestIsOrderTool(t *testing.T) {
+	t.Parallel()
 	assert.True(t, IsOrderTool("place_order"))
 	assert.True(t, IsOrderTool("modify_order"))
 	assert.True(t, IsOrderTool("close_all_positions"))
@@ -160,6 +166,7 @@ func TestIsOrderTool(t *testing.T) {
 }
 
 func TestGetEffectiveLimits(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	t.Run("returns system defaults for unknown user", func(t *testing.T) {
@@ -190,6 +197,7 @@ func TestGetEffectiveLimits(t *testing.T) {
 }
 
 func TestCheckRateLimit(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "rate@test.com"
 
@@ -237,6 +245,7 @@ func TestCheckRateLimit(t *testing.T) {
 }
 
 func TestCheckDuplicate(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "dup@test.com"
 
@@ -289,6 +298,7 @@ func TestCheckDuplicate(t *testing.T) {
 }
 
 func TestCheckDailyValue(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "value@test.com"
 
@@ -348,6 +358,7 @@ func TestCheckDailyValue(t *testing.T) {
 }
 
 func TestFreezeUnfreeze(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 
 	require.False(t, g.IsFrozen("user@test.com"))
@@ -360,6 +371,7 @@ func TestFreezeUnfreeze(t *testing.T) {
 }
 
 func TestAutoFreeze(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "autofreeze@test.com"
 
@@ -437,6 +449,7 @@ func TestAutoFreeze(t *testing.T) {
 }
 
 func TestAutoFreezeDisabled(t *testing.T) {
+	t.Parallel()
 	g := newTestGuard()
 	email := "noautofreeze@test.com"
 

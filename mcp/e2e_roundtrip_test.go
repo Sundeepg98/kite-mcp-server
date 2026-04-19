@@ -176,6 +176,7 @@ func (s *e2eSession) readResponse(t *testing.T) map[string]any {
 // TestE2E_RoundtripInitializeAndToolsList exercises the canonical
 // handshake and tool catalogue roundtrip.
 func TestE2E_RoundtripInitializeAndToolsList(t *testing.T) {
+	t.Parallel()
 	bin := e2eServerBinary(t)
 	s := startE2ESession(t, bin)
 
@@ -238,6 +239,7 @@ func TestE2E_RoundtripInitializeAndToolsList(t *testing.T) {
 // An unknown tool name must surface as a proper JSON-RPC error envelope
 // (not a process crash, not silent swallow).
 func TestE2E_UnknownToolReturnsError(t *testing.T) {
+	t.Parallel()
 	bin := e2eServerBinary(t)
 	s := startE2ESession(t, bin)
 
@@ -281,6 +283,7 @@ func TestE2E_UnknownToolReturnsError(t *testing.T) {
 // stdin is closed — this is the real shutdown signal in stdio mode and
 // a regression here bricks Claude Desktop / VSCode integrations.
 func TestE2E_BinarySmokeShutdown(t *testing.T) {
+	t.Parallel()
 	bin := e2eServerBinary(t)
 	s := startE2ESession(t, bin)
 

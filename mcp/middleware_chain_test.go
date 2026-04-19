@@ -94,6 +94,7 @@ func waitForAuditCount(t *testing.T, auditStore *audit.Store, email string, expe
 // a pro tool (place_order) is blocked by billing middleware, and that the
 // audit trail records the blocked attempt.
 func TestFullChain_FreeUserBlockedByBilling(t *testing.T) {
+	t.Parallel()
 	handlerCalled := false
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handlerCalled = true
@@ -145,6 +146,7 @@ func TestFullChain_FreeUserBlockedByBilling(t *testing.T) {
 // TestFullChain_ProUserValidOrder verifies that a pro user with a valid small
 // order passes through all middleware and reaches the handler.
 func TestFullChain_ProUserValidOrder(t *testing.T) {
+	t.Parallel()
 	handlerCalled := false
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handlerCalled = true
@@ -204,6 +206,7 @@ func TestFullChain_ProUserValidOrder(t *testing.T) {
 // TestFullChain_ProUserExcessiveValueBlocked verifies that a pro user
 // with an order exceeding the riskguard value limit is blocked.
 func TestFullChain_ProUserExcessiveValueBlocked(t *testing.T) {
+	t.Parallel()
 	handlerCalled := false
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handlerCalled = true
@@ -260,6 +263,7 @@ func TestFullChain_ProUserExcessiveValueBlocked(t *testing.T) {
 // TestFullChain_ReadOnlyToolPassesForAnyUser verifies that read-only tools
 // pass through all middleware regardless of subscription tier.
 func TestFullChain_ReadOnlyToolPassesForAnyUser(t *testing.T) {
+	t.Parallel()
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText(`{"holdings": []}`), nil
 	}
@@ -310,6 +314,7 @@ func TestFullChain_ReadOnlyToolPassesForAnyUser(t *testing.T) {
 // TestFullChain_AuditRecordsCreatedForEveryCall verifies that audit records
 // are created regardless of the outcome (success, billing block, riskguard block).
 func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
+	t.Parallel()
 	callCount := 0
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		callCount++
@@ -403,6 +408,7 @@ func TestFullChain_AuditRecordsCreatedForEveryCall(t *testing.T) {
 // TestFullChain_FrozenUserBlockedByRiskguard verifies that a frozen user is
 // blocked by riskguard even though billing allows pro tools.
 func TestFullChain_FrozenUserBlockedByRiskguard(t *testing.T) {
+	t.Parallel()
 	handlerCalled := false
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handlerCalled = true
@@ -448,6 +454,7 @@ func TestFullChain_FrozenUserBlockedByRiskguard(t *testing.T) {
 // TestFullChain_NoAuthContextPassesThrough verifies that calls without email
 // in context pass through all middleware (auth is handled elsewhere).
 func TestFullChain_NoAuthContextPassesThrough(t *testing.T) {
+	t.Parallel()
 	handlerCalled := false
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handlerCalled = true
@@ -479,6 +486,7 @@ func TestFullChain_NoAuthContextPassesThrough(t *testing.T) {
 // TestFullChain_DuplicateOrderDetection verifies riskguard's duplicate
 // order detection within the dedup window.
 func TestFullChain_DuplicateOrderDetection(t *testing.T) {
+	t.Parallel()
 	callCount := 0
 	handler := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		callCount++

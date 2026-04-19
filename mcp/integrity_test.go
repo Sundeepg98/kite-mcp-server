@@ -36,6 +36,7 @@ func sha256Hex(s string) string {
 // produces deterministic sha256 hashes of each tool's description, keyed
 // by tool name. Running it twice on the same inputs must match.
 func TestToolManifest_ComputeStableHashes(t *testing.T) {
+	t.Parallel()
 	tools := []Tool{
 		&fakeIntegrityTool{name: "tool_a", description: "fetch your holdings from Kite"},
 		&fakeIntegrityTool{name: "tool_b", description: "place a limit order"},
@@ -61,6 +62,7 @@ func TestToolManifest_ComputeStableHashes(t *testing.T) {
 // same tool name, but description has been mutated mid-flight (proxy
 // injection). Must surface a DescriptionChanged mismatch.
 func TestToolManifest_VerifyDetectsDescriptionChange(t *testing.T) {
+	t.Parallel()
 	original := []Tool{
 		&fakeIntegrityTool{name: "search_instruments", description: "Search NSE/BSE instruments by query"},
 	}
@@ -83,6 +85,7 @@ func TestToolManifest_VerifyDetectsDescriptionChange(t *testing.T) {
 // tool the server never registered. Manifest.Verify must report it as
 // MismatchAdded so an operator can raise the alarm.
 func TestToolManifest_VerifyDetectsAddedTool(t *testing.T) {
+	t.Parallel()
 	original := []Tool{
 		&fakeIntegrityTool{name: "get_profile", description: "fetch Kite user profile"},
 	}
@@ -105,6 +108,7 @@ func TestToolManifest_VerifyDetectsAddedTool(t *testing.T) {
 // a tool that was in the manifest (hostile proxy stripping legitimate
 // tools). Verify must report MismatchRemoved.
 func TestToolManifest_VerifyDetectsRemovedTool(t *testing.T) {
+	t.Parallel()
 	original := []Tool{
 		&fakeIntegrityTool{name: "get_holdings", description: "fetch holdings"},
 		&fakeIntegrityTool{name: "get_positions", description: "fetch positions"},
@@ -126,6 +130,7 @@ func TestToolManifest_VerifyDetectsRemovedTool(t *testing.T) {
 // TestToolManifest_VerifyNoMismatchesOnIdenticalSet — sanity check that
 // the happy path returns no mismatches.
 func TestToolManifest_VerifyNoMismatchesOnIdenticalSet(t *testing.T) {
+	t.Parallel()
 	tools := []Tool{
 		&fakeIntegrityTool{name: "x", description: "x desc"},
 		&fakeIntegrityTool{name: "y", description: "y desc"},
@@ -137,6 +142,7 @@ func TestToolManifest_VerifyNoMismatchesOnIdenticalSet(t *testing.T) {
 // TestToolManifest_HashSizeBytes — sanity check that each hash is a full
 // sha256 hex digest (64 chars / 32 bytes). Used by the startup log.
 func TestToolManifest_HashSizeBytes(t *testing.T) {
+	t.Parallel()
 	tools := []Tool{&fakeIntegrityTool{name: "foo", description: "bar"}}
 	m := ComputeToolManifest(tools)
 	for name, h := range m.Tools {
@@ -150,6 +156,7 @@ func TestToolManifest_HashSizeBytes(t *testing.T) {
 // GetToolManifest return a safe copy — caller mutations must not leak
 // into the stored state.
 func TestToolManifest_SingletonRoundTrip(t *testing.T) {
+	t.Parallel()
 	tools := []Tool{
 		&fakeIntegrityTool{name: "alpha", description: "A"},
 		&fakeIntegrityTool{name: "beta", description: "B"},

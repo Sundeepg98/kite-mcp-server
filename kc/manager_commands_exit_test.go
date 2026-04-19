@@ -52,6 +52,7 @@ func (f *fakeBrokerForExit) PlaceOrder(_ broker.OrderParams) (broker.OrderRespon
 // If the CommandBus handler short-circuited the use case or built it without
 // a riskguard, the broker would be hit and the test would fail.
 func TestCommandBus_ClosePosition_RiskguardFires(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -84,6 +85,7 @@ func TestCommandBus_ClosePosition_RiskguardFires(t *testing.T) {
 // test but for the bulk-exit path. A frozen user should have every candidate
 // position blocked by riskguard and no orders should reach the broker.
 func TestCommandBus_CloseAllPositions_RiskguardFires(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)

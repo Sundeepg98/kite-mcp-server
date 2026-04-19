@@ -33,6 +33,7 @@ import (
 // ArgParser getter with a key not present in the args map always returns
 // the supplied default, across an arbitrary map shape and key choice.
 func TestProperty_ArgParser_DefaultsWhenKeyMissing(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		// Generate an arbitrary args map with string keys and scalar
 		// values. The draws are small (<= 10 entries) because the
@@ -93,6 +94,7 @@ func TestProperty_ArgParser_DefaultsWhenKeyMissing(t *testing.T) {
 // the parser returns that value exactly — the default is never
 // consulted for type-matching present values.
 func TestProperty_ArgParser_ReturnsStoredValueWhenPresent(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		key := rapid.String().Filter(func(s string) bool {
 			return s != "" // avoid empty-key edge case
@@ -136,6 +138,7 @@ func TestProperty_ArgParser_ReturnsStoredValueWhenPresent(t *testing.T) {
 // SafeAssert* converters; here we cover the composition path (the
 // parser over arbitrary maps with arbitrary keys).
 func TestProperty_ArgParser_NeverPanics(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		// Allow nil values, empty maps, wrong-type values — the full
 		// junk drawer.

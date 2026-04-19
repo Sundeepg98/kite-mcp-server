@@ -10,6 +10,7 @@ import (
 // --- AlertAggregate tests ---
 
 func TestAlertAggregate_CreateTriggerLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-1")
 	assert.Equal(t, AlertStatusActive, agg.Status)
 	assert.Equal(t, 0, agg.Version())
@@ -36,6 +37,7 @@ func TestAlertAggregate_CreateTriggerLifecycle(t *testing.T) {
 }
 
 func TestAlertAggregate_CreateDeleteLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-2")
 	_ = agg.Create("user@example.com", "INFY", "NSE", 1500.0, "below")
 
@@ -47,6 +49,7 @@ func TestAlertAggregate_CreateDeleteLifecycle(t *testing.T) {
 }
 
 func TestAlertAggregate_CannotTriggerTriggered(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-3")
 	_ = agg.Create("user@example.com", "TCS", "NSE", 3000.0, "above")
 	_ = agg.Trigger(3001.0)
@@ -57,6 +60,7 @@ func TestAlertAggregate_CannotTriggerTriggered(t *testing.T) {
 }
 
 func TestAlertAggregate_CannotTriggerDeleted(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-4")
 	_ = agg.Create("user@example.com", "TCS", "NSE", 3000.0, "above")
 	_ = agg.Delete()
@@ -67,6 +71,7 @@ func TestAlertAggregate_CannotTriggerDeleted(t *testing.T) {
 }
 
 func TestAlertAggregate_CannotDeleteAlreadyDeleted(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-5")
 	_ = agg.Create("user@example.com", "INFY", "NSE", 1500.0, "below")
 	_ = agg.Delete()
@@ -77,6 +82,7 @@ func TestAlertAggregate_CannotDeleteAlreadyDeleted(t *testing.T) {
 }
 
 func TestAlertAggregate_CanDeleteTriggered(t *testing.T) {
+	t.Parallel()
 	// Triggered alerts can still be cleaned up via delete.
 	agg := NewAlertAggregate("alert-6")
 	_ = agg.Create("user@example.com", "RELIANCE", "NSE", 2600.0, "above")
@@ -88,6 +94,7 @@ func TestAlertAggregate_CanDeleteTriggered(t *testing.T) {
 }
 
 func TestAlertAggregate_CannotCreateTwice(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-7")
 	_ = agg.Create("user@example.com", "TCS", "NSE", 3000.0, "above")
 
@@ -97,6 +104,7 @@ func TestAlertAggregate_CannotCreateTwice(t *testing.T) {
 }
 
 func TestAlertAggregate_CreateValidation(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-v")
 
 	err := agg.Create("", "RELIANCE", "NSE", 2600, "above")
@@ -113,6 +121,7 @@ func TestAlertAggregate_CreateValidation(t *testing.T) {
 }
 
 func TestAlertAggregate_InvariantMethods(t *testing.T) {
+	t.Parallel()
 	agg := NewAlertAggregate("alert-inv")
 	_ = agg.Create("user@example.com", "RELIANCE", "NSE", 2600, "above")
 
@@ -125,6 +134,7 @@ func TestAlertAggregate_InvariantMethods(t *testing.T) {
 }
 
 func TestAlertAggregate_ReconstitutionFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewAlertAggregate("alert-recon")
@@ -158,6 +168,7 @@ func TestAlertAggregate_ReconstitutionFromEvents(t *testing.T) {
 }
 
 func TestAlertAggregate_ReconstitutionCreateDeleteFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewAlertAggregate("alert-del-recon")
@@ -179,6 +190,7 @@ func TestAlertAggregate_ReconstitutionCreateDeleteFromEvents(t *testing.T) {
 }
 
 func TestAlertAggregate_LoadFromEventsEmpty(t *testing.T) {
+	t.Parallel()
 	_, err := LoadAlertFromEvents(nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no events to load alert from")

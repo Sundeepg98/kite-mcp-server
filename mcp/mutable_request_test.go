@@ -14,6 +14,7 @@ import (
 // CallToolRequest, read args, verify the underlying map was copied
 // (mutations don't leak back to the original request).
 func TestMutableCallToolRequest_Basic(t *testing.T) {
+	t.Parallel()
 	orig := mcp.CallToolRequest{}
 	orig.Params.Name = "place_order"
 	orig.Params.Arguments = map[string]any{"symbol": "INFY", "qty": float64(10)}
@@ -38,6 +39,7 @@ func TestMutableCallToolRequest_Basic(t *testing.T) {
 // TestMutableCallToolRequest_SetGetDelete — the three mutation
 // primitives round-trip values correctly.
 func TestMutableCallToolRequest_SetGetDelete(t *testing.T) {
+	t.Parallel()
 	m := NewMutableCallToolRequest(mcp.CallToolRequest{})
 
 	// Empty-state Get.
@@ -69,6 +71,7 @@ func TestMutableCallToolRequest_SetGetDelete(t *testing.T) {
 // wrapper. This protects against hook authors accidentally sharing
 // a map reference.
 func TestMutableCallToolRequest_ArgumentsSnapshot(t *testing.T) {
+	t.Parallel()
 	orig := mcp.CallToolRequest{}
 	orig.Params.Arguments = map[string]any{"a": 1}
 	m := NewMutableCallToolRequest(orig)
@@ -85,6 +88,7 @@ func TestMutableCallToolRequest_ArgumentsSnapshot(t *testing.T) {
 // CallToolRequest with the CURRENT wrapper state. The downstream
 // handler sees mutations.
 func TestMutableCallToolRequest_ToRequest(t *testing.T) {
+	t.Parallel()
 	orig := mcp.CallToolRequest{}
 	orig.Params.Name = "place_order"
 	orig.Params.Arguments = map[string]any{"qty": float64(1)}
@@ -105,6 +109,7 @@ func TestMutableCallToolRequest_ToRequest(t *testing.T) {
 // rewritten value. This is the user-facing feature that closes
 // plugin depth to 100%.
 func TestOnToolExecutionMutable_HookRewritesArg(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -137,6 +142,7 @@ func TestOnToolExecutionMutable_HookRewritesArg(t *testing.T) {
 // TestOnToolExecutionMutable_HookDeletesArg — a hook can strip a
 // sensitive field before the handler sees it.
 func TestOnToolExecutionMutable_HookDeletesArg(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -165,6 +171,7 @@ func TestOnToolExecutionMutable_HookDeletesArg(t *testing.T) {
 // TestOnToolExecutionMutable_HookAddsArg — a hook can inject a
 // default / derived value.
 func TestOnToolExecutionMutable_HookAddsArg(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -196,6 +203,7 @@ func TestOnToolExecutionMutable_HookAddsArg(t *testing.T) {
 // surfaces as IsError=true, does NOT call the handler, does NOT
 // propagate.
 func TestOnToolExecutionMutable_PanicRecovered(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -226,6 +234,7 @@ func TestOnToolExecutionMutable_PanicRecovered(t *testing.T) {
 // mutates sees the mutations flow into a subsequent immutable hook
 // and into the handler.
 func TestOnToolExecutionMutable_ChainsWithImmutable(t *testing.T) {
+	t.Parallel()
 	ClearHooks()
 	defer ClearHooks()
 
@@ -265,6 +274,7 @@ func TestOnToolExecutionMutable_ChainsWithImmutable(t *testing.T) {
 // TestOnToolExecutionMutable_NilArguments — a tool called with nil
 // Arguments still gets a functional wrapper (Set creates the map).
 func TestOnToolExecutionMutable_NilArguments(t *testing.T) {
+	t.Parallel()
 	orig := mcp.CallToolRequest{}
 	orig.Params.Arguments = nil // missing entirely
 

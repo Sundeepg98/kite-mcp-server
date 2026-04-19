@@ -61,6 +61,7 @@ func validComposite() cqrs.CreateCompositeAlertCommand {
 // TestCreateCompositeAlert_Success is the happy path: valid command, store
 // succeeds, use case returns the ID and tokens resolve on every leg.
 func TestCreateCompositeAlert_Success(t *testing.T) {
+	t.Parallel()
 	store := &mockCompositeAlertStore{returnID: "CMP-42"}
 	resolver := &mockInstrumentResolver{token: 256265}
 	uc := NewCreateCompositeAlertUseCase(store, resolver, testLogger())
@@ -81,6 +82,7 @@ func TestCreateCompositeAlert_Success(t *testing.T) {
 // so the use case's validation matrix is exercised. Cases are expressed
 // as table-driven tests to match the patterns in usecases_test.go.
 func TestCreateCompositeAlert_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewCreateCompositeAlertUseCase(nil, nil, testLogger())
 
 	tests := []struct {
@@ -183,6 +185,7 @@ func TestCreateCompositeAlert_ValidationFailures(t *testing.T) {
 // instrument-lookup failures with the offending leg index so callers
 // can pinpoint the bad input.
 func TestCreateCompositeAlert_InstrumentResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockInstrumentResolver{err: fmt.Errorf("not found")}
 	uc := NewCreateCompositeAlertUseCase(nil, resolver, testLogger())
 
@@ -194,6 +197,7 @@ func TestCreateCompositeAlert_InstrumentResolveError(t *testing.T) {
 // TestCreateCompositeAlert_StoreError verifies that store failures are
 // wrapped (not swallowed) and don't leak bare fmt.Errorf tokens.
 func TestCreateCompositeAlert_StoreError(t *testing.T) {
+	t.Parallel()
 	store := &mockCompositeAlertStore{returnErr: fmt.Errorf("db write failed")}
 	resolver := &mockInstrumentResolver{token: 256265}
 	uc := NewCreateCompositeAlertUseCase(store, resolver, testLogger())
@@ -207,6 +211,7 @@ func TestCreateCompositeAlert_StoreError(t *testing.T) {
 // logic parsing ("and" -> AND) — the tool handler already uppercases,
 // but the use case should not rely on the caller's casing.
 func TestCreateCompositeAlert_LogicNormalization(t *testing.T) {
+	t.Parallel()
 	store := &mockCompositeAlertStore{}
 	resolver := &mockInstrumentResolver{token: 256265}
 	uc := NewCreateCompositeAlertUseCase(store, resolver, testLogger())
@@ -228,5 +233,6 @@ func TestCreateCompositeAlert_LogicNormalization(t *testing.T) {
 // This is a compile-time guard: if AddComposite's signature drifts, the
 // build breaks here before downstream call sites notice.
 func TestCreateCompositeAlert_CompatibleWithAlertStore(t *testing.T) {
+	t.Parallel()
 	var _ CompositeAlertStore = (*alerts.Store)(nil)
 }

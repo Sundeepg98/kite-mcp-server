@@ -17,6 +17,7 @@ import (
 // plugin command registry: a plugin registers /echo, the user sends
 // "/echo hello", and the registered handler runs with the raw args.
 func TestRegisterCommand_FiresOnMatch(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -75,6 +76,7 @@ func TestRegisterCommand_FiresOnMatch(t *testing.T) {
 // with a clear error. Built-ins MUST win — a malicious plugin cannot
 // hijack the /buy or /sell routing.
 func TestRegisterCommand_DoesNotOverrideBuiltin(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -97,6 +99,7 @@ func TestRegisterCommand_DoesNotOverrideBuiltin(t *testing.T) {
 // parseCommand lowercases and trims, so registration validation should
 // match the same shape.
 func TestRegisterCommand_RejectsInvalidName(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	h, _ := newTestBotHandler(mgr)
 	defer h.Shutdown()
@@ -121,6 +124,7 @@ func TestRegisterCommand_RejectsInvalidName(t *testing.T) {
 // still fires. Plugin registration is additive — it must NOT shadow the
 // default-else path.
 func TestRegisterCommand_UnknownCommandStillEmitsDefault(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -153,6 +157,7 @@ func TestRegisterCommand_UnknownCommandStillEmitsDefault(t *testing.T) {
 // replaces the first handler. Simple last-wins semantics mirror a
 // typical singleton plugin lifecycle where a restart re-registers.
 func TestRegisterCommand_LastWinsOnDuplicate(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)
@@ -193,6 +198,7 @@ func TestRegisterCommand_LastWinsOnDuplicate(t *testing.T) {
 // TestRegisterCommand_PanicRecovered — a panicking plugin handler must
 // not crash the webhook; the user should see an error message instead.
 func TestRegisterCommand_PanicRecovered(t *testing.T) {
+	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	h, mock := newTestBotHandler(mgr)

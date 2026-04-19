@@ -5,6 +5,7 @@ import "testing"
 // --- QuantitySpec tests ---
 
 func TestQuantitySpec_WithinBounds(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 100)
 	if !spec.IsSatisfiedBy(50) {
 		t.Errorf("expected 50 to satisfy [1, 100]")
@@ -12,6 +13,7 @@ func TestQuantitySpec_WithinBounds(t *testing.T) {
 }
 
 func TestQuantitySpec_AtBounds(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 100)
 	if !spec.IsSatisfiedBy(1) {
 		t.Error("expected min bound 1 to satisfy")
@@ -22,6 +24,7 @@ func TestQuantitySpec_AtBounds(t *testing.T) {
 }
 
 func TestQuantitySpec_BelowMin(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(10, 100)
 	if spec.IsSatisfiedBy(5) {
 		t.Error("expected 5 to fail with min=10")
@@ -32,6 +35,7 @@ func TestQuantitySpec_BelowMin(t *testing.T) {
 }
 
 func TestQuantitySpec_AboveMax(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 100)
 	if spec.IsSatisfiedBy(101) {
 		t.Error("expected 101 to fail with max=100")
@@ -42,6 +46,7 @@ func TestQuantitySpec_AboveMax(t *testing.T) {
 }
 
 func TestQuantitySpec_ZeroQuantity(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 100)
 	if spec.IsSatisfiedBy(0) {
 		t.Error("expected 0 to fail")
@@ -49,6 +54,7 @@ func TestQuantitySpec_ZeroQuantity(t *testing.T) {
 }
 
 func TestQuantitySpec_NegativeQuantity(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 100)
 	if spec.IsSatisfiedBy(-5) {
 		t.Error("expected -5 to fail")
@@ -56,6 +62,7 @@ func TestQuantitySpec_NegativeQuantity(t *testing.T) {
 }
 
 func TestQuantitySpec_NoMaxBound(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(1, 0) // max=0 means no upper bound
 	if !spec.IsSatisfiedBy(999999) {
 		t.Error("expected large quantity to satisfy when max=0")
@@ -63,6 +70,7 @@ func TestQuantitySpec_NoMaxBound(t *testing.T) {
 }
 
 func TestQuantitySpec_DefaultMin(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(0, 100) // min=0 defaults to 1
 	if spec.Min != 1 {
 		t.Errorf("expected Min=1 after default, got %d", spec.Min)
@@ -73,6 +81,7 @@ func TestQuantitySpec_DefaultMin(t *testing.T) {
 }
 
 func TestQuantitySpec_NegativeMinDefaultsTo1(t *testing.T) {
+	t.Parallel()
 	spec := NewQuantitySpec(-5, 100)
 	if spec.Min != 1 {
 		t.Errorf("expected Min=1 for negative input, got %d", spec.Min)
@@ -82,6 +91,7 @@ func TestQuantitySpec_NegativeMinDefaultsTo1(t *testing.T) {
 // --- PriceSpec tests ---
 
 func TestPriceSpec_ValidPrice(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(100000)
 	if !spec.IsSatisfiedBy(2500.50) {
 		t.Error("expected 2500.50 to satisfy")
@@ -89,6 +99,7 @@ func TestPriceSpec_ValidPrice(t *testing.T) {
 }
 
 func TestPriceSpec_ZeroPrice(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(100000)
 	if spec.IsSatisfiedBy(0) {
 		t.Error("expected 0 to fail (must be positive)")
@@ -99,6 +110,7 @@ func TestPriceSpec_ZeroPrice(t *testing.T) {
 }
 
 func TestPriceSpec_NegativePrice(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(100000)
 	if spec.IsSatisfiedBy(-10) {
 		t.Error("expected negative to fail")
@@ -106,6 +118,7 @@ func TestPriceSpec_NegativePrice(t *testing.T) {
 }
 
 func TestPriceSpec_AboveMax(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(500000)
 	if spec.IsSatisfiedBy(600000) {
 		t.Error("expected 600000 to fail with max=500000")
@@ -116,6 +129,7 @@ func TestPriceSpec_AboveMax(t *testing.T) {
 }
 
 func TestPriceSpec_NoMaxBound(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(0)
 	if !spec.IsSatisfiedBy(99999999) {
 		t.Error("expected large price to satisfy when max=0")
@@ -123,6 +137,7 @@ func TestPriceSpec_NoMaxBound(t *testing.T) {
 }
 
 func TestPriceSpec_AtMax(t *testing.T) {
+	t.Parallel()
 	spec := NewPriceSpec(500)
 	if !spec.IsSatisfiedBy(500) {
 		t.Error("expected price at max to satisfy")
@@ -132,6 +147,7 @@ func TestPriceSpec_AtMax(t *testing.T) {
 // --- OrderSpec tests ---
 
 func TestOrderSpec_ValidBuyLimit(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -147,6 +163,7 @@ func TestOrderSpec_ValidBuyLimit(t *testing.T) {
 }
 
 func TestOrderSpec_MarketOrderSkipsPriceCheck(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -162,6 +179,7 @@ func TestOrderSpec_MarketOrderSkipsPriceCheck(t *testing.T) {
 }
 
 func TestOrderSpec_SLMOrderSkipsPriceCheck(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -177,6 +195,7 @@ func TestOrderSpec_SLMOrderSkipsPriceCheck(t *testing.T) {
 }
 
 func TestOrderSpec_MissingTradingsymbol(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -190,6 +209,7 @@ func TestOrderSpec_MissingTradingsymbol(t *testing.T) {
 }
 
 func TestOrderSpec_InvalidTransactionType(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -204,6 +224,7 @@ func TestOrderSpec_InvalidTransactionType(t *testing.T) {
 }
 
 func TestOrderSpec_QtyFails(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(10, 100), NewPriceSpec(500000))
 	candidate := OrderCandidate{
 		Quantity:        5, // below min
@@ -218,6 +239,7 @@ func TestOrderSpec_QtyFails(t *testing.T) {
 }
 
 func TestOrderSpec_PriceFails(t *testing.T) {
+	t.Parallel()
 	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(1000))
 	candidate := OrderCandidate{
 		Quantity:        100,
@@ -234,6 +256,7 @@ func TestOrderSpec_PriceFails(t *testing.T) {
 // --- AndSpec tests ---
 
 func TestAndSpec_BothSatisfied(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(1, 100)
 	right := NewQuantitySpec(10, 200)
 	spec := And[int](left, right)
@@ -243,6 +266,7 @@ func TestAndSpec_BothSatisfied(t *testing.T) {
 }
 
 func TestAndSpec_LeftFails(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(10, 100)
 	right := NewQuantitySpec(1, 200)
 	spec := And[int](left, right)
@@ -255,6 +279,7 @@ func TestAndSpec_LeftFails(t *testing.T) {
 }
 
 func TestAndSpec_RightFails(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(1, 200)
 	right := NewQuantitySpec(10, 50)
 	spec := And[int](left, right)
@@ -269,6 +294,7 @@ func TestAndSpec_RightFails(t *testing.T) {
 // --- OrSpec tests ---
 
 func TestOrSpec_LeftSatisfied(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(1, 10)
 	right := NewQuantitySpec(100, 200)
 	spec := Or[int](left, right)
@@ -278,6 +304,7 @@ func TestOrSpec_LeftSatisfied(t *testing.T) {
 }
 
 func TestOrSpec_RightSatisfied(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(1, 10)
 	right := NewQuantitySpec(100, 200)
 	spec := Or[int](left, right)
@@ -287,6 +314,7 @@ func TestOrSpec_RightSatisfied(t *testing.T) {
 }
 
 func TestOrSpec_NeitherSatisfied(t *testing.T) {
+	t.Parallel()
 	left := NewQuantitySpec(1, 10)
 	right := NewQuantitySpec(100, 200)
 	spec := Or[int](left, right)
@@ -301,6 +329,7 @@ func TestOrSpec_NeitherSatisfied(t *testing.T) {
 // --- NotSpec tests ---
 
 func TestNotSpec_InnerSatisfied(t *testing.T) {
+	t.Parallel()
 	inner := NewQuantitySpec(1, 100)
 	spec := Not[int](inner)
 	if spec.IsSatisfiedBy(50) {
@@ -312,6 +341,7 @@ func TestNotSpec_InnerSatisfied(t *testing.T) {
 }
 
 func TestNotSpec_InnerNotSatisfied(t *testing.T) {
+	t.Parallel()
 	inner := NewQuantitySpec(10, 100)
 	spec := Not[int](inner)
 	if !spec.IsSatisfiedBy(5) {
@@ -322,6 +352,7 @@ func TestNotSpec_InnerNotSatisfied(t *testing.T) {
 // --- Glossary type compile-time checks ---
 
 func TestGlossaryTypes_CompileTimeCheck(t *testing.T) {
+	t.Parallel()
 	// These assignments verify the type aliases resolve correctly at compile time.
 	var _ AdminActor = "admin@example.com"
 	var _ AdminRole = true
@@ -333,6 +364,7 @@ func TestGlossaryTypes_CompileTimeCheck(t *testing.T) {
 }
 
 func TestGlossaryConstants(t *testing.T) {
+	t.Parallel()
 	// Transaction types
 	if TransactionBuy != "BUY" {
 		t.Errorf("TransactionBuy = %q", TransactionBuy)

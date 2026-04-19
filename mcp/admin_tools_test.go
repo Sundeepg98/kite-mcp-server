@@ -104,6 +104,7 @@ func callAdminTool(t *testing.T, mgr *kc.Manager, toolName string, email string,
 // ---------------------------------------------------------------------------
 
 func TestAdminCheck_UnauthenticatedReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	ctx := context.Background() // no email in context
 	_, errResult := adminCheck(ctx, mgr)
@@ -112,6 +113,7 @@ func TestAdminCheck_UnauthenticatedReturnsError(t *testing.T) {
 }
 
 func TestAdminCheck_NonAdminReturnsError(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	ctx := oauth.ContextWithEmail(context.Background(), "trader@example.com")
@@ -121,6 +123,7 @@ func TestAdminCheck_NonAdminReturnsError(t *testing.T) {
 }
 
 func TestAdminCheck_AdminSucceeds(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	ctx := oauth.ContextWithEmail(context.Background(), "admin@example.com")
@@ -134,6 +137,7 @@ func TestAdminCheck_AdminSucceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAdminListUsers_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_list_users", "trader@example.com", nil)
@@ -141,6 +145,7 @@ func TestAdminListUsers_NonAdminBlocked(t *testing.T) {
 }
 
 func TestAdminListUsers_UnauthenticatedBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_list_users", "", nil)
@@ -148,6 +153,7 @@ func TestAdminListUsers_UnauthenticatedBlocked(t *testing.T) {
 }
 
 func TestAdminListUsers_AdminSucceeds(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_list_users", "admin@example.com", nil)
@@ -155,6 +161,7 @@ func TestAdminListUsers_AdminSucceeds(t *testing.T) {
 }
 
 func TestAdminSuspendUser_SelfActionBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_suspend_user", "admin@example.com", map[string]any{
@@ -165,6 +172,7 @@ func TestAdminSuspendUser_SelfActionBlocked(t *testing.T) {
 }
 
 func TestAdminSuspendUser_RequiresConfirm(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_suspend_user", "admin@example.com", map[string]any{
@@ -175,6 +183,7 @@ func TestAdminSuspendUser_RequiresConfirm(t *testing.T) {
 }
 
 func TestAdminSuspendUser_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_suspend_user", "trader@example.com", map[string]any{
@@ -185,6 +194,7 @@ func TestAdminSuspendUser_NonAdminBlocked(t *testing.T) {
 }
 
 func TestAdminSuspendUser_LastAdminGuard(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 
@@ -241,6 +251,7 @@ func TestAdminSuspendUser_LastAdminGuard(t *testing.T) {
 }
 
 func TestAdminFreezeGlobal_RequiresConfirm(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_global", "admin@example.com", map[string]any{
@@ -251,6 +262,7 @@ func TestAdminFreezeGlobal_RequiresConfirm(t *testing.T) {
 }
 
 func TestAdminFreezeGlobal_RequiresReason(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_global", "admin@example.com", map[string]any{
@@ -261,6 +273,7 @@ func TestAdminFreezeGlobal_RequiresReason(t *testing.T) {
 }
 
 func TestAdminFreezeGlobal_AdminSucceeds(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_global", "admin@example.com", map[string]any{
@@ -271,6 +284,7 @@ func TestAdminFreezeGlobal_AdminSucceeds(t *testing.T) {
 }
 
 func TestAdminRemoveFamilyMember_RequiresConfirm(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_remove_family_member", "admin@example.com", map[string]any{
@@ -281,6 +295,7 @@ func TestAdminRemoveFamilyMember_RequiresConfirm(t *testing.T) {
 }
 
 func TestAdminRemoveFamilyMember_SelfBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_remove_family_member", "admin@example.com", map[string]any{
@@ -291,6 +306,7 @@ func TestAdminRemoveFamilyMember_SelfBlocked(t *testing.T) {
 }
 
 func TestAdminFreezeUser_SelfBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_user", "admin@example.com", map[string]any{
@@ -302,6 +318,7 @@ func TestAdminFreezeUser_SelfBlocked(t *testing.T) {
 }
 
 func TestAdminFreezeUser_RequiresConfirm(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_user", "admin@example.com", map[string]any{
@@ -313,6 +330,7 @@ func TestAdminFreezeUser_RequiresConfirm(t *testing.T) {
 }
 
 func TestAdminFreezeUser_AdminSucceeds(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_freeze_user", "admin@example.com", map[string]any{
@@ -324,6 +342,7 @@ func TestAdminFreezeUser_AdminSucceeds(t *testing.T) {
 }
 
 func TestAdminActivateUser_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_activate_user", "trader@example.com", map[string]any{
@@ -333,6 +352,7 @@ func TestAdminActivateUser_NonAdminBlocked(t *testing.T) {
 }
 
 func TestAdminServerStatus_AdminSucceeds(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_server_status", "admin@example.com", nil)
@@ -340,6 +360,7 @@ func TestAdminServerStatus_AdminSucceeds(t *testing.T) {
 }
 
 func TestAdminServerStatus_NonAdminBlocked(t *testing.T) {
+	t.Parallel()
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	result := callAdminTool(t, mgr, "admin_server_status", "trader@example.com", nil)
@@ -347,6 +368,7 @@ func TestAdminServerStatus_NonAdminBlocked(t *testing.T) {
 }
 
 func TestFamilyInviteFlow(t *testing.T) {
+	t.Parallel()
 	manager := newAdminTestManager(t)
 	seedUsers(t, manager)
 
@@ -384,6 +406,7 @@ func TestFamilyInviteFlow(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAdminWorkflow_SuspendActivateFreeze(t *testing.T) {
+	t.Parallel()
 	manager := newAdminTestManager(t)
 	seedUsers(t, manager)
 
@@ -437,6 +460,7 @@ func TestAdminWorkflow_SuspendActivateFreeze(t *testing.T) {
 }
 
 func TestAdminWorkflow_RoleChanges(t *testing.T) {
+	t.Parallel()
 	manager := newAdminTestManager(t)
 	seedUsers(t, manager)
 
@@ -483,6 +507,7 @@ func TestAdminWorkflow_RoleChanges(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestE2E_FreezeUser_DispatchesEvent(t *testing.T) {
+	t.Parallel()
 	manager := newAdminTestManager(t)
 	seedUsers(t, manager)
 

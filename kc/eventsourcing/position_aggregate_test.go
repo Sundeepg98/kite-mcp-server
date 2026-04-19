@@ -10,6 +10,7 @@ import (
 // --- PositionAggregate tests ---
 
 func TestPositionAggregate_OpenCloseLifecycle(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("pos-1")
 	assert.Equal(t, PositionStatusOpen, agg.Status)
 	assert.Equal(t, 0, agg.Version())
@@ -38,6 +39,7 @@ func TestPositionAggregate_OpenCloseLifecycle(t *testing.T) {
 }
 
 func TestPositionAggregate_CannotCloseAlreadyClosed(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("pos-2")
 	_ = agg.Open("user@example.com", "INFY", "NSE", "SELL", 50, 1800.0)
 	_ = agg.Close("order-c", "BUY")
@@ -48,6 +50,7 @@ func TestPositionAggregate_CannotCloseAlreadyClosed(t *testing.T) {
 }
 
 func TestPositionAggregate_CannotOpenTwice(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("pos-3")
 	err := agg.Open("user@example.com", "TCS", "NSE", "BUY", 5, 3000.0)
 	require.NoError(t, err)
@@ -58,6 +61,7 @@ func TestPositionAggregate_CannotOpenTwice(t *testing.T) {
 }
 
 func TestPositionAggregate_OpenValidation(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("pos-v")
 
 	err := agg.Open("", "RELIANCE", "NSE", "BUY", 10, 2500)
@@ -74,6 +78,7 @@ func TestPositionAggregate_OpenValidation(t *testing.T) {
 }
 
 func TestPositionAggregate_CanCloseInvariant(t *testing.T) {
+	t.Parallel()
 	agg := NewPositionAggregate("pos-inv")
 
 	// Open position can be closed.
@@ -87,6 +92,7 @@ func TestPositionAggregate_CanCloseInvariant(t *testing.T) {
 }
 
 func TestPositionAggregate_ReconstitutionFromEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	agg := NewPositionAggregate("pos-recon")
@@ -118,6 +124,7 @@ func TestPositionAggregate_ReconstitutionFromEvents(t *testing.T) {
 }
 
 func TestPositionAggregate_LoadFromEventsEmpty(t *testing.T) {
+	t.Parallel()
 	_, err := LoadPositionFromEvents(nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no events to load position from")

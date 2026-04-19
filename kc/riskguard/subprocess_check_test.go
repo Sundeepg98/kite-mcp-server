@@ -17,6 +17,7 @@ import (
 // (not at construction), return a clean CheckResult with
 // Reason="subprocess_unavailable", and NOT panic.
 func TestSubprocessCheck_NilOnMissingBinary(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	missing := filepath.Join(tmp, "does-not-exist.exe")
 
@@ -54,6 +55,7 @@ func TestSubprocessCheck_NilOnMissingBinary(t *testing.T) {
 // executable that fails to launch also fails closed rather than
 // crashing the host.
 func TestSubprocessCheck_StaleExecutableFallback(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("unix-like chmod semantics not available on Windows")
 	}
@@ -88,6 +90,7 @@ func TestSubprocessCheck_StaleExecutableFallback(t *testing.T) {
 // into a temp directory, registers it, and confirms an evaluation
 // round-trips.
 func TestSubprocessCheck_EvaluateRoundtrip(t *testing.T) {
+	t.Parallel()
 	pluginBin := buildExamplePlugin(t)
 
 	sc := NewSubprocessCheck(SubprocessCheckConfig{
@@ -117,6 +120,7 @@ func TestSubprocessCheck_EvaluateRoundtrip(t *testing.T) {
 // the resulting error; evaluation returns a fail-closed result.
 // Subsequent evaluations relaunch the subprocess.
 func TestSubprocessCheck_PanicInPluginFailsClosed(t *testing.T) {
+	t.Parallel()
 	pluginBin := buildExamplePlugin(t)
 
 	sc := NewSubprocessCheck(SubprocessCheckConfig{
@@ -151,6 +155,7 @@ func TestSubprocessCheck_PanicInPluginFailsClosed(t *testing.T) {
 // hitting Evaluate at once must not deadlock or race. Exercises the
 // mutex around the cached rpc.Client.
 func TestSubprocessCheck_ConcurrentEvaluateIsSafe(t *testing.T) {
+	t.Parallel()
 	pluginBin := buildExamplePlugin(t)
 
 	sc := NewSubprocessCheck(SubprocessCheckConfig{
@@ -185,6 +190,7 @@ func TestSubprocessCheck_ConcurrentEvaluateIsSafe(t *testing.T) {
 // SubprocessCheck kills the subprocess; a subsequent Evaluate must
 // relaunch it cleanly.
 func TestSubprocessCheck_ReloadReconnects(t *testing.T) {
+	t.Parallel()
 	pluginBin := buildExamplePlugin(t)
 
 	sc := NewSubprocessCheck(SubprocessCheckConfig{
@@ -214,6 +220,7 @@ func TestSubprocessCheck_ReloadReconnects(t *testing.T) {
 // chain. A missing binary makes the check fail closed for the
 // first order; the rest of the chain is unaffected.
 func TestSubprocessCheck_RegisterOnGuard(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	missing := filepath.Join(tmp, "never-exists.exe")
 
@@ -240,6 +247,7 @@ func TestSubprocessCheck_RegisterOnGuard(t *testing.T) {
 
 // TestSubprocessCheckConfig_Validate — rejects invalid config.
 func TestSubprocessCheckConfig_Validate(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		cfg  SubprocessCheckConfig

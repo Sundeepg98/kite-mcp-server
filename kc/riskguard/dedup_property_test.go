@@ -33,6 +33,7 @@ import (
 // the same (email, key) pair within the TTL window always returns a
 // duplicate on the second call. Covers the core idempotency contract.
 func TestProperty_Dedup_DeterministicWithinTTL(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		email := rapid.String().Draw(t, "email")
 		key := rapid.String().Draw(t, "key")
@@ -58,6 +59,7 @@ func TestProperty_Dedup_DeterministicWithinTTL(t *testing.T) {
 // hashKey (e.g. drops the separator byte, truncates the output), this
 // property catches the regression long before a real user does.
 func TestProperty_Dedup_NoCrossInputCollisions(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		// Draw a modest sample per iteration; rapid will run the check
 		// 100 times by default so the aggregate sample is ~1000.
@@ -95,6 +97,7 @@ func TestProperty_Dedup_NoCrossInputCollisions(t *testing.T) {
 // as a duplicate — user isolation must hold even when clients happen
 // to pick the same key string.
 func TestProperty_Dedup_EmailScopeIsolation(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		key := rapid.String().Draw(t, "key")
 		emailA := rapid.String().Draw(t, "email_a")
@@ -118,6 +121,7 @@ func TestProperty_Dedup_EmailScopeIsolation(t *testing.T) {
 // insertion — stale entries are correctly overwritten rather than
 // lingering as false positives.
 func TestProperty_Dedup_StaleEntriesExpire(t *testing.T) {
+	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		email := rapid.String().Draw(t, "email")
 		key := rapid.String().Draw(t, "key")

@@ -21,6 +21,7 @@ import (
 // --- PlaceOrderUseCase tests ---
 
 func TestPlaceOrder_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	events := domain.NewEventDispatcher()
@@ -51,6 +52,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 }
 
 func TestPlaceOrder_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
 
 	qty10, _ := domain.NewQuantity(10)
@@ -96,6 +98,7 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 }
 
 func TestPlaceOrder_BrokerResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token for user")}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
@@ -107,6 +110,7 @@ func TestPlaceOrder_BrokerResolveError(t *testing.T) {
 }
 
 func TestPlaceOrder_BrokerPlaceError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{placeErr: fmt.Errorf("insufficient margin")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
@@ -119,6 +123,7 @@ func TestPlaceOrder_BrokerPlaceError(t *testing.T) {
 }
 
 func TestPlaceOrder_NoEventsDispatcher(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	// nil events dispatcher — should not panic.
@@ -134,6 +139,7 @@ func TestPlaceOrder_NoEventsDispatcher(t *testing.T) {
 // --- GetPortfolioUseCase tests ---
 
 func TestGetPortfolio_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		holdings: []broker.Holding{
 			{Tradingsymbol: "RELIANCE", Quantity: 10, AveragePrice: 2400, LastPrice: 2500},
@@ -156,6 +162,7 @@ func TestGetPortfolio_Success(t *testing.T) {
 }
 
 func TestGetPortfolio_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetPortfolioUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetPortfolioQuery{})
 	require.Error(t, err)
@@ -163,6 +170,7 @@ func TestGetPortfolio_EmptyEmail(t *testing.T) {
 }
 
 func TestGetPortfolio_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token")}
 	uc := NewGetPortfolioUseCase(resolver, testLogger())
 
@@ -174,6 +182,7 @@ func TestGetPortfolio_ResolveError(t *testing.T) {
 // --- CreateAlertUseCase tests ---
 
 func TestCreateAlert_Success(t *testing.T) {
+	t.Parallel()
 	store := &mockAlertStore{alerts: make(map[string]string)}
 	instruments := &mockInstrumentResolver{token: 738561}
 	uc := NewCreateAlertUseCase(store, instruments, testLogger())
@@ -191,6 +200,7 @@ func TestCreateAlert_Success(t *testing.T) {
 }
 
 func TestCreateAlert_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewCreateAlertUseCase(nil, nil, testLogger())
 
 	tests := []struct {
@@ -230,6 +240,7 @@ func TestCreateAlert_ValidationFailures(t *testing.T) {
 }
 
 func TestCreateAlert_InstrumentResolveError(t *testing.T) {
+	t.Parallel()
 	instruments := &mockInstrumentResolver{err: fmt.Errorf("instrument not found")}
 	uc := NewCreateAlertUseCase(nil, instruments, testLogger())
 
@@ -242,6 +253,7 @@ func TestCreateAlert_InstrumentResolveError(t *testing.T) {
 }
 
 func TestCreateAlert_StoreError(t *testing.T) {
+	t.Parallel()
 	store := &mockAlertStore{alerts: make(map[string]string), addErr: fmt.Errorf("db error")}
 	instruments := &mockInstrumentResolver{token: 12345}
 	uc := NewCreateAlertUseCase(store, instruments, testLogger())
@@ -257,6 +269,7 @@ func TestCreateAlert_StoreError(t *testing.T) {
 // --- GetOrdersUseCase tests ---
 
 func TestGetOrders_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		orders: []broker.Order{
 			{OrderID: "ORD-1", Tradingsymbol: "RELIANCE", Status: "COMPLETE"},
@@ -273,6 +286,7 @@ func TestGetOrders_Success(t *testing.T) {
 }
 
 func TestGetOrders_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOrdersUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{})
 	require.Error(t, err)
@@ -280,6 +294,7 @@ func TestGetOrders_EmptyEmail(t *testing.T) {
 }
 
 func TestGetOrders_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetOrdersUseCase(resolver, testLogger())
 
@@ -291,6 +306,7 @@ func TestGetOrders_ResolveError(t *testing.T) {
 // --- ModifyOrderUseCase tests ---
 
 func TestModifyOrder_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		modifyResp: broker.OrderResponse{OrderID: "ORD-42"},
 	}
@@ -326,6 +342,7 @@ func TestModifyOrder_Success(t *testing.T) {
 }
 
 func TestModifyOrder_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewModifyOrderUseCase(nil, nil, nil, testLogger())
 
 	tests := []struct {
@@ -355,6 +372,7 @@ func TestModifyOrder_ValidationFailures(t *testing.T) {
 }
 
 func TestModifyOrder_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		modifyErr: fmt.Errorf("order not found"),
 	}
@@ -369,6 +387,7 @@ func TestModifyOrder_BrokerError(t *testing.T) {
 }
 
 func TestModifyOrder_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token")}
 	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
 
@@ -382,6 +401,7 @@ func TestModifyOrder_ResolveError(t *testing.T) {
 // --- CancelOrderUseCase tests ---
 
 func TestCancelOrder_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		cancelResp: broker.OrderResponse{OrderID: "ORD-55"},
 	}
@@ -415,6 +435,7 @@ func TestCancelOrder_Success(t *testing.T) {
 }
 
 func TestCancelOrder_DefaultVariety(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		cancelResp: broker.OrderResponse{OrderID: "ORD-10"},
 	}
@@ -432,6 +453,7 @@ func TestCancelOrder_DefaultVariety(t *testing.T) {
 }
 
 func TestCancelOrder_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewCancelOrderUseCase(nil, nil, testLogger())
 
 	tests := []struct {
@@ -461,6 +483,7 @@ func TestCancelOrder_ValidationFailures(t *testing.T) {
 }
 
 func TestCancelOrder_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		cancelErr: fmt.Errorf("order already executed"),
 	}
@@ -475,6 +498,7 @@ func TestCancelOrder_BrokerError(t *testing.T) {
 }
 
 func TestCancelOrder_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("expired session")}
 	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
 
@@ -488,6 +512,7 @@ func TestCancelOrder_ResolveError(t *testing.T) {
 // --- ClosePositionUseCase tests ---
 
 func TestClosePosition_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -523,6 +548,7 @@ func TestClosePosition_Success(t *testing.T) {
 }
 
 func TestClosePosition_ShortPosition(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -547,6 +573,7 @@ func TestClosePosition_ShortPosition(t *testing.T) {
 }
 
 func TestClosePosition_NotFound(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -563,6 +590,7 @@ func TestClosePosition_NotFound(t *testing.T) {
 }
 
 func TestClosePosition_ZeroQuantitySkipped(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -579,6 +607,7 @@ func TestClosePosition_ZeroQuantitySkipped(t *testing.T) {
 }
 
 func TestClosePosition_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), "", "NSE", "RELIANCE", "")
@@ -591,6 +620,7 @@ func TestClosePosition_ValidationFailures(t *testing.T) {
 }
 
 func TestClosePosition_BrokerPlaceError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -608,6 +638,7 @@ func TestClosePosition_BrokerPlaceError(t *testing.T) {
 }
 
 func TestClosePosition_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
 
@@ -617,6 +648,7 @@ func TestClosePosition_ResolveError(t *testing.T) {
 }
 
 func TestClosePosition_ProductFilter(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -638,6 +670,7 @@ func TestClosePosition_ProductFilter(t *testing.T) {
 // --- CloseAllPositionsUseCase tests ---
 
 func TestCloseAllPositions_ZeroPositions(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{},
@@ -657,6 +690,7 @@ func TestCloseAllPositions_ZeroPositions(t *testing.T) {
 }
 
 func TestCloseAllPositions_TwoPositions(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -691,6 +725,7 @@ func TestCloseAllPositions_TwoPositions(t *testing.T) {
 }
 
 func TestCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -710,6 +745,7 @@ func TestCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 }
 
 func TestCloseAllPositions_ProductFilter(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -730,6 +766,7 @@ func TestCloseAllPositions_ProductFilter(t *testing.T) {
 }
 
 func TestCloseAllPositions_ValidationFailure(t *testing.T) {
+	t.Parallel()
 	uc := NewCloseAllPositionsUseCase(nil, nil, nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), "", "")
@@ -738,6 +775,7 @@ func TestCloseAllPositions_ValidationFailure(t *testing.T) {
 }
 
 func TestCloseAllPositions_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewCloseAllPositionsUseCase(resolver, nil, nil, testLogger())
 
@@ -747,6 +785,7 @@ func TestCloseAllPositions_ResolveError(t *testing.T) {
 }
 
 func TestCloseAllPositions_FetchPositionsError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positionsErr: fmt.Errorf("API timeout"),
 	}
@@ -759,6 +798,7 @@ func TestCloseAllPositions_FetchPositionsError(t *testing.T) {
 }
 
 func TestCloseAllPositions_PartialFailure(t *testing.T) {
+	t.Parallel()
 	// placeErr causes ALL PlaceOrder calls to fail.
 	client := &mockBrokerClient{
 		positions: broker.Positions{
@@ -783,6 +823,7 @@ func TestCloseAllPositions_PartialFailure(t *testing.T) {
 // --- GetProfileUseCase tests ---
 
 func TestGetProfile_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		profile: broker.Profile{
 			UserID:    "AB1234",
@@ -806,6 +847,7 @@ func TestGetProfile_Success(t *testing.T) {
 }
 
 func TestGetProfile_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetProfileUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{})
 	require.Error(t, err)
@@ -813,6 +855,7 @@ func TestGetProfile_EmptyEmail(t *testing.T) {
 }
 
 func TestGetProfile_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		profileErr: fmt.Errorf("token expired"),
 	}
@@ -825,6 +868,7 @@ func TestGetProfile_BrokerError(t *testing.T) {
 }
 
 func TestGetProfile_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetProfileUseCase(resolver, testLogger())
 
@@ -836,6 +880,7 @@ func TestGetProfile_ResolveError(t *testing.T) {
 // --- GetMarginsUseCase tests ---
 
 func TestGetMargins_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		margins: broker.Margins{
 			Equity: broker.SegmentMargin{
@@ -857,6 +902,7 @@ func TestGetMargins_Success(t *testing.T) {
 }
 
 func TestGetMargins_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetMarginsUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetMarginsQuery{})
 	require.Error(t, err)
@@ -864,6 +910,7 @@ func TestGetMargins_EmptyEmail(t *testing.T) {
 }
 
 func TestGetMargins_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		marginsErr: fmt.Errorf("service unavailable"),
 	}
@@ -876,6 +923,7 @@ func TestGetMargins_BrokerError(t *testing.T) {
 }
 
 func TestGetMargins_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetMarginsUseCase(resolver, testLogger())
 
@@ -887,6 +935,7 @@ func TestGetMargins_ResolveError(t *testing.T) {
 // --- GetTradesUseCase tests ---
 
 func TestGetTrades_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		trades: []broker.Trade{
 			{TradeID: "T1", OrderID: "ORD-1", Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY", Quantity: 10, Price: 2500.0, Product: "CNC"},
@@ -906,6 +955,7 @@ func TestGetTrades_Success(t *testing.T) {
 }
 
 func TestGetTrades_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetTradesUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{})
 	require.Error(t, err)
@@ -913,6 +963,7 @@ func TestGetTrades_EmptyEmail(t *testing.T) {
 }
 
 func TestGetTrades_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		tradesErr: fmt.Errorf("API rate limited"),
 	}
@@ -925,6 +976,7 @@ func TestGetTrades_BrokerError(t *testing.T) {
 }
 
 func TestGetTrades_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetTradesUseCase(resolver, testLogger())
 
@@ -936,6 +988,7 @@ func TestGetTrades_ResolveError(t *testing.T) {
 // --- GetOrderHistoryUseCase tests ---
 
 func TestGetOrderHistory_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		orderHistory: []broker.Order{
 			{OrderID: "ORD-1", Tradingsymbol: "RELIANCE", Status: "OPEN"},
@@ -956,6 +1009,7 @@ func TestGetOrderHistory_Success(t *testing.T) {
 }
 
 func TestGetOrderHistory_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOrderHistoryUseCase(nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{OrderID: "ORD-1"})
@@ -968,6 +1022,7 @@ func TestGetOrderHistory_ValidationFailures(t *testing.T) {
 }
 
 func TestGetOrderHistory_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		orderHistoryErr: fmt.Errorf("order not found"),
 	}
@@ -982,6 +1037,7 @@ func TestGetOrderHistory_BrokerError(t *testing.T) {
 }
 
 func TestGetOrderHistory_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetOrderHistoryUseCase(resolver, testLogger())
 
@@ -995,6 +1051,7 @@ func TestGetOrderHistory_ResolveError(t *testing.T) {
 // --- GetLTPUseCase tests ---
 
 func TestGetLTP_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		ltpMap: map[string]broker.LTP{
 			"NSE:RELIANCE": {LastPrice: 2500.50},
@@ -1015,6 +1072,7 @@ func TestGetLTP_Success(t *testing.T) {
 }
 
 func TestGetLTP_EmptyInstruments(t *testing.T) {
+	t.Parallel()
 	uc := NewGetLTPUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetLTPQuery{})
 	require.Error(t, err)
@@ -1022,6 +1080,7 @@ func TestGetLTP_EmptyInstruments(t *testing.T) {
 }
 
 func TestGetLTP_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		ltpErr: fmt.Errorf("invalid instrument"),
 	}
@@ -1036,6 +1095,7 @@ func TestGetLTP_BrokerError(t *testing.T) {
 }
 
 func TestGetLTP_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetLTPUseCase(resolver, testLogger())
 
@@ -1049,6 +1109,7 @@ func TestGetLTP_ResolveError(t *testing.T) {
 // --- GetOHLCUseCase tests ---
 
 func TestGetOHLC_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		ohlcMap: map[string]broker.OHLC{
 			"NSE:RELIANCE": {Open: 2480, High: 2520, Low: 2470, Close: 2500, LastPrice: 2505},
@@ -1071,6 +1132,7 @@ func TestGetOHLC_Success(t *testing.T) {
 }
 
 func TestGetOHLC_EmptyInstruments(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOHLCUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetOHLCQuery{})
 	require.Error(t, err)
@@ -1078,6 +1140,7 @@ func TestGetOHLC_EmptyInstruments(t *testing.T) {
 }
 
 func TestGetOHLC_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		ohlcErr: fmt.Errorf("service down"),
 	}
@@ -1092,6 +1155,7 @@ func TestGetOHLC_BrokerError(t *testing.T) {
 }
 
 func TestGetOHLC_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetOHLCUseCase(resolver, testLogger())
 
@@ -1105,6 +1169,7 @@ func TestGetOHLC_ResolveError(t *testing.T) {
 // --- GetHistoricalDataUseCase tests ---
 
 func TestGetHistoricalData_Success(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	from := now.Add(-24 * time.Hour)
 	client := &mockBrokerClient{
@@ -1131,6 +1196,7 @@ func TestGetHistoricalData_Success(t *testing.T) {
 }
 
 func TestGetHistoricalData_ValidationFailures(t *testing.T) {
+	t.Parallel()
 	uc := NewGetHistoricalDataUseCase(nil, testLogger())
 	now := time.Now()
 	from := now.Add(-24 * time.Hour)
@@ -1177,6 +1243,7 @@ func TestGetHistoricalData_ValidationFailures(t *testing.T) {
 }
 
 func TestGetHistoricalData_BrokerError(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	from := now.Add(-24 * time.Hour)
 	client := &mockBrokerClient{
@@ -1196,6 +1263,7 @@ func TestGetHistoricalData_BrokerError(t *testing.T) {
 }
 
 func TestGetHistoricalData_ResolveError(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	from := now.Add(-24 * time.Hour)
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
@@ -1214,6 +1282,7 @@ func TestGetHistoricalData_ResolveError(t *testing.T) {
 // --- GetQuotesUseCase tests ---
 
 func TestGetQuotes_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		quotesMap: map[string]broker.Quote{
 			"NSE:RELIANCE": {LastPrice: 2500.0, Volume: 100000},
@@ -1231,6 +1300,7 @@ func TestGetQuotes_Success(t *testing.T) {
 }
 
 func TestGetQuotes_EmptyInstruments(t *testing.T) {
+	t.Parallel()
 	uc := NewGetQuotesUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{})
 	require.Error(t, err)
@@ -1238,6 +1308,7 @@ func TestGetQuotes_EmptyInstruments(t *testing.T) {
 }
 
 func TestGetQuotes_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetQuotesUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
@@ -1248,6 +1319,7 @@ func TestGetQuotes_ResolveError(t *testing.T) {
 }
 
 func TestGetQuotes_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{quotesErr: fmt.Errorf("rate limited")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewGetQuotesUseCase(resolver, testLogger())
@@ -1261,6 +1333,7 @@ func TestGetQuotes_BrokerError(t *testing.T) {
 // --- GetOrderTradesUseCase tests ---
 
 func TestGetOrderTrades_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		orderTrades: []broker.Trade{
 			{TradeID: "T1", OrderID: "ORD-1", Tradingsymbol: "INFY", Quantity: 10, Price: 1500.0},
@@ -1280,6 +1353,7 @@ func TestGetOrderTrades_Success(t *testing.T) {
 }
 
 func TestGetOrderTrades_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOrderTradesUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{OrderID: "ORD-1"})
 	require.Error(t, err)
@@ -1287,6 +1361,7 @@ func TestGetOrderTrades_EmptyEmail(t *testing.T) {
 }
 
 func TestGetOrderTrades_EmptyOrderID(t *testing.T) {
+	t.Parallel()
 	uc := NewGetOrderTradesUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{Email: "test@test.com"})
 	require.Error(t, err)
@@ -1294,6 +1369,7 @@ func TestGetOrderTrades_EmptyOrderID(t *testing.T) {
 }
 
 func TestGetOrderTrades_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetOrderTradesUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
@@ -1304,6 +1380,7 @@ func TestGetOrderTrades_ResolveError(t *testing.T) {
 }
 
 func TestGetOrderTrades_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{orderTradesErr: fmt.Errorf("not found")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewGetOrderTradesUseCase(resolver, testLogger())
@@ -1317,6 +1394,7 @@ func TestGetOrderTrades_BrokerError(t *testing.T) {
 // --- GetGTTsUseCase tests ---
 
 func TestGetGTTs_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		gtts: []broker.GTTOrder{
 			{ID: 1, Type: "single", Status: "active"},
@@ -1333,6 +1411,7 @@ func TestGetGTTs_Success(t *testing.T) {
 }
 
 func TestGetGTTs_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewGetGTTsUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{})
 	require.Error(t, err)
@@ -1340,6 +1419,7 @@ func TestGetGTTs_EmptyEmail(t *testing.T) {
 }
 
 func TestGetGTTs_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewGetGTTsUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
@@ -1348,6 +1428,7 @@ func TestGetGTTs_ResolveError(t *testing.T) {
 }
 
 func TestGetGTTs_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{gttsErr: fmt.Errorf("api error")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewGetGTTsUseCase(resolver, testLogger())
@@ -1359,6 +1440,7 @@ func TestGetGTTs_BrokerError(t *testing.T) {
 // --- PlaceGTTUseCase tests ---
 
 func TestPlaceGTT_SingleLeg(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 42}}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
@@ -1380,6 +1462,7 @@ func TestPlaceGTT_SingleLeg(t *testing.T) {
 }
 
 func TestPlaceGTT_TwoLeg(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 43}}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
@@ -1403,6 +1486,7 @@ func TestPlaceGTT_TwoLeg(t *testing.T) {
 }
 
 func TestPlaceGTT_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewPlaceGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
 		Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
@@ -1412,6 +1496,7 @@ func TestPlaceGTT_EmptyEmail(t *testing.T) {
 }
 
 func TestPlaceGTT_EmptyTradingsymbol(t *testing.T) {
+	t.Parallel()
 	uc := NewPlaceGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
 		Email: "test@test.com", Type: "single",
@@ -1421,6 +1506,7 @@ func TestPlaceGTT_EmptyTradingsymbol(t *testing.T) {
 }
 
 func TestPlaceGTT_InvalidType(t *testing.T) {
+	t.Parallel()
 	uc := NewPlaceGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
 		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "triple",
@@ -1430,6 +1516,7 @@ func TestPlaceGTT_InvalidType(t *testing.T) {
 }
 
 func TestPlaceGTT_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
@@ -1440,6 +1527,7 @@ func TestPlaceGTT_ResolveError(t *testing.T) {
 }
 
 func TestPlaceGTT_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{placeGTTErr: fmt.Errorf("insufficient funds")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewPlaceGTTUseCase(resolver, testLogger())
@@ -1453,6 +1541,7 @@ func TestPlaceGTT_BrokerError(t *testing.T) {
 // --- ModifyGTTUseCase tests ---
 
 func TestModifyGTT_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{modifyGTTResp: broker.GTTResponse{TriggerID: 42}}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
@@ -1473,6 +1562,7 @@ func TestModifyGTT_Success(t *testing.T) {
 }
 
 func TestModifyGTT_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewModifyGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
 		TriggerID: 1, Type: "single",
@@ -1482,6 +1572,7 @@ func TestModifyGTT_EmptyEmail(t *testing.T) {
 }
 
 func TestModifyGTT_ZeroTriggerID(t *testing.T) {
+	t.Parallel()
 	uc := NewModifyGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
 		Email: "test@test.com", Type: "single",
@@ -1491,6 +1582,7 @@ func TestModifyGTT_ZeroTriggerID(t *testing.T) {
 }
 
 func TestModifyGTT_InvalidType(t *testing.T) {
+	t.Parallel()
 	uc := NewModifyGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
 		Email: "test@test.com", TriggerID: 1, Type: "invalid",
@@ -1500,6 +1592,7 @@ func TestModifyGTT_InvalidType(t *testing.T) {
 }
 
 func TestModifyGTT_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
@@ -1510,6 +1603,7 @@ func TestModifyGTT_ResolveError(t *testing.T) {
 }
 
 func TestModifyGTT_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{modifyGTTErr: fmt.Errorf("trigger not found")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewModifyGTTUseCase(resolver, testLogger())
@@ -1523,6 +1617,7 @@ func TestModifyGTT_BrokerError(t *testing.T) {
 // --- DeleteGTTUseCase tests ---
 
 func TestDeleteGTT_Success(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{deleteGTTResp: broker.GTTResponse{TriggerID: 42}}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewDeleteGTTUseCase(resolver, testLogger())
@@ -1537,6 +1632,7 @@ func TestDeleteGTT_Success(t *testing.T) {
 }
 
 func TestDeleteGTT_EmptyEmail(t *testing.T) {
+	t.Parallel()
 	uc := NewDeleteGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{TriggerID: 1})
 	require.Error(t, err)
@@ -1544,6 +1640,7 @@ func TestDeleteGTT_EmptyEmail(t *testing.T) {
 }
 
 func TestDeleteGTT_ZeroTriggerID(t *testing.T) {
+	t.Parallel()
 	uc := NewDeleteGTTUseCase(nil, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{Email: "test@test.com"})
 	require.Error(t, err)
@@ -1551,6 +1648,7 @@ func TestDeleteGTT_ZeroTriggerID(t *testing.T) {
 }
 
 func TestDeleteGTT_ResolveError(t *testing.T) {
+	t.Parallel()
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
 	uc := NewDeleteGTTUseCase(resolver, testLogger())
 	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
@@ -1561,6 +1659,7 @@ func TestDeleteGTT_ResolveError(t *testing.T) {
 }
 
 func TestDeleteGTT_BrokerError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{deleteGTTErr: fmt.Errorf("trigger not found")}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewDeleteGTTUseCase(resolver, testLogger())
@@ -1576,6 +1675,7 @@ func TestDeleteGTT_BrokerError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPlaceOrder_WithRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	events := domain.NewEventDispatcher()
@@ -1594,6 +1694,7 @@ func TestPlaceOrder_WithRiskguard(t *testing.T) {
 }
 
 func TestModifyOrder_WithRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		modifyResp: broker.OrderResponse{OrderID: "ORD-42"},
 	}
@@ -1616,6 +1717,7 @@ func TestModifyOrder_WithRiskguard(t *testing.T) {
 }
 
 func TestClosePosition_WithRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1636,6 +1738,7 @@ func TestClosePosition_WithRiskguard(t *testing.T) {
 }
 
 func TestCloseAllPositions_WithRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1658,6 +1761,7 @@ func TestCloseAllPositions_WithRiskguard(t *testing.T) {
 }
 
 func TestCloseAllPositions_WithEvents(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1683,6 +1787,7 @@ func TestCloseAllPositions_WithEvents(t *testing.T) {
 }
 
 func TestClosePosition_WithEvents(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1708,6 +1813,7 @@ func TestClosePosition_WithEvents(t *testing.T) {
 }
 
 func TestGetPortfolio_HoldingsError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	// Override GetHoldings to return error.
 	client.holdings = nil
@@ -1720,6 +1826,7 @@ func TestGetPortfolio_HoldingsError(t *testing.T) {
 }
 
 func TestGetPortfolio_PositionsError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		holdings:     []broker.Holding{{Tradingsymbol: "A"}},
 		positionsErr: fmt.Errorf("positions API down"),
@@ -1733,6 +1840,7 @@ func TestGetPortfolio_PositionsError(t *testing.T) {
 }
 
 func TestGetOrders_GetOrdersError(t *testing.T) {
+	t.Parallel()
 	client := &ordersErrClient{}
 	resolver := &mockBrokerResolver{client: client}
 	uc := NewGetOrdersUseCase(resolver, testLogger())
@@ -1743,6 +1851,7 @@ func TestGetOrders_GetOrdersError(t *testing.T) {
 }
 
 func TestClosePosition_FetchPositionsError(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positionsErr: fmt.Errorf("network timeout"),
 	}
@@ -1755,6 +1864,7 @@ func TestClosePosition_FetchPositionsError(t *testing.T) {
 }
 
 func TestModifyOrder_NoEventsDispatcher(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		modifyResp: broker.OrderResponse{OrderID: "ORD-99"},
 	}
@@ -1769,6 +1879,7 @@ func TestModifyOrder_NoEventsDispatcher(t *testing.T) {
 }
 
 func TestCreateAlert_WithReferencePrice(t *testing.T) {
+	t.Parallel()
 	store := &mockAlertStore{alerts: make(map[string]string)}
 	instruments := &mockInstrumentResolver{token: 738561}
 	uc := NewCreateAlertUseCase(store, instruments, testLogger())
@@ -1786,6 +1897,7 @@ func TestCreateAlert_WithReferencePrice(t *testing.T) {
 }
 
 func TestClosePosition_ExchangeEmptySymbolPresent(t *testing.T) {
+	t.Parallel()
 	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), "test@test.com", "", "RELIANCE", "")
@@ -1794,6 +1906,7 @@ func TestClosePosition_ExchangeEmptySymbolPresent(t *testing.T) {
 }
 
 func TestClosePosition_SymbolEmptyExchangePresent(t *testing.T) {
+	t.Parallel()
 	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
 
 	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "", "")
@@ -1802,6 +1915,7 @@ func TestClosePosition_SymbolEmptyExchangePresent(t *testing.T) {
 }
 
 func TestCloseAllPositions_EmptyProductFilter(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1844,6 +1958,7 @@ func newFrozenGuard(t *testing.T) *riskguard.Guard {
 }
 
 func TestPlaceOrder_BlockedByRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	events := domain.NewEventDispatcher()
@@ -1866,6 +1981,7 @@ func TestPlaceOrder_BlockedByRiskguard(t *testing.T) {
 }
 
 func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	guard := newFrozenGuard(t)
@@ -1880,6 +1996,7 @@ func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
 }
 
 func TestModifyOrder_BlockedByRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	events := domain.NewEventDispatcher()
@@ -1904,6 +2021,7 @@ func TestModifyOrder_BlockedByRiskguard(t *testing.T) {
 }
 
 func TestModifyOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{}
 	resolver := &mockBrokerResolver{client: client}
 	guard := newFrozenGuard(t)
@@ -1919,6 +2037,7 @@ func TestModifyOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
 }
 
 func TestClosePosition_BlockedByRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1945,6 +2064,7 @@ func TestClosePosition_BlockedByRiskguard(t *testing.T) {
 }
 
 func TestClosePosition_BlockedByRiskguard_NoEvents(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{
@@ -1963,6 +2083,7 @@ func TestClosePosition_BlockedByRiskguard_NoEvents(t *testing.T) {
 }
 
 func TestCloseAllPositions_BlockedByRiskguard(t *testing.T) {
+	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{
 			Net: []broker.Position{

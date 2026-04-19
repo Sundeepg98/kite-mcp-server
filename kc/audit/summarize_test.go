@@ -9,6 +9,7 @@ import (
 )
 
 func TestSummarizeInput_PlaceOrder(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"transaction_type": "BUY",
 		"quantity":         10,
@@ -22,6 +23,7 @@ func TestSummarizeInput_PlaceOrder(t *testing.T) {
 }
 
 func TestSummarizeInput_ModifyOrder(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"transaction_type": "SELL",
 		"quantity":         5,
@@ -35,6 +37,7 @@ func TestSummarizeInput_ModifyOrder(t *testing.T) {
 }
 
 func TestSummarizeInput_CancelOrder(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"variety":  "regular",
 		"order_id": "220101000012345",
@@ -44,6 +47,7 @@ func TestSummarizeInput_CancelOrder(t *testing.T) {
 }
 
 func TestSummarizeInput_CancelOrderDefaultVariety(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"order_id": "220101000012345",
 	}
@@ -52,6 +56,7 @@ func TestSummarizeInput_CancelOrderDefaultVariety(t *testing.T) {
 }
 
 func TestSummarizeInput_PlaceGTTOrder(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"transaction_type": "BUY",
 		"tradingsymbol":    "RELIANCE",
@@ -63,6 +68,7 @@ func TestSummarizeInput_PlaceGTTOrder(t *testing.T) {
 }
 
 func TestSummarizeInput_DeleteGTTOrder(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"trigger_id": "123456",
 	}
@@ -71,6 +77,7 @@ func TestSummarizeInput_DeleteGTTOrder(t *testing.T) {
 }
 
 func TestSummarizeInput_GetLTP(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instruments": "NSE:RELIANCE,NSE:INFY",
 	}
@@ -79,6 +86,7 @@ func TestSummarizeInput_GetLTP(t *testing.T) {
 }
 
 func TestSummarizeInput_GetOHLC(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instruments": "NSE:RELIANCE",
 	}
@@ -87,6 +95,7 @@ func TestSummarizeInput_GetOHLC(t *testing.T) {
 }
 
 func TestSummarizeInput_GetQuotes(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instruments": "NSE:RELIANCE",
 	}
@@ -95,6 +104,7 @@ func TestSummarizeInput_GetQuotes(t *testing.T) {
 }
 
 func TestSummarizeInput_SetAlert(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instrument_id": "NSE:RELIANCE",
 		"direction":     "above",
@@ -105,6 +115,7 @@ func TestSummarizeInput_SetAlert(t *testing.T) {
 }
 
 func TestSummarizeInput_SetAlertNoExchange(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instrument_id": "RELIANCE",
 		"direction":     "below",
@@ -115,6 +126,7 @@ func TestSummarizeInput_SetAlertNoExchange(t *testing.T) {
 }
 
 func TestSummarizeInput_DeleteAlert(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"alert_id": "abc123",
 	}
@@ -123,6 +135,7 @@ func TestSummarizeInput_DeleteAlert(t *testing.T) {
 }
 
 func TestSummarizeInput_SearchInstruments(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"query": "RELIANCE",
 	}
@@ -131,6 +144,7 @@ func TestSummarizeInput_SearchInstruments(t *testing.T) {
 }
 
 func TestSummarizeInput_GetHistoricalData(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instrument_id": "NSE:RELIANCE",
 		"interval":      "5minute",
@@ -142,6 +156,7 @@ func TestSummarizeInput_GetHistoricalData(t *testing.T) {
 }
 
 func TestSummarizeInput_StartTicker(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"email": "user@example.com",
 	}
@@ -150,6 +165,7 @@ func TestSummarizeInput_StartTicker(t *testing.T) {
 }
 
 func TestSummarizeInput_StopTicker(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"email": "user@example.com",
 	}
@@ -158,6 +174,7 @@ func TestSummarizeInput_StopTicker(t *testing.T) {
 }
 
 func TestSummarizeInput_SubscribeInstruments(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"instruments": "NSE:RELIANCE,NSE:INFY",
 	}
@@ -166,6 +183,7 @@ func TestSummarizeInput_SubscribeInstruments(t *testing.T) {
 }
 
 func TestSummarizeInput_SetupTelegram(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"chat_id": "12345",
 	}
@@ -174,6 +192,7 @@ func TestSummarizeInput_SetupTelegram(t *testing.T) {
 }
 
 func TestSummarizeInput_GetOrderHistory(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"order_id": "220101000012345",
 	}
@@ -182,6 +201,7 @@ func TestSummarizeInput_GetOrderHistory(t *testing.T) {
 }
 
 func TestSummarizeInput_GetOrderTrades(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"order_id": "220101000012345",
 	}
@@ -190,6 +210,7 @@ func TestSummarizeInput_GetOrderTrades(t *testing.T) {
 }
 
 func TestSummarizeInput_NoParams(t *testing.T) {
+	t.Parallel()
 	result := SummarizeInput("any_tool", nil)
 	assert.Equal(t, "(no params)", result)
 
@@ -198,6 +219,7 @@ func TestSummarizeInput_NoParams(t *testing.T) {
 }
 
 func TestSummarizeInput_DefaultTool(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"alpha": "one",
 		"beta":  "two",
@@ -207,6 +229,7 @@ func TestSummarizeInput_DefaultTool(t *testing.T) {
 }
 
 func TestSummarizeInput_DefaultToolManyParams(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"alpha":   "one",
 		"beta":    "two",
@@ -221,18 +244,21 @@ func TestSummarizeInput_DefaultToolManyParams(t *testing.T) {
 }
 
 func TestSummarizeOutput_Success(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText(`{"status":"ok","data":[1,2,3]}`)
 	summary := SummarizeOutput("any_tool", result)
 	assert.Equal(t, `{"status":"ok","data":[1,2,3]}`, summary)
 }
 
 func TestSummarizeOutput_Error(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultError("something went wrong")
 	summary := SummarizeOutput("any_tool", result)
 	assert.Equal(t, "ERROR: something went wrong", summary)
 }
 
 func TestSummarizeOutput_ErrorTruncated(t *testing.T) {
+	t.Parallel()
 	longMsg := strings.Repeat("x", 300)
 	result := gomcp.NewToolResultError(longMsg)
 	summary := SummarizeOutput("any_tool", result)
@@ -242,11 +268,13 @@ func TestSummarizeOutput_ErrorTruncated(t *testing.T) {
 }
 
 func TestSummarizeOutput_Nil(t *testing.T) {
+	t.Parallel()
 	summary := SummarizeOutput("any_tool", nil)
 	assert.Equal(t, "(no result)", summary)
 }
 
 func TestSummarizeOutput_EmptyContent(t *testing.T) {
+	t.Parallel()
 	result := &gomcp.CallToolResult{
 		Content: []gomcp.Content{},
 	}
@@ -255,6 +283,7 @@ func TestSummarizeOutput_EmptyContent(t *testing.T) {
 }
 
 func TestSummarizeOutput_SuccessTruncated(t *testing.T) {
+	t.Parallel()
 	longText := strings.Repeat("a", 300)
 	result := gomcp.NewToolResultText(longText)
 	summary := SummarizeOutput("any_tool", result)
@@ -265,6 +294,7 @@ func TestSummarizeOutput_SuccessTruncated(t *testing.T) {
 // --- Per-tool output summarizer tests ---
 
 func TestSummarizeOutput_Holdings(t *testing.T) {
+	t.Parallel()
 	holdingsJSON := `{"data":[
 		{"tradingsymbol":"RELIANCE","average_price":2500,"quantity":10,"last_price":2600},
 		{"tradingsymbol":"INFY","average_price":1500,"quantity":20,"last_price":1400}
@@ -277,18 +307,21 @@ func TestSummarizeOutput_Holdings(t *testing.T) {
 }
 
 func TestSummarizeOutput_HoldingsEmpty(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText(`{"data":[],"pagination":{"total":0}}`)
 	summary := SummarizeOutput("get_holdings", result)
 	assert.Equal(t, "No holdings", summary)
 }
 
 func TestSummarizeOutput_HoldingsInvalidJSON(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText("not json at all")
 	summary := SummarizeOutput("get_holdings", result)
 	assert.Equal(t, "not json at all", summary)
 }
 
 func TestSummarizeOutput_Positions(t *testing.T) {
+	t.Parallel()
 	posJSON := `{"data":[
 		{"tradingsymbol":"RELIANCE","pnl":1250.50},
 		{"tradingsymbol":"INFY","pnl":-500}
@@ -300,12 +333,14 @@ func TestSummarizeOutput_Positions(t *testing.T) {
 }
 
 func TestSummarizeOutput_PositionsEmpty(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText(`{"data":[]}`)
 	summary := SummarizeOutput("get_positions", result)
 	assert.Equal(t, "No positions", summary)
 }
 
 func TestSummarizeOutput_Orders(t *testing.T) {
+	t.Parallel()
 	ordersJSON := `{"data":[
 		{"order_id":"1","status":"COMPLETE"},
 		{"order_id":"2","status":"COMPLETE"},
@@ -321,6 +356,7 @@ func TestSummarizeOutput_Orders(t *testing.T) {
 }
 
 func TestSummarizeOutput_Profile(t *testing.T) {
+	t.Parallel()
 	profileJSON := `{"data":{"user_id":"CQP281","user_name":"Sundeep","email":"sundeepg8@gmail.com","pan":"ABCDE1234F"}}`
 	result := gomcp.NewToolResultText(profileJSON)
 	summary := SummarizeOutput("get_profile", result)
@@ -332,18 +368,21 @@ func TestSummarizeOutput_Profile(t *testing.T) {
 }
 
 func TestSummarizeOutput_PlaceOrderResult(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText(`{"data":{"order_id":"220101000012345"}}`)
 	summary := SummarizeOutput("place_order", result)
 	assert.Equal(t, "Order ID: 220101000012345", summary)
 }
 
 func TestSummarizeOutput_PlaceOrderResultTopLevel(t *testing.T) {
+	t.Parallel()
 	result := gomcp.NewToolResultText(`{"order_id":"99999"}`)
 	summary := SummarizeOutput("place_order", result)
 	assert.Equal(t, "Order ID: 99999", summary)
 }
 
 func TestSummarizeOutput_LTP(t *testing.T) {
+	t.Parallel()
 	ltpJSON := `{"data":{"NSE:RELIANCE":{"last_price":2600},"NSE:INFY":{"last_price":1400}}}`
 	result := gomcp.NewToolResultText(ltpJSON)
 	summary := SummarizeOutput("get_ltp", result)
@@ -353,6 +392,7 @@ func TestSummarizeOutput_LTP(t *testing.T) {
 }
 
 func TestSummarizeOutput_Margins(t *testing.T) {
+	t.Parallel()
 	marginsJSON := `{"data":{"equity":{"available":125000},"commodity":{"available":50000}}}`
 	result := gomcp.NewToolResultText(marginsJSON)
 	summary := SummarizeOutput("get_margins", result)
@@ -361,6 +401,7 @@ func TestSummarizeOutput_Margins(t *testing.T) {
 }
 
 func TestSummarizeOutput_Search(t *testing.T) {
+	t.Parallel()
 	searchJSON := `{"data":[{"instrument_token":1},{"instrument_token":2},{"instrument_token":3}]}`
 	result := gomcp.NewToolResultText(searchJSON)
 	summary := SummarizeOutput("search_instruments", result)
@@ -368,6 +409,7 @@ func TestSummarizeOutput_Search(t *testing.T) {
 }
 
 func TestFormatRupee(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "\u20b9500", formatRupee(500))
 	assert.Equal(t, "\u20b925K", formatRupee(25000))
 	assert.Equal(t, "\u20b91.2L", formatRupee(120000))
@@ -377,6 +419,7 @@ func TestFormatRupee(t *testing.T) {
 }
 
 func TestExtractDataArray(t *testing.T) {
+	t.Parallel()
 	// Paginated format
 	arr := extractDataArray(`{"data":[1,2,3],"pagination":{"total":3}}`)
 	assert.Len(t, arr, 3)
@@ -395,6 +438,7 @@ func TestExtractDataArray(t *testing.T) {
 }
 
 func TestJSONFloat(t *testing.T) {
+	t.Parallel()
 	m := map[string]any{
 		"f":   3.14,
 		"i":   float64(42),
@@ -409,6 +453,7 @@ func TestJSONFloat(t *testing.T) {
 }
 
 func TestJSONString(t *testing.T) {
+	t.Parallel()
 	m := map[string]any{
 		"str": "hello",
 		"num": 42,
@@ -421,11 +466,13 @@ func TestJSONString(t *testing.T) {
 }
 
 func TestExtractText_NilResult(t *testing.T) {
+	t.Parallel()
 	text := extractText(nil)
 	assert.Equal(t, "", text)
 }
 
 func TestExtractText_NoTextContent(t *testing.T) {
+	t.Parallel()
 	result := &gomcp.CallToolResult{
 		Content: []gomcp.Content{
 			gomcp.ImageContent{
@@ -440,6 +487,7 @@ func TestExtractText_NoTextContent(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "hello", truncate("hello", 10))
 	assert.Equal(t, "hello", truncate("hello", 5))
 	assert.Equal(t, "he...", truncate("hello world", 5))
@@ -447,11 +495,13 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestNonEmpty(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, []string{"a", "b"}, nonEmpty([]string{"a", "", "b", ""}))
 	assert.Equal(t, []string{}, nonEmpty([]string{"", ""}))
 }
 
 func TestStrVal(t *testing.T) {
+	t.Parallel()
 	args := map[string]any{
 		"str":    "hello",
 		"num":    42,
@@ -472,6 +522,7 @@ func TestStrVal(t *testing.T) {
 // ===========================================================================
 
 func TestSanitizeForLog(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, `foo\nbar`, sanitizeForLog("foo\nbar"))
 	assert.Equal(t, `foo\rbar`, sanitizeForLog("foo\rbar"))
 	assert.Equal(t, `foo\tbar`, sanitizeForLog("foo\tbar"))
@@ -487,6 +538,7 @@ func TestSanitizeForLog(t *testing.T) {
 }
 
 func TestStrVal_SanitizesNewlines(t *testing.T) {
+	t.Parallel()
 	// Attacker-controlled watchlist name: attempt to inject a fake row.
 	args := map[string]any{
 		"name": "foo\nFAKE LOG: admin_change_role target=victim@test.com",
@@ -498,6 +550,7 @@ func TestStrVal_SanitizesNewlines(t *testing.T) {
 }
 
 func TestSummarizeInput_CreateWatchlist_InjectionAttempt(t *testing.T) {
+	t.Parallel()
 	// End-to-end: injected newline in watchlist name must not appear raw
 	// in the rendered summary — otherwise an attacker could forge rows in
 	// the activity audit widget.
@@ -510,6 +563,7 @@ func TestSummarizeInput_CreateWatchlist_InjectionAttempt(t *testing.T) {
 }
 
 func TestSummarizeInput_AddToWatchlist_InjectionAttempt(t *testing.T) {
+	t.Parallel()
 	// instruments and watchlist are both user-controlled string fields.
 	args := map[string]any{
 		"watchlist":  "main\nFAKE",
@@ -520,6 +574,7 @@ func TestSummarizeInput_AddToWatchlist_InjectionAttempt(t *testing.T) {
 }
 
 func TestJSONString_SanitizesNewlines(t *testing.T) {
+	t.Parallel()
 	m := map[string]any{"status": "open\nINJECTED"}
 	out := jsonString(m, "status")
 	assert.NotContains(t, out, "\n")

@@ -18,6 +18,7 @@ import (
 // port — and use it as a positive wiring signal. Any earlier failure
 // (missing handler, wrong type, nil port) would produce a different error.
 func TestCommandBus_Login_ReachesManagerPort(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -43,6 +44,7 @@ func TestCommandBus_Login_ReachesManagerPort(t *testing.T) {
 // Manager port, so this test proves the handler returns use case errors
 // verbatim (no swallowing, no wrapping).
 func TestCommandBus_Login_MissingSessionID(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)
@@ -64,6 +66,7 @@ func TestCommandBus_Login_MissingSessionID(t *testing.T) {
 // command travels through the handler without pre-validation that could
 // mask this check.
 func TestCommandBus_Login_InvalidAPIKey(t *testing.T) {
+	t.Parallel()
 	mgr, err := newTestManager("test_key", "test_secret")
 	if err != nil {
 		t.Fatalf("newTestManager: %v", err)

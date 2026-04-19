@@ -15,18 +15,21 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestNewMockKiteServer(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	assert.NotNil(t, srv)
 	assert.NotEmpty(t, srv.URL())
 }
 
 func TestMockKiteServer_Client(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	kc := srv.Client("test_key", "test_token")
 	assert.NotNil(t, kc)
 }
 
 func TestMockKiteServer_ProfileEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/user/profile")
 
@@ -41,6 +44,7 @@ func TestMockKiteServer_ProfileEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_HoldingsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/portfolio/holdings")
 
@@ -54,6 +58,7 @@ func TestMockKiteServer_HoldingsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_PositionsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/portfolio/positions")
 
@@ -68,6 +73,7 @@ func TestMockKiteServer_PositionsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_OrdersEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/orders")
 
@@ -81,6 +87,7 @@ func TestMockKiteServer_OrdersEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_TradesEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/trades")
 
@@ -90,6 +97,7 @@ func TestMockKiteServer_TradesEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_QuoteEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	// The SDK routes GetLTP/GetOHLC/GetQuotes all through /quote.
 	body := httpGet(t, srv.URL()+"/quote")
@@ -107,6 +115,7 @@ func TestMockKiteServer_QuoteEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_QuoteLTPAlias(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	// /quote/ltp is an alias for /quote, for direct HTTP testing convenience.
 	body := httpGet(t, srv.URL()+"/quote/ltp")
@@ -117,6 +126,7 @@ func TestMockKiteServer_QuoteLTPAlias(t *testing.T) {
 }
 
 func TestMockKiteServer_QuoteOHLCAlias(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/quote/ohlc")
 
@@ -126,6 +136,7 @@ func TestMockKiteServer_QuoteOHLCAlias(t *testing.T) {
 }
 
 func TestMockKiteServer_TriggerRangeEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/instruments/NSE/INFY/trigger_range")
 
@@ -135,6 +146,7 @@ func TestMockKiteServer_TriggerRangeEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_MFOrdersEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/mf/orders")
 
@@ -144,6 +156,7 @@ func TestMockKiteServer_MFOrdersEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_MFSIPsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/mf/sips")
 
@@ -153,6 +166,7 @@ func TestMockKiteServer_MFSIPsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_MFHoldingsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/mf/holdings")
 
@@ -162,6 +176,7 @@ func TestMockKiteServer_MFHoldingsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_MarginsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/user/margins")
 
@@ -176,6 +191,7 @@ func TestMockKiteServer_MarginsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_OrderMarginsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/margins/orders")
 
@@ -185,6 +201,7 @@ func TestMockKiteServer_OrderMarginsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_BasketMarginsEndpoint(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	body := httpGet(t, srv.URL()+"/margins/basket")
 
@@ -194,6 +211,7 @@ func TestMockKiteServer_BasketMarginsEndpoint(t *testing.T) {
 }
 
 func TestMockKiteServer_InstrumentsCSV(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	resp, err := http.Get(srv.URL() + "/instruments")
 	require.NoError(t, err)
@@ -203,6 +221,7 @@ func TestMockKiteServer_InstrumentsCSV(t *testing.T) {
 }
 
 func TestMockKiteServer_SetProfile(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	custom := map[string]any{"user_id": "XY9999", "email": "custom@test.com"}
 	srv.SetProfile(custom)
@@ -217,6 +236,7 @@ func TestMockKiteServer_SetProfile(t *testing.T) {
 }
 
 func TestMockKiteServer_SetHoldings(t *testing.T) {
+	t.Parallel()
 	srv := NewMockKiteServer(t)
 	srv.SetHoldings([]map[string]any{})
 
@@ -234,6 +254,7 @@ func TestMockKiteServer_SetHoldings(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDiscardLogger(t *testing.T) {
+	t.Parallel()
 	logger := DiscardLogger()
 	assert.NotNil(t, logger)
 }
@@ -243,6 +264,7 @@ func TestDiscardLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewSessionKiteServer_ProfileRoute(t *testing.T) {
+	t.Parallel()
 	srv := NewSessionKiteServer(t)
 	body := httpGet(t, srv.URL+"/user/profile")
 
@@ -252,6 +274,7 @@ func TestNewSessionKiteServer_ProfileRoute(t *testing.T) {
 }
 
 func TestNewSessionKiteServer_SessionTokenPOST(t *testing.T) {
+	t.Parallel()
 	srv := NewSessionKiteServer(t)
 	resp, err := http.Post(srv.URL+"/session/token", "application/x-www-form-urlencoded", nil)
 	require.NoError(t, err)
@@ -271,6 +294,7 @@ func TestNewSessionKiteServer_SessionTokenPOST(t *testing.T) {
 }
 
 func TestNewSessionKiteServer_SessionTokenDELETE(t *testing.T) {
+	t.Parallel()
 	srv := NewSessionKiteServer(t)
 	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/session/token", nil)
 	require.NoError(t, err)

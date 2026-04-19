@@ -46,6 +46,7 @@ func testEngine(t *testing.T, prices map[string]float64) *PaperEngine {
 const testEmail = "test@example.com"
 
 func TestEnableDisable(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, nil)
 
 	// Not enabled initially.
@@ -73,6 +74,7 @@ func TestEnableDisable(t *testing.T) {
 }
 
 func TestPlaceMarketOrder(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:RELIANCE": 2500.0,
 	})
@@ -104,6 +106,7 @@ func TestPlaceMarketOrder(t *testing.T) {
 }
 
 func TestPlaceLimitOrder(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:INFY": 1500.0,
 	})
@@ -137,6 +140,7 @@ func TestPlaceLimitOrder(t *testing.T) {
 }
 
 func TestCancelOrder(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:TCS": 3500.0,
 	})
@@ -168,6 +172,7 @@ func TestCancelOrder(t *testing.T) {
 }
 
 func TestInsufficientCash(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:RELIANCE": 2500.0,
 	})
@@ -192,6 +197,7 @@ func TestInsufficientCash(t *testing.T) {
 }
 
 func TestSellOrder(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:SBIN": 800.0,
 	})
@@ -237,6 +243,7 @@ func TestSellOrder(t *testing.T) {
 }
 
 func TestGetHoldings(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:HDFC": 1600.0,
 	})
@@ -263,6 +270,7 @@ func TestGetHoldings(t *testing.T) {
 }
 
 func TestGetPositions(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:ITC": 450.0,
 	})
@@ -290,6 +298,7 @@ func TestGetPositions(t *testing.T) {
 }
 
 func TestGetMargins(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:WIPRO": 500.0,
 	})
@@ -317,6 +326,7 @@ func TestGetMargins(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:RELIANCE": 2500.0,
 	})
@@ -361,6 +371,7 @@ func TestReset(t *testing.T) {
 // ===========================================================================
 
 func TestStatus_NotEnabled(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, nil)
 
 	status, err := engine.Status(testEmail)
@@ -370,6 +381,7 @@ func TestStatus_NotEnabled(t *testing.T) {
 }
 
 func TestStatus_Enabled(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, nil)
 	require.NoError(t, engine.Enable(testEmail, 500_000))
 
@@ -384,6 +396,7 @@ func TestStatus_Enabled(t *testing.T) {
 }
 
 func TestStatus_WithOpenOrders(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, nil)
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -405,6 +418,7 @@ func TestStatus_WithOpenOrders(t *testing.T) {
 }
 
 func TestGetMargins_NoAccount(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, nil)
 
 	_, err := engine.GetMargins(testEmail)
@@ -413,6 +427,7 @@ func TestGetMargins_NoAccount(t *testing.T) {
 }
 
 func TestGetMargins_Enabled(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:RELIANCE": 2500.0,
 	})
@@ -435,6 +450,7 @@ func TestGetMargins_Enabled(t *testing.T) {
 }
 
 func TestMonitor_FillLimitOrder(t *testing.T) {
+	t.Parallel()
 	// Set initial LTP high so BUY LIMIT stays OPEN at placement.
 	engine := testEngine(t, map[string]float64{"NSE:SBIN": 700.0})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
@@ -480,6 +496,7 @@ func TestMonitor_FillLimitOrder(t *testing.T) {
 }
 
 func TestMonitor_FillSellLimitOrder(t *testing.T) {
+	t.Parallel()
 	// Start with prices for BUY MARKET fill.
 	prices := map[string]float64{"NSE:TCS": 3500.0}
 	engine := testEngine(t, prices)
@@ -523,6 +540,7 @@ func TestMonitor_FillSellLimitOrder(t *testing.T) {
 }
 
 func TestMonitor_InsufficientCashReject(t *testing.T) {
+	t.Parallel()
 	// Set LTP high initially so the BUY LIMIT at 2600 stays OPEN
 	// (price 2600 < ltp 3000 → not marketable).
 	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 3000.0})
@@ -562,6 +580,7 @@ func TestMonitor_InsufficientCashReject(t *testing.T) {
 }
 
 func TestResetAccount(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{"NSE:INFY": 1500.0})
 	require.NoError(t, engine.Enable(testEmail, 1_000_000))
 
@@ -595,6 +614,7 @@ func TestResetAccount(t *testing.T) {
 // trades surface in /dashboard/activity, the event-sourcing projection, and
 // the domain_events audit table alongside live trades.
 func TestPlaceOrder_DispatchesDomainEvents(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:RELIANCE": 2500.0,
 	})
@@ -656,6 +676,7 @@ func TestPlaceOrder_DispatchesDomainEvents(t *testing.T) {
 // paper trading must continue working identically for callers (tests, CLI)
 // that never wire a dispatcher.
 func TestPlaceOrder_NoDispatcher_Safe(t *testing.T) {
+	t.Parallel()
 	engine := testEngine(t, map[string]float64{
 		"NSE:INFY": 1500.0,
 	})

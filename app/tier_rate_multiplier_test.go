@@ -7,6 +7,7 @@ import (
 )
 
 func TestTierRateMultiplier(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		tier billing.Tier
