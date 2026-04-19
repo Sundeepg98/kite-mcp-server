@@ -31,6 +31,11 @@ type Clock func() time.Time
 type Scheduler struct {
 	mu           sync.Mutex
 	tasks        []Task
+	// providers are plugin-registered sources of additional tasks. Their
+	// Tasks() method is invoked exactly once by Start, before the tick
+	// goroutine launches. See provider.go for the full contract and
+	// rationale for one-shot (not per-tick) collection.
+	providers    []TaskProvider
 	lastRun      map[string]string // task name -> "2006-01-02" of last execution
 	done         chan struct{}
 	logger       *slog.Logger
@@ -63,7 +68,14 @@ func (s *Scheduler) Add(task Task) {
 }
 
 // Start launches a background goroutine that ticks every minute.
+//
+// Before the goroutine launches, every registered TaskProvider is
+// consulted via Tasks() and its returned tasks are appended to the
+// scheduler's task list. This is the single collection point for
+// plugin-contributed schedules — Tasks() is NOT called again until
+// the scheduler is stopped and a new one is constructed.
 func (s *Scheduler) Start() {
+	s.collectProviderTasks()
 	go s.loop()
 }
 
