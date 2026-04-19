@@ -109,6 +109,13 @@ type BotHandler struct {
 	// initializes to true so local-dev tests and older call sites
 	// retain the trading-on behaviour they relied on before Path 2.
 	tradingEnabled bool
+
+	// pluginCmds holds plugin-registered /commands (see
+	// plugin_commands.go). Lazily initialised by ensurePluginRegistry
+	// on first RegisterCommand call — keeps the zero BotHandler valid
+	// for the common case of no plugins.
+	pluginCmds         *pluginCommandRegistry
+	pluginRegistryOnce sync.Once
 }
 
 // NewBotHandler creates a new BotHandler and starts a background goroutine
@@ -339,6 +346,24 @@ func (h *BotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/setalert":
 		reply = h.handleSetAlert(chatID, email, args)
 	default:
+		// Plugin-registered commands are consulted AFTER every built-in.
+		// Built-ins always win (see reservedCommands in plugin_commands.go)
+		// so a malicious plugin cannot hijack /buy, /price, etc. We only
+		// reach this branch when the command matches no built-in, so a
+		// plugin lookup here is safe.
+		if fn, ok := h.lookupPluginCommand(cmd); ok {
+			reply = h.dispatchPluginCommand(fn, PluginCommandContext{
+				ChatID: chatID,
+				Email:  email,
+				Args:   args,
+			})
+			// Treat plugin replies as non-meta by default so the shared
+			// disclaimer banner attaches — plugin output is often
+			// financial-adjacent, and erring on the side of appending
+			// the legal boilerplate is safer than stripping it.
+			isMeta = false
+			break
+		}
 		reply = fmt.Sprintf("Unknown command: <code>%s</code>\nType /help for available commands.", escapeHTML(cmd))
 		isMeta = true
 	}
