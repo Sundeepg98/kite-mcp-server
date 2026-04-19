@@ -2,9 +2,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 
 	"github.com/zerodha/kite-mcp-server/app"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
@@ -69,6 +71,20 @@ func main() {
 
 	// Set the server version
 	application.SetVersion(MCP_SERVER_VERSION)
+
+	// Wire SIGUSR2 graceful-restart (unix) / stub (windows). Safe to
+	// call unconditionally: the windows stub is a no-op logger.
+	// The listener auto-exits when the ctx is cancelled (never in
+	// practice — main blocks on RunServer; process exit cancels the
+	// listener goroutine indirectly via OS teardown).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var activeRequests atomic.Int32
+	app.StartGracefulRestartListener(ctx,
+		app.GracefulRestartConfig{}.WithDefaults(),
+		&activeRequests,
+		logger,
+		func() { application.TriggerShutdown() })
 
 	// Run the server (blocks until shutdown)
 	logger.Info("Starting Kite MCP Server...", "version", MCP_SERVER_VERSION, "build", buildString)

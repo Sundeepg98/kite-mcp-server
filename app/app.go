@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
@@ -66,6 +68,44 @@ type App struct {
 	// exit. nil when the goroutine was never started (no alert DB). Cancel
 	// is idempotent — calling it twice is a no-op.
 	invitationCleanupCancel context.CancelFunc
+	// shutdownOnce guards the one-shot close of shutdownCh performed by
+	// TriggerShutdown. Multiple SIGUSR2 in quick succession, or a
+	// SIGUSR2 racing with the normal SIGTERM path, must NOT panic
+	// with "close of closed channel".
+	shutdownOnce sync.Once
+}
+
+// TriggerShutdown initiates a graceful shutdown without requiring an
+// OS signal. Used by the graceful-restart handler: once the child
+// process signals ready, the parent calls TriggerShutdown to hand
+// off new traffic and drain in-flight handlers. Safe to call
+// multiple times — only the first call closes the channel.
+//
+// If shutdownCh is nil (the default production path uses
+// signal.NotifyContext instead of an injectable channel), this
+// method lazily creates the channel AND wires it into the next
+// setupGracefulShutdown call. That path is racy if setupGracefulShutdown
+// has already started its goroutine with signal.NotifyContext —
+// future callers who need guaranteed trigger semantics should call
+// SetShutdownChannel(ch) before RunServer(). For the graceful-
+// restart use case this race is acceptable: the parent process
+// reacts to SIGUSR2 AFTER its http.Server is serving, so the
+// shutdown goroutine is already running under signal.NotifyContext
+// and TriggerShutdown's fallback (send SIGTERM to self) is the
+// right behaviour.
+func (app *App) TriggerShutdown() {
+	app.shutdownOnce.Do(func() {
+		if app.shutdownCh != nil {
+			close(app.shutdownCh)
+			return
+		}
+		// No injectable channel — fall back to sending SIGTERM to
+		// ourselves, which the signal.NotifyContext in
+		// setupGracefulShutdown is already listening for.
+		if p, err := os.FindProcess(os.Getpid()); err == nil {
+			_ = p.Signal(syscall.SIGTERM)
+		}
+	})
 }
 
 // StatusPageData holds template data for the status page
