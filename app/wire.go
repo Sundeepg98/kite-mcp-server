@@ -30,19 +30,26 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		return nil, nil, fmt.Errorf("environment validation failed: %w", err)
 	}
 	app.logger.Info("Creating Kite Connect manager...")
+	// INSTRUMENTS_SKIP_FETCH=true is a test-only seam that causes the
+	// instruments manager to load an empty map instead of fetching
+	// api.kite.trade/instruments.json at startup. Used by newTestApp(t)
+	// to isolate the test suite from external API rate limits. Never set
+	// in production.
+	skipInstrumentsFetch := strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true")
 	kcManager, err := kc.New(kc.Config{
-		APIKey:           app.Config.KiteAPIKey,
-		APISecret:        app.Config.KiteAPISecret,
-		AccessToken:      app.Config.KiteAccessToken,
-		Logger:           app.logger,
-		Metrics:          app.metrics,
-		TelegramBotToken: app.Config.TelegramBotToken,
-		AlertDBPath:      app.Config.AlertDBPath,
-		AppMode:          app.Config.AppMode,
-		ExternalURL:      app.Config.ExternalURL,
-		AdminSecretPath:  app.Config.AdminSecretPath,
-		EncryptionSecret: app.Config.OAuthJWTSecret,
-		DevMode:          app.DevMode,
+		APIKey:               app.Config.KiteAPIKey,
+		APISecret:            app.Config.KiteAPISecret,
+		AccessToken:          app.Config.KiteAccessToken,
+		Logger:               app.logger,
+		Metrics:              app.metrics,
+		TelegramBotToken:     app.Config.TelegramBotToken,
+		AlertDBPath:          app.Config.AlertDBPath,
+		AppMode:              app.Config.AppMode,
+		ExternalURL:          app.Config.ExternalURL,
+		AdminSecretPath:      app.Config.AdminSecretPath,
+		EncryptionSecret:     app.Config.OAuthJWTSecret,
+		DevMode:              app.DevMode,
+		InstrumentsSkipFetch: skipInstrumentsFetch,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)

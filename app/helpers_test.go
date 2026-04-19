@@ -28,10 +28,18 @@ func testLogger() *slog.Logger {
 // created in NewApp itself). Tests that additionally call initializeServices
 // must still invoke cleanupInitializeServices for the services started there.
 //
+// Also sets INSTRUMENTS_SKIP_FETCH=true so that tests which subsequently call
+// initializeServices do not hit api.kite.trade/instruments.json. This keeps
+// the full wiring exercised but removes the external-API dependency that
+// caused CI timeouts under Kite rate-limiting. Integration tests that want
+// to exercise the real fetch should NOT use this helper — see
+// integration_kite_api_test.go, gated by -tags integration.
+//
 // Preferred over `NewApp(testLogger())` for new tests — catches leaks by
 // default.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
+	t.Setenv("INSTRUMENTS_SKIP_FETCH", "true")
 	app := NewApp(testLogger())
 	t.Cleanup(func() {
 		if app.metrics != nil {
