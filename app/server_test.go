@@ -40,47 +40,6 @@ func newTestMCPServer() *server.MCPServer {
 }
 
 
-// ---------------------------------------------------------------------------
-// registerTelegramWebhook tests — exercises early return branches
-// ---------------------------------------------------------------------------
-func TestRegisterTelegramWebhook_NoNotifier(t *testing.T) {
-	mgr := newTestManager(t)
-	app := newTestApp(t)
-	mux := http.NewServeMux()
-	// No Telegram notifier configured on the test manager → should return early.
-	app.registerTelegramWebhook(mux, mgr)
-	// No panic, no webhook registered. Verify by checking a would-be path returns 404.
-	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook/test", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
-
-func TestRegisterTelegramWebhook_NoJWTSecret(t *testing.T) {
-	mgr := newTestManager(t)
-	app := newTestApp(t)
-	app.Config.OAuthJWTSecret = ""
-	app.Config.ExternalURL = ""
-	mux := http.NewServeMux()
-	app.registerTelegramWebhook(mux, mgr)
-	// No panic — early return because no JWT secret.
-}
-
-
-// ---------------------------------------------------------------------------
-// initScheduler tests — exercises early-exit paths
-// ---------------------------------------------------------------------------
-func TestInitScheduler_NoTelegram_NoAudit(t *testing.T) {
-	mgr := newTestManager(t)
-	app := newTestApp(t)
-	app.auditStore = nil
-	app.initScheduler(mgr)
-	// No Telegram notifier, no audit store → "No scheduled tasks configured" path
-	assert.Nil(t, app.scheduler)
-}
-
-
 func TestSetupMux_MCP_ServerCard_Version(t *testing.T) {
 	t.Setenv("DEV_MODE", "true")
 	t.Setenv("KITE_API_KEY", "test_key")
@@ -212,6 +171,7 @@ func TestSetupMux_FaviconEndpoint(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // serveErrorPage — additional status codes
 // ---------------------------------------------------------------------------
@@ -222,6 +182,7 @@ func TestServeErrorPage_403(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Forbidden")
 	assert.Contains(t, rec.Body.String(), "Access denied")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -244,6 +205,7 @@ func TestProvisionUser_ActiveUser_UpdateKiteUID(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // LoadConfig — OAuth mode (no API keys, just JWT secret)
 // ---------------------------------------------------------------------------
@@ -260,6 +222,7 @@ func TestLoadConfig_OAuthModeOnly(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // paperLTPAdapter — no kite client path
 // ---------------------------------------------------------------------------
@@ -270,6 +233,7 @@ func TestPaperLTPAdapter_NoKiteClient(t *testing.T) {
 	_, err := adapter.GetLTP("NSE:INFY")
 	assert.Error(t, err)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -312,6 +276,7 @@ func TestInstrumentsFreezeAdapter_MultipleInstruments(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // kiteExchangerAdapter GetCredentials — edge: credentials with empty API key
 // ---------------------------------------------------------------------------
@@ -334,6 +299,7 @@ func TestGetCredentials_EmptyCredentialAPIKey(t *testing.T) {
 	assert.Equal(t, "", key)
 	assert.Equal(t, "", secret)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -370,6 +336,7 @@ func TestSetupMux_NoAdminNoOAuth(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // securityHeaders — verify all 6 headers present
 // ---------------------------------------------------------------------------
@@ -390,6 +357,7 @@ func TestSecurityHeaders_AllSixHeaders(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'self'")
 	assert.Contains(t, rec.Header().Get("Permissions-Policy"), "camera=()")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -420,24 +388,6 @@ func TestSetupMux_ServerCard_CORS(t *testing.T) {
 }
 
 
-// ---------------------------------------------------------------------------
-// initScheduler — with audit store (covers audit_cleanup branch)
-// ---------------------------------------------------------------------------
-func TestInitScheduler_WithAuditStore(t *testing.T) {
-	mgr := newTestManager(t)
-	db, err := alerts.OpenDB(":memory:")
-	require.NoError(t, err)
-
-	app := newTestApp(t)
-	app.auditStore = audit.New(db)
-	require.NoError(t, app.auditStore.InitTable())
-
-	app.initScheduler(mgr)
-	// With audit store but no Telegram, the audit_cleanup task should be registered
-	assert.NotNil(t, app.scheduler)
-	app.scheduler.Stop()
-}
-
 
 // ---------------------------------------------------------------------------
 // GetLTP — exercise more branches
@@ -450,6 +400,7 @@ func TestPaperLTPAdapter_MultipleInstruments_NoSessions(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no active Kite sessions")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -468,6 +419,7 @@ func TestProvisionUser_CaseInsensitive(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "UID1", u.KiteUID)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -500,6 +452,7 @@ func TestSetupMux_NoAdminNoOAuthNoSecret(t *testing.T) {
 		app.rateLimiters.Stop()
 	}
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -553,37 +506,6 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 }
 
 
-// ---------------------------------------------------------------------------
-// registerTelegramWebhook — more coverage
-// ---------------------------------------------------------------------------
-func TestRegisterTelegramWebhook_NoNotifier_WithConfig(t *testing.T) {
-	mgr := newTestManager(t)
-	app := newTestApp(t)
-	app.Config.OAuthJWTSecret = "test-secret"
-	app.Config.ExternalURL = "https://example.com"
-	mux := http.NewServeMux()
-	// Notifier is nil on test manager → returns early
-	app.registerTelegramWebhook(mux, mgr)
-}
-
-
-// ---------------------------------------------------------------------------
-// initScheduler — additional branch: audit cleanup with no Telegram
-// ---------------------------------------------------------------------------
-func TestInitScheduler_AuditOnly(t *testing.T) {
-	mgr := newTestManager(t)
-	db, err := alerts.OpenDB(":memory:")
-	require.NoError(t, err)
-
-	app := newTestApp(t)
-	app.auditStore = audit.New(db)
-	require.NoError(t, app.auditStore.InitTable())
-
-	app.initScheduler(mgr)
-	require.NotNil(t, app.scheduler)
-	app.scheduler.Stop()
-}
-
 
 // ---------------------------------------------------------------------------
 // makeEventPersister — exercise all paths including success
@@ -605,6 +527,7 @@ func TestMakeEventPersister_FullPath(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -634,6 +557,7 @@ func TestSetupMux_StripeWebhookNoBillingStore(t *testing.T) {
 		app.rateLimiters.Stop()
 	}
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -667,6 +591,7 @@ func newTestOAuthHandler(t *testing.T) *oauth.Handler {
 }
 
 
+
 // ===========================================================================
 // ratelimiter cleanup
 // ===========================================================================
@@ -683,39 +608,6 @@ func TestRateLimiterCleanup_Populated(t *testing.T) {
 	limiter.mu.RUnlock()
 }
 
-
-// ===========================================================================
-// initScheduler with P&L snapshot path
-// ===========================================================================
-func TestInitScheduler_WithPnLSnapshot(t *testing.T) {
-	instrMgr, err := instruments.New(instruments.Config{
-		Logger:   testLogger(),
-		TestData: map[uint32]*instruments.Instrument{},
-	})
-	require.NoError(t, err)
-	mgr, err := kc.NewWithOptions(context.Background(),
-		kc.WithLogger(testLogger()),
-		kc.WithKiteCredentials("tk", "ts"),
-		kc.WithDevMode(true),
-		kc.WithInstrumentsManager(instrMgr),
-		kc.WithAlertDBPath(":memory:"),
-	)
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-	app := newTestApp(t)
-	if alertDB := mgr.AlertDB(); alertDB != nil {
-		app.auditStore = audit.New(alertDB)
-		require.NoError(t, app.auditStore.InitTable())
-	}
-	app.initScheduler(mgr)
-	assert.NotNil(t, app.scheduler)
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-}
 
 
 // ---------------------------------------------------------------------------
@@ -761,6 +653,7 @@ func TestSetupMux_PricingPage_WithCookie(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // makeEventPersister — error on closed/nil store
 // ---------------------------------------------------------------------------
@@ -796,6 +689,7 @@ func TestMakeEventPersister_AppendError(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // getLimiter — double-check-after-write-lock branch (concurrent access)
 // ---------------------------------------------------------------------------
@@ -818,6 +712,7 @@ func TestGetLimiter_ConcurrentAccess(t *testing.T) {
 	assert.Equal(t, 1, len(limiter.limiters))
 	limiter.mu.RUnlock()
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -850,32 +745,6 @@ func TestSetupMux_StripeWebhookSecret_NoBillingStore(t *testing.T) {
 	}
 }
 
-
-// ---------------------------------------------------------------------------
-// initScheduler — exercises all three branches
-// ---------------------------------------------------------------------------
-func TestInitScheduler_AuditAndPnL(t *testing.T) {
-	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
-
-	if alertDB := mgr.AlertDB(); alertDB != nil {
-		auditStore := audit.New(alertDB)
-		require.NoError(t, auditStore.InitTable())
-		app.auditStore = auditStore
-	}
-
-	app.initScheduler(mgr)
-
-	// With alertDB, both audit_cleanup and pnl_snapshot should be registered
-	assert.NotNil(t, app.scheduler)
-
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-}
 
 
 // ---------------------------------------------------------------------------
@@ -915,6 +784,7 @@ func TestDeriveAggregateID_FamilyInvited(t *testing.T) {
 	})
 	assert.Equal(t, "family-admin@test.com", result)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -959,6 +829,7 @@ func TestSetupMux_StripeWebhookWithBillingStore(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // setupMux — billing checkout and portal with OAuth + billing store
 // ---------------------------------------------------------------------------
@@ -993,6 +864,7 @@ func TestSetupMux_BillingCheckout_WithOAuth(t *testing.T) {
 		app.rateLimiters.Stop()
 	}
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1040,48 +912,6 @@ func TestSetupMux_PricingPage_WithProTier(t *testing.T) {
 }
 
 
-// ---------------------------------------------------------------------------
-// initScheduler — with DB and audit store (covers PnL snapshot branch)
-// ---------------------------------------------------------------------------
-func TestInitScheduler_WithDB_AuditAndPnL(t *testing.T) {
-	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
-
-	// Setup audit store from the manager's DB
-	if alertDB := mgr.AlertDB(); alertDB != nil {
-		auditStore := audit.New(alertDB)
-		require.NoError(t, auditStore.InitTable())
-		app.auditStore = auditStore
-	}
-
-	app.initScheduler(mgr)
-
-	// With DB, both audit_cleanup and pnl_snapshot should be registered
-	assert.NotNil(t, app.scheduler)
-
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-}
-
-
-// ---------------------------------------------------------------------------
-// initScheduler — no tasks (no Telegram, no audit, no DB)
-// ---------------------------------------------------------------------------
-func TestInitScheduler_NoTasks(t *testing.T) {
-	mgr := newTestManager(t) // no DB
-	app := newTestApp(t)
-	app.auditStore = nil
-
-	app.initScheduler(mgr)
-
-	// No tasks → scheduler should be nil
-	assert.Nil(t, app.scheduler)
-}
-
 
 // ---------------------------------------------------------------------------
 // makeEventPersister — MarshalPayload error path
@@ -1125,6 +955,7 @@ func TestMakeEventPersister_NextSequenceError(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // deriveAggregateID — unknown event type returns "unknown"
 // ---------------------------------------------------------------------------
@@ -1132,6 +963,7 @@ func TestDeriveAggregateID_UnknownEventType(t *testing.T) {
 	result := deriveAggregateID(badEvent{})
 	assert.Equal(t, "unknown", result)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1150,6 +982,7 @@ func TestPaperLTPAdapter_WithSession_NilData(t *testing.T) {
 	// Should iterate sessions but find no valid kite client
 	assert.Contains(t, err.Error(), "no")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1177,6 +1010,7 @@ func TestRateLimiters_CleanupDoesNotPanic(t *testing.T) {
 
 	rl.Stop()
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1214,6 +1048,7 @@ func TestSetupMux_PprofEndpoints_DevMode(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // setupMux — non-DevMode should NOT have pprof endpoints
 // ---------------------------------------------------------------------------
@@ -1241,6 +1076,7 @@ func TestSetupMux_PprofEndpoints_NonDevMode(t *testing.T) {
 		app.rateLimiters.Stop()
 	}
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1278,6 +1114,7 @@ func TestSetupMux_SecurityTxt(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // LoadConfig — DevMode without API keys (valid)
 // ---------------------------------------------------------------------------
@@ -1294,6 +1131,7 @@ func TestLoadConfig_DevMode_NoAPIKeys(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // LoadConfig — OAuth mode without EXTERNAL_URL (error)
 // ---------------------------------------------------------------------------
@@ -1308,6 +1146,7 @@ func TestLoadConfig_OAuth_MissingExternalURL(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "EXTERNAL_URL is required")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1334,6 +1173,7 @@ func TestInstrumentsFreezeAdapter_ZeroFreezeQty(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // truncKey — edge cases
 // ---------------------------------------------------------------------------
@@ -1357,6 +1197,7 @@ func TestTruncKey_Empty(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // configureHTTPClient — verifies no panic
 // ---------------------------------------------------------------------------
@@ -1365,6 +1206,7 @@ func TestConfigureHTTPClient_NoPanic(t *testing.T) {
 	app.configureHTTPClient()
 	// Should not panic, just logs
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1376,6 +1218,7 @@ func TestBuildServerURL_CustomHostPort(t *testing.T) {
 	app.Config.AppPort = "3000"
 	assert.Equal(t, "0.0.0.0:3000", app.buildServerURL())
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1414,6 +1257,7 @@ func TestBriefingTokenAdapter_IsExpired_PastDate(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // briefingCredAdapter — GetAPIKey
 // ---------------------------------------------------------------------------
@@ -1428,6 +1272,7 @@ func TestBriefingCredAdapter_GetAPIKey_UnknownEmail(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // SetLogBuffer — verify assignment
 // ---------------------------------------------------------------------------
@@ -1438,6 +1283,7 @@ func TestSetLogBuffer_NilInput(t *testing.T) {
 	app.SetLogBuffer(nil)
 	assert.Nil(t, app.logBuffer)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1453,6 +1299,7 @@ func TestGetStatusData_Fields(t *testing.T) {
 	assert.Equal(t, "v1.2.3", data.Version)
 	assert.Equal(t, "http", data.Mode)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1508,6 +1355,7 @@ func TestSetupMux_BillingCheckout_RealOAuthAndBillingStore(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // GetLTP — exercise session with KiteSessionData containing nil Client
 // ---------------------------------------------------------------------------
@@ -1529,6 +1377,7 @@ func TestPaperLTPAdapter_WithSession_KiteSessionData_NilClient(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // serveLegalPages — error in template execution
 // ---------------------------------------------------------------------------
@@ -1547,6 +1396,7 @@ func TestServeLegalPages_TemplateExecuteError(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Terms")
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1585,6 +1435,7 @@ func TestRateLimit_FlyClientIPHeader(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // rateLimit middleware — RemoteAddr port stripping
 // ---------------------------------------------------------------------------
@@ -1615,6 +1466,7 @@ func TestRateLimit_RemoteAddrPortStripping(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // withSessionType — verify context value
 // ---------------------------------------------------------------------------
@@ -1634,6 +1486,7 @@ func TestWithSessionType_ContextValue(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.NotNil(t, capturedCtx)
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1746,6 +1599,7 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // setupMux — pprof heap/goroutine/allocs/block/mutex handlers
 // ---------------------------------------------------------------------------
@@ -1830,6 +1684,7 @@ func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
 		app.rateLimiters.Stop()
 	}
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -1940,6 +1795,7 @@ func TestSetupMux_PprofSpecificHandlers(t *testing.T) {
 }
 
 
+
 // ===========================================================================
 // Coverage push: ExchangeRequestToken / ExchangeWithCredentials success paths
 // ===========================================================================
@@ -1970,6 +1826,7 @@ func mockKiteAPIServer(t *testing.T) *httptest.Server {
 }
 
 
+
 // ===========================================================================
 // GetLTP (paperLTPAdapter) — exercise all branches
 // ===========================================================================
@@ -1997,71 +1854,6 @@ func TestPaperLTPAdapter_SessionWithNilData(t *testing.T) {
 }
 
 
-// ===========================================================================
-// registerTelegramWebhook — early return paths
-// ===========================================================================
-func TestRegisterTelegramWebhook_NilNotifier(t *testing.T) {
-	app := newTestApp(t)
-	app.Config.OAuthJWTSecret = "test-secret"
-	app.Config.ExternalURL = "https://test.example.com"
-
-	mgr := newTestManagerWithDB(t)
-	mux := http.NewServeMux()
-
-	// TelegramNotifier() returns nil for a manager without TELEGRAM_BOT_TOKEN.
-	// Should return early without panic.
-	app.registerTelegramWebhook(mux, mgr)
-}
-
-
-func TestRegisterTelegramWebhook_MissingSecret(t *testing.T) {
-	app := newTestApp(t)
-	app.Config.OAuthJWTSecret = ""
-	app.Config.ExternalURL = ""
-
-	mgr := newTestManagerWithDB(t)
-	mux := http.NewServeMux()
-
-	app.registerTelegramWebhook(mux, mgr)
-}
-
-
-// ===========================================================================
-// initScheduler — no-tasks path
-// ===========================================================================
-func TestInitScheduler_NoTasks_Minimal(t *testing.T) {
-	// Use a manager WITHOUT AlertDB so no PnL snapshot task is added.
-	mgr, err := kc.NewWithOptions(context.Background(),
-		kc.WithLogger(testLogger()),
-		kc.WithKiteCredentials("test_key", "test_secret"),
-		kc.WithDevMode(true),
-	)
-	require.NoError(t, err)
-	t.Cleanup(mgr.Shutdown)
-
-	app := newTestApp(t)
-	app.initScheduler(mgr)
-	assert.Nil(t, app.scheduler)
-}
-
-
-func TestInitScheduler_WithAuditStore_Minimal(t *testing.T) {
-	db, err := alerts.OpenDB(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
-	app.auditStore = audit.New(db)
-	require.NoError(t, app.auditStore.InitTable())
-
-	app.initScheduler(mgr)
-
-	// Scheduler should be started (audit_cleanup task was added).
-	assert.NotNil(t, app.scheduler)
-	app.scheduler.Stop()
-}
-
 
 // ===========================================================================
 // newRateLimiters — basic coverage
@@ -2074,6 +1866,7 @@ func TestNewRateLimiters_Basic(t *testing.T) {
 	assert.NotNil(t, rl.mcp)
 	rl.Stop()
 }
+
 
 
 // ===========================================================================

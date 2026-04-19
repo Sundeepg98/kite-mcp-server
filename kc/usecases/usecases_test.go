@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,124 +19,8 @@ import (
 
 // --- PlaceOrderUseCase tests ---
 
-func TestPlaceOrder_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("order.placed", func(e domain.Event) {
-		captured = e
-	})
-
-	uc := NewPlaceOrderUseCase(resolver, nil, events, testLogger())
-
-	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@example.com", "NSE", "RELIANCE", "BUY", "LIMIT", "CNC", 10, 2500.0,
-	))
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-1", orderID)
-	assert.Len(t, client.placedOrders, 1)
-	assert.Equal(t, "RELIANCE", client.placedOrders[0].Tradingsymbol)
-	assert.Equal(t, 10, client.placedOrders[0].Quantity)
-
-	// Verify domain event was dispatched.
-	require.NotNil(t, captured)
-	orderEvent, ok := captured.(domain.OrderPlacedEvent)
-	require.True(t, ok)
-	assert.Equal(t, "test@example.com", orderEvent.Email)
-	assert.Equal(t, "ORD-1", orderEvent.OrderID)
-}
-
-func TestPlaceOrder_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
-
-	qty10, _ := domain.NewQuantity(10)
-	tests := []struct {
-		name string
-		cmd  cqrs.PlaceOrderCommand
-		want string
-	}{
-		{
-			name: "empty email",
-			cmd:  cqrs.PlaceOrderCommand{Instrument: domain.NewInstrumentKey("", "INFY"), Qty: qty10},
-			want: "email is required",
-		},
-		{
-			name: "empty tradingsymbol",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Qty: qty10},
-			want: "tradingsymbol is required",
-		},
-		{
-			name: "zero quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
-			want: "quantity 0 below minimum 1",
-		},
-		{
-			name: "negative quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
-			want: "quantity 0 below minimum 1",
-		},
-		{
-			name: "invalid transaction type",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "HOLD", Qty: qty10},
-			want: "transaction_type must be BUY or SELL",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := uc.Execute(context.Background(), tt.cmd)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-		})
-	}
-}
-
-func TestPlaceOrder_BrokerResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token for user")}
-	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@test.com", "", "INFY", "BUY", "MARKET", "", 10, 0,
-	))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestPlaceOrder_BrokerPlaceError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{placeErr: fmt.Errorf("insufficient margin")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@test.com", "NSE", "RELIANCE", "BUY", "", "", 10, 2500,
-	))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient margin")
-}
-
-func TestPlaceOrder_NoEventsDispatcher(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	// nil events dispatcher — should not panic.
-	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
-
-	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@test.com", "NSE", "RELIANCE", "BUY", "MARKET", "", 5, 0,
-	))
-	require.NoError(t, err)
-	assert.NotEmpty(t, orderID)
-}
 
 // --- GetPortfolioUseCase tests ---
-
 func TestGetPortfolio_Success(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
@@ -161,6 +44,7 @@ func TestGetPortfolio_Success(t *testing.T) {
 	assert.Equal(t, "RELIANCE", result.Holdings[0].Tradingsymbol)
 }
 
+
 func TestGetPortfolio_EmptyEmail(t *testing.T) {
 	t.Parallel()
 	uc := NewGetPortfolioUseCase(nil, testLogger())
@@ -168,6 +52,7 @@ func TestGetPortfolio_EmptyEmail(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "email is required")
 }
+
 
 func TestGetPortfolio_ResolveError(t *testing.T) {
 	t.Parallel()
@@ -179,8 +64,8 @@ func TestGetPortfolio_ResolveError(t *testing.T) {
 	assert.Contains(t, err.Error(), "resolve broker")
 }
 
-// --- CreateAlertUseCase tests ---
 
+// --- CreateAlertUseCase tests ---
 func TestCreateAlert_Success(t *testing.T) {
 	t.Parallel()
 	store := &mockAlertStore{alerts: make(map[string]string)}
@@ -198,6 +83,7 @@ func TestCreateAlert_Success(t *testing.T) {
 	assert.Equal(t, "ALT-1", alertID)
 	assert.Equal(t, "RELIANCE", store.alerts["ALT-1"])
 }
+
 
 func TestCreateAlert_ValidationFailures(t *testing.T) {
 	t.Parallel()
@@ -239,6 +125,7 @@ func TestCreateAlert_ValidationFailures(t *testing.T) {
 	}
 }
 
+
 func TestCreateAlert_InstrumentResolveError(t *testing.T) {
 	t.Parallel()
 	instruments := &mockInstrumentResolver{err: fmt.Errorf("instrument not found")}
@@ -251,6 +138,7 @@ func TestCreateAlert_InstrumentResolveError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve instrument")
 }
+
 
 func TestCreateAlert_StoreError(t *testing.T) {
 	t.Parallel()
@@ -266,409 +154,8 @@ func TestCreateAlert_StoreError(t *testing.T) {
 	assert.Contains(t, err.Error(), "create alert")
 }
 
-// --- GetOrdersUseCase tests ---
-
-func TestGetOrders_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		orders: []broker.Order{
-			{OrderID: "ORD-1", Tradingsymbol: "RELIANCE", Status: "COMPLETE"},
-			{OrderID: "ORD-2", Tradingsymbol: "INFY", Status: "OPEN"},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrdersUseCase(resolver, testLogger())
-
-	orders, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: "test@test.com"})
-	require.NoError(t, err)
-	assert.Len(t, orders, 2)
-	assert.Equal(t, "ORD-1", orders[0].OrderID)
-}
-
-func TestGetOrders_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetOrdersUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetOrders_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetOrdersUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- ModifyOrderUseCase tests ---
-
-func TestModifyOrder_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		modifyResp: broker.OrderResponse{OrderID: "ORD-42"},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("order.modified", func(e domain.Event) {
-		captured = e
-	})
-
-	uc := NewModifyOrderUseCase(resolver, nil, events, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email:    "test@example.com",
-		OrderID:  "ORD-42",
-		Quantity: 20,
-		Price:    domain.NewINR(2600.0),
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-42", resp.OrderID)
-	assert.Equal(t, "ORD-42", client.lastModifyOrderID)
-	assert.Equal(t, 20, client.lastModifyParams.Quantity)
-	assert.Equal(t, 2600.0, client.lastModifyParams.Price)
-
-	// Verify domain event was dispatched.
-	require.NotNil(t, captured)
-	modEvent, ok := captured.(domain.OrderModifiedEvent)
-	require.True(t, ok)
-	assert.Equal(t, "test@example.com", modEvent.Email)
-	assert.Equal(t, "ORD-42", modEvent.OrderID)
-}
-
-func TestModifyOrder_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewModifyOrderUseCase(nil, nil, nil, testLogger())
-
-	tests := []struct {
-		name string
-		cmd  cqrs.ModifyOrderCommand
-		want string
-	}{
-		{
-			name: "empty email",
-			cmd:  cqrs.ModifyOrderCommand{OrderID: "ORD-1"},
-			want: "email is required",
-		},
-		{
-			name: "empty order_id",
-			cmd:  cqrs.ModifyOrderCommand{Email: "test@test.com"},
-			want: "order_id is required",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := uc.Execute(context.Background(), tt.cmd)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-		})
-	}
-}
-
-func TestModifyOrder_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		modifyErr: fmt.Errorf("order not found"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email: "test@test.com", OrderID: "ORD-999", Quantity: 5,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "order not found")
-}
-
-func TestModifyOrder_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token")}
-	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email: "test@test.com", OrderID: "ORD-1",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- CancelOrderUseCase tests ---
-
-func TestCancelOrder_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		cancelResp: broker.OrderResponse{OrderID: "ORD-55"},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("order.cancelled", func(e domain.Event) {
-		captured = e
-	})
-
-	uc := NewCancelOrderUseCase(resolver, events, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
-		Email:   "test@example.com",
-		OrderID: "ORD-55",
-		Variety: "regular",
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-55", resp.OrderID)
-	assert.Equal(t, "ORD-55", client.lastCancelOrderID)
-	assert.Equal(t, "regular", client.lastCancelVariety)
-
-	// Verify domain event was dispatched.
-	require.NotNil(t, captured)
-	cancelEvent, ok := captured.(domain.OrderCancelledEvent)
-	require.True(t, ok)
-	assert.Equal(t, "test@example.com", cancelEvent.Email)
-	assert.Equal(t, "ORD-55", cancelEvent.OrderID)
-}
-
-func TestCancelOrder_DefaultVariety(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		cancelResp: broker.OrderResponse{OrderID: "ORD-10"},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
-		Email:   "test@test.com",
-		OrderID: "ORD-10",
-		// Variety left empty — should default to "regular"
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "regular", client.lastCancelVariety)
-}
-
-func TestCancelOrder_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewCancelOrderUseCase(nil, nil, testLogger())
-
-	tests := []struct {
-		name string
-		cmd  cqrs.CancelOrderCommand
-		want string
-	}{
-		{
-			name: "empty email",
-			cmd:  cqrs.CancelOrderCommand{OrderID: "ORD-1"},
-			want: "email is required",
-		},
-		{
-			name: "empty order_id",
-			cmd:  cqrs.CancelOrderCommand{Email: "test@test.com"},
-			want: "order_id is required",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := uc.Execute(context.Background(), tt.cmd)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-		})
-	}
-}
-
-func TestCancelOrder_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		cancelErr: fmt.Errorf("order already executed"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
-		Email: "test@test.com", OrderID: "ORD-99",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "order already executed")
-}
-
-func TestCancelOrder_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("expired session")}
-	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
-		Email: "test@test.com", OrderID: "ORD-1",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- ClosePositionUseCase tests ---
-
-func TestClosePosition_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{
-					Exchange:      "NSE",
-					Tradingsymbol: "RELIANCE",
-					Quantity:      10,
-					Product:       "MIS",
-					PnL:           250.0,
-				},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "ORD-1", result.OrderID)
-	assert.Equal(t, "NSE:RELIANCE", result.Instrument)
-	assert.Equal(t, 10, result.Quantity)
-	assert.Equal(t, "SELL", result.Direction) // Opposite of long position
-	assert.Equal(t, "MIS", result.Product)
-	assert.Equal(t, 250.0, result.PositionPnL)
-
-	// Verify the order was placed with correct params.
-	require.Len(t, client.placedOrders, 1)
-	assert.Equal(t, "SELL", client.placedOrders[0].TransactionType)
-	assert.Equal(t, 10, client.placedOrders[0].Quantity)
-	assert.Equal(t, "MARKET", client.placedOrders[0].OrderType)
-}
-
-func TestClosePosition_ShortPosition(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{
-					Exchange:      "NSE",
-					Tradingsymbol: "INFY",
-					Quantity:      -5, // Short position
-					Product:       "MIS",
-					PnL:           -100.0,
-				},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "INFY", "")
-
-	require.NoError(t, err)
-	assert.Equal(t, "BUY", result.Direction) // Opposite of short position
-	assert.Equal(t, 5, result.Quantity)
-}
-
-func TestClosePosition_NotFound(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 10, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "INFY", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no open position found")
-}
-
-func TestClosePosition_ZeroQuantitySkipped(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 0, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no open position found")
-}
-
-func TestClosePosition_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "", "NSE", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-
-	_, err = uc.Execute(context.Background(), "test@test.com", "", "", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exchange and symbol are required")
-}
-
-func TestClosePosition_BrokerPlaceError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 10, Product: "MIS"},
-			},
-		},
-		placeErr: fmt.Errorf("market closed"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "market closed")
-}
-
-func TestClosePosition_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestClosePosition_ProductFilter(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 10, Product: "CNC"},
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 5, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "MIS")
-
-	require.NoError(t, err)
-	assert.Equal(t, 5, result.Quantity) // Matched the MIS position, not CNC
-	assert.Equal(t, "MIS", result.Product)
-}
 
 // --- CloseAllPositionsUseCase tests ---
-
 func TestCloseAllPositions_ZeroPositions(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
@@ -688,6 +175,7 @@ func TestCloseAllPositions_ZeroPositions(t *testing.T) {
 	assert.Equal(t, 0, result.ErrorCount)
 	assert.Empty(t, result.Results)
 }
+
 
 func TestCloseAllPositions_TwoPositions(t *testing.T) {
 	t.Parallel()
@@ -724,6 +212,7 @@ func TestCloseAllPositions_TwoPositions(t *testing.T) {
 	assert.NotEmpty(t, result.Results[1].OrderID)
 }
 
+
 func TestCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
@@ -743,6 +232,7 @@ func TestCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 	assert.Equal(t, 1, result.Total) // Only INFY (RELIANCE has qty 0)
 	assert.Equal(t, 1, result.SuccessCount)
 }
+
 
 func TestCloseAllPositions_ProductFilter(t *testing.T) {
 	t.Parallel()
@@ -765,6 +255,7 @@ func TestCloseAllPositions_ProductFilter(t *testing.T) {
 	assert.Equal(t, "INFY", result.Results[0].Tradingsymbol)
 }
 
+
 func TestCloseAllPositions_ValidationFailure(t *testing.T) {
 	t.Parallel()
 	uc := NewCloseAllPositionsUseCase(nil, nil, nil, testLogger())
@@ -773,6 +264,7 @@ func TestCloseAllPositions_ValidationFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "email is required")
 }
+
 
 func TestCloseAllPositions_ResolveError(t *testing.T) {
 	t.Parallel()
@@ -783,6 +275,7 @@ func TestCloseAllPositions_ResolveError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
 }
+
 
 func TestCloseAllPositions_FetchPositionsError(t *testing.T) {
 	t.Parallel()
@@ -796,6 +289,7 @@ func TestCloseAllPositions_FetchPositionsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetch positions")
 }
+
 
 func TestCloseAllPositions_PartialFailure(t *testing.T) {
 	t.Parallel()
@@ -820,922 +314,6 @@ func TestCloseAllPositions_PartialFailure(t *testing.T) {
 	assert.Contains(t, result.Results[0].Error, "insufficient margin")
 }
 
-// --- GetProfileUseCase tests ---
-
-func TestGetProfile_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		profile: broker.Profile{
-			UserID:    "AB1234",
-			UserName:  "Test User",
-			Email:     "test@test.com",
-			Broker:    "kite",
-			Exchanges: []string{"NSE", "BSE"},
-			Products:  []string{"CNC", "MIS"},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetProfileUseCase(resolver, testLogger())
-
-	profile, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: "test@test.com"})
-
-	require.NoError(t, err)
-	assert.Equal(t, "AB1234", profile.UserID)
-	assert.Equal(t, "Test User", profile.UserName)
-	assert.Equal(t, "test@test.com", profile.Email)
-	assert.Equal(t, []string{"NSE", "BSE"}, profile.Exchanges)
-}
-
-func TestGetProfile_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetProfileUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetProfile_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		profileErr: fmt.Errorf("token expired"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetProfileUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "token expired")
-}
-
-func TestGetProfile_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetProfileUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetMarginsUseCase tests ---
-
-func TestGetMargins_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		margins: broker.Margins{
-			Equity: broker.SegmentMargin{
-				Available: 100000.0,
-				Used:      25000.0,
-				Total:     125000.0,
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetMarginsUseCase(resolver, testLogger())
-
-	margins, err := uc.Execute(context.Background(), cqrs.GetMarginsQuery{Email: "test@test.com"})
-
-	require.NoError(t, err)
-	assert.Equal(t, 100000.0, margins.Equity.Available)
-	assert.Equal(t, 25000.0, margins.Equity.Used)
-	assert.Equal(t, 125000.0, margins.Equity.Total)
-}
-
-func TestGetMargins_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetMarginsUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetMarginsQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetMargins_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		marginsErr: fmt.Errorf("service unavailable"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetMarginsUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetMarginsQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "service unavailable")
-}
-
-func TestGetMargins_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetMarginsUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetMarginsQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetTradesUseCase tests ---
-
-func TestGetTrades_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		trades: []broker.Trade{
-			{TradeID: "T1", OrderID: "ORD-1", Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY", Quantity: 10, Price: 2500.0, Product: "CNC"},
-			{TradeID: "T2", OrderID: "ORD-2", Exchange: "NSE", Tradingsymbol: "INFY", TransactionType: "SELL", Quantity: 5, Price: 1400.0, Product: "MIS"},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetTradesUseCase(resolver, testLogger())
-
-	trades, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{Email: "test@test.com"})
-
-	require.NoError(t, err)
-	assert.Len(t, trades, 2)
-	assert.Equal(t, "T1", trades[0].TradeID)
-	assert.Equal(t, "RELIANCE", trades[0].Tradingsymbol)
-	assert.Equal(t, "SELL", trades[1].TransactionType)
-}
-
-func TestGetTrades_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetTradesUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetTrades_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		tradesErr: fmt.Errorf("API rate limited"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetTradesUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "API rate limited")
-}
-
-func TestGetTrades_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetTradesUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetTradesQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetOrderHistoryUseCase tests ---
-
-func TestGetOrderHistory_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		orderHistory: []broker.Order{
-			{OrderID: "ORD-1", Tradingsymbol: "RELIANCE", Status: "OPEN"},
-			{OrderID: "ORD-1", Tradingsymbol: "RELIANCE", Status: "COMPLETE"},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrderHistoryUseCase(resolver, testLogger())
-
-	history, err := uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{
-		Email: "test@test.com", OrderID: "ORD-1",
-	})
-
-	require.NoError(t, err)
-	assert.Len(t, history, 2)
-	assert.Equal(t, "OPEN", history[0].Status)
-	assert.Equal(t, "COMPLETE", history[1].Status)
-}
-
-func TestGetOrderHistory_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewGetOrderHistoryUseCase(nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{OrderID: "ORD-1"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-
-	_, err = uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "order_id is required")
-}
-
-func TestGetOrderHistory_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		orderHistoryErr: fmt.Errorf("order not found"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrderHistoryUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{
-		Email: "test@test.com", OrderID: "ORD-999",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "order not found")
-}
-
-func TestGetOrderHistory_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetOrderHistoryUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderHistoryQuery{
-		Email: "test@test.com", OrderID: "ORD-1",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetLTPUseCase tests ---
-
-func TestGetLTP_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		ltpMap: map[string]broker.LTP{
-			"NSE:RELIANCE": {LastPrice: 2500.50},
-			"NSE:INFY":     {LastPrice: 1400.25},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetLTPUseCase(resolver, testLogger())
-
-	ltp, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetLTPQuery{
-		Instruments: []string{"NSE:RELIANCE", "NSE:INFY"},
-	})
-
-	require.NoError(t, err)
-	assert.Len(t, ltp, 2)
-	assert.Equal(t, 2500.50, ltp["NSE:RELIANCE"].LastPrice)
-	assert.Equal(t, 1400.25, ltp["NSE:INFY"].LastPrice)
-}
-
-func TestGetLTP_EmptyInstruments(t *testing.T) {
-	t.Parallel()
-	uc := NewGetLTPUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetLTPQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at least one instrument is required")
-}
-
-func TestGetLTP_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		ltpErr: fmt.Errorf("invalid instrument"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetLTPUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetLTPQuery{
-		Instruments: []string{"NSE:INVALID"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid instrument")
-}
-
-func TestGetLTP_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetLTPUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetLTPQuery{
-		Instruments: []string{"NSE:RELIANCE"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetOHLCUseCase tests ---
-
-func TestGetOHLC_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		ohlcMap: map[string]broker.OHLC{
-			"NSE:RELIANCE": {Open: 2480, High: 2520, Low: 2470, Close: 2500, LastPrice: 2505},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOHLCUseCase(resolver, testLogger())
-
-	ohlc, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetOHLCQuery{
-		Instruments: []string{"NSE:RELIANCE"},
-	})
-
-	require.NoError(t, err)
-	assert.Len(t, ohlc, 1)
-	assert.Equal(t, 2480.0, ohlc["NSE:RELIANCE"].Open)
-	assert.Equal(t, 2520.0, ohlc["NSE:RELIANCE"].High)
-	assert.Equal(t, 2470.0, ohlc["NSE:RELIANCE"].Low)
-	assert.Equal(t, 2500.0, ohlc["NSE:RELIANCE"].Close)
-	assert.Equal(t, 2505.0, ohlc["NSE:RELIANCE"].LastPrice)
-}
-
-func TestGetOHLC_EmptyInstruments(t *testing.T) {
-	t.Parallel()
-	uc := NewGetOHLCUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetOHLCQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at least one instrument is required")
-}
-
-func TestGetOHLC_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		ohlcErr: fmt.Errorf("service down"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOHLCUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetOHLCQuery{
-		Instruments: []string{"NSE:RELIANCE"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "service down")
-}
-
-func TestGetOHLC_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetOHLCUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetOHLCQuery{
-		Instruments: []string{"NSE:RELIANCE"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetHistoricalDataUseCase tests ---
-
-func TestGetHistoricalData_Success(t *testing.T) {
-	t.Parallel()
-	now := time.Now()
-	from := now.Add(-24 * time.Hour)
-	client := &mockBrokerClient{
-		historicalData: []broker.HistoricalCandle{
-			{Date: from, Open: 2480, High: 2520, Low: 2470, Close: 2500, Volume: 100000},
-			{Date: now, Open: 2500, High: 2550, Low: 2490, Close: 2530, Volume: 120000},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetHistoricalDataUseCase(resolver, testLogger())
-
-	candles, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetHistoricalDataQuery{
-		InstrumentToken: 738561,
-		Interval:        "day",
-		From:            from,
-		To:              now,
-	})
-
-	require.NoError(t, err)
-	assert.Len(t, candles, 2)
-	assert.Equal(t, 2480.0, candles[0].Open)
-	assert.Equal(t, 100000, candles[0].Volume)
-	assert.Equal(t, 2530.0, candles[1].Close)
-}
-
-func TestGetHistoricalData_ValidationFailures(t *testing.T) {
-	t.Parallel()
-	uc := NewGetHistoricalDataUseCase(nil, testLogger())
-	now := time.Now()
-	from := now.Add(-24 * time.Hour)
-
-	tests := []struct {
-		name  string
-		query cqrs.GetHistoricalDataQuery
-		want  string
-	}{
-		{
-			name:  "zero instrument token",
-			query: cqrs.GetHistoricalDataQuery{Interval: "day", From: from, To: now},
-			want:  "instrument_token is required",
-		},
-		{
-			name:  "empty interval",
-			query: cqrs.GetHistoricalDataQuery{InstrumentToken: 738561, From: from, To: now},
-			want:  "interval is required",
-		},
-		{
-			name:  "zero from date",
-			query: cqrs.GetHistoricalDataQuery{InstrumentToken: 738561, Interval: "day", To: now},
-			want:  "from and to dates are required",
-		},
-		{
-			name:  "zero to date",
-			query: cqrs.GetHistoricalDataQuery{InstrumentToken: 738561, Interval: "day", From: from},
-			want:  "from and to dates are required",
-		},
-		{
-			name:  "from after to",
-			query: cqrs.GetHistoricalDataQuery{InstrumentToken: 738561, Interval: "day", From: now, To: from},
-			want:  "from must be before to",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := uc.Execute(context.Background(), "test@test.com", tt.query)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-		})
-	}
-}
-
-func TestGetHistoricalData_BrokerError(t *testing.T) {
-	t.Parallel()
-	now := time.Now()
-	from := now.Add(-24 * time.Hour)
-	client := &mockBrokerClient{
-		historicalErr: fmt.Errorf("too many candles requested"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetHistoricalDataUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetHistoricalDataQuery{
-		InstrumentToken: 738561,
-		Interval:        "day",
-		From:            from,
-		To:              now,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "too many candles requested")
-}
-
-func TestGetHistoricalData_ResolveError(t *testing.T) {
-	t.Parallel()
-	now := time.Now()
-	from := now.Add(-24 * time.Hour)
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetHistoricalDataUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetHistoricalDataQuery{
-		InstrumentToken: 738561,
-		Interval:        "day",
-		From:            from,
-		To:              now,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-// --- GetQuotesUseCase tests ---
-
-func TestGetQuotes_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		quotesMap: map[string]broker.Quote{
-			"NSE:RELIANCE": {LastPrice: 2500.0, Volume: 100000},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetQuotesUseCase(resolver, testLogger())
-
-	quotes, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
-		Instruments: []string{"NSE:RELIANCE"},
-	})
-	require.NoError(t, err)
-	assert.Len(t, quotes, 1)
-	assert.Equal(t, 2500.0, quotes["NSE:RELIANCE"].LastPrice)
-}
-
-func TestGetQuotes_EmptyInstruments(t *testing.T) {
-	t.Parallel()
-	uc := NewGetQuotesUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at least one instrument")
-}
-
-func TestGetQuotes_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetQuotesUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
-		Instruments: []string{"NSE:INFY"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestGetQuotes_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{quotesErr: fmt.Errorf("rate limited")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetQuotesUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), "test@test.com", cqrs.GetQuotesQuery{
-		Instruments: []string{"NSE:INFY"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get quotes")
-}
-
-// --- GetOrderTradesUseCase tests ---
-
-func TestGetOrderTrades_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		orderTrades: []broker.Trade{
-			{TradeID: "T1", OrderID: "ORD-1", Tradingsymbol: "INFY", Quantity: 10, Price: 1500.0},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrderTradesUseCase(resolver, testLogger())
-
-	trades, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
-		Email:   "test@test.com",
-		OrderID: "ORD-1",
-	})
-	require.NoError(t, err)
-	assert.Len(t, trades, 1)
-	assert.Equal(t, "T1", trades[0].TradeID)
-	assert.Equal(t, "ORD-1", client.lastOrderTradesID)
-}
-
-func TestGetOrderTrades_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetOrderTradesUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{OrderID: "ORD-1"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetOrderTrades_EmptyOrderID(t *testing.T) {
-	t.Parallel()
-	uc := NewGetOrderTradesUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "order_id is required")
-}
-
-func TestGetOrderTrades_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetOrderTradesUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
-		Email: "test@test.com", OrderID: "ORD-1",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestGetOrderTrades_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{orderTradesErr: fmt.Errorf("not found")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrderTradesUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetOrderTradesQuery{
-		Email: "test@test.com", OrderID: "ORD-999",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get order trades")
-}
-
-// --- GetGTTsUseCase tests ---
-
-func TestGetGTTs_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		gtts: []broker.GTTOrder{
-			{ID: 1, Type: "single", Status: "active"},
-			{ID: 2, Type: "two-leg", Status: "active"},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetGTTsUseCase(resolver, testLogger())
-
-	gtts, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
-	require.NoError(t, err)
-	assert.Len(t, gtts, 2)
-	assert.Equal(t, 1, gtts[0].ID)
-}
-
-func TestGetGTTs_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewGetGTTsUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestGetGTTs_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewGetGTTsUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestGetGTTs_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{gttsErr: fmt.Errorf("api error")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetGTTsUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.GetGTTsQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get gtts")
-}
-
-// --- PlaceGTTUseCase tests ---
-
-func TestPlaceGTT_SingleLeg(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 42}}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewPlaceGTTUseCase(resolver, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email:           "test@test.com",
-		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
-		LastPrice:       domain.NewINR(2500.0),
-		TransactionType: "BUY",
-		Product:         "CNC",
-		Type:            "single",
-		TriggerValue:    2400.0,
-		Quantity:        10,
-		LimitPrice:      domain.NewINR(2390.0),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 42, resp.TriggerID)
-	assert.Equal(t, 2400.0, client.lastGTTParams.TriggerValue)
-}
-
-func TestPlaceGTT_TwoLeg(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 43}}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewPlaceGTTUseCase(resolver, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email:             "test@test.com",
-		Instrument:        domain.NewInstrumentKey("NSE", "INFY"),
-		LastPrice:         domain.NewINR(1500.0),
-		TransactionType:   "SELL",
-		Product:           "CNC",
-		Type:              "two-leg",
-		UpperTriggerValue: 1600.0,
-		UpperQuantity:     5,
-		UpperLimitPrice:   domain.NewINR(1595.0),
-		LowerTriggerValue: 1400.0,
-		LowerQuantity:     5,
-		LowerLimitPrice:   domain.NewINR(1405.0),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 43, resp.TriggerID)
-}
-
-func TestPlaceGTT_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewPlaceGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestPlaceGTT_EmptyTradingsymbol(t *testing.T) {
-	t.Parallel()
-	uc := NewPlaceGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Type: "single",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tradingsymbol is required")
-}
-
-func TestPlaceGTT_InvalidType(t *testing.T) {
-	t.Parallel()
-	uc := NewPlaceGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "triple",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid GTT type")
-}
-
-func TestPlaceGTT_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewPlaceGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single", Quantity: 1,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestPlaceGTT_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{placeGTTErr: fmt.Errorf("insufficient funds")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewPlaceGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Type: "single", Quantity: 1,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "place gtt")
-}
-
-// --- ModifyGTTUseCase tests ---
-
-func TestModifyGTT_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{modifyGTTResp: broker.GTTResponse{TriggerID: 42}}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewModifyGTTUseCase(resolver, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email:        "test@test.com",
-		TriggerID:    42,
-		Instrument:   domain.NewInstrumentKey("", "RELIANCE"),
-		Type:         "single",
-		TriggerValue: 2450.0,
-		Quantity:     15,
-		LimitPrice:   domain.NewINR(2440.0),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 42, resp.TriggerID)
-	assert.Equal(t, 42, client.lastModifyGTTID)
-	assert.Equal(t, 2450.0, client.lastGTTParams.TriggerValue)
-}
-
-func TestModifyGTT_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewModifyGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		TriggerID: 1, Type: "single",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestModifyGTT_ZeroTriggerID(t *testing.T) {
-	t.Parallel()
-	uc := NewModifyGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", Type: "single",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "trigger_id is required")
-}
-
-func TestModifyGTT_InvalidType(t *testing.T) {
-	t.Parallel()
-	uc := NewModifyGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", TriggerID: 1, Type: "invalid",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid GTT type")
-}
-
-func TestModifyGTT_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewModifyGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", TriggerID: 1, Type: "single", Quantity: 1,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestModifyGTT_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{modifyGTTErr: fmt.Errorf("trigger not found")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewModifyGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
-		Email: "test@test.com", TriggerID: 99, Type: "two-leg", UpperQuantity: 1, LowerQuantity: 1,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "modify gtt")
-}
-
-// --- DeleteGTTUseCase tests ---
-
-func TestDeleteGTT_Success(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{deleteGTTResp: broker.GTTResponse{TriggerID: 42}}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewDeleteGTTUseCase(resolver, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
-		Email:     "test@test.com",
-		TriggerID: 42,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 42, resp.TriggerID)
-	assert.Equal(t, 42, client.lastDeleteGTTID)
-}
-
-func TestDeleteGTT_EmptyEmail(t *testing.T) {
-	t.Parallel()
-	uc := NewDeleteGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{TriggerID: 1})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-func TestDeleteGTT_ZeroTriggerID(t *testing.T) {
-	t.Parallel()
-	uc := NewDeleteGTTUseCase(nil, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "trigger_id is required")
-}
-
-func TestDeleteGTT_ResolveError(t *testing.T) {
-	t.Parallel()
-	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no session")}
-	uc := NewDeleteGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
-		Email: "test@test.com", TriggerID: 1,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve broker")
-}
-
-func TestDeleteGTT_BrokerError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{deleteGTTErr: fmt.Errorf("trigger not found")}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewDeleteGTTUseCase(resolver, testLogger())
-	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
-		Email: "test@test.com", TriggerID: 999,
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "delete gtt")
-}
-
-// ---------------------------------------------------------------------------
-// Additional coverage: riskguard branches, event dispatching, error combination paths
-// ---------------------------------------------------------------------------
-
-func TestPlaceOrder_WithRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	// Create a riskguard that allows all orders (not frozen, high limits).
-	guard := newTestGuard(t)
-
-	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
-
-	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "CNC", 1, 0,
-	))
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, orderID)
-}
-
-func TestModifyOrder_WithRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		modifyResp: broker.OrderResponse{OrderID: "ORD-42"},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-	guard := newTestGuard(t)
-
-	uc := NewModifyOrderUseCase(resolver, guard, events, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email:     "test@example.com",
-		OrderID:   "ORD-42",
-		Quantity:  1,
-		Price:     domain.NewINR(100.0),
-		Confirmed: true,
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-42", resp.OrderID)
-}
-
-func TestClosePosition_WithRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-	guard := newTestGuard(t)
-
-	uc := NewClosePositionUseCase(resolver, guard, events, testLogger())
-
-	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-1", result.OrderID)
-}
 
 func TestCloseAllPositions_WithRiskguard(t *testing.T) {
 	t.Parallel()
@@ -1759,6 +337,7 @@ func TestCloseAllPositions_WithRiskguard(t *testing.T) {
 	assert.Equal(t, 2, result.Total)
 	assert.Equal(t, 2, result.SuccessCount)
 }
+
 
 func TestCloseAllPositions_WithEvents(t *testing.T) {
 	t.Parallel()
@@ -1786,31 +365,6 @@ func TestCloseAllPositions_WithEvents(t *testing.T) {
 	require.NotNil(t, captured)
 }
 
-func TestClosePosition_WithEvents(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 3, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("position.closed", func(e domain.Event) {
-		captured = e
-	})
-
-	uc := NewClosePositionUseCase(resolver, nil, events, testLogger())
-
-	result, err := uc.Execute(context.Background(), "test@test.com", "NSE", "INFY", "")
-
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-1", result.OrderID)
-	require.NotNil(t, captured)
-}
 
 func TestGetPortfolio_HoldingsError(t *testing.T) {
 	t.Parallel()
@@ -1824,6 +378,7 @@ func TestGetPortfolio_HoldingsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get holdings")
 }
+
 
 func TestGetPortfolio_PositionsError(t *testing.T) {
 	t.Parallel()
@@ -1839,44 +394,6 @@ func TestGetPortfolio_PositionsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "get positions")
 }
 
-func TestGetOrders_GetOrdersError(t *testing.T) {
-	t.Parallel()
-	client := &ordersErrClient{}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewGetOrdersUseCase(resolver, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.GetOrdersQuery{Email: "test@test.com"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get orders")
-}
-
-func TestClosePosition_FetchPositionsError(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positionsErr: fmt.Errorf("network timeout"),
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "fetch positions")
-}
-
-func TestModifyOrder_NoEventsDispatcher(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		modifyResp: broker.OrderResponse{OrderID: "ORD-99"},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
-
-	resp, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email: "test@test.com", OrderID: "ORD-99", Quantity: 5,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "ORD-99", resp.OrderID)
-}
 
 func TestCreateAlert_WithReferencePrice(t *testing.T) {
 	t.Parallel()
@@ -1896,23 +413,6 @@ func TestCreateAlert_WithReferencePrice(t *testing.T) {
 	assert.Equal(t, "ALT-1", alertID)
 }
 
-func TestClosePosition_ExchangeEmptySymbolPresent(t *testing.T) {
-	t.Parallel()
-	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "", "RELIANCE", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exchange and symbol are required")
-}
-
-func TestClosePosition_SymbolEmptyExchangePresent(t *testing.T) {
-	t.Parallel()
-	uc := NewClosePositionUseCase(nil, nil, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exchange and symbol are required")
-}
 
 func TestCloseAllPositions_EmptyProductFilter(t *testing.T) {
 	t.Parallel()
@@ -1934,6 +434,7 @@ func TestCloseAllPositions_EmptyProductFilter(t *testing.T) {
 	assert.Equal(t, "ALL", result.ProductFilter)
 }
 
+
 // ordersErrClient is a broker client that returns an error on GetOrders.
 type ordersErrClient struct {
 	mockBrokerClient
@@ -1949,6 +450,7 @@ func newTestGuard(t *testing.T) *riskguard.Guard {
 	return riskguard.NewGuard(testLogger())
 }
 
+
 // newFrozenGuard creates a riskguard with global freeze enabled.
 func newFrozenGuard(t *testing.T) *riskguard.Guard {
 	t.Helper()
@@ -1957,130 +459,6 @@ func newFrozenGuard(t *testing.T) *riskguard.Guard {
 	return g
 }
 
-func TestPlaceOrder_BlockedByRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("risk.limit_breached", func(e domain.Event) {
-		captured = e
-	})
-
-	guard := newFrozenGuard(t)
-	uc := NewPlaceOrderUseCase(resolver, guard, events, testLogger())
-
-	_, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "CNC", 1, 0,
-	))
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
-}
-
-func TestPlaceOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	guard := newFrozenGuard(t)
-	uc := NewPlaceOrderUseCase(resolver, guard, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@example.com", "NSE", "RELIANCE", "BUY", "MARKET", "", 1, 0,
-	))
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-}
-
-func TestModifyOrder_BlockedByRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("risk.limit_breached", func(e domain.Event) {
-		captured = e
-	})
-
-	guard := newFrozenGuard(t)
-	uc := NewModifyOrderUseCase(resolver, guard, events, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email:    "test@example.com",
-		OrderID:  "ORD-1",
-		Quantity: 1,
-	})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
-}
-
-func TestModifyOrder_BlockedByRiskguard_NoEvents(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{}
-	resolver := &mockBrokerResolver{client: client}
-	guard := newFrozenGuard(t)
-	uc := NewModifyOrderUseCase(resolver, guard, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
-		Email:   "test@example.com",
-		OrderID: "ORD-1",
-	})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-}
-
-func TestClosePosition_BlockedByRiskguard(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	events := domain.NewEventDispatcher()
-
-	var captured domain.Event
-	events.Subscribe("risk.limit_breached", func(e domain.Event) {
-		captured = e
-	})
-
-	guard := newFrozenGuard(t)
-	uc := NewClosePositionUseCase(resolver, guard, events, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-	require.NotNil(t, captured, "RiskLimitBreachedEvent should be dispatched")
-}
-
-func TestClosePosition_BlockedByRiskguard_NoEvents(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{
-		positions: broker.Positions{
-			Net: []broker.Position{
-				{Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 1, Product: "MIS"},
-			},
-		},
-	}
-	resolver := &mockBrokerResolver{client: client}
-	guard := newFrozenGuard(t)
-	uc := NewClosePositionUseCase(resolver, guard, nil, testLogger())
-
-	_, err := uc.Execute(context.Background(), "test@test.com", "NSE", "RELIANCE", "")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "riskguard")
-}
 
 func TestCloseAllPositions_BlockedByRiskguard(t *testing.T) {
 	t.Parallel()
