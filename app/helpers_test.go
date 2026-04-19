@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
@@ -161,5 +163,66 @@ func newMockAuth(email, userID, userName, accessToken string) *mockAuthenticator
 func newMockAuthError(errMsg string) *mockAuthenticator {
 	return &mockAuthenticator{
 		err: fmt.Errorf("%s", errMsg),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Server-readiness helpers — replace wall-clock Sleep with fast dial polls.
+// ---------------------------------------------------------------------------
+
+// waitForServerReady polls net.DialTimeout against addr until a TCP connection
+// succeeds or the overall budget expires. Returns nil once the server is
+// accepting connections; failure is a t.Fatal so tests stay compact.
+//
+// Budget defaults to 2s — ample for any OS to bind a port + enter Accept loop,
+// while still orders of magnitude faster than the 50-500ms fixed sleeps this
+// replaces. Typical observed time-to-ready on Windows + Linux: 1-5ms.
+//
+// Use this INSTEAD of time.Sleep whenever a test spawns an HTTP server in a
+// goroutine and then expects to dial it. Correctness guarantee: if dial
+// succeeds, the listener is accepting — no race remains.
+func waitForServerReady(t *testing.T, addr string) {
+	t.Helper()
+	waitForServerReadyWithin(t, addr, 2*time.Second)
+}
+
+// waitForServerReadyWithin is the configurable variant. Most callers should
+// use waitForServerReady; override the budget only when a test deliberately
+// exercises slow startup paths.
+func waitForServerReadyWithin(t *testing.T, addr string, budget time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(budget)
+	for {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("server at %s did not accept within %v (last err: %v)", addr, budget, err)
+		}
+		// 1ms is finer than the wall-clock slack we had (50ms min) but
+		// still friendly to the OS scheduler. Real bind completes in
+		// microseconds; this poll cadence is effectively free.
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// waitForServerShutdown polls net.DialTimeout until connection is refused
+// (server has stopped accepting) or the deadline expires. Replaces the
+// "sleep and dial" loop in shutdown tests with a single named call.
+func waitForServerShutdown(t *testing.T, addr string, budget time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(budget)
+	for {
+		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if err != nil {
+			return // connection refused / timeout → server is down
+		}
+		_ = conn.Close()
+		if time.Now().After(deadline) {
+			t.Fatalf("server at %s still accepting after %v shutdown budget", addr, budget)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

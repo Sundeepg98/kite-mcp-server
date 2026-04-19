@@ -287,7 +287,7 @@ func TestRunServer_HybridMode_Cov(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.RunServer() }()
-	time.Sleep(500 * time.Millisecond)
+	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
 
 	resp, httpErr := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
 	if httpErr == nil && resp != nil {
@@ -337,7 +337,7 @@ func TestRunServer_SSEMode_Cov(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.RunServer() }()
-	time.Sleep(500 * time.Millisecond)
+	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
 
 	resp, httpErr := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
 	if httpErr == nil && resp != nil {
@@ -384,7 +384,7 @@ func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.RunServer() }()
-	time.Sleep(500 * time.Millisecond)
+	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
 
 	// Verify OAuth endpoints are registered
 	resp, httpErr := http.Get(fmt.Sprintf("http://127.0.0.1:%d/.well-known/oauth-authorization-server", port))
@@ -1098,7 +1098,7 @@ func TestConfigureAndStartServer_SetsHandler(t *testing.T) {
 
 	srv := &http.Server{Addr: addr}
 	go app.configureAndStartServer(srv, mux)
-	time.Sleep(100 * time.Millisecond)
+	waitForServerReady(t, addr)
 
 	resp, httpErr := http.Get("http://" + addr + "/test")
 	if httpErr == nil && resp != nil {
@@ -1158,7 +1158,7 @@ func TestStartServer_AllModes(t *testing.T) {
 				errCh <- app.startServer(srv, mgr, mcpSrv, addr)
 			}()
 
-			time.Sleep(200 * time.Millisecond)
+			waitForServerReady(t, addr)
 
 			// Shutdown the server
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -2786,7 +2786,7 @@ func TestConfigureAndStartServer_WithSSE(t *testing.T) {
 	go func() {
 		app.configureAndStartServer(srv, mux)
 	}()
-	time.Sleep(50 * time.Millisecond)
+	waitForServerReady(t, srv.Addr)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)
@@ -2868,7 +2868,7 @@ func TestStartHybridServer_QuickShutdown(t *testing.T) {
 		app.startHybridServer(srv, kcMgr, mcpSrv, addr)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServerReady(t, addr)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)

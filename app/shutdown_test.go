@@ -75,8 +75,9 @@ func TestSetupGracefulShutdown_ViaShutdownCh(t *testing.T) {
 		}
 	}()
 
-	// Wait for server readiness
-	time.Sleep(50 * time.Millisecond)
+	// Wait for server readiness (dial-poll instead of fixed sleep — ~1-5ms
+	// typical, 2s budget for slow CI runners).
+	waitForServerReady(t, addr)
 
 	// Wire graceful shutdown
 	app.setupGracefulShutdown(srv, mgr)
@@ -90,21 +91,8 @@ func TestSetupGracefulShutdown_ViaShutdownCh(t *testing.T) {
 	// Trigger shutdown via the injected channel
 	close(app.shutdownCh)
 
-	// Wait for shutdown to complete
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case <-deadline:
-			t.Fatal("shutdown did not complete within 5 seconds")
-		default:
-		}
-		_, err := http.Get("http://" + addr + "/healthz")
-		if err != nil {
-			// Connection refused → server shut down
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	// Wait for shutdown to complete (dial-poll for connection-refused).
+	waitForServerShutdown(t, addr, 5*time.Second)
 }
 
 // ===========================================================================
@@ -137,12 +125,14 @@ func TestSetupGracefulShutdown_ViaShutdownCh_NilComponents(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerReady(t, addr)
 	app.setupGracefulShutdown(srv, mgr)
 
 	// Close shutdownCh — should not panic with nil components
 	close(app.shutdownCh)
 
-	// Give shutdown goroutine time to complete
-	time.Sleep(200 * time.Millisecond)
+	// Wait for shutdown — 3s budget covers the sum of component Stop()s on
+	// slow CI runners while still an order of magnitude faster than the
+	// 200ms fixed sleep this replaces when all components are nil.
+	waitForServerShutdown(t, addr, 3*time.Second)
 }
