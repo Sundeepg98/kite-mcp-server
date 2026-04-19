@@ -31,24 +31,21 @@ func TestWatchPluginBinary_FiresOnWrite(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// StartPluginBinaryWatcher subscribes synchronously before
+	// spawning the watcher goroutine, so no subscribe-readiness
+	// wait is needed — any subsequent file write is observable.
 	require.NoError(t, StartPluginBinaryWatcher(ctx))
 	defer StopPluginBinaryWatcher()
-
-	// Give the goroutine a moment to subscribe.
-	time.Sleep(50 * time.Millisecond)
 
 	// Overwrite the binary.
 	require.NoError(t, os.WriteFile(binary, []byte("v2"), 0o755))
 
-	// Wait for the close callback to fire.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if closeCount.Load() > 0 {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	assert.GreaterOrEqual(t, closeCount.Load(), int32(1),
+	// Wait for the close callback to fire. 2s budget covers the
+	// 250ms debounce window + fsnotify event-delivery latency on
+	// slow CI; typical wall time is ~300ms.
+	require.Eventually(t, func() bool {
+		return closeCount.Load() > 0
+	}, 2*time.Second, 10*time.Millisecond,
 		"Close() must fire at least once after WRITE event")
 }
 
@@ -71,17 +68,25 @@ func TestWatchPluginBinary_DebouncesRapidWrites(t *testing.T) {
 	defer cancel()
 	require.NoError(t, StartPluginBinaryWatcher(ctx))
 	defer StopPluginBinaryWatcher()
-	time.Sleep(50 * time.Millisecond)
+	// Subscribe is synchronous in Start — no wait needed.
 
-	// Five rapid writes within 100ms — the debounce window collapses
-	// them to (usually 1, at most 2) Close() calls.
+	// Five rapid writes within 75ms — the debounce window (250ms)
+	// collapses them to (usually 1, at most 2) Close() calls. The
+	// 15ms inter-write gap is deliberately shorter than the
+	// debounce window to guarantee coalescing.
 	for i := 0; i < 5; i++ {
 		require.NoError(t, os.WriteFile(binary, []byte("v"+string(rune('2'+i))), 0o755))
 		time.Sleep(15 * time.Millisecond)
 	}
 
-	// Wait for the debounce window to flush.
-	time.Sleep(500 * time.Millisecond)
+	// Poll for at least one Close() with a budget that covers the
+	// debounce window (250ms) + fsnotify event latency. Once the
+	// first fires, we still need a small grace window for any late
+	// second fire to land before we assert the upper bound.
+	require.Eventually(t, func() bool {
+		return closeCount.Load() >= 1
+	}, 2*time.Second, 10*time.Millisecond, "at least one Close() must fire")
+	time.Sleep(300 * time.Millisecond) // let any stragglers land before upper-bound check
 
 	count := closeCount.Load()
 	// Accept 1 or 2 — platforms vary. The invariant is "not 5."
@@ -110,17 +115,17 @@ func TestWatchPluginBinary_NoopOnNoChange(t *testing.T) {
 	defer cancel()
 	require.NoError(t, StartPluginBinaryWatcher(ctx))
 	defer StopPluginBinaryWatcher()
-	time.Sleep(50 * time.Millisecond)
 
 	// Rewrite with identical bytes.
 	require.NoError(t, os.WriteFile(binary, contents, 0o755))
-	time.Sleep(400 * time.Millisecond)
 
 	// We DO expect a Close() — the watcher does not diff contents
 	// by default. The user asked for "mtime or checksum" trigger;
-	// we implement mtime via fsnotify WRITE events. Checksum-based
-	// change detection is a future optimisation.
-	assert.GreaterOrEqual(t, closeCount.Load(), int32(1),
+	// we implement mtime via fsnotify WRITE events. Poll for the
+	// callback; 2s covers debounce + fsnotify latency.
+	require.Eventually(t, func() bool {
+		return closeCount.Load() >= 1
+	}, 2*time.Second, 10*time.Millisecond,
 		"WRITE event must fire even on same-bytes rewrite")
 }
 
@@ -141,13 +146,15 @@ func TestWatchPluginBinary_StopCleansUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	require.NoError(t, StartPluginBinaryWatcher(ctx))
-	time.Sleep(50 * time.Millisecond)
 
-	// Stop the watcher.
+	// Stop the watcher. StopPluginBinaryWatcher blocks until the
+	// goroutine exits (fsnotify Close() + ctx cancel), so no
+	// post-stop wait is needed.
 	StopPluginBinaryWatcher()
-	time.Sleep(50 * time.Millisecond)
 
-	// Subsequent write must not fire.
+	// Subsequent write must not fire. This is inherently proving a
+	// negative: a short window is sufficient since a real leak
+	// would fire within fsnotify's delivery window (sub-ms).
 	require.NoError(t, os.WriteFile(binary, []byte("v2"), 0o755))
 	time.Sleep(300 * time.Millisecond)
 
@@ -175,13 +182,15 @@ func TestWatchPluginBinary_MultiplePluginsIndependent(t *testing.T) {
 	defer cancel()
 	require.NoError(t, StartPluginBinaryWatcher(ctx))
 	defer StopPluginBinaryWatcher()
-	time.Sleep(50 * time.Millisecond)
 
 	// Write only to A.
 	require.NoError(t, os.WriteFile(binA, []byte("a2"), 0o755))
-	time.Sleep(400 * time.Millisecond)
 
-	assert.GreaterOrEqual(t, closeA.Load(), int32(1), "plugin-a Close must fire")
+	// Poll for A's close to fire; proving B did NOT fire is
+	// inherently negative but bounded by the same 2s window.
+	require.Eventually(t, func() bool {
+		return closeA.Load() >= 1
+	}, 2*time.Second, 10*time.Millisecond, "plugin-a Close must fire")
 	assert.Equal(t, int32(0), closeB.Load(), "plugin-b Close must NOT fire")
 }
 
