@@ -1,8 +1,12 @@
 package riskguard
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -287,7 +291,11 @@ var _ Check = (*SubprocessCheck)(nil)
 
 // RegisterSubprocessCheck is the Guard-side ergonomic wrapper:
 // construct a SubprocessCheck from minimal config and register it
-// in the Check chain.
+// in the Check chain. Also computes a SHA-256 checksum of the
+// plugin binary on disk and emits it to the caller via the
+// returned ChecksumEmitter — the caller can stitch that into the
+// mcp.PluginSBOM registry without creating a dependency cycle
+// (riskguard MUST NOT import mcp).
 //
 // Returns an error for invalid config; otherwise the subprocess
 // check is installed at the given Order slot. The subprocess is
@@ -318,4 +326,54 @@ func (g *Guard) RegisterSubprocessCheck(name, executable string, order int) erro
 	sc := NewSubprocessCheck(cfg)
 	g.RegisterCheck(sc)
 	return nil
+}
+
+// SubprocessChecksumEmitter is the callback the caller supplies to
+// capture the plugin-binary checksum for SBOM tracking. Kept as a
+// narrow callback (not a direct import of mcp.RegisterPluginSBOM)
+// so the riskguard package remains import-cycle-free.
+//
+// Contract: emitter is invoked synchronously from
+// RegisterSubprocessCheckWithSBOM before the SubprocessCheck is
+// installed on the Guard. A nil emitter disables SBOM emission;
+// a non-nil call with an empty checksum means the binary could
+// not be hashed (file missing, permission error) — callers
+// should treat that as degraded state.
+type SubprocessChecksumEmitter func(name, executable, checksum string, err error)
+
+// RegisterSubprocessCheckWithSBOM is the SBOM-aware variant of
+// RegisterSubprocessCheck. Computes a SHA-256 of the plugin binary
+// and passes (name, executable, "sha256:<hex>", nil) to the emitter
+// before the check is registered. If the binary can't be hashed,
+// invokes the emitter with an empty checksum + the error, then
+// proceeds with registration anyway — a missing binary will
+// fail-closed at Evaluate time (see SubprocessCheck.failClosed).
+func (g *Guard) RegisterSubprocessCheckWithSBOM(
+	name, executable string,
+	order int,
+	emit SubprocessChecksumEmitter,
+) error {
+	if emit != nil {
+		checksum, err := checksumExecutable(executable)
+		emit(name, executable, checksum, err)
+	}
+	return g.RegisterSubprocessCheck(name, executable, order)
+}
+
+// checksumExecutable streams the file at path through SHA-256 and
+// returns "sha256:<hex>". Kept as a thin wrapper rather than
+// importing mcp.ChecksumFile because riskguard MUST NOT depend on
+// mcp — the callback pattern inverts the dependency so the caller
+// (typically app/wire.go) owns the SBOM-emission side.
+func checksumExecutable(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("checksumExecutable: open %s: %w", path, err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("checksumExecutable: hash %s: %w", path, err)
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }

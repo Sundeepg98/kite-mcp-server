@@ -113,6 +113,12 @@ type PluginManifest struct {
 	// LifecycleCount is the number of registries participating in
 	// the Init/Shutdown/Reload coordination.
 	LifecycleCount         int
+	// SBOM is the Software Bill of Materials — per-plugin checksum,
+	// optional version, optional signature. Populated by
+	// RegisterPluginSBOM (see plugin_sbom.go). Answers "what code
+	// is serving this plugin right now?" — the forensic question
+	// after a drift / tampering incident.
+	SBOM                   map[string]PluginSBOMEntry
 }
 
 // GetPluginManifest returns a snapshot of every plugin-contributed
@@ -133,6 +139,7 @@ func GetPluginManifest() PluginManifest {
 		EventSubscriptionCount: PluginEventSubscriptionCount(),
 		Health:                 PluginHealth(),
 		LifecycleCount:         PluginLifecycleCount(),
+		SBOM:                   ListPluginSBOM(),
 	}
 }
 
