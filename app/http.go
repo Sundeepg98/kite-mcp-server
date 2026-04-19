@@ -850,6 +850,11 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	app.logger.Info("SSE endpoints available", "url", fmt.Sprintf("http://%s/sse and http://%s/message", url, url))
 	app.logger.Info("MCP endpoint available", "url", fmt.Sprintf("http://%s/mcp", url))
 
+	// Wire graceful shutdown AFTER setupMux has populated app.rateLimiters;
+	// the `go` statement inside setupGracefulShutdown establishes the
+	// happens-before edge needed for the shutdown goroutine's later reads.
+	app.setupGracefulShutdown(srv, kcManager)
+
 	app.configureAndStartServer(srv, mux)
 }
 
@@ -860,6 +865,9 @@ func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpSer
 
 	// Setup mux with common handlers
 	mux := app.setupMux(kcManager)
+
+	// Wire graceful shutdown AFTER setupMux (see startHybridServer).
+	app.setupGracefulShutdown(srv, kcManager)
 
 	go app.configureAndStartServer(srv, mux)
 
@@ -877,6 +885,9 @@ func (app *App) startSSEServer(srv *http.Server, kcManager *kc.Manager, mcpServe
 	// Setup mux with common handlers
 	mux := app.setupMux(kcManager)
 	app.registerSSEEndpoints(mux, sse)
+
+	// Wire graceful shutdown AFTER setupMux (see startHybridServer).
+	app.setupGracefulShutdown(srv, kcManager)
 
 	app.logger.Info("Active MCP and Kite sessions will be monitored and cleaned up automatically")
 	app.configureAndStartServer(srv, mux)
@@ -899,6 +910,9 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	} else {
 		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
+
+	// Wire graceful shutdown AFTER setupMux (see startHybridServer).
+	app.setupGracefulShutdown(srv, kcManager)
 
 	app.logger.Info("MCP session manager configured with automatic cleanup for both MCP and Kite sessions")
 	app.logger.Info("MCP Session manager configured", "session_expiry", kc.DefaultSessionDuration)

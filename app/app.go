@@ -472,8 +472,14 @@ func (app *App) RunServer() error {
 	}
 
 	srv := app.createHTTPServer(url)
-	app.setupGracefulShutdown(srv, kcManager)
 
+	// Note: setupGracefulShutdown is invoked inside startXxxServer AFTER
+	// setupMux has populated app.rateLimiters (and any other fields the
+	// shutdown goroutine reads). The `go` statement inside setupGracefulShutdown
+	// establishes the happens-before edge that the race detector requires;
+	// calling setupGracefulShutdown here (before startServer) would race on
+	// those fields because setupMux runs on the main goroutine AFTER this
+	// point while the shutdown goroutine is already spawned.
 	return app.startServer(srv, kcManager, mcpServer, url)
 }
 
