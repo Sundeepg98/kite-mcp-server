@@ -9,42 +9,72 @@ package app
 //   - papertrading.Monitor background loop (fixed via sync.Once Stop)
 //   - invitation-cleanup ticker goroutine (fixed via context-cancel)
 //
-// Uses go.uber.org/goleak VerifyNone at test end for precise leak
-// attribution; replaces the earlier runtime.NumGoroutine tolerance
-// pattern.
+// Uses the delta-NumGoroutine tolerance pattern (not goleak.VerifyNone)
+// because the app package hosts ~100 parallel tests that each spawn
+// their own DB pools, scheduler loops, ticker services, OAuth cleanup
+// workers, rate-limit reload loops, metrics cleanup, papertrading
+// Monitors, and fill-watchers. goleak.VerifyNone would require
+// whitelisting every intra-package goroutine class — brittle and
+// risks masking real NewApp-owned leaks.
+//
+// The NumGoroutine-delta pattern is resilient: it measures the delta
+// from a per-test baseline after cycles of NewApp+Shutdown, and a
+// small tolerance absorbs test-runtime noise. A real leak in NewApp
+// (~20 goroutines over 20 cycles) would blow past the tolerance
+// while intra-package interference stays below it.
+//
+// Other goroutine sentinels in the repo (kc/scheduler, kc/audit,
+// kc/ticker, kc/alerts, kc/billing, kc/instruments, kc/papertrading)
+// DO use goleak because their packages have narrower test surfaces
+// and the strict-equality check gives better failure attribution.
 
 import (
+	"runtime"
 	"testing"
-
-	"go.uber.org/goleak"
+	"time"
 )
 
-// TestGoroutineLeakSentinel_NewApp verifies that 10 NewApp calls with
-// proper metrics.Shutdown do not leak goroutines. Without the
-// Shutdown call the prior impl leaked one metrics cleanup goroutine
-// per NewApp — goleak would fire immediately with that function name
-// in the stack trace.
+// TestGoroutineLeakSentinel_NewApp verifies that 20 NewApp() calls with
+// proper Shutdown() follow-up do not accumulate more than a handful of
+// goroutines. Without the Shutdown call (the leak this guards), each
+// NewApp leaked one metrics cleanup goroutine, so 20 calls = ~20 leaked.
 func TestGoroutineLeakSentinel_NewApp(t *testing.T) {
-	defer goleak.VerifyNone(t,
-		goleak.IgnoreTopFunction("testing.(*T).Parallel"),
-		// mcp.NewToolCache spawns an unstoppable 5-minute cleanup
-		// ticker; it's a process-lifetime singleton, not per-App, so
-		// it appears once per test binary and is not a NewApp leak.
-		goleak.IgnoreTopFunction("github.com/zerodha/kite-mcp-server/mcp.NewToolCache.func1"),
-	)
+	// Warmup: allocate one app to settle lazy runtime workers (goroutine
+	// count climbs on first use of certain stdlib paths like database/sql
+	// drivers, crypto/rand, signal handlers) before we take a baseline.
+	warmup := NewApp(testLogger())
+	warmup.metrics.Shutdown()
+	runtime.GC()
+	time.Sleep(50 * time.Millisecond)
 
-	const cycles = 10
+	baseline := runtime.NumGoroutine()
+
+	const cycles = 20
 	for i := 0; i < cycles; i++ {
 		app := NewApp(testLogger())
 		// Immediately shut down the metrics routine — this is what
 		// newTestApp.t.Cleanup does in production tests.
 		app.metrics.Shutdown()
 	}
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	after := runtime.NumGoroutine()
+
+	delta := after - baseline
+	// Tolerance 3 allows for GC helpers / test runtime noise. Without the
+	// Shutdown fix, delta would be ~20.
+	const tolerance = 3
+	if delta > tolerance {
+		t.Errorf("goroutine leak: baseline=%d after=%d delta=%d exceeds tolerance=%d",
+			baseline, after, delta, tolerance)
+	}
 }
 
-// TestMetricsShutdownIdempotent verifies metrics.Manager.Shutdown is
-// safe to call from both cleanupInitializeServices (test cleanup) and
-// setupGracefulShutdown (server shutdown) without panic.
+// TestMetricsShutdownIdempotent verifies metrics.Manager.Shutdown is safe
+// to call from both cleanupInitializeServices (test cleanup) and
+// setupGracefulShutdown (server shutdown) without panic. The sync.Once
+// guard is already present on metrics.Manager — this test locks in that
+// invariant so a refactor can't silently remove it.
 func TestMetricsShutdownIdempotent(t *testing.T) {
 	app := newTestApp(t) // newTestApp already arranges cleanup
 	// Triple-Shutdown must not panic (the Cleanup will call it a 4th time).
