@@ -330,7 +330,11 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.manager.Logger.Error("Failed to modify order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
-			resp, _ := raw.(broker.OrderResponse)
+			resp, terr := BusResult[broker.OrderResponse](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("modify_order bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 			return handler.MarshalResponse(resp, "modify_order")
 		})
 	}
@@ -384,7 +388,11 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.manager.Logger.Error("Failed to cancel order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
-			resp, _ := raw.(broker.OrderResponse)
+			resp, terr := BusResult[broker.OrderResponse](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("cancel_order bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 			return handler.MarshalResponse(resp, "cancel_order")
 		})
 	}

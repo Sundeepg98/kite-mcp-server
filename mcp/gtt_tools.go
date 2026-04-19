@@ -150,7 +150,11 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to place GTT order: %s", err.Error())), nil
 			}
-			resp, _ := raw.(broker.GTTResponse)
+			resp, terr := BusResult[broker.GTTResponse](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("place_gtt_order bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 			return handler.MarshalResponse(resp, "place_gtt_order")
 		})
 	}
@@ -196,7 +200,11 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete GTT order: %s", err.Error())), nil
 			}
-			resp, _ := raw.(broker.GTTResponse)
+			resp, terr := BusResult[broker.GTTResponse](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("delete_gtt_order bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 			return handler.MarshalResponse(resp, "delete_gtt_order")
 		})
 	}
@@ -339,7 +347,11 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify GTT order: %s", err.Error())), nil
 			}
-			resp, _ := raw.(broker.GTTResponse)
+			resp, terr := BusResult[broker.GTTResponse](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("modify_gtt_order bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 			return handler.MarshalResponse(resp, "modify_gtt_order")
 		})
 	}

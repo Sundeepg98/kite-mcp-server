@@ -2293,7 +2293,7 @@ func TestBuildTradingContext_WithFullData(t *testing.T) {
 	}
 
 	errs := map[string]string{"some_api": "timeout"}
-	tc := buildTradingContext(data, errs, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, errs, mgr, "test@example.com")
 
 	assert.Equal(t, 2, tc.OpenPositions)
 	assert.Equal(t, 800.0, tc.PositionsPnL)
@@ -2334,7 +2334,7 @@ func TestBuildTradingContext_HighMarginUtilization_Push100(t *testing.T) {
 		},
 	}
 
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.Equal(t, 90.0, tc.MarginUtilization)
 	// Should have high margin warning
 	found := false
@@ -2351,7 +2351,7 @@ func TestBuildTradingContext_EmptyData_Push100(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	tc := buildTradingContext(map[string]any{}, nil, mgr, "")
+	tc := buildTradingContextFromMap(map[string]any{}, nil, mgr, "")
 	assert.Equal(t, 0, tc.OpenPositions)
 	assert.Equal(t, 0, tc.HoldingsCount)
 	assert.Equal(t, 0, tc.PendingOrders)
@@ -2370,7 +2370,7 @@ func TestBuildTradingContext_WithAlerts(t *testing.T) {
 		store.MarkTriggered(id2, 1950)
 	}
 
-	tc := buildTradingContext(map[string]any{}, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(map[string]any{}, nil, mgr, "test@example.com")
 	assert.Equal(t, 1, tc.ActiveAlerts)
 	assert.Len(t, tc.AlertDetails, 1)
 	assert.Equal(t, "INFY", tc.AlertDetails[0].Symbol)
@@ -2510,7 +2510,7 @@ func TestPageRoutes_AllValid(t *testing.T) {
 func TestBuildTradingContext_MarketStatus(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	tc := buildTradingContext(map[string]any{}, nil, mgr, "")
+	tc := buildTradingContextFromMap(map[string]any{}, nil, mgr, "")
 	// scheduler.MarketStatus always returns a non-empty string
 	assert.NotEmpty(t, tc.MarketStatus)
 	// Validate it's one of the known statuses

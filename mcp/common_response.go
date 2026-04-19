@@ -65,3 +65,37 @@ func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCal
 		return h.MarshalResponse(data, toolName)
 	})
 }
+
+// BusResult[T] narrows a CommandBus/QueryBus dispatch result (typed as any)
+// into a strongly typed value T. Returns a non-nil error when the dispatch
+// failed OR when the underlying value is not of the expected type. The nil-
+// value case is returned as (zero T, nil) so callers that expect an empty
+// result (e.g. a no-op event persister path) handle it the same way as a
+// successful zero-valued response.
+//
+// This helper replaces the blanket `resp, _ := raw.(broker.Xxx)` pattern at
+// CommandBus dispatch sites, which silently swallows type mismatches and
+// hands an empty struct to MarshalResponse. With BusResult, a type mismatch
+// surfaces as an explicit error — the tool-level handler reports it cleanly
+// instead of returning a misleading "success" with zero fields.
+//
+// Usage:
+//
+//	resp, err := BusResult[broker.OrderResponse](raw)
+//	if err != nil {
+//	    return mcp.NewToolResultError(err.Error()), nil
+//	}
+//
+// T must be the non-pointer concrete type returned by the handler. For
+// pointer returns (e.g. *usecases.LoginResult), use BusResultPtr instead.
+func BusResult[T any](raw any) (T, error) {
+	var zero T
+	if raw == nil {
+		return zero, nil
+	}
+	v, ok := raw.(T)
+	if !ok {
+		return zero, fmt.Errorf("cqrs: unexpected bus result type %T (want %T)", raw, zero)
+	}
+	return v, nil
+}

@@ -1779,7 +1779,7 @@ func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 		},
 	}
 
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Equal(t, "INFY", resp.Symbol)
 	assert.Equal(t, "NSE", resp.Exchange)
 	assert.Equal(t, "BUY", resp.Side)
@@ -1798,7 +1798,7 @@ func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 
 func TestBuildPreTradeResponse_EmptyData(t *testing.T) {
 	t.Parallel()
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0,
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0,
 		map[string]any{}, nil)
 	assert.Equal(t, "INFY", resp.Symbol)
 	assert.Equal(t, 0.0, resp.CurrentPrice)
@@ -1816,7 +1816,7 @@ func TestBuildPreTradeResponse_InsufficientMargin(t *testing.T) {
 		},
 		"order_margins": map[string]any{"total": float64(50000)},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 100, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 100, "CNC", 0, data, nil)
 	assert.Equal(t, "BLOCKED", resp.Recommendation)
 	assert.GreaterOrEqual(t, len(resp.Warnings), 1)
 }
@@ -1832,7 +1832,7 @@ func TestBuildPreTradeResponse_HighMarginUtilization(t *testing.T) {
 		},
 		"order_margins": map[string]any{"total": float64(8000)}, // 80% utilization
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Contains(t, resp.Recommendation, "CAUTION")
 }
 
@@ -1852,7 +1852,7 @@ func TestBuildPreTradeResponse_OverConcentration(t *testing.T) {
 	}
 	// Order value = 5000 * 100 = 500000, portfolio = 35000, total = 535000
 	// orderAsPct = 500000/535000 * 100 ≈ 93.5% — over-concentrated
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 100, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 100, "CNC", 0, data, nil)
 	foundConcentration := false
 	for _, w := range resp.Warnings {
 		if containsAnyStr(w, "concentration") || containsAnyStr(w, "Over-concentration") {
@@ -1869,7 +1869,7 @@ func TestBuildPreTradeResponse_SellStopLoss(t *testing.T) {
 			"NSE:INFY": {LastPrice: 1500},
 		},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "SELL", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "SELL", 10, "CNC", 0, data, nil)
 	// SELL stop loss should be above the price
 	assert.Greater(t, resp.StopLoss.CNC2Pct, 1500.0)
 	assert.Greater(t, resp.StopLoss.MIS1Pct, 1500.0)
@@ -1882,7 +1882,7 @@ func TestBuildPreTradeResponse_WithLimitPrice(t *testing.T) {
 			"NSE:INFY": {LastPrice: 1500},
 		},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 1450, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 1450, data, nil)
 	// Order value should use limit price
 	assert.Equal(t, roundTo2(14500.0), resp.OrderValue)
 }
@@ -1893,7 +1893,7 @@ func TestBuildPreTradeResponse_WithAPIErrors(t *testing.T) {
 		"ltp":     "API error: rate limited",
 		"margins": "timeout",
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0,
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0,
 		map[string]any{}, apiErrors)
 	assert.NotNil(t, resp.Errors)
 	assert.Contains(t, resp.Errors, "ltp")
@@ -1916,7 +1916,7 @@ func TestBuildPreTradeResponse_NoExistingPosition(t *testing.T) {
 			},
 		},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Nil(t, resp.ExistingPos, "should not have existing position for different symbol")
 }
 
@@ -1932,7 +1932,7 @@ func TestBuildPreTradeResponse_FallbackMargin(t *testing.T) {
 		},
 		// No "order_margins" key — fallback
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	// Margin required should fall back to order value (1000 * 10 = 10000)
 	assert.Equal(t, 10000.0, resp.Margin.Required)
 }
@@ -1978,7 +1978,7 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 		},
 	}
 
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.NotNil(t, tc)
 	assert.NotEmpty(t, tc.MarketStatus)
 	assert.Equal(t, 500000.0, tc.MarginAvailable)
@@ -1998,7 +1998,7 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 func TestBuildTradingContext_EmptyData(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	tc := buildTradingContext(map[string]any{}, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(map[string]any{}, nil, mgr, "test@example.com")
 	assert.NotNil(t, tc)
 	assert.NotEmpty(t, tc.MarketStatus)
 	assert.Equal(t, 0.0, tc.MarginAvailable)
@@ -2010,7 +2010,7 @@ func TestBuildTradingContext_WithAPIErrors(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	errs := map[string]string{"margins": "timeout", "positions": "auth failed"}
-	tc := buildTradingContext(map[string]any{}, errs, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(map[string]any{}, errs, mgr, "test@example.com")
 	assert.NotNil(t, tc.Errors)
 	assert.Contains(t, tc.Errors, "margins")
 	assert.Contains(t, tc.Errors, "positions")
@@ -2024,7 +2024,7 @@ func TestBuildTradingContext_HighMarginUtilization(t *testing.T) {
 			Equity: broker.SegmentMargin{Available: 100000, Used: 500000, Total: 600000},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.Greater(t, tc.MarginUtilization, 80.0)
 	foundHighMargin := false
 	for _, w := range tc.Warnings {
@@ -2043,7 +2043,7 @@ func TestBuildTradingContext_ManyRejectedOrders(t *testing.T) {
 		orders[i] = broker.Order{Status: "REJECTED"}
 	}
 	data := map[string]any{"orders": orders}
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.Equal(t, 5, tc.RejectedToday)
 	foundRejectedWarning := false
 	for _, w := range tc.Warnings {
@@ -2066,7 +2066,7 @@ func TestBuildTradingContext_OrderStatuses(t *testing.T) {
 			{Status: "CANCELLED"},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.Equal(t, 1, tc.ExecutedToday)
 	assert.Equal(t, 2, tc.PendingOrders)
 	assert.Equal(t, 1, tc.RejectedToday)
@@ -2090,7 +2090,7 @@ func TestBuildTradingContext_PositionPnLPct(t *testing.T) {
 			},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "")
+	tc := buildTradingContextFromMap(data, nil, mgr, "")
 	assert.Equal(t, 1, tc.OpenPositions)
 	assert.Equal(t, 1, tc.NRMLPositions)
 	assert.NotEmpty(t, tc.PositionDetails)
@@ -2109,7 +2109,7 @@ func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
 			},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "")
+	tc := buildTradingContextFromMap(data, nil, mgr, "")
 	assert.Equal(t, 1, tc.OpenPositions, "closed position (qty=0) should be excluded")
 	assert.Equal(t, 1000.0, tc.PositionsPnL, "only open position PnL should be counted")
 }
@@ -2121,7 +2121,7 @@ func TestBuildPreTradeResponse_EmptyPositions(t *testing.T) {
 			Net: []broker.Position{},
 		},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Nil(t, resp.ExistingPos)
 }
 
@@ -2130,7 +2130,7 @@ func TestBuildPreTradeResponse_EmptyHoldings(t *testing.T) {
 	data := map[string]any{
 		"holdings": []broker.Holding{},
 	}
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 10, "CNC", 0, data, nil)
 	assert.Equal(t, "low", resp.PortfolioImpact.ConcentrationAfter)
 }
 
@@ -2146,7 +2146,7 @@ func TestBuildPreTradeResponse_ModerateConcentration(t *testing.T) {
 	}
 	// Order value = 100 * 20 = 2000, portfolio = 100000, total = 102000
 	// orderAsPct ≈ 2%, which is low
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 20, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 20, "CNC", 0, data, nil)
 	assert.Equal(t, "low", resp.PortfolioImpact.ConcentrationAfter)
 }
 
@@ -2158,7 +2158,7 @@ func TestBuildTradingContext_NoPositionDetails(t *testing.T) {
 			Net: []broker.Position{}, // no open positions
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "test@example.com")
+	tc := buildTradingContextFromMap(data, nil, mgr, "test@example.com")
 	assert.Equal(t, 0, tc.OpenPositions)
 	assert.Nil(t, tc.PositionDetails)
 }
@@ -2173,7 +2173,7 @@ func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
 			},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "")
+	tc := buildTradingContextFromMap(data, nil, mgr, "")
 	assert.Equal(t, 1, tc.OpenPositions)
 	// With zero avg price, PnLPct should be 0
 	assert.Equal(t, 0.0, tc.PositionDetails[0].PnLPct)
@@ -2259,7 +2259,7 @@ func TestBuildTradingContext_ZeroMargin(t *testing.T) {
 			Equity: broker.SegmentMargin{Available: 0, Used: 0, Total: 0},
 		},
 	}
-	tc := buildTradingContext(data, nil, mgr, "")
+	tc := buildTradingContextFromMap(data, nil, mgr, "")
 	assert.Equal(t, 0.0, tc.MarginUtilization)
 }
 
@@ -2278,7 +2278,7 @@ func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 	data := map[string]any{
 		"positions": broker.Positions{Net: positions},
 	}
-	tc := buildTradingContext(data, nil, mgr, "")
+	tc := buildTradingContextFromMap(data, nil, mgr, "")
 	assert.Equal(t, 5, tc.OpenPositions)
 	assert.Equal(t, 5, tc.MISPositions)
 }
@@ -2295,7 +2295,7 @@ func TestBuildPreTradeResponse_HighConcentrationLevel(t *testing.T) {
 	}
 	// Order value = 1000 * 50 = 50000, portfolio = 1000, total = 51000
 	// orderAsPct = 50000/51000 * 100 ≈ 98% — high concentration
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 50, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 50, "CNC", 0, data, nil)
 	assert.Equal(t, "high", resp.PortfolioImpact.ConcentrationAfter)
 }
 
@@ -2335,7 +2335,7 @@ func TestBuildPreTradeResponse_ModerateConcentrationLevel(t *testing.T) {
 	}
 	// Order value = 100 * 60 = 6000, portfolio = 30000, total = 36000
 	// orderAsPct = 6000/36000 * 100 ≈ 16.7% — moderate concentration
-	resp := buildPreTradeResponse("NSE", "INFY", "BUY", 60, "CNC", 0, data, nil)
+	resp := buildPreTradeResponseFromMap("NSE", "INFY", "BUY", 60, "CNC", 0, data, nil)
 	assert.Equal(t, "moderate", resp.PortfolioImpact.ConcentrationAfter)
 }
 

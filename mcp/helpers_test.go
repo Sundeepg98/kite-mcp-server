@@ -11,12 +11,14 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
@@ -442,4 +444,105 @@ func newTestAuditStore(t *testing.T) *audit.Store {
 		db.Close()
 	})
 	return store
+}
+
+// --- Test bridges for typed pre-trade / trading-context builders --------
+//
+// buildPreTradeResponse and buildTradingContext were rewritten to consume
+// *usecases.PreTradeData and *usecases.TradingContextResult directly (see
+// pretrade_tool.go / context_tool.go — the map[string]any round-trip and
+// its ten broker.Xxx type assertions were replaced by end-to-end typed
+// struct flow).
+//
+// The existing table-driven tests were written against the old
+// map[string]any signature and are still the canonical regression corpus.
+// Rather than hand-migrating every case (which is pure churn — same data,
+// different shape), we provide small map->struct bridges below so the old
+// call sites keep working unchanged. These bridges live in _test.go scope
+// and are never compiled into the production binary.
+
+// buildPreTradeResponseFromMap bridges the old map[string]any-based test
+// signature to the typed buildPreTradeResponse entry point. Accepts the
+// same keys the former implementation read: "ltp", "margins", "positions",
+// "holdings", "order_margins".
+func buildPreTradeResponseFromMap(
+	exchange, tradingsymbol, transactionType string,
+	quantity int, product string, limitPrice float64,
+	data map[string]any, apiErrors map[string]string,
+) *preTradeResponse {
+	typed := ptDataFromMap(data, apiErrors)
+	return buildPreTradeResponse(
+		exchange, tradingsymbol, transactionType,
+		quantity, product, limitPrice, typed,
+	)
+}
+
+// buildTradingContextFromMap bridges the old map[string]any test signature
+// to the typed buildTradingContext entry point.
+func buildTradingContextFromMap(data map[string]any, apiErrors map[string]string, mgr *kc.Manager, email string) *TradingContext {
+	typed := tcResultFromMap(data, apiErrors)
+	return buildTradingContext(typed, mgr, email)
+}
+
+func ptDataFromMap(data map[string]any, apiErrors map[string]string) *usecases.PreTradeData {
+	if data == nil && apiErrors == nil {
+		return nil
+	}
+	res := &usecases.PreTradeData{Errors: apiErrors}
+	if v, ok := data["ltp"]; ok {
+		if m, ok := v.(map[string]broker.LTP); ok {
+			res.LTP = m
+		}
+	}
+	if v, ok := data["margins"]; ok {
+		if m, ok := v.(broker.Margins); ok {
+			cp := m
+			res.Margins = &cp
+		}
+	}
+	if v, ok := data["positions"]; ok {
+		if p, ok := v.(broker.Positions); ok {
+			cp := p
+			res.Positions = &cp
+		}
+	}
+	if v, ok := data["holdings"]; ok {
+		if h, ok := v.([]broker.Holding); ok {
+			res.Holdings = h
+		}
+	}
+	if v, ok := data["order_margins"]; ok {
+		res.OrderMargins = v
+	}
+	return res
+}
+
+func tcResultFromMap(data map[string]any, apiErrors map[string]string) *usecases.TradingContextResult {
+	if data == nil && apiErrors == nil {
+		return nil
+	}
+	res := &usecases.TradingContextResult{Errors: apiErrors}
+	if v, ok := data["margins"]; ok {
+		if m, ok := v.(broker.Margins); ok {
+			cp := m
+			res.Margins = &cp
+		}
+	}
+	if v, ok := data["positions"]; ok {
+		if p, ok := v.(broker.Positions); ok {
+			cp := p
+			res.Positions = &cp
+		}
+	}
+	if v, ok := data["orders"]; ok {
+		if o, ok := v.([]broker.Order); ok {
+			res.Orders = o
+		}
+	}
+	if v, ok := data["holdings"]; ok {
+		if h, ok := v.([]broker.Holding); ok {
+			res.Holdings = h
+		}
+	}
+	return res
 }

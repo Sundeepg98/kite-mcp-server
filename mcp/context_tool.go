@@ -8,7 +8,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
@@ -103,35 +102,22 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			ucResult := raw.(*usecases.TradingContextResult)
-
-			// Convert use case result to the legacy data/errs maps for buildTradingContext
-			data := make(map[string]any)
-			errs := make(map[string]string)
-			if ucResult.Margins != nil {
-				data["margins"] = *ucResult.Margins
-			}
-			if ucResult.Positions != nil {
-				data["positions"] = *ucResult.Positions
-			}
-			if ucResult.Orders != nil {
-				data["orders"] = ucResult.Orders
-			}
-			if ucResult.Holdings != nil {
-				data["holdings"] = ucResult.Holdings
-			}
-			if ucResult.Errors != nil {
-				errs = ucResult.Errors
+			ucResult, terr := BusResult[*usecases.TradingContextResult](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("trading_context bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
 			}
 
-			tradingCtx := buildTradingContext(data, errs, manager, email)
+			tradingCtx := buildTradingContext(ucResult, manager, email)
 			return handler.MarshalResponse(tradingCtx, "trading_context")
 		})
 	}
 }
 
 // buildTradingContext processes the raw API responses into a structured TradingContext.
-func buildTradingContext(data map[string]any, apiErrors map[string]string, manager *kc.Manager, email string) *TradingContext {
+// Consumes the typed *usecases.TradingContextResult directly so broker types flow
+// end-to-end without map[string]any reboxing at the tool layer.
+func buildTradingContext(data *usecases.TradingContextResult, manager *kc.Manager, email string) *TradingContext {
 	tc := &TradingContext{
 		Warnings: make([]string, 0),
 	}
@@ -151,20 +137,23 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 		tc.Warnings = append(tc.Warnings, "Market is in closing session (3:30-4:00 PM IST).")
 	}
 
+	if data == nil {
+		return tc
+	}
+
 	// Copy API errors
-	if len(apiErrors) > 0 {
-		tc.Errors = apiErrors
+	if len(data.Errors) > 0 {
+		tc.Errors = data.Errors
 	}
 
 	// Process margins (broker-agnostic)
-	if marginsRaw, ok := data["margins"]; ok {
-		margins := marginsRaw.(broker.Margins)
-		eqAvail := margins.Equity.Available
-		eqUsed := margins.Equity.Used
+	if data.Margins != nil {
+		eqAvail := data.Margins.Equity.Available
+		eqUsed := data.Margins.Equity.Used
 		tc.MarginAvailable = roundTo2(eqAvail)
 		tc.MarginUsed = roundTo2(eqUsed)
 
-		total := margins.Equity.Total
+		total := data.Margins.Equity.Total
 		if total > 0 {
 			tc.MarginUtilization = roundTo2(eqUsed / total * 100)
 		}
@@ -176,13 +165,12 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 	}
 
 	// Process positions
-	if positionsRaw, ok := data["positions"]; ok {
-		positions := positionsRaw.(broker.Positions)
+	if data.Positions != nil {
 		var totalPnL float64
 		var misCount, nrmlCount, openCount int
 		var details []positionDetail
 
-		for _, p := range positions.Net {
+		for _, p := range data.Positions.Net {
 			pos := domain.NewPositionFromBroker(p)
 			if pos.IsOpen() {
 				openCount++
@@ -240,11 +228,10 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 	}
 
 	// Process orders
-	if ordersRaw, ok := data["orders"]; ok {
-		orders := ordersRaw.([]broker.Order)
+	if len(data.Orders) > 0 {
 		var pending, executed, rejected int
 
-		for _, o := range orders {
+		for _, o := range data.Orders {
 			ord := domain.NewOrderFromBroker(o)
 			switch {
 			case ord.IsComplete():
@@ -267,12 +254,11 @@ func buildTradingContext(data map[string]any, apiErrors map[string]string, manag
 	}
 
 	// Process holdings
-	if holdingsRaw, ok := data["holdings"]; ok {
-		holdings := holdingsRaw.([]broker.Holding)
-		tc.HoldingsCount = len(holdings)
+	if len(data.Holdings) > 0 {
+		tc.HoldingsCount = len(data.Holdings)
 
 		var dayPnL float64
-		for _, h := range holdings {
+		for _, h := range data.Holdings {
 			dayPnL += h.PnL
 		}
 		tc.HoldingsDayPnL = roundTo2(dayPnL)

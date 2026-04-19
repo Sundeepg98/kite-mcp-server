@@ -7,7 +7,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
@@ -149,34 +148,16 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			ucResult := raw.(*usecases.PreTradeData)
-
-			// Convert use case result to legacy data/errs maps for buildPreTradeResponse
-			data := make(map[string]any)
-			errs := make(map[string]string)
-			if ucResult.LTP != nil {
-				data["ltp"] = ucResult.LTP
-			}
-			if ucResult.Margins != nil {
-				data["margins"] = *ucResult.Margins
-			}
-			if ucResult.Positions != nil {
-				data["positions"] = *ucResult.Positions
-			}
-			if ucResult.Holdings != nil {
-				data["holdings"] = ucResult.Holdings
-			}
-			if ucResult.OrderMargins != nil {
-				data["order_margins"] = ucResult.OrderMargins
-			}
-			if ucResult.Errors != nil {
-				errs = ucResult.Errors
+			ucResult, terr := BusResult[*usecases.PreTradeData](raw)
+			if terr != nil {
+				handler.manager.Logger.Error("order_risk_report bus result type mismatch", "error", terr)
+				return mcp.NewToolResultError(terr.Error()), nil
 			}
 
 			resp := buildPreTradeResponse(
 				exchange, tradingsymbol, transactionType,
 				int(quantity), product, price,
-				data, errs,
+				ucResult,
 			)
 
 			return handler.MarshalResponse(resp, "order_risk_report")
@@ -185,10 +166,13 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 // buildPreTradeResponse processes parallel API results into a pre-trade check response.
+// Consumes the typed *usecases.PreTradeData directly rather than a map[string]any
+// so the broker-typed fields (LTP, Margins, Positions, Holdings) flow end-to-end
+// without type assertions or reboxing at the tool layer.
 func buildPreTradeResponse(
 	exchange, tradingsymbol, transactionType string,
 	quantity int, product string, limitPrice float64,
-	data map[string]any, apiErrors map[string]string,
+	data *usecases.PreTradeData,
 ) *preTradeResponse {
 	resp := &preTradeResponse{
 		Symbol:         tradingsymbol,
@@ -199,6 +183,11 @@ func buildPreTradeResponse(
 		Recommendation: "PROCEED",
 	}
 
+	if data == nil {
+		return resp
+	}
+
+	apiErrors := data.Errors
 	if len(apiErrors) > 0 {
 		resp.Errors = apiErrors
 	}
@@ -206,9 +195,8 @@ func buildPreTradeResponse(
 	// --- Current price from LTP ---
 	var currentPrice float64
 	instrumentKey := exchange + ":" + tradingsymbol
-	if ltpRaw, ok := data["ltp"]; ok {
-		ltpMap := ltpRaw.(map[string]broker.LTP)
-		if ltpData, ok := ltpMap[instrumentKey]; ok {
+	if data.LTP != nil {
+		if ltpData, ok := data.LTP[instrumentKey]; ok {
 			currentPrice = ltpData.LastPrice
 		}
 	}
@@ -224,9 +212,9 @@ func buildPreTradeResponse(
 
 	// --- Margin from GetOrderMargins (exact) ---
 	var marginRequired float64
-	if omRaw, ok := data["order_margins"]; ok {
-		// GetOrderMargins returns any — try to extract total from the response.
-		marginRequired = extractMarginTotal(omRaw, orderValue)
+	if data.OrderMargins != nil {
+		// GetOrderMargins returns any at the broker port — extract total.
+		marginRequired = extractMarginTotal(data.OrderMargins, orderValue)
 	} else {
 		// Fallback estimate if GetOrderMargins failed
 		marginRequired = orderValue
@@ -234,9 +222,8 @@ func buildPreTradeResponse(
 
 	// --- Available margin from GetMargins (broker-agnostic) ---
 	var marginAvailable float64
-	if marginsRaw, ok := data["margins"]; ok {
-		margins := marginsRaw.(broker.Margins)
-		marginAvailable = margins.Equity.Available
+	if data.Margins != nil {
+		marginAvailable = data.Margins.Equity.Available
 	}
 
 	utilizationAfter := 0.0
@@ -252,11 +239,8 @@ func buildPreTradeResponse(
 
 	// --- Portfolio concentration from holdings ---
 	var totalPortfolioValue float64
-	if holdingsRaw, ok := data["holdings"]; ok {
-		holdings := holdingsRaw.([]broker.Holding)
-		for _, h := range holdings {
-			totalPortfolioValue += h.LastPrice * float64(h.Quantity)
-		}
+	for _, h := range data.Holdings {
+		totalPortfolioValue += h.LastPrice * float64(h.Quantity)
 	}
 
 	orderAsPct := 0.0
@@ -278,9 +262,8 @@ func buildPreTradeResponse(
 	}
 
 	// --- Existing position check ---
-	if positionsRaw, ok := data["positions"]; ok {
-		positions := positionsRaw.(broker.Positions)
-		for _, p := range positions.Net {
+	if data.Positions != nil {
+		for _, p := range data.Positions.Net {
 			if strings.EqualFold(p.Tradingsymbol, tradingsymbol) &&
 				strings.EqualFold(p.Exchange, exchange) &&
 				p.Quantity != 0 {
