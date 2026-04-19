@@ -48,13 +48,12 @@ func newMetricsManager(t *testing.T) *kc.Manager {
 
 	metricsMgr := appmetrics.New(appmetrics.Config{ServiceName: "test"})
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		Metrics:            metricsMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithMetrics(metricsMgr),
+	)
 	require.NoError(t, err)
 
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))

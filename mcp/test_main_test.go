@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -58,12 +59,11 @@ func newTestManagerOnce() *kc.Manager {
 		panic("newTestManagerOnce: instruments.New: " + err.Error())
 	}
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+	)
 	if err != nil {
 		panic("newTestManagerOnce: kc.New: " + err.Error())
 	}

@@ -39,12 +39,11 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+	)
 	require.NoError(t, err)
 
 	// Wire up a RiskGuard so freeze-related tools work.

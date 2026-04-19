@@ -170,13 +170,12 @@ func newMockKiteManager(t *testing.T, mockURL string) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            false, // NON-DevMode
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(false), // NON-DevMode
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
@@ -557,10 +556,12 @@ func TestMock_WithSession_CachedTokenValid(t *testing.T) {
 		}(),
 		Logger: logger, TestData: testData,
 	})
-	mgr, err := kc.New(kc.Config{
-		APIKey: "test_key", APISecret: "test_secret",
-		Logger: logger, InstrumentsManager: instMgr, DevMode: false,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(false),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 

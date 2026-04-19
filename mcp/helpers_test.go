@@ -135,13 +135,12 @@ func newDevModeManager(t *testing.T) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            true,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(true),
+	)
 	require.NoError(t, err)
 
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
@@ -168,13 +167,12 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            true,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(true),
+	)
 	require.NoError(t, err)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
@@ -231,13 +229,12 @@ func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            true,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(true),
+	)
 	require.NoError(t, err)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
@@ -419,13 +416,12 @@ func newNFODevModeManager(t *testing.T) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            true,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(true),
+	)
 	require.NoError(t, err)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 	return mgr

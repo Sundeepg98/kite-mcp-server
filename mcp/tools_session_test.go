@@ -137,13 +137,12 @@ func newNonDevModeManager(t *testing.T, kiteBaseURL string) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "test_key",
-		APISecret:          "test_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            false, // Non-DevMode!
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("test_key", "test_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(false), // Non-DevMode!
+	)
 	require.NoError(t, err)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 

@@ -205,13 +205,12 @@ func newFactoryManager(t *testing.T, mockURL string) *kc.Manager {
 	})
 	require.NoError(t, err)
 
-	mgr, err := kc.New(kc.Config{
-		APIKey:             "factory_key",
-		APISecret:          "factory_secret",
-		Logger:             logger,
-		InstrumentsManager: instMgr,
-		DevMode:            false,
-	})
+	mgr, err := kc.NewWithOptions(context.Background(),
+		kc.WithLogger(logger),
+		kc.WithKiteCredentials("factory_key", "factory_secret"),
+		kc.WithInstrumentsManager(instMgr),
+		kc.WithDevMode(false),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { mgr.Shutdown() })
 
