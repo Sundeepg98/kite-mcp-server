@@ -1536,7 +1536,7 @@ func TestCov_OrdersAPI_WithSeededOrders(t *testing.T) {
 		StartedAt:    time.Now(),
 		DurationMs:   50,
 	})
-	time.Sleep(100 * time.Millisecond) // flush async writer
+	// audit.Store.Record is synchronous — no flush wait needed.
 
 	req := reqWithEmail(http.MethodGet, "/dashboard/api/orders", "user@test.com")
 	rec := httptest.NewRecorder()
@@ -1657,7 +1657,7 @@ func TestCov_OrderAttribution_WithData(t *testing.T) {
 		StartedAt:     time.Now().Add(-4 * time.Minute),
 		DurationMs:    200,
 	})
-	time.Sleep(100 * time.Millisecond)
+	// audit.Store.Record is synchronous — no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)

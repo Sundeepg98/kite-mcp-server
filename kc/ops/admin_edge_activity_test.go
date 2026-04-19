@@ -210,7 +210,7 @@ func TestFinal_OrdersAPI_WithMockKite(t *testing.T) {
 		StartedAt:    time.Now().Add(-1 * time.Hour),
 		CompletedAt:  time.Now().Add(-1 * time.Hour),
 	})
-	time.Sleep(50 * time.Millisecond)
+	// Record is synchronous (direct SQL INSERT), no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)
@@ -255,7 +255,7 @@ func TestFinal_ActivityExport_JSON_WithData(t *testing.T) {
 		StartedAt: time.Now(),
 		IsError:   true,
 	})
-	time.Sleep(50 * time.Millisecond)
+	// Record is synchronous (direct SQL INSERT), no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)
@@ -281,7 +281,7 @@ func TestFinal_ActivityExport_CSV_WithData(t *testing.T) {
 		ErrorMessage: "test error",
 		StartedAt:    time.Now(),
 	})
-	time.Sleep(50 * time.Millisecond)
+	// Record is synchronous (direct SQL INSERT), no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)
@@ -307,7 +307,7 @@ func TestFinal_ActivityExport_WithFilters(t *testing.T) {
 		ToolCategory: "query",
 		StartedAt:    time.Now(),
 	})
-	time.Sleep(50 * time.Millisecond)
+	// Record is synchronous (direct SQL INSERT), no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)
