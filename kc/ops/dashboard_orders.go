@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // serveOrdersPageSSR renders the user orders page.
@@ -63,7 +64,7 @@ func (h *OrdersHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email str
 
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
-	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
+	if hasCreds && hasToken && !kc.ToDomainSession(email, tokenEntry).IsExpired() {
 		client := d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 		h.enrichOrdersWithKite(client, entries)
 	}
@@ -72,7 +73,7 @@ func (h *OrdersHandler) buildOrderEntries(toolCalls []*audit.ToolCall, email str
 }
 
 // enrichOrdersWithKite enriches order entries with fill details and current prices from Kite API.
-func (h *OrdersHandler) enrichOrdersWithKite(client *kiteconnect.Client, entries []orderEntry) {
+func (h *OrdersHandler) enrichOrdersWithKite(client zerodha.KiteSDK, entries []orderEntry) {
 	type ltpKey struct {
 		exchange string
 		symbol   string
@@ -104,7 +105,7 @@ func (h *OrdersHandler) enrichOrdersWithKite(client *kiteconnect.Client, entries
 			if oe.Quantity == 0 {
 				oe.Quantity = latest.Quantity
 			}
-			if latest.Status == "COMPLETE" && latest.AveragePrice > 0 {
+			if latest.Status == domain.OrderStatusComplete && latest.AveragePrice > 0 {
 				fp := latest.AveragePrice
 				oe.FillPrice = &fp
 				if latest.FilledQuantity > 0 {
@@ -162,7 +163,7 @@ func (h *OrdersHandler) buildOrderSummary(entries []orderEntry) ordersSummary {
 	var totalPnL float64
 	hasPnL := false
 	for _, oe := range entries {
-		if oe.Status == "COMPLETE" {
+		if oe.Status == domain.OrderStatusComplete {
 			summary.Completed++
 		}
 		if oe.PnL != nil {

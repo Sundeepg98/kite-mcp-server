@@ -7,7 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -153,7 +154,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, oe)
 	}
 
-	var client *kiteconnect.Client
+	var client zerodha.KiteSDK
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
 	if hasCreds && hasToken {
@@ -205,7 +206,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 					oe.Quantity = latest.Quantity
 				}
 
-				if latest.Status == "COMPLETE" && latest.AveragePrice > 0 {
+				if latest.Status == domain.OrderStatusComplete && latest.AveragePrice > 0 {
 					fp := latest.AveragePrice
 					oe.FillPrice = &fp
 					if latest.FilledQuantity > 0 {
@@ -262,7 +263,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 	var totalPnL float64
 	hasPnL := false
 	for _, oe := range entries {
-		if oe.Status == "COMPLETE" {
+		if oe.Status == domain.OrderStatusComplete {
 			summary.Completed++
 		}
 		if oe.PnL != nil {

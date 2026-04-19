@@ -13,8 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -738,23 +738,25 @@ func TestOAuthContextRoundtrip(t *testing.T) {
 
 // ── mock KiteClientFactory ───────────────────────────────────────────────────
 
-// testKiteClientFactory returns *kiteconnect.Client instances whose BaseURI
-// points at the given mock server URL.
+// testKiteClientFactory returns zerodha.KiteSDK instances whose BaseURI
+// points at the given mock server URL. The production factory returns
+// the hexagonal port, so this test factory matches — SetBaseURI is part
+// of the KiteSDK interface, so no concrete-type escape is needed.
 type testKiteClientFactory struct {
 	mockURL string
 }
 
-func (f *testKiteClientFactory) NewClient(apiKey string) *kiteconnect.Client {
-	c := kiteconnect.New(apiKey)
-	c.SetBaseURI(f.mockURL)
-	return c
+func (f *testKiteClientFactory) NewClient(apiKey string) zerodha.KiteSDK {
+	sdk := zerodha.NewKiteSDK(apiKey)
+	sdk.SetBaseURI(f.mockURL)
+	return sdk
 }
 
-func (f *testKiteClientFactory) NewClientWithToken(apiKey, accessToken string) *kiteconnect.Client {
-	c := kiteconnect.New(apiKey)
-	c.SetAccessToken(accessToken)
-	c.SetBaseURI(f.mockURL)
-	return c
+func (f *testKiteClientFactory) NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK {
+	sdk := zerodha.NewKiteSDK(apiKey)
+	sdk.SetAccessToken(accessToken)
+	sdk.SetBaseURI(f.mockURL)
+	return sdk
 }
 
 // ── mock Kite HTTP server for dashboard endpoints ────────────────────────────

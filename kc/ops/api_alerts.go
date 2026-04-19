@@ -174,10 +174,10 @@ func (h *AlertsHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	var client *kiteconnect.Client
+	var client zerodha.KiteSDK
 	credEntry, hasCreds := d.manager.CredentialStore().Get(email)
 	tokenEntry, hasToken := d.manager.TokenStore().Get(email)
-	if hasCreds && hasToken && !kc.IsKiteTokenExpired(tokenEntry.StoredAt) {
+	if hasCreds && hasToken && !kc.ToDomainSession(email, tokenEntry).IsExpired() {
 		client = d.manager.KiteClientFactory().NewClientWithToken(credEntry.APIKey, tokenEntry.AccessToken)
 	}
 
