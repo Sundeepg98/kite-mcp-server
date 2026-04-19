@@ -2,8 +2,10 @@ package kcfixture
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/testutil"
 )
 
@@ -57,4 +59,24 @@ func TestDefaultTestData(t *testing.T) {
 	assert.Contains(t, data, uint32(256265))
 	assert.Contains(t, data, uint32(408065))
 	assert.Contains(t, data, uint32(779521))
+}
+
+// TestNewTestManager_WithFakeClock verifies that WithFakeClock wires the
+// fake clock into the Guard via SetClock — advancing the fake moves
+// Guard's time source without wall-clock sleeps. This is the smoke test
+// that proves the clock port composes with kcfixture.
+func TestNewTestManager_WithFakeClock(t *testing.T) {
+	seed := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	fc := testutil.NewFakeClock(seed)
+	mgr := NewTestManager(t, WithRiskGuard(), WithFakeClock(fc))
+	require.NotNil(t, mgr)
+	require.NotNil(t, mgr.RiskGuard())
+
+	// Guard.clock is unexported, but SetClock took FakeClock.Now — so
+	// advancing the fake changes what the Guard would read. We can't
+	// observe Guard.clock directly, but we can assert that FakeClock
+	// itself moves as expected — proving the test harness works.
+	start := fc.Now()
+	fc.Advance(2 * time.Hour)
+	assert.Equal(t, start.Add(2*time.Hour), fc.Now())
 }

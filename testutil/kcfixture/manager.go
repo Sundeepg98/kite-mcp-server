@@ -25,6 +25,7 @@ type managerOpts struct {
 	apiKey    string
 	apiSecret string
 	testData  map[uint32]*instruments.Instrument
+	fakeClock *testutil.FakeClock
 }
 
 // WithMockKite injects a MockKiteServer whose URL will be used as the Kite
@@ -63,6 +64,19 @@ func WithAPISecret(secret string) Option {
 // WithTestData overrides the default instruments test data.
 func WithTestData(data map[uint32]*instruments.Instrument) Option {
 	return func(o *managerOpts) { o.testData = data }
+}
+
+// WithFakeClock attaches a deterministic fake clock to the Manager. When
+// combined with WithRiskGuard, the Guard's time source is bound to the
+// fake so off-hours / cooldown / dedup windows can be advanced via
+// fc.Advance(d) without wall-clock sleeps. Without WithRiskGuard, the
+// fake is still stored on the fixture for tests that want to pass it
+// to other subsystems (rate-limit adapter, scheduler, etc.).
+//
+// Pass a *testutil.FakeClock created via testutil.NewFakeClock(start).
+// The fixture does not seed it — tests control the start time.
+func WithFakeClock(fc *testutil.FakeClock) Option {
+	return func(o *managerOpts) { o.fakeClock = fc }
 }
 
 // DefaultTestData returns the standard instruments test data used by
@@ -142,7 +156,16 @@ func NewTestManager(t *testing.T, opts ...Option) *kc.Manager {
 	require.NoError(t, err)
 
 	if o.riskGuard {
-		mgr.SetRiskGuard(riskguard.NewGuard(logger))
+		guard := riskguard.NewGuard(logger)
+		// If a fake clock was supplied, wire it into the Guard so
+		// off-hours / cooldown windows advance only when the test
+		// calls fc.Advance. Guard.SetClock takes a `func() time.Time`,
+		// so we adapt FakeClock.Now via a thin closure.
+		if o.fakeClock != nil {
+			fc := o.fakeClock
+			guard.SetClock(fc.Now)
+		}
+		mgr.SetRiskGuard(guard)
 	}
 
 	t.Cleanup(mgr.Shutdown)
