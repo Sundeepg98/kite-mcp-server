@@ -35,9 +35,14 @@ func TestConcurrentRegisterDuringReload(t *testing.T) {
 		_ = ReloadPluginRegistries(context.Background())
 	}()
 
-	// During the reload's Shutdown-sleep, register new entries.
-	// These MUST succeed without deadlock.
-	time.Sleep(10 * time.Millisecond) // let reload start
+	// During the reload's Shutdown-sleep (50ms), register new entries.
+	// These MUST succeed without deadlock. The reload's goroutine
+	// takes a snapshot of the registry then calls Shutdown on each
+	// entry — so as long as we register DURING the 50ms window the
+	// "slow" plugin's Shutdown is sleeping, we exercise the race
+	// path. A tight loop of registrations is faster than the 50ms
+	// Shutdown sleep so they'll run while Shutdown is still pending;
+	// no explicit "let reload start" delay needed.
 	for i := 0; i < 5; i++ {
 		RegisterPluginLifecycle("late-"+string(rune('a'+i)), &stubLifecycle{})
 	}
