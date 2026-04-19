@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 2026-04-18
+## [Unreleased]
 
 ### Added
 - Per-calendar-second order cap in riskguard (9/sec defensive — broker enforces at 10/sec per SEBI April 2026 retail-algo framework); keyed by `(email, calendar-second)` with lazy GC; evaluated before the per-minute check
@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README Trademark block clarifying kite-mcp-server is unaffiliated with Zerodha Broking Ltd., Personal-use scope note citing SEBI §I(c) family carve-out and the <10 OPS threshold, and a Compliance section summarising enforced controls + DPDP posture
 - MCP Registry prepublish config: `server.json` v1.1.0 with registry-friendly title, neutral description, `orderPlacement: false` on hosted + `orderPlacementSelfHostedOnly: true`, and `riskGuardChecks: 9`
 - goldmark v1.8.2 as a direct module dependency for markdown rendering of legal pages
+- ChatGPT Apps SDK widget support: `openai/outputTemplate` metadata shim alongside `ui/resourceUri` in `mcp/ext_apps.go` — ChatGPT clients now render the same widget resources Claude renders, with no new hosting
+- `smithery.yaml` at repo root enabling Smithery one-click install
+- `.env.example` at repo root as the canonical env-var reference for self-hosters
 
 ### Changed
 - `/privacy` and `/terms` now render embedded markdown via goldmark instead of hardcoded HTML constants; DPDP-aligned content (Bengaluru arbitration seat, Privacy Notice heading, Erase/Data Fiduciary terminology)
@@ -30,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Product metadata (`plugin.json`, issue-template contact links, `funding.json`) no longer references a personal-foundation email address; replaced with a placeholder pending product-contact setup
 - Compliance documents (Zerodha compliance email draft, FLOSS/fund proposal, compliance timeline owner, `compliance-emails-sent.md`) scrubbed of the same personal-foundation address; two remaining references in incident-response scenarios replaced with `<grievance officer email>` placeholder
+- Production bug: `Confirmed` field now threaded through `PlaceOrderCommand`/`ModifyOrderCommand` to the use-case layer so middleware-approved orders are not re-blocked by the second-layer riskguard re-check (the default-on `RequireConfirmAllOrders` gate short-circuited before value/duplicate/count checks)
+- CORS preflight `OPTIONS /mcp` now returns 204 with permissive CORS headers; previously returned 401, blocking browser-based MCP clients at the preflight stage
+- `.gitignore` root-anchored patterns for build artifacts (`/*.out`, `/*.exe`, `/*.cov`, `/app_*.html`, `/coverage.*`) — belt-and-suspenders against committing build noise
+- 13 previously-failing tests brought back to green after `RequireConfirmAllOrders` tightening left their assertions stale (mcp middleware chain, use-case riskguard path, app env-validation)
 
 ### Security
 - OAuth-callback path now records a DPDP consent event (`purpose`, `scope`, `proof-hash`) into the hash-chained consent log on every successful authorisation — produces auditable evidence for DPDP §6 consent-manager requirements
@@ -44,10 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incident response runbook — actionable crisis playbook for production incidents
 - FLOSS/fund proposal + `funding.json` manifest (Zerodha open-source grant application)
 - BYO Anthropic API key guide — walks users through bypassing Claude.ai tool-call quotas by bringing their own key
-- Setup checklist widget (`ui://kite-mcp/setup`) and `test_ip_whitelist` tool for in-Claude IP/credential verification (`db503de`)
-- MCP Registry manifest (`server.json`) for listing on modelcontextprotocol.io (`142a5e1`)
-- Per-user rate limiting (email-based), complementing existing per-IP limits (`0b1724d`)
-- CHANGELOG.md
+- Setup checklist widget (`ui://kite-mcp/setup`) and `test_ip_whitelist` tool for in-Claude IP/credential verification- MCP Registry manifest (`server.json`) for listing on modelcontextprotocol.io- Per-user rate limiting (email-based), complementing existing per-IP limits- CHANGELOG.md
 - Evidence package skeleton — pre-built SEBI/regulatory response templates for incident-response handoff
 - Claude plugin marketplace scaffold (`.claude-plugin` + `.mcp.json`) for discoverable plugin distribution
 - Pre-deploy 5-minute operator checklist — last-mile verification runbook before `flyctl deploy`
@@ -57,29 +61,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Kite daily token-refresh runbook (6 AM IST expiry) — user-visible re-auth guidance
 - Monitoring and observability guide — Prometheus labels, log grep recipes, Fly.io metrics panels
 - `test-race` CI workflow running `go test -race` across concurrency-heavy packages
+- MCP Resources (`resources/list`, `resources/read`) exposing user holdings, positions, and orders as typed MCP resources for client-side caching
+- Self-hosted `ENABLE_TRADING` configuration guide for users running the fork locally with order placement enabled
+- Claude Desktop `claude_desktop_config.json` snippets for one-paste MCP server wiring (Mac/Windows/Linux)
+- MCP tool catalog documentation — exhaustive list of ~80 tools with parameters, examples, and tier gating
+- Architecture diagrams (Mermaid + ASCII) covering OAuth flow, middleware chain, persistence layers, and deployment topology
+- `/healthz` endpoint now reports anomaly-detection baseline cache hit rate alongside existing liveness signals
+- FAQ page covering daily token refresh, IP whitelist, Path 1 vs Path 2 distinction, and per-user OAuth
 
 ### Changed
 - README rewritten with trust signals, compliance framing, and self-hosted fork positioning
 - Riskguard defaults tightened — lower order value cap, stricter daily limits, and order confirmation elicitation now defaults on (mitigates prompt-injection risk in agentic flows)
 - MCP Apps widgets are now gated on client capability — hosts that don't render widgets no longer receive widget-URL noise in responses
 - Telegram outbound messages prefixed with SEBI disclaimer, plus `/disclaimer` command (protects against SEBI advisory classification drift)
-- Landing page redesigned with client-specific setup tabs (claude.ai web / Claude Desktop / Claude Code / ChatGPT / VS Code), IP whitelist prerequisite notice, daily refresh note, and algorithmic-developer framing (`cd3f7de`)
-- CQRS duplicate handler registration now returns an error instead of panicking at startup (`4a37f10`)
-- OAuth `/oauth/authorize` short-circuits when a dashboard session cookie is present, eliminating a second Kite login for dashboard users (`0038a23`)
-- MCP responses wrap array data in `{items: [...]}` so strict-validating clients accept them; fixes `get_holdings`, `get_positions`, `get_orders`, `get_gtts`, `get_mf_holdings` (`2b637bf`)
-- Hardcoded local paths updated after project relocation (`b253f74`)
-- Tool rename follow-up (SEBI Path 1 compliance framing): `pre_trade_check` -> `order_risk_report`, `tax_harvest_analysis` -> `tax_loss_analysis`. Descriptions rewritten in factual voice with "Not investment advice." disclaimer appended. Behavior unchanged.
+- Landing page redesigned with client-specific setup tabs (claude.ai web / Claude Desktop / Claude Code / ChatGPT / VS Code), IP whitelist prerequisite notice, daily refresh note, and algorithmic-developer framing- CQRS duplicate handler registration now returns an error instead of panicking at startup- OAuth `/oauth/authorize` short-circuits when a dashboard session cookie is present, eliminating a second Kite login for dashboard users- MCP responses wrap array data in `{items: [...]}` so strict-validating clients accept them; fixes `get_holdings`, `get_positions`, `get_orders`, `get_gtts`, `get_mf_holdings`- Hardcoded local paths updated after project relocation- Tool rename follow-up (SEBI Path 1 compliance framing): `pre_trade_check` -> `order_risk_report`, `tax_harvest_analysis` -> `tax_loss_analysis`. Descriptions rewritten in factual voice with "Not investment advice." disclaimer appended. Behavior unchanged.
 - Lint cleanup sweeps — idiom modernization, `strings.Builder.Fprintf`, drop unnecessary `fmt.Sprintf` in Telegram package
 - README gained a Documentation section cross-linking the new session docs, runbooks, and blog post
 - Modernization sweep: `interface{}` → `any` across tests, plus `range N` int-range idiom
 - 15-minute TTL cache on `UserOrderStats` in the audit path — reduces SQLite pressure on every order placement
 
 ### Fixed
-- Audit buffer drop log spam; now logs `Warn` only every 100 drops under sustained overflow (`4a37f10`)
-- XSS edge case in widget data injection: U+2028/U+2029 JS line separators are now escaped (`0b1724d`)
-- Audit log newline injection: user-controlled strings in `InputSummary` now sanitize `\n`/`\r`/`\t` (`0b1724d`)
-- Rate limiter IP-only bypass via VPN/botnet (closed by per-user rate limiting) (`0b1724d`)
-
+- Audit buffer drop log spam; now logs `Warn` only every 100 drops under sustained overflow- XSS edge case in widget data injection: U+2028/U+2029 JS line separators are now escaped- Audit log newline injection: user-controlled strings in `InputSummary` now sanitize `\n`/`\r`/`\t`- Rate limiter IP-only bypass via VPN/botnet (closed by per-user rate limiting)
 ### Security
 - Idempotency keys on `place_order` / `modify_order` — `client_order_id` deduplication prevents replay and duplicate submissions across retries
 - Tool-description integrity manifest — detects line-jumping prompt-injection attacks against the MCP tool registry
@@ -90,9 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Path 2 compliance gate: `ENABLE_TRADING` env flag for order-placement tools (read-only by default when unset)
 - Legal `TERMS` and `PRIVACY` marked as DRAFT under review to mitigate DPDP exposure
 - Complete MIT attribution — Dockerfile `LICENSE` copy, `NOTICE` file, and landing-page footer attribution
-- Per-user rate limiting (`X-RateLimit-Scope: user`) blocks credential-stuffing and multi-IP abuse (`0b1724d`)
-- Audit log injection via malicious watchlist/symbol names is now prevented (`0b1724d`)
-- OAuth consent ordering verified + SSRF blocklist added on the audit-publish endpoint
+- Per-user rate limiting (`X-RateLimit-Scope: user`) blocks credential-stuffing and multi-IP abuse- Audit log injection via malicious watchlist/symbol names is now prevented- OAuth consent ordering verified + SSRF blocklist added on the audit-publish endpoint
 - `testing.F` fuzz harnesses added for `ArgParser`, widget data injection, and the Telegram command parser
 - Weekly `gosec` + `govulncheck` CI scans with SARIF output wired into GitHub Code Scanning
 
@@ -286,7 +286,8 @@ Initial Go rewrite of the Kite MCP server with the majority of tools implemented
 
 Initial commit of the upstream Kite MCP server (`9c56b1f`).
 
-[Unreleased]: https://github.com/Sundeepg98/kite-mcp-server/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Sundeepg98/kite-mcp-server/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Sundeepg98/kite-mcp-server/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Sundeepg98/kite-mcp-server/compare/v0.4.0-dev3...v1.0.0
 [0.4.0-dev3]: https://github.com/Sundeepg98/kite-mcp-server/compare/v0.4.0-dev1...v0.4.0-dev3
 [0.4.0-dev1]: https://github.com/Sundeepg98/kite-mcp-server/compare/v0.4.0-dev0...v0.4.0-dev1
