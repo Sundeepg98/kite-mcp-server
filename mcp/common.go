@@ -73,6 +73,14 @@ func (h *ToolHandler) WithViewerBlock(ctx context.Context, toolName string) *mcp
 
 // WithTokenRefresh checks if a Kite token has likely expired (~6 AM IST daily)
 // and verifies it with the Kite API. Returns a non-nil result if expired, nil otherwise.
+//
+// CQRS escape — permanent architectural exception. This path runs before every
+// tool dispatch (middleware-adjacent hot path). Routing the profile probe
+// through QueryBus would add a reflect.TypeFor lookup + handler indirection to
+// every call for zero observability win: the probe is already scoped to
+// "expired token detected", already logs + tracks errors inline, and the
+// returned profile value is never consumed. Documented exception is also
+// called out in kc/manager_queries_escapes.go.
 func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, session *kc.KiteSessionData, sessionID, email string) *mcp.CallToolResult {
 	if email == "" {
 		return nil

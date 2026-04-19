@@ -268,12 +268,16 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		apiKey := p.String("api_key", "")
 		apiSecret := p.String("api_secret", "")
 
-		// Validate credentials up front. This is a pure, side-effect-free
-		// check, so we call the use case directly rather than dispatching;
-		// the real CommandBus dispatch happens below at the URL-generation
-		// site, which is where LoginUseCase.Execute actually runs.
-		loginUC := usecases.NewLoginUseCase(manager, manager.Logger)
-		if err := loginUC.Validate(ctx, cqrs.LoginCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
+		// Validate credentials up front via the QueryBus so observability,
+		// correlation, and any future middleware wrap this pre-dispatch
+		// check uniformly with the rest of the bus surface. The real
+		// URL-generation (LoginCommand on the CommandBus) happens below at
+		// the dispatch site, which is where LoginUseCase.Execute runs.
+		if _, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ValidateLoginQuery{
+			Email:     email,
+			APIKey:    apiKey,
+			APISecret: apiSecret,
+		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -454,12 +458,14 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		handler := NewToolHandler(manager)
 		handler.trackToolCall(ctx, "open_dashboard")
 
-		// Parse page and validate through use case
+		// Parse page and validate through the QueryBus. URL construction
+		// itself stays in the handler because it depends on infrastructure
+		// state (IsLocalMode, ExternalURL, query-param composition) that
+		// sits above the use-case boundary.
 		args := request.GetArguments()
 		page := NewArgParser(args).String("page", "portfolio")
 
-		dashUC := usecases.NewOpenDashboardUseCase(manager.Logger)
-		if err := dashUC.Validate(ctx, cqrs.OpenDashboardQuery{
+		if _, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.OpenDashboardQuery{
 			Email: oauth.EmailFromContext(ctx),
 			Page:  page,
 		}); err != nil {

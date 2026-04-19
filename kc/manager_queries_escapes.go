@@ -21,17 +21,13 @@ import (
 //   - GetPortfolioForWidgetQuery, GetActivityForWidgetQuery,
 //     GetOrdersForWidgetQuery, GetAlertsForWidgetQuery
 //     (mcp/ext_apps.go widget DataFuncs)
+//   - ValidateLoginQuery, OpenDashboardQuery
+//     (mcp/setup_tools.go Login pre-dispatch + OpenDashboard validate)
 //
 // Not covered — intentionally left as direct calls:
 //   - mcp/common.go:88 — WithTokenRefresh middleware helper, hot path that
 //     runs before every tool dispatch; adding bus dispatch adds latency to
-//     every call for no observability win.
-//   - mcp/setup_tools.go:269 — LoginUseCase.Validate() pre-dispatch check
-//     (its own comment explains the pattern: pure validation before the
-//     real CommandBus dispatch later in the same handler).
-//   - mcp/setup_tools.go:455 — OpenDashboard is already a Query via the
-//     earlier CQRS migration; the direct call here is inside a redirect
-//     flow that runs synchronously in HTTP, not a tool handler.
+//     every call for no observability win. Permanent architectural exception.
 //
 // Widget handlers resolve the audit store in a two-step fallback:
 //  1. cqrs.WidgetAuditStoreFromContext — populated by the ext_apps
@@ -112,6 +108,39 @@ func (m *Manager) registerEscapeQueries() error {
 		}
 		uc := usecases.NewGetAlertsForWidgetUseCase(m.resolverFromContext(ctx), alertStore, m.Logger)
 		return uc.Execute(ctx, cqrs.GetWidgetAlertsQuery{Email: q.Email})
+	}); err != nil {
+		return err
+	}
+
+	// --- Setup validation queries ---
+	//
+	// ValidateLoginQuery routes the pre-dispatch Login validation through the
+	// QueryBus. The real URL-generation happens via LoginCommand on the
+	// CommandBus later in the same tool handler; this query is the validation
+	// hop that runs before credential-side-effects so observability and
+	// correlation wrap it uniformly with the rest of the bus surface.
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.ValidateLoginQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.ValidateLoginQuery)
+		uc := usecases.NewLoginUseCase(m, m.Logger)
+		// Reuse the LoginCommand validation surface so we share one rule set
+		// with the CommandBus handler. A nil return means "valid".
+		return nil, uc.Validate(ctx, cqrs.LoginCommand{
+			Email:     q.Email,
+			APIKey:    q.APIKey,
+			APISecret: q.APISecret,
+		})
+	}); err != nil {
+		return err
+	}
+
+	// OpenDashboardQuery routes the pre-resolution page validation through
+	// the QueryBus. The URL construction itself remains in the tool handler
+	// because it depends on infrastructure concerns (IsLocalMode, ExternalURL,
+	// query-param composition) that sit above the use-case boundary.
+	if err := m.queryBus.Register(reflect.TypeFor[cqrs.OpenDashboardQuery](), func(ctx context.Context, msg any) (any, error) {
+		q := msg.(cqrs.OpenDashboardQuery)
+		uc := usecases.NewOpenDashboardUseCase(m.Logger)
+		return nil, uc.Validate(ctx, q)
 	}); err != nil {
 		return err
 	}
