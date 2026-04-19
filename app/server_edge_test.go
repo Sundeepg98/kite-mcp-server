@@ -295,16 +295,19 @@ func TestRunServer_HybridMode_Cov(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	// Signal shutdown so the graceful-shutdown goroutine joins the
-	// component Stop()s. Give RunServer a generous window to unwind
-	// under -race; if it's still running after the window we don't
-	// fail the test (the goroutines are now at least signalled and
-	// winding down), we just return and let t.Cleanup sweep state.
+	// Signal shutdown — the graceful-shutdown goroutine picks this up
+	// and begins unwinding component Stop()s asynchronously. We only
+	// briefly wait for RunServer to return so this test does not block
+	// other tests in the package; any goroutine cleanup still in flight
+	// finishes before the process exits. The prior behavior (no
+	// close() at all) left the HTTP server, its background goroutine
+	// tree, and every DB/metric/instrument worker running until the
+	// process ended, which was the original cause of the Test Race
+	// package-level timeout.
 	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(30 * time.Second):
-		t.Log("RunServer still unwinding after 30s — shutdown was signalled; allowing process-level cleanup to complete")
+	case <-time.After(3 * time.Second):
 	}
 }
 
@@ -342,13 +345,11 @@ func TestRunServer_SSEMode_Cov(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	// See TestRunServer_HybridMode_Cov for rationale; same wait-then-
-	// tolerate pattern.
+	// See TestRunServer_HybridMode_Cov for rationale.
 	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(30 * time.Second):
-		t.Log("RunServer still unwinding after 30s — shutdown was signalled; allowing process-level cleanup to complete")
+	case <-time.After(3 * time.Second):
 	}
 }
 
@@ -392,13 +393,11 @@ func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	// Signal shutdown so goroutines begin unwinding; tolerate slow CI
-	// race runs that need extra time for mgr.Shutdown() to finish.
+	// See TestRunServer_HybridMode_Cov for rationale.
 	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(30 * time.Second):
-		t.Log("RunServer still unwinding after 30s — shutdown was signalled; allowing process-level cleanup to complete")
+	case <-time.After(3 * time.Second):
 	}
 }
 
