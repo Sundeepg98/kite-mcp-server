@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 )
 
@@ -78,12 +77,7 @@ type HealthStatus struct {
 	LastChecked time.Time   `json:"last_checked"`
 }
 
-// --- Lifecycle registry ---
-
-var lifecycleRegistry = struct {
-	mu      sync.RWMutex
-	entries []lifecycleEntry
-}{}
+// --- Lifecycle registry (delegates to DefaultRegistry) ---
 
 type lifecycleEntry struct {
 	name      string
@@ -91,157 +85,81 @@ type lifecycleEntry struct {
 }
 
 // RegisterPluginLifecycle adds a participant to the coordinated
-// Init/Shutdown/Reload chain. Registration is append-only; the
-// order matters because Shutdown reverses it. Nil lifecycle is
-// silently dropped (defensive — a feature-flagged-off plugin
-// shouldn't crash startup).
+// Init/Shutdown/Reload chain on DefaultRegistry. Registration is
+// append-only; the order matters because Shutdown reverses it.
+// Nil lifecycle is silently dropped (defensive — a feature-flagged-
+// off plugin shouldn't crash startup).
 func RegisterPluginLifecycle(name string, l PluginLifecycle) {
-	if l == nil || name == "" {
-		return
-	}
-	lifecycleRegistry.mu.Lock()
-	defer lifecycleRegistry.mu.Unlock()
-	lifecycleRegistry.entries = append(lifecycleRegistry.entries, lifecycleEntry{
-		name:      name,
-		lifecycle: l,
-	})
+	DefaultRegistry.RegisterPluginLifecycle(name, l)
 }
 
-// ClearPluginLifecycles drops every registered lifecycle. Test-only.
+// ClearPluginLifecycles drops every registered lifecycle on
+// DefaultRegistry. Test-only.
 func ClearPluginLifecycles() {
-	lifecycleRegistry.mu.Lock()
-	defer lifecycleRegistry.mu.Unlock()
-	lifecycleRegistry.entries = nil
+	DefaultRegistry.lifecycleMu.Lock()
+	defer DefaultRegistry.lifecycleMu.Unlock()
+	DefaultRegistry.lifecycleEntries = nil
 }
 
 // PluginLifecycleCount returns the number of registered lifecycle
-// participants. Exposed for the admin surface and tests.
+// participants on DefaultRegistry.
 func PluginLifecycleCount() int {
-	lifecycleRegistry.mu.RLock()
-	defer lifecycleRegistry.mu.RUnlock()
-	return len(lifecycleRegistry.entries)
+	return DefaultRegistry.LifecycleCount()
 }
 
-// InitPluginRegistries fires Init on every registered lifecycle in
-// registration order. A panic in one plugin's Init is recovered,
-// reported to PluginHealth as Failed, and does NOT abort the chain
-// — other plugins still get their chance to initialise. The returned
-// error is a multi-error aggregate (nil if every Init succeeded).
+// InitPluginRegistries fires Init on every registered lifecycle on
+// DefaultRegistry in registration order. A panic in one plugin's
+// Init is recovered, reported to PluginHealth as Failed, and does
+// NOT abort the chain — other plugins still get their chance to
+// initialise. The returned error is a multi-error aggregate (nil if
+// every Init succeeded).
 func InitPluginRegistries(ctx context.Context) error {
-	lifecycleRegistry.mu.RLock()
-	entries := append([]lifecycleEntry(nil), lifecycleRegistry.entries...)
-	lifecycleRegistry.mu.RUnlock()
-
-	var errs []string
-	for _, e := range entries {
-		e := e
-		if err := SafeInvoke(e.name+":init", func() error {
-			return e.lifecycle.Init(ctx)
-		}); err != nil {
-			ReportPluginHealth(e.name, HealthStatus{
-				State:   HealthStateFailed,
-				Message: "init failed: " + err.Error(),
-			})
-			errs = append(errs, e.name+": "+err.Error())
-			continue
-		}
-		ReportPluginHealth(e.name, HealthStatus{State: HealthStateOK})
-	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return fmt.Errorf("plugin init errors (%d): %v", len(errs), errs)
+	return DefaultRegistry.InitAll(ctx)
 }
 
 // ShutdownPluginRegistries fires Shutdown on every registered
-// lifecycle in REVERSE order of registration so stateful teardown
-// mirrors setup. Panics are recovered; the chain always runs to
-// completion so one misbehaving plugin cannot prevent others from
-// releasing resources.
+// lifecycle on DefaultRegistry in REVERSE order so stateful
+// teardown mirrors setup.
 func ShutdownPluginRegistries(ctx context.Context) error {
-	lifecycleRegistry.mu.RLock()
-	entries := append([]lifecycleEntry(nil), lifecycleRegistry.entries...)
-	lifecycleRegistry.mu.RUnlock()
-
-	var errs []string
-	// Reverse iteration.
-	for i := len(entries) - 1; i >= 0; i-- {
-		e := entries[i]
-		if err := SafeInvoke(e.name+":shutdown", func() error {
-			return e.lifecycle.Shutdown(ctx)
-		}); err != nil {
-			errs = append(errs, e.name+": "+err.Error())
-			continue
-		}
-	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return fmt.Errorf("plugin shutdown errors (%d): %v", len(errs), errs)
+	return DefaultRegistry.ShutdownAll(ctx)
 }
 
-// ReloadPluginRegistries runs Shutdown then Init on every registered
-// lifecycle. Used by the edit-plugin-code, hit-SIGHUP dev loop —
-// gives the solo developer a clean re-init without restarting the
-// whole server.
+// ReloadPluginRegistries runs Shutdown then Init on every
+// registered lifecycle on DefaultRegistry.
 func ReloadPluginRegistries(ctx context.Context) error {
-	if err := ShutdownPluginRegistries(ctx); err != nil {
-		return fmt.Errorf("reload: shutdown phase: %w", err)
-	}
-	return InitPluginRegistries(ctx)
+	return DefaultRegistry.ReloadAll(ctx)
 }
 
-// --- Health registry ---
+// --- Health registry (delegates to DefaultRegistry) ---
 
-var healthRegistry = struct {
-	mu      sync.RWMutex
-	entries map[string]HealthStatus
-}{
-	entries: make(map[string]HealthStatus),
-}
-
-// ReportPluginHealth records a plugin's health status. Replaces any
-// prior entry for the same name (last-wins). Auto-stamps
-// LastChecked if caller leaves it zero.
+// ReportPluginHealth records a plugin's health status on
+// DefaultRegistry. Replaces any prior entry for the same name
+// (last-wins). Auto-stamps LastChecked if caller leaves it zero.
 func ReportPluginHealth(name string, status HealthStatus) {
-	if name == "" {
-		return
-	}
-	if status.LastChecked.IsZero() {
-		status.LastChecked = time.Now()
-	}
-	healthRegistry.mu.Lock()
-	defer healthRegistry.mu.Unlock()
-	healthRegistry.entries[name] = status
+	DefaultRegistry.ReportPluginHealth(name, status)
 }
 
-// PluginHealth returns a snapshot of every reported health status.
-// Keys are plugin names, values are the most recent HealthStatus.
-// Safe for concurrent use; the returned map is a fresh copy.
+// PluginHealth returns a snapshot of every reported health status
+// from DefaultRegistry.
 func PluginHealth() map[string]HealthStatus {
-	healthRegistry.mu.RLock()
-	defer healthRegistry.mu.RUnlock()
-	out := make(map[string]HealthStatus, len(healthRegistry.entries))
-	for k, v := range healthRegistry.entries {
-		out[k] = v
-	}
-	return out
+	return DefaultRegistry.PluginHealth()
 }
 
-// ClearPluginHealth drops every reported health status. Test-only.
+// ClearPluginHealth drops every reported health status on
+// DefaultRegistry. Test-only.
 func ClearPluginHealth() {
-	healthRegistry.mu.Lock()
-	defer healthRegistry.mu.Unlock()
-	healthRegistry.entries = make(map[string]HealthStatus)
+	DefaultRegistry.healthMu.Lock()
+	defer DefaultRegistry.healthMu.Unlock()
+	DefaultRegistry.healthEntries = make(map[string]HealthStatus)
 }
 
-// ListPluginHealthSorted returns plugin names in sorted order for
-// deterministic admin-surface display. Convenience helper.
+// ListPluginHealthSorted returns plugin names from DefaultRegistry
+// in sorted order for deterministic admin-surface display.
 func ListPluginHealthSorted() []string {
-	healthRegistry.mu.RLock()
-	defer healthRegistry.mu.RUnlock()
-	names := make([]string, 0, len(healthRegistry.entries))
-	for k := range healthRegistry.entries {
+	DefaultRegistry.healthMu.RLock()
+	defer DefaultRegistry.healthMu.RUnlock()
+	names := make([]string, 0, len(DefaultRegistry.healthEntries))
+	for k := range DefaultRegistry.healthEntries {
 		names = append(names, k)
 	}
 	sort.Strings(names)

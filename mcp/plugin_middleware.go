@@ -3,8 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"sort"
-	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -20,25 +18,10 @@ type PluginMiddlewareEntry struct {
 	Middleware server.ToolHandlerMiddleware
 }
 
-// pluginMiddlewareRegistry holds plugin-contributed tool-handler
-// middleware. Separate from the app's wire.go-managed chain of
-// built-in middleware (correlation, timeout, audit, hook, circuit
-// breaker, riskguard, rate limit, billing, paper, dashboard) — plugin
-// middleware runs AFTER all built-ins via PluginMiddlewareChain, which
-// app/wire.go appends as the terminal WithToolHandlerMiddleware call.
-//
-// Keyed by Name for last-wins on duplicate registration (matches
-// RegisterWidget + plugin_commands conventions).
-var pluginMiddlewareRegistry = struct {
-	mu      sync.RWMutex
-	entries map[string]PluginMiddlewareEntry
-}{
-	entries: make(map[string]PluginMiddlewareEntry),
-}
-
-// RegisterMiddleware installs a plugin middleware at a specific Order
-// position. Plugin middleware wraps around the built-in handler chain;
-// higher Order values sit closer to the real handler.
+// RegisterMiddleware installs a plugin middleware on DefaultRegistry
+// at a specific Order position. Plugin middleware wraps around the
+// built-in handler chain; higher Order values sit closer to the real
+// handler.
 //
 // Returns an error when:
 //   - name is empty (needed for logs and dedup);
@@ -56,54 +39,28 @@ var pluginMiddlewareRegistry = struct {
 //     Order=900, so the innermost plugin middleware (closest to the
 //     real handler) has the highest Order.
 func RegisterMiddleware(name string, mw server.ToolHandlerMiddleware, order int) error {
-	if name == "" {
-		return fmt.Errorf("mcp: middleware name is empty")
-	}
-	if mw == nil {
-		return fmt.Errorf("mcp: middleware %q is nil", name)
-	}
-	pluginMiddlewareRegistry.mu.Lock()
-	defer pluginMiddlewareRegistry.mu.Unlock()
-	pluginMiddlewareRegistry.entries[name] = PluginMiddlewareEntry{
-		Name:       name,
-		Order:      order,
-		Middleware: mw,
-	}
-	return nil
+	return DefaultRegistry.RegisterMiddleware(name, mw, order)
 }
 
-// ListPluginMiddleware returns registered entries in Order ascending.
-// Safe for concurrent use; returned slice is a copy.
+// ListPluginMiddleware returns registered entries in Order ascending
+// from DefaultRegistry. Safe for concurrent use; returned slice is a
+// copy.
 func ListPluginMiddleware() []PluginMiddlewareEntry {
-	pluginMiddlewareRegistry.mu.RLock()
-	defer pluginMiddlewareRegistry.mu.RUnlock()
-	out := make([]PluginMiddlewareEntry, 0, len(pluginMiddlewareRegistry.entries))
-	for _, e := range pluginMiddlewareRegistry.entries {
-		out = append(out, e)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Order != out[j].Order {
-			return out[i].Order < out[j].Order
-		}
-		return out[i].Name < out[j].Name
-	})
-	return out
+	return DefaultRegistry.ListMiddleware()
 }
 
 // PluginMiddlewareCount returns the number of registered plugin
-// middleware. Intended for the /admin/plugins surface and tests.
+// middleware on DefaultRegistry.
 func PluginMiddlewareCount() int {
-	pluginMiddlewareRegistry.mu.RLock()
-	defer pluginMiddlewareRegistry.mu.RUnlock()
-	return len(pluginMiddlewareRegistry.entries)
+	return DefaultRegistry.MiddlewareCount()
 }
 
-// ClearPluginMiddleware drops every registered plugin middleware.
-// Test-only; production code never calls this.
+// ClearPluginMiddleware drops every registered plugin middleware on
+// DefaultRegistry. Test-only; production code never calls this.
 func ClearPluginMiddleware() {
-	pluginMiddlewareRegistry.mu.Lock()
-	defer pluginMiddlewareRegistry.mu.Unlock()
-	pluginMiddlewareRegistry.entries = make(map[string]PluginMiddlewareEntry)
+	DefaultRegistry.middlewareMu.Lock()
+	defer DefaultRegistry.middlewareMu.Unlock()
+	DefaultRegistry.middlewareEntries = make(map[string]PluginMiddlewareEntry)
 }
 
 // PluginMiddlewareChain returns a single ToolHandlerMiddleware that

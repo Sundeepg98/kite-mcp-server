@@ -3,50 +3,33 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// ToolRegistry allows external packages to register custom MCP tools.
-// Tools are merged with built-in tools at server startup.
-var registry = &toolRegistry{
-	plugins: make([]Tool, 0),
-}
-
-type toolRegistry struct {
-	mu      sync.Mutex
-	plugins []Tool
-}
-
-// RegisterPlugin adds a custom tool to the registry.
+// RegisterPlugin adds a custom tool to DefaultRegistry.
 // Call this before server startup (e.g., in init() or main()).
 func RegisterPlugin(tool Tool) {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	registry.plugins = append(registry.plugins, tool)
+	DefaultRegistry.RegisterPlugin(tool)
 }
 
 // RegisterPlugins adds multiple custom tools.
 func RegisterPlugins(tools ...Tool) {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	registry.plugins = append(registry.plugins, tools...)
+	DefaultRegistry.RegisterPlugins(tools...)
 }
 
-// PluginCount returns the number of registered plugins.
+// PluginCount returns the number of registered plugins on DefaultRegistry.
 func PluginCount() int {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	return len(registry.plugins)
+	return DefaultRegistry.PluginCount()
 }
 
-// ClearPlugins removes all registered plugins (useful for testing).
+// ClearPlugins removes all registered plugins on DefaultRegistry
+// (useful for testing).
 func ClearPlugins() {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	registry.plugins = registry.plugins[:0]
+	DefaultRegistry.toolMu.Lock()
+	defer DefaultRegistry.toolMu.Unlock()
+	DefaultRegistry.toolPlugins = nil
 }
 
 // ToolHook is called before or after tool execution. ctx carries the
@@ -85,39 +68,12 @@ type ToolHandlerNext = server.ToolHandlerFunc
 // the MCP server. See around_hook_test.go for the full contract.
 type ToolAroundHook func(ctx context.Context, req mcp.CallToolRequest, next ToolHandlerNext) (*mcp.CallToolResult, error)
 
-var (
-	beforeHooks []ToolHook
-	afterHooks  []ToolHook
-	// aroundHooks holds ToolAroundHook values paired with a global
-	// registration sequence number (aroundSeqCounter). The sequence
-	// lets HookMiddleware interleave immutable and mutable around-hooks
-	// by true registration order — first-registered becomes the
-	// outermost wrapper regardless of which kind.
-	aroundHooks []aroundHookEntry
-	hooksMu     sync.RWMutex
-	// aroundSeqCounter is incremented on every OnToolExecution or
-	// OnToolExecutionMutable call. Guarded by aroundSeqMu to keep
-	// the counter monotonic across the two registrar sites.
-	aroundSeqCounter uint64
-	aroundSeqMu      sync.Mutex
-)
-
 // aroundHookEntry tags an immutable ToolAroundHook with its global
 // registration sequence so HookMiddleware can interleave it with
 // ToolMutableAroundHook entries in true registration order.
 type aroundHookEntry struct {
 	hook ToolAroundHook
 	seq  uint64
-}
-
-// nextAroundSeq returns the next global registration sequence
-// number. Shared between OnToolExecution and OnToolExecutionMutable
-// so both registrars read from the same monotonic source.
-func nextAroundSeq() uint64 {
-	aroundSeqMu.Lock()
-	defer aroundSeqMu.Unlock()
-	aroundSeqCounter++
-	return aroundSeqCounter
 }
 
 // mergedAroundEntry is the unified view used by HookMiddleware to
@@ -130,86 +86,25 @@ type mergedAroundEntry struct {
 	mutable   ToolMutableAroundHook
 }
 
-// mergedAroundChain returns the combined around-hook chain sorted
-// by global registration sequence (ascending — first-registered
-// first). Called once per tool invocation; the snapshot is
-// concurrency-safe against concurrent Register calls.
-func mergedAroundChain() []mergedAroundEntry {
-	// Snapshot immutable side.
-	hooksMu.RLock()
-	immutable := make([]aroundHookEntry, len(aroundHooks))
-	copy(immutable, aroundHooks)
-	hooksMu.RUnlock()
-	// Snapshot mutable side.
-	mutable := mutableAroundHookEntries()
-
-	out := make([]mergedAroundEntry, 0, len(immutable)+len(mutable))
-	for _, e := range immutable {
-		out = append(out, mergedAroundEntry{seq: e.seq, immutable: e.hook})
-	}
-	for _, e := range mutable {
-		out = append(out, mergedAroundEntry{seq: e.seq, mutable: e.hook})
-	}
-	// Stable ascending sort by seq (small N in practice — ~tens of hooks).
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1].seq > out[j].seq; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
-	return out
-}
-
-// OnBeforeToolExecution registers a hook called before any tool runs.
+// OnBeforeToolExecution registers a before-hook on DefaultRegistry.
 func OnBeforeToolExecution(hook ToolHook) {
-	hooksMu.Lock()
-	defer hooksMu.Unlock()
-	beforeHooks = append(beforeHooks, hook)
+	DefaultRegistry.OnBeforeToolExecution(hook)
 }
 
-// OnAfterToolExecution registers a hook called after any tool runs.
+// OnAfterToolExecution registers an after-hook on DefaultRegistry.
 func OnAfterToolExecution(hook ToolHook) {
-	hooksMu.Lock()
-	defer hooksMu.Unlock()
-	afterHooks = append(afterHooks, hook)
+	DefaultRegistry.OnAfterToolExecution(hook)
 }
 
-// OnToolExecution registers an around-style hook that wraps the tool
-// handler. See ToolAroundHook for the full contract. Multiple
-// registrations compose in registration order: the first registered
-// becomes the outermost wrapper, the last is closest to the real
-// handler.
-//
-// Relative to OnBefore/OnAfter: all three kinds of hook coexist. When
-// HookMiddleware runs, it fires before-hooks first, then the around
-// chain (with the handler innermost), then after-hooks. An around-hook
-// that short-circuits prevents the handler from running but still
-// triggers the after-hooks (they fire unconditionally, consistent with
-// their observe-only semantics).
+// OnToolExecution registers an immutable around-hook on
+// DefaultRegistry. See ToolAroundHook for the full contract.
 func OnToolExecution(hook ToolAroundHook) {
-	if hook == nil {
-		return
-	}
-	// Acquire the global sequence FIRST to preserve registration
-	// order across both immutable and mutable registrars.
-	seq := nextAroundSeq()
-	hooksMu.Lock()
-	defer hooksMu.Unlock()
-	aroundHooks = append(aroundHooks, aroundHookEntry{hook: hook, seq: seq})
+	DefaultRegistry.OnToolExecution(hook)
 }
 
-// RunBeforeHooks executes all before hooks. Returns first error.
-// Panics inside a hook are recovered and returned as an error so a
-// misbehaving plugin cannot take down the server.
+// RunBeforeHooks executes all before hooks on DefaultRegistry.
 func RunBeforeHooks(ctx context.Context, toolName string, args map[string]any) error {
-	hooksMu.RLock()
-	hooks := append([]ToolHook(nil), beforeHooks...)
-	hooksMu.RUnlock()
-	for _, hook := range hooks {
-		if err := safeRunBeforeHook(hook, ctx, toolName, args); err != nil {
-			return err
-		}
-	}
-	return nil
+	return DefaultRegistry.RunBeforeHooks(ctx, toolName, args)
 }
 
 // safeRunBeforeHook invokes a single before-hook with panic recovery.
@@ -225,18 +120,9 @@ func safeRunBeforeHook(hook ToolHook, ctx context.Context, toolName string, args
 	return hook(ctx, toolName, args)
 }
 
-// RunAfterHooks executes all after hooks. Panics are recovered per-hook
-// so one misbehaving hook cannot prevent subsequent ones from running.
-// Errors (returned or recovered from panic) are intentionally swallowed —
-// after-hooks are fire-and-forget observers; by the time they run the
-// tool has already produced a result.
+// RunAfterHooks executes all after hooks on DefaultRegistry.
 func RunAfterHooks(ctx context.Context, toolName string, args map[string]any) {
-	hooksMu.RLock()
-	hooks := append([]ToolHook(nil), afterHooks...)
-	hooksMu.RUnlock()
-	for _, hook := range hooks {
-		safeRunAfterHook(hook, ctx, toolName, args)
-	}
+	DefaultRegistry.RunAfterHooks(ctx, toolName, args)
 }
 
 // safeRunAfterHook invokes a single after-hook with panic recovery.
@@ -249,24 +135,20 @@ func safeRunAfterHook(hook ToolHook, ctx context.Context, toolName string, args 
 	_ = hook(ctx, toolName, args)
 }
 
-// ClearHooks removes all registered hooks (useful for testing).
-// Clears the before, after, around, AND mutable-around registries —
-// every hook surface the package exposes — so a single call in a
-// test's defer rewinds the whole state. Also resets the global
-// aroundSeqCounter so tests that assert specific sequence values
-// (rare, but supported) get a predictable counter.
+// ClearHooks removes all registered hooks (useful for testing) on
+// DefaultRegistry. Clears the before, after, around, AND mutable-
+// around registries — every hook surface the package exposes — so a
+// single call in a test's defer rewinds the whole state.
 func ClearHooks() {
-	hooksMu.Lock()
-	beforeHooks = beforeHooks[:0]
-	afterHooks = afterHooks[:0]
-	aroundHooks = nil
-	hooksMu.Unlock()
-	// mutable hooks live in their own file's mutex; keep the lock
-	// ordering consistent (this one first, then mutable).
-	clearMutableAroundHooks()
-	aroundSeqMu.Lock()
-	aroundSeqCounter = 0
-	aroundSeqMu.Unlock()
+	DefaultRegistry.hooksMu.Lock()
+	DefaultRegistry.beforeHooks = nil
+	DefaultRegistry.afterHooks = nil
+	DefaultRegistry.aroundHooks = nil
+	DefaultRegistry.aroundSeqCounter = 0
+	DefaultRegistry.hooksMu.Unlock()
+	DefaultRegistry.mutableAroundHookMu.Lock()
+	DefaultRegistry.mutableAroundHooks = nil
+	DefaultRegistry.mutableAroundHookMu.Unlock()
 }
 
 // HookMiddleware returns a ToolHandlerMiddleware that runs registered
@@ -300,7 +182,7 @@ func HookMiddleware() server.ToolHandlerMiddleware {
 			// ends up as the outermost wrapper — matches HTTP
 			// middleware convention and gives plugin authors a
 			// single intuitive rule regardless of hook kind.
-			merged := mergedAroundChain()
+			merged := DefaultRegistry.mergedAroundChain()
 
 			// Compose right-to-left.
 			handler := ToolHandlerNext(next)

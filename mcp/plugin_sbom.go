@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"sync"
 	"time"
 )
 
@@ -60,71 +59,43 @@ type PluginSBOMEntry struct {
 	Recorded time.Time `json:"recorded"`
 }
 
-var pluginSBOMRegistry = struct {
-	mu      sync.RWMutex
-	entries map[string]PluginSBOMEntry
-}{
-	entries: make(map[string]PluginSBOMEntry),
-}
-
-// RegisterPluginSBOM stores an SBOM entry. Duplicate names replace
-// (last-wins) so operators can re-register after a rolling upgrade
-// without duplicate entries. Returns an error for missing Name or
-// Checksum — both required.
+// RegisterPluginSBOM stores an SBOM entry on DefaultRegistry.
+// Duplicate names replace (last-wins).
 func RegisterPluginSBOM(entry PluginSBOMEntry) error {
-	if entry.Name == "" {
-		return fmt.Errorf("mcp: SBOM entry requires Name")
-	}
-	if entry.Checksum == "" {
-		return fmt.Errorf("mcp: SBOM entry for %q requires Checksum", entry.Name)
-	}
-	if entry.Recorded.IsZero() {
-		entry.Recorded = time.Now()
-	}
-	pluginSBOMRegistry.mu.Lock()
-	defer pluginSBOMRegistry.mu.Unlock()
-	pluginSBOMRegistry.entries[entry.Name] = entry
-	return nil
+	return DefaultRegistry.RegisterSBOM(entry)
 }
 
 // ListPluginSBOM returns a snapshot of every registered SBOM entry
-// keyed by Name. Safe for concurrent use; the returned map is a
-// fresh allocation.
+// on DefaultRegistry.
 func ListPluginSBOM() map[string]PluginSBOMEntry {
-	pluginSBOMRegistry.mu.RLock()
-	defer pluginSBOMRegistry.mu.RUnlock()
-	out := make(map[string]PluginSBOMEntry, len(pluginSBOMRegistry.entries))
-	for k, v := range pluginSBOMRegistry.entries {
-		out[k] = v
-	}
-	return out
+	return DefaultRegistry.ListSBOM()
 }
 
-// ListPluginSBOMSorted returns SBOM names in sorted order for
-// deterministic admin display.
+// ListPluginSBOMSorted returns SBOM names from DefaultRegistry in
+// sorted order for deterministic admin display.
 func ListPluginSBOMSorted() []string {
-	pluginSBOMRegistry.mu.RLock()
-	defer pluginSBOMRegistry.mu.RUnlock()
-	names := make([]string, 0, len(pluginSBOMRegistry.entries))
-	for k := range pluginSBOMRegistry.entries {
+	DefaultRegistry.sbomMu.RLock()
+	defer DefaultRegistry.sbomMu.RUnlock()
+	names := make([]string, 0, len(DefaultRegistry.sbomEntries))
+	for k := range DefaultRegistry.sbomEntries {
 		names = append(names, k)
 	}
 	sort.Strings(names)
 	return names
 }
 
-// PluginSBOMCount returns the number of registered SBOM entries.
+// PluginSBOMCount returns the number of registered SBOM entries on
+// DefaultRegistry.
 func PluginSBOMCount() int {
-	pluginSBOMRegistry.mu.RLock()
-	defer pluginSBOMRegistry.mu.RUnlock()
-	return len(pluginSBOMRegistry.entries)
+	return DefaultRegistry.SBOMCount()
 }
 
-// ClearPluginSBOM drops every SBOM entry. Test-only.
+// ClearPluginSBOM drops every SBOM entry on DefaultRegistry.
+// Test-only.
 func ClearPluginSBOM() {
-	pluginSBOMRegistry.mu.Lock()
-	defer pluginSBOMRegistry.mu.Unlock()
-	pluginSBOMRegistry.entries = make(map[string]PluginSBOMEntry)
+	DefaultRegistry.sbomMu.Lock()
+	defer DefaultRegistry.sbomMu.Unlock()
+	DefaultRegistry.sbomEntries = make(map[string]PluginSBOMEntry)
 }
 
 // --- Checksum helpers ---

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
@@ -25,19 +24,6 @@ type PluginWidget struct {
 	Handler WidgetHandler
 }
 
-// pluginWidgetRegistry holds plugin-registered widgets. Separate from
-// the built-in appResources slice so the boundary is clear: built-ins
-// are owned by RegisterAppResources and include tight control over
-// HTML templating, data injection, and MIME type; plugins supply
-// their own ResourceContents — we only track (URI, Name, Handler).
-var pluginWidgetRegistry = struct {
-	mu       sync.RWMutex
-	widgets  map[string]PluginWidget // keyed by URI (enforces uniqueness + last-wins)
-	ordered  []string                // preserves registration order for ListPluginWidgets
-}{
-	widgets: make(map[string]PluginWidget),
-}
-
 // widgetURIScheme is the MCP Apps resource URI prefix that hosts
 // (Claude.ai, Claude Desktop, ChatGPT, VS Code Copilot, Goose)
 // interpret as "render this as an inline widget". Plugins MUST use
@@ -45,8 +31,13 @@ var pluginWidgetRegistry = struct {
 // and could be a security red flag if accepted.
 const widgetURIScheme = "ui://"
 
-// RegisterWidget installs a plugin-supplied MCP App widget. Returns
-// an error when:
+// RegisterWidget installs a plugin-supplied MCP App widget on the
+// package-level DefaultRegistry. Production callers (examples/,
+// app/wire.go, kc/telegram plugin adapters) call this free function;
+// parallel tests that need state isolation construct their own
+// Registry via NewRegistry() and call the equivalent method on it.
+//
+// Returns an error when:
 //
 //   - uri is empty or does not begin with "ui://" (other schemes are
 //     not inline-rendered by any known MCP host);
@@ -57,72 +48,33 @@ const widgetURIScheme = "ui://"
 //     the portfolio/activity/orders widgets for its own HTML, which
 //     would bypass our CSP and data-injection guarantees).
 //
-// Re-registering the same URI is permitted and replaces the prior
-// Handler (last-wins). This matches the Telegram plugin-command
-// registry semantics and supports a plugin reloading itself.
-//
-// Thread-safe: callable from any goroutine, but the expected usage
-// is once-per-plugin at app wiring time. The hot-path (resource
-// fetch) takes only the reader lock via ListPluginWidgets.
+// Re-registering the same URI replaces the prior Handler (last-wins).
+// Thread-safe: Registry.RegisterWidget takes its own lock.
 func RegisterWidget(uri, name string, handler WidgetHandler) error {
-	if err := validateWidgetURI(uri); err != nil {
-		return err
-	}
-	if name == "" {
-		return fmt.Errorf("mcp: widget name is empty for URI %q", uri)
-	}
-	if handler == nil {
-		return fmt.Errorf("mcp: widget handler is nil for URI %q", uri)
-	}
-	if builtInWidgetURIs()[uri] {
-		return fmt.Errorf("mcp: %q is a built-in widget URI — plugins cannot override it", uri)
-	}
-
-	pluginWidgetRegistry.mu.Lock()
-	defer pluginWidgetRegistry.mu.Unlock()
-	if _, existed := pluginWidgetRegistry.widgets[uri]; !existed {
-		pluginWidgetRegistry.ordered = append(pluginWidgetRegistry.ordered, uri)
-	}
-	pluginWidgetRegistry.widgets[uri] = PluginWidget{
-		URI:     uri,
-		Name:    name,
-		Handler: handler,
-	}
-	return nil
+	return DefaultRegistry.RegisterWidget(uri, name, handler)
 }
 
 // ListPluginWidgets returns a snapshot of every registered plugin
-// widget in registration order. Callers are the app wire-up layer
-// (which enumerates these and calls MCPServer.AddResource for each)
-// and tests. Safe for concurrent use; the returned slice is a copy.
+// widget in registration order from DefaultRegistry.
 func ListPluginWidgets() []PluginWidget {
-	pluginWidgetRegistry.mu.RLock()
-	defer pluginWidgetRegistry.mu.RUnlock()
-	out := make([]PluginWidget, 0, len(pluginWidgetRegistry.ordered))
-	for _, uri := range pluginWidgetRegistry.ordered {
-		if w, ok := pluginWidgetRegistry.widgets[uri]; ok {
-			out = append(out, w)
-		}
-	}
-	return out
+	return DefaultRegistry.ListWidgets()
 }
 
-// ClearPluginWidgets removes all plugin-registered widgets. Primarily
-// for test isolation — production code never needs this because
-// plugin widgets are registered once at startup.
+// ClearPluginWidgets removes all plugin-registered widgets from
+// DefaultRegistry. Primarily for test isolation on tests that have
+// opted to share DefaultRegistry (most new parallel tests should
+// construct an isolated Registry via NewRegistry() instead).
 func ClearPluginWidgets() {
-	pluginWidgetRegistry.mu.Lock()
-	defer pluginWidgetRegistry.mu.Unlock()
-	pluginWidgetRegistry.widgets = make(map[string]PluginWidget)
-	pluginWidgetRegistry.ordered = nil
+	DefaultRegistry.widgetMu.Lock()
+	defer DefaultRegistry.widgetMu.Unlock()
+	DefaultRegistry.widgets = make(map[string]PluginWidget)
+	DefaultRegistry.widgetOrdered = nil
 }
 
-// PluginWidgetCount returns the number of registered plugin widgets.
-// Exposed for the health/status admin surface and tests.
+// PluginWidgetCount returns the number of widgets registered on
+// DefaultRegistry.
 func PluginWidgetCount() int {
-	pluginWidgetRegistry.mu.RLock()
-	defer pluginWidgetRegistry.mu.RUnlock()
-	return len(pluginWidgetRegistry.widgets)
+	return DefaultRegistry.WidgetCount()
 }
 
 // validateWidgetURI enforces the ui:// prefix + non-empty path.

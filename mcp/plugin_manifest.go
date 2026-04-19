@@ -1,10 +1,7 @@
 package mcp
 
-import (
-	"fmt"
-	"sort"
-	"sync"
-)
+// manifest helpers are pure delegates onto DefaultRegistry; all
+// direct state has moved to the Registry struct in plugin_registry.go.
 
 // PluginInfo is the manifest a plugin supplies at registration time.
 // It describes the plugin for the admin surface (plugins-list endpoint,
@@ -38,57 +35,34 @@ type PluginInfo struct {
 	Extensions []string
 }
 
-var pluginInfoRegistry = struct {
-	mu    sync.RWMutex
-	items map[string]PluginInfo
-}{
-	items: make(map[string]PluginInfo),
-}
-
-// RegisterPluginInfo installs a plugin manifest. Duplicate names
-// replace (last-wins) to support plugin reload cycles.
+// RegisterPluginInfo installs a plugin manifest on DefaultRegistry.
+// Duplicate names replace (last-wins) to support plugin reload cycles.
 //
 // Returns an error when Name or Version is empty. Other fields are
 // optional — plugins that care only about being visible in the
 // admin listing can supply just Name + Version.
 func RegisterPluginInfo(info PluginInfo) error {
-	if info.Name == "" {
-		return fmt.Errorf("mcp: plugin info requires Name")
-	}
-	if info.Version == "" {
-		return fmt.Errorf("mcp: plugin info requires Version")
-	}
-	pluginInfoRegistry.mu.Lock()
-	defer pluginInfoRegistry.mu.Unlock()
-	pluginInfoRegistry.items[info.Name] = info
-	return nil
+	return DefaultRegistry.RegisterPluginInfo(info)
 }
 
-// ListPlugins returns a snapshot of registered plugin manifests
-// sorted by Name for deterministic admin-surface display.
+// ListPlugins returns a snapshot of registered plugin manifests on
+// DefaultRegistry, sorted by Name.
 func ListPlugins() []PluginInfo {
-	pluginInfoRegistry.mu.RLock()
-	defer pluginInfoRegistry.mu.RUnlock()
-	out := make([]PluginInfo, 0, len(pluginInfoRegistry.items))
-	for _, p := range pluginInfoRegistry.items {
-		out = append(out, p)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
+	return DefaultRegistry.ListPlugins()
 }
 
-// PluginInfoCount returns the number of registered plugin manifests.
+// PluginInfoCount returns the number of registered plugin manifests
+// on DefaultRegistry.
 func PluginInfoCount() int {
-	pluginInfoRegistry.mu.RLock()
-	defer pluginInfoRegistry.mu.RUnlock()
-	return len(pluginInfoRegistry.items)
+	return DefaultRegistry.InfoCount()
 }
 
-// ClearPluginInfo drops every registered plugin manifest. Test-only.
+// ClearPluginInfo drops every registered plugin manifest on
+// DefaultRegistry. Test-only.
 func ClearPluginInfo() {
-	pluginInfoRegistry.mu.Lock()
-	defer pluginInfoRegistry.mu.Unlock()
-	pluginInfoRegistry.items = make(map[string]PluginInfo)
+	DefaultRegistry.infoMu.Lock()
+	defer DefaultRegistry.infoMu.Unlock()
+	DefaultRegistry.infoItems = make(map[string]PluginInfo)
 }
 
 // PluginManifest aggregates every plugin-registered extension into a
@@ -144,21 +118,8 @@ func GetPluginManifest() PluginManifest {
 }
 
 // beforeHookCount, afterHookCount, aroundHookCount expose the hook
-// slice lengths from registry.go. Kept private to that file's state
-// but surfaced here via small helpers so the manifest code doesn't
-// reach directly into registry.go's package-level variables.
-func beforeHookCount() int {
-	hooksMu.RLock()
-	defer hooksMu.RUnlock()
-	return len(beforeHooks)
-}
-func afterHookCount() int {
-	hooksMu.RLock()
-	defer hooksMu.RUnlock()
-	return len(afterHooks)
-}
-func aroundHookCount() int {
-	hooksMu.RLock()
-	defer hooksMu.RUnlock()
-	return len(aroundHooks)
-}
+// slice lengths on DefaultRegistry. Kept as small helpers so manifest
+// code doesn't reach directly into Registry's fields.
+func beforeHookCount() int { return DefaultRegistry.BeforeHookCount() }
+func afterHookCount() int  { return DefaultRegistry.AfterHookCount() }
+func aroundHookCount() int { return DefaultRegistry.AroundHookCount() }

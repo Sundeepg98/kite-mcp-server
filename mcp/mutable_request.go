@@ -204,61 +204,20 @@ type mutableAroundHookEntry struct {
 	seq  uint64
 }
 
-// mutableAroundHooks is the per-package registry of
-// ToolMutableAroundHook values. Separate from aroundHooks in
-// registry.go because the two kinds have different signatures and
-// we want composition to be explicit (the middleware wires them
-// TOGETHER, so authors see both kinds in one chain).
-var (
-	mutableAroundHooks  []mutableAroundHookEntry
-	mutableAroundHookMu sync.RWMutex
-)
-
-// OnToolExecutionMutable registers a mutable around-hook. Hooks
-// compose with the immutable ones from OnToolExecution in true
-// registration order (shared global aroundSeqCounter): the first
-// OnToolExecution or OnToolExecutionMutable call becomes the
-// outermost wrapper, the last is closest to the handler. This
-// gives plugin authors a single intuitive ordering rule regardless
-// of hook kind.
+// OnToolExecutionMutable registers a mutable around-hook on
+// DefaultRegistry. Hooks compose with the immutable ones from
+// OnToolExecution in true registration order (shared sequence
+// counter): the first OnToolExecution or OnToolExecutionMutable
+// call becomes the outermost wrapper, the last is closest to the
+// handler.
 func OnToolExecutionMutable(hook ToolMutableAroundHook) {
-	if hook == nil {
-		return
-	}
-	seq := nextAroundSeq()
-	mutableAroundHookMu.Lock()
-	defer mutableAroundHookMu.Unlock()
-	mutableAroundHooks = append(mutableAroundHooks, mutableAroundHookEntry{
-		hook: hook,
-		seq:  seq,
-	})
-}
-
-// clearMutableAroundHooks drops every registered mutable hook.
-// Test-only — callable from tests in this package.
-func clearMutableAroundHooks() {
-	mutableAroundHookMu.Lock()
-	defer mutableAroundHookMu.Unlock()
-	mutableAroundHooks = nil
-}
-
-// mutableAroundHookEntries returns a copy of the registered mutable
-// hook entries (hook + seq) under a read lock. Used by
-// mergedAroundChain to interleave with the immutable chain.
-func mutableAroundHookEntries() []mutableAroundHookEntry {
-	mutableAroundHookMu.RLock()
-	defer mutableAroundHookMu.RUnlock()
-	out := make([]mutableAroundHookEntry, len(mutableAroundHooks))
-	copy(out, mutableAroundHooks)
-	return out
+	DefaultRegistry.OnToolExecutionMutable(hook)
 }
 
 // MutableAroundHookCount exposes the registered mutable-hook count
-// for the admin / manifest surface.
+// on DefaultRegistry for the admin / manifest surface.
 func MutableAroundHookCount() int {
-	mutableAroundHookMu.RLock()
-	defer mutableAroundHookMu.RUnlock()
-	return len(mutableAroundHooks)
+	return DefaultRegistry.MutableAroundHookCount()
 }
 
 // safeInvokeMutableAroundHook runs a single mutable hook with

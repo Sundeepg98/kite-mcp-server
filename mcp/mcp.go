@@ -193,12 +193,10 @@ func GetAllTools() []Tool {
 		&AdminSetBillingTierTool{},
 	}
 
-	// Append registered plugins
-	registry.mu.Lock()
-	if len(registry.plugins) > 0 {
-		builtIn = append(builtIn, registry.plugins...)
+	// Append registered plugins (lives on DefaultRegistry now).
+	if plugins := DefaultRegistry.Tools(); len(plugins) > 0 {
+		builtIn = append(builtIn, plugins...)
 	}
-	registry.mu.Unlock()
 
 	return builtIn
 }
