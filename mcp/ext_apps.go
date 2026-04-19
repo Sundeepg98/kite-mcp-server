@@ -21,7 +21,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -538,20 +537,15 @@ func portfolioData(manager *kc.Manager, _ *audit.Store, email string) any {
 }
 
 // activityData fetches recent audit trail entries via the activity widget use case.
+//
+// Closes the last production CQRS escape: previously a "defensive fallback"
+// branch for nil manager existed, but no test or production caller ever hit
+// it (TestActivityData_NoAuditStore short-circuits at the nil-auditStore
+// guard above). Removing the fallback makes every widget-activity read go
+// through the QueryBus uniformly.
 func activityData(manager *kc.Manager, auditStore *audit.Store, email string) any {
-	if auditStore == nil {
+	if auditStore == nil || manager == nil {
 		return nil
-	}
-	if manager == nil {
-		// Defensive fallback: tests historically called activityData(nil, nil, ...).
-		// The nil-auditStore check above covers that case; this guard is for
-		// hypothetical future callers that pass a store without a manager.
-		uc := usecases.NewGetActivityForWidgetUseCase(auditStore, slog.Default())
-		result, err := uc.Execute(context.Background(), cqrs.GetWidgetActivityQuery{Email: email})
-		if err != nil {
-			return nil
-		}
-		return result
 	}
 	ctx := cqrs.WithWidgetAuditStore(context.Background(), auditStore)
 	result, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetActivityForWidgetQuery{Email: email})
