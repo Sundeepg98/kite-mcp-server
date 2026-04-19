@@ -52,6 +52,15 @@ func NewKiteClient(apiKey string) *kiteconnect.Client {
 	return kiteconnect.New(apiKey)
 }
 
+// NewKiteSDK returns a production KiteSDK implementation for the given
+// API key. Callers should prefer this over NewKiteClient when they do
+// not need the concrete *kiteconnect.Client type — depending on the
+// interface rather than the SDK keeps the hexagonal boundary intact
+// and lets tests substitute MockKiteSDK without HTTP.
+func NewKiteSDK(apiKey string) KiteSDK {
+	return newKiteSDKAdapter(NewKiteClient(apiKey))
+}
+
 // defaultKiteSDKConstructor is the production SDK constructor used by
 // Factory and Auth when no override is supplied. Routes through
 // NewKiteClient so the gokiteconnect.New call lives in one place.
@@ -73,6 +82,10 @@ func newClientFromSDK(sdk KiteSDK) *Client {
 
 func (a *kiteSDKAdapter) SetAccessToken(accessToken string) {
 	a.kc.SetAccessToken(accessToken)
+}
+
+func (a *kiteSDKAdapter) SetBaseURI(baseURI string) {
+	a.kc.SetBaseURI(baseURI)
 }
 
 func (a *kiteSDKAdapter) GetLoginURL() string {

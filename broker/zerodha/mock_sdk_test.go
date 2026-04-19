@@ -24,6 +24,7 @@ type MockKiteSDK struct {
 
 	// --- connect / auth lifecycle ---
 	SetAccessTokenFunc       func(accessToken string)
+	SetBaseURIFunc           func(baseURI string)
 	GetLoginURLFunc          func() string
 	GenerateSessionFunc      func(requestToken, apiSecret string) (kiteconnect.UserSession, error)
 	InvalidateAccessTokenFunc func() (bool, error)
@@ -124,6 +125,13 @@ func (m *MockKiteSDK) SetAccessToken(accessToken string) {
 	m.record("SetAccessToken")
 	if m.SetAccessTokenFunc != nil {
 		m.SetAccessTokenFunc(accessToken)
+	}
+}
+
+func (m *MockKiteSDK) SetBaseURI(baseURI string) {
+	m.record("SetBaseURI")
+	if m.SetBaseURIFunc != nil {
+		m.SetBaseURIFunc(baseURI)
 	}
 }
 

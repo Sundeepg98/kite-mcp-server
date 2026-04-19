@@ -23,6 +23,7 @@ import (
 type KiteSDK interface {
 	// --- connect / auth lifecycle ---
 	SetAccessToken(accessToken string)
+	SetBaseURI(baseURI string)
 	GetLoginURL() string
 	GenerateSession(requestToken string, apiSecret string) (kiteconnect.UserSession, error)
 	InvalidateAccessToken() (bool, error)
