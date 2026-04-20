@@ -843,19 +843,16 @@ func TestSetupMux_StripeWebhookWithBillingStore(t *testing.T) {
 // setupMux — billing checkout and portal with OAuth + billing store
 // ---------------------------------------------------------------------------
 func TestSetupMux_BillingCheckout_WithOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	// Note: STRIPE_SECRET_KEY not set in env, but we set it on the app config
-	// to exercise the billing checkout route without actually calling Stripe
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -880,13 +877,14 @@ func TestSetupMux_BillingCheckout_WithOAuth(t *testing.T) {
 // setupMux — pricing page tier detection (pro/premium)
 // ---------------------------------------------------------------------------
 func TestSetupMux_PricingPage_WithProTier(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	oauthCfg := &oauth.Config{
@@ -1028,12 +1026,13 @@ func TestRateLimiters_CleanupDoesNotPanic(t *testing.T) {
 // setupMux — DevMode pprof endpoints verification
 // ---------------------------------------------------------------------------
 func TestSetupMux_PprofEndpoints_DevMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -1064,12 +1063,13 @@ func TestSetupMux_PprofEndpoints_DevMode(t *testing.T) {
 // setupMux — non-DevMode should NOT have pprof endpoints
 // ---------------------------------------------------------------------------
 func TestSetupMux_PprofEndpoints_NonDevMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
 	_ = app.initStatusPageTemplate()
 
@@ -1094,12 +1094,13 @@ func TestSetupMux_PprofEndpoints_NonDevMode(t *testing.T) {
 // setupMux — security.txt and robots.txt endpoints
 // ---------------------------------------------------------------------------
 func TestSetupMux_SecurityTxt(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -1130,12 +1131,8 @@ func TestSetupMux_SecurityTxt(t *testing.T) {
 // LoadConfig — DevMode without API keys (valid)
 // ---------------------------------------------------------------------------
 func TestLoadConfig_DevMode_NoAPIKeys(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{})
 	app.DevMode = true
 	err := app.LoadConfig()
 	assert.NoError(t, err)
@@ -1147,12 +1144,12 @@ func TestLoadConfig_DevMode_NoAPIKeys(t *testing.T) {
 // LoadConfig — OAuth mode without EXTERNAL_URL (error)
 // ---------------------------------------------------------------------------
 func TestLoadConfig_OAuth_MissingExternalURL(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "k")
-	t.Setenv("KITE_API_SECRET", "s")
-	t.Setenv("OAUTH_JWT_SECRET", "some-secret")
-	t.Setenv("EXTERNAL_URL", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:     "k",
+		KiteAPISecret:  "s",
+		OAuthJWTSecret: "some-secret",
+	})
 	err := app.LoadConfig()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "EXTERNAL_URL is required")
