@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -1039,4 +1040,113 @@ func TestClosePosition_BlockedByRiskguard_NoEvents(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "riskguard")
+}
+
+// --- Phase C ES: order lifecycle audit-log append ---
+
+// TestPlaceOrder_EmitsEventOnSuccess verifies the use case appends an
+// order.placed StoredEvent to the audit log after broker success. Payload
+// matches OrderPlacedPayload for round-trip through LoadOrderFromEvents.
+func TestPlaceOrder_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := &mockEventAppender{}
+	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
+	uc.SetEventStore(events)
+
+	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "RELIANCE", "BUY", "LIMIT", "CNC", 10, 2500.0,
+	))
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, orderID, got.AggregateID)
+	assert.Equal(t, "Order", got.AggregateType)
+	assert.Equal(t, "order.placed", got.EventType)
+	assert.Contains(t, string(got.Payload), "RELIANCE")
+	assert.Contains(t, string(got.Payload), "BUY")
+}
+
+// TestPlaceOrder_EventStoreFailureDoesNotRollback: the broker has already
+// placed the order; an audit-append failure must not surface to the caller.
+func TestPlaceOrder_EventStoreFailureDoesNotRollback(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := &mockEventAppender{appendErr: errors.New("disk full")}
+	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
+	uc.SetEventStore(events)
+
+	orderID, err := uc.Execute(context.Background(), testPlaceCmd(
+		"test@example.com", "NSE", "INFY", "BUY", "LIMIT", "CNC", 5, 1500.0,
+	))
+	require.NoError(t, err, "audit append failure must not rollback the broker order")
+	assert.NotEmpty(t, orderID)
+}
+
+// TestModifyOrder_EmitsEventOnSuccess verifies the use case appends an
+// order.modified StoredEvent after broker success.
+func TestModifyOrder_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := &mockEventAppender{}
+	uc := NewModifyOrderUseCase(resolver, nil, nil, testLogger())
+	uc.SetEventStore(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email:     "test@example.com",
+		OrderID:   "ORD-99",
+		Quantity:  15,
+		Price:     domain.NewINR(2550.0),
+		OrderType: "LIMIT",
+		Variety:   "regular",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "ORD-99", got.AggregateID)
+	assert.Equal(t, "Order", got.AggregateType)
+	assert.Equal(t, "order.modified", got.EventType)
+}
+
+// TestCancelOrder_EmitsEventOnSuccess verifies the use case appends an
+// order.cancelled StoredEvent after broker success.
+func TestCancelOrder_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := &mockEventAppender{}
+	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
+	uc.SetEventStore(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
+		Email:   "test@example.com",
+		OrderID: "ORD-100",
+		Variety: "regular",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "ORD-100", got.AggregateID)
+	assert.Equal(t, "Order", got.AggregateType)
+	assert.Equal(t, "order.cancelled", got.EventType)
+}
+
+// TestCancelOrder_EventStoreFailureDoesNotRollback: the cancel has already
+// gone through to the broker; audit failure must not surface.
+func TestCancelOrder_EventStoreFailureDoesNotRollback(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{}
+	resolver := &mockBrokerResolver{client: client}
+	events := &mockEventAppender{appendErr: errors.New("disk full")}
+	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
+	uc.SetEventStore(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
+		Email:   "test@example.com",
+		OrderID: "ORD-101",
+	})
+	require.NoError(t, err)
 }

@@ -264,9 +264,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		} else {
 			kcManager.SetEventStore(eventStore)
 			// Subscribe the domain audit log to persist all dispatched events.
-			eventDispatcher.Subscribe("order.placed", makeEventPersister(eventStore, "Order", app.logger))
-			eventDispatcher.Subscribe("order.modified", makeEventPersister(eventStore, "Order", app.logger))
-			eventDispatcher.Subscribe("order.cancelled", makeEventPersister(eventStore, "Order", app.logger))
+			// Phase C ES: order.placed / .modified / .cancelled are appended
+			// to the audit log by their use cases (PlaceOrderUseCase etc.) via
+			// eventStore.Append — subscribing the persister here would
+			// double-write. order.filled still flows via dispatcher because
+			// fill_watcher.go (not a use case) is its origin, and paper
+			// trading also dispatches it from outside the command bus.
 			eventDispatcher.Subscribe("order.filled", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("position.opened", makeEventPersister(eventStore, "Position", app.logger))
 			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))

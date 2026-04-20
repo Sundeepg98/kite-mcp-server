@@ -32,6 +32,10 @@ func (m *Manager) registerOrderCommands() error {
 			m.eventing.Dispatcher(),
 			m.Logger,
 		)
+		// Phase C ES: direct audit-log append on order.placed.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -49,6 +53,10 @@ func (m *Manager) registerOrderCommands() error {
 			m.eventing.Dispatcher(),
 			m.Logger,
 		)
+		// Phase C ES: direct audit-log append on order.modified.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -65,6 +73,10 @@ func (m *Manager) registerOrderCommands() error {
 			m.eventing.Dispatcher(),
 			m.Logger,
 		)
+		// Phase C ES: direct audit-log append on order.cancelled.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

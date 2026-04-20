@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -31,6 +32,7 @@ type PlaceOrderUseCase struct {
 	brokerResolver BrokerResolver
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
@@ -47,6 +49,15 @@ func NewPlaceOrderUseCase(
 		events:         events,
 		logger:         logger,
 	}
+}
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends an order.placed StoredEvent directly after broker success.
+// Phase C event sourcing — avoids double-emit with the dispatcher→persister
+// path (wire.go drops order.placed persister subscription). The dispatcher
+// path still drives fill_watcher and the Projector. Nil-safe.
+func (uc *PlaceOrderUseCase) SetEventStore(s EventAppender) {
+	uc.eventStore = s
 }
 
 // Execute runs the PlaceOrder pipeline and returns the broker-assigned order ID.
@@ -145,15 +156,16 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	}
 
 	// 5. Dispatch domain events.
-	// OrderPlacedEvent drives the audit log and the order projection.
-	// PositionOpenedEvent activates the position projection: each new order
-	// is treated as opening a position candidate keyed by the order ID. Once
-	// close_position / close_all_positions dispatches PositionClosedEvent
-	// with the same-or-related order ID, the projection reflects the full
-	// open → close lifecycle. Position ID is the broker order ID because
-	// that's the only stable identifier available at placement time.
+	// OrderPlacedEvent drives the order projection (via Projector) and the
+	// fill-watcher bridge that polls the broker until the order reaches
+	// COMPLETE. PositionOpenedEvent activates the position projection: each
+	// new order is treated as opening a position candidate keyed by the
+	// order ID. Once close_position / close_all_positions dispatches
+	// PositionClosedEvent with the same-or-related order ID, the projection
+	// reflects the full open → close lifecycle. Position ID is the broker
+	// order ID because that's the only stable identifier at placement time.
+	now := time.Now().UTC()
 	if uc.events != nil {
-		now := time.Now().UTC()
 		uc.events.Dispatch(domain.OrderPlacedEvent{
 			Email:           cmd.Email,
 			OrderID:         resp.OrderID,
@@ -175,6 +187,11 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 		})
 	}
 
+	// Phase C ES: append order.placed to the audit log. Direct path avoids
+	// double-emit with the dispatcher→persister subscription (dropped in
+	// wire.go when this landed).
+	uc.appendPlacedEvent(resp.OrderID, cmd, symbol, exchange, qty, price, now)
+
 	uc.logger.Info("Order placed",
 		"email", cmd.Email,
 		"order_id", resp.OrderID,
@@ -183,5 +200,44 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	)
 
 	return resp.OrderID, nil
+}
+
+// appendPlacedEvent writes an order.placed StoredEvent to the audit log.
+// Best-effort — the broker has already placed the order; a failed audit
+// append logs and returns. Payload matches OrderPlacedPayload in
+// kc/eventsourcing/order_aggregate.go for replay compatibility.
+func (uc *PlaceOrderUseCase) appendPlacedEvent(orderID string, cmd cqrs.PlaceOrderCommand, symbol, exchange string, qty int, price float64, occurredAt time.Time) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(orderID)
+	if err != nil {
+		uc.logger.Warn("event store NextSequence failed on order.placed", "order_id", orderID, "error", err)
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(eventsourcing.OrderPlacedPayload{
+		Email:           cmd.Email,
+		Exchange:        exchange,
+		Tradingsymbol:   symbol,
+		TransactionType: cmd.TransactionType,
+		OrderType:       cmd.OrderType,
+		Product:         cmd.Product,
+		Quantity:        qty,
+		Price:           price,
+	})
+	if err != nil { // COVERAGE: unreachable — struct marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   orderID,
+		AggregateType: "Order",
+		EventType:     "order.placed",
+		Payload:       payload,
+		OccurredAt:    occurredAt,
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		uc.logger.Warn("event store Append failed on order.placed", "order_id", orderID, "error", err)
+	}
 }
 
