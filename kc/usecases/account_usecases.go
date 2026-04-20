@@ -143,6 +143,54 @@ func (uc *InvalidateTokenUseCase) Execute(ctx context.Context, cmd cqrs.Invalida
 	return nil
 }
 
+// --- Revoke Credentials ---
+
+// RevokeCredentialsUseCase deletes a user's Kite credentials and clears
+// their cached access token. Narrower than DeleteMyAccountUseCase — it
+// does not touch alerts, watchlists, trailing stops, paper trading, or
+// the user's "offboarded" status. Use when the intent is "cut access to
+// Kite" while preserving the rest of the account.
+//
+// Added for Phase B-Audit task #25 so kc/ops dashboard/admin credential
+// revoke paths can route through the bus without semantically expanding
+// DeleteMyAccountCommand.
+type RevokeCredentialsUseCase struct {
+	credentialStore CredentialUpdater
+	tokenStore      TokenStore
+	logger          *slog.Logger
+}
+
+// NewRevokeCredentialsUseCase creates a RevokeCredentialsUseCase with
+// the credential + token stores injected. Either store may be nil during
+// partial bootstrap; Execute tolerates nil as a no-op for that store so
+// a half-initialized Manager does not panic.
+func NewRevokeCredentialsUseCase(credentialStore CredentialUpdater, tokenStore TokenStore, logger *slog.Logger) *RevokeCredentialsUseCase {
+	return &RevokeCredentialsUseCase{credentialStore: credentialStore, tokenStore: tokenStore, logger: logger}
+}
+
+// Execute deletes the user's credentials and invalidates the cached
+// token. Reason is logged at Info so the audit trail tags intent
+// (user-initiated vs admin-forced vs rotation).
+func (uc *RevokeCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.RevokeCredentialsCommand) error {
+	if cmd.Email == "" {
+		return fmt.Errorf("usecases: email is required")
+	}
+	if uc.credentialStore != nil {
+		uc.credentialStore.Delete(cmd.Email)
+	}
+	if uc.tokenStore != nil {
+		uc.tokenStore.Delete(cmd.Email)
+	}
+	if uc.logger != nil {
+		reason := cmd.Reason
+		if reason == "" {
+			reason = "unspecified"
+		}
+		uc.logger.Info("Kite credentials revoked via command bus", "email", cmd.Email, "reason", reason)
+	}
+	return nil
+}
+
 // --- Update My Credentials ---
 
 // UpdateMyCredentialsUseCase updates a user's Kite API credentials.

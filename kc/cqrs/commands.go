@@ -433,6 +433,22 @@ type InvalidateTokenCommand struct {
 	Reason string `json:"reason,omitempty"` // "expired" / "credential_rotation" / "admin_action"
 }
 
+// RevokeCredentialsCommand requests deleting the user's Kite credentials
+// and invalidating any cached access token. Narrower than
+// DeleteMyAccountCommand, which also tears down alerts, watchlists,
+// trailing stops, paper trading, and marks the user offboarded.
+//
+// Use when the intent is strictly "this user can no longer call Kite"
+// — e.g. dashboard credential DELETE, admin force-revoke — while
+// preserving the rest of their account state.
+//
+// Reason tags the audit trail ("user_self" / "admin_revoke" /
+// "credential_rotation").
+type RevokeCredentialsCommand struct {
+	Email  string `json:"email"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // ClearSessionDataCommand requests clearing the Kite session data for an MCP
 // session without terminating the session itself. Used by the login flow
 // when (a) fresh credentials are registered and the next GetOrCreateSession

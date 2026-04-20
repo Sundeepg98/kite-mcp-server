@@ -72,6 +72,24 @@ func (m *Manager) registerAccountCommands() error {
 		return err
 	}
 
+	// --- Account: RevokeCredentialsCommand ---
+	// Phase B-Audit #25: narrow credential + cached-token revoke for the
+	// dashboard credential DELETE and admin force-revoke endpoints.
+	// Distinct from DeleteMyAccountCommand (which also tears down alerts/
+	// watchlists/paper-trading and marks offboarded) — use when the intent
+	// is strictly "cut Kite access" while preserving account state.
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.RevokeCredentialsCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.RevokeCredentialsCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		credAdapter := &credentialStoreWriterAdapter{store: m.credentialStore}
+		uc := usecases.NewRevokeCredentialsUseCase(credAdapter, m.tokenStore, m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
 	// --- Account: InvalidateTokenCommand ---
 	// Round-5 Phase B: direct manager.TokenStore().Delete(email) sites in
 	// mcp/setup_tools.go route through this handler so every token-invalidation

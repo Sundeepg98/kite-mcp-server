@@ -1043,6 +1043,46 @@ func TestUpdateMyCredentials_Persists(t *testing.T) {
 	assert.True(t, tokStore.deleted, "changing credentials must invalidate cached token")
 }
 
+// TestRevokeCredentials_Success verifies the narrow revoke command deletes
+// both credentials and the cached token, scoped strictly to the Kite-access
+// surface (no alerts/watchlists/offboarding, which DeleteMyAccount handles).
+func TestRevokeCredentials_Success(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	uc := NewRevokeCredentialsUseCase(credStore, tokStore, testLogger())
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{
+		Email: "u@t.com", Reason: "user_self",
+	})
+	require.NoError(t, err)
+	assert.True(t, credStore.deleted, "credentials must be deleted on revoke")
+	assert.True(t, tokStore.deleted, "cached token must be invalidated on revoke")
+}
+
+// TestRevokeCredentials_EmptyEmail rejects empty-email requests — the stores
+// are keyed by email, so an empty key would either be a no-op or clear a
+// shared slot. Fail loud.
+func TestRevokeCredentials_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	uc := NewRevokeCredentialsUseCase(credStore, tokStore, testLogger())
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{Email: ""})
+	require.Error(t, err)
+	assert.False(t, credStore.deleted, "empty email must NOT trigger a credential delete")
+	assert.False(t, tokStore.deleted, "empty email must NOT trigger a token delete")
+}
+
+// TestRevokeCredentials_NilStores: defensive guard — manager wiring may hand
+// nil stores during partial bootstrap. Must not panic and must still
+// succeed (no-op).
+func TestRevokeCredentials_NilStores(t *testing.T) {
+	t.Parallel()
+	uc := NewRevokeCredentialsUseCase(nil, nil, testLogger())
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{Email: "u@t.com"})
+	require.NoError(t, err)
+}
+
 // TestInvalidateToken_Success verifies the new command that clears a cached
 // Kite access token without touching credentials. Used by the login flow
 // when cached tokens are detected as expired against the live Kite API.
