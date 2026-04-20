@@ -98,13 +98,26 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		targetEmail := authEmail
+		reason := "user_self"
 		if h.isAdmin(authEmail) {
 			if qEmail := r.URL.Query().Get("email"); qEmail != "" {
 				targetEmail = strings.ToLower(qEmail)
+				if targetEmail != authEmail {
+					reason = "admin_revoke"
+				}
 			}
 		}
-		h.manager.CredentialStore().Delete(targetEmail)
-		h.manager.TokenStore().Delete(targetEmail)
+		// Phase B-Audit #25: credential revoke routes through the
+		// CommandBus via the narrow RevokeCredentialsCommand — deletes
+		// credentials + invalidates cached token, nothing more. Reason
+		// tags the audit trail with user-self vs admin-revoke intent.
+		if _, err := h.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.RevokeCredentialsCommand{
+			Email:  targetEmail,
+			Reason: reason,
+		}); err != nil {
+			h.writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		h.logger.Info("Deleted Kite credentials", "email", targetEmail, "by", authEmail)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
