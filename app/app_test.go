@@ -18,11 +18,8 @@ import (
 )
 
 func TestLoadConfig_MissingAPIKey(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{})
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -31,11 +28,8 @@ func TestLoadConfig_MissingAPIKey(t *testing.T) {
 }
 
 func TestLoadConfig_MissingAPISecret(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{KiteAPIKey: "test_key"})
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -44,10 +38,11 @@ func TestLoadConfig_MissingAPISecret(t *testing.T) {
 }
 
 func TestLoadConfig_ValidCredentials(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	err := app.LoadConfig()
 
 	if err != nil {
@@ -63,13 +58,11 @@ func TestLoadConfig_ValidCredentials(t *testing.T) {
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {
-	t.Setenv("APP_MODE", "")
-	t.Setenv("APP_PORT", "")
-	t.Setenv("APP_HOST", "")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	err := app.LoadConfig()
 
 	if err != nil {

@@ -51,6 +51,39 @@ func newTestApp(t *testing.T) *App {
 	t.Helper()
 	t.Setenv("INSTRUMENTS_SKIP_FETCH", "true")
 	app := NewApp(testLogger())
+	registerTestAppCleanup(t, app)
+	return app
+}
+
+// newTestAppWithConfig is the Phase E.2 entry point for tests that want to
+// inject a Config explicitly rather than shaping it via t.Setenv. It mirrors
+// newTestApp's lifecycle handling (shutdownCh, t.Cleanup) but routes through
+// NewAppWithConfig so the caller can set KiteAPIKey / KiteAPISecret /
+// OAuthJWTSecret / etc. as struct fields and run the test under t.Parallel().
+//
+// cfg may be nil — a nil Config becomes a zero-valued Config inside
+// NewAppWithConfig. Tests that want sensible non-production defaults can
+// pass `(&Config{...}).WithDefaults()`.
+//
+// NOTE on INSTRUMENTS_SKIP_FETCH: this helper deliberately does NOT call
+// t.Setenv("INSTRUMENTS_SKIP_FETCH", "true") — that would preclude t.Parallel
+// which is the whole point. Tests that only exercise NewAppWithConfig +
+// LoadConfig + in-memory behaviour don't need the env var at all. Tests that
+// ALSO call initializeServices (which reads INSTRUMENTS_SKIP_FETCH via
+// app/wire.go:38) should keep using newTestApp until that env read is also
+// plumbed through Config in a later Phase E.2 step.
+func newTestAppWithConfig(t *testing.T, cfg *Config) *App {
+	t.Helper()
+	app := NewAppWithConfig(cfg, testLogger())
+	registerTestAppCleanup(t, app)
+	return app
+}
+
+// registerTestAppCleanup wires the shutdown channel + t.Cleanup block that
+// both newTestApp and newTestAppWithConfig share. Extracted so the two
+// helpers stay in lock-step — any new teardown step must land here once.
+func registerTestAppCleanup(t *testing.T, app *App) {
+	t.Helper()
 	app.shutdownCh = make(chan struct{})
 	t.Cleanup(func() {
 		// Guard against tests that already closed shutdownCh (idempotent).
@@ -104,7 +137,6 @@ func newTestApp(t *testing.T) *App {
 			app.metrics.Shutdown()
 		}
 	})
-	return app
 }
 
 // newTestManager creates a kc.Manager in DevMode with empty instruments.
