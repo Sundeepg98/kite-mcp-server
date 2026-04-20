@@ -112,6 +112,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCreateWatchlistUseCase(m.watchlistStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -124,6 +127,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewDeleteWatchlistUseCase(m.watchlistStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -136,6 +142,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewAddToWatchlistUseCase(m.watchlistStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -148,6 +157,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewRemoveFromWatchlistUseCase(m.watchlistStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

@@ -250,6 +250,51 @@ type FamilyMemberRemovedEvent struct {
 func (e FamilyMemberRemovedEvent) EventType() string    { return "family.member_removed" }
 func (e FamilyMemberRemovedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// WatchlistCreatedEvent is emitted when a new watchlist is created.
+type WatchlistCreatedEvent struct {
+	Email       string
+	WatchlistID string
+	Name        string
+	Timestamp   time.Time
+}
+
+func (e WatchlistCreatedEvent) EventType() string    { return "watchlist.created" }
+func (e WatchlistCreatedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// WatchlistDeletedEvent is emitted when a watchlist is deleted.
+type WatchlistDeletedEvent struct {
+	Email       string
+	WatchlistID string
+	Name        string // captured before deletion for audit trail
+	ItemCount   int    // captured before deletion so auditors see the scope
+	Timestamp   time.Time
+}
+
+func (e WatchlistDeletedEvent) EventType() string    { return "watchlist.deleted" }
+func (e WatchlistDeletedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// WatchlistItemAddedEvent is emitted when an instrument is added to a watchlist.
+type WatchlistItemAddedEvent struct {
+	Email       string
+	WatchlistID string
+	Instrument  InstrumentKey
+	Timestamp   time.Time
+}
+
+func (e WatchlistItemAddedEvent) EventType() string    { return "watchlist.item_added" }
+func (e WatchlistItemAddedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// WatchlistItemRemovedEvent is emitted when an instrument is removed from a watchlist.
+type WatchlistItemRemovedEvent struct {
+	Email       string
+	WatchlistID string
+	ItemID      string
+	Timestamp   time.Time
+}
+
+func (e WatchlistItemRemovedEvent) EventType() string    { return "watchlist.item_removed" }
+func (e WatchlistItemRemovedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

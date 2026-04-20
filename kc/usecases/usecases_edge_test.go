@@ -1489,6 +1489,97 @@ func TestAddToWatchlist_StoreError(t *testing.T) {
 	assert.ErrorContains(t, err, "add to watchlist")
 }
 
+// --- Phase C-Watchlist: audit-log append tests ---
+
+// TestCreateWatchlist_EmitsEventOnSuccess verifies the use case appends a
+// watchlist.created StoredEvent after the SQL insert succeeds.
+func TestCreateWatchlist_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{createID: "wl-1"}
+	events := &mockEventAppender{}
+	uc := NewCreateWatchlistUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	_, err := uc.Execute(context.Background(), cqrs.CreateWatchlistCommand{Email: "u@t.com", Name: "Tech"})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "wl-1", got.AggregateID)
+	assert.Equal(t, "Watchlist", got.AggregateType)
+	assert.Equal(t, "watchlist.created", got.EventType)
+	assert.Contains(t, string(got.Payload), "Tech")
+}
+
+// TestDeleteWatchlist_EmitsEventOnSuccess verifies a watchlist.deleted event
+// is appended with the pre-delete item count captured for audit scope.
+func TestDeleteWatchlist_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{
+		watchlists: []*watchlist.Watchlist{{ID: "wl-9", Name: "LargeCaps"}},
+		itemCounts: map[string]int{"wl-9": 7},
+	}
+	events := &mockEventAppender{}
+	uc := NewDeleteWatchlistUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	_, err := uc.Execute(context.Background(), cqrs.DeleteWatchlistCommand{Email: "u@t.com", WatchlistID: "wl-9"})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "wl-9", got.AggregateID)
+	assert.Equal(t, "watchlist.deleted", got.EventType)
+	assert.Contains(t, string(got.Payload), "LargeCaps")
+	assert.Contains(t, string(got.Payload), "\"item_count\":7")
+}
+
+// TestAddToWatchlist_EmitsEventOnSuccess verifies a watchlist.item_added event.
+func TestAddToWatchlist_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{}
+	events := &mockEventAppender{}
+	uc := NewAddToWatchlistUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	err := uc.Execute(context.Background(), cqrs.AddToWatchlistCommand{
+		Email: "u@t.com", WatchlistID: "wl-2",
+		Exchange: "NSE", Tradingsymbol: "RELIANCE",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "wl-2", got.AggregateID)
+	assert.Equal(t, "watchlist.item_added", got.EventType)
+	assert.Contains(t, string(got.Payload), "RELIANCE")
+}
+
+// TestRemoveFromWatchlist_EmitsEventOnSuccess verifies watchlist.item_removed.
+func TestRemoveFromWatchlist_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{}
+	events := &mockEventAppender{}
+	uc := NewRemoveFromWatchlistUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	err := uc.Execute(context.Background(), cqrs.RemoveFromWatchlistCommand{
+		Email: "u@t.com", WatchlistID: "wl-3", ItemID: "item-5",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "wl-3", got.AggregateID)
+	assert.Equal(t, "watchlist.item_removed", got.EventType)
+	assert.Contains(t, string(got.Payload), "item-5")
+}
+
+// TestCreateWatchlist_EventStoreFailureDoesNotRollback: audit failure is
+// logged and swallowed; the SQL insert stands.
+func TestCreateWatchlist_EventStoreFailureDoesNotRollback(t *testing.T) {
+	t.Parallel()
+	store := &mockWatchlistStore{createID: "wl-err"}
+	events := &mockEventAppender{appendErr: errors.New("disk full")}
+	uc := NewCreateWatchlistUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	got, err := uc.Execute(context.Background(), cqrs.CreateWatchlistCommand{Email: "u@t.com", Name: "ErrSafe"})
+	require.NoError(t, err)
+	assert.Equal(t, "wl-err", got.ID)
+}
+
 func TestGetWatchlist_Success(t *testing.T) {
 	t.Parallel()
 	store := &mockWatchlistStore{
