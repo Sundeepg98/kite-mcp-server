@@ -35,19 +35,34 @@ package app
 //     Missing Shutdown hooks (hashPublisher, oauthHandler, rateLimiters,
 //     paperMonitor, invitationCleanup, telegramBot) now fire on t.Cleanup.
 //
-// Residual structural leakers (by design — not test-level):
-//   - wire.go fires startRateLimitReloadLoop(nil) without a stop chan
-//     (lives for process lifetime; RunServer-path tests leak one each).
-//   - RunServer-based tests that start an HTTP/stdio server without a
-//     mechanism to join the serve goroutine (app.RunServer is blocking).
-//   - TelegramBot.runCleanup — currently no Close hook wiring in tests
-//     that manually construct the bot.
+// Apr-2026 Round 2: structural lifecycle fixes that moved code out of
+// the "leaks by design" bucket:
+//   - wire.go now wires app.rateLimitReloadStop into startRateLimitReloadLoop;
+//     both graceful shutdown and cleanupInitializeServices join the loop.
+//   - 7 RunServer tests (DevMode_FullLifecycle, WithOAuth, FullDevMode,
+//     WithOAuth_FullWiring, SSEMode, HybridMode, OAuthWiring_Push100)
+//     now set shutdownCh and close it after HTTP probing — the server
+//     goroutine tree unwinds instead of leaking past test exit.
+//   - kc/telegram.newTestBotHandler takes *testing.T and registers
+//     tb.Cleanup(h.Shutdown) — plugs BotHandler.runCleanup across 150+
+//     call sites.
 //
-// Because these residual leakers are structural, migrating this
-// package to goleak.VerifyTestMain would require ignoring each by
-// function name, which masks real leaks the sentinel should catch.
-// The NumGoroutine-delta pattern ignores them uniformly via the
-// tolerance — cleaner tradeoff.
+// Residual test-level leakers that block package-wide goleak migration:
+//   - kc.SessionRegistry.cleanupRoutine — no user-facing Close/Stop hook
+//     (internal cleanup goroutine that lives with the Manager).
+//   - HTTP server goroutines from handful of remaining RunServer/stdio
+//     tests that construct their own http.Server and don't call Shutdown
+//     (mostly the older "cover the case branch" tests that spawn
+//     configureAndStartServer without matching teardown).
+//   - mcp.NewToolCache ltpCache — package-init global with a 5-minute
+//     cleanup ticker and no Close. Lives for process lifetime by design.
+//
+// Because some residual leakers can only be masked via broad
+// IgnoreAnyFunction rules, migrating THIS package to VerifyTestMain
+// risks hiding real leaks the sentinel should catch. NumGoroutine-delta
+// stays for the package-wide guard; the 6 leak_sentinel_test.go files
+// in sibling kc/* packages retain their strict goleak.VerifyNone checks
+// because those packages have narrower test surfaces.
 //
 // Other goroutine sentinels in the repo (kc/scheduler, kc/audit,
 // kc/ticker, kc/alerts, kc/billing, kc/instruments, kc/papertrading)

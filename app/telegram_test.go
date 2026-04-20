@@ -104,6 +104,14 @@ func TestRegisterTelegramWebhook_Success(t *testing.T) {
 
 	// After registerTelegramWebhook, app.telegramBot should be set
 	assert.NotNil(t, app.telegramBot, "telegramBot handler should be wired after successful registration")
+	// Close the BotHandler background cleanup goroutine when the test ends.
+	// registerTelegramWebhook spawns one on success; without Shutdown() it
+	// lingers past test teardown and trips the package goleak sentinel.
+	t.Cleanup(func() {
+		if app.telegramBot != nil {
+			app.telegramBot.Shutdown()
+		}
+	})
 }
 
 // ===========================================================================

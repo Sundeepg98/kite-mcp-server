@@ -1197,6 +1197,12 @@ func TestStartServer_StdIOMode(t *testing.T) {
 	}
 
 	stdoutW.Close()
+	// startStdIOServer spawned a sidecar HTTP server goroutine via
+	// `go app.configureAndStartServer(srv, mux)`. Without Shutdown it
+	// blocks in ListenAndServe past test end — close it explicitly.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
+	_ = srv.Shutdown(shutdownCtx)
 	if app.rateLimiters != nil {
 		app.rateLimiters.Stop()
 	}

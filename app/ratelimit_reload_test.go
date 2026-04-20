@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -107,35 +108,42 @@ func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
 // audit where wire.go fired the loop with a nil stopCh — the goroutine
 // then lived for the process lifetime and leaked into every test using
 // goleak-style sentinels.
+//
+// Uses a test-scoped stack-frame count (not NumGoroutine delta) so the
+// signal survives concurrent parallel tests that may also spin up their
+// own reload loops via RunServer. Records baseline before start so only
+// THIS loop's arrival and departure are asserted.
 func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
-	t.Parallel()
-
 	rl := mcp.NewToolRateLimiter(map[string]int{"place_order": 100})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	stopCh := make(chan struct{})
 
-	// Measure goroutine count before + after to verify the loop terminated.
-	// Using a baseline bump instead of strict equality because the test
-	// runtime has other ambient goroutines that may fluctuate.
-	beforeLoop := runtime.NumGoroutine()
+	baseline := countLoopGoroutines()
 	_ = startRateLimitReloadLoop(rl, logger, stopCh)
-	afterStart := runtime.NumGoroutine()
-	require.Greater(t, afterStart, beforeLoop, "startRateLimitReloadLoop should spawn a goroutine")
+	require.Eventually(t, func() bool {
+		return countLoopGoroutines() > baseline
+	}, 2*time.Second, 5*time.Millisecond, "loop goroutine should be visible after start")
 
 	close(stopCh)
 
-	// The goroutine exits via the `case <-stopCh:` branch; allow up to 2s
-	// for the scheduler to drop it. In practice this resolves in microseconds.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		runtime.GC()
-		if runtime.NumGoroutine() <= beforeLoop+1 { // +1 absorbs timer/test noise
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatalf("reload-loop goroutine did not exit after stopCh closed (before=%d after=%d)",
-		beforeLoop, runtime.NumGoroutine())
+	require.Eventually(t, func() bool {
+		return countLoopGoroutines() <= baseline
+	}, 2*time.Second, 5*time.Millisecond, "loop goroutine should exit after stopCh close")
+}
+
+// countLoopGoroutines returns the number of goroutines whose current
+// stack contains the signature of startRateLimitReloadLoop's closure.
+// Parallel-safe relative-count variant — absolute value can fluctuate
+// because other parallel tests create their own reload loops via
+// RunServer.
+func countLoopGoroutines() int {
+	buf := make([]byte, 1<<16)
+	n := runtime.Stack(buf, true)
+	stacks := string(buf[:n])
+	// The goroutine runs an anonymous closure inside
+	// startRateLimitReloadLoop — its frame always contains the
+	// function name.
+	return strings.Count(stacks, "app.startRateLimitReloadLoop.func1")
 }
 
 // TestApp_StopRateLimitReload_Idempotent verifies the App helper that
