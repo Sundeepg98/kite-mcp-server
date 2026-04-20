@@ -215,13 +215,11 @@ func TestProvisionUser_ActiveUser_UpdateKiteUID(t *testing.T) {
 // LoadConfig — OAuth mode (no API keys, just JWT secret)
 // ---------------------------------------------------------------------------
 func TestLoadConfig_OAuthModeOnly(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "some-secret")
-	t.Setenv("EXTERNAL_URL", "https://example.com")
-	t.Setenv("DEV_MODE", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		OAuthJWTSecret: "some-secret",
+		ExternalURL:    "https://example.com",
+	})
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 }
@@ -1211,7 +1209,8 @@ func TestTruncKey_Empty(t *testing.T) {
 // configureHTTPClient — verifies no panic
 // ---------------------------------------------------------------------------
 func TestConfigureHTTPClient_NoPanic(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	app.configureHTTPClient()
 	// Should not panic, just logs
 }
@@ -1222,9 +1221,12 @@ func TestConfigureHTTPClient_NoPanic(t *testing.T) {
 // buildServerURL — various combos
 // ---------------------------------------------------------------------------
 func TestBuildServerURL_CustomHostPort(t *testing.T) {
-	app := newTestApp(t)
-	app.Config.AppHost = "0.0.0.0"
-	app.Config.AppPort = "3000"
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		AppHost:              "0.0.0.0",
+		AppPort:              "3000",
+		InstrumentsSkipFetch: true,
+	})
 	assert.Equal(t, "0.0.0.0:3000", app.buildServerURL())
 }
 
@@ -1286,7 +1288,8 @@ func TestBriefingCredAdapter_GetAPIKey_UnknownEmail(t *testing.T) {
 // SetLogBuffer — verify assignment
 // ---------------------------------------------------------------------------
 func TestSetLogBuffer_NilInput(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	assert.Nil(t, app.logBuffer)
 	// SetLogBuffer with nil — should not panic
 	app.SetLogBuffer(nil)
@@ -1299,9 +1302,12 @@ func TestSetLogBuffer_NilInput(t *testing.T) {
 // getStatusData — verify fields
 // ---------------------------------------------------------------------------
 func TestGetStatusData_Fields(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		AppMode:              "http",
+		InstrumentsSkipFetch: true,
+	})
 	app.Version = "v1.2.3"
-	app.Config.AppMode = "http"
 
 	data := app.getStatusData()
 	assert.Equal(t, "Status", data.Title)
@@ -1315,14 +1321,7 @@ func TestGetStatusData_Fields(t *testing.T) {
 // setupMux — billing checkout routes with real OAuth and billing store
 // ---------------------------------------------------------------------------
 func TestSetupMux_BillingCheckout_RealOAuthAndBillingStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 
 	oauthCfg := &oauth.Config{
@@ -1332,9 +1331,14 @@ func TestSetupMux_BillingCheckout_RealOAuthAndBillingStore(t *testing.T) {
 		Logger:      testLogger(),
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
 	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
@@ -1392,7 +1396,8 @@ func TestPaperLTPAdapter_WithSession_KiteSessionData_NilClient(t *testing.T) {
 // serveLegalPages — error in template execution
 // ---------------------------------------------------------------------------
 func TestServeLegalPages_TemplateExecuteError(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	err := app.initStatusPageTemplate()
 	require.NoError(t, err)
 
@@ -1503,14 +1508,7 @@ func TestWithSessionType_ContextValue(t *testing.T) {
 // setupMux — with OAuth handler, DB, and Stripe webhook (full branch)
 // ---------------------------------------------------------------------------
 func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret_full")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/test-secret-path")
+	t.Parallel()
 
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
@@ -1536,13 +1534,19 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 		Logger:      testLogger(),
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AdminSecretPath:      "/test-secret-path",
+		GoogleClientID:       "google-id",
+		GoogleClientSecret:   "google-secret",
+		ExternalURL:          "http://localhost:9999",
+		AlertDBPath:          ":memory:",
+		StripeWebhookSecret:  "whsec_test_secret_full",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
-	app.Config.AdminSecretPath = "/test-secret-path"
-	app.Config.GoogleClientID = "google-id"
-	app.Config.GoogleClientSecret = "google-secret"
-	app.Config.ExternalURL = "http://localhost:9999"
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
 	t.Cleanup(app.oauthHandler.Close)
 
@@ -1620,13 +1624,7 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 // setupMux — billing checkout and portal routes (OAuth + billing store)
 // ---------------------------------------------------------------------------
 func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
+	t.Parallel()
 
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
