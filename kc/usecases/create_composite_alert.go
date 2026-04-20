@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 )
 
 // CompositeAlertStore is the subset of kc.AlertStoreInterface needed to
@@ -44,6 +46,7 @@ const (
 type CreateCompositeAlertUseCase struct {
 	store       CompositeAlertStore
 	instruments InstrumentResolver
+	eventStore  EventAppender
 	logger      *slog.Logger
 }
 
@@ -58,6 +61,12 @@ func NewCreateCompositeAlertUseCase(
 		instruments: instruments,
 		logger:      logger,
 	}
+}
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends an alert.created StoredEvent after successful persistence. Phase C ES.
+func (uc *CreateCompositeAlertUseCase) SetEventStore(s EventAppender) {
+	uc.eventStore = s
 }
 
 // Execute validates the command, resolves instrument tokens for every leg,
@@ -117,6 +126,8 @@ func (uc *CreateCompositeAlertUseCase) Execute(ctx context.Context, cmd cqrs.Cre
 		"legs", len(conds),
 	)
 
+	uc.appendCreatedEvent(id, cmd.Email, cmd.Name, logic, len(conds))
+
 	return id, nil
 }
 
@@ -168,4 +179,42 @@ func (uc *CreateCompositeAlertUseCase) validateAndResolve(idx int, spec cqrs.Com
 		Value:           spec.Value,
 		ReferencePrice:  spec.ReferencePrice,
 	}, nil
+}
+
+// appendCreatedEvent writes an alert.created StoredEvent to the audit log
+// for composite alerts. Reuses the AlertCreatedPayload shape so both simple
+// and composite alerts round-trip through LoadAlertFromEvents (composite
+// alerts have no per-leg symbol/target_price — the Name field is stored in
+// Symbol and TargetPrice is 0 to signal composite). Best-effort: SQL insert
+// is source of truth.
+func (uc *CreateCompositeAlertUseCase) appendCreatedEvent(alertID, email, name string, logic domain.CompositeLogic, legs int) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(alertID)
+	if err != nil {
+		uc.logger.Warn("event store NextSequence failed on composite alert.created", "alert_id", alertID, "error", err)
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(map[string]any{
+		"email":    email,
+		"name":     name,
+		"logic":    string(logic),
+		"legs":     legs,
+		"kind":     "composite",
+	})
+	if err != nil { // COVERAGE: unreachable
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   alertID,
+		AggregateType: "Alert",
+		EventType:     "alert.created",
+		Payload:       payload,
+		OccurredAt:    time.Now().UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		uc.logger.Warn("event store Append failed on composite alert.created", "alert_id", alertID, "error", err)
+	}
 }

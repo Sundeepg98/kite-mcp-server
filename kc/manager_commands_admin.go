@@ -241,6 +241,10 @@ func (m *Manager) registerAlertCommands() error {
 			&adminBatchInstrumentResolver{m: m},
 			m.Logger,
 		)
+		// Phase C-Audit: composite alert.created event.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
