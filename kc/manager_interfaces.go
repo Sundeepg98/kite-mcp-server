@@ -48,6 +48,9 @@ type SessionProvider interface {
 }
 
 // CredentialResolver resolves per-user or global API credentials and tokens.
+//
+// Deprecated: use ports.CredentialPort (kc/ports/credential.go) instead.
+// Retained until Phase B/D migrate remaining consumers.
 type CredentialResolver interface {
 	// GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
 	GetAPIKeyForEmail(email string) string

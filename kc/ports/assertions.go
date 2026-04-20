@@ -10,5 +10,6 @@ import "github.com/zerodha/kite-mcp-server/kc"
 // ports-package imports; only ports imports kc, keeping the graph
 // acyclic.
 var (
-	_ SessionPort = (*kc.Manager)(nil)
+	_ SessionPort    = (*kc.Manager)(nil)
+	_ CredentialPort = (*kc.Manager)(nil)
 )

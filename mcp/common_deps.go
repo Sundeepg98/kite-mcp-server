@@ -21,7 +21,7 @@ type ToolHandlerDeps struct {
 	TokenStore  kc.TokenStoreInterface
 	UserStore   kc.UserStoreInterface // may be nil
 	Sessions    ports.SessionPort
-	Credentials kc.CredentialResolver
+	Credentials ports.CredentialPort
 	Metrics     kc.MetricsRecorder
 	Config      kc.AppConfigProvider
 
