@@ -913,12 +913,7 @@ func TestSetupMux_GoogleSSOConfig_WithOAuth(t *testing.T) {
 // setupMux — with DB-backed manager for accept-invite with real store
 // ---------------------------------------------------------------------------
 func TestSetupMux_AcceptInvite_ValidToken(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
 		TestData: map[uint32]*instruments.Instrument{},
@@ -936,9 +931,12 @@ func TestSetupMux_AcceptInvite_ValidToken(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -983,11 +981,7 @@ func TestSetupMux_AcceptInvite_ValidToken(t *testing.T) {
 // setupMux — accept-invite expired token
 // ---------------------------------------------------------------------------
 func TestSetupMux_AcceptInvite_ExpiredToken(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
 		TestData: map[uint32]*instruments.Instrument{},
@@ -1005,7 +999,10 @@ func TestSetupMux_AcceptInvite_ExpiredToken(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -1042,15 +1039,14 @@ func TestSetupMux_AcceptInvite_ExpiredToken(t *testing.T) {
 // setupMux — callback with OAuth flow=oauth
 // ---------------------------------------------------------------------------
 func TestSetupMux_Callback_OAuthFlow_WithHandler(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -1080,13 +1076,12 @@ func TestSetupMux_Callback_OAuthFlow_WithHandler(t *testing.T) {
 // setupMux — /auth/accept-invite with already-accepted invitation
 // ---------------------------------------------------------------------------
 func TestSetupMux_AcceptInvite_AlreadyAccepted(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -1125,15 +1120,14 @@ func TestSetupMux_AcceptInvite_AlreadyAccepted(t *testing.T) {
 // setupMux — admin auth with expired JWT cookie (not valid)
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_ExpiredCookie(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 
 	oauthCfg := &oauth.Config{
 		KiteAPIKey:  "test-key",
@@ -1174,11 +1168,11 @@ func TestSetupMux_AdminAuth_ExpiredCookie(t *testing.T) {
 // setupMux — serveStatusPage OAuth redirect branch (valid JWT)
 // ---------------------------------------------------------------------------
 func TestServeStatusPage_OAuthRedirect_ValidJWT(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 
 	oauthCfg := &oauth.Config{
