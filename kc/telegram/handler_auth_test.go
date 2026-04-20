@@ -27,7 +27,7 @@ func TestHandleStatus_ValidCredentials(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "test-token"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "user@test.com")
@@ -52,7 +52,7 @@ func TestHandleStatus_ExpiredCredentials(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "old-token"
 	mgr.tokenValid["user@test.com"] = false
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "user@test.com")
@@ -68,7 +68,7 @@ func TestHandleStatus_MissingCredentials(t *testing.T) {
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "nobody@test.com")

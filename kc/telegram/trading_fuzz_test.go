@@ -50,7 +50,7 @@ func FuzzHandleBuy(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		mgr := newMockKiteManager()
-		h, mock := newTestBotHandler(mgr)
+		h, mock := newTestBotHandler(t, mgr)
 		defer h.Shutdown()
 
 		// Must not panic regardless of input.
@@ -78,7 +78,7 @@ func FuzzHandleSell(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		mgr := newMockKiteManager()
-		h, mock := newTestBotHandler(mgr)
+		h, mock := newTestBotHandler(t, mgr)
 		defer h.Shutdown()
 
 		h.handleSell(42, "user@test.com", input)
@@ -110,7 +110,7 @@ func FuzzHandleQuick(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		mgr := newMockKiteManager()
-		h, mock := newTestBotHandler(mgr)
+		h, mock := newTestBotHandler(t, mgr)
 		defer h.Shutdown()
 
 		h.handleQuick(42, "user@test.com", input)
@@ -144,7 +144,7 @@ func FuzzHandleSetAlert(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		mgr := newMockKiteManager()
-		h, _ := newTestBotHandler(mgr)
+		h, _ := newTestBotHandler(t, mgr)
 		defer h.Shutdown()
 
 		// Must never panic; must always return *some* string (usage, error,

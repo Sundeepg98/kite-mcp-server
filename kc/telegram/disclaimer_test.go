@@ -66,7 +66,7 @@ func TestDisclaimerPrefix_OnFinancialMessage(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// /portfolio goes through newKiteClient first, so with no creds
@@ -99,7 +99,7 @@ func TestHelpCommandNotPrefixed(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -132,7 +132,7 @@ func TestDisclaimerCommand(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -168,7 +168,7 @@ func TestDisclaimerCommand(t *testing.T) {
 func TestHandleDisclaimer_ReturnsFullText(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	got := h.handleDisclaimer(42)
@@ -184,7 +184,7 @@ func TestDisclaimerPrefix_OnTradingConfirmation(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "RELIANCE 10 1500")
@@ -205,7 +205,7 @@ func TestDisclaimerPrefix_NotOnRateLimit(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Burn through the rate limit so the next call is rejected.

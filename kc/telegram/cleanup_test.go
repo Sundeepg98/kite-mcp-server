@@ -11,7 +11,7 @@ import (
 func TestCleanupNow_PrunesStaleRateWindow(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(12345)
@@ -41,7 +41,7 @@ func TestCleanupNow_PrunesStaleRateWindow(t *testing.T) {
 func TestCleanupNow_KeepsFreshRateWindow(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(67890)
@@ -70,7 +70,7 @@ func TestCleanupNow_KeepsFreshRateWindow(t *testing.T) {
 func TestCleanupNow_PrunesExpiredPendingOrders(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(11111)
@@ -104,7 +104,7 @@ func TestCleanupNow_PrunesExpiredPendingOrders(t *testing.T) {
 func TestCleanupNow_KeepsFreshPendingOrders(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(22222)
@@ -139,7 +139,7 @@ func TestCleanupNow_KeepsFreshPendingOrders(t *testing.T) {
 func TestCleanupNow_EmptyMaps(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Should not panic on empty maps.

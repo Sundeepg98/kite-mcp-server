@@ -152,7 +152,8 @@ func (m *mockTelegramLookup) GetEmailByChatID(chatID int64) (string, bool) {
 // Test helper: create a BotHandler with mocked bot and manager.
 // ---------------------------------------------------------------------------
 
-func newTestBotHandler(mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
+func newTestBotHandler(tb testing.TB, mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
+	tb.Helper()
 	mockClient := newMockHTTPClient()
 
 	// Create a real BotAPI with a mock HTTP transport.
@@ -161,6 +162,9 @@ func newTestBotHandler(mgr *mockKiteManager) (*BotHandler, *mockHTTPClient) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewBotHandler(bot, "test-secret", mgr, logger, testKiteClientFactory{})
+	// Register Shutdown so the background cleanup goroutine exits at
+	// test teardown. Without this, goleak sentinels catch the leak.
+	tb.Cleanup(h.Shutdown)
 	// Reset baseline: NewBotAPIWithClient makes a getMe call that we don't want to count.
 	mockClient.setBaseline()
 	return h, mockClient
@@ -372,7 +376,7 @@ func TestConfirmKeyboard(t *testing.T) {
 func TestHandleHelp(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	help := h.handleHelp(123)
@@ -399,7 +403,7 @@ func TestHandleHelp(t *testing.T) {
 func TestAllowCommand_UnderLimit(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(12345)
@@ -413,7 +417,7 @@ func TestAllowCommand_UnderLimit(t *testing.T) {
 func TestAllowCommand_OverLimit(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(12345)
@@ -430,7 +434,7 @@ func TestAllowCommand_OverLimit(t *testing.T) {
 func TestAllowCommand_DifferentChats(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Fill up chat 1.
@@ -450,7 +454,7 @@ func TestAllowCommand_DifferentChats(t *testing.T) {
 func TestPendingOrderLifecycle(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(100)
@@ -491,7 +495,7 @@ func TestPendingOrderLifecycle(t *testing.T) {
 func TestPendingOrderExpiry(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(200)
@@ -510,7 +514,7 @@ func TestPendingOrderExpiry(t *testing.T) {
 func TestPendingOrderOverwrite(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(300)
@@ -533,7 +537,7 @@ func TestPendingOrderOverwrite(t *testing.T) {
 func TestCleanupStaleEntries_PrunesExpiredOrders(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Add an expired order.
@@ -565,7 +569,7 @@ func TestCleanupStaleEntries_PrunesExpiredOrders(t *testing.T) {
 func TestCleanupStaleEntries_PrunesOldRateWindows(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Add stale rate-limit entries (all timestamps > 2 min ago).
@@ -596,7 +600,7 @@ func TestCleanupStaleEntries_PrunesOldRateWindows(t *testing.T) {
 func TestShutdown_Idempotent(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 
 	// Should not panic when called multiple times.
 	h.Shutdown()
@@ -610,7 +614,7 @@ func TestShutdown_Idempotent(t *testing.T) {
 func TestNewKiteClient_NoAPIKey(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	client, msg := h.newKiteClient("nobody@example.com")
@@ -626,7 +630,7 @@ func TestNewKiteClient_NoAccessToken(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.apiKeys["user@test.com"] = "some-key"
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	client, msg := h.newKiteClient("user@test.com")
@@ -644,7 +648,7 @@ func TestNewKiteClient_ExpiredToken(t *testing.T) {
 	mgr.apiKeys["user@test.com"] = "some-key"
 	mgr.accessTokens["user@test.com"] = "some-token"
 	mgr.tokenValid["user@test.com"] = false
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	client, msg := h.newKiteClient("user@test.com")
@@ -662,7 +666,7 @@ func TestNewKiteClient_ValidCredentials(t *testing.T) {
 	mgr.apiKeys["user@test.com"] = "api-key-123"
 	mgr.accessTokens["user@test.com"] = "token-456"
 	mgr.tokenValid["user@test.com"] = true
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	client, msg := h.newKiteClient("user@test.com")
@@ -681,7 +685,7 @@ func TestNewKiteClient_ValidCredentials(t *testing.T) {
 func TestServeHTTP_RejectsNonPOST(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	req := httptest.NewRequest(http.MethodGet, "/telegram/webhook", nil)
@@ -696,7 +700,7 @@ func TestServeHTTP_RejectsNonPOST(t *testing.T) {
 func TestServeHTTP_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	req := httptest.NewRequest(http.MethodPost, "/telegram/webhook",
@@ -712,7 +716,7 @@ func TestServeHTTP_InvalidJSON(t *testing.T) {
 func TestServeHTTP_EmptyUpdate(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	body, _ := json.Marshal(tgbotapi.Update{})
@@ -729,7 +733,7 @@ func TestServeHTTP_EmptyUpdate(t *testing.T) {
 func TestServeHTTP_UnregisteredUser(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -760,7 +764,7 @@ func TestServeHTTP_UnregisteredUser(t *testing.T) {
 func TestServeHTTP_GroupChat_Ignored(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -788,7 +792,7 @@ func TestServeHTTP_RegisteredUser_HelpCommand(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -815,7 +819,7 @@ func TestServeHTTP_UnknownCommand(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -842,7 +846,7 @@ func TestServeHTTP_EmptyMessage_NoReply(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -869,7 +873,7 @@ func TestServeHTTP_RateLimited(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -908,7 +912,7 @@ func TestHandleBuy_MissingArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "")
@@ -921,7 +925,7 @@ func TestHandleBuy_MissingArgs(t *testing.T) {
 func TestHandleBuy_TooManyArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "INFY 10 1500 extra")
@@ -934,7 +938,7 @@ func TestHandleBuy_TooManyArgs(t *testing.T) {
 func TestHandleBuy_InvalidQty(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "INFY abc")
@@ -947,7 +951,7 @@ func TestHandleBuy_InvalidQty(t *testing.T) {
 func TestHandleBuy_NegativeQty(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "INFY -5")
@@ -960,7 +964,7 @@ func TestHandleBuy_NegativeQty(t *testing.T) {
 func TestHandleBuy_InvalidPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, "user@test.com", "INFY 10 notanumber")
@@ -973,7 +977,7 @@ func TestHandleBuy_InvalidPrice(t *testing.T) {
 func TestHandleBuy_MarketOrder_SetsPendingOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1012,7 +1016,7 @@ func TestHandleBuy_MarketOrder_SetsPendingOrder(t *testing.T) {
 func TestHandleBuy_LimitOrder_SetsPendingOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1042,7 +1046,7 @@ func TestHandleBuy_LimitOrder_SetsPendingOrder(t *testing.T) {
 func TestHandleSell_MarketOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1070,7 +1074,7 @@ func TestHandleSell_MarketOrder(t *testing.T) {
 func TestHandleQuick_MissingArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, "user@test.com", "INFY 10")
@@ -1083,7 +1087,7 @@ func TestHandleQuick_MissingArgs(t *testing.T) {
 func TestHandleQuick_TooManyArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, "user@test.com", "INFY 10 BUY LIMIT 1500 extra")
@@ -1096,7 +1100,7 @@ func TestHandleQuick_TooManyArgs(t *testing.T) {
 func TestHandleQuick_InvalidSide(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, "user@test.com", "INFY 10 HOLD MARKET")
@@ -1109,7 +1113,7 @@ func TestHandleQuick_InvalidSide(t *testing.T) {
 func TestHandleQuick_InvalidType(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, "user@test.com", "INFY 10 BUY SL")
@@ -1122,7 +1126,7 @@ func TestHandleQuick_InvalidType(t *testing.T) {
 func TestHandleQuick_LimitWithoutPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, "user@test.com", "INFY 10 BUY LIMIT")
@@ -1135,7 +1139,7 @@ func TestHandleQuick_LimitWithoutPrice(t *testing.T) {
 func TestHandleQuick_MarketOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1162,7 +1166,7 @@ func TestHandleQuick_MarketOrder(t *testing.T) {
 func TestHandleQuick_LimitOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1189,7 +1193,7 @@ func TestHandleQuick_LimitOrder(t *testing.T) {
 func TestHandleQuick_CaseInsensitiveSideAndType(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1217,7 +1221,7 @@ func TestHandleQuick_CaseInsensitiveSideAndType(t *testing.T) {
 func TestHandleSetAlert_MissingArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "")
@@ -1229,7 +1233,7 @@ func TestHandleSetAlert_MissingArgs(t *testing.T) {
 func TestHandleSetAlert_TooFewArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE above")
@@ -1241,7 +1245,7 @@ func TestHandleSetAlert_TooFewArgs(t *testing.T) {
 func TestHandleSetAlert_InvalidDirection(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE sideways 2700")
@@ -1253,7 +1257,7 @@ func TestHandleSetAlert_InvalidDirection(t *testing.T) {
 func TestHandleSetAlert_InvalidPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE above abc")
@@ -1265,7 +1269,7 @@ func TestHandleSetAlert_InvalidPrice(t *testing.T) {
 func TestHandleSetAlert_ZeroPrice(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE above 0")
@@ -1278,7 +1282,7 @@ func TestHandleSetAlert_NoInstrumentsManager(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.instrMgr = nil
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE above 2700")
@@ -1294,7 +1298,7 @@ func TestHandleSetAlert_NoInstrumentsManager(t *testing.T) {
 func TestHandlePrice_EmptyArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePrice(42, "user@test.com", "")
@@ -1306,7 +1310,7 @@ func TestHandlePrice_EmptyArgs(t *testing.T) {
 func TestHandlePrice_NoAPIKey(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePrice(42, "user@test.com", "RELIANCE")
@@ -1322,7 +1326,7 @@ func TestHandlePrice_NoAPIKey(t *testing.T) {
 func TestHandlePortfolio_NoCredentials(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePortfolio(42, "nobody@test.com")
@@ -1334,7 +1338,7 @@ func TestHandlePortfolio_NoCredentials(t *testing.T) {
 func TestHandlePositions_NoCredentials(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePositions(42, "nobody@test.com")
@@ -1346,7 +1350,7 @@ func TestHandlePositions_NoCredentials(t *testing.T) {
 func TestHandleOrders_NoCredentials(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleOrders(42, "nobody@test.com")
@@ -1358,7 +1362,7 @@ func TestHandleOrders_NoCredentials(t *testing.T) {
 func TestHandlePnL_NoCredentials(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePnL(42, "nobody@test.com")
@@ -1374,7 +1378,7 @@ func TestHandlePnL_NoCredentials(t *testing.T) {
 func TestHandlePrices_EmptyArgs(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePrices(42, "user@test.com", "")
@@ -1390,7 +1394,7 @@ func TestHandlePrices_TooManySymbols(t *testing.T) {
 	mgr.apiKeys["user@test.com"] = "key"
 	mgr.accessTokens["user@test.com"] = "token"
 	mgr.tokenValid["user@test.com"] = true
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePrices(42, "user@test.com", "A,B,C,D,E,F,G,H,I,J,K")
@@ -1402,7 +1406,7 @@ func TestHandlePrices_TooManySymbols(t *testing.T) {
 func TestHandlePrices_NoCredentials(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handlePrices(42, "nobody@test.com", "RELIANCE")
@@ -1419,7 +1423,7 @@ func TestHandleMyWatchlist_NilStore(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.watchlistStore = nil
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleMyWatchlist(42, "user@test.com")
@@ -1450,7 +1454,7 @@ func TestHandleStatus_NoCredentials(t *testing.T) {
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "nobody@test.com")
@@ -1474,7 +1478,7 @@ func TestHandleStatus_ValidToken(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "token-xyz"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "user@test.com")
@@ -1495,7 +1499,7 @@ func TestHandleStatus_ExpiredToken(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "token-xyz"
 	mgr.tokenValid["user@test.com"] = false
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleStatus(42, "user@test.com")
@@ -1513,7 +1517,7 @@ func TestHandleAlerts_Empty(t *testing.T) {
 	mgr := newMockKiteManager()
 	store := alerts.NewStore(nil)
 	mgr.alertStore = store
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleAlerts(42, "user@test.com")
@@ -1534,7 +1538,7 @@ func TestHandleAlerts_WithAlerts(t *testing.T) {
 		t.Fatalf("failed to add alert: %v", err)
 	}
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleAlerts(42, "user@test.com")
@@ -1556,7 +1560,7 @@ func TestHandleAlerts_WithAlerts(t *testing.T) {
 func TestHandleCallbackQuery_NilMessage(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Should not panic with nil message.
@@ -1569,7 +1573,7 @@ func TestHandleCallbackQuery_NilMessage(t *testing.T) {
 func TestHandleCallbackQuery_UnregisteredUser(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleCallbackQuery(&tgbotapi.CallbackQuery{
@@ -1590,7 +1594,7 @@ func TestHandleCallbackQuery_CancelOrder(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(42)
@@ -1626,7 +1630,7 @@ func TestHandleCallbackQuery_ConfirmOrder_NoPending(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleCallbackQuery(&tgbotapi.CallbackQuery{
@@ -1648,7 +1652,7 @@ func TestHandleCallbackQuery_UnknownAction(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleCallbackQuery(&tgbotapi.CallbackQuery{
@@ -1671,7 +1675,7 @@ func TestHandleCallbackQuery_UnknownAction(t *testing.T) {
 func TestPendingOrder_Concurrent(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	var wg sync.WaitGroup
@@ -1691,7 +1695,7 @@ func TestPendingOrder_Concurrent(t *testing.T) {
 func TestAllowCommand_Concurrent(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	var wg sync.WaitGroup

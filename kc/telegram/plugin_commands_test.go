@@ -20,7 +20,7 @@ func TestRegisterCommand_FiresOnMatch(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	var gotEmail, gotArgs string
@@ -78,7 +78,7 @@ func TestRegisterCommand_FiresOnMatch(t *testing.T) {
 func TestRegisterCommand_DoesNotOverrideBuiltin(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	builtins := []string{
@@ -101,7 +101,7 @@ func TestRegisterCommand_DoesNotOverrideBuiltin(t *testing.T) {
 func TestRegisterCommand_RejectsInvalidName(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	cases := []string{
@@ -127,7 +127,7 @@ func TestRegisterCommand_UnknownCommandStillEmitsDefault(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Register /echo but send /nonexistent.
@@ -160,7 +160,7 @@ func TestRegisterCommand_LastWinsOnDuplicate(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	var firstCalls, secondCalls atomic.Int32
@@ -201,7 +201,7 @@ func TestRegisterCommand_PanicRecovered(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	_ = h.RegisterCommand("/boom", func(ctx PluginCommandContext) string {

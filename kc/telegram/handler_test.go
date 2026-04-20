@@ -71,7 +71,7 @@ func newTestBotWithFakeAPI(t *testing.T, email string) (*BotHandler, *mockHTTPCl
 	mgr.accessTokens[email] = "test-access-token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	return h, mock, fakeAPI
 }
@@ -336,7 +336,7 @@ func TestHandleMyWatchlist_EmptyWatchlistList(t *testing.T) {
 	mgr.tokenValid[email] = true
 	mgr.watchlistStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleMyWatchlist(42, email)
@@ -383,7 +383,7 @@ func TestHandleMyWatchlist_WithItemsAndLTP(t *testing.T) {
 	mgr.tokenValid[email] = true
 	mgr.watchlistStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -416,7 +416,7 @@ func TestHandleMyWatchlist_NoKiteClient_ShowsItems(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.watchlistStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleMyWatchlist(42, email)
@@ -441,7 +441,7 @@ func TestHandleMyWatchlist_EmptyWatchlistItems(t *testing.T) {
 	mgr.tokenValid[email] = true
 	mgr.watchlistStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleMyWatchlist(42, email)
@@ -575,7 +575,7 @@ func TestServeHTTP_PriceCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -622,7 +622,7 @@ func TestServeHTTP_PortfolioCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -669,7 +669,7 @@ func TestServeHTTP_OrdersCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -713,7 +713,7 @@ func TestServeHTTP_PnLCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -756,7 +756,7 @@ func TestServeHTTP_PositionsCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -807,7 +807,7 @@ func TestServeHTTP_PricesCommandIntegration(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -861,7 +861,7 @@ func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 	mgr.tokenValid[email] = true
 	mgr.watchlistStore = store
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -891,7 +891,7 @@ func TestServeHTTP_MywatchlistCommandIntegration(t *testing.T) {
 func TestSendHTML_BotError(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Make the mock return an API error so bot.Send() fails.
@@ -911,7 +911,7 @@ func TestSendHTML_BotError(t *testing.T) {
 func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	mock.mu.Lock()
@@ -930,7 +930,7 @@ func TestSendHTMLWithKeyboard_BotError(t *testing.T) {
 func TestAnswerCallback_BotError(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	mock.mu.Lock()
@@ -948,7 +948,7 @@ func TestAnswerCallback_BotError(t *testing.T) {
 func TestEditMessage_BotError(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	mock.mu.Lock()
@@ -1219,7 +1219,7 @@ func TestExecuteConfirmedOrder_NoKiteClient(t *testing.T) {
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: "user@test.com"}}
 	// No API key set → newKiteClient returns nil.
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.setPendingOrder(42, &pendingOrder{
@@ -1252,7 +1252,7 @@ func TestExecuteConfirmedOrder_NoKiteClientNilMessage(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.setPendingOrder(42, &pendingOrder{
@@ -1321,7 +1321,7 @@ func TestHandleAlerts_WithPercentageAlerts(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.alertStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleAlerts(42, email)
@@ -1347,7 +1347,7 @@ func TestHandleAlerts_MixedDirections(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.alertStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleAlerts(42, email)
@@ -1368,7 +1368,7 @@ func TestHandleAlerts_NoAlerts(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.alertStore = store
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleAlerts(42, email)
@@ -1387,7 +1387,7 @@ func TestServeHTTP_CallbackQuery(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1417,7 +1417,7 @@ func TestServeHTTP_CallbackQuery_UnknownAction(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1446,7 +1446,7 @@ func TestServeHTTP_CallbackQuery_UnregisteredUser(t *testing.T) {
 	mgr := newMockKiteManager()
 	// No registered users.
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1474,7 +1474,7 @@ func TestServeHTTP_CallbackQuery_NilMessageNilChat(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1504,7 +1504,7 @@ func TestServeHTTP_EmptyTextMessage(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1538,7 +1538,7 @@ func TestServeHTTP_RateLimitExceeded(t *testing.T) {
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 	mgr.alertStore = alerts.NewStore(nil)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Fill up rate limit.
@@ -1572,7 +1572,7 @@ func TestServeHTTP_UnknownCommandStartCommand(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1619,7 +1619,7 @@ func TestServeHTTP_WatchlistCommand(t *testing.T) {
 	mgr.accessTokens[email] = "token"
 	mgr.tokenValid[email] = true
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -1669,7 +1669,7 @@ func TestCancelPendingOrder(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.setPendingOrder(42, &pendingOrder{
@@ -1698,7 +1698,7 @@ func TestCancelPendingOrder_NilMessage(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	cq := &tgbotapi.CallbackQuery{
@@ -1768,7 +1768,7 @@ func TestServeHTTP_BuyCommandIntegration(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1797,7 +1797,7 @@ func TestServeHTTP_SellCommandIntegration(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1826,7 +1826,7 @@ func TestServeHTTP_QuickCommandIntegration(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1857,7 +1857,7 @@ func TestServeHTTP_SetAlertCommandIntegration(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -1890,7 +1890,7 @@ func TestServeHTTP_AlertsCommandIntegration(t *testing.T) {
 	mgr.tgStore = &mockTelegramLookup{emails: map[int64]string{42: email}}
 	mgr.alertStore = store
 
-	h, mock := newTestBotHandler(mgr)
+	h, mock := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{

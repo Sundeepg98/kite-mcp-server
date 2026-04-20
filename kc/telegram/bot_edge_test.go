@@ -42,7 +42,7 @@ func TestExecuteConfirmedOrder_PaperTradingError(t *testing.T) {
 	mgr.tokenValid[email] = true
 	mgr.tgStore.(*mockTelegramLookup).emails[42] = email
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Set up paper engine with a DB that will be closed.
@@ -99,7 +99,7 @@ func TestExecuteConfirmedOrder_PaperTradingError(t *testing.T) {
 func TestServeHTTP_ReadBodyError(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Create a request with an erroring body.
@@ -127,7 +127,7 @@ func TestServeHTTP_UnknownCommand_Final(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.tgStore.(*mockTelegramLookup).emails[111] = "user@test.com"
-	h, mockHTTP := newTestBotHandler(mgr)
+	h, mockHTTP := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Build a Telegram update with an unknown command.
@@ -162,7 +162,7 @@ func TestServeHTTP_UnknownCommand_Final(t *testing.T) {
 func TestAllowCommand_RateLimitExceeded(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	chatID := int64(999)
@@ -204,7 +204,7 @@ func TestHandlePortfolio_ZeroDayChangeSkipped(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "token"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -257,7 +257,7 @@ func TestHandleOrders_GetOrdersError(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "token"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -309,7 +309,7 @@ func TestHandleSetAlert_WithTickerSubscribe(t *testing.T) {
 	tickerSvc := ticker.New(ticker.Config{})
 	mgr.tickerService = tickerSvc
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Test alert without ticker running (ts.IsRunning returns false).
@@ -336,7 +336,7 @@ func TestHandleSetAlert_InvalidFormat(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.alertStore = alerts.NewStore(nil)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Too few arguments.
@@ -369,7 +369,7 @@ func TestServeHTTP_StatusCommand(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "tok"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, mockHTTP := newTestBotHandler(mgr)
+	h, mockHTTP := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	update := tgbotapi.Update{
@@ -412,7 +412,7 @@ func TestHandlePortfolio_MoreThan5TopMovers(t *testing.T) {
 	mgr.accessTokens["user@test.com"] = "token"
 	mgr.tokenValid["user@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	h.kiteBaseURI = fakeAPI.server.URL
 	defer h.Shutdown()
 
@@ -470,7 +470,7 @@ func TestExecuteConfirmedOrder_PaperOrderFail(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.paperEngine = pe
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.setPendingOrder(42, &pendingOrder{
@@ -529,7 +529,7 @@ func TestHandleSetAlert_MaxAlertsReached(t *testing.T) {
 	defer instrMgr.Shutdown()
 	mgr.instrMgr = instrMgr
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	// Fill up 100 alerts for this user to hit MaxAlertsPerUser.
@@ -779,7 +779,7 @@ func TestNewKiteClient_BaseURINotSet(t *testing.T) {
 	mgr.accessTokens["prod@test.com"] = "tok"
 	mgr.tokenValid["prod@test.com"] = true
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 	// kiteBaseURI is empty by default.
 

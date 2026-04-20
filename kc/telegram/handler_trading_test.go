@@ -29,7 +29,7 @@ func TestHandleSetAlert_Success(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "RELIANCE above 2700")
@@ -54,7 +54,7 @@ func TestHandleSetAlert_InstrumentNotFound(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "NOSUCHSYMBOL above 100")
@@ -71,7 +71,7 @@ func TestHandleSetAlert_BelowDirection(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "INFY below 1300")
@@ -92,7 +92,7 @@ func TestHandleQuick_LimitBadPrice2(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, email, "RELIANCE 10 SELL LIMIT -50")
@@ -104,7 +104,7 @@ func TestHandleQuick_InvalidQuantity2(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, email, "RELIANCE abc BUY MARKET")
@@ -116,7 +116,7 @@ func TestHandleSell_LimitSuccess2(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleSell(42, email, "INFY 5 1600")
@@ -128,7 +128,7 @@ func TestHandleBuy_NegativePrice2(t *testing.T) {
 	email := "user@test.com"
 	mgr := newMockKiteManager()
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, email, "RELIANCE 10 -500")
@@ -142,7 +142,7 @@ func TestHandleSetAlert_PercentageOver100(t *testing.T) {
 	t.Parallel()
 	mgr := newMockKiteManager()
 	mgr.instrMgr = newTestInstrumentsManager(t)
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, "user@test.com", "RELIANCE drop_pct 150")
@@ -159,7 +159,7 @@ func TestHandleSetAlert_PercentageValid(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "RELIANCE rise_pct 5")
@@ -185,7 +185,7 @@ func TestHandleSetAlert_DropPct(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = newTestInstrumentsManager(t)
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "INFY drop_pct 3")
@@ -227,7 +227,7 @@ func TestHandleSetAlert_BSEFallback(t *testing.T) {
 	mgr.alertStore = alerts.NewStore(nil)
 	mgr.instrMgr = im
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "RELIANCE above 2800")
@@ -261,7 +261,7 @@ func TestHandleBuy_PaperTradingMode(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.paperEngine = pe
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleBuy(42, email, "RELIANCE 10")
@@ -286,7 +286,7 @@ func TestHandleQuick_PaperTradingMode(t *testing.T) {
 	mgr := newMockKiteManager()
 	mgr.paperEngine = pe
 
-	h, _ := newTestBotHandler(mgr)
+	h, _ := newTestBotHandler(t, mgr)
 	defer h.Shutdown()
 
 	h.handleQuick(42, email, "INFY 5 BUY LIMIT 1500")
