@@ -1736,10 +1736,7 @@ func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
 // setupMux — pricing page with billing store (pro tier detection)
 // ---------------------------------------------------------------------------
 func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
+	t.Parallel()
 
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
@@ -1779,7 +1776,12 @@ func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
 		Logger:      testLogger(),
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
 	t.Cleanup(app.oauthHandler.Close)
@@ -1809,12 +1811,14 @@ func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
 
 
 func TestSetupMux_PprofSpecificHandlers(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -1923,7 +1927,8 @@ func TestNewRateLimiters_Basic(t *testing.T) {
 // serveLegalPages — exercise the various paths
 // ===========================================================================
 func TestServeLegalPages_Terms(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	require.NoError(t, app.initStatusPageTemplate())
 	mux := http.NewServeMux()
 	app.serveLegalPages(mux)
@@ -1937,7 +1942,8 @@ func TestServeLegalPages_Terms(t *testing.T) {
 
 
 func TestServeLegalPages_Privacy(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	require.NoError(t, app.initStatusPageTemplate())
 	mux := http.NewServeMux()
 	app.serveLegalPages(mux)
@@ -1950,6 +1956,7 @@ func TestServeLegalPages_Privacy(t *testing.T) {
 
 
 func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 
 	if alertDB := mgr.AlertDB(); alertDB != nil {
@@ -1983,7 +1990,7 @@ func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
 	token, err := oauthHandler.JWTManager().GenerateTokenWithExpiry("premium@test.com", "dashboard", 1*time.Hour)
 	require.NoError(t, err)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	app.oauthHandler = oauthHandler
 	mux := app.setupMux(mgr)
 	defer app.rateLimiters.Stop()
