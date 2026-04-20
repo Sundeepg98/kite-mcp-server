@@ -64,8 +64,17 @@ type SessionRegistry struct {
 	cleanupHooks    []CleanupHook
 	cleanupContext  context.Context
 	cleanupCancel   context.CancelFunc
-	logger          *slog.Logger
-	db              SessionDB // optional persistence
+	// cleanupWG tracks the background cleanupRoutine goroutine. StartCleanupRoutine
+	// adds to it, the goroutine calls Done() on exit, and StopCleanupRoutine waits
+	// on it so callers (including goleak sentinels) can observe the routine has
+	// actually terminated — not just signalled to stop.
+	cleanupWG sync.WaitGroup
+	// stopOnce guards cleanupCancel so StopCleanupRoutine is idempotent. The
+	// production graceful-shutdown path and test cleanupInitializeServices
+	// can both call without panic.
+	stopOnce sync.Once
+	logger   *slog.Logger
+	db       SessionDB // optional persistence
 }
 
 // CleanupHook is called when a session is terminated or expires
@@ -432,18 +441,30 @@ func (sm *SessionRegistry) AddCleanupHook(hook CleanupHook) {
 
 // StartCleanupRoutine starts background cleanup goroutines for expired MCP sessions
 func (sm *SessionRegistry) StartCleanupRoutine(ctx context.Context) {
+	sm.cleanupWG.Add(1)
 	go sm.cleanupRoutine(ctx)
 }
 
-// StopCleanupRoutine stops background cleanup goroutines for MCP sessions
+// StopCleanupRoutine stops background cleanup goroutines for MCP sessions and
+// waits for the cleanupRoutine goroutine to exit before returning. Safe to
+// call multiple times — the sync.Once guard absorbs double-close of the
+// internal cancel context. Waiting (rather than returning after a signal)
+// lets goleak-style sentinels observe the goroutine has actually terminated.
 func (sm *SessionRegistry) StopCleanupRoutine() {
-	if sm.cleanupCancel != nil {
-		sm.cleanupCancel()
-	}
+	sm.stopOnce.Do(func() {
+		if sm.cleanupCancel != nil {
+			sm.cleanupCancel()
+		}
+	})
+	// Always wait — even on the second call — so the second caller also sees
+	// the goroutine-exited postcondition. cleanupWG is only Add'd inside
+	// StartCleanupRoutine, so Wait is a no-op when the routine was never started.
+	sm.cleanupWG.Wait()
 }
 
 // cleanupRoutine runs periodic cleanup of expired MCP sessions and their Kite data
 func (sm *SessionRegistry) cleanupRoutine(ctx context.Context) {
+	defer sm.cleanupWG.Done()
 	ticker := time.NewTicker(DefaultCleanupInterval)
 	defer ticker.Stop()
 

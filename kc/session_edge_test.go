@@ -3,9 +3,12 @@ package kc
 // session_edge_test.go — session, callback, and CompleteSession edge case tests.
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -1142,6 +1145,96 @@ func TestCleanupRoutine_StopCancelsGoroutine(t *testing.T) {
 	m.SessionManager().StopCleanupRoutine()
 	// A second call should be safe (idempotent)
 	m.SessionManager().StopCleanupRoutine()
+}
+
+// TestSessionRegistry_Close_StopsGoroutine proves StopCleanupRoutine waits
+// for the background cleanup goroutine to exit before returning — not just
+// signals stop. A plain cancel signal is racy with goleak-style sentinels
+// because the goroutine may not have completed when VerifyTestMain runs.
+func TestSessionRegistry_Close_StopsGoroutine(t *testing.T) {
+	t.Parallel()
+
+	reg := NewSessionRegistry(testLogger())
+	reg.StartCleanupRoutine(context.Background())
+
+	// Prove the goroutine is running by looking at the registry's own
+	// stack-frame presence. Wait briefly for scheduling — the goroutine
+	// was launched but may not be live yet. The count is relative and
+	// may include other concurrent tests' registries, so we only require
+	// delta > 0 to confirm SOME cleanupRoutine is up (sufficient to prove
+	// this registry's goroutine could be among them; the strict proof
+	// that Stop joined ours is the timeout check below).
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if countSessionCleanupGoroutines() >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if countSessionCleanupGoroutines() < 1 {
+		t.Fatalf("no cleanupRoutine goroutine visible within 2s of start")
+	}
+
+	// Core assertion: StopCleanupRoutine MUST return within a short
+	// bounded time even though the ticker interval is 30min. That's
+	// only possible if the cancel context wakes the goroutine AND the
+	// WaitGroup.Wait inside Stop actually observes the goroutine's exit.
+	// Without the WaitGroup, Stop would return immediately after cancel
+	// (which also passes — but then the goroutine could outlive Stop,
+	// defeating the purpose). With the WaitGroup, Stop blocks until the
+	// goroutine has reached its defer Done() — which is our proof.
+	done := make(chan struct{})
+	go func() {
+		reg.StopCleanupRoutine()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Stop returned — the sync.Once did its thing and WaitGroup joined.
+	case <-time.After(3 * time.Second):
+		t.Fatal("StopCleanupRoutine did not return within 3s — goroutine Join likely blocked")
+	}
+}
+
+// TestSessionRegistry_Close_Idempotent proves StopCleanupRoutine is safe to
+// call multiple times from any sequence of paths (graceful shutdown +
+// test cleanup hooks both fire in the full integration tests).
+func TestSessionRegistry_Close_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	reg := NewSessionRegistry(testLogger())
+	reg.StartCleanupRoutine(context.Background())
+
+	// Four back-to-back calls — any panic here (e.g., "close of closed
+	// channel" from double cancel, or sync.WaitGroup re-used after zero
+	// counter) fails the test.
+	reg.StopCleanupRoutine()
+	reg.StopCleanupRoutine()
+	reg.StopCleanupRoutine()
+	reg.StopCleanupRoutine()
+}
+
+// TestSessionRegistry_Close_NeverStarted verifies Close is a safe no-op
+// when StartCleanupRoutine was never called. Tests that manually construct
+// a SessionRegistry for narrow unit coverage shouldn't be forced to start
+// a goroutine just to satisfy cleanup semantics.
+func TestSessionRegistry_Close_NeverStarted(t *testing.T) {
+	t.Parallel()
+
+	reg := NewSessionRegistry(testLogger())
+	// Must not panic, must not block on a zero-counter WaitGroup.
+	reg.StopCleanupRoutine()
+}
+
+// countSessionCleanupGoroutines reads the runtime stack and counts
+// goroutines whose current frame contains SessionRegistry.cleanupRoutine.
+// Parallel-safe relative count — used by the stop-semantics tests above
+// instead of runtime.NumGoroutine() which would double-count other parallel
+// tests that also construct registries.
+func countSessionCleanupGoroutines() int {
+	buf := make([]byte, 1<<16)
+	n := runtime.Stack(buf, true)
+	return strings.Count(string(buf[:n]), "SessionRegistry).cleanupRoutine")
 }
 
 // ---------------------------------------------------------------------------
