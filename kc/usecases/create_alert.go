@@ -72,11 +72,16 @@ func (uc *CreateAlertUseCase) Execute(ctx context.Context, cmd cqrs.CreateAlertC
 	if cmd.Tradingsymbol == "" {
 		return "", fmt.Errorf("usecases: tradingsymbol is required")
 	}
-	if cmd.TargetPrice <= 0 {
-		return "", fmt.Errorf("usecases: target_price must be positive")
-	}
 	if cmd.Direction == "" {
 		return "", fmt.Errorf("usecases: direction is required")
+	}
+	// Delegate threshold + percentage/ref-price rules to the domain. Caller
+	// preserves "target_price must be positive" error substring via wrap.
+	if err := domain.ValidateAlertSpec(domain.Direction(cmd.Direction), cmd.TargetPrice, cmd.ReferencePrice); err != nil {
+		if cmd.TargetPrice <= 0 {
+			return "", fmt.Errorf("usecases: target_price must be positive: %w", err)
+		}
+		return "", fmt.Errorf("usecases: %w", err)
 	}
 
 	// Resolve instrument token.
