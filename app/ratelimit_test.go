@@ -351,12 +351,10 @@ func TestPrivacyHTML_ContainsKeyContent(t *testing.T) {
 // ===========================================================================
 
 func TestLoadConfig_OAuthWithoutExternalURL(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret")
-	t.Setenv("EXTERNAL_URL", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		OAuthJWTSecret: "test-jwt-secret",
+	})
 	err := app.LoadConfig()
 
 	if err == nil {
@@ -366,12 +364,11 @@ func TestLoadConfig_OAuthWithoutExternalURL(t *testing.T) {
 }
 
 func TestLoadConfig_OAuthWithExternalURL(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret")
-	t.Setenv("EXTERNAL_URL", "https://example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		OAuthJWTSecret: "test-jwt-secret",
+		ExternalURL:    "https://example.com",
+	})
 	err := app.LoadConfig()
 
 	// Should succeed: OAuth mode with per-user credentials
@@ -379,13 +376,14 @@ func TestLoadConfig_OAuthWithExternalURL(t *testing.T) {
 }
 
 func TestLoadConfig_CustomPortAndHost(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("APP_PORT", "9090")
-	t.Setenv("APP_HOST", "0.0.0.0")
-	t.Setenv("APP_MODE", "sse")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AppPort:       "9090",
+		AppHost:       "0.0.0.0",
+		AppMode:       "sse",
+	})
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "9090", app.Config.AppPort)
@@ -394,7 +392,8 @@ func TestLoadConfig_CustomPortAndHost(t *testing.T) {
 }
 
 func TestSetLogBuffer(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	// SetLogBuffer should not panic with nil
 	app.SetLogBuffer(nil)
 	assert.Nil(t, app.logBuffer)

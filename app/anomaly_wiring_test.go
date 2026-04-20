@@ -20,17 +20,14 @@ import (
 // BaselineProvider on the risk guard when an audit store is available,
 // and that the wired provider is the audit store itself (not some stub).
 func TestAnomalyWiring(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
