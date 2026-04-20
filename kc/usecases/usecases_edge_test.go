@@ -637,6 +637,98 @@ func TestDeleteAlert_StoreError(t *testing.T) {
 	assert.ErrorContains(t, err, "delete alert")
 }
 
+// --- Phase C ES: alert.deleted audit-log append ---
+
+// TestDeleteAlert_EmitsEventOnSuccess verifies the use case appends an
+// alert.deleted StoredEvent to the audit log after SQL delete succeeds.
+func TestDeleteAlert_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockAlertReader{}
+	events := &mockEventAppender{}
+	uc := NewDeleteAlertUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	err := uc.Execute(context.Background(), cqrs.DeleteAlertCommand{Email: "u@t.com", AlertID: "a-42"})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, "a-42", got.AggregateID)
+	assert.Equal(t, "Alert", got.AggregateType)
+	assert.Equal(t, "alert.deleted", got.EventType)
+}
+
+// TestDeleteAlert_EventStoreFailureDoesNotRollback: SQL delete is source
+// of truth. An audit append failure must not fail the command — it's
+// logged and the delete stands.
+func TestDeleteAlert_EventStoreFailureDoesNotRollback(t *testing.T) {
+	t.Parallel()
+	store := &mockAlertReader{}
+	events := &mockEventAppender{appendErr: errors.New("disk full")}
+	uc := NewDeleteAlertUseCase(store, testLogger())
+	uc.SetEventStore(events)
+	err := uc.Execute(context.Background(), cqrs.DeleteAlertCommand{Email: "u@t.com", AlertID: "a-43"})
+	require.NoError(t, err, "audit failure must not fail the command")
+}
+
+// TestDeleteAlert_NilEventStoreNoOp: event store is optional.
+func TestDeleteAlert_NilEventStoreNoOp(t *testing.T) {
+	t.Parallel()
+	store := &mockAlertReader{}
+	uc := NewDeleteAlertUseCase(store, testLogger())
+	err := uc.Execute(context.Background(), cqrs.DeleteAlertCommand{Email: "u@t.com", AlertID: "a-44"})
+	require.NoError(t, err)
+}
+
+// --- Phase C ES: alert.created audit-log append ---
+
+// TestCreateAlert_EmitsEventOnSuccess verifies the use case appends an
+// alert.created StoredEvent after instrument resolve + SQL insert. Payload
+// carries AlertCreatedPayload so LoadAlertFromEvents can round-trip.
+func TestCreateAlert_EmitsEventOnSuccess(t *testing.T) {
+	t.Parallel()
+	store := &mockAlertStore{alerts: make(map[string]string)}
+	instruments := &mockInstrumentResolver{token: 738561}
+	events := &mockEventAppender{}
+	uc := NewCreateAlertUseCase(store, instruments, testLogger())
+	uc.SetEventStore(events)
+
+	alertID, err := uc.Execute(context.Background(), cqrs.CreateAlertCommand{
+		Email:         "test@test.com",
+		Tradingsymbol: "RELIANCE",
+		Exchange:      "NSE",
+		TargetPrice:   2600.0,
+		Direction:     "above",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	got := events.appended[0]
+	assert.Equal(t, alertID, got.AggregateID)
+	assert.Equal(t, "Alert", got.AggregateType)
+	assert.Equal(t, "alert.created", got.EventType)
+	assert.Contains(t, string(got.Payload), "RELIANCE")
+	assert.Contains(t, string(got.Payload), "above")
+}
+
+// TestCreateAlert_EventStoreFailureDoesNotRollback: SQL insert is source
+// of truth; audit failures are logged and swallowed.
+func TestCreateAlert_EventStoreFailureDoesNotRollback(t *testing.T) {
+	t.Parallel()
+	store := &mockAlertStore{alerts: make(map[string]string)}
+	instruments := &mockInstrumentResolver{token: 738561}
+	events := &mockEventAppender{appendErr: errors.New("disk full")}
+	uc := NewCreateAlertUseCase(store, instruments, testLogger())
+	uc.SetEventStore(events)
+
+	alertID, err := uc.Execute(context.Background(), cqrs.CreateAlertCommand{
+		Email:         "test@test.com",
+		Tradingsymbol: "INFY",
+		Exchange:      "NSE",
+		TargetPrice:   1500.0,
+		Direction:     "below",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, alertID)
+}
+
 // ---------------------------------------------------------------------------
 // native_alert_usecases.go — Place, List, Modify, Delete, History
 // ---------------------------------------------------------------------------

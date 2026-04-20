@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 )
 
 // AlertStore is the interface needed by CreateAlertUseCase.
@@ -28,6 +29,7 @@ type CreateAlertUseCase struct {
 	alertStore  AlertStore
 	instruments InstrumentResolver
 	events      *domain.EventDispatcher
+	eventStore  EventAppender
 	logger      *slog.Logger
 }
 
@@ -45,10 +47,21 @@ func NewCreateAlertUseCase(
 }
 
 // SetEventDispatcher wires an event dispatcher so AlertCreatedEvent is
-// emitted on successful creation. Optional — existing callers that don't
-// set one keep working; events are simply not dispatched.
+// emitted on successful creation. Dispatcher feeds the Projector (read
+// model) and runtime subscribers. Audit-log persistence is handled
+// separately by SetEventStore — the dispatcher path for alert.created is
+// no longer subscribed to the persister in wire.go (Phase C: use case
+// owns the audit write to avoid double-emit). Optional — callers without
+// a dispatcher skip the dispatch step.
 func (uc *CreateAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
 	uc.events = d
+}
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends an alert.created StoredEvent directly after a successful insert.
+// Phase C event sourcing. Nil-safe — unset event stores skip the append.
+func (uc *CreateAlertUseCase) SetEventStore(s EventAppender) {
+	uc.eventStore = s
 }
 
 // Execute creates an alert and returns the alert ID.
@@ -104,6 +117,7 @@ func (uc *CreateAlertUseCase) Execute(ctx context.Context, cmd cqrs.CreateAlertC
 		"direction", cmd.Direction,
 	)
 
+	now := time.Now()
 	if uc.events != nil {
 		uc.events.Dispatch(domain.AlertCreatedEvent{
 			Email:       cmd.Email,
@@ -111,9 +125,46 @@ func (uc *CreateAlertUseCase) Execute(ctx context.Context, cmd cqrs.CreateAlertC
 			Instrument:  domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
 			TargetPrice: domain.NewINR(cmd.TargetPrice),
 			Direction:   cmd.Direction,
-			Timestamp:   time.Now(),
+			Timestamp:   now,
 		})
 	}
+	uc.appendCreatedEvent(alertID, cmd, now)
 
 	return alertID, nil
+}
+
+// appendCreatedEvent writes an alert.created StoredEvent to the audit log.
+// Failures are logged and swallowed — the SQL insert is source of truth
+// and has already succeeded. Uses AlertCreatedPayload so LoadAlertFromEvents
+// round-trips the record cleanly.
+func (uc *CreateAlertUseCase) appendCreatedEvent(alertID string, cmd cqrs.CreateAlertCommand, occurredAt time.Time) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(alertID)
+	if err != nil {
+		uc.logger.Warn("event store NextSequence failed on alert.created", "alert_id", alertID, "error", err)
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(eventsourcing.AlertCreatedPayload{
+		Email:       cmd.Email,
+		Symbol:      cmd.Tradingsymbol,
+		Exchange:    cmd.Exchange,
+		TargetPrice: cmd.TargetPrice,
+		Direction:   cmd.Direction,
+	})
+	if err != nil { // COVERAGE: unreachable — struct marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   alertID,
+		AggregateType: "Alert",
+		EventType:     "alert.created",
+		Payload:       payload,
+		OccurredAt:    occurredAt.UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		uc.logger.Warn("event store Append failed on alert.created", "alert_id", alertID, "error", err)
+	}
 }

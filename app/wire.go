@@ -270,9 +270,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("order.filled", makeEventPersister(eventStore, "Order", app.logger))
 			eventDispatcher.Subscribe("position.opened", makeEventPersister(eventStore, "Position", app.logger))
 			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))
-			eventDispatcher.Subscribe("alert.created", makeEventPersister(eventStore, "Alert", app.logger))
+			// Phase C ES: alert.created and alert.deleted are appended to the
+			// audit log by the use cases themselves (CreateAlertUseCase /
+			// DeleteAlertUseCase) via eventStore.Append — subscribing the
+			// persister here would double-write. alert.triggered is still
+			// fired from manager_init.go's polling loop (not a use case),
+			// so it stays on the dispatcher→persister path.
 			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
-			eventDispatcher.Subscribe("alert.deleted", makeEventPersister(eventStore, "Alert", app.logger))
 			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
 			eventDispatcher.Subscribe("user.suspended", makeEventPersister(eventStore, "User", app.logger))
 			eventDispatcher.Subscribe("global.freeze", makeEventPersister(eventStore, "Global", app.logger))

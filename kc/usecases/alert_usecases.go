@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 )
 
 // AlertReader abstracts alert read/delete operations for use cases.
@@ -42,9 +43,10 @@ func (uc *ListAlertsUseCase) Execute(ctx context.Context, query cqrs.GetAlertsQu
 
 // DeleteAlertUseCase deletes a specific alert.
 type DeleteAlertUseCase struct {
-	store  AlertReader
-	events *domain.EventDispatcher
-	logger *slog.Logger
+	store      AlertReader
+	events     *domain.EventDispatcher
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewDeleteAlertUseCase creates a DeleteAlertUseCase with dependencies injected.
@@ -53,10 +55,19 @@ func NewDeleteAlertUseCase(store AlertReader, logger *slog.Logger) *DeleteAlertU
 }
 
 // SetEventDispatcher wires an event dispatcher so AlertDeletedEvent is
-// emitted on successful deletion. Optional — existing callers that don't
-// set one keep working; events are simply not dispatched.
+// emitted on successful deletion. Dispatcher drives the Projector (read
+// model). Audit-log persistence is handled separately by SetEventStore —
+// the dispatcher→persister path for alert.deleted was dropped in Phase C
+// to prevent double-emit. Optional — unset dispatcher skips the dispatch.
 func (uc *DeleteAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
 	uc.events = d
+}
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends an alert.deleted StoredEvent directly after successful deletion.
+// Phase C event sourcing. Nil-safe.
+func (uc *DeleteAlertUseCase) SetEventStore(s EventAppender) {
+	uc.eventStore = s
 }
 
 // Execute deletes an alert by ID.
@@ -71,12 +82,45 @@ func (uc *DeleteAlertUseCase) Execute(ctx context.Context, cmd cqrs.DeleteAlertC
 		uc.logger.Error("Failed to delete alert", "email", cmd.Email, "alert_id", cmd.AlertID, "error", err)
 		return fmt.Errorf("usecases: delete alert: %w", err)
 	}
+	now := time.Now()
 	if uc.events != nil {
 		uc.events.Dispatch(domain.AlertDeletedEvent{
 			Email:     cmd.Email,
 			AlertID:   cmd.AlertID,
-			Timestamp: time.Now(),
+			Timestamp: now,
 		})
 	}
+	uc.appendDeletedEvent(cmd.Email, cmd.AlertID, now)
 	return nil
+}
+
+// appendDeletedEvent writes an alert.deleted StoredEvent to the audit log.
+// Failures are logged and swallowed — the SQL delete is source of truth.
+func (uc *DeleteAlertUseCase) appendDeletedEvent(email, alertID string, occurredAt time.Time) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(alertID)
+	if err != nil {
+		uc.logger.Warn("event store NextSequence failed on alert.deleted", "alert_id", alertID, "error", err)
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(map[string]string{
+		"email":    email,
+		"alert_id": alertID,
+	})
+	if err != nil { // COVERAGE: unreachable — map[string]string marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   alertID,
+		AggregateType: "Alert",
+		EventType:     "alert.deleted",
+		Payload:       payload,
+		OccurredAt:    occurredAt.UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		uc.logger.Warn("event store Append failed on alert.deleted", "alert_id", alertID, "error", err)
+	}
 }

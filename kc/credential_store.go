@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // KiteCredentialEntry stores a user's Kite developer app credentials.
@@ -147,12 +148,16 @@ type KiteCredentialSummary struct {
 	StoredAt      time.Time `json:"stored_at"`
 }
 
-// maskSecret returns a redacted version of a secret: first 4 + "****" + last 3 chars.
+// maskSecret returns a log-safe hint for a stored secret. Delegates to the
+// domain APISecret value object so presentation rules live in one place.
+// Invalid (empty) secrets produce the "****" placeholder via the VO
+// constructor's error path — matches legacy behaviour for degenerate inputs.
 func maskSecret(s string) string {
-	if len(s) <= 7 {
+	sec, err := domain.NewAPISecret(s)
+	if err != nil {
 		return "****"
 	}
-	return s[:4] + "****" + s[len(s)-3:]
+	return sec.Masked()
 }
 
 // ListAll returns a redacted summary of all stored credentials.

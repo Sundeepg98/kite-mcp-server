@@ -194,6 +194,11 @@ func (m *Manager) registerAlertCommands() error {
 		if m.eventDispatcher != nil {
 			uc.SetEventDispatcher(m.eventDispatcher)
 		}
+		// Phase C ES: audit-log appender so alert.created lands in domain_events
+		// without going through dispatcher→persister (prevents double-emit).
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -210,6 +215,10 @@ func (m *Manager) registerAlertCommands() error {
 		uc := usecases.NewDeleteAlertUseCase(m.alertStore, m.Logger)
 		if m.eventDispatcher != nil {
 			uc.SetEventDispatcher(m.eventDispatcher)
+		}
+		// Phase C ES: audit-log appender owns alert.deleted persistence.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
