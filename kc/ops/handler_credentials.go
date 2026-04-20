@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -62,11 +62,18 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 			jsonError(http.StatusBadRequest, "api_key and api_secret are required")
 			return
 		}
-		h.manager.CredentialStore().Set(authEmail, &kc.KiteCredentialEntry{
+		// Phase B-Audit (residual): credential create routes through the
+		// CommandBus — persistence + cached-token invalidation are owned
+		// by UpdateMyCredentialsUseCase (kc/manager_commands_account.go),
+		// keeping the bus the single write entry point for credentials.
+		if _, err := h.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.UpdateMyCredentialsCommand{
+			Email:     authEmail,
 			APIKey:    req.APIKey,
 			APISecret: req.APISecret,
-		})
-		h.manager.TokenStore().Delete(authEmail)
+		}); err != nil {
+			jsonError(http.StatusBadRequest, err.Error())
+			return
+		}
 
 		if h.registryStore != nil {
 			if _, found := h.registryStore.GetByAPIKeyAnyStatus(req.APIKey); !found {
@@ -125,7 +132,16 @@ func (h *Handler) forceReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.manager.TokenStore().Delete(targetEmail)
+	// Phase B-Audit (residual): force-reauth routes through the CommandBus
+	// so the admin-triggered cached-token delete gets the bus's audit layer
+	// (reason tagged as "admin_forced_reauth").
+	if _, err := h.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.InvalidateTokenCommand{
+		Email:  targetEmail,
+		Reason: "admin_forced_reauth",
+	}); err != nil {
+		h.writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	h.logger.Info("Admin forced re-auth", "admin", adminEmail, "target", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Token deleted, user will re-authenticate on next MCP call"})
 }
