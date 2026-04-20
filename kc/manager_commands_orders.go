@@ -6,8 +6,41 @@ import (
 	"reflect"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
+
+// instrumentLookupAdapter wraps the concrete *instruments.Manager so it
+// satisfies usecases.InstrumentLookup. The port wants Get(exchange, symbol)
+// → (lotSize, tickSize, ok); the concrete manager exposes
+// GetByID("EXCH:SYM") → (Instrument, error). This adapter bridges the two
+// shapes so PlaceOrderUseCase can enforce domain.InstrumentRules (lot-size
+// divisibility + tick-size alignment) in production without changing
+// instruments.Manager's public API.
+type instrumentLookupAdapter struct {
+	mgr *instruments.Manager
+}
+
+// Get satisfies usecases.InstrumentLookup. Returns ok=false if the
+// manager is nil, the instrument is unknown, or the metadata is
+// unusable (lotSize <= 0). All three cases are treated by
+// PlaceOrderUseCase as "skip lot/tick enforcement" rather than a hard
+// failure, matching the off-hours / bootstrap contract.
+//
+// lotSize=0 is treated as "metadata unavailable" rather than a rule
+// because domain.ValidateLotSize treats it as a config error — we'd
+// rather let the broker reject a bad order than fail with a cryptic
+// domain error on unpopulated instruments (test fixtures, pre-fetch).
+func (a *instrumentLookupAdapter) Get(exchange, tradingsymbol string) (int, float64, bool) {
+	if a.mgr == nil {
+		return 0, 0, false
+	}
+	inst, err := a.mgr.GetByID(exchange + ":" + tradingsymbol)
+	if err != nil || inst.LotSize <= 0 {
+		return 0, 0, false
+	}
+	return inst.LotSize, inst.TickSize, true
+}
 
 // registerOrderCommands wires CommandBus handlers for write-side order,
 // GTT, position, and trailing-stop commands (CommandBus batch B).
@@ -35,6 +68,13 @@ func (m *Manager) registerOrderCommands() error {
 		// Phase C ES: direct audit-log append on order.placed.
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		// Task #36: wire the instruments manager as InstrumentLookup so
+		// the use case enforces lot-size + tick-size invariants via
+		// domain.InstrumentRules. Nil-safe on both sides — missing
+		// metadata skips the check rather than erroring.
+		if im := m.InstrumentsManagerConcrete(); im != nil {
+			uc.SetInstrumentLookup(&instrumentLookupAdapter{mgr: im})
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
