@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -333,45 +332,42 @@ const (
 	DefaultAppMode = "http"
 )
 
-// NewApp creates and initializes a new App instance
-// NewApp creates a new application instance with logger
+// NewApp creates and initializes a new App instance from the ambient
+// environment. Thin wrapper over NewAppWithConfig(ConfigFromEnv(), logger)
+// plus the DEV_MODE env read (dev mode is not a Config field — it's an
+// app-wide debug toggle that influences wiring decisions, not a value
+// threaded through handlers).
+//
+// Prefer NewAppWithConfig in new tests so they can construct a Config
+// directly (dropping t.Setenv) and run with t.Parallel(). NewApp stays
+// as a back-compat shim for existing callers (main.go + ~280 tests);
+// Phase E.2 migrates those incrementally.
 func NewApp(logger *slog.Logger) *App {
-	adminSecretPath := os.Getenv("ADMIN_ENDPOINT_SECRET_PATH")
+	return NewAppWithConfig(ConfigFromEnv(), logger)
+}
+
+// NewAppWithConfig creates a new App instance from an explicit Config.
+// Reads only DEV_MODE from the environment (not a Config field); every
+// other env read now flows through the Config parameter.
+//
+// cfg may be nil — a nil Config is replaced with a zero-valued Config
+// (treated as "everything empty"). Callers that want defaults should
+// pass cfg.WithDefaults().
+func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
+	if cfg == nil {
+		cfg = &Config{}
+	}
 	devMode := os.Getenv("DEV_MODE") == "true"
 
 	return &App{
-		Config: &Config{
-			KiteAPIKey:      os.Getenv("KITE_API_KEY"),
-			KiteAPISecret:   os.Getenv("KITE_API_SECRET"),
-			KiteAccessToken: os.Getenv("KITE_ACCESS_TOKEN"),
-			AppMode:         os.Getenv("APP_MODE"),
-			AppPort:       os.Getenv("APP_PORT"),
-			AppHost:       os.Getenv("APP_HOST"),
-
-			ExcludedTools:   os.Getenv("EXCLUDED_TOOLS"),
-			AdminSecretPath: adminSecretPath,
-
-			OAuthJWTSecret: os.Getenv("OAUTH_JWT_SECRET"),
-			ExternalURL:    os.Getenv("EXTERNAL_URL"),
-
-			TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-			AlertDBPath:      os.Getenv("ALERT_DB_PATH"),
-			AdminEmails:      os.Getenv("ADMIN_EMAILS"),
-
-			GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-
-			// Default false: hosted multi-user safe mode. Only an
-			// explicit "true" (case-insensitive) flips trading on.
-			EnableTrading: strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
-		},
+		Config:    cfg,
 		DevMode:   devMode,
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
 		logger:    logger,
 		metrics: metrics.New(metrics.Config{
 			ServiceName:     "kite-mcp-server",
-			AdminSecretPath: adminSecretPath,
+			AdminSecretPath: cfg.AdminSecretPath,
 			AutoCleanup:     true,
 		}),
 	}
