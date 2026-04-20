@@ -60,6 +60,34 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
 	}
 
+	// Track whether initializeServices returns a live manager or one of its
+	// error paths. Without this, a failure AFTER kcManager construction
+	// (e.g., the "audit trail required in production" guard below) leaks
+	// the Kite manager's background goroutines AND any app-level workers
+	// (scheduler, audit, paperMonitor, hashPublisher) that were wired
+	// before the failure. Callers cannot reach Shutdown on a nil return.
+	success := false
+	defer func() {
+		if !success {
+			// Tear down app-level workers first (mirror setupGracefulShutdown
+			// order), then the manager last. Every Stop/Shutdown is nil-safe.
+			if app.scheduler != nil {
+				app.scheduler.Stop()
+			}
+			if app.hashPublisherCancel != nil {
+				app.hashPublisherCancel()
+			}
+			if app.auditStore != nil {
+				app.auditStore.Stop()
+			}
+			if app.paperMonitor != nil {
+				app.paperMonitor.Stop()
+			}
+			app.stopRateLimitReload()
+			kcManager.Shutdown()
+		}
+	}()
+
 	// Store reference for template data
 	app.kcManager = kcManager
 
@@ -476,6 +504,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Initialize scheduled Telegram briefings (morning + daily P&L).
 	app.initScheduler(kcManager)
 
+	success = true
 	return kcManager, mcpServer, nil
 }
 

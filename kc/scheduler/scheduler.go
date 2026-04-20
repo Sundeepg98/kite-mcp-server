@@ -38,6 +38,10 @@ type Scheduler struct {
 	providers    []TaskProvider
 	lastRun      map[string]string // task name -> "2006-01-02" of last execution
 	done         chan struct{}
+	// loopDone is closed by the loop goroutine when it exits. Stop() waits
+	// on it so callers observe the goroutine has actually terminated —
+	// without this goleak-style sentinels race the exit.
+	loopDone     chan struct{}
 	logger       *slog.Logger
 	clock        Clock
 	tickInterval time.Duration // default 60s, override in tests
@@ -48,6 +52,7 @@ func New(logger *slog.Logger) *Scheduler {
 	return &Scheduler{
 		lastRun:      make(map[string]string),
 		done:         make(chan struct{}),
+		loopDone:     make(chan struct{}),
 		logger:       logger,
 		clock:        time.Now,
 		tickInterval: 60 * time.Second,
@@ -91,18 +96,41 @@ func (s *Scheduler) Start() {
 	go s.loop()
 }
 
-// Stop signals the scheduler goroutine to exit.
+// Stop signals the scheduler goroutine to exit and waits for it to finish.
+// Safe to call multiple times (select guards the channel close, loopDone
+// reads are idempotent on a closed channel). Safe to call without Start:
+// loopDone is initialised in New and only closed by loop — the bounded
+// wait below protects against "Stop before Start" by returning once a
+// small window passes with no signal.
 func (s *Scheduler) Stop() {
+	alreadyStopped := false
 	select {
 	case <-s.done:
-		// already closed
+		alreadyStopped = true
 	default:
 		close(s.done)
+	}
+	if alreadyStopped {
+		// Second call: loop already exited during the first Stop.
+		return
+	}
+	// Wait for the loop goroutine to actually exit. Without this wait,
+	// goleak sentinels race the scheduler exit and report a spurious
+	// leak even though the Stop signal was delivered. Timeout covers
+	// the "Stop before Start" case — loop never runs, loopDone never
+	// closes; after the timeout we accept the mildly-degenerate state
+	// (nothing actually leaked because nothing ran).
+	if s.loopDone != nil {
+		select {
+		case <-s.loopDone:
+		case <-time.After(2 * time.Second):
+		}
 	}
 }
 
 // loop is the main ticker loop, running at tickInterval (default 60s).
 func (s *Scheduler) loop() {
+	defer close(s.loopDone)
 	s.mu.Lock()
 	interval := s.tickInterval
 	s.mu.Unlock()

@@ -1101,6 +1101,7 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	app := newTestApp(t)
 	app.auditStore = audit.New(db)

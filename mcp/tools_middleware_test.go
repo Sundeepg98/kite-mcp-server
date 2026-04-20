@@ -55,6 +55,7 @@ func newMetricsManager(t *testing.T) *kc.Manager {
 		kc.WithMetrics(metricsMgr),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 	return mgr
@@ -713,6 +714,7 @@ func TestHookMiddleware_AfterHooks(t *testing.T) {
 func TestToolCache_MissAndHit_P7(t *testing.T) {
 	t.Parallel()
 	cache := NewToolCache(time.Minute)
+	t.Cleanup(cache.Close)
 	require.NotNil(t, cache)
 
 	// Miss
@@ -732,6 +734,7 @@ func TestToolCache_MissAndHit_P7(t *testing.T) {
 func TestToolCache_Expiration_P7(t *testing.T) {
 	t.Parallel()
 	cache := NewToolCache(10 * time.Millisecond)
+	t.Cleanup(cache.Close)
 	require.NotNil(t, cache)
 
 	cache.Set("key1", "value1")

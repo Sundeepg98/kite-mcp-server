@@ -10,6 +10,7 @@ import (
 func TestToolCache_SetGet(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(1 * time.Second)
+	t.Cleanup(c.Close)
 	c.Set("key1", "value1")
 
 	val, ok := c.Get("key1")
@@ -20,6 +21,7 @@ func TestToolCache_SetGet(t *testing.T) {
 func TestToolCache_Expiry(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(50 * time.Millisecond)
+	t.Cleanup(c.Close)
 	c.Set("key1", "value1")
 
 	time.Sleep(100 * time.Millisecond)
@@ -31,6 +33,7 @@ func TestToolCache_Expiry(t *testing.T) {
 func TestToolCache_Miss(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(1 * time.Second)
+	t.Cleanup(c.Close)
 	_, ok := c.Get("nonexistent")
 	assert.False(t, ok)
 }
@@ -38,6 +41,7 @@ func TestToolCache_Miss(t *testing.T) {
 func TestToolCache_Clear(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(1 * time.Second)
+	t.Cleanup(c.Close)
 	c.Set("k1", "v1")
 	c.Set("k2", "v2")
 	assert.Equal(t, 2, c.Size())
@@ -57,6 +61,7 @@ func TestCacheKey(t *testing.T) {
 func TestToolCache_Close_StopsGoroutine(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(1 * time.Second)
+	t.Cleanup(c.Close)
 
 	done := make(chan struct{})
 	go func() {
@@ -78,6 +83,7 @@ func TestToolCache_Close_StopsGoroutine(t *testing.T) {
 func TestToolCache_Close_Idempotent(t *testing.T) {
 	t.Parallel()
 	c := NewToolCache(1 * time.Second)
+	t.Cleanup(c.Close)
 	c.Close()
 	c.Close() // second call must not panic on close-of-closed-channel
 	c.Close() // third call exercises stopOnce-guard fast path

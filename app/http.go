@@ -60,7 +60,13 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	}
 
+	// gracefulShutdownDone signals teardown completion so tests can
+	// wait on it after closing shutdownCh. Always initialised — nil
+	// readers just skip.
+	app.gracefulShutdownDone = make(chan struct{})
+
 	go func() {
+		defer close(app.gracefulShutdownDone)
 		defer stop()
 		<-ctx.Done()
 		app.logger.Info("Shutting down server...")

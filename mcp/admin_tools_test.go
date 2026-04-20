@@ -45,6 +45,7 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 		kc.WithInstrumentsManager(instMgr),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 
 	// Wire up a RiskGuard so freeze-related tools work.
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))

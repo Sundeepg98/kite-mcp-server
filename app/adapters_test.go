@@ -119,6 +119,7 @@ func TestTelegramAdapter_TickerServiceConcrete(t *testing.T) {
 func TestClientPersisterAdapter_SaveAndLoad(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	adapter := &clientPersisterAdapter{db: db}
 
@@ -141,6 +142,7 @@ func TestClientPersisterAdapter_SaveAndLoad(t *testing.T) {
 func TestClientPersisterAdapter_SaveKiteKey(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	adapter := &clientPersisterAdapter{db: db}
 
@@ -157,6 +159,7 @@ func TestClientPersisterAdapter_SaveKiteKey(t *testing.T) {
 func TestClientPersisterAdapter_Delete(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	adapter := &clientPersisterAdapter{db: db}
 
@@ -181,6 +184,7 @@ func TestClientPersisterAdapter_Delete(t *testing.T) {
 func TestClientPersisterAdapter_LoadEmpty(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	adapter := &clientPersisterAdapter{db: db}
 
@@ -192,6 +196,7 @@ func TestClientPersisterAdapter_LoadEmpty(t *testing.T) {
 func TestClientPersisterAdapter_MultipleClients(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	adapter := &clientPersisterAdapter{db: db}
 
@@ -272,6 +277,7 @@ func TestInstrumentsFreezeAdapter_ZeroFreeze(t *testing.T) {
 func TestMakeEventPersister_PersistsEvent(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())
@@ -298,6 +304,7 @@ func TestMakeEventPersister_PersistsEvent(t *testing.T) {
 func TestMakeEventPersister_MultipleEvents(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())
@@ -317,6 +324,7 @@ func TestMakeEventPersister_MultipleEvents(t *testing.T) {
 func TestMakeEventPersister_UserEvents(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())

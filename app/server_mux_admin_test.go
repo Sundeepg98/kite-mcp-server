@@ -77,6 +77,7 @@ func TestInitScheduler_WithAuditStore(t *testing.T) {
 	mgr := newTestManager(t)
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	app := newTestApp(t)
 	app.auditStore = audit.New(db)
@@ -112,6 +113,7 @@ func TestInitScheduler_AuditOnly(t *testing.T) {
 	mgr := newTestManager(t)
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	app := newTestApp(t)
 	app.auditStore = audit.New(db)

@@ -142,6 +142,7 @@ func newDevModeManager(t *testing.T) *kc.Manager {
 		kc.WithDevMode(true),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 	return mgr
@@ -174,6 +175,7 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 		kc.WithDevMode(true),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	// Wire up audit store (in-memory SQLite)
@@ -236,11 +238,13 @@ func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 		kc.WithDevMode(true),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	// SQLite-backed stores
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	auditStore := audit.New(db)
 	require.NoError(t, auditStore.InitTable())
@@ -423,6 +427,7 @@ func newNFODevModeManager(t *testing.T) *kc.Manager {
 		kc.WithDevMode(true),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 	return mgr
 }

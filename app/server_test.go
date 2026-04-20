@@ -515,6 +515,7 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 func TestMakeEventPersister_FullPath(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())
@@ -666,6 +667,7 @@ func TestMakeEventPersister_AppendError(t *testing.T) {
 	// Use a DB that we close to force append errors
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())
@@ -933,6 +935,7 @@ func (e badEvent) OccurredAt() time.Time  { return time.Now() }
 func TestMakeEventPersister_NextSequenceError(t *testing.T) {
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
 
 	store := eventsourcing.NewEventStore(db)
 	require.NoError(t, store.InitTable())

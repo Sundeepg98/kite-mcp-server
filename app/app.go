@@ -78,6 +78,12 @@ type App struct {
 	// exits. stopRateLimitReload waits on it so goleak sentinels observe
 	// the goroutine has actually terminated, not just been signalled.
 	rateLimitReloadDone <-chan struct{}
+	// gracefulShutdownDone is closed by setupGracefulShutdown's teardown
+	// goroutine after it has run every component's Stop/Shutdown. Tests
+	// that inject shutdownCh can <- this channel after closing shutdownCh
+	// to synchronise with the teardown's completion — otherwise
+	// goleak-style sentinels race the async teardown.
+	gracefulShutdownDone chan struct{}
 	// shutdownOnce guards the one-shot close of shutdownCh performed by
 	// TriggerShutdown. Multiple SIGUSR2 in quick succession, or a
 	// SIGUSR2 racing with the normal SIGTERM path, must NOT panic
@@ -427,6 +433,46 @@ func (app *App) RunServer() error {
 		return err
 	}
 
+	// RunServer owns the Manager lifecycle. Any error-return past this
+	// point (oauth config, startServer) must shut down the partially-
+	// wired components — otherwise we leak every background goroutine
+	// kcManager + app.auditStore + app.oauthHandler spawned. Production
+	// graceful shutdown also owns this chain via setupGracefulShutdown;
+	// the defer here covers the error-before-serve gap.
+	runSuccess := false
+	defer func() {
+		if !runSuccess {
+			// Mirror the teardown order from setupGracefulShutdown /
+			// cleanupInitializeServices. Every Stop is idempotent / nil-safe.
+			if app.scheduler != nil {
+				app.scheduler.Stop()
+			}
+			if app.hashPublisherCancel != nil {
+				app.hashPublisherCancel()
+			}
+			if app.auditStore != nil {
+				app.auditStore.Stop()
+			}
+			if app.telegramBot != nil {
+				app.telegramBot.Shutdown()
+			}
+			kcManager.Shutdown()
+			if app.oauthHandler != nil {
+				app.oauthHandler.Close()
+			}
+			if app.rateLimiters != nil {
+				app.rateLimiters.Stop()
+			}
+			app.stopRateLimitReload()
+			if app.invitationCleanupCancel != nil {
+				app.invitationCleanupCancel()
+			}
+			if app.paperMonitor != nil {
+				app.paperMonitor.Stop()
+			}
+		}
+	}()
+
 	// Initialize OAuth handler if configured (uses Kite as identity provider)
 	if app.Config.OAuthJWTSecret != "" {
 		oauthCfg := &oauth.Config{
@@ -558,7 +604,22 @@ func (app *App) RunServer() error {
 	// calling setupGracefulShutdown here (before startServer) would race on
 	// those fields because setupMux runs on the main goroutine AFTER this
 	// point while the shutdown goroutine is already spawned.
-	return app.startServer(srv, kcManager, mcpServer, url)
+	//
+	// If startServer returns successfully (signal-triggered graceful shutdown
+	// ran), the teardown-on-error defer above is a no-op because
+	// setupGracefulShutdown's deferred chain already stopped every
+	// component. Setting runSuccess=true signals the defer to skip.
+	if err := app.startServer(srv, kcManager, mcpServer, url); err != nil {
+		// startServer failed before serving. setupGracefulShutdown may not
+		// have been called (AppMode default case returns before wiring).
+		// The RunServer defer above will unwind every wired component.
+		return err
+	}
+	// startServer returned without error — setupGracefulShutdown's
+	// teardown has already run (triggered by signal or shutdownCh).
+	// Signal the defer to skip duplicate teardown.
+	runSuccess = true
+	return nil
 }
 
 // buildServerURL constructs the server URL from host and port

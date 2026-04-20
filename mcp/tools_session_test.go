@@ -144,6 +144,7 @@ func newNonDevModeManager(t *testing.T, kiteBaseURL string) *kc.Manager {
 		kc.WithDevMode(false), // Non-DevMode!
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	// Wire up stores

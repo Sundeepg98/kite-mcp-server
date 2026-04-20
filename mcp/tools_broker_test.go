@@ -212,6 +212,7 @@ func newFactoryManager(t *testing.T, mockURL string) *kc.Manager {
 		kc.WithDevMode(false),
 	)
 	require.NoError(t, err)
+	t.Cleanup(mgr.Shutdown)
 	t.Cleanup(func() { mgr.Shutdown() })
 
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))

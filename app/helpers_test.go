@@ -60,6 +60,46 @@ func newTestApp(t *testing.T) *App {
 		default:
 			close(app.shutdownCh)
 		}
+		// If setupGracefulShutdown wired its teardown goroutine, wait
+		// for it to finish so goleak sentinels observe a clean state.
+		if app.gracefulShutdownDone != nil {
+			select {
+			case <-app.gracefulShutdownDone:
+			case <-time.After(5 * time.Second):
+				t.Errorf("newTestApp: graceful shutdown did not complete within 5s")
+			}
+		} else {
+			// No setupGracefulShutdown was called (e.g., tests that invoke
+			// setupMux directly without going through startXxxServer). Run
+			// the equivalent teardown sequence here so background workers
+			// spawned by setupMux / direct component wiring exit before
+			// goleak inspects at process end. Every Stop is nil-safe.
+			if app.scheduler != nil {
+				app.scheduler.Stop()
+			}
+			if app.hashPublisherCancel != nil {
+				app.hashPublisherCancel()
+			}
+			if app.auditStore != nil {
+				app.auditStore.Stop()
+			}
+			if app.telegramBot != nil {
+				app.telegramBot.Shutdown()
+			}
+			if app.oauthHandler != nil {
+				app.oauthHandler.Close()
+			}
+			if app.rateLimiters != nil {
+				app.rateLimiters.Stop()
+			}
+			app.stopRateLimitReload()
+			if app.invitationCleanupCancel != nil {
+				app.invitationCleanupCancel()
+			}
+			if app.paperMonitor != nil {
+				app.paperMonitor.Stop()
+			}
+		}
 		if app.metrics != nil {
 			app.metrics.Shutdown()
 		}
