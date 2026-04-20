@@ -181,6 +181,7 @@ func TestSetupMux_FaviconEndpoint(t *testing.T) {
 // serveErrorPage — additional status codes
 // ---------------------------------------------------------------------------
 func TestServeErrorPage_403(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	serveErrorPage(rec, 403, "Forbidden", "Access denied")
 	assert.Equal(t, 403, rec.Code)
@@ -194,6 +195,7 @@ func TestServeErrorPage_403(t *testing.T) {
 // provisionUser — active user UID update
 // ---------------------------------------------------------------------------
 func TestProvisionUser_ActiveUser_UpdateKiteUID(t *testing.T) {
+	t.Parallel()
 	store := users.NewStore()
 	store.EnsureUser("active@example.com", "", "Active User", "self")
 
@@ -230,6 +232,7 @@ func TestLoadConfig_OAuthModeOnly(t *testing.T) {
 // paperLTPAdapter — no kite client path
 // ---------------------------------------------------------------------------
 func TestPaperLTPAdapter_NoKiteClient(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	adapter := &paperLTPAdapter{manager: mgr}
 
@@ -243,6 +246,7 @@ func TestPaperLTPAdapter_NoKiteClient(t *testing.T) {
 // instrumentsFreezeAdapter — multiple instruments
 // ---------------------------------------------------------------------------
 func TestInstrumentsFreezeAdapter_MultipleInstruments(t *testing.T) {
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger: testLogger(),
 		TestData: map[uint32]*instruments.Instrument{
@@ -285,6 +289,7 @@ func TestInstrumentsFreezeAdapter_MultipleInstruments(t *testing.T) {
 // kiteExchangerAdapter GetCredentials — edge: credentials with empty API key
 // ---------------------------------------------------------------------------
 func TestGetCredentials_EmptyCredentialAPIKey(t *testing.T) {
+	t.Parallel()
 	credStore := kc.NewKiteCredentialStore()
 	// Store credentials with empty key
 	credStore.Set("user@example.com", &kc.KiteCredentialEntry{
@@ -342,6 +347,7 @@ func TestSetupMux_NoAdminNoOAuth(t *testing.T) {
 // securityHeaders — verify all 6 headers present
 // ---------------------------------------------------------------------------
 func TestSecurityHeaders_AllSixHeaders(t *testing.T) {
+	t.Parallel()
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -395,6 +401,7 @@ func TestSetupMux_ServerCard_CORS(t *testing.T) {
 // GetLTP — exercise more branches
 // ---------------------------------------------------------------------------
 func TestPaperLTPAdapter_MultipleInstruments_NoSessions(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	adapter := &paperLTPAdapter{manager: mgr}
 
@@ -409,6 +416,7 @@ func TestPaperLTPAdapter_MultipleInstruments_NoSessions(t *testing.T) {
 // provisionUser — case-insensitive email handling
 // ---------------------------------------------------------------------------
 func TestProvisionUser_CaseInsensitive(t *testing.T) {
+	t.Parallel()
 	store := users.NewStore()
 	adapter := &kiteExchangerAdapter{
 		userStore: store,
@@ -511,6 +519,7 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 // makeEventPersister — exercise all paths including success
 // ---------------------------------------------------------------------------
 func TestMakeEventPersister_FullPath(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -600,6 +609,7 @@ func newTestOAuthHandler(t *testing.T) *oauth.Handler {
 // ratelimiter cleanup
 // ===========================================================================
 func TestRateLimiterCleanup_Populated(t *testing.T) {
+	t.Parallel()
 	limiter := newIPRateLimiter(1, 1)
 	limiter.getLimiter("192.168.1.1")
 	limiter.getLimiter("192.168.1.2")
@@ -664,6 +674,7 @@ func TestSetupMux_PricingPage_WithCookie(t *testing.T) {
 // makeEventPersister — error on closed/nil store
 // ---------------------------------------------------------------------------
 func TestMakeEventPersister_AppendError(t *testing.T) {
+	t.Parallel()
 	// Use a DB that we close to force append errors
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
@@ -701,6 +712,7 @@ func TestMakeEventPersister_AppendError(t *testing.T) {
 // getLimiter — double-check-after-write-lock branch (concurrent access)
 // ---------------------------------------------------------------------------
 func TestGetLimiter_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	limiter := newIPRateLimiter(100, 200)
 	ip := "10.0.0.1"
 
@@ -758,6 +770,7 @@ func TestSetupMux_StripeWebhookSecret_NoBillingStore(t *testing.T) {
 // deriveAggregateID — remaining event types
 // ---------------------------------------------------------------------------
 func TestDeriveAggregateID_SessionCreated(t *testing.T) {
+	t.Parallel()
 	result := deriveAggregateID(domain.SessionCreatedEvent{
 		SessionID: "sess-test-123",
 		Timestamp: time.Now(),
@@ -767,6 +780,7 @@ func TestDeriveAggregateID_SessionCreated(t *testing.T) {
 
 
 func TestDeriveAggregateID_GlobalFreeze(t *testing.T) {
+	t.Parallel()
 	result := deriveAggregateID(domain.GlobalFreezeEvent{
 		By:        "admin@test.com",
 		Timestamp: time.Now(),
@@ -776,6 +790,7 @@ func TestDeriveAggregateID_GlobalFreeze(t *testing.T) {
 
 
 func TestDeriveAggregateID_RiskLimitBreached(t *testing.T) {
+	t.Parallel()
 	result := deriveAggregateID(domain.RiskLimitBreachedEvent{
 		Email:     "risky@test.com",
 		Timestamp: time.Now(),
@@ -785,6 +800,7 @@ func TestDeriveAggregateID_RiskLimitBreached(t *testing.T) {
 
 
 func TestDeriveAggregateID_FamilyInvited(t *testing.T) {
+	t.Parallel()
 	result := deriveAggregateID(domain.FamilyInvitedEvent{
 		AdminEmail: "family-admin@test.com",
 		Timestamp:  time.Now(),
@@ -931,6 +947,7 @@ type badEvent struct{}
 func (e badEvent) EventType() string      { return "bad.event" }
 func (e badEvent) OccurredAt() time.Time  { return time.Now() }
 func TestMakeEventPersister_NextSequenceError(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -967,6 +984,7 @@ func TestMakeEventPersister_NextSequenceError(t *testing.T) {
 // deriveAggregateID — unknown event type returns "unknown"
 // ---------------------------------------------------------------------------
 func TestDeriveAggregateID_UnknownEventType(t *testing.T) {
+	t.Parallel()
 	result := deriveAggregateID(badEvent{})
 	assert.Equal(t, "unknown", result)
 }
@@ -977,6 +995,7 @@ func TestDeriveAggregateID_UnknownEventType(t *testing.T) {
 // GetLTP — exercise session iteration with nil data
 // ---------------------------------------------------------------------------
 func TestPaperLTPAdapter_WithSession_NilData(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 
 	// Create a session manually — the session will have nil data
@@ -996,6 +1015,7 @@ func TestPaperLTPAdapter_WithSession_NilData(t *testing.T) {
 // runRateLimiters — concurrent cleanup does not panic
 // ---------------------------------------------------------------------------
 func TestRateLimiters_CleanupDoesNotPanic(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiters()
 
 	// Use the limiters concurrently
@@ -1159,6 +1179,7 @@ func TestLoadConfig_OAuth_MissingExternalURL(t *testing.T) {
 // instrumentsFreezeAdapter — GetFreezeQuantity with zero freeze qty
 // ---------------------------------------------------------------------------
 func TestInstrumentsFreezeAdapter_ZeroFreezeQty(t *testing.T) {
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger: testLogger(),
 		TestData: map[uint32]*instruments.Instrument{
@@ -1185,21 +1206,25 @@ func TestInstrumentsFreezeAdapter_ZeroFreezeQty(t *testing.T) {
 // truncKey — edge cases
 // ---------------------------------------------------------------------------
 func TestTruncKey_Shorter(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "ab", truncKey("ab", 5))
 }
 
 
 func TestTruncKey_Exact(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "abc", truncKey("abc", 3))
 }
 
 
 func TestTruncKey_Longer(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "abc", truncKey("abcdef", 3))
 }
 
 
 func TestTruncKey_Empty(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "", truncKey("", 5))
 }
 
@@ -1236,6 +1261,7 @@ func TestBuildServerURL_CustomHostPort(t *testing.T) {
 // briefingTokenAdapter — edge cases
 // ---------------------------------------------------------------------------
 func TestBriefingTokenAdapter_NotFound(t *testing.T) {
+	t.Parallel()
 	store := kc.NewKiteTokenStore()
 	adapter := &briefingTokenAdapter{store: store}
 
@@ -1245,6 +1271,7 @@ func TestBriefingTokenAdapter_NotFound(t *testing.T) {
 
 
 func TestBriefingTokenAdapter_Found(t *testing.T) {
+	t.Parallel()
 	store := kc.NewKiteTokenStore()
 	store.Set("user@test.com", &kc.KiteTokenEntry{
 		AccessToken: "test-token-123",
@@ -1260,6 +1287,7 @@ func TestBriefingTokenAdapter_Found(t *testing.T) {
 
 
 func TestBriefingTokenAdapter_IsExpired_PastDate(t *testing.T) {
+	t.Parallel()
 	store := kc.NewKiteTokenStore()
 	adapter := &briefingTokenAdapter{store: store}
 
@@ -1273,6 +1301,7 @@ func TestBriefingTokenAdapter_IsExpired_PastDate(t *testing.T) {
 // briefingCredAdapter — GetAPIKey
 // ---------------------------------------------------------------------------
 func TestBriefingCredAdapter_GetAPIKey_UnknownEmail(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	adapter := &briefingCredAdapter{manager: mgr}
 
@@ -1374,6 +1403,7 @@ func TestSetupMux_BillingCheckout_RealOAuthAndBillingStore(t *testing.T) {
 // GetLTP — exercise session with KiteSessionData containing nil Client
 // ---------------------------------------------------------------------------
 func TestPaperLTPAdapter_WithSession_KiteSessionData_NilClient(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 
 	// Create a session with KiteSessionData that has nil Kite
@@ -1418,6 +1448,7 @@ func TestServeLegalPages_TemplateExecuteError(t *testing.T) {
 // rateLimit middleware — Fly-Client-IP header handling
 // ---------------------------------------------------------------------------
 func TestRateLimit_FlyClientIPHeader(t *testing.T) {
+	t.Parallel()
 	limiter := newIPRateLimiter(1, 1) // Very tight: 1 req/sec, burst 1
 	middleware := rateLimit(limiter)
 
@@ -1455,6 +1486,7 @@ func TestRateLimit_FlyClientIPHeader(t *testing.T) {
 // rateLimit middleware — RemoteAddr port stripping
 // ---------------------------------------------------------------------------
 func TestRateLimit_RemoteAddrPortStripping(t *testing.T) {
+	t.Parallel()
 	limiter := newIPRateLimiter(1, 1)
 	middleware := rateLimit(limiter)
 
@@ -1486,6 +1518,7 @@ func TestRateLimit_RemoteAddrPortStripping(t *testing.T) {
 // withSessionType — verify context value
 // ---------------------------------------------------------------------------
 func TestWithSessionType_ContextValue(t *testing.T) {
+	t.Parallel()
 	var capturedCtx context.Context
 	inner := func(w http.ResponseWriter, r *http.Request) {
 		capturedCtx = r.Context()
@@ -1845,6 +1878,7 @@ func mockKiteAPIServer(t *testing.T) *httptest.Server {
 // GetLTP (paperLTPAdapter) — exercise all branches
 // ===========================================================================
 func TestPaperLTPAdapter_NoSessions(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 	adapter := &paperLTPAdapter{manager: mgr}
 
@@ -1855,6 +1889,7 @@ func TestPaperLTPAdapter_NoSessions(t *testing.T) {
 
 
 func TestPaperLTPAdapter_SessionWithNilData(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 
 	// Generate a session to have at least one active session, but with no KiteSessionData.
@@ -1873,6 +1908,7 @@ func TestPaperLTPAdapter_SessionWithNilData(t *testing.T) {
 // newRateLimiters — basic coverage
 // ===========================================================================
 func TestNewRateLimiters_Basic(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiters()
 	assert.NotNil(t, rl)
 	assert.NotNil(t, rl.auth)
