@@ -426,10 +426,14 @@ func TestBuildServerURL(t *testing.T) {
 }
 
 func TestBuildServerURL_Default(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "k")
-	t.Setenv("KITE_API_SECRET", "s")
-	app := newTestApp(t)
-	_ = app.LoadConfig()
+	t.Parallel()
+	// Phase E.2 Task #42: config literal replaces t.Setenv. Defaults
+	// applied via WithDefaults so AppHost/AppPort get their production
+	// fallbacks — that's the point of "default" in this test.
+	app := newTestAppWithConfig(t, (&Config{
+		KiteAPIKey:    "k",
+		KiteAPISecret: "s",
+	}).WithDefaults())
 	assert.Equal(t, "localhost:8080", app.buildServerURL())
 }
 
