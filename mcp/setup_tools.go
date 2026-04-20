@@ -296,11 +296,17 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.trackToolError(ctx, "login", "credential_persist_failed")
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to persist credentials: %s", err.Error())), nil
 			}
-			// Session data reset stays inline — it's session-lifecycle, not
-			// credential-lifecycle. Clearing ensures the next GetOrCreateSession
-			// builds a fresh Kite client with the newly-persisted API key.
-			if err := manager.ClearSessionData(mcpSessionID); err != nil {
-				manager.Logger.Warn("Failed to clear session data after credential registration", "error", err)
+			// Round-5 Phase B (Sessions): session data clear routes through the
+			// CommandBus so the lifecycle event gets LoggingMiddleware audit.
+			// Clearing ensures the next GetOrCreateSession builds a fresh Kite
+			// client with the newly-persisted API key. A failure here is
+			// non-fatal to the login flow (next GetOrCreateSession may still
+			// succeed), so we warn-and-continue rather than short-circuit.
+			if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
+				SessionID: mcpSessionID,
+				Reason:    "post_credential_register",
+			}); dispErr != nil {
+				manager.Logger.Warn("Failed to clear session data after credential registration", "error", dispErr)
 			}
 			manager.Logger.Info("Stored per-user Kite credentials via login tool", "email", email)
 		}
@@ -373,8 +379,15 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			profile, err := kiteSession.Kite.Client.GetUserProfile()
 			if err != nil {
 				manager.Logger.Warn("Kite profile check failed, clearing session data", "session_id", mcpSessionID, "error", err)
-				// If we are still getting an error, lets clear session data and recreate
-				if clearErr := manager.ClearSessionData(mcpSessionID); clearErr != nil {
+				// If we are still getting an error, lets clear session data and
+				// recreate — via CommandBus for uniform observability
+				// (Round-5 Phase B Sessions). Here, unlike the post-credential
+				// path, a clear failure IS fatal: we cannot safely recreate
+				// the session if the stale data still occupies the slot.
+				if _, clearErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
+					SessionID: mcpSessionID,
+					Reason:    "profile_check_failed",
+				}); clearErr != nil {
 					manager.Logger.Error("Failed to clear session data", "session_id", mcpSessionID, "error", clearErr)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to clear session data: %s", clearErr.Error())), nil
 				}

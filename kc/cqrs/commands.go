@@ -432,3 +432,17 @@ type InvalidateTokenCommand struct {
 	Email  string `json:"email"`
 	Reason string `json:"reason,omitempty"` // "expired" / "credential_rotation" / "admin_action"
 }
+
+// ClearSessionDataCommand requests clearing the Kite session data for an MCP
+// session without terminating the session itself. Used by the login flow
+// when (a) fresh credentials are registered and the next GetOrCreateSession
+// should rebuild the Kite client, or (b) a profile check against Kite fails
+// and the stale Kite-side data must be dropped before a retry.
+//
+// Round-5 Phase B (Sessions): replaces direct manager.ClearSessionData(id)
+// sites in mcp/setup_tools.go so every session-lifecycle write flows through
+// the command bus, giving a uniform audit/observability layer.
+type ClearSessionDataCommand struct {
+	SessionID string `json:"session_id"`
+	Reason    string `json:"reason,omitempty"` // "post_credential_register" / "profile_check_failed" / "admin_action"
+}
