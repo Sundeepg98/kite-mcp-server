@@ -81,6 +81,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 }
 
 func TestStartServer_InvalidMode(t *testing.T) {
+	t.Parallel()
 	app := &App{
 		Config: &Config{
 			AppMode: "invalid_mode",
@@ -100,7 +101,8 @@ func TestStartServer_InvalidMode(t *testing.T) {
 }
 
 func TestNewApp(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 
 	if app == nil {
 		t.Error("Expected non-nil app")
@@ -115,7 +117,8 @@ func TestNewApp(t *testing.T) {
 }
 
 func TestSetVersion(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	testVersion := "v1.2.3"
 
 	app.SetVersion(testVersion)
