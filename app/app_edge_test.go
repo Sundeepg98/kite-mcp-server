@@ -890,9 +890,10 @@ func TestInitializeServices_FamilyInvitation_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-	t.Setenv("ADMIN_PASSWORD", "")
-
+	// Phase E.2 Task #42: STRIPE_WEBHOOK_SECRET + ADMIN_PASSWORD moved to
+	// Config fields; the explicit env sanitization below is no longer
+	// needed now that newTestApp sets them via ConfigFromEnv and we clear
+	// them on the Config directly further down.
 	mgr := p100Manager(t)
 
 	oauthCfg := &oauth.Config{
@@ -915,6 +916,8 @@ func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
 	app.DevMode = true
 	app.oauthHandler = handler
 	app.Config.AdminEmails = ""
+	app.Config.AdminPassword = ""       // Task #42: explicit clear (was t.Setenv)
+	app.Config.StripeWebhookSecret = "" // Task #42: explicit clear (was t.Setenv)
 	app.Config.GoogleClientID = "google-client-id.apps.googleusercontent.com"
 	app.Config.GoogleClientSecret = "google-secret"
 	app.Config.ExternalURL = "https://test.example.com"
