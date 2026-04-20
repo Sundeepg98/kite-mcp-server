@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -149,12 +150,16 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete credentials, tokens, and sessions
-	h.manager.CredentialStore().Delete(targetEmail)
-	h.manager.TokenStore().Delete(targetEmail)
-	h.manager.SessionManager().TerminateByEmail(targetEmail)
-
-	if err := h.userStore.UpdateStatus(targetEmail, users.StatusOffboarded); err != nil {
+	// Phase B-Audit #25: admin offboard = full account teardown, which
+	// is DeleteMyAccountUseCase's exact contract — credentials, tokens,
+	// sessions, alerts, watchlists, trailing stops, paper-trading reset,
+	// and the UserStore "offboarded" status write. One dispatch replaces
+	// four manual operations and gains the bus's audit/observability
+	// layer. The use case already calls UpdateStatus(email, "offboarded")
+	// internally, so we drop the now-redundant inline UpdateStatus call.
+	if _, err := h.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.DeleteMyAccountCommand{
+		Email: targetEmail,
+	}); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
