@@ -56,19 +56,20 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 	// Extract raw price from Money VO.
 	price := cmd.Price.Amount
 
-	// Use domain specs for quantity/price validation on modify.
-	// Quantity of 0 means "don't change" — only validate when provided.
+	// Delegate quantity / price invariants to the domain value-object
+	// constructors. For modify, a zero quantity means "don't change" —
+	// only validate when the caller supplies a change. Same applies to
+	// price for non-MARKET / non-SL-M orders. NewQuantity rejects <= 0
+	// and NewMoney rejects <= 0 — load-bearing invariants at the domain
+	// boundary replace the prior QuantitySpec / PriceSpec inline checks.
 	if cmd.Quantity > 0 {
-		qtySpec := domain.NewQuantitySpec(1, 0)
-		if !qtySpec.IsSatisfiedBy(cmd.Quantity) {
-			return broker.OrderResponse{}, fmt.Errorf("usecases: %s", qtySpec.Reason())
+		if _, err := domain.NewQuantity(cmd.Quantity); err != nil {
+			return broker.OrderResponse{}, fmt.Errorf("usecases: %w", err)
 		}
 	}
-	// Price validation for non-MARKET modify orders when price is provided.
 	if price > 0 && cmd.OrderType != "MARKET" && cmd.OrderType != "SL-M" {
-		priceSpec := domain.NewPriceSpec(0)
-		if !priceSpec.IsSatisfiedBy(price) {
-			return broker.OrderResponse{}, fmt.Errorf("usecases: %s", priceSpec.Reason())
+		if _, err := domain.NewMoney(price); err != nil {
+			return broker.OrderResponse{}, fmt.Errorf("usecases: %w", err)
 		}
 	}
 

@@ -67,28 +67,21 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 		return "", fmt.Errorf("usecases: email is required")
 	}
 
+	// Construct the domain OrderPlacement aggregate root — single entry point
+	// for the {instrument, qty, price, txType, orderType} invariants. This
+	// replaces the previous OrderSpec/QuantitySpec/PriceSpec composition so
+	// all order-placement rules live on one domain aggregate.
+	if _, err := domain.NewOrderPlacement(
+		cmd.Instrument, cmd.Qty, cmd.Price, cmd.TransactionType, cmd.OrderType,
+	); err != nil {
+		return "", fmt.Errorf("usecases: %w", err)
+	}
+
 	// Extract raw values from VOs for downstream use.
 	qty := cmd.Qty.Int()
 	price := cmd.Price.Amount
 	exchange := cmd.Instrument.Exchange
 	symbol := cmd.Instrument.Tradingsymbol
-
-	// Use OrderSpec (specification pattern) for domain-level order validation.
-	orderSpec := domain.NewOrderSpec(
-		domain.NewQuantitySpec(1, 0), // min 1, no max
-		domain.NewPriceSpec(0),       // positive price, no ceiling
-	)
-	candidate := domain.OrderCandidate{
-		Quantity:        qty,
-		Price:           price,
-		Exchange:        exchange,
-		Tradingsymbol:   symbol,
-		TransactionType: cmd.TransactionType,
-		OrderType:       cmd.OrderType,
-	}
-	if !orderSpec.IsSatisfiedBy(candidate) {
-		return "", fmt.Errorf("usecases: %s", orderSpec.Reason())
-	}
 
 	// 2. Run riskguard checks (if configured).
 	// Confirmed is threaded through PlaceOrderCommand from the MCP handler

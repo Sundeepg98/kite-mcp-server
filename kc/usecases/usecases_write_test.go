@@ -61,29 +61,32 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 		cmd  cqrs.PlaceOrderCommand
 		want string
 	}{
+		// Task #34: validation is delegated to domain.NewOrderPlacement.
+		// Test expectations match the aggregate's error text (the use
+		// case wraps with "usecases:").
 		{
 			name: "empty email",
-			cmd:  cqrs.PlaceOrderCommand{Instrument: domain.NewInstrumentKey("", "INFY"), Qty: qty10},
+			cmd:  cqrs.PlaceOrderCommand{Instrument: domain.NewInstrumentKey("NSE", "INFY"), Qty: qty10, TransactionType: "BUY", OrderType: "MARKET"},
 			want: "email is required",
 		},
 		{
-			name: "empty tradingsymbol",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Qty: qty10},
-			want: "tradingsymbol is required",
+			name: "invalid instrument (empty exchange)",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), Qty: qty10, TransactionType: "BUY", OrderType: "MARKET"},
+			want: "requires a valid instrument",
+		},
+		{
+			name: "missing instrument entirely",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Qty: qty10, TransactionType: "BUY", OrderType: "MARKET"},
+			want: "requires a valid instrument",
 		},
 		{
 			name: "zero quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
-			want: "quantity 0 below minimum 1",
-		},
-		{
-			name: "negative quantity",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "BUY"},
-			want: "quantity 0 below minimum 1",
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("NSE", "INFY"), TransactionType: "BUY", OrderType: "MARKET"},
+			want: "requires a positive quantity",
 		},
 		{
 			name: "invalid transaction type",
-			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("", "INFY"), TransactionType: "HOLD", Qty: qty10},
+			cmd:  cqrs.PlaceOrderCommand{Email: "test@test.com", Instrument: domain.NewInstrumentKey("NSE", "INFY"), TransactionType: "HOLD", Qty: qty10, OrderType: "MARKET"},
 			want: "transaction_type must be BUY or SELL",
 		},
 	}
@@ -103,8 +106,10 @@ func TestPlaceOrder_BrokerResolveError(t *testing.T) {
 	resolver := &mockBrokerResolver{resolveErr: fmt.Errorf("no token for user")}
 	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
 
+	// Task #34: exchange must now be populated (domain aggregate rejects
+	// empty exchange). Use NSE to exercise broker-resolve failure path.
 	_, err := uc.Execute(context.Background(), testPlaceCmd(
-		"test@test.com", "", "INFY", "BUY", "MARKET", "", 10, 0,
+		"test@test.com", "NSE", "INFY", "BUY", "MARKET", "", 10, 0,
 	))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "resolve broker")
