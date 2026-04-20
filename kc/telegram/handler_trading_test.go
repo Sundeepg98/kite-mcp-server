@@ -152,6 +152,13 @@ func TestHandleSetAlert_PercentageOver100(t *testing.T) {
 }
 
 
+// Task #32 tightened the percentage-alert path: a live LTP is now required
+// to anchor the reference price, which the domain ValidateAlertSpec uses as
+// an invariant. In tests where no kite client is wired (no API key / token
+// in the mock manager), LTP fetch fails — the handler surfaces a friendly
+// error pointing the user at the prerequisite. These tests assert that
+// contract; a follow-up test (TestHandleSetAlert_PercentageWithLTP) could
+// seed a mock broker to exercise the success path end-to-end.
 func TestHandleSetAlert_PercentageValid(t *testing.T) {
 	t.Parallel()
 	email := "user@test.com"
@@ -163,20 +170,15 @@ func TestHandleSetAlert_PercentageValid(t *testing.T) {
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "RELIANCE rise_pct 5")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "5.00%") {
-		t.Errorf("expected '5.00%%', got: %s", result)
-	}
-	if !strings.Contains(result, "rise_pct") {
-		t.Errorf("expected 'rise_pct', got: %s", result)
+	if !strings.Contains(result, "live LTP") {
+		t.Errorf("expected LTP-required error for percentage alert without broker, got: %s", result)
 	}
 }
 
 
 // ===========================================================================
-// handleSetAlert — drop_pct direction with percentage display
+// handleSetAlert — drop_pct direction without live LTP returns the friendly
+// prerequisite error (same contract as PercentageValid above).
 // ===========================================================================
 func TestHandleSetAlert_DropPct(t *testing.T) {
 	t.Parallel()
@@ -189,11 +191,8 @@ func TestHandleSetAlert_DropPct(t *testing.T) {
 	defer h.Shutdown()
 
 	result := h.handleSetAlert(42, email, "INFY drop_pct 3")
-	if !strings.Contains(result, "Alert set") {
-		t.Errorf("expected 'Alert set', got: %s", result)
-	}
-	if !strings.Contains(result, "3.00%") {
-		t.Errorf("expected '3.00%%', got: %s", result)
+	if !strings.Contains(result, "live LTP") {
+		t.Errorf("expected LTP-required error for percentage alert without broker, got: %s", result)
 	}
 }
 

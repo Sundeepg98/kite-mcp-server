@@ -10,6 +10,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 )
@@ -350,11 +351,6 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 		return "Price must be a positive number."
 	}
 
-	// For percentage alerts, validate threshold.
-	if alerts.IsPercentageDirection(direction) && targetPrice > 100 {
-		return "Percentage threshold cannot exceed 100%."
-	}
-
 	// Resolve instrument to get token.
 	instrumentID := "NSE:" + symbol
 	im := h.manager.InstrumentsManagerConcrete()
@@ -375,7 +371,44 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 	exchange := inst.Exchange
 	tradingsymbol := inst.Tradingsymbol
 
-	alertID, err := h.manager.AlertStoreConcrete().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+	// For percentage alerts, fetch current LTP to anchor the reference
+	// price. This lets domain.ValidateAlertSpec run with the full (direction,
+	// targetPrice, referencePrice) triple. If LTP fetch fails (no client,
+	// network error), fall back to pre-ValidateAlertSpec inline checks so
+	// the handler's UX remains intact in degraded broker states.
+	var referencePrice float64
+	if alerts.IsPercentageDirection(direction) {
+		if client, _ := h.newKiteClient(email); client != nil {
+			if ltpResp, ltpErr := client.GetLTP(exchange + ":" + tradingsymbol); ltpErr == nil {
+				if data, ok := ltpResp[exchange+":"+tradingsymbol]; ok && data.LastPrice > 0 {
+					referencePrice = data.LastPrice
+				}
+			}
+		}
+	}
+
+	// Delegate threshold + direction + (for percentages) the LTP-anchored
+	// reference-price invariants to the domain. If no referencePrice was
+	// obtainable for a percentage alert, ValidateAlertSpec will surface
+	// the requirement — we rewrap as a friendly message.
+	if err := domain.ValidateAlertSpec(direction, targetPrice, referencePrice); err != nil {
+		if alerts.IsPercentageDirection(direction) && targetPrice > 100 {
+			return "Percentage threshold cannot exceed 100%."
+		}
+		if alerts.IsPercentageDirection(direction) && referencePrice == 0 {
+			return "Percentage alerts need a live LTP to anchor the reference price. Please try again after market hours open."
+		}
+		return "Invalid alert parameters."
+	}
+
+	var alertID string
+	if alerts.IsPercentageDirection(direction) && referencePrice > 0 {
+		alertID, err = h.manager.AlertStoreConcrete().AddWithReferencePrice(
+			email, tradingsymbol, exchange, inst.InstrumentToken,
+			targetPrice, direction, referencePrice)
+	} else {
+		alertID, err = h.manager.AlertStoreConcrete().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+	}
 	if err != nil {
 		return fmt.Sprintf("Failed to set alert: %s", escapeHTML(err.Error()))
 	}
