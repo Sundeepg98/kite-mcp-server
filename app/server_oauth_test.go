@@ -1208,15 +1208,14 @@ func TestServeStatusPage_OAuthRedirect_ValidJWT(t *testing.T) {
 // setupMux — OAuth email-lookup endpoint
 // ---------------------------------------------------------------------------
 func TestSetupMux_OAuthEmailLookup(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -1256,16 +1255,14 @@ func TestRegistryAdapter_GetSecretByAPIKey_FoundActive(t *testing.T) {
 // setupMux — with DB manager + invitation store (accept-invite integration)
 // ---------------------------------------------------------------------------
 func TestSetupMux_AcceptInvite_UserProvisioning(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -1361,16 +1358,14 @@ func TestSignerAdapter_SignAndVerify(t *testing.T) {
 // setupMux — with OAuth + registry store wiring
 // ---------------------------------------------------------------------------
 func TestSetupMux_OAuthWithRegistryStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 
 	// Wire user store into OAuth handler
@@ -1398,15 +1393,14 @@ func TestSetupMux_OAuthWithRegistryStore(t *testing.T) {
 // setupMux — admin auth redirect with malicious path (//)
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_MaliciousPath(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -1457,12 +1451,12 @@ func TestServeStatusPage_StatusTemplateOnly(t *testing.T) {
 // setupMux — /callback with oauth flow and handler
 // ---------------------------------------------------------------------------
 func TestSetupMux_Callback_BrowserFlow_WithHandler(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
