@@ -312,17 +312,14 @@ func TestGetCredentials_EmptyCredentialAPIKey(t *testing.T) {
 // setupMux — no admin secret path, no oauth, no user store → no ops routes
 // ---------------------------------------------------------------------------
 func TestSetupMux_NoAdminNoOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = ""
-	app.Config.AdminEmails = ""
 	app.oauthHandler = nil
 	_ = app.initStatusPageTemplate()
 
@@ -370,12 +367,13 @@ func TestSecurityHeaders_AllSixHeaders(t *testing.T) {
 // setupMux — CORS preflight on server card
 // ---------------------------------------------------------------------------
 func TestSetupMux_ServerCard_CORS(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -432,17 +430,14 @@ func TestProvisionUser_CaseInsensitive(t *testing.T) {
 // setupMux — no admin, no OAuth, no secret → no ops routes registered
 // ---------------------------------------------------------------------------
 func TestSetupMux_NoAdminNoOAuthNoSecret(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = ""
-	app.Config.AdminEmails = ""
 	app.oauthHandler = nil
 	_ = app.initStatusPageTemplate()
 
@@ -465,11 +460,7 @@ func TestSetupMux_NoAdminNoOAuthNoSecret(t *testing.T) {
 // setupMux — with DB-backed manager (invitation store, billing)
 // ---------------------------------------------------------------------------
 func TestSetupMux_WithDBManager(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
 		TestData: map[uint32]*instruments.Instrument{},
@@ -487,9 +478,13 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -542,13 +537,14 @@ func TestMakeEventPersister_FullPath(t *testing.T) {
 // setupMux — Stripe webhook with env var but no billing store
 // ---------------------------------------------------------------------------
 func TestSetupMux_StripeWebhookNoBillingStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeWebhookSecret:  "whsec_test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -624,12 +620,13 @@ func TestRateLimiterCleanup_Populated(t *testing.T) {
 // setupMux — pricing page with OAuth cookie (tier detection)
 // ---------------------------------------------------------------------------
 func TestSetupMux_PricingPage_WithCookie(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	oauthCfg := &oauth.Config{
@@ -731,14 +728,14 @@ func TestGetLimiter_ConcurrentAccess(t *testing.T) {
 // setupMux — Stripe webhook path (env-driven, no billing store)
 // ---------------------------------------------------------------------------
 func TestSetupMux_StripeWebhookSecret_NoBillingStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test123")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeWebhookSecret:  "whsec_test123",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -803,13 +800,7 @@ func TestDeriveAggregateID_FamilyInvited(t *testing.T) {
 // setupMux — Stripe webhook WITH billing store (uses DB manager)
 // ---------------------------------------------------------------------------
 func TestSetupMux_StripeWebhookWithBillingStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret_123")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	// Use initializeServices to get a properly wired manager with billing store.
 	// In DevMode billing middleware is skipped, but the billing store is not
 	// created by setupMux — it's created by initializeServices only when
@@ -819,7 +810,13 @@ func TestSetupMux_StripeWebhookWithBillingStore(t *testing.T) {
 	// Since we can't easily get billing store in DevMode, test the "no billing store"
 	// path with the webhook secret set — exercises the "warn" log path.
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeWebhookSecret:  "whsec_test_secret_123",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
