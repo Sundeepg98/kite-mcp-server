@@ -26,15 +26,15 @@ import (
 // setupMux tests — additional routes and branches not covered elsewhere
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminSeeding_FreshDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin1@test.com,admin2@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin1@test.com,admin2@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin1@test.com,admin2@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -54,16 +54,16 @@ func TestSetupMux_AdminSeeding_FreshDB(t *testing.T) {
 
 
 func TestSetupMux_AdminPassword_FreshDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "adminpw@test.com")
-	t.Setenv("ADMIN_PASSWORD", "test-password-123")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "adminpw@test.com",
+		AdminPassword:        "test-password-123",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "adminpw@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -83,16 +83,15 @@ func TestSetupMux_AdminPassword_FreshDB(t *testing.T) {
 
 
 func TestSetupMux_AdminOps_IdentityMiddleware(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminSecretPath:      "/secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = "/secret"
-	app.Config.AdminEmails = ""
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -115,11 +114,7 @@ func TestSetupMux_AdminOps_IdentityMiddleware(t *testing.T) {
 // setupMux — admin seeding skipped when users already exist
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminSeeding_ExistingUsers(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
 
 	// Pre-seed a non-admin user so the store is non-empty
@@ -128,9 +123,13 @@ func TestSetupMux_AdminSeeding_ExistingUsers(t *testing.T) {
 		userStore.EnsureUser("existing@test.com", "", "", "self")
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -152,15 +151,15 @@ func TestSetupMux_AdminSeeding_ExistingUsers(t *testing.T) {
 // setupMux — empty admin emails in ADMIN_EMAILS
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminSeeding_EmptyEmails(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", ",  ,")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          ",  ,",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = ",  ,"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -176,16 +175,16 @@ func TestSetupMux_AdminSeeding_EmptyEmails(t *testing.T) {
 // setupMux — multiple admin passwords
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminPassword_MultipleAdmins(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "a1@test.com,a2@test.com")
-	t.Setenv("ADMIN_PASSWORD", "shared-pass")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "a1@test.com,a2@test.com",
+		AdminPassword:        "shared-pass",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "a1@test.com,a2@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -207,15 +206,15 @@ func TestSetupMux_AdminPassword_MultipleAdmins(t *testing.T) {
 // setupMux — /admin/ handler with AdminSecretPath
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminMetrics(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/test-metrics")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminSecretPath:      "/test-metrics",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = "/test-metrics"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -237,15 +236,15 @@ func TestSetupMux_AdminMetrics(t *testing.T) {
 // setupMux — verifies the dashboard handler is registered
 // ---------------------------------------------------------------------------
 func TestSetupMux_DashboardRoute(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -267,15 +266,15 @@ func TestSetupMux_DashboardRoute(t *testing.T) {
 // setupMux — /dashboard/activity route
 // ---------------------------------------------------------------------------
 func TestSetupMux_DashboardActivity(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -296,17 +295,16 @@ func TestSetupMux_DashboardActivity(t *testing.T) {
 // setupMux — /admin/ops with admin auth and secret path
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminOps_WithBothPaths(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/s3cr3t")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AdminSecretPath:      "/s3cr3t",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = "/s3cr3t"
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -332,11 +330,7 @@ func TestSetupMux_AdminOps_WithBothPaths(t *testing.T) {
 // setupMux — admin seeding skipped with non-empty user store
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminSeeding_Skipped(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
 
 	userStore := mgr.UserStoreConcrete()
@@ -344,9 +338,13 @@ func TestSetupMux_AdminSeeding_Skipped(t *testing.T) {
 		userStore.EnsureUser("existing@test.com", "", "", "self")
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -366,15 +364,15 @@ func TestSetupMux_AdminSeeding_Skipped(t *testing.T) {
 // setupMux — admin seeding with empty emails in comma-separated list
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminSeeding_EmptyEmailsInList(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", ",  ,")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          ",  ,",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = ",  ,"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -390,15 +388,15 @@ func TestSetupMux_AdminSeeding_EmptyEmailsInList(t *testing.T) {
 // setupMux — dashboard route with OAuth (exercises RequireAuthBrowser branch)
 // ---------------------------------------------------------------------------
 func TestSetupMux_Dashboard_WithOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 
 	oauthCfg := &oauth.Config{
 		KiteAPIKey:  "test-key",
@@ -429,16 +427,16 @@ func TestSetupMux_Dashboard_WithOAuth(t *testing.T) {
 // setupMux — dashboard handler registered with billing store
 // ---------------------------------------------------------------------------
 func TestSetupMux_DashboardWithBillingStore(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -461,16 +459,16 @@ func TestSetupMux_DashboardWithBillingStore(t *testing.T) {
 // setupMux — admin password seeding with empty email entries
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminPassword_EmptyEntries(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", ",,,")
-	t.Setenv("ADMIN_PASSWORD", "test-pass")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          ",,,",
+		AdminPassword:        "test-pass",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = ",,,"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -486,13 +484,13 @@ func TestSetupMux_AdminPassword_EmptyEntries(t *testing.T) {
 // setupMux — dashboard with no OAuth handler uses identity middleware
 // ---------------------------------------------------------------------------
 func TestSetupMux_Dashboard_NoOAuth_IdentityMiddleware(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = nil
 	_ = app.initStatusPageTemplate()
