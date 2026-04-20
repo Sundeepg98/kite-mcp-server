@@ -396,6 +396,7 @@ func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
 	app := newTestApp(t)
 	app.DevMode = true
 	app.Config.AppMode = ModeHTTP
+	app.shutdownCh = make(chan struct{})
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -410,10 +411,11 @@ func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		resp.Body.Close()
 	}
+	close(app.shutdownCh)
 	select {
 	case err := <-errCh:
 		_ = err
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 	}
 }
 
@@ -478,6 +480,12 @@ func TestStartStdIOServer_ViaPipes(t *testing.T) {
 	}()
 	_ = stdio.Listen(ctx, stdinR, stdoutW) // will unblock when stdinR closes
 
+	// Shut down the configureAndStartServer goroutine — without this, the
+	// http.Server.ListenAndServe call leaks past test end.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
+	_ = srv.Shutdown(shutdownCtx)
+
 	if app.rateLimiters != nil {
 		app.rateLimiters.Stop()
 	}
@@ -513,6 +521,7 @@ func TestRunServer_WithOAuth(t *testing.T) {
 
 	app.Config.AppHost = "127.0.0.1"
 	app.Config.AppPort = strconv.Itoa(port)
+	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -537,9 +546,10 @@ func TestRunServer_WithOAuth(t *testing.T) {
 		resp2.Body.Close()
 	}
 
+	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 	}
 }
 
@@ -628,6 +638,7 @@ func TestRunServer_FullDevMode(t *testing.T) {
 	app.Config.AppMode = ModeHTTP
 	app.Config.AppHost = "127.0.0.1"
 	app.Config.AppPort = portStr
+	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -658,13 +669,13 @@ func TestRunServer_FullDevMode(t *testing.T) {
 
 	_ = port
 
-	// Give RunServer a moment then check for errors (non-blocking)
+	close(app.shutdownCh)
 	select {
 	case runErr := <-errCh:
 		if runErr != nil {
 			t.Logf("RunServer returned error (may be expected): %v", runErr)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 		// Server is still running — that's fine for a lifecycle test
 	}
 }
@@ -703,6 +714,7 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 	app.Config.AdminEmails = "admin@test.com"
 	app.Config.GoogleClientID = "google-test-id"
 	app.Config.GoogleClientSecret = "google-test-secret"
+	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -747,6 +759,7 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 		}
 	}
 
+	close(app.shutdownCh)
 	select {
 	case runErr := <-errCh:
 		if runErr != nil {
@@ -778,6 +791,7 @@ func TestRunServer_SSEMode(t *testing.T) {
 	app.Config.AppMode = ModeSSE
 	app.Config.AppHost = "127.0.0.1"
 	app.Config.AppPort = portStr
+	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -793,9 +807,10 @@ func TestRunServer_SSEMode(t *testing.T) {
 		resp.Body.Close()
 	}
 
+	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 	}
 }
 
@@ -821,6 +836,7 @@ func TestRunServer_HybridMode(t *testing.T) {
 	app.Config.AppMode = ModeHybrid
 	app.Config.AppHost = "127.0.0.1"
 	app.Config.AppPort = portStr
+	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -836,9 +852,10 @@ func TestRunServer_HybridMode(t *testing.T) {
 		resp.Body.Close()
 	}
 
+	close(app.shutdownCh)
 	select {
 	case <-errCh:
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 	}
 }
 

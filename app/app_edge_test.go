@@ -4,7 +4,9 @@ package app
 // Only contains tests for lines NOT already covered by other test files.
 
 import (
+	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -694,17 +696,34 @@ func TestRunServer_OAuthWiring_Push100(t *testing.T) {
 	app.Config.KiteAPISecret = "test_secret"
 	app.Config.AppMode = ModeHybrid
 	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = "0" // random port
+	// Reserve a fixed port so setup-graceful-shutdown can dial Shutdown
+	// before leaking listeners. Port 0 would bind randomly and we'd not
+	// get a reliable address for teardown.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	app.Config.AppPort = fmt.Sprintf("%d", port)
 
-	// Run in background — will start listening, then we stop it
+	// Inject shutdownCh so we can trigger graceful shutdown without OS
+	// signals. Without this, RunServer's HTTP server goroutine blocks in
+	// ListenAndServe forever and every background worker it spawned
+	// (metrics, audit, OAuth cleanup, instruments scheduler, rate-limit
+	// reload loop) leaks until the process exits.
+	app.shutdownCh = make(chan struct{})
+
 	done := make(chan error, 1)
-	go func() {
-		done <- app.RunServer()
-	}()
+	go func() { done <- app.RunServer() }()
 
-	// Give it time to start
-	time.Sleep(200 * time.Millisecond)
-	// Not easy to stop cleanly on Windows, but the test exercises the wiring code paths
+	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
+
+	// Trigger graceful shutdown and wait for RunServer to return.
+	close(app.shutdownCh)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunServer did not return within 5s of shutdownCh close")
+	}
 }
 
 // ---------------------------------------------------------------------------
