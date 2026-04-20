@@ -536,6 +536,44 @@ func TestDeleteMyAccount_Success(t *testing.T) {
 	assert.True(t, al.deleted)
 }
 
+// TestDeleteMyAccount_EmitsCredentialRevoked verifies the account-deletion
+// path appends a credential.revoked event tagged Reason="account_deletion"
+// so the credential lifecycle stream has a uniform shape whether the
+// revocation came via RevokeCredentialsCommand or DeleteMyAccountCommand.
+// Phase C-Credentials (#33).
+func TestDeleteMyAccount_EmitsCredentialRevoked(t *testing.T) {
+	t.Parallel()
+	cred := &mockCredentialStore{}
+	events := &mockEventAppender{}
+	uc := NewDeleteMyAccountUseCase(AccountDependencies{CredentialStore: cred}, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.DeleteMyAccountCommand{Email: "a@test.com"})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1, "DeleteMyAccount must append exactly one credential.revoked event")
+	evt := events.appended[0]
+	assert.Equal(t, "credential.revoked", evt.EventType)
+	assert.Equal(t, "a@test.com", evt.AggregateID)
+	assert.Equal(t, "Credential", evt.AggregateType)
+	assert.Contains(t, string(evt.Payload), "account_deletion",
+		"Reason must be tagged account_deletion so auditors can distinguish this from user_self/admin_revoke")
+}
+
+// TestDeleteMyAccount_NilCredStoreSkipsEvent: when there is no credential
+// store attached, the event emission must also be skipped — never emit
+// a credential.revoked event for a credential that was never cleared.
+func TestDeleteMyAccount_NilCredStoreSkipsEvent(t *testing.T) {
+	t.Parallel()
+	events := &mockEventAppender{}
+	uc := NewDeleteMyAccountUseCase(AccountDependencies{}, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.DeleteMyAccountCommand{Email: "a@test.com"})
+	require.NoError(t, err)
+	assert.Empty(t, events.appended,
+		"no credential.revoked event when there was no credential store to clear")
+}
+
 func TestDeleteMyAccount_EmptyEmail(t *testing.T) {
 	t.Parallel()
 	uc := NewDeleteMyAccountUseCase(AccountDependencies{}, testLogger())

@@ -50,6 +50,9 @@ func (m *Manager) registerAccountCommands() error {
 			deps.Sessions = m.sessionManager
 		}
 		uc := usecases.NewDeleteMyAccountUseCase(deps, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

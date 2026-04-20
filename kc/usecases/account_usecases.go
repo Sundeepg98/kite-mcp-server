@@ -51,14 +51,22 @@ type AccountDependencies struct {
 
 // DeleteMyAccountUseCase permanently deletes a user's account and all data.
 type DeleteMyAccountUseCase struct {
-	deps   AccountDependencies
-	logger *slog.Logger
+	deps       AccountDependencies
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewDeleteMyAccountUseCase creates a DeleteMyAccountUseCase with dependencies injected.
 func NewDeleteMyAccountUseCase(deps AccountDependencies, logger *slog.Logger) *DeleteMyAccountUseCase {
 	return &DeleteMyAccountUseCase{deps: deps, logger: logger}
 }
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends a credential.revoked StoredEvent (Reason="account_deletion")
+// after the credential Delete so the account-deletion path shares the
+// same credential-lifecycle stream as RevokeCredentialsCommand. Phase
+// C-Credentials (#33). Nil-safe.
+func (uc *DeleteMyAccountUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute deletes the user's account and all associated data.
 func (uc *DeleteMyAccountUseCase) Execute(ctx context.Context, cmd cqrs.DeleteMyAccountCommand) error {
@@ -68,6 +76,11 @@ func (uc *DeleteMyAccountUseCase) Execute(ctx context.Context, cmd cqrs.DeleteMy
 
 	if uc.deps.CredentialStore != nil {
 		uc.deps.CredentialStore.Delete(cmd.Email)
+		// Emit CredentialRevoked on the account-deletion path so both
+		// credential-clear paths (RevokeCredentialsCommand and this one)
+		// share the credential.revoked stream. Reason="account_deletion"
+		// distinguishes this from user_self / admin_revoke in audit.
+		uc.appendRevokedEvent(cmd.Email)
 	}
 	if uc.deps.TokenStore != nil {
 		uc.deps.TokenStore.Delete(cmd.Email)
@@ -100,6 +113,44 @@ func (uc *DeleteMyAccountUseCase) Execute(ctx context.Context, cmd cqrs.DeleteMy
 
 	uc.logger.Info("User self-deleted account via use case", "email", cmd.Email)
 	return nil
+}
+
+// appendRevokedEvent writes a credential.revoked StoredEvent to the audit
+// log, tagged Reason="account_deletion" so auditors can distinguish the
+// account-deletion teardown path from the user_self / admin_revoke paths
+// emitted by RevokeCredentialsUseCase. Failures are logged and swallowed
+// — the SQL delete is the source of truth.
+func (uc *DeleteMyAccountUseCase) appendRevokedEvent(email string) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(email)
+	if err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store NextSequence failed on credential.revoked (account_deletion)", "email", email, "error", err)
+		}
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(map[string]string{
+		"email":  email,
+		"reason": "account_deletion",
+	})
+	if err != nil { // COVERAGE: unreachable — map[string]string marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   email,
+		AggregateType: "Credential",
+		EventType:     "credential.revoked",
+		Payload:       payload,
+		OccurredAt:    time.Now().UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store Append failed on credential.revoked (account_deletion)", "email", email, "error", err)
+		}
+	}
 }
 
 // CredentialSetter abstracts credential persistence for updating credentials.
