@@ -6,6 +6,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/ports"
 )
 
 // ToolHandlerDeps holds the injected services for ToolHandler, replacing
@@ -19,7 +20,7 @@ type ToolHandlerDeps struct {
 	Logger      *slog.Logger
 	TokenStore  kc.TokenStoreInterface
 	UserStore   kc.UserStoreInterface // may be nil
-	Sessions    kc.SessionProvider
+	Sessions    ports.SessionPort
 	Credentials kc.CredentialResolver
 	Metrics     kc.MetricsRecorder
 	Config      kc.AppConfigProvider

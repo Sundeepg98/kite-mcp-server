@@ -13,6 +13,11 @@ import (
 // enabling consumers to depend only on the capabilities they need.
 
 // SessionProvider retrieves and manages MCP sessions with associated Kite data.
+//
+// Deprecated: use ports.SessionPort (kc/ports/session.go) instead. The two
+// contracts are identical; SessionProvider is retained until Phase B/D
+// teammates complete migration. It will be deleted once the ports package
+// owns the session contract exclusively.
 type SessionProvider interface {
 	// GetOrCreateSession retrieves an existing Kite session or creates a new one.
 	GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error)
