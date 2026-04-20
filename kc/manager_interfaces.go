@@ -96,6 +96,9 @@ type CredentialStoreProvider interface {
 }
 
 // AlertStoreProvider exposes the per-user alert store (alert CRUD).
+//
+// Deprecated: prefer ports.AlertPort (kc/ports/alert.go) which composes
+// this with the four alert-adjacent accessors.
 type AlertStoreProvider interface {
 	AlertStore() AlertStoreInterface
 }
@@ -146,6 +149,8 @@ type InstrumentsManagerProvider interface {
 }
 
 // AlertDBProvider exposes the optional SQLite database used by the alerts subsystem.
+//
+// Deprecated: prefer ports.AlertPort.
 type AlertDBProvider interface {
 	AlertDB() *alerts.DB
 }
@@ -156,16 +161,22 @@ type RiskGuardProvider interface {
 }
 
 // TelegramNotifierProvider exposes the Telegram notifier. Returns nil if unconfigured.
+//
+// Deprecated: prefer ports.AlertPort.
 type TelegramNotifierProvider interface {
 	TelegramNotifier() *alerts.TelegramNotifier
 }
 
 // TrailingStopManagerProvider exposes the trailing stop manager.
+//
+// Deprecated: prefer ports.AlertPort.
 type TrailingStopManagerProvider interface {
 	TrailingStopManager() *alerts.TrailingStopManager
 }
 
 // PnLServiceProvider exposes the P&L snapshot service.
+//
+// Deprecated: prefer ports.AlertPort.
 type PnLServiceProvider interface {
 	PnLService() *alerts.PnLSnapshotService
 }

@@ -12,4 +12,5 @@ import "github.com/zerodha/kite-mcp-server/kc"
 var (
 	_ SessionPort    = (*kc.Manager)(nil)
 	_ CredentialPort = (*kc.Manager)(nil)
+	_ AlertPort      = (*kc.Manager)(nil)
 )
