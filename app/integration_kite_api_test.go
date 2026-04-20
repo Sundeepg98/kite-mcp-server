@@ -23,25 +23,24 @@ import (
 )
 
 // TestInitializeServices_FetchesRealInstruments verifies that the normal
-// initialization path (without INSTRUMENTS_SKIP_FETCH) successfully loads
+// initialization path (without InstrumentsSkipFetch) successfully loads
 // instruments from api.kite.trade. Requires network access and runs only
 // under -tags integration.
 func TestInitializeServices_FetchesRealInstruments(t *testing.T) {
+	// Phase E.2 Task #42: most env reads replaced with a Config literal.
+	// DEV_MODE remains a t.Setenv because app.DevMode is derived from the
+	// env inside NewApp rather than Config. INSTRUMENTS_SKIP_FETCH is
+	// explicitly cleared so the real fetch path is exercised; the build
+	// tag `integration` keeps this out of default CI.
 	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	// Explicitly ensure the skip-fetch seam is OFF — this test wants to
-	// exercise the real fetch path. Even if the env inherits it from a
-	// wrapper script, t.Setenv scopes it per-test.
 	os.Unsetenv("INSTRUMENTS_SKIP_FETCH")
 
-	// Do NOT use newTestApp — it sets INSTRUMENTS_SKIP_FETCH=true.
-	app := NewApp(testLogger())
-	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
+	cfg := &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AlertDBPath:   ":memory:",
+	}
+	app := NewAppWithConfig(cfg, testLogger())
 	t.Cleanup(func() {
 		if app.metrics != nil {
 			app.metrics.Shutdown()
