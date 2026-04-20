@@ -120,14 +120,16 @@ func TestSetupGracefulShutdown_Basic(t *testing.T) {
 // startHTTPServer — exercises all setup code before the blocking start
 // ---------------------------------------------------------------------------
 func TestStartHTTPServer_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -152,14 +154,16 @@ func TestStartHTTPServer_PortInUse(t *testing.T) {
 // startSSEServer — exercises all setup code before the blocking start
 // ---------------------------------------------------------------------------
 func TestStartSSEServer_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -181,14 +185,16 @@ func TestStartSSEServer_PortInUse(t *testing.T) {
 // startHybridServer — exercises all setup code before the blocking start
 // ---------------------------------------------------------------------------
 func TestStartHybridServer_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -210,9 +216,7 @@ func TestStartHybridServer_PortInUse(t *testing.T) {
 // startServer — test all valid mode dispatches via port-in-use
 // ---------------------------------------------------------------------------
 func TestStartServer_HTTPMode_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
@@ -222,7 +226,11 @@ func TestStartServer_HTTPMode_PortInUse(t *testing.T) {
 	defer listener.Close()
 	addr := listener.Addr().String()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.Config.AppMode = ModeHTTP
 	_ = app.initStatusPageTemplate()
@@ -238,9 +246,7 @@ func TestStartServer_HTTPMode_PortInUse(t *testing.T) {
 
 
 func TestStartServer_SSEMode_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
@@ -250,7 +256,11 @@ func TestStartServer_SSEMode_PortInUse(t *testing.T) {
 	defer listener.Close()
 	addr := listener.Addr().String()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.Config.AppMode = ModeSSE
 	_ = app.initStatusPageTemplate()
@@ -266,9 +276,7 @@ func TestStartServer_SSEMode_PortInUse(t *testing.T) {
 
 
 func TestStartServer_HybridMode_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
@@ -278,7 +286,11 @@ func TestStartServer_HybridMode_PortInUse(t *testing.T) {
 	defer listener.Close()
 	addr := listener.Addr().String()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.Config.AppMode = ModeHybrid
 	_ = app.initStatusPageTemplate()
@@ -297,14 +309,16 @@ func TestStartServer_HybridMode_PortInUse(t *testing.T) {
 // startHTTPServer — with OAuth handler (exercises the OAuth mux branch)
 // ---------------------------------------------------------------------------
 func TestStartHTTPServer_WithOAuth_PortInUse(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
@@ -1160,14 +1174,16 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 // startServer — STDIO mode via pre-occupied port (exercises the case branch)
 // ---------------------------------------------------------------------------
 func TestStartServer_StdIOMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
 	mcpSrv := newTestMCPServer()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.Config.AppMode = ModeStdIO
 	_ = app.initStatusPageTemplate()
