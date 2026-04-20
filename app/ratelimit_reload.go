@@ -54,16 +54,21 @@ import (
 // The goroutine exits when stopCh closes — wire into the server's
 // shutdown sequence to avoid leaking on process teardown.
 //
-// Returns the signal channel so callers can unit-test the subscription
-// without sending a real OS signal.
-func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}) chan os.Signal {
+// Returns the signal channel (for unit tests that send SIGHUP directly)
+// AND a doneCh that closes when the goroutine exits. Callers wiring this
+// into graceful shutdown should <-doneCh after closing stopCh to
+// demonstrate the goroutine has actually terminated — otherwise
+// goleak-style sentinels race the exit.
+func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}) (chan os.Signal, <-chan struct{}) {
 	sigCh := make(chan os.Signal, 1)
+	doneCh := make(chan struct{})
 	// Notify for SIGHUP. On platforms without SIGHUP (Windows),
 	// signal.Notify is a no-op for that signal — the channel simply
 	// never fires and the goroutine blocks forever on <-sigCh.
 	signal.Notify(sigCh, syscall.SIGHUP)
 
 	go func() {
+		defer close(doneCh)
 		for {
 			select {
 			case <-sigCh:
@@ -88,7 +93,7 @@ func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stop
 			}
 		}
 	}()
-	return sigCh
+	return sigCh, doneCh
 }
 
 // parseRateLimitEnv decodes a comma-separated `tool=N` string into a

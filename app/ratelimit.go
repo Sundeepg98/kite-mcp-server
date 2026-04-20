@@ -151,6 +151,10 @@ type rateLimiters struct {
 	// both invoke Stop on the same rateLimiters instance. Without this,
 	// the second close of rl.done would panic with "close of closed channel".
 	stopOnce sync.Once
+	// cleanupDone is closed by the background cleanup goroutine when it exits.
+	// Stop() waits on it so callers can observe "goroutine gone" on return —
+	// otherwise goleak-style sentinels race the actual exit.
+	cleanupDone chan struct{}
 }
 
 // rateLimiterOption configures rateLimiters at construction. Variadic so
@@ -187,6 +191,7 @@ func newRateLimiters(opts ...rateLimiterOption) *rateLimiters {
 		tokenUser:       newUserRateLimiter(rate.Limit(5), 10),
 		mcpUser:         newUserRateLimiter(rate.Limit(20), 40),
 		done:            make(chan struct{}),
+		cleanupDone:     make(chan struct{}),
 		cleanupInterval: 10 * time.Minute,
 		clock:           rlRealClock{},
 	}
@@ -199,6 +204,7 @@ func newRateLimiters(opts ...rateLimiterOption) *rateLimiters {
 	// fast test Advance-before-NewTicker would drop ticks.
 	ticker := rl.clock.NewTicker(rl.cleanupInterval)
 	go func() {
+		defer close(rl.cleanupDone)
 		defer ticker.Stop()
 		for {
 			select {
@@ -217,17 +223,25 @@ func newRateLimiters(opts ...rateLimiterOption) *rateLimiters {
 	return rl
 }
 
-// Stop signals the cleanup goroutine to exit.
+// Stop signals the cleanup goroutine to exit AND waits for it to exit.
 //
 // Stop is idempotent: calling it multiple times is safe and only the first
 // call closes the cleanup channel. This guards against the case where more
 // than one graceful-shutdown path (e.g. the HTTP signal handler and a test
 // teardown) both try to Stop the same rateLimiters instance, which would
 // otherwise produce `panic: close of closed channel`.
+//
+// The wait on cleanupDone means the goroutine is demonstrably gone when
+// Stop returns — goleak-style sentinels won't race the exit. If Stop is
+// called after the goroutine has already exited on its own, cleanupDone
+// is closed and the read returns immediately.
 func (rl *rateLimiters) Stop() {
 	rl.stopOnce.Do(func() {
 		close(rl.done)
 	})
+	if rl.cleanupDone != nil {
+		<-rl.cleanupDone
+	}
 }
 
 // rateLimit returns middleware that limits requests per client IP.

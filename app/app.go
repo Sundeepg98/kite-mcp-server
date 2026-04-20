@@ -74,6 +74,10 @@ type App struct {
 	// idempotent — production and test paths can both call without panic.
 	rateLimitReloadStop     chan struct{}
 	rateLimitReloadStopOnce sync.Once
+	// rateLimitReloadDone is closed by the reload-loop goroutine when it
+	// exits. stopRateLimitReload waits on it so goleak sentinels observe
+	// the goroutine has actually terminated, not just been signalled.
+	rateLimitReloadDone <-chan struct{}
 	// shutdownOnce guards the one-shot close of shutdownCh performed by
 	// TriggerShutdown. Multiple SIGUSR2 in quick succession, or a
 	// SIGUSR2 racing with the normal SIGTERM path, must NOT panic
@@ -115,9 +119,10 @@ func (app *App) TriggerShutdown() {
 }
 
 // stopRateLimitReload closes rateLimitReloadStop exactly once, signalling
-// the SIGHUP reload goroutine to exit. Safe to call multiple times and from
-// multiple paths (graceful shutdown, test cleanup, unit tests that wire
-// rate-limit middleware without a full server).
+// the SIGHUP reload goroutine to exit, and waits for that goroutine to
+// finish. Safe to call multiple times and from multiple paths (graceful
+// shutdown, test cleanup, unit tests that wire rate-limit middleware
+// without a full server).
 func (app *App) stopRateLimitReload() {
 	if app.rateLimitReloadStop == nil {
 		return
@@ -125,6 +130,11 @@ func (app *App) stopRateLimitReload() {
 	app.rateLimitReloadStopOnce.Do(func() {
 		close(app.rateLimitReloadStop)
 	})
+	// Wait for the goroutine to exit so goleak sentinels observe
+	// the post-condition "goroutine gone", not just "signal sent".
+	if app.rateLimitReloadDone != nil {
+		<-app.rateLimitReloadDone
+	}
 }
 
 // StatusPageData holds template data for the status page

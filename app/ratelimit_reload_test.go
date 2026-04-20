@@ -85,7 +85,7 @@ func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
 
 	t.Setenv("KITE_RATELIMIT", "place_order=3,modify_order=7")
 
-	sigCh := startRateLimitReloadLoop(rl, logger, stopCh)
+	sigCh, _ := startRateLimitReloadLoop(rl, logger, stopCh)
 	// Send the signal directly into the channel — equivalent to kill -HUP
 	// from the operator's perspective and keeps the test independent of
 	// the OS signal-delivery timing window.
@@ -119,7 +119,7 @@ func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
 	stopCh := make(chan struct{})
 
 	baseline := countLoopGoroutines()
-	_ = startRateLimitReloadLoop(rl, logger, stopCh)
+	_, _ = startRateLimitReloadLoop(rl, logger, stopCh)
 	require.Eventually(t, func() bool {
 		return countLoopGoroutines() > baseline
 	}, 2*time.Second, 5*time.Millisecond, "loop goroutine should be visible after start")

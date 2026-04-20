@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	// goleak-style sentinels in dependent packages observe a clean
 	// post-test state. ltpCache in market_tools.go spawns a 5-minute
 	// cleanup ticker that would otherwise outlive the test binary.
-	ltpCacheShutdown()
+	ShutdownLtpCache()
 	os.Exit(code)
 }
 

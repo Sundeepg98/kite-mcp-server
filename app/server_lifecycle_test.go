@@ -480,6 +480,12 @@ func TestStartStdIOServer_ViaPipes(t *testing.T) {
 	}()
 	_ = stdio.Listen(ctx, stdinR, stdoutW) // will unblock when stdinR closes
 
+	// Cancel ctx explicitly and give the mcp-go handleNotifications
+	// goroutine a moment to observe ctx.Done() and return — otherwise
+	// goleak at process exit catches it.
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+
 	// Shut down the configureAndStartServer goroutine — without this, the
 	// http.Server.ListenAndServe call leaks past test end.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -975,6 +981,18 @@ func TestStartStdIOServer_WithPipeIO(t *testing.T) {
 	_ = stdio.Listen(ctx, stdinR, stdoutW)
 	stdoutR.Close()
 	stdoutW.Close()
+
+	// Cancel the stdio ctx explicitly and wait briefly for the
+	// handleNotifications goroutine to observe ctx.Done() and exit.
+	// Without this, goleak sees the goroutine alive at process exit.
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+
+	// Shut down the sidecar HTTP server goroutine — without this the
+	// srv.ListenAndServe call leaks past test end.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
+	_ = srv.Shutdown(shutdownCtx)
 
 	if app.rateLimiters != nil {
 		app.rateLimiters.Stop()

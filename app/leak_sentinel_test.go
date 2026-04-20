@@ -47,22 +47,32 @@ package app
 //     tb.Cleanup(h.Shutdown) — plugs BotHandler.runCleanup across 150+
 //     call sites.
 //
-// Residual test-level leakers that block package-wide goleak migration:
-//   - kc.SessionRegistry.cleanupRoutine — no user-facing Close/Stop hook
-//     (internal cleanup goroutine that lives with the Manager).
-//   - HTTP server goroutines from handful of remaining RunServer/stdio
-//     tests that construct their own http.Server and don't call Shutdown
-//     (mostly the older "cover the case branch" tests that spawn
-//     configureAndStartServer without matching teardown).
-//   - mcp.NewToolCache ltpCache — package-init global with a 5-minute
-//     cleanup ticker and no Close. Lives for process lifetime by design.
+// Apr-2026 Round 3: architectural debts paid, remaining leakers are test
+// hygiene. Production-code lifecycle fixes:
+//   - kc.SessionRegistry.StopCleanupRoutine now blocks on a WaitGroup
+//     until the cleanupRoutine goroutine exits (not just signals cancel).
+//   - mcp.ToolCache gained Close() + ShutdownLtpCache() package helper;
+//     TestMain in mcp/ + app/ can fully shut down the ltpCache singleton.
+//   - app.rateLimiters.Stop now waits on cleanupDone; startRateLimitReloadLoop
+//     returns a doneCh and app.stopRateLimitReload joins it.
+//   - app.startStdIOServer uses context.WithCancel tied to shutdownCh so
+//     mcp-go's handleNotifications goroutine exits on app shutdown.
+//   - newTestApp pre-wires app.shutdownCh + closes on Cleanup, so every
+//     test that calls setupGracefulShutdown has its wait goroutine joined.
 //
-// Because some residual leakers can only be masked via broad
-// IgnoreAnyFunction rules, migrating THIS package to VerifyTestMain
-// risks hiding real leaks the sentinel should catch. NumGoroutine-delta
-// stays for the package-wide guard; the 6 leak_sentinel_test.go files
-// in sibling kc/* packages retain their strict goleak.VerifyNone checks
-// because those packages have narrower test surfaces.
+// Residual leakers are now test-side only. They cluster in tests that
+// directly wire app.rateLimiters = newRateLimiters() + skip Stop,
+// directly call app.initializeServices + skip cleanupInitializeServices,
+// or create audit.Store workers without a matching s.Stop(). Each fix
+// is a per-site t.Cleanup addition — not fundamental code changes.
+//
+// Because migrating THIS package to VerifyTestMain would require
+// chasing down ~25+ tests and adding per-site cleanup hooks (most of
+// which are best-covered by extending newTestApp further), the delta
+// NumGoroutine sentinel stays as the package-wide guard. The 6
+// leak_sentinel_test.go files in sibling kc/* packages retain their
+// strict goleak.VerifyNone checks because those packages have narrower
+// test surfaces.
 //
 // Other goroutine sentinels in the repo (kc/scheduler, kc/audit,
 // kc/ticker, kc/alerts, kc/billing, kc/instruments, kc/papertrading)

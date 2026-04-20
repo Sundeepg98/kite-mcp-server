@@ -891,7 +891,21 @@ func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpSer
 
 	go app.configureAndStartServer(srv, mux)
 
-	ctx := context.Background()
+	// Cancellable ctx tied to shutdownCh so mcp-go's internal
+	// handleNotifications goroutine exits when the app is shut down.
+	// Previously used context.Background() which meant the goroutine
+	// outlived the test process and tripped goleak sentinels.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if app.shutdownCh != nil {
+		go func() {
+			select {
+			case <-app.shutdownCh:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
 	if err := stdio.Listen(ctx, os.Stdin, os.Stdout); err != nil {
 		app.logger.Error("STDIO server error", "error", err)
 	}

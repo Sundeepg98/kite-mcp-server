@@ -17,11 +17,15 @@ import (
 // ltpCache caches LTP responses for 30 seconds to reduce API calls.
 var ltpCache = NewToolCache(30 * time.Second)
 
-// ltpCacheShutdown stops the ltpCache background cleanup goroutine. Called
-// from TestMain in tests so goleak-style sentinels see a clean goroutine
-// dump at process exit. Production never calls this — the singleton lives
-// for the process lifetime by design.
-func ltpCacheShutdown() {
+// ShutdownLtpCache stops the ltpCache background cleanup goroutine. Called
+// from TestMain in packages that import mcp/ so goleak-style sentinels see
+// a clean goroutine dump at process exit. Production never calls this —
+// the singleton lives for the process lifetime by design.
+//
+// Exported (not internal package-level) so tests in dependent packages
+// (app/, and any future package that imports mcp/) can call it via their
+// own TestMain. See mcp/test_main_test.go for the canonical usage.
+func ShutdownLtpCache() {
 	ltpCache.Close()
 }
 

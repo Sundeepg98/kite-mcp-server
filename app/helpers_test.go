@@ -39,11 +39,27 @@ func testLogger() *slog.Logger {
 //
 // Preferred over `NewApp(testLogger())` for new tests — catches leaks by
 // default.
+//
+// Also pre-wires app.shutdownCh and a t.Cleanup that closes it. Tests that
+// exercise setupGracefulShutdown / startXxxServer / RunServer would
+// otherwise leak a goroutine blocked on signal.NotifyContext waiting for
+// SIGTERM; closing shutdownCh unwinds that goroutine at test end. Tests
+// that want to CONTROL the close (e.g., to assert the shutdown sequence
+// fires) may call close(app.shutdownCh) themselves before the Cleanup
+// runs — stopOnce on shutdownCh is handled by closeShutdownOnce.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 	t.Setenv("INSTRUMENTS_SKIP_FETCH", "true")
 	app := NewApp(testLogger())
+	app.shutdownCh = make(chan struct{})
 	t.Cleanup(func() {
+		// Guard against tests that already closed shutdownCh (idempotent).
+		select {
+		case <-app.shutdownCh:
+			// already closed by the test — nothing to do
+		default:
+			close(app.shutdownCh)
+		}
 		if app.metrics != nil {
 			app.metrics.Shutdown()
 		}

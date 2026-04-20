@@ -346,7 +346,8 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// app/ratelimit_reload.go for the env format and design rationale.
 	// No-op on Windows where signal.Notify(SIGHUP) is a platform no-op.
 	app.rateLimitReloadStop = make(chan struct{})
-	_ = startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
+	_, rateLimitReloadDone := startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
+	app.rateLimitReloadDone = rateLimitReloadDone
 	app.logger.Info("SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
 	// Skipped entirely in DEV_MODE — all tools are free tier.
