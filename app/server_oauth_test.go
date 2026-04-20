@@ -704,12 +704,12 @@ func TestLoadClients_ErrorPath(t *testing.T) {
 // setupMux — OAuth endpoints are NOT registered without OAuth handler
 // ---------------------------------------------------------------------------
 func TestSetupMux_NoOAuth_OAuthEndpointsReturn404(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 	app.oauthHandler = nil
 	_ = app.initStatusPageTemplate()
@@ -743,15 +743,14 @@ func TestSetupMux_NoOAuth_OAuthEndpointsReturn404(t *testing.T) {
 // setupMux — OAuth endpoints ARE registered with OAuth handler
 // ---------------------------------------------------------------------------
 func TestSetupMux_WithOAuth_EndpointsRegistered(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -793,15 +792,14 @@ func TestSetupMux_WithOAuth_EndpointsRegistered(t *testing.T) {
 // setupMux — admin auth middleware: redirect to admin-login (no cookie)
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_NoCookie_Redirect(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -825,15 +823,14 @@ func TestSetupMux_AdminAuth_NoCookie_Redirect(t *testing.T) {
 // setupMux — admin auth: malicious redirect param is sanitized
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_MaliciousRedirect(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -883,18 +880,17 @@ func TestServeStatusPage_TemplateExecuteError(t *testing.T) {
 // setupMux — Google SSO config (with OAuth handler)
 // ---------------------------------------------------------------------------
 func TestSetupMux_GoogleSSOConfig_WithOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:         "test_key",
+		KiteAPISecret:      "test_secret",
+		AdminEmails:        "admin@test.com",
+		GoogleClientID:     "google-id",
+		GoogleClientSecret: "google-secret",
+		ExternalURL:        "http://localhost:9999",
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
-	app.Config.GoogleClientID = "google-id"
-	app.Config.GoogleClientSecret = "google-secret"
-	app.Config.ExternalURL = "http://localhost:9999"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
