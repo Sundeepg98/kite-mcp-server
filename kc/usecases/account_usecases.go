@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 )
 
 // CredentialUpdater abstracts credential persistence for account use cases.
@@ -13,10 +15,14 @@ import (
 // Set installs/updates a user's credentials (used by UpdateMyCredentials). The
 // apiKey/apiSecret pair is passed as primitive strings — the use case should
 // not import kc internal types (circular dependency risk with kc → usecases).
+// Has reports whether an entry already exists for the email — needed by
+// UpdateMyCredentials to tell first-time registration (CredentialRegistered
+// event) from replacement (CredentialRotated event).
 // Implementations wrap the kc.KiteCredentialStore.Set call behind this port.
 type CredentialUpdater interface {
 	Delete(email string)
 	Set(email, apiKey, apiSecret string)
+	Has(email string) bool
 }
 
 // TokenStore abstracts token persistence for account use cases.
@@ -157,6 +163,7 @@ func (uc *InvalidateTokenUseCase) Execute(ctx context.Context, cmd cqrs.Invalida
 type RevokeCredentialsUseCase struct {
 	credentialStore CredentialUpdater
 	tokenStore      TokenStore
+	eventStore      EventAppender
 	logger          *slog.Logger
 }
 
@@ -167,6 +174,11 @@ type RevokeCredentialsUseCase struct {
 func NewRevokeCredentialsUseCase(credentialStore CredentialUpdater, tokenStore TokenStore, logger *slog.Logger) *RevokeCredentialsUseCase {
 	return &RevokeCredentialsUseCase{credentialStore: credentialStore, tokenStore: tokenStore, logger: logger}
 }
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends a credential.revoked StoredEvent after successful revoke.
+// Phase C-Credentials (#31). Nil-safe.
+func (uc *RevokeCredentialsUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute deletes the user's credentials and invalidates the cached
 // token. Reason is logged at Info so the audit trail tags intent
@@ -181,14 +193,51 @@ func (uc *RevokeCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.Revoke
 	if uc.tokenStore != nil {
 		uc.tokenStore.Delete(cmd.Email)
 	}
+	reason := cmd.Reason
+	if reason == "" {
+		reason = "unspecified"
+	}
 	if uc.logger != nil {
-		reason := cmd.Reason
-		if reason == "" {
-			reason = "unspecified"
-		}
 		uc.logger.Info("Kite credentials revoked via command bus", "email", cmd.Email, "reason", reason)
 	}
+	uc.appendRevokedEvent(cmd.Email, reason)
 	return nil
+}
+
+// appendRevokedEvent writes a credential.revoked StoredEvent to the audit
+// log. Failures are logged and swallowed — the SQL delete is the source of
+// truth and has already succeeded by the time this runs.
+func (uc *RevokeCredentialsUseCase) appendRevokedEvent(email, reason string) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(email)
+	if err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store NextSequence failed on credential.revoked", "email", email, "error", err)
+		}
+		return
+	}
+	payload, err := eventsourcing.MarshalPayload(map[string]string{
+		"email":  email,
+		"reason": reason,
+	})
+	if err != nil { // COVERAGE: unreachable — map[string]string marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   email,
+		AggregateType: "Credential",
+		EventType:     "credential.revoked",
+		Payload:       payload,
+		OccurredAt:    time.Now().UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store Append failed on credential.revoked", "email", email, "error", err)
+		}
+	}
 }
 
 // --- Update My Credentials ---
@@ -203,6 +252,7 @@ func (uc *RevokeCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.Revoke
 type UpdateMyCredentialsUseCase struct {
 	credentialStore CredentialUpdater
 	tokenStore      TokenStore
+	eventStore      EventAppender
 	logger          *slog.Logger
 }
 
@@ -210,6 +260,12 @@ type UpdateMyCredentialsUseCase struct {
 func NewUpdateMyCredentialsUseCase(credStore CredentialUpdater, tokenStore TokenStore, logger *slog.Logger) *UpdateMyCredentialsUseCase {
 	return &UpdateMyCredentialsUseCase{credentialStore: credStore, tokenStore: tokenStore, logger: logger}
 }
+
+// SetEventStore wires the domain audit-log appender. When set, Execute
+// appends either a credential.registered (first-time) or
+// credential.rotated (replacement) StoredEvent after the successful
+// credential write. Phase C-Credentials (#31). Nil-safe.
+func (uc *UpdateMyCredentialsUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute validates then persists the user's credentials and invalidates the
 // cached token so the next tool call forces re-authentication against the
@@ -226,14 +282,62 @@ func (uc *UpdateMyCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.Upda
 		return fmt.Errorf("usecases: both api_key and api_secret are required")
 	}
 
+	// Snapshot Has() BEFORE the Set so we can tell first-time registration
+	// from rotation. Set is non-transactional with the event append but
+	// this check-then-act race is acceptable — worst case a concurrent
+	// revoke+re-register emits two Registered events in the log, which is
+	// still auditor-correct (they describe two distinct lifecycle moments).
+	hadPriorEntry := false
 	if uc.credentialStore != nil {
+		hadPriorEntry = uc.credentialStore.Has(cmd.Email)
 		uc.credentialStore.Set(cmd.Email, cmd.APIKey, cmd.APISecret)
 	}
 	if uc.tokenStore != nil {
 		uc.tokenStore.Delete(cmd.Email)
 	}
 
-	uc.logger.Info("User updated credentials via use case", "email", cmd.Email)
+	uc.logger.Info("User updated credentials via use case", "email", cmd.Email, "prior_entry", hadPriorEntry)
+	uc.appendUpdatedEvent(cmd.Email, hadPriorEntry)
 	return nil
+}
+
+// appendUpdatedEvent writes either a credential.registered or
+// credential.rotated StoredEvent depending on whether the email had a
+// prior credential entry when Execute ran. Failures are logged and
+// swallowed — the SQL write is the source of truth.
+func (uc *UpdateMyCredentialsUseCase) appendUpdatedEvent(email string, hadPriorEntry bool) {
+	if uc.eventStore == nil {
+		return
+	}
+	seq, err := uc.eventStore.NextSequence(email)
+	if err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store NextSequence failed on credential update", "email", email, "error", err)
+		}
+		return
+	}
+	eventType := "credential.registered"
+	if hadPriorEntry {
+		eventType = "credential.rotated"
+	}
+	payload, err := eventsourcing.MarshalPayload(map[string]string{
+		"email": email,
+	})
+	if err != nil { // COVERAGE: unreachable — map[string]string marshals cleanly
+		return
+	}
+	evt := eventsourcing.StoredEvent{
+		AggregateID:   email,
+		AggregateType: "Credential",
+		EventType:     eventType,
+		Payload:       payload,
+		OccurredAt:    time.Now().UTC(),
+		Sequence:      seq,
+	}
+	if err := uc.eventStore.Append(evt); err != nil {
+		if uc.logger != nil {
+			uc.logger.Warn("event store Append failed on credential update", "email", email, "event_type", eventType, "error", err)
+		}
+	}
 }
 

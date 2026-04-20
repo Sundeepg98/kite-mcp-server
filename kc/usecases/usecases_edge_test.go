@@ -1083,6 +1083,119 @@ func TestRevokeCredentials_NilStores(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// --- Phase C-Credentials (#31): event emission ---
+
+// TestRevokeCredentials_EmitsRevokedEvent verifies the use case appends a
+// credential.revoked StoredEvent after a successful revoke, tagged with
+// the command's Reason for audit-trail correlation.
+func TestRevokeCredentials_EmitsRevokedEvent(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	events := &mockEventAppender{}
+	uc := NewRevokeCredentialsUseCase(credStore, tokStore, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{
+		Email: "u@t.com", Reason: "admin_revoke",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1, "exactly one credential.revoked event should be appended")
+	evt := events.appended[0]
+	assert.Equal(t, "credential.revoked", evt.EventType)
+	assert.Equal(t, "u@t.com", evt.AggregateID)
+	assert.Equal(t, "Credential", evt.AggregateType)
+}
+
+// TestRevokeCredentials_EmptyReasonTagsUnspecified: when the caller omits
+// Reason, the event payload is tagged "unspecified" so the log never has
+// an empty reason slot.
+func TestRevokeCredentials_EmptyReasonTagsUnspecified(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	events := &mockEventAppender{}
+	uc := NewRevokeCredentialsUseCase(credStore, tokStore, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{Email: "u@t.com"})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	assert.Contains(t, string(events.appended[0].Payload), "unspecified",
+		"empty Reason must be tagged unspecified in the payload")
+}
+
+// TestUpdateMyCredentials_FirstTimeEmitsRegistered: Has() returns false
+// (no prior entry) so the event type must be credential.registered.
+func TestUpdateMyCredentials_FirstTimeEmitsRegistered(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{has: false}
+	tokStore := &mockTokenStore{}
+	events := &mockEventAppender{}
+	uc := NewUpdateMyCredentialsUseCase(credStore, tokStore, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{
+		Email: "new@t.com", APIKey: "k", APISecret: "s",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	assert.Equal(t, "credential.registered", events.appended[0].EventType,
+		"first-time credential set must emit credential.registered")
+	assert.Equal(t, "new@t.com", events.appended[0].AggregateID)
+}
+
+// TestUpdateMyCredentials_RotationEmitsRotated: Has() returns true (prior
+// entry exists) so the event type must be credential.rotated.
+func TestUpdateMyCredentials_RotationEmitsRotated(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{has: true}
+	tokStore := &mockTokenStore{}
+	events := &mockEventAppender{}
+	uc := NewUpdateMyCredentialsUseCase(credStore, tokStore, testLogger())
+	uc.SetEventStore(events)
+
+	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{
+		Email: "existing@t.com", APIKey: "k2", APISecret: "s2",
+	})
+	require.NoError(t, err)
+	require.Len(t, events.appended, 1)
+	assert.Equal(t, "credential.rotated", events.appended[0].EventType,
+		"replacing an existing credential must emit credential.rotated")
+}
+
+// TestRevokeCredentials_NilEventStore: defensive guard — the bus may hand
+// a nil event store during partial bootstrap. Must not panic and must
+// still complete the revoke successfully.
+func TestRevokeCredentials_NilEventStore(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	uc := NewRevokeCredentialsUseCase(credStore, tokStore, testLogger())
+	// No SetEventStore call — eventStore stays nil.
+
+	err := uc.Execute(context.Background(), cqrs.RevokeCredentialsCommand{Email: "u@t.com"})
+	require.NoError(t, err)
+	assert.True(t, credStore.deleted, "revoke must still succeed without event store")
+}
+
+// TestUpdateMyCredentials_NilEventStore: the update must complete even
+// without an event store attached — audit-log append is a best-effort
+// side channel, never load-bearing on the SQL write.
+func TestUpdateMyCredentials_NilEventStore(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	uc := NewUpdateMyCredentialsUseCase(credStore, tokStore, testLogger())
+	// No SetEventStore call.
+
+	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{
+		Email: "u@t.com", APIKey: "k", APISecret: "s",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, credStore.setCalls)
+}
+
 // TestInvalidateToken_Success verifies the new command that clears a cached
 // Kite access token without touching credentials. Used by the login flow
 // when cached tokens are detected as expired against the live Kite API.

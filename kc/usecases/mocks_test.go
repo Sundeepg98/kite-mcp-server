@@ -280,6 +280,10 @@ type mockCredentialStore struct {
 	lastEmail    string
 	lastAPIKey   string
 	lastAPISecret string
+	// has is returned by Has() — tests set this to simulate a prior-entry
+	// (rotation scenario) or no-entry (first-time registration) so
+	// UpdateMyCredentials can pick the right event type.
+	has bool
 }
 
 func (m *mockCredentialStore) Delete(email string) { m.deleted = true }
@@ -290,6 +294,8 @@ func (m *mockCredentialStore) Set(email, apiKey, apiSecret string) {
 	m.lastAPIKey = apiKey
 	m.lastAPISecret = apiSecret
 }
+
+func (m *mockCredentialStore) Has(email string) bool { return m.has }
 
 type mockTokenStore struct{ deleted bool }
 

@@ -67,6 +67,9 @@ func (m *Manager) registerAccountCommands() error {
 		// kc-internal types.
 		credAdapter := &credentialStoreWriterAdapter{store: m.credentialStore}
 		uc := usecases.NewUpdateMyCredentialsUseCase(credAdapter, m.tokenStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -85,6 +88,9 @@ func (m *Manager) registerAccountCommands() error {
 		}
 		credAdapter := &credentialStoreWriterAdapter{store: m.credentialStore}
 		uc := usecases.NewRevokeCredentialsUseCase(credAdapter, m.tokenStore, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -220,4 +226,16 @@ func (a *credentialStoreWriterAdapter) Set(email, apiKey, apiSecret string) {
 		return
 	}
 	a.store.Set(email, &KiteCredentialEntry{APIKey: apiKey, APISecret: apiSecret})
+}
+
+// Has reports whether a credential entry already exists for email. Used by
+// UpdateMyCredentialsUseCase to distinguish first-time registration
+// (CredentialRegisteredEvent) from rotation (CredentialRotatedEvent).
+// Nil-safe — a nil underlying store is treated as "no prior entry".
+func (a *credentialStoreWriterAdapter) Has(email string) bool {
+	if a.store == nil {
+		return false
+	}
+	_, ok := a.store.Get(email)
+	return ok
 }
