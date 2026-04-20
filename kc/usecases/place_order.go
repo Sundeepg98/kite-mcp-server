@@ -26,6 +26,16 @@ type BrokerResolver interface {
 	GetBrokerForEmail(email string) (broker.Client, error)
 }
 
+// InstrumentLookup looks up lot size and tick size for an instrument. Narrow
+// port so the use case does not pull in the full instruments.Manager surface
+// just to check divisibility and tick alignment. Returning ok=false means
+// "metadata unavailable" — the use case treats that as a silent skip rather
+// than a failure, so off-hours or bootstrap paths where instruments aren't
+// loaded keep working.
+type InstrumentLookup interface {
+	Get(exchange, tradingsymbol string) (lotSize int, tickSize float64, ok bool)
+}
+
 // PlaceOrderUseCase orchestrates the full order placement pipeline:
 // riskguard check -> broker API call -> domain event dispatch.
 type PlaceOrderUseCase struct {
@@ -33,6 +43,7 @@ type PlaceOrderUseCase struct {
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
 	eventStore     EventAppender
+	instruments    InstrumentLookup
 	logger         *slog.Logger
 }
 
@@ -60,6 +71,15 @@ func (uc *PlaceOrderUseCase) SetEventStore(s EventAppender) {
 	uc.eventStore = s
 }
 
+// SetInstrumentLookup wires the instrument metadata lookup so Execute can
+// enforce lot-size divisibility and tick-size alignment at the domain
+// boundary via domain.InstrumentRules. Nil-safe — when unset, the use case
+// skips lot/tick checks. Optional to avoid breaking callers that construct
+// the use case without instrument metadata (bootstrap, tests).
+func (uc *PlaceOrderUseCase) SetInstrumentLookup(l InstrumentLookup) {
+	uc.instruments = l
+}
+
 // Execute runs the PlaceOrder pipeline and returns the broker-assigned order ID.
 func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCommand) (string, error) {
 	// 1. Validate basic inputs.
@@ -82,6 +102,31 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	price := cmd.Price.Amount
 	exchange := cmd.Instrument.Exchange
 	symbol := cmd.Instrument.Tradingsymbol
+
+	// Enforce per-instrument lot-size + tick-size invariants when the
+	// lookup port is wired. InstrumentRules routes through the same
+	// domain.ValidateLotSize / ValidateTickSize helpers that kc/domain
+	// already tests. Nil-safe: if no lookup, skip (matches pre-#35
+	// behaviour). Metadata-miss is treated as "don't enforce" rather than
+	// "reject" so off-hours tests / bootstrap don't break.
+	if uc.instruments != nil {
+		if lotSize, tickSize, ok := uc.instruments.Get(exchange, symbol); ok {
+			rules := domain.NewInstrumentRules(exchange, symbol, lotSize, tickSize)
+			if err := rules.CheckQuantity(qty); err != nil {
+				return "", fmt.Errorf("usecases: %w", err)
+			}
+			// Price alignment only matters for non-MARKET/SL-M orders
+			// where the caller supplied a concrete price. MARKET/SL-M
+			// carry price=0 by convention — skip alignment check for
+			// those to preserve the domain's "zero tick = no rule"
+			// semantics consistently.
+			if price > 0 && cmd.OrderType != "MARKET" && cmd.OrderType != "SL-M" {
+				if err := rules.CheckPrice(price); err != nil {
+					return "", fmt.Errorf("usecases: %w", err)
+				}
+			}
+		}
+	}
 
 	// 2. Run riskguard checks (if configured).
 	// Confirmed is threaded through PlaceOrderCommand from the MCP handler

@@ -100,6 +100,72 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 	}
 }
 
+// mockInstrumentLookup returns fixed lot + tick metadata for one
+// hard-coded (exchange, symbol). Test-only dependency wired via
+// PlaceOrderUseCase.SetInstrumentLookup — mirrors how app/wire.go
+// will inject the production instruments.Manager.
+type mockInstrumentLookup struct {
+	exchange      string
+	tradingsymbol string
+	lotSize       int
+	tickSize      float64
+}
+
+func (m *mockInstrumentLookup) Get(exchange, tradingsymbol string) (int, float64, bool) {
+	if exchange == m.exchange && tradingsymbol == m.tradingsymbol {
+		return m.lotSize, m.tickSize, true
+	}
+	return 0, 0, false
+}
+
+// Task #35: place_order now enforces lot-size divisibility when an
+// InstrumentLookup is wired. NIFTY futures have lotSize=50 — an order
+// for 75 fails the domain.ValidateLotSize check.
+func TestPlaceOrder_LotSizeRejection(t *testing.T) {
+	t.Parallel()
+	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
+	uc.SetInstrumentLookup(&mockInstrumentLookup{
+		exchange: "NFO", tradingsymbol: "NIFTY25APRFUT",
+		lotSize: 50, tickSize: 0.05,
+	})
+
+	qty75, _ := domain.NewQuantity(75) // not a multiple of 50
+	price100, _ := domain.NewMoney(100.05)
+	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
+		Email:           "test@test.com",
+		Instrument:      domain.NewInstrumentKey("NFO", "NIFTY25APRFUT"),
+		Qty:             qty75,
+		Price:           price100,
+		TransactionType: "BUY",
+		OrderType:       "LIMIT",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a multiple of lot size 50")
+}
+
+// Task #35: tick-size alignment enforced for non-MARKET/SL-M orders
+// when lookup is wired. 100.03 is not aligned to a 0.05 tick.
+func TestPlaceOrder_TickSizeRejection(t *testing.T) {
+	t.Parallel()
+	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
+	uc.SetInstrumentLookup(&mockInstrumentLookup{
+		exchange: "NSE", tradingsymbol: "RELIANCE",
+		lotSize: 1, tickSize: 0.05,
+	})
+
+	qty10, _ := domain.NewQuantity(10)
+	misaligned, _ := domain.NewMoney(100.03) // not aligned with 0.05 tick
+	_, err := uc.Execute(context.Background(), cqrs.PlaceOrderCommand{
+		Email:           "test@test.com",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		Qty:             qty10,
+		Price:           misaligned,
+		TransactionType: "BUY",
+		OrderType:       "LIMIT",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not aligned to tick size 0.05")
+}
 
 func TestPlaceOrder_BrokerResolveError(t *testing.T) {
 	t.Parallel()
