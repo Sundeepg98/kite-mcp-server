@@ -322,12 +322,12 @@ func TestStartHTTPServer_WithOAuth_PortInUse(t *testing.T) {
 // initializeServices — full initialization pipeline coverage
 // ===========================================================================
 func TestInitializeServices_DevMode_Minimal(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	mgr, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -338,15 +338,14 @@ func TestInitializeServices_DevMode_Minimal(t *testing.T) {
 
 
 func TestInitializeServices_WithAlertDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
 	mgr, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
@@ -357,24 +356,21 @@ func TestInitializeServices_WithAlertDB(t *testing.T) {
 
 
 func TestInitializeServices_WithEncryption(t *testing.T) {
+	t.Parallel()
 	// OAUTH_JWT_SECRET must be >=32 bytes (HMAC-SHA256 security floor) —
 	// envcheck.go enforces this. Short test secrets fail the env gate
 	// before initializeServices gets to run.
 	const testJWTSecret = "test-jwt-secret-for-encryption-minimum-32-bytes-long"
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", testJWTSecret)
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       testJWTSecret,
+		ExternalURL:          "https://test.example.com",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = testJWTSecret
-	app.Config.ExternalURL = "https://test.example.com"
-	app.Config.AdminEmails = "admin@test.com"
 	mgr, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
@@ -387,15 +383,14 @@ func TestInitializeServices_WithEncryption(t *testing.T) {
 // RunServer — full lifecycle
 // ===========================================================================
 func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("APP_MODE", "http")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHTTP,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
 	app.shutdownCh = make(chan struct{})
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
