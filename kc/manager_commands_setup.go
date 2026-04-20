@@ -44,6 +44,13 @@ func (m *Manager) registerSetupCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewClearSessionDataUseCase(m, m.Logger)
+		// Phase C ES: feed the audit-log appender so Execute emits a
+		// session.cleared event after the SQL write. m.eventStore may be nil
+		// during partial bootstrap or when alert DB init failed — the use
+		// case is nil-safe.
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

@@ -518,10 +518,13 @@ func (app *App) RunServer() error {
 					return false
 				}
 			}
-			// Check if a valid (non-expired) Kite token exists
-			entry, hasToken := tokenStore.Get(email)
-			if hasToken && !kc.IsKiteTokenExpired(entry.StoredAt) {
-				return true // valid token, pass through
+			// Check if a valid (non-expired) Kite token exists. The
+			// "has token AND not expired" rule is encapsulated on the
+			// domain Session aggregate so the middleware stays thin.
+			if entry, hasToken := tokenStore.Get(email); hasToken {
+				if kc.ToDomainSession(email, entry).IsAuthenticated() {
+					return true // valid token, pass through
+				}
 			}
 			// No valid token. If user has stored credentials, they're a returning
 			// user whose token expired or was cleaned up — force re-auth via 401.

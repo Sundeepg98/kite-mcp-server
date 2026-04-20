@@ -1,10 +1,35 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
+
+// SessionID is the value object for an MCP session identifier. It is always
+// non-empty — the NewSessionID constructor is the only way to produce a valid
+// one. Callers that receive a zero-value SessionID (e.g., var id SessionID)
+// can detect it via IsValid().
+type SessionID struct {
+	value string
+}
+
+// NewSessionID constructs a validated SessionID. Empty IDs are rejected so
+// that downstream services don't have to re-check the invariant.
+func NewSessionID(s string) (SessionID, error) {
+	if s == "" {
+		return SessionID{}, fmt.Errorf("domain: session id must not be empty")
+	}
+	return SessionID{value: s}, nil
+}
+
+// String returns the underlying ID.
+func (id SessionID) String() string { return id.value }
+
+// IsValid reports whether the SessionID carries a non-empty value. Zero-value
+// SessionID (e.g., from var id SessionID) is invalid.
+func (id SessionID) IsValid() bool { return id.value != "" }
 
 // Session is the rich domain entity representing a user's Kite broker
 // session — specifically, the authenticated access token and the metadata
@@ -119,4 +144,24 @@ func (s Session) TokenAgeHoursAt(now time.Time) float64 {
 		return 0
 	}
 	return h
+}
+
+// HasToken reports whether the session carries a non-empty access token.
+// Useful as a cheap pre-check before deciding whether re-auth is required.
+func (s Session) HasToken() bool {
+	return s.dto.AccessToken != ""
+}
+
+// IsAuthenticatedAt reports whether the session can be used to call the Kite
+// API *at the given moment*: a token is present AND it has not crossed the
+// daily 06:00 IST refresh boundary. Collapses the two-step
+// `hasToken && !IsExpired` check that was previously duplicated in OAuth
+// middleware and lifecycle tests.
+func (s Session) IsAuthenticatedAt(now time.Time) bool {
+	return s.HasToken() && !s.IsExpiredAt(now)
+}
+
+// IsAuthenticated is the wall-clock variant of IsAuthenticatedAt.
+func (s Session) IsAuthenticated() bool {
+	return s.IsAuthenticatedAt(time.Now())
 }

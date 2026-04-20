@@ -173,6 +173,30 @@ type SessionCreatedEvent struct {
 func (e SessionCreatedEvent) EventType() string    { return "session.created" }
 func (e SessionCreatedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// SessionClearedEvent is emitted when the Kite session data attached to an
+// MCP session is cleared (without terminating the session itself). Phase C
+// ES: append-only audit record of the clear, keyed by session ID.
+type SessionClearedEvent struct {
+	SessionID string
+	Reason    string // "post_credential_register" / "profile_check_failed" / "admin_action"
+	Timestamp time.Time
+}
+
+func (e SessionClearedEvent) EventType() string    { return "session.cleared" }
+func (e SessionClearedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// SessionInvalidatedEvent is emitted when an MCP session is ended (the
+// SessionRegistry entry is evicted, cleanup hooks run). Distinct from
+// SessionClearedEvent which keeps the session alive without broker data.
+type SessionInvalidatedEvent struct {
+	SessionID string
+	Reason    string // "expired" / "admin_action" / "logout"
+	Timestamp time.Time
+}
+
+func (e SessionInvalidatedEvent) EventType() string    { return "session.invalidated" }
+func (e SessionInvalidatedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // UserFrozenEvent is emitted when a user's trading is frozen (manual or auto).
 type UserFrozenEvent struct {
 	Email    string

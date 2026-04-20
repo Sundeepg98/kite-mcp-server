@@ -164,3 +164,80 @@ func TestToDomainSession(t *testing.T) {
 	assert.False(t, d.IsExpiredAt(now))
 	assert.InDelta(t, 2.75, d.TokenAgeHoursAt(now), 0.01)
 }
+
+func TestNewSessionID_RejectsEmpty(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSessionID("")
+	assert.Error(t, err)
+}
+
+func TestNewSessionID_AcceptsNonEmpty(t *testing.T) {
+	t.Parallel()
+
+	id, err := NewSessionID("abc-123")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc-123", id.String())
+}
+
+func TestSessionID_Zero_IsInvalid(t *testing.T) {
+	t.Parallel()
+
+	var id SessionID
+	assert.False(t, id.IsValid())
+}
+
+func TestSession_HasToken(t *testing.T) {
+	t.Parallel()
+
+	withTok := NewSessionFromData(SessionData{AccessToken: "TOK"})
+	assert.True(t, withTok.HasToken())
+
+	empty := NewSessionFromData(SessionData{AccessToken: ""})
+	assert.False(t, empty.HasToken())
+}
+
+func TestSession_IsAuthenticatedAt(t *testing.T) {
+	t.Parallel()
+
+	loc := isttz.Location
+	now := time.Date(2026, 4, 19, 12, 0, 0, 0, loc)
+	freshIssued := time.Date(2026, 4, 19, 9, 15, 0, 0, loc)
+	staleIssued := time.Date(2026, 4, 17, 10, 0, 0, 0, loc)
+
+	tests := []struct {
+		name string
+		data SessionData
+		want bool
+	}{
+		{
+			name: "token present and fresh",
+			data: SessionData{AccessToken: "TOK", IssuedAt: freshIssued},
+			want: true,
+		},
+		{
+			name: "token present but expired",
+			data: SessionData{AccessToken: "TOK", IssuedAt: staleIssued},
+			want: false,
+		},
+		{
+			name: "no token",
+			data: SessionData{AccessToken: "", IssuedAt: freshIssued},
+			want: false,
+		},
+		{
+			name: "zero session",
+			data: SessionData{},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := NewSessionFromData(tc.data)
+			assert.Equal(t, tc.want, s.IsAuthenticatedAt(now))
+		})
+	}
+}
