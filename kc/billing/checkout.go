@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 
 	stripe "github.com/stripe/stripe-go/v82"
@@ -12,9 +11,29 @@ import (
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
+// maxUsersByPlan maps plan names to the subscription's max_users metadata
+// value. Kept separate from Config so plan sizing remains a pure
+// constant rather than an env-injected knob.
+var maxUsersByPlan = map[string]int{
+	"solo_pro": 1,
+	"pro":      5,
+	"premium":  20,
+}
+
 // CheckoutHandler creates a Stripe Checkout Session and returns the URL.
-// Protected by RequireAuthBrowser. Accepts plan query param (pro/premium).
+// Protected by RequireAuthBrowser. Accepts plan query param (solo_pro/pro/premium).
+//
+// Reads STRIPE_PRICE_* and EXTERNAL_URL from the environment. Prefer
+// CheckoutHandlerWithConfig when you can pass a Config constructed at
+// app wiring time — it makes tests t.Parallel-safe.
 func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
+	return CheckoutHandlerWithConfig(store, logger, ConfigFromEnv())
+}
+
+// CheckoutHandlerWithConfig is the injected-config variant of CheckoutHandler.
+// Production wiring passes ConfigFromEnv(); tests pass a hand-built Config
+// so they can run with t.Parallel() instead of t.Setenv.
+func CheckoutHandlerWithConfig(store *Store, logger *slog.Logger, cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -28,34 +47,20 @@ func CheckoutHandler(store *Store, logger *slog.Logger) http.HandlerFunc {
 		}
 
 		plan := r.URL.Query().Get("plan")
-		if plan != "solo_pro" && plan != "pro" && plan != "premium" {
+		maxUsers, ok := maxUsersByPlan[plan]
+		if !ok {
 			http.Error(w, "invalid plan: use ?plan=solo_pro, ?plan=pro, or ?plan=premium", http.StatusBadRequest)
 			return
 		}
 
-		var priceID string
-		var maxUsers int
-		switch plan {
-		case "solo_pro":
-			priceID = os.Getenv("STRIPE_PRICE_SOLO_PRO")
-			maxUsers = 1
-		case "pro":
-			priceID = os.Getenv("STRIPE_PRICE_PRO")
-			maxUsers = 5
-		case "premium":
-			priceID = os.Getenv("STRIPE_PRICE_PREMIUM")
-			maxUsers = 20
-		}
+		priceID := cfg.priceIDForPlan(plan)
 		if priceID == "" {
 			logger.Error("Stripe price ID not configured", "plan", plan)
 			http.Error(w, "pricing not configured", http.StatusInternalServerError)
 			return
 		}
 
-		externalURL := os.Getenv("EXTERNAL_URL")
-		if externalURL == "" {
-			externalURL = "http://localhost:8080"
-		}
+		externalURL := cfg.effectiveExternalURL()
 
 		params := &stripe.CheckoutSessionParams{
 			Mode:          stripe.String(string(stripe.CheckoutSessionModeSubscription)),

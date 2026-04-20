@@ -331,7 +331,7 @@ func TestCheckoutHandler_PriceNotConfigured(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckoutHandler_ExistingCustomerReuse(t *testing.T) {
-	// Cannot use t.Parallel() because t.Setenv is required.
+	t.Parallel() // Injected Config avoids t.Setenv, so parallel is safe.
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -341,9 +341,9 @@ func TestCheckoutHandler_ExistingCustomerReuse(t *testing.T) {
 		Status:           StatusActive,
 	}))
 
-	handler := CheckoutHandler(s, logger)
+	cfg := Config{PricePremium: "price_test_premium"}
+	handler := CheckoutHandlerWithConfig(s, logger, cfg)
 	ctx := oauth.ContextWithEmail(context.Background(), "reuse@test.com")
-	t.Setenv("STRIPE_PRICE_PREMIUM", "price_test_premium")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=premium", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 	handler(rr, req)
