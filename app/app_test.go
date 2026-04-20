@@ -595,6 +595,7 @@ func TestBriefingCredAdapter_GetAPIKey(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -621,6 +622,7 @@ func TestInstrumentsFreezeAdapter_NotFound(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	_, ok := adapter.GetFreezeQuantity("NSE", "RELIANCE")

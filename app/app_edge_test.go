@@ -136,6 +136,7 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 	app.auditStore = p100AuditStore(t, db)
 	app.rateLimiters = newRateLimiters()
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(app.oauthHandler.Close)
 
 	srv := &http.Server{Addr: "127.0.0.1:0"}
 	// Should not panic with all components set
@@ -179,13 +180,7 @@ func TestInitializeServices_AuditEncryption_Push100(t *testing.T) {
 	require.NotNil(t, mcpServer)
 	assert.NotNil(t, app.auditStore)
 
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 // ---------------------------------------------------------------------------
@@ -215,13 +210,7 @@ func TestInitializeServices_RiskGuardFreezeAndAutoFreeze_Push100(t *testing.T) {
 	rg := kcManager.RiskGuard()
 	assert.NotNil(t, rg)
 
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +445,7 @@ func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.DevMode = true
@@ -897,6 +887,7 @@ func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.DevMode = true
@@ -965,6 +956,7 @@ func TestInstrumentsFreezeAdapter_Push100(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 

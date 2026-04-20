@@ -128,6 +128,7 @@ func TestInitScheduler_AuditOnly_NoTelegram(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),

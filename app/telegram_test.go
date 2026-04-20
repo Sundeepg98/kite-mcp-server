@@ -67,6 +67,7 @@ func newTelegramTestManager(t *testing.T, tgServerURL string) *kc.Manager {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -115,6 +116,7 @@ func TestRegisterTelegramWebhook_NilNotifier_Inject(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),

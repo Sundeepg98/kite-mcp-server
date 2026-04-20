@@ -23,6 +23,32 @@ package app
 // (~20 goroutines over 20 cycles) would blow past the tolerance
 // while intra-package interference stays below it.
 //
+// Apr-2026 cleanup pass reduced intra-package leaks by wiring:
+//   - oauth.Handler.Close() via newTestOAuthHandler + t.Cleanup on all
+//     direct oauth.NewHandler sites (~27 in total). AuthCodeStore
+//     cleanup goroutine now dies per-test.
+//   - instruments.Manager.Shutdown() via t.Cleanup on every
+//     instruments.New test site (~64). startScheduler goroutine now
+//     dies per-test.
+//   - cleanupInitializeServices on every initializeServices test site
+//     that previously only stopped scheduler+auditStore (14 sites).
+//     Missing Shutdown hooks (hashPublisher, oauthHandler, rateLimiters,
+//     paperMonitor, invitationCleanup, telegramBot) now fire on t.Cleanup.
+//
+// Residual structural leakers (by design — not test-level):
+//   - wire.go fires startRateLimitReloadLoop(nil) without a stop chan
+//     (lives for process lifetime; RunServer-path tests leak one each).
+//   - RunServer-based tests that start an HTTP/stdio server without a
+//     mechanism to join the serve goroutine (app.RunServer is blocking).
+//   - TelegramBot.runCleanup — currently no Close hook wiring in tests
+//     that manually construct the bot.
+//
+// Because these residual leakers are structural, migrating this
+// package to goleak.VerifyTestMain would require ignoring each by
+// function name, which masks real leaks the sentinel should catch.
+// The NumGoroutine-delta pattern ignores them uniformly via the
+// tolerance — cleaner tradeoff.
+//
 // Other goroutine sentinels in the repo (kc/scheduler, kc/audit,
 // kc/ticker, kc/alerts, kc/billing, kc/instruments, kc/papertrading)
 // DO use goleak because their packages have narrower test surfaces

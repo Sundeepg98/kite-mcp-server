@@ -71,6 +71,7 @@ func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
 		logger:          testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(app.oauthHandler.Close)
 
 	listener, listErr := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, listErr)
@@ -836,6 +837,7 @@ func TestInstrumentsFreezeAdapter_NotFound_Cov(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	_, ok := adapter.GetFreezeQuantity("NSE", "NONEXISTENT")
@@ -857,6 +859,7 @@ func TestInstrumentsFreezeAdapter_WithFreezeQty(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	qty, ok := adapter.GetFreezeQuantity("NSE", "INFY")

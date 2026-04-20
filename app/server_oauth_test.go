@@ -215,6 +215,7 @@ func TestSetupMux_AcceptInvite_MissingToken(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -503,6 +504,7 @@ func TestSetupMux_AdminAuth_Forbidden(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	// Wire user store into OAuth handler
@@ -555,6 +557,7 @@ func TestSetupMux_AdminAuth_ValidAdmin(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	userStore := mgr.UserStoreConcrete()
@@ -924,6 +927,7 @@ func TestSetupMux_AcceptInvite_ValidToken(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -992,6 +996,7 @@ func TestSetupMux_AcceptInvite_ExpiredToken(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -1140,6 +1145,7 @@ func TestSetupMux_AdminAuth_ExpiredCookie(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -1185,6 +1191,7 @@ func TestServeStatusPage_OAuthRedirect_ValidJWT(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	// Generate a valid JWT
@@ -1693,6 +1700,7 @@ func TestSetupMux_AdminAuth_DoubleSlashPrefix_Push100Extra(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 	handler.SetUserStore(userStore)
 
 	app := newTestApp(t)

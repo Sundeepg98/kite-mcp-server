@@ -170,6 +170,7 @@ func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 	handler.SetUserStore(userStore)
 
 	app := newTestApp(t)
@@ -211,6 +212,7 @@ func TestSetupMux_GoogleSSO_NoCredentials(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.oauthHandler = handler
@@ -549,6 +551,7 @@ func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 	handler.SetUserStore(userStore)
 
 	app := newTestApp(t)
@@ -647,6 +650,7 @@ func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.oauthHandler = handler
@@ -706,6 +710,7 @@ func TestSetupMux_AdminAuth_EmptyPath_DefaultRedirect(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 	handler.SetUserStore(userStore)
 
 	app := newTestApp(t)
@@ -929,6 +934,7 @@ func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.oauthHandler = handler
@@ -983,6 +989,7 @@ func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	// Generate a valid JWT token for the pro user
 	token, err := handler.JWTManager().GenerateTokenWithExpiry("pro@test.com", "dashboard", 1*time.Hour)
@@ -1026,6 +1033,7 @@ func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 	handler.SetUserStore(userStore)
 
 	// Generate JWT for non-admin user
@@ -1065,6 +1073,7 @@ func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
 		logger:          testLogger(),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(handler.Close)
 
 	app := newTestApp(t)
 	app.oauthHandler = handler

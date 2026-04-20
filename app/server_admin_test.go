@@ -407,6 +407,7 @@ func TestSetupMux_Dashboard_WithOAuth(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)

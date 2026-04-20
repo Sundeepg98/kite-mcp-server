@@ -333,13 +333,7 @@ func TestInitializeServices_DevMode_Minimal(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
 	require.NotNil(t, mcpServer)
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	mgr.Shutdown()
+	cleanupInitializeServices(app, mgr)
 }
 
 
@@ -358,13 +352,7 @@ func TestInitializeServices_WithAlertDB(t *testing.T) {
 	require.NotNil(t, mgr)
 	require.NotNil(t, mcpServer)
 	assert.NotNil(t, app.auditStore)
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	mgr.Shutdown()
+	cleanupInitializeServices(app, mgr)
 }
 
 
@@ -391,13 +379,7 @@ func TestInitializeServices_WithEncryption(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, mgr)
 	require.NotNil(t, mcpServer)
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	mgr.Shutdown()
+	cleanupInitializeServices(app, mgr)
 }
 
 
@@ -1021,14 +1003,7 @@ func TestInitializeServices_WithDB(t *testing.T) {
 	// Verify scheduler was started
 	assert.NotNil(t, app.scheduler)
 
-	// Clean up
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1055,7 +1030,7 @@ func TestInitializeServices_NoDB(t *testing.T) {
 	// Without DB, audit store should be nil
 	assert.Nil(t, app.auditStore)
 
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1079,7 +1054,7 @@ func TestInitializeServices_ProdMode(t *testing.T) {
 	require.NotNil(t, kcManager)
 	require.NotNil(t, mcpServer)
 
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1259,7 +1234,7 @@ func TestInitializeServices_ExcludedTools(t *testing.T) {
 	require.NotNil(t, kcManager)
 	require.NotNil(t, mcpServer)
 
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1291,14 +1266,7 @@ func TestInitializeServices_WithStripeBilling(t *testing.T) {
 	// Verify billing store was created
 	assert.NotNil(t, kcManager.BillingStore())
 
-	// Clean up
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1328,13 +1296,7 @@ func TestInitializeServices_WithStripePriceIDs(t *testing.T) {
 	// Billing store should be created
 	assert.NotNil(t, kcManager.BillingStore())
 
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1362,13 +1324,7 @@ func TestInitializeServices_DevMode_StripeSkipped(t *testing.T) {
 	// In DevMode, billing should be nil (Stripe skipped)
 	assert.Nil(t, kcManager.BillingStore())
 
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1421,15 +1377,7 @@ func TestRunServer_OAuthWiring_TokenChecker(t *testing.T) {
 
 	kcManager, _, err := app.initializeServices()
 	require.NoError(t, err)
-	defer func() {
-		if app.scheduler != nil {
-			app.scheduler.Stop()
-		}
-		if app.auditStore != nil {
-			app.auditStore.Stop()
-		}
-		kcManager.Shutdown()
-	}()
+	defer cleanupInitializeServices(app, kcManager)
 
 	// Replicate the OAuth wiring from RunServer
 	oauthCfg := &oauth.Config{
@@ -1451,6 +1399,7 @@ func TestRunServer_OAuthWiring_TokenChecker(t *testing.T) {
 		logger:          testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(app.oauthHandler.Close)
 
 	// Wire the token checker — replicating RunServer lines 376-402
 	tokenStore := kcManager.TokenStore()
@@ -1560,14 +1509,7 @@ func TestInitializeServices_WithDB_FullSetup(t *testing.T) {
 	assert.NotNil(t, kcManager.EventDispatcher(), "event dispatcher should be set")
 	assert.NotNil(t, kcManager.InvitationStore(), "invitation store should be created with DB")
 
-	// Clean up
-	if app.scheduler != nil {
-		app.scheduler.Stop()
-	}
-	if app.auditStore != nil {
-		app.auditStore.Stop()
-	}
-	kcManager.Shutdown()
+	cleanupInitializeServices(app, kcManager)
 }
 
 
@@ -1641,7 +1583,7 @@ func TestInitializeServices_WithAdminEmails(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, mgr)
 	assert.NotNil(t, mcpSrv)
-	mgr.Shutdown()
+	cleanupInitializeServices(app, mgr)
 }
 
 
@@ -1659,5 +1601,5 @@ func TestInitializeServices_DevMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, mgr)
 	assert.NotNil(t, mcpSrv)
-	mgr.Shutdown()
+	cleanupInitializeServices(app, mgr)
 }

@@ -236,6 +236,7 @@ func TestInstrumentsFreezeAdapter_Found(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	qty, ok := adapter.GetFreezeQuantity("NSE", "RELIANCE")
@@ -257,6 +258,7 @@ func TestInstrumentsFreezeAdapter_ZeroFreeze(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	_, ok := adapter.GetFreezeQuantity("NSE", "SMALLCAP")
@@ -376,6 +378,7 @@ func TestBriefingCredAdapter_PerUserKey(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),

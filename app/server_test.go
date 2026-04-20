@@ -260,6 +260,7 @@ func TestInstrumentsFreezeAdapter_MultipleInstruments(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 
@@ -469,6 +470,7 @@ func TestSetupMux_WithDBManager(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -587,7 +589,9 @@ func newTestOAuthHandler(t *testing.T) *oauth.Handler {
 		ExternalURL: "http://localhost:9999",
 		Logger:      testLogger(),
 	}
-	return oauth.NewHandler(cfg, &testSigner{}, &testExchanger{})
+	h := oauth.NewHandler(cfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(h.Close)
+	return h
 }
 
 
@@ -629,6 +633,7 @@ func TestSetupMux_PricingPage_WithCookie(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -887,6 +892,7 @@ func TestSetupMux_PricingPage_WithProTier(t *testing.T) {
 		Logger:      testLogger(),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -1166,6 +1172,7 @@ func TestInstrumentsFreezeAdapter_ZeroFreezeQty(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	adapter := &instrumentsFreezeAdapter{mgr: instrMgr}
 	_, ok := adapter.GetFreezeQuantity("NSE", "SMALLCAP")
@@ -1327,6 +1334,7 @@ func TestSetupMux_BillingCheckout_RealOAuthAndBillingStore(t *testing.T) {
 	app.DevMode = true
 	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	// Wire user store
@@ -1507,6 +1515,7 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -1533,6 +1542,7 @@ func TestSetupMux_FullBranches_WithDB_OAuth_StripeWebhook(t *testing.T) {
 	app.Config.GoogleClientSecret = "google-secret"
 	app.Config.ExternalURL = "http://localhost:9999"
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 
 	// Wire user store
 	if us := mgr.UserStoreConcrete(); us != nil {
@@ -1621,6 +1631,7 @@ func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -1650,6 +1661,7 @@ func TestSetupMux_BillingRoutes_CheckoutAndPortal(t *testing.T) {
 	app.DevMode = true
 	app.Config.AdminEmails = "admin@test.com"
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -1701,6 +1713,7 @@ func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(testLogger()),
@@ -1736,6 +1749,7 @@ func TestSetupMux_PricingPage_WithBillingStore_ProTier(t *testing.T) {
 	app := newTestApp(t)
 	app.DevMode = true
 	app.oauthHandler = oauth.NewHandler(oauthCfg, &testSigner{}, &testExchanger{})
+	t.Cleanup(app.oauthHandler.Close)
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -1928,6 +1942,7 @@ func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
 		logger:          testLogger(),
 	}
 	oauthHandler := oauth.NewHandler(oauthCfg, signer, exchanger)
+	t.Cleanup(oauthHandler.Close)
 
 	token, err := oauthHandler.JWTManager().GenerateTokenWithExpiry("premium@test.com", "dashboard", 1*time.Hour)
 	require.NoError(t, err)
