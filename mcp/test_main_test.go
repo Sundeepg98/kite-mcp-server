@@ -19,7 +19,13 @@ var sharedTestManager *kc.Manager
 
 func TestMain(m *testing.M) {
 	sharedTestManager = newTestManagerOnce()
-	os.Exit(m.Run())
+	code := m.Run()
+	// Shut down package-level background goroutines before exit so
+	// goleak-style sentinels in dependent packages observe a clean
+	// post-test state. ltpCache in market_tools.go spawns a 5-minute
+	// cleanup ticker that would otherwise outlive the test binary.
+	ltpCacheShutdown()
+	os.Exit(code)
 }
 
 // newTestManagerOnce creates a Manager suitable for read-only tests.

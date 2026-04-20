@@ -50,3 +50,35 @@ func TestCacheKey(t *testing.T) {
 	key := CacheKey("get_ltp", "user@example.com", "NSE:INFY")
 	assert.Equal(t, "get_ltp:user@example.com:NSE:INFY", key)
 }
+
+// TestToolCache_Close_StopsGoroutine proves Close bounds the caller's
+// wait — the cleanup goroutine must exit before Close returns. Without
+// a WaitGroup-style join, goleak sentinels race the goroutine's exit.
+func TestToolCache_Close_StopsGoroutine(t *testing.T) {
+	t.Parallel()
+	c := NewToolCache(1 * time.Second)
+
+	done := make(chan struct{})
+	go func() {
+		c.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// success — Close observed doneCh signal from the goroutine
+	case <-time.After(3 * time.Second):
+		t.Fatal("ToolCache.Close did not return within 3s — goroutine Join likely blocked")
+	}
+}
+
+// TestToolCache_Close_Idempotent verifies multiple Close calls don't
+// panic (stopOnce guards close of stopCh; doneCh is closed exactly once
+// by the goroutine, which Close reads from — reads on closed chan are
+// always successful).
+func TestToolCache_Close_Idempotent(t *testing.T) {
+	t.Parallel()
+	c := NewToolCache(1 * time.Second)
+	c.Close()
+	c.Close() // second call must not panic on close-of-closed-channel
+	c.Close() // third call exercises stopOnce-guard fast path
+}

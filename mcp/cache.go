@@ -7,10 +7,18 @@ import (
 
 // ToolCache provides a simple TTL cache for read-heavy tool responses.
 // Keyed by tool name + email + serialized args hash.
+//
+// Background goroutine lifecycle: NewToolCache spawns a cleanup goroutine
+// that runs until Close() is called. Production uses a package-level
+// singleton (ltpCache) that lives for the process lifetime; tests can
+// construct their own caches and call Close() to release the goroutine.
 type ToolCache struct {
-	mu      sync.RWMutex
-	entries map[string]*cacheEntry
-	ttl     time.Duration
+	mu       sync.RWMutex
+	entries  map[string]*cacheEntry
+	ttl      time.Duration
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	doneCh   chan struct{}
 }
 
 type cacheEntry struct {
@@ -23,16 +31,34 @@ func NewToolCache(ttl time.Duration) *ToolCache {
 	c := &ToolCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     ttl,
+		stopCh:  make(chan struct{}),
+		doneCh:  make(chan struct{}),
 	}
-	// Background cleanup every 5 minutes
 	go func() {
+		defer close(c.doneCh)
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			c.cleanup()
+		for {
+			select {
+			case <-c.stopCh:
+				return
+			case <-ticker.C:
+				c.cleanup()
+			}
 		}
 	}()
 	return c
+}
+
+// Close stops the background cleanup goroutine and waits for it to exit.
+// Safe to call multiple times — stopOnce guards the stopCh close, and
+// the doneCh read is idempotent (reads from a closed channel always
+// succeed). Callers that need a bounded wait should use CloseWithTimeout.
+func (c *ToolCache) Close() {
+	c.stopOnce.Do(func() {
+		close(c.stopCh)
+	})
+	<-c.doneCh
 }
 
 // Get retrieves a cached value. Returns nil if not found or expired.

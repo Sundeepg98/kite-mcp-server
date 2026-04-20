@@ -17,6 +17,14 @@ import (
 // ltpCache caches LTP responses for 30 seconds to reduce API calls.
 var ltpCache = NewToolCache(30 * time.Second)
 
+// ltpCacheShutdown stops the ltpCache background cleanup goroutine. Called
+// from TestMain in tests so goleak-style sentinels see a clean goroutine
+// dump at process exit. Production never calls this — the singleton lives
+// for the process lifetime by design.
+func ltpCacheShutdown() {
+	ltpCache.Close()
+}
+
 type QuotesTool struct{}
 
 func (*QuotesTool) Tool() mcp.Tool {
