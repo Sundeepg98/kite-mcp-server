@@ -444,12 +444,14 @@ func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
 // startStdIOServer — exercise via pipes (no real stdin/stdout)
 // ---------------------------------------------------------------------------
 func TestStartStdIOServer_ViaPipes(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -953,12 +955,14 @@ func TestStartStdIOServer_RealFunction(t *testing.T) {
 // startStdIOServer — exercise via io.Pipe directly (no os.Stdin replacement)
 // ---------------------------------------------------------------------------
 func TestStartStdIOServer_WithPipeIO(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
