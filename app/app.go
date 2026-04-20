@@ -327,6 +327,18 @@ type Config struct {
 	//
 	// Must never be set in production.
 	InstrumentsSkipFetch bool
+
+	// AdminPassword seeds first-boot admin password for the ADMIN_EMAILS
+	// users (ADMIN_PASSWORD env var). Empty means no seeding; admins
+	// authenticate via OAuth only on first boot. Field lives on Config so
+	// tests drop t.Setenv and can t.Parallel the dashboard setup path.
+	AdminPassword string
+
+	// StripeWebhookSecret is the signing secret for Stripe's webhook
+	// endpoint (STRIPE_WEBHOOK_SECRET env var). Empty means the webhook
+	// handler is not registered. Field lives on Config so tests that
+	// exercise the webhook path drop t.Setenv and can t.Parallel.
+	StripeWebhookSecret string
 }
 
 // Server mode constants

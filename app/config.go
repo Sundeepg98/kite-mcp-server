@@ -34,6 +34,8 @@ import (
 //	GoogleClientSecret <- GOOGLE_CLIENT_SECRET
 //	EnableTrading        <- ENABLE_TRADING == "true" (case-insensitive)
 //	InstrumentsSkipFetch <- INSTRUMENTS_SKIP_FETCH == "true" (case-insensitive)
+//	AdminPassword        <- ADMIN_PASSWORD
+//	StripeWebhookSecret  <- STRIPE_WEBHOOK_SECRET
 //
 // Defaults are applied via WithDefaults when the caller opts in.
 func ConfigFromEnv() *Config {
@@ -55,6 +57,8 @@ func ConfigFromEnv() *Config {
 		GoogleClientSecret:   os.Getenv("GOOGLE_CLIENT_SECRET"),
 		EnableTrading:        strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
 		InstrumentsSkipFetch: strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true"),
+		AdminPassword:        os.Getenv("ADMIN_PASSWORD"),
+		StripeWebhookSecret:  os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	}
 }
 

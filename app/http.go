@@ -215,8 +215,9 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		}
 	}
 
-	// Seed admin password from ADMIN_PASSWORD env var (first boot only).
-	if adminPassword := os.Getenv("ADMIN_PASSWORD"); adminPassword != "" && userStore != nil && app.Config.AdminEmails != "" {
+	// Seed admin password from Config.AdminPassword (populated from
+	// ADMIN_PASSWORD env by ConfigFromEnv). First-boot path only.
+	if adminPassword := app.Config.AdminPassword; adminPassword != "" && userStore != nil && app.Config.AdminEmails != "" {
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
 		if len(adminEmails) > 1 {
 			app.logger.Warn("ADMIN_PASSWORD is shared across all admin emails. Consider setting individual passwords via the admin console after first login.")
@@ -408,7 +409,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	}
 
 	// Register Stripe webhook endpoint (no auth — Stripe calls this with a signed payload).
-	if webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET"); webhookSecret != "" {
+	if webhookSecret := app.Config.StripeWebhookSecret; webhookSecret != "" {
 		if bs := kcManager.BillingStoreConcrete(); bs != nil {
 			if err := bs.InitEventLogTable(); err != nil {
 				app.logger.Error("Failed to initialize webhook_events table", "error", err)
