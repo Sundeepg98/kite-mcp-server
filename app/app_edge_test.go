@@ -426,9 +426,7 @@ func TestKiteTokenChecker_AllPaths_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
-	t.Setenv("ADMIN_PASSWORD", "testpass123!")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-
+	t.Parallel()
 	mgr := p100Manager(t)
 
 	// Create user store with admin who has no password yet
@@ -454,10 +452,13 @@ func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		AdminEmails:          "adminp@test.com",
+		AdminPassword:        "testpass123!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = handler
-	app.Config.AdminEmails = "adminp@test.com"
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -474,15 +475,14 @@ func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_AdminSecretPathFallback_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-	t.Setenv("ADMIN_PASSWORD", "")
-
+	t.Parallel()
 	mgr := p100Manager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		AdminSecretPath:      "test-admin-secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = nil // no OAuth
-	app.Config.AdminSecretPath = "test-admin-secret"
-	app.Config.AdminEmails = ""
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -503,11 +503,9 @@ func TestSetupMux_AdminSecretPathFallback_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_PricingPage_PremiumTier_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-	t.Setenv("ADMIN_PASSWORD", "")
-
+	t.Parallel()
 	mgr := p100Manager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
@@ -528,9 +526,7 @@ func TestSetupMux_PricingPage_PremiumTier_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_StripeWebhookBillingStore_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_push100_test")
-	t.Setenv("ADMIN_PASSWORD", "")
-
+	t.Parallel()
 	mgr := p100Manager(t)
 
 	// Manually wire billing store (avoids initializeServices + real Kite API)
@@ -540,7 +536,10 @@ func TestSetupMux_StripeWebhookBillingStore_Push100(t *testing.T) {
 		mgr.SetBillingStore(bs)
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		StripeWebhookSecret:  "whsec_push100_test",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -561,12 +560,13 @@ func TestSetupMux_StripeWebhookBillingStore_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_StripeWebhookNoBilling_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_push100_nobilling")
-	t.Setenv("ADMIN_PASSWORD", "")
-	t.Setenv("STRIPE_SECRET_KEY", "") // No billing store
-
+	t.Parallel()
+	// No billing store wired on mgr → /webhooks/stripe should be absent.
 	mgr := p100Manager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		StripeWebhookSecret:  "whsec_push100_nobilling",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
@@ -587,9 +587,7 @@ func TestSetupMux_StripeWebhookNoBilling_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupMux_AcceptInvite_AllPaths_Push100(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
-	t.Setenv("ADMIN_PASSWORD", "")
-
+	t.Parallel()
 	mgr := p100Manager(t)
 
 	// Initialize invitation store and add test data
@@ -615,7 +613,7 @@ func TestSetupMux_AcceptInvite_AllPaths_Push100(t *testing.T) {
 		}))
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	app.DevMode = true
 	require.NoError(t, app.initStatusPageTemplate())
 	app.rateLimiters = newRateLimiters()
