@@ -88,6 +88,11 @@ type Registry struct {
 	// SBOM entries (PluginSBOMEntry).
 	sbomMu      sync.RWMutex
 	sbomEntries map[string]PluginSBOMEntry
+
+	// Signature verification trust state. See plugin_sbom_signature.go
+	// for policy. Zero-value is legacy "no trust anchor" mode — SBOM
+	// signatures are stored opaquely without verification.
+	signer trustedSignerRegistry
 }
 
 // NewRegistry constructs a fresh, empty Registry. Intended primarily
@@ -155,6 +160,12 @@ func (r *Registry) Reset() {
 	r.sbomMu.Lock()
 	r.sbomEntries = make(map[string]PluginSBOMEntry)
 	r.sbomMu.Unlock()
+
+	r.signer.mu.Lock()
+	r.signer.key = nil
+	r.signer.devMode = false
+	r.signer.logger = nil
+	r.signer.mu.Unlock()
 }
 
 // --- Tool-registry methods ---
@@ -590,13 +601,22 @@ func (r *Registry) InfoCount() int {
 
 // --- SBOM methods ---
 
-// RegisterSBOM stores an SBOM entry.
+// RegisterSBOM stores an SBOM entry. Phase G: when a trusted signer
+// key is configured on the registry, the entry's signature is verified
+// against the checksum here — mismatched or (in prod) missing
+// signatures short-circuit registration. When no trusted signer is
+// configured, behavior is unchanged from pre-Phase-G: opaque storage
+// only. See plugin_sbom_signature.go verifyEntrySignature for the
+// full policy table.
 func (r *Registry) RegisterSBOM(entry PluginSBOMEntry) error {
 	if entry.Name == "" {
 		return fmt.Errorf("mcp: SBOM entry requires Name")
 	}
 	if entry.Checksum == "" {
 		return fmt.Errorf("mcp: SBOM entry for %q requires Checksum", entry.Name)
+	}
+	if err := r.verifyEntrySignature(entry); err != nil {
+		return err
 	}
 	if entry.Recorded.IsZero() {
 		entry.Recorded = time.Now()
