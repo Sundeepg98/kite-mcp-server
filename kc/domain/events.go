@@ -295,6 +295,42 @@ type WatchlistItemRemovedEvent struct {
 func (e WatchlistItemRemovedEvent) EventType() string    { return "watchlist.item_removed" }
 func (e WatchlistItemRemovedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// CredentialRegisteredEvent is emitted the first time a user registers Kite
+// API credentials (no prior CredentialStore entry for this email). Distinct
+// from CredentialRotatedEvent so auditors can tell onboarding from key
+// rotation without walking the full credential history.
+type CredentialRegisteredEvent struct {
+	Email     string
+	Timestamp time.Time
+}
+
+func (e CredentialRegisteredEvent) EventType() string    { return "credential.registered" }
+func (e CredentialRegisteredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// CredentialRotatedEvent is emitted when a user replaces existing Kite API
+// credentials with a new key/secret pair. Emitted by UpdateMyCredentials
+// when a prior credential entry exists for the email.
+type CredentialRotatedEvent struct {
+	Email     string
+	Timestamp time.Time
+}
+
+func (e CredentialRotatedEvent) EventType() string    { return "credential.rotated" }
+func (e CredentialRotatedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// CredentialRevokedEvent is emitted when credentials are removed — via the
+// dashboard DELETE endpoint, admin force-revoke, or the credentials half of
+// DeleteMyAccount. Reason tags the lifecycle narrative ("user_self",
+// "admin_revoke", "credential_rotation", "account_deleted").
+type CredentialRevokedEvent struct {
+	Email     string
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e CredentialRevokedEvent) EventType() string    { return "credential.revoked" }
+func (e CredentialRevokedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.
