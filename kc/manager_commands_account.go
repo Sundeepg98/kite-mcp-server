@@ -26,7 +26,7 @@ func (m *Manager) registerAccountCommands() error {
 		// defeats the use case's `!= nil` guard. Assign only live stores.
 		deps := usecases.AccountDependencies{}
 		if m.credentialStore != nil {
-			deps.CredentialStore = m.credentialStore
+			deps.CredentialStore = &credentialStoreWriterAdapter{store: m.credentialStore}
 		}
 		if m.tokenStore != nil {
 			deps.TokenStore = m.tokenStore
@@ -61,7 +61,27 @@ func (m *Manager) registerAccountCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewUpdateMyCredentialsUseCase(m.credentialStore, m.tokenStore, m.Logger)
+		// credentialStoreAdapter bridges the concrete *KiteCredentialStore.Set(email,
+		// *KiteCredentialEntry) signature to the usecases.CredentialUpdater port's
+		// Set(email, apiKey, apiSecret string) signature. Keeps usecases free of
+		// kc-internal types.
+		credAdapter := &credentialStoreWriterAdapter{store: m.credentialStore}
+		uc := usecases.NewUpdateMyCredentialsUseCase(credAdapter, m.tokenStore, m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
+	// --- Account: InvalidateTokenCommand ---
+	// Round-5 Phase B: direct manager.TokenStore().Delete(email) sites in
+	// mcp/setup_tools.go route through this handler so every token-invalidation
+	// gets the bus's observability layer (LoggingMiddleware + future audit).
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.InvalidateTokenCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.InvalidateTokenCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewInvalidateTokenUseCase(m.tokenStore, m.Logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -145,4 +165,29 @@ func (m *Manager) registerAccountCommands() error {
 		return err
 	}
 	return nil
+}
+
+// credentialStoreWriterAdapter adapts the concrete *KiteCredentialStore to the
+// usecases.CredentialUpdater port. The port's Set(email, apiKey, apiSecret
+// string) signature takes primitive strings so use cases stay decoupled from
+// kc-internal types (kc.KiteCredentialEntry). The underlying store's Set
+// takes a *KiteCredentialEntry; the adapter constructs one.
+//
+// Delete passes through unchanged. Only Set needs the signature bridge.
+type credentialStoreWriterAdapter struct {
+	store *KiteCredentialStore
+}
+
+func (a *credentialStoreWriterAdapter) Delete(email string) {
+	if a.store == nil {
+		return
+	}
+	a.store.Delete(email)
+}
+
+func (a *credentialStoreWriterAdapter) Set(email, apiKey, apiSecret string) {
+	if a.store == nil {
+		return
+	}
+	a.store.Set(email, &KiteCredentialEntry{APIKey: apiKey, APISecret: apiSecret})
 }

@@ -285,13 +285,20 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if email == "" {
 				return mcp.NewToolResultError("OAuth authentication required to register per-user credentials. Please connect via an OAuth-enabled client first."), nil
 			}
-			manager.CredentialStore().Set(email, &kc.KiteCredentialEntry{
+			// Round-5 Phase B: credential persistence + token invalidation are
+			// the single UpdateMyCredentialsCommand. No direct .Set/.Delete on
+			// stores here — the bus is the single write entry point.
+			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{
+				Email:     email,
 				APIKey:    apiKey,
 				APISecret: apiSecret,
-			})
-			// Clear old cached token — it was generated with different credentials
-			manager.TokenStore().Delete(email)
-			// Clear session data so next GetOrCreateSession uses the new API key
+			}); err != nil {
+				handler.trackToolError(ctx, "login", "credential_persist_failed")
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to persist credentials: %s", err.Error())), nil
+			}
+			// Session data reset stays inline — it's session-lifecycle, not
+			// credential-lifecycle. Clearing ensures the next GetOrCreateSession
+			// builds a fresh Kite client with the newly-persisted API key.
 			if err := manager.ClearSessionData(mcpSessionID); err != nil {
 				manager.Logger.Warn("Failed to clear session data after credential registration", "error", err)
 			}
@@ -332,9 +339,15 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					},
 				}, nil
 			}
-			// Cached token expired, remove it
+			// Cached token expired, remove it via the CommandBus so this
+			// lifecycle event gets the bus's observability layer (Round-5 Phase B).
 			manager.Logger.Warn("Cached token expired, clearing", "email", email, "error", err)
-			manager.TokenStore().Delete(email)
+			if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
+				Email:  email,
+				Reason: "expired",
+			}); dispErr != nil {
+				manager.Logger.Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
+			}
 		}
 
 		if isNew && manager.HasPreAuth() {
@@ -366,9 +379,15 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to clear session data: %s", clearErr.Error())), nil
 				}
 
-				// Clear cached token too if it exists
+				// Clear cached token too if it exists — via CommandBus for
+				// uniform observability (Round-5 Phase B).
 				if email != "" {
-					manager.TokenStore().Delete(email)
+					if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
+						Email:  email,
+						Reason: "session_profile_check_failed",
+					}); dispErr != nil {
+						manager.Logger.Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
+					}
 				}
 
 				// Create a new session

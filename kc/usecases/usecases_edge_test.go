@@ -931,6 +931,61 @@ func TestUpdateMyCredentials_Success(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestUpdateMyCredentials_Persists verifies the use case now OWNS persistence
+// (previously it was validation-only and the MCP tool handler called .Set
+// separately — a CQRS bypass). Post-Round-5 Phase B, dispatch-command-then-
+// persist is a single atomic operation.
+func TestUpdateMyCredentials_Persists(t *testing.T) {
+	t.Parallel()
+	credStore := &mockCredentialStore{}
+	tokStore := &mockTokenStore{}
+	uc := NewUpdateMyCredentialsUseCase(credStore, tokStore, testLogger())
+	err := uc.Execute(context.Background(), cqrs.UpdateMyCredentialsCommand{
+		Email: "u@t.com", APIKey: "api-key-new", APISecret: "api-secret-new",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, credStore.setCalls, "use case must call CredentialStore.Set exactly once")
+	assert.Equal(t, "u@t.com", credStore.lastEmail)
+	assert.Equal(t, "api-key-new", credStore.lastAPIKey)
+	assert.Equal(t, "api-secret-new", credStore.lastAPISecret)
+	assert.True(t, tokStore.deleted, "changing credentials must invalidate cached token")
+}
+
+// TestInvalidateToken_Success verifies the new command that clears a cached
+// Kite access token without touching credentials. Used by the login flow
+// when cached tokens are detected as expired against the live Kite API.
+func TestInvalidateToken_Success(t *testing.T) {
+	t.Parallel()
+	tokStore := &mockTokenStore{}
+	uc := NewInvalidateTokenUseCase(tokStore, testLogger())
+	err := uc.Execute(context.Background(), cqrs.InvalidateTokenCommand{
+		Email: "u@t.com", Reason: "expired",
+	})
+	require.NoError(t, err)
+	assert.True(t, tokStore.deleted, "token store must be cleared on invalidation")
+}
+
+// TestInvalidateToken_EmptyEmail rejects empty-email requests — the token
+// store is keyed by email, so an empty key would delete nothing or
+// inadvertently clear a shared slot.
+func TestInvalidateToken_EmptyEmail(t *testing.T) {
+	t.Parallel()
+	tokStore := &mockTokenStore{}
+	uc := NewInvalidateTokenUseCase(tokStore, testLogger())
+	err := uc.Execute(context.Background(), cqrs.InvalidateTokenCommand{Email: ""})
+	require.Error(t, err)
+	assert.False(t, tokStore.deleted, "empty email must NOT trigger a delete")
+}
+
+// TestInvalidateToken_NilStore: defensive nil-guard — manager wiring may
+// hand a nil store during partial bootstrap. Must not panic.
+func TestInvalidateToken_NilStore(t *testing.T) {
+	t.Parallel()
+	uc := NewInvalidateTokenUseCase(nil, testLogger())
+	err := uc.Execute(context.Background(), cqrs.InvalidateTokenCommand{Email: "u@t.com"})
+	require.NoError(t, err)
+}
+
 func TestUpdateMyCredentials_EmptyEmail(t *testing.T) {
 	t.Parallel()
 	uc := NewUpdateMyCredentialsUseCase(&mockCredentialStore{}, &mockTokenStore{}, testLogger())

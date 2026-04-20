@@ -97,15 +97,13 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError("Both api_key and api_secret must be non-empty"), nil
 		}
 
+		// Round-5 Phase B: dispatch owns persistence. The command handler calls
+		// UpdateMyCredentialsUseCase which persists via CredentialUpdater and
+		// invalidates the cached token. No direct .Set/.Delete on stores here —
+		// the bus is the single write entry point for credentials.
 		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
-
-		// Persist the actual credentials via the manager (use case validates, manager persists)
-		handler.deps.CredStore.CredentialStore().Set(email, &kc.KiteCredentialEntry{
-			APIKey:    apiKey,
-			APISecret: apiSecret,
-		})
 
 		return gomcp.NewToolResultText(fmt.Sprintf("Credentials updated successfully. Your cached Kite token has been cleared. Please use the login tool to re-authenticate with the new credentials.")), nil
 	}

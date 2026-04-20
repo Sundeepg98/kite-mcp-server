@@ -274,9 +274,22 @@ func (m *mockInstrumentResolver) GetInstrumentToken(exchange, tradingsymbol stri
 // The canonical types live here.
 // =============================================================================
 
-type mockCredentialStore struct{ deleted bool }
+type mockCredentialStore struct {
+	deleted      bool
+	setCalls     int
+	lastEmail    string
+	lastAPIKey   string
+	lastAPISecret string
+}
 
 func (m *mockCredentialStore) Delete(email string) { m.deleted = true }
+
+func (m *mockCredentialStore) Set(email, apiKey, apiSecret string) {
+	m.setCalls++
+	m.lastEmail = email
+	m.lastAPIKey = apiKey
+	m.lastAPISecret = apiSecret
+}
 
 type mockTokenStore struct{ deleted bool }
 

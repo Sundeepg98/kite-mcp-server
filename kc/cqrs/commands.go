@@ -422,3 +422,13 @@ type UpdateMyCredentialsCommand struct {
 	APIKey    string `json:"api_key"`
 	APISecret string `json:"api_secret"`
 }
+
+// InvalidateTokenCommand requests clearing the cached Kite access token for
+// the given user. Used by the login flow when a cached token is detected as
+// expired against the live Kite API. Distinct from UpdateMyCredentialsCommand
+// because no new credentials are being written — only the stale token is
+// removed so the next tool call triggers a fresh auth.
+type InvalidateTokenCommand struct {
+	Email  string `json:"email"`
+	Reason string `json:"reason,omitempty"` // "expired" / "credential_rotation" / "admin_action"
+}
