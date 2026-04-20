@@ -842,12 +842,15 @@ func securityHeaders(next http.Handler) http.Handler {
 // configureAndStartServer sets up server handler and starts it.
 //
 // Middleware order (outermost first):
-//  1. withRequestID — earliest so every downstream handler, middleware, and
-//     log line can observe the correlation ID via RequestIDFromCtx.
-//  2. securityHeaders — applies standard response hardening headers.
-//  3. mux — application routes.
+//  1. recoverPanic — outermost so it catches panics in any inner
+//     middleware or handler; logs the stack with the request ID and
+//     returns a structured 500 rather than a bare connection close.
+//  2. withRequestID — so every downstream handler, middleware, and log
+//     line can observe the correlation ID via RequestIDFromCtx.
+//  3. securityHeaders — applies standard response hardening headers.
+//  4. mux — application routes.
 func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
-	srv.Handler = withRequestID(securityHeaders(mux))
+	srv.Handler = recoverPanic(app.logger, withRequestID(securityHeaders(mux)))
 	app.serveHTTPServer(srv)
 }
 
