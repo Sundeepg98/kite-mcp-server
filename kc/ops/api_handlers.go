@@ -251,11 +251,16 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		d.manager.CredentialStore().Set(email, &kc.KiteCredentialEntry{
+		// Phase B-Audit #25: dashboard credential PUT routes through the
+		// CommandBus — UpdateMyCredentialsUseCase owns both store writes.
+		if _, err := d.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.UpdateMyCredentialsCommand{
+			Email:     email,
 			APIKey:    body.APIKey,
 			APISecret: body.APISecret,
-		})
-		d.manager.TokenStore().Delete(email)
+		}); err != nil {
+			d.writeJSONError(w, http.StatusBadRequest, "update_failed", err.Error())
+			return
+		}
 		d.logger.Info("User updated credentials via dashboard", "email", email)
 		d.writeJSON(w, map[string]string{
 			"status":  "ok",
@@ -263,8 +268,17 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 		})
 
 	case http.MethodDelete:
-		d.manager.CredentialStore().Delete(email)
-		d.manager.TokenStore().Delete(email)
+		// Phase B-Audit #25: dashboard credential DELETE routes through
+		// the narrow RevokeCredentialsCommand — credentials + cached
+		// token only. Account-scope teardown (alerts/watchlists/etc.)
+		// lives on /dashboard/api/account/delete, not here.
+		if _, err := d.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.RevokeCredentialsCommand{
+			Email:  email,
+			Reason: "user_self",
+		}); err != nil {
+			d.writeJSONError(w, http.StatusBadRequest, "revoke_failed", err.Error())
+			return
+		}
 		d.logger.Info("User deleted credentials via dashboard", "email", email)
 		d.writeJSON(w, map[string]string{
 			"status":  "ok",
