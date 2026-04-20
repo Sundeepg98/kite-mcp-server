@@ -10,6 +10,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -173,36 +174,18 @@ func (h *AccountHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	d.manager.CredentialStore().Delete(email)
-	d.manager.TokenStore().Delete(email)
-
-	if sm := d.manager.SessionManager(); sm != nil {
-		sm.TerminateByEmail(email)
-	}
-
-	d.manager.AlertStore().DeleteByEmail(email)
-
-	if ws := d.manager.WatchlistStore(); ws != nil {
-		ws.DeleteByEmail(email)
-	}
-
-	if tsm := d.manager.AlertSvc().TrailingStopManager(); tsm != nil {
-		tsm.CancelByEmail(email)
-	}
-
-	if pe := d.manager.PaperEngine(); pe != nil {
-		if err := pe.Reset(email); err != nil {
-			d.logger.Error("Failed to reset paper trading during self-delete", "email", email, "error", err)
-		}
-		if err := pe.Disable(email); err != nil {
-			d.logger.Error("Failed to disable paper trading during self-delete", "email", email, "error", err)
-		}
-	}
-
-	if us := d.manager.UserStore(); us != nil {
-		if err := us.UpdateStatus(email, "offboarded"); err != nil {
-			d.logger.Error("Failed to update user status during self-delete", "email", email, "error", err)
-		}
+	// Phase B-Audit (residual): self-delete routes through the CommandBus
+	// as a single DeleteMyAccountCommand dispatch. The use case
+	// (kc/usecases/account_usecases.go) owns the full teardown:
+	// credentials, tokens, sessions, alerts, watchlists, trailing stops,
+	// paper trading reset+disable, and offboarded user-status write.
+	// Replaces ~30 lines of manual orchestration while gaining the bus's
+	// audit/observability layer.
+	if _, err := d.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.DeleteMyAccountCommand{
+		Email: email,
+	}); err != nil {
+		d.writeJSONError(w, http.StatusBadRequest, "delete_failed", err.Error())
+		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
