@@ -35,23 +35,21 @@ import (
 // ===========================================================================
 
 // TestRunServer_OAuthValidationFailure exercises the OAuth config validation
-// error path in RunServer.
+// error path in RunServer. DevMode short-circuits the Stripe branch so no
+// STRIPE env vars are needed here — the test parallelizes cleanly.
 func TestRunServer_OAuthValidationFailure(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHTTP,
+		AppHost:              "127.0.0.1",
+		AppPort:              "0",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "", // triggers "ExternalURL is required"
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = "0"
-	// Set OAuthJWTSecret but leave ExternalURL empty to trigger validation failure
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "" // triggers "ExternalURL is required"
 
 	err := app.RunServer()
 	require.Error(t, err)
@@ -59,7 +57,11 @@ func TestRunServer_OAuthValidationFailure(t *testing.T) {
 }
 
 
-// TestRunServer_MissingExternalURL exercises the EXTERNAL_URL requirement error.
+// TestRunServer_MissingExternalURL exercises the EXTERNAL_URL requirement
+// error. This test exercises LoadConfig's env-read path directly, so
+// t.Setenv and non-parallel execution are load-bearing — converting to
+// Config injection would defeat the subject under test. Trimmed STRIPE
+// env vars because DevMode short-circuits that branch regardless.
 func TestRunServer_MissingExternalURL(t *testing.T) {
 	t.Setenv("DEV_MODE", "true")
 	t.Setenv("KITE_API_KEY", "test_key")
@@ -84,17 +86,14 @@ func TestRunServer_MissingExternalURL(t *testing.T) {
 
 // TestRunServer_HybridMode exercises the hybrid server mode path in RunServer.
 func TestRunServer_HybridMode_Cov(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHybrid,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHybrid
 	// Inject shutdownCh so we can trigger the graceful-shutdown goroutine
 	// without an OS signal. Without this, srv.ListenAndServe blocks
 	// forever, the setup-shutdown goroutine never fires, and all
@@ -140,17 +139,14 @@ func TestRunServer_HybridMode_Cov(t *testing.T) {
 
 // TestRunServer_SSEMode exercises the SSE server mode path.
 func TestRunServer_SSEMode_Cov(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeSSE,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeSSE
 	// See TestRunServer_HybridMode_Cov for the rationale behind injecting
 	// shutdownCh — same goroutine-leak class.
 	app.shutdownCh = make(chan struct{})
@@ -184,22 +180,18 @@ func TestRunServer_SSEMode_Cov(t *testing.T) {
 // TestRunServer_WithOAuthFullLifecycle exercises RunServer with OAuth enabled,
 // covering the OAuth handler wiring and KiteTokenChecker setup.
 func TestRunServer_WithOAuthFullLifecycle(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHTTP,
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		AlertDBPath:          ":memory:",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "https://test.example.com"
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.AdminEmails = "admin@test.com"
 	// See TestRunServer_HybridMode_Cov for the rationale.
 	app.shutdownCh = make(chan struct{})
 
@@ -313,15 +305,15 @@ func TestStartStdIOServer_Smoke(t *testing.T) {
 // startHybridServer — exercises the hybrid server start path
 // ===========================================================================
 func TestStartHybridServer_QuickShutdown(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
-	app.Config.AppMode = "hybrid"
-
-	// Create an MCP server
-	t.Setenv("DEV_MODE", "true")
-	app.Config.KiteAPIKey = "test_key"
-	app.Config.KiteAPISecret = "test_secret"
-	app.Config.AlertDBPath = ":memory:"
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              "hybrid",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	kcMgr, mcpSrv, err := app.initializeServices()

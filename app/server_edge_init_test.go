@@ -92,22 +92,20 @@ func TestInitializeServices_StripePricesSet(t *testing.T) {
 }
 
 
-// TestInitializeServices_DevModeSkipsBilling verifies that even with
-// STRIPE_SECRET_KEY set, billing middleware is skipped in DevMode.
+// TestInitializeServices_DevModeSkipsBilling verifies that billing
+// middleware is skipped in DevMode regardless of STRIPE_SECRET_KEY
+// state. The DevMode short-circuit in wire.go (`&& !app.DevMode`) means
+// the test does not need to exercise the STRIPE env vars — leaving them
+// unset here, which lets the test parallelize cleanly.
 func TestInitializeServices_DevModeSkipsBilling(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_should_be_skipped_in_devmode")
-	t.Setenv("STRIPE_PRICE_PRO", "price_123")
-	t.Setenv("STRIPE_PRICE_PREMIUM", "price_456")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
 
 	mgr, mcpSrv, err := app.initializeServices()
 	require.NoError(t, err)
@@ -208,17 +206,14 @@ func TestInitScheduler_WithAuditAndPnL(t *testing.T) {
 // initializeServices — with all env vars set (event store + paper trading)
 // ===========================================================================
 func TestInitializeServices_FullSetup(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-
-	app := newTestApp(t)
-	app.Config.KiteAPIKey = "test_key"
-	app.Config.KiteAPISecret = "test_secret"
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	mgr, mcpSrv, err := app.initializeServices()
@@ -240,13 +235,13 @@ func TestInitializeServices_FullSetup(t *testing.T) {
 // initializeServices — without AlertDBPath (no SQLite)
 // ===========================================================================
 func TestInitializeServices_NoAlertDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
-	app := newTestApp(t)
-	app.Config.KiteAPIKey = "test_key"
-	app.Config.KiteAPISecret = "test_secret"
-	app.Config.AlertDBPath = "" // no DB
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          "", // no DB
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	mgr, mcpSrv, err := app.initializeServices()
