@@ -443,14 +443,14 @@ func TestBriefingTokenAdapter_IsExpired_FutureTimestamp(t *testing.T) {
 // ===========================================================================
 
 func TestSetupMux_Smoke(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+		AdminEmails:   "admin@test.com",
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -537,16 +537,15 @@ func TestSetupMux_Smoke(t *testing.T) {
 }
 
 func TestSetupMux_WithAdminSecretPath(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/test-secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:      "test_key",
+		KiteAPISecret:   "test_secret",
+		AdminSecretPath: "/test-secret",
+	})
 	app.DevMode = true
-	app.Config.AdminSecretPath = "/test-secret"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -565,13 +564,13 @@ func TestSetupMux_WithAdminSecretPath(t *testing.T) {
 }
 
 func TestSetupMux_DevModePprof(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:    "test_key",
+		KiteAPISecret: "test_secret",
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -594,34 +593,33 @@ func TestSetupMux_DevModePprof(t *testing.T) {
 // ===========================================================================
 
 func TestLoadConfig_DevModeSkipsCredentials(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{})
+	app.DevMode = true // DevMode isn't a Config field; set after construction.
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 }
 
 func TestLoadConfig_AdminEndpointSecretPath(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "k")
-	t.Setenv("KITE_API_SECRET", "s")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/my/secret")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:      "k",
+		KiteAPISecret:   "s",
+		AdminSecretPath: "/my/secret",
+	})
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "/my/secret", app.Config.AdminSecretPath)
 }
 
 func TestLoadConfig_GoogleOAuthCredentials(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "k")
-	t.Setenv("KITE_API_SECRET", "s")
-	t.Setenv("GOOGLE_CLIENT_ID", "gid")
-	t.Setenv("GOOGLE_CLIENT_SECRET", "gsecret")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:         "k",
+		KiteAPISecret:      "s",
+		GoogleClientID:     "gid",
+		GoogleClientSecret: "gsecret",
+	})
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, "gid", app.Config.GoogleClientID)
