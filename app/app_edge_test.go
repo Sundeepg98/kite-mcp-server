@@ -45,7 +45,8 @@ func p100AuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 // ---------------------------------------------------------------------------
 
 func TestServeLegalPages_TemplateExecuteError_Push100(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	// Template with no "legal" definition → ExecuteTemplate("legal",...) fails
 	badTmpl := template.Must(template.New("not_legal").Parse("{{.Missing}}"))
 	app.legalTemplate = badTmpl
@@ -71,7 +72,8 @@ func TestServeLegalPages_TemplateExecuteError_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServeStatusPage_LandingTemplateExecuteError_Push100(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	// Template that defines "base" but references an undefined field via method call
 	tmpl := template.Must(template.New("base").Parse("{{.NonExistentMethod}}"))
 	app.landingTemplate = tmpl
@@ -93,7 +95,8 @@ func TestServeStatusPage_LandingTemplateExecuteError_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServeStatusPage_WriteTo_Push100(t *testing.T) {
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	require.NoError(t, app.initStatusPageTemplate())
 	mux := http.NewServeMux()
 	app.serveStatusPage(mux)
@@ -115,6 +118,7 @@ func TestServeStatusPage_WriteTo_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
+	t.Parallel()
 	mgr := p100Manager(t)
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
@@ -134,7 +138,7 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 		logger:          testLogger(),
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
 	app.auditStore = p100AuditStore(t, db)
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -164,15 +168,15 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestInitializeServices_AuditEncryption_Push100(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-encryption-key-at-least-32-chars!!")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-encryption-key-at-least-32-chars!!",
+		InstrumentsSkipFetch: true,
+	})
+	app.DevMode = true
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.OAuthJWTSecret = "test-encryption-key-at-least-32-chars!!"
@@ -192,15 +196,15 @@ func TestInitializeServices_AuditEncryption_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestInitializeServices_RiskGuardFreezeAndAutoFreeze_Push100(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
+	app.DevMode = true
 	app.DevMode = true
 	app.Config.AlertDBPath = ":memory:"
 	app.Config.AdminEmails = "admin@test.com"
