@@ -51,7 +51,9 @@ func TestSetupGracefulShutdown_ViaShutdownCh(t *testing.T) {
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
 	app.auditStore.StartWorker()
+	t.Cleanup(app.auditStore.Stop)
 	app.rateLimiters = newRateLimiters()
+	t.Cleanup(app.rateLimiters.Stop)
 
 	// Inject shutdownCh so we can trigger shutdown without OS signals
 	app.shutdownCh = make(chan struct{})

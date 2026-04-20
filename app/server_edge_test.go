@@ -55,7 +55,9 @@ func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
 	app.auditStore.StartWorker()
+	t.Cleanup(app.auditStore.Stop)
 	app.rateLimiters = newRateLimiters()
+	t.Cleanup(app.rateLimiters.Stop)
 
 	// Set up OAuth handler so the oauthHandler close path is wired
 	oauthCfg := &oauth.Config{

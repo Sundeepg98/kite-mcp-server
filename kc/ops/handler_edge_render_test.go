@@ -246,6 +246,7 @@ func TestPush100_ServeSafetyPageSSR_WithRiskGuard(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -285,6 +286,7 @@ func TestPush100_ServePaperPageSSR_WithEngine(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -328,6 +330,7 @@ func TestPush100_ServeAlertsPageSSR_WithAlerts(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -384,6 +387,7 @@ func TestPush100_ServeOrdersPageSSR_WithAuditData(t *testing.T) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),

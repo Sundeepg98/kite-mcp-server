@@ -39,6 +39,7 @@ func newPush100OpsHandler(t *testing.T) *Handler {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -67,6 +68,7 @@ func newPush100OpsHandlerFull(t *testing.T) *Handler {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -122,6 +124,7 @@ func newPush100Dashboard(t *testing.T) (*DashboardHandler, *kc.Manager) {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),

@@ -137,6 +137,7 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 	app := newTestApp(t)
 	app.auditStore = p100AuditStore(t, db)
 	app.rateLimiters = newRateLimiters()
+	t.Cleanup(app.rateLimiters.Stop)
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(app.oauthHandler.Close)
 

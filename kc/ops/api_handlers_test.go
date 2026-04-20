@@ -42,6 +42,7 @@ func newFullTestDashboard(t *testing.T, kiteBaseURL string) *DashboardHandler {
 		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),

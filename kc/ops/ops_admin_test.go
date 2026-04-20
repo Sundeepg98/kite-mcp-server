@@ -32,6 +32,7 @@ func newTestAdminOpsHandler(t *testing.T) *Handler {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
@@ -1311,6 +1312,7 @@ func newTestDashboardWithAudit(t *testing.T) *DashboardHandler {
 		TestData: map[uint32]*instruments.Instrument{},
 	})
 	require.NoError(t, err)
+	t.Cleanup(instrMgr.Shutdown)
 
 	mgr, err := kc.NewWithOptions(context.Background(),
 		kc.WithLogger(logger),
