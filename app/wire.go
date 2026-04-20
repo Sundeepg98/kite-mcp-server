@@ -336,12 +336,17 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// SIGHUP hot-reload for per-tool rate-limit caps. Operators can
 	// retune throttles mid-incident without redeploying: edit
 	// KITE_RATELIMIT, signal the process, and the new caps land
-	// atomically with in-flight counters preserved. The goroutine
-	// dies with the process — no shutdown hook needed because it
-	// holds no persistent resources. See app/ratelimit_reload.go for
-	// the env format and design rationale. No-op on Windows where
-	// signal.Notify(SIGHUP) is a platform no-op.
-	_ = startRateLimitReloadLoop(toolRateLimiter, app.logger, nil)
+	// atomically with in-flight counters preserved.
+	//
+	// Wire a per-App stop channel so the goroutine exits at graceful
+	// shutdown rather than living for the process lifetime. Production
+	// used to run with a nil stopCh (goroutine died with the process);
+	// this closed an annoying hole in the test leak-audit because
+	// every test that exercised wire.go leaked this goroutine. See
+	// app/ratelimit_reload.go for the env format and design rationale.
+	// No-op on Windows where signal.Notify(SIGHUP) is a platform no-op.
+	app.rateLimitReloadStop = make(chan struct{})
+	_ = startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
 	app.logger.Info("SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
 	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
 	// Skipped entirely in DEV_MODE — all tools are free tier.

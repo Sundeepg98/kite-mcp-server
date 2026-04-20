@@ -111,6 +111,7 @@ func cleanupInitializeServices(app *App, mgr *kc.Manager) {
 	if app.rateLimiters != nil {
 		app.rateLimiters.Stop()
 	}
+	app.stopRateLimitReload()
 	if app.invitationCleanupCancel != nil {
 		app.invitationCleanupCancel()
 	}

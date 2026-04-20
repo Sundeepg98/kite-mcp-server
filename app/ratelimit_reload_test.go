@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -99,4 +100,75 @@ func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("SIGHUP reload did not update limits within timeout; got %+v", rl.CurrentLimits())
+}
+
+// TestStartRateLimitReloadLoop_StopChanExits proves closing stopCh causes
+// the background goroutine to exit cleanly. Regression for Apr-2026 leak
+// audit where wire.go fired the loop with a nil stopCh — the goroutine
+// then lived for the process lifetime and leaked into every test using
+// goleak-style sentinels.
+func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
+	t.Parallel()
+
+	rl := mcp.NewToolRateLimiter(map[string]int{"place_order": 100})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stopCh := make(chan struct{})
+
+	// Measure goroutine count before + after to verify the loop terminated.
+	// Using a baseline bump instead of strict equality because the test
+	// runtime has other ambient goroutines that may fluctuate.
+	beforeLoop := runtime.NumGoroutine()
+	_ = startRateLimitReloadLoop(rl, logger, stopCh)
+	afterStart := runtime.NumGoroutine()
+	require.Greater(t, afterStart, beforeLoop, "startRateLimitReloadLoop should spawn a goroutine")
+
+	close(stopCh)
+
+	// The goroutine exits via the `case <-stopCh:` branch; allow up to 2s
+	// for the scheduler to drop it. In practice this resolves in microseconds.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		runtime.GC()
+		if runtime.NumGoroutine() <= beforeLoop+1 { // +1 absorbs timer/test noise
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("reload-loop goroutine did not exit after stopCh closed (before=%d after=%d)",
+		beforeLoop, runtime.NumGoroutine())
+}
+
+// TestApp_StopRateLimitReload_Idempotent verifies the App helper that
+// closes rateLimitReloadStop is safe to call multiple times. Both the
+// graceful-shutdown path and cleanupInitializeServices call it, so a
+// full integration test path ends up double-calling.
+func TestApp_StopRateLimitReload_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	app := &App{rateLimitReloadStop: make(chan struct{})}
+	// Four calls — any of these panicking ("close of closed channel")
+	// would fail the test and flag the regression.
+	app.stopRateLimitReload()
+	app.stopRateLimitReload()
+	app.stopRateLimitReload()
+	app.stopRateLimitReload()
+
+	// Channel must actually be closed.
+	select {
+	case _, ok := <-app.rateLimitReloadStop:
+		assert.False(t, ok, "rateLimitReloadStop should be closed after stopRateLimitReload")
+	default:
+		t.Fatal("rateLimitReloadStop should be closed; read blocked")
+	}
+}
+
+// TestApp_StopRateLimitReload_NilChannel verifies the helper is a safe
+// no-op when rateLimitReloadStop was never initialized (e.g., tests that
+// construct an App directly without calling wire.go).
+func TestApp_StopRateLimitReload_NilChannel(t *testing.T) {
+	t.Parallel()
+
+	app := &App{}
+	// Must not panic.
+	app.stopRateLimitReload()
 }

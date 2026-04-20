@@ -68,6 +68,12 @@ type App struct {
 	// exit. nil when the goroutine was never started (no alert DB). Cancel
 	// is idempotent — calling it twice is a no-op.
 	invitationCleanupCancel context.CancelFunc
+	// rateLimitReloadStop signals the SIGHUP rate-limit reload loop to
+	// exit. Closed during setupGracefulShutdown (and cleanupInitializeServices
+	// in tests). rateLimitReloadStopOnce guards the close so teardown is
+	// idempotent — production and test paths can both call without panic.
+	rateLimitReloadStop     chan struct{}
+	rateLimitReloadStopOnce sync.Once
 	// shutdownOnce guards the one-shot close of shutdownCh performed by
 	// TriggerShutdown. Multiple SIGUSR2 in quick succession, or a
 	// SIGUSR2 racing with the normal SIGTERM path, must NOT panic
@@ -105,6 +111,19 @@ func (app *App) TriggerShutdown() {
 		if p, err := os.FindProcess(os.Getpid()); err == nil {
 			_ = p.Signal(syscall.SIGTERM)
 		}
+	})
+}
+
+// stopRateLimitReload closes rateLimitReloadStop exactly once, signalling
+// the SIGHUP reload goroutine to exit. Safe to call multiple times and from
+// multiple paths (graceful shutdown, test cleanup, unit tests that wire
+// rate-limit middleware without a full server).
+func (app *App) stopRateLimitReload() {
+	if app.rateLimitReloadStop == nil {
+		return
+	}
+	app.rateLimitReloadStopOnce.Do(func() {
+		close(app.rateLimitReloadStop)
 	})
 }
 

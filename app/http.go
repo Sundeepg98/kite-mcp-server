@@ -106,6 +106,10 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.rateLimiters.Stop()
 		}
 
+		// Stop the SIGHUP rate-limit hot-reload goroutine (idempotent no-op
+		// if never wired — stopRateLimitReload guards the channel internally).
+		app.stopRateLimitReload()
+
 		// Stop the invitation-cleanup goroutine (idempotent no-op if never started).
 		if app.invitationCleanupCancel != nil {
 			app.invitationCleanupCancel()
