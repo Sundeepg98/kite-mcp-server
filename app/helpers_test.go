@@ -49,8 +49,19 @@ func testLogger() *slog.Logger {
 // runs — stopOnce on shutdownCh is handled by closeShutdownOnce.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
-	t.Setenv("INSTRUMENTS_SKIP_FETCH", "true")
-	app := NewApp(testLogger())
+	// Start from the ambient env so existing tests that pre-Setenv
+	// KITE_API_KEY et al still see those values, then force-override
+	// InstrumentsSkipFetch=true via the Config field (replaces the prior
+	// t.Setenv("INSTRUMENTS_SKIP_FETCH", "true") — that env read is now
+	// sourced from Config.InstrumentsSkipFetch, not from os.Getenv at
+	// call time). Tests keep their t.Setenv semantics for other env vars
+	// because ConfigFromEnv still reads them, and we don't call t.Setenv
+	// ourselves — which means tests that go via newTestApp still can't
+	// use t.Parallel (they retain their pre-existing env-mutation pattern).
+	// For t.Parallel tests, use newTestAppWithConfig with an explicit Config.
+	cfg := ConfigFromEnv()
+	cfg.InstrumentsSkipFetch = true
+	app := NewAppWithConfig(cfg, testLogger())
 	registerTestAppCleanup(t, app)
 	return app
 }

@@ -32,27 +32,29 @@ import (
 //	AdminEmails        <- ADMIN_EMAILS
 //	GoogleClientID     <- GOOGLE_CLIENT_ID
 //	GoogleClientSecret <- GOOGLE_CLIENT_SECRET
-//	EnableTrading      <- ENABLE_TRADING == "true" (case-insensitive)
+//	EnableTrading        <- ENABLE_TRADING == "true" (case-insensitive)
+//	InstrumentsSkipFetch <- INSTRUMENTS_SKIP_FETCH == "true" (case-insensitive)
 //
 // Defaults are applied via WithDefaults when the caller opts in.
 func ConfigFromEnv() *Config {
 	return &Config{
-		KiteAPIKey:         os.Getenv("KITE_API_KEY"),
-		KiteAPISecret:      os.Getenv("KITE_API_SECRET"),
-		KiteAccessToken:    os.Getenv("KITE_ACCESS_TOKEN"),
-		AppMode:            os.Getenv("APP_MODE"),
-		AppPort:            os.Getenv("APP_PORT"),
-		AppHost:            os.Getenv("APP_HOST"),
-		ExcludedTools:      os.Getenv("EXCLUDED_TOOLS"),
-		AdminSecretPath:    os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
-		OAuthJWTSecret:     os.Getenv("OAUTH_JWT_SECRET"),
-		ExternalURL:        os.Getenv("EXTERNAL_URL"),
-		TelegramBotToken:   os.Getenv("TELEGRAM_BOT_TOKEN"),
-		AlertDBPath:        os.Getenv("ALERT_DB_PATH"),
-		AdminEmails:        os.Getenv("ADMIN_EMAILS"),
-		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		EnableTrading:      strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
+		KiteAPIKey:           os.Getenv("KITE_API_KEY"),
+		KiteAPISecret:        os.Getenv("KITE_API_SECRET"),
+		KiteAccessToken:      os.Getenv("KITE_ACCESS_TOKEN"),
+		AppMode:              os.Getenv("APP_MODE"),
+		AppPort:              os.Getenv("APP_PORT"),
+		AppHost:              os.Getenv("APP_HOST"),
+		ExcludedTools:        os.Getenv("EXCLUDED_TOOLS"),
+		AdminSecretPath:      os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+		OAuthJWTSecret:       os.Getenv("OAUTH_JWT_SECRET"),
+		ExternalURL:          os.Getenv("EXTERNAL_URL"),
+		TelegramBotToken:     os.Getenv("TELEGRAM_BOT_TOKEN"),
+		AlertDBPath:          os.Getenv("ALERT_DB_PATH"),
+		AdminEmails:          os.Getenv("ADMIN_EMAILS"),
+		GoogleClientID:       os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret:   os.Getenv("GOOGLE_CLIENT_SECRET"),
+		EnableTrading:        strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
+		InstrumentsSkipFetch: strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true"),
 	}
 }
 

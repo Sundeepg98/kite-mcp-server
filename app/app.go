@@ -318,6 +318,15 @@ type Config struct {
 	// Algo and will be required to be tagged"). Local single-user
 	// builds set ENABLE_TRADING=true to unlock order placement.
 	EnableTrading bool
+
+	// InstrumentsSkipFetch is a test-only seam (INSTRUMENTS_SKIP_FETCH env
+	// var) that causes the instruments manager to load an empty map instead
+	// of fetching api.kite.trade/instruments.json at startup. Lives on the
+	// Config so tests can set it via struct literal and drop t.Setenv, which
+	// unblocks t.Parallel for any test that calls initializeServices.
+	//
+	// Must never be set in production.
+	InstrumentsSkipFetch bool
 }
 
 // Server mode constants

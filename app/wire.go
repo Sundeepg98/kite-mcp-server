@@ -30,12 +30,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		return nil, nil, fmt.Errorf("environment validation failed: %w", err)
 	}
 	app.logger.Info("Creating Kite Connect manager...")
-	// INSTRUMENTS_SKIP_FETCH=true is a test-only seam that causes the
-	// instruments manager to load an empty map instead of fetching
-	// api.kite.trade/instruments.json at startup. Used by newTestApp(t)
-	// to isolate the test suite from external API rate limits. Never set
-	// in production.
-	skipInstrumentsFetch := strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true")
+	// InstrumentsSkipFetch is a test-only seam that causes the instruments
+	// manager to load an empty map instead of fetching
+	// api.kite.trade/instruments.json at startup. Populated from the
+	// INSTRUMENTS_SKIP_FETCH env var by ConfigFromEnv; tests that drop
+	// t.Setenv in favour of t.Parallel pass it via the Config struct
+	// literal instead. Never set in production.
+	skipInstrumentsFetch := app.Config.InstrumentsSkipFetch
 
 	// Migrated to kc.NewWithOptions — the functional-options pattern
 	// aligns with the rest of the codebase (testutil/kcfixture,
