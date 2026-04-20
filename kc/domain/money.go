@@ -17,9 +17,23 @@ type Money struct {
 	Currency string
 }
 
-// NewINR creates a Money value in Indian Rupees.
+// NewINR creates a Money value in Indian Rupees without validation.
+// Kept for existing callers that intentionally pass zero/negative values
+// (adjustments, PnL deltas). New call sites that must reject invalid
+// amounts should prefer NewMoney.
 func NewINR(amount float64) Money {
 	return Money{Amount: amount, Currency: "INR"}
+}
+
+// NewMoney creates a validated Money value in INR. Rejects amounts that are
+// not strictly positive — the canonical "price must be > 0" invariant for
+// LIMIT/SL orders. Zero is rejected so that the zero-value Money can be
+// detected as "no price set" via IsPositive.
+func NewMoney(amount float64) (Money, error) {
+	if amount <= 0 {
+		return Money{}, fmt.Errorf("domain: money amount must be positive, got %v", amount)
+	}
+	return Money{Amount: amount, Currency: "INR"}, nil
 }
 
 // Add returns a new Money that is the sum of m and other.
