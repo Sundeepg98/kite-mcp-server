@@ -111,7 +111,14 @@ func resolveVersionInfo() {
 // of the codebase ("true"/"1"/"yes"/"on" — case-insensitive).
 // Extracted so tests can pin behaviour without spinning up the whole handler.
 func readEnableTradingFlag() bool {
-	return SafeAssertBool(os.Getenv("ENABLE_TRADING"), false)
+	return parseEnableTradingFlag(os.Getenv("ENABLE_TRADING"))
+}
+
+// parseEnableTradingFlag is the pure truthy-check over a raw value.
+// Callers pass os.Getenv("ENABLE_TRADING") explicitly so tests can exercise
+// the parser without t.Setenv and run in parallel.
+func parseEnableTradingFlag(raw string) bool {
+	return SafeAssertBool(raw, false)
 }
 
 func (*ServerVersionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {

@@ -97,15 +97,18 @@ func TestCleanupOldRecords_ReturnsDeletedCount(t *testing.T) {
 	assert.Equal(t, int64(0), deleted, "second cleanup should delete 0 rows")
 }
 
-// TestRetentionDaysFromEnv verifies AUDIT_RETENTION_DAYS env var parsing.
+// TestParseRetentionDays verifies retention-days parsing.
 // 0, negative, or invalid values are treated as "use default"; positive
 // integers override the default.
-func TestRetentionDaysFromEnv(t *testing.T) {
+//
+// Pure parser — no env read, so the test runs in parallel.
+func TestParseRetentionDays(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name    string
-		envVal  string // "" means env var unset
-		defVal  int
-		want    int
+		name   string
+		raw    string
+		defVal int
+		want   int
 	}{
 		{"unset uses default", "", 90, 90},
 		{"explicit 30 overrides", "30", 90, 30},
@@ -118,12 +121,8 @@ func TestRetentionDaysFromEnv(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.envVal == "" {
-				t.Setenv("AUDIT_RETENTION_DAYS", "")
-			} else {
-				t.Setenv("AUDIT_RETENTION_DAYS", tc.envVal)
-			}
-			got := retentionDaysFromEnv(tc.defVal)
+			t.Parallel()
+			got := ParseRetentionDays(tc.raw, tc.defVal)
 			assert.Equal(t, tc.want, got)
 		})
 	}

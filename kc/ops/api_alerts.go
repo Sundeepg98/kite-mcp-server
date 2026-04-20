@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -137,7 +138,12 @@ func (h *AlertsHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request
 			http.Error(w, "alert_id required", http.StatusBadRequest)
 			return
 		}
-		if err := d.manager.AlertStore().Delete(email, alertID); err != nil {
+		// Phase B-Audit: dashboard alert delete routes through CommandBus
+		// so the lifecycle write gets the bus's audit/observability layer.
+		if _, err := d.manager.CommandBus().DispatchWithResult(r.Context(), cqrs.DeleteAlertCommand{
+			Email:   email,
+			AlertID: alertID,
+		}); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

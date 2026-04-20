@@ -325,56 +325,60 @@ func TestUICapabilityExtensionKey(t *testing.T) {
 }
 
 func TestClientSupportsUI(t *testing.T) {
-	// Isolate from any ambient MCP_UI_ENABLED setting in the test environment.
-	t.Setenv("MCP_UI_ENABLED", "")
+	// Pure override — no t.Setenv, runs in parallel.
+	t.Parallel()
 
 	t.Run("returns true when client advertises ui extension", func(t *testing.T) {
+		t.Parallel()
 		caps := gomcp.ClientCapabilities{
 			Extensions: map[string]any{
 				UICapabilityExtensionKey: map[string]any{},
 			},
 		}
-		assert.True(t, clientSupportsUI(caps))
+		assert.True(t, clientSupportsUIWithOverride(caps, ""))
 	})
 
 	t.Run("returns true when client declares ui extension under experimental", func(t *testing.T) {
+		t.Parallel()
 		// Some clients adopt the extension before moving out of experimental.
 		caps := gomcp.ClientCapabilities{
 			Experimental: map[string]any{
 				UICapabilityExtensionKey: map[string]any{},
 			},
 		}
-		assert.True(t, clientSupportsUI(caps))
+		assert.True(t, clientSupportsUIWithOverride(caps, ""))
 	})
 
 	t.Run("returns false when client omits ui extension", func(t *testing.T) {
+		t.Parallel()
 		caps := gomcp.ClientCapabilities{
 			Extensions: map[string]any{
 				"some.other.extension": map[string]any{},
 			},
 		}
-		assert.False(t, clientSupportsUI(caps))
+		assert.False(t, clientSupportsUIWithOverride(caps, ""))
 	})
 
 	t.Run("returns false when capabilities are empty", func(t *testing.T) {
-		assert.False(t, clientSupportsUI(gomcp.ClientCapabilities{}))
+		t.Parallel()
+		assert.False(t, clientSupportsUIWithOverride(gomcp.ClientCapabilities{}, ""))
 	})
 
-	t.Run("env var MCP_UI_ENABLED=false forces disable even if client advertises", func(t *testing.T) {
-		t.Setenv("MCP_UI_ENABLED", "false")
+	t.Run("kill-switch false forces disable even if client advertises", func(t *testing.T) {
+		t.Parallel()
 		caps := gomcp.ClientCapabilities{
 			Extensions: map[string]any{UICapabilityExtensionKey: map[string]any{}},
 		}
-		assert.False(t, clientSupportsUI(caps),
+		assert.False(t, clientSupportsUIWithOverride(caps, "false"),
 			"operator kill-switch MCP_UI_ENABLED=false must win over client advertisement")
 	})
 
-	t.Run("env var MCP_UI_ENABLED=true does not force enable when client omits", func(t *testing.T) {
-		// The env var is a kill-switch only; it cannot force-enable widgets
+	t.Run("kill-switch true does not force enable when client omits", func(t *testing.T) {
+		t.Parallel()
+		// The kill-switch can only disable; it cannot force-enable widgets
 		// on a client that didn't advertise support. Any other semantics
 		// would produce noise on non-widget hosts (the exact bug we're fixing).
-		t.Setenv("MCP_UI_ENABLED", "true")
-		assert.False(t, clientSupportsUI(gomcp.ClientCapabilities{}),
+		assert.False(t, clientSupportsUIWithOverride(gomcp.ClientCapabilities{}, "true"),
 			"capability advertisement is the authoritative source — env var cannot forge it")
 	})
 }

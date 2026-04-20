@@ -59,7 +59,14 @@ const (
 // is buggy in production), but cannot force-enable on a client that
 // didn't advertise — that would reintroduce the noise bug.
 func clientSupportsUI(caps gomcp.ClientCapabilities) bool {
-	if os.Getenv("MCP_UI_ENABLED") == "false" {
+	return clientSupportsUIWithOverride(caps, os.Getenv("MCP_UI_ENABLED"))
+}
+
+// clientSupportsUIWithOverride is the pure capability-check used by tests.
+// It takes the kill-switch string (typically MCP_UI_ENABLED) explicitly so
+// table-driven tests can run in parallel without t.Setenv.
+func clientSupportsUIWithOverride(caps gomcp.ClientCapabilities, killSwitch string) bool {
+	if killSwitch == "false" {
 		return false
 	}
 	if caps.Extensions != nil {

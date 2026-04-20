@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"os"
 	"strconv"
 	"time"
 )
@@ -40,17 +39,20 @@ func (s *Store) CleanupOldRecords(days int) (int64, error) {
 	return s.DeleteOlderThan(cutoff)
 }
 
-// retentionDaysFromEnv returns the effective retention window in days.
+// ParseRetentionDays parses the effective retention window in days from a
+// raw string value (typically AUDIT_RETENTION_DAYS from the environment).
 //
 // Resolution order:
-//  1. AUDIT_RETENTION_DAYS env var if set to a non-empty parseable integer
+//  1. raw if a non-empty parseable integer
 //     (including 0 or negative — which disable retention).
 //  2. Otherwise the provided defaultDays.
 //
 // Unparseable values (non-numeric garbage) fall back to the default so a
 // typo'd env var does not silently disable audit retention.
-func retentionDaysFromEnv(defaultDays int) int {
-	raw := os.Getenv("AUDIT_RETENTION_DAYS")
+//
+// Pure function — no env read. Callers pass os.Getenv("AUDIT_RETENTION_DAYS")
+// explicitly so tests can exercise the parser without t.Setenv.
+func ParseRetentionDays(raw string, defaultDays int) int {
 	if raw == "" {
 		return defaultDays
 	}

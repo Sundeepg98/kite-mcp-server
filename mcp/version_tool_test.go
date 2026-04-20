@@ -99,40 +99,28 @@ func TestServerVersion_NoSecretLeaks(t *testing.T) {
 	}
 }
 
-// TestServerVersion_EnvFlags_TradingFlagReflectsEnv verifies env_flags mirrors
-// the ENABLE_TRADING env var. Default (unset / empty / "false") → false,
-// "true" → true. We set via t.Setenv so the helper is exercised cleanly.
-func TestServerVersion_EnvFlags_TradingFlagReflectsEnv(t *testing.T) {
+// TestParseEnableTradingFlag verifies the pure ENABLE_TRADING parser.
+// Default (empty / "false") → false, "true"/"1"/"yes"/"on" → true.
+// Pure parser — no env read, so the test runs in parallel.
+func TestParseEnableTradingFlag(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name    string
-		envVal  string
-		want    bool
-		setEnv  bool
+		name string
+		raw  string
+		want bool
 	}{
-		{"unset defaults to false", "", false, false},
-		{"empty defaults to false", "", false, true},
-		{"explicit false", "false", false, true},
-		{"explicit true", "true", true, true},
-		{"mixed-case True", "True", true, true},
-		{"1 is true", "1", true, true},
+		{"empty defaults to false", "", false},
+		{"explicit false", "false", false},
+		{"explicit true", "true", true},
+		{"mixed-case True", "True", true},
+		{"1 is true", "1", true},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			// Can't run parallel — we mutate the process env.
-			if tc.setEnv {
-				t.Setenv("ENABLE_TRADING", tc.envVal)
-			} else {
-				// Make sure the var is absent for the "unset" case.
-				t.Setenv("ENABLE_TRADING", "")
-			}
-			got := readEnableTradingFlag()
-			if tc.envVal == "" && !tc.setEnv {
-				// "unset" path: Setenv still sets it to empty, which readEnableTradingFlag treats as false.
-				assert.Equal(t, tc.want, got)
-				return
-			}
-			assert.Equal(t, tc.want, got, "readEnableTradingFlag for ENABLE_TRADING=%q", tc.envVal)
+			t.Parallel()
+			got := parseEnableTradingFlag(tc.raw)
+			assert.Equal(t, tc.want, got, "parseEnableTradingFlag(%q)", tc.raw)
 		})
 	}
 }
