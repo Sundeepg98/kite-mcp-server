@@ -144,6 +144,10 @@ type PaperEngineProvider interface {
 }
 
 // InstrumentsManagerProvider exposes the instruments manager.
+//
+// Deprecated: prefer ports.InstrumentPort (kc/ports/instrument.go) which
+// composes the 5 instrument accessors (abstract+concrete manager, stats,
+// config, force-update).
 type InstrumentsManagerProvider interface {
 	InstrumentsManager() InstrumentManagerInterface
 }

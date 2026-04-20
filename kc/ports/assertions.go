@@ -14,4 +14,5 @@ var (
 	_ CredentialPort = (*kc.Manager)(nil)
 	_ AlertPort      = (*kc.Manager)(nil)
 	_ OrderPort      = (*kc.Manager)(nil)
+	_ InstrumentPort = (*kc.Manager)(nil)
 )
