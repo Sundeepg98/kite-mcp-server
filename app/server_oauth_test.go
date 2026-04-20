@@ -77,12 +77,13 @@ func TestRegisterSSEEndpoints_NoOAuth(t *testing.T) {
 
 
 func TestSetupMux_Callback_DefaultFlow(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -102,12 +103,13 @@ func TestSetupMux_Callback_DefaultFlow(t *testing.T) {
 
 
 func TestSetupMux_Callback_OAuthFlow_NoHandler(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = nil
 	_ = app.initStatusPageTemplate()
@@ -204,12 +206,7 @@ func TestExchangeWithCredentials_Error(t *testing.T) {
 // setupMux — invitation acceptance route
 // ---------------------------------------------------------------------------
 func TestSetupMux_AcceptInvite_MissingToken(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
 		TestData: map[uint32]*instruments.Instrument{},
@@ -227,9 +224,14 @@ func TestSetupMux_AcceptInvite_MissingToken(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -250,19 +252,17 @@ func TestSetupMux_AcceptInvite_MissingToken(t *testing.T) {
 // setupMux — Google SSO config (without OAuth handler → just stored)
 // ---------------------------------------------------------------------------
 func TestSetupMux_GoogleSSOConfig(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
-	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		GoogleClientID:       "google-id",
+		GoogleClientSecret:   "google-secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
-	app.Config.GoogleClientID = "google-id"
-	app.Config.GoogleClientSecret = "google-secret"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -319,15 +319,15 @@ func TestRegisterSSEEndpoints_MessagePost(t *testing.T) {
 // setupMux — test admin auth redirect on /admin/ops when no cookie
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_Redirect(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 	_ = app.initStatusPageTemplate()
 
 	mux := app.setupMux(mgr)
@@ -372,16 +372,16 @@ func TestRegisterSSEEndpoints_WithOAuth(t *testing.T) {
 // setupMux — with OAuth handler (exercises OAuth route registration)
 // ---------------------------------------------------------------------------
 func TestSetupMux_WithOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		ExternalURL:          "http://localhost:9999",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
-	app.Config.ExternalURL = "http://localhost:9999"
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
 
@@ -454,12 +454,13 @@ func TestExchangeWithCredentials_BadToken(t *testing.T) {
 // setupMux — serveStatusPage OAuth redirect branch
 // ---------------------------------------------------------------------------
 func TestServeStatusPage_OAuthRedirect(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	app.oauthHandler = newTestOAuthHandler(t)
 	_ = app.initStatusPageTemplate()
@@ -486,15 +487,15 @@ func TestServeStatusPage_OAuthRedirect(t *testing.T) {
 // setupMux — admin auth middleware: forbidden for non-admin
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_Forbidden(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "real-admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "real-admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "real-admin@test.com"
 
 	// Use a real OAuth handler that can issue/validate JWTs
 	oauthCfg := &oauth.Config{
@@ -540,15 +541,15 @@ func TestSetupMux_AdminAuth_Forbidden(t *testing.T) {
 // setupMux — admin auth middleware: valid admin gets through
 // ---------------------------------------------------------------------------
 func TestSetupMux_AdminAuth_ValidAdmin(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
+	t.Parallel()
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AdminEmails = "admin@test.com"
 
 	oauthCfg := &oauth.Config{
 		KiteAPIKey:  "test-key",
