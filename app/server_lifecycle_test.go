@@ -40,6 +40,7 @@ import (
 // createSSEServer tests
 // ---------------------------------------------------------------------------
 func TestCreateSSEServer(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	mcpSrv := newTestMCPServer()
 	sse := app.createSSEServer(mcpSrv, "localhost:9999")
@@ -51,6 +52,7 @@ func TestCreateSSEServer(t *testing.T) {
 // createStreamableHTTPServer tests
 // ---------------------------------------------------------------------------
 func TestCreateStreamableHTTPServer(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	app := newTestApp(t)
 	streamable := app.createStreamableHTTPServer(newTestMCPServer(), mgr)
@@ -62,6 +64,7 @@ func TestCreateStreamableHTTPServer(t *testing.T) {
 // serveHTTPServer — pre-occupied port to cover error path
 // ---------------------------------------------------------------------------
 func TestServeHTTPServer_PortInUse(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 
 	// Bind a port so ListenAndServe will fail.
@@ -80,6 +83,7 @@ func TestServeHTTPServer_PortInUse(t *testing.T) {
 // configureAndStartServer — pre-occupied port to cover code path
 // ---------------------------------------------------------------------------
 func TestConfigureAndStartServer_PortInUse(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -103,6 +107,7 @@ func TestConfigureAndStartServer_PortInUse(t *testing.T) {
 // setupGracefulShutdown — basic wiring
 // ---------------------------------------------------------------------------
 func TestSetupGracefulShutdown_Basic(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	app := newTestApp(t)
 	srv := &http.Server{Addr: "127.0.0.1:0"}
@@ -1092,6 +1097,7 @@ func TestInitializeServices_ProdMode(t *testing.T) {
 // setupGracefulShutdown — verify shutdown sequence runs
 // ---------------------------------------------------------------------------
 func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 
 	db, err := alerts.OpenDB(":memory:")
@@ -1227,6 +1233,7 @@ func TestStartServer_StdIOMode(t *testing.T) {
 // startServer — default/invalid mode returns error
 // ---------------------------------------------------------------------------
 func TestStartServer_DefaultInvalidMode(t *testing.T) {
+	t.Parallel()
 	app := &App{
 		Config: &Config{AppMode: "banana"},
 		logger: testLogger(),
@@ -1241,6 +1248,7 @@ func TestStartServer_DefaultInvalidMode(t *testing.T) {
 // createHTTPServer — verify fields
 // ---------------------------------------------------------------------------
 func TestCreateHTTPServer_Fields(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	srv := app.createHTTPServer("localhost:8080")
 	assert.Equal(t, "localhost:8080", srv.Addr)
@@ -1554,6 +1562,7 @@ func TestInitializeServices_WithDB_FullSetup(t *testing.T) {
 // setupGracefulShutdown — signal-based test
 // ===========================================================================
 func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("CI") == "" {
 		// On Windows, os.Interrupt cannot be sent via p.Signal().
 		// On Linux CI this test works. Skip locally to avoid flakes.
@@ -1604,6 +1613,7 @@ func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
 // initializeServices — exercising the deeper branches with more config
 // ===========================================================================
 func TestInitializeServices_WithAdminEmails(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	app.Config = &Config{
 		KiteAPIKey:     "test-key",
@@ -1625,6 +1635,7 @@ func TestInitializeServices_WithAdminEmails(t *testing.T) {
 
 
 func TestInitializeServices_DevMode(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	app.DevMode = true
 	app.Config = &Config{
