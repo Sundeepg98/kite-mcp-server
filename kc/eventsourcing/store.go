@@ -25,6 +25,13 @@ import (
 
 // StoredEvent is the persistent representation of a domain event.
 // All events are stored in a single table, keyed by aggregate ID and type.
+//
+// EmailHash is the SHA-256 hex digest of the lowercased email associated
+// with the event (PR-D Item 2). Empty for events with no user-association
+// (system events, alert.triggered without recipient context). The audit
+// log uses email_hash as the canonical user identifier so the
+// domain_events table never carries plaintext PII — DPDP minimisation
+// principle.
 type StoredEvent struct {
 	ID            string    `json:"id"`
 	AggregateID   string    `json:"aggregate_id"`   // e.g., order ID
@@ -33,6 +40,7 @@ type StoredEvent struct {
 	Payload       []byte    `json:"payload"`         // JSON-serialized event data
 	OccurredAt    time.Time `json:"occurred_at"`
 	Sequence      int64     `json:"sequence"`        // auto-incremented per aggregate
+	EmailHash     string    `json:"email_hash,omitempty"` // SHA-256 hex of lowercased email; empty for system events
 }
 
 // EventStore provides append-only persistence for domain events backed by SQLite.
@@ -60,13 +68,21 @@ CREATE TABLE IF NOT EXISTS domain_events (
     event_type      TEXT NOT NULL,
     payload         TEXT NOT NULL,
     occurred_at     TEXT NOT NULL,
-    sequence        INTEGER NOT NULL
+    sequence        INTEGER NOT NULL,
+    email_hash      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_de_aggregate ON domain_events(aggregate_id, sequence ASC);
 CREATE INDEX IF NOT EXISTS idx_de_type ON domain_events(aggregate_type, occurred_at ASC);
 CREATE INDEX IF NOT EXISTS idx_de_occurred ON domain_events(occurred_at ASC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_de_aggregate_seq ON domain_events(aggregate_id, sequence);`
-	return s.db.ExecDDL(ddl)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_de_aggregate_seq ON domain_events(aggregate_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_de_email_hash ON domain_events(email_hash, occurred_at ASC) WHERE email_hash != '';`
+	if err := s.db.ExecDDL(ddl); err != nil {
+		return err
+	}
+	// PR-D Item 2 migration: pre-existing tables get the email_hash column
+	// added (SQLite ignores duplicate-column errors via the err discard).
+	_ = s.db.ExecDDL(`ALTER TABLE domain_events ADD COLUMN email_hash TEXT NOT NULL DEFAULT ''`)
+	return nil
 }
 
 // Append persists one or more events atomically. Each event is assigned a UUID
@@ -81,8 +97,8 @@ func (s *EventStore) Append(events ...StoredEvent) error {
 			e.ID = uuid.New().String()
 		}
 		err := s.db.ExecInsert(
-			`INSERT INTO domain_events (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO domain_events (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			e.ID,
 			e.AggregateID,
 			e.AggregateType,
@@ -90,6 +106,7 @@ func (s *EventStore) Append(events ...StoredEvent) error {
 			string(e.Payload),
 			e.OccurredAt.Format(time.RFC3339Nano),
 			e.Sequence,
+			e.EmailHash,
 		)
 		if err != nil {
 			return fmt.Errorf("eventsourcing: append event %s: %w", e.EventType, err)
@@ -104,7 +121,7 @@ func (s *EventStore) LoadEvents(aggregateID string) ([]StoredEvent, error) {
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.RawQuery(
-		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence
+		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash
 		 FROM domain_events
 		 WHERE aggregate_id = ?
 		 ORDER BY sequence ASC`,
@@ -125,7 +142,7 @@ func (s *EventStore) LoadEventsSince(since time.Time) ([]StoredEvent, error) {
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.RawQuery(
-		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence
+		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash
 		 FROM domain_events
 		 WHERE occurred_at > ?
 		 ORDER BY occurred_at ASC`,
@@ -133,6 +150,36 @@ func (s *EventStore) LoadEventsSince(since time.Time) ([]StoredEvent, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("eventsourcing: load events since %s: %w", since.Format(time.RFC3339), err)
+	}
+	defer rows.Close()
+
+	return scanEvents(rows)
+}
+
+// LoadEventsByEmailHash retrieves all events associated with the given
+// hashed email, ordered by occurred_at. Used by the data-portability
+// export (PR-D Item 3) to find every domain event a Data Principal
+// accumulated over the retention window.
+//
+// Empty emailHash returns no rows (defensive — never matches the
+// empty-string default for system events).
+func (s *EventStore) LoadEventsByEmailHash(emailHash string, since time.Time) ([]StoredEvent, error) {
+	if emailHash == "" {
+		return nil, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.RawQuery(
+		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash
+		 FROM domain_events
+		 WHERE email_hash = ? AND occurred_at >= ?
+		 ORDER BY occurred_at ASC`,
+		emailHash,
+		since.Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("eventsourcing: load events by email_hash: %w", err)
 	}
 	defer rows.Close()
 
@@ -153,6 +200,10 @@ func (s *EventStore) NextSequence(aggregateID string) (int64, error) {
 }
 
 // scanEvents scans rows from a domain_events query into a slice of StoredEvent.
+// Expects 8 columns: (id, aggregate_id, aggregate_type, event_type, payload,
+// occurred_at, sequence, email_hash). Callers using the legacy 7-column
+// projection should migrate — every prod query path includes email_hash
+// after PR-D Item 2.
 func scanEvents(rows interface {
 	Next() bool
 	Scan(dest ...any) error
@@ -163,7 +214,7 @@ func scanEvents(rows interface {
 		var e StoredEvent
 		var occurredAtStr string
 		var payload string
-		if err := rows.Scan(&e.ID, &e.AggregateID, &e.AggregateType, &e.EventType, &payload, &occurredAtStr, &e.Sequence); err != nil {
+		if err := rows.Scan(&e.ID, &e.AggregateID, &e.AggregateType, &e.EventType, &payload, &occurredAtStr, &e.Sequence, &e.EmailHash); err != nil {
 			return nil, fmt.Errorf("eventsourcing: scan event: %w", err)
 		}
 		e.Payload = []byte(payload)

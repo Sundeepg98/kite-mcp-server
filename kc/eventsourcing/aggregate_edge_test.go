@@ -313,7 +313,8 @@ func (m *mockRows) Err() error {
 func TestScanEvents_ScanError(t *testing.T) {
 	t.Parallel()
 	rows := &mockRows{
-		data:    [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "2026-01-01T00:00:00Z", int64(1)}},
+		// 8 cols after PR-D Item 2 (added email_hash).
+		data:    [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "2026-01-01T00:00:00Z", int64(1), ""}},
 		scanErr: fmt.Errorf("scan failed"),
 	}
 	_, err := scanEvents(rows)
@@ -324,7 +325,7 @@ func TestScanEvents_ScanError(t *testing.T) {
 func TestScanEvents_BadTimestamp(t *testing.T) {
 	t.Parallel()
 	rows := &mockRows{
-		data: [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "not-a-time", int64(1)}},
+		data: [][]interface{}{{"id", "agg", "aggtype", "evtype", "{}", "not-a-time", int64(1), ""}},
 	}
 	_, err := scanEvents(rows)
 	assert.Error(t, err)
@@ -346,8 +347,8 @@ func TestScanEvents_Success(t *testing.T) {
 	t.Parallel()
 	rows := &mockRows{
 		data: [][]interface{}{
-			{"id1", "agg1", "Order", "OrderPlaced", `{"email":"u@test.com"}`, "2026-01-01T10:00:00Z", int64(1)},
-			{"id2", "agg1", "Order", "OrderFilled", `{"filled_price":100}`, "2026-01-01T10:01:00Z", int64(2)},
+			{"id1", "agg1", "Order", "OrderPlaced", `{"email":"u@test.com"}`, "2026-01-01T10:00:00Z", int64(1), "h1"},
+			{"id2", "agg1", "Order", "OrderFilled", `{"filled_price":100}`, "2026-01-01T10:01:00Z", int64(2), "h1"},
 		},
 	}
 	events, err := scanEvents(rows)
@@ -355,6 +356,7 @@ func TestScanEvents_Success(t *testing.T) {
 	assert.Len(t, events, 2)
 	assert.Equal(t, "id1", events[0].ID)
 	assert.Equal(t, "OrderPlaced", events[0].EventType)
+	assert.Equal(t, "h1", events[0].EmailHash, "PR-D Item 2: email_hash threaded through scan")
 }
 
 // =============================================================================

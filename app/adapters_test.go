@@ -18,6 +18,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
@@ -374,6 +375,61 @@ func TestDeriveAggregateID_PositionOpened(t *testing.T) {
 	result := deriveAggregateID(ev)
 	assert.Equal(t, "alice@example.com:NSE:HDFC:CNC", result)
 	assert.NotEqual(t, "unknown", result, "P1 regression: PositionOpenedEvent must not fall through to unknown")
+}
+
+// ===========================================================================
+// PR-D Item 2: deriveEmailHash — PII consistency on the persister boundary
+// ===========================================================================
+
+// TestDeriveEmailHash_OrderPlaced verifies the hash matches audit.HashEmail
+// — same canonical form the consent log uses, so cross-table joins via
+// email_hash work without re-hashing.
+func TestDeriveEmailHash_OrderPlaced(t *testing.T) {
+	t.Parallel()
+	ev := domain.OrderPlacedEvent{
+		Email:   "Alice@Example.COM",
+		OrderID: "ORD-1",
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("alice@example.com")
+	assert.Equal(t, want, got)
+	assert.NotEqual(t, "", got, "Email-bearing event must produce non-empty hash")
+}
+
+func TestDeriveEmailHash_FamilyInvitedHashesAdmin(t *testing.T) {
+	t.Parallel()
+	// Family events key on AdminEmail (the data subject doing the invite).
+	ev := domain.FamilyInvitedEvent{AdminEmail: "admin@example.com"}
+	got := deriveEmailHash(ev)
+	assert.Equal(t, audit.HashEmail("admin@example.com"), got)
+}
+
+func TestDeriveEmailHash_GlobalFreezeIsEmpty(t *testing.T) {
+	t.Parallel()
+	// System events with no user-association field return empty hash —
+	// the email_hash WHERE filter for data-portability export then
+	// correctly excludes them from per-user replay.
+	got := deriveEmailHash(domain.GlobalFreezeEvent{})
+	assert.Equal(t, "", got)
+}
+
+func TestDeriveEmailHash_Unknown(t *testing.T) {
+	t.Parallel()
+	got := deriveEmailHash(customEvent{timestamp: time.Now()})
+	assert.Equal(t, "", got)
+}
+
+func TestDeriveEmailHash_ConsentWithdrawn_PrefersPreHashed(t *testing.T) {
+	t.Parallel()
+	// ConsentWithdrawnEvent already carries a pre-computed EmailHash from
+	// the use case. The persister honours it as-is so we don't re-hash
+	// (and don't accidentally hash an empty Email when the use case
+	// chose to omit plaintext).
+	ev := domain.ConsentWithdrawnEvent{
+		Email:     "ignored-because-prehashed",
+		EmailHash: "deadbeef",
+	}
+	assert.Equal(t, "deadbeef", deriveEmailHash(ev))
 }
 
 // ===========================================================================

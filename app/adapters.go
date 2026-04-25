@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
@@ -481,6 +482,13 @@ func (a *telegramManagerAdapter) TickerServiceConcrete() *ticker.Service {
 // for compliance, debugging, and activity dashboards.
 // Each event is stored with the given aggregateType. The aggregate ID is derived from
 // the event's fields (e.g. OrderID for orders, AlertID for alerts, Email for users).
+//
+// PR-D Item 2: deriveEmailHash extracts the user-association field from
+// the typed event (Email / AdminEmail) and stores its SHA-256 hex digest
+// on StoredEvent.EmailHash. The persisted row carries the hash, never
+// the plaintext — the original event payload is JSON-marshalled as-is
+// for in-process consumers, but the indexable email_hash column gives
+// auditors and the data-portability export a PII-free correlation key.
 func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, logger *slog.Logger) func(domain.Event) {
 	return func(e domain.Event) {
 		aggregateID := deriveAggregateID(e)
@@ -501,9 +509,84 @@ func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, l
 			Payload:       payload,
 			OccurredAt:    e.OccurredAt(),
 			Sequence:      seq,
+			EmailHash:     deriveEmailHash(e),
 		}); err != nil {
 			logger.Error("Failed to persist domain event", "event_type", e.EventType(), "error", err)
 		}
+	}
+}
+
+// deriveEmailHash extracts the user-association field from a typed
+// domain.Event and returns its SHA-256 hex digest. Returns "" for
+// system events that have no user (GlobalFreezeEvent, etc.).
+//
+// Centralised here so the persister and any future direct-Append
+// callers (use cases that bypass the dispatcher path) produce
+// identical hash values.
+func deriveEmailHash(e domain.Event) string {
+	switch ev := e.(type) {
+	case domain.OrderPlacedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.OrderModifiedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.OrderCancelledEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.OrderFilledEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PositionOpenedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PositionClosedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.AlertCreatedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.AlertTriggeredEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.AlertDeletedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.UserFrozenEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.UserSuspendedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.RiskLimitBreachedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.SessionCreatedEvent:
+		return audit.HashEmail(ev.Email)
+	// SessionCleared / SessionInvalidated key by session_id only, no
+	// email field — empty hash means "session-scoped, not user-scoped".
+	case domain.FamilyInvitedEvent:
+		// Hash the admin (the data subject doing the inviting). The
+		// invited email is also user data but isn't queried-by-user
+		// in our schema; if needed a future migration can split.
+		return audit.HashEmail(ev.AdminEmail)
+	case domain.FamilyMemberRemovedEvent:
+		return audit.HashEmail(ev.AdminEmail)
+	case domain.WatchlistCreatedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.WatchlistDeletedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.WatchlistItemAddedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.WatchlistItemRemovedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.CredentialRegisteredEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.CredentialRotatedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.CredentialRevokedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.ConsentWithdrawnEvent:
+		// Already pre-hashed by the use case; pass through if non-empty.
+		if ev.EmailHash != "" {
+			return ev.EmailHash
+		}
+		return audit.HashEmail(ev.Email)
+	case domain.GlobalFreezeEvent:
+		// System event — no user-association field. Empty hash means
+		// "this row is not user-correlated" (the email_hash WHERE
+		// query won't include it, which is correct).
+		return ""
+	default:
+		return ""
 	}
 }
 

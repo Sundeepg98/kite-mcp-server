@@ -130,10 +130,16 @@ CREATE TABLE IF NOT EXISTS event_outbox (
     occurred_at     TEXT NOT NULL,
     sequence        INTEGER NOT NULL,
     inserted_at     TEXT NOT NULL,
-    processed       INTEGER NOT NULL DEFAULT 0
+    processed       INTEGER NOT NULL DEFAULT 0,
+    email_hash      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON event_outbox(processed, inserted_at ASC) WHERE processed = 0;`
-	return s.db.ExecDDL(ddl)
+	if err := s.db.ExecDDL(ddl); err != nil {
+		return err
+	}
+	// Migration for pre-PR-D outbox tables.
+	_ = s.db.ExecDDL(`ALTER TABLE event_outbox ADD COLUMN email_hash TEXT NOT NULL DEFAULT ''`)
+	return nil
 }
 
 // AppendToOutbox inserts an event into the staging outbox. The row is
@@ -153,8 +159,8 @@ func (s *EventStore) AppendToOutbox(evt StoredEvent) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	err := s.db.ExecInsert(
 		`INSERT INTO event_outbox
-		    (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, inserted_at, processed)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		    (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, inserted_at, processed, email_hash)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
 		evt.ID,
 		evt.AggregateID,
 		evt.AggregateType,
@@ -163,6 +169,7 @@ func (s *EventStore) AppendToOutbox(evt StoredEvent) error {
 		evt.OccurredAt.Format(time.RFC3339Nano),
 		evt.Sequence,
 		now,
+		evt.EmailHash,
 	)
 	if err != nil {
 		return fmt.Errorf("eventsourcing: outbox insert: %w", err)
@@ -180,7 +187,7 @@ func (s *EventStore) Drain(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.db.RawQuery(
-		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence
+		`SELECT id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash
 		   FROM event_outbox
 		  WHERE processed = 0
 		  ORDER BY inserted_at ASC
@@ -202,8 +209,8 @@ func (s *EventStore) Drain(ctx context.Context) (int, error) {
 		// the mutex; Append re-locks. To avoid the deadlock, copy the
 		// INSERT inline.
 		insErr := s.db.ExecInsert(
-			`INSERT INTO domain_events (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO domain_events (id, aggregate_id, aggregate_type, event_type, payload, occurred_at, sequence, email_hash)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			evt.ID,
 			evt.AggregateID,
 			evt.AggregateType,
@@ -211,6 +218,7 @@ func (s *EventStore) Drain(ctx context.Context) (int, error) {
 			string(evt.Payload),
 			evt.OccurredAt.Format(time.RFC3339Nano),
 			evt.Sequence,
+			evt.EmailHash,
 		)
 		if insErr != nil {
 			// Row insertion into domain_events failed (e.g. UNIQUE
