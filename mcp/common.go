@@ -475,8 +475,10 @@ func CreatePaginatedResponse(originalData any, paginatedData any, params Paginat
 	return response
 }
 
-// SimpleToolHandler creates a handler function for simple GET endpoints
-func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData) (any, error)) server.ToolHandlerFunc {
+// SimpleToolHandler creates a handler function for simple GET endpoints.
+// The apiCall closure receives the request context so dispatches inherit
+// cancellation and X-Request-ID values rather than rooting via context.Background().
+func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(context.Context, *kc.KiteSessionData) (any, error)) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Track the tool call at the handler level
@@ -491,15 +493,16 @@ func SimpleToolHandler(manager *kc.Manager, toolName string, apiCall func(*kc.Ki
 	}
 }
 
-// PaginatedToolHandler creates a handler function for endpoints that support pagination
-func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData) ([]T, error)) server.ToolHandlerFunc {
+// PaginatedToolHandler creates a handler function for endpoints that support pagination.
+// The apiCall closure receives the request context for ctx-aware bus dispatch.
+func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall func(context.Context, *kc.KiteSessionData) ([]T, error)) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Track the tool call at the handler level
 		handler.trackToolCall(ctx, toolName)
 		result, err := handler.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Get the data
-			data, err := apiCall(session)
+			data, err := apiCall(ctx, session)
 			if err != nil {
 				handler.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
 				handler.trackToolError(ctx, toolName, "api_error")
@@ -537,13 +540,14 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 // PaginatedToolHandlerWithArgs is like PaginatedToolHandler but passes
 // the request arguments to the API call function, allowing tool-specific
 // parameters (e.g., position_type) to influence which data is returned.
-func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, apiCall func(*kc.KiteSessionData, map[string]any) ([]T, error)) server.ToolHandlerFunc {
+// The apiCall closure receives the request context for ctx-aware bus dispatch.
+func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, apiCall func(context.Context, *kc.KiteSessionData, map[string]any) ([]T, error)) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, toolName)
 		result, err := handler.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			args := request.GetArguments()
-			data, err := apiCall(session, args)
+			data, err := apiCall(ctx, session, args)
 			if err != nil {
 				handler.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
 				handler.trackToolError(ctx, toolName, "api_error")

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
@@ -19,7 +20,7 @@ import (
 //
 // Handles nil manager (test path) by returning a zero-point payload.
 // Handles missing DB (dev mode without ALERT_DB_PATH) the same way.
-func pnlSparklineWidgetData(manager *kc.Manager, email string) any {
+func pnlSparklineWidgetData(_ context.Context, manager *kc.Manager, email string) any {
 	type pnlPoint struct {
 		Date   string  `json:"date"`
 		NetPnL float64 `json:"net_pnl"`

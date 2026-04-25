@@ -21,7 +21,7 @@ import (
 // time via closure — they may be nil when widgets are registered in
 // tests without a live manager, and handlers defensively handle that
 // case.
-type builtinWidgetDataFunc func(manager *kc.Manager, email string) any
+type builtinWidgetDataFunc func(ctx context.Context, manager *kc.Manager, email string) any
 
 // builtinWidgetDef describes one widget in the pack.
 type builtinWidgetDef struct {
@@ -100,7 +100,7 @@ func RegisterBuiltinWidgetPack(manager *kc.Manager, auditStore *audit.Store, log
 			// as an error panel inside the widget rather than
 			// crashing the ReadResource request.
 			data, err := SafeCall(def.URI, func() (any, error) {
-				return def.DataFunc(manager, email), nil
+				return def.DataFunc(ctx, manager, email), nil
 			})
 			if err != nil {
 				data = map[string]any{"error": err.Error()}

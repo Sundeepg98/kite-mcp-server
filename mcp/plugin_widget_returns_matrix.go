@@ -24,7 +24,7 @@ import (
 // historical_data tool's output through a rolling cache.
 //
 // Defensive on nil manager and missing broker.
-func returnsMatrixWidgetData(manager *kc.Manager, email string) any {
+func returnsMatrixWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
 	type row struct {
 		Symbol       string  `json:"symbol"`
 		Qty          int     `json:"qty"`
@@ -41,7 +41,7 @@ func returnsMatrixWidgetData(manager *kc.Manager, email string) any {
 	if email == "" {
 		return map[string]any{"error": "unauthenticated"}
 	}
-	raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: email})
+	raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: email})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}

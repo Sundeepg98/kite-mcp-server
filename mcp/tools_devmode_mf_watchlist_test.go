@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -709,7 +710,7 @@ func TestOrdersData_WithToolCalls(t *testing.T) {
 		InputParams: `{"tradingsymbol":"INFY","exchange":"NSE","transaction_type":"BUY","order_type":"MARKET","quantity":10}`,
 	})
 	time.Sleep(100 * time.Millisecond) // flush async writer
-	data := ordersData(mgr, auditStore, "cred@example.com")
+	data := ordersData(context.Background(), mgr, auditStore, "cred@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -726,7 +727,7 @@ func TestWatchlistData_WithItems_Push(t *testing.T) {
 		Exchange: "NSE", Tradingsymbol: "INFY", Notes: "cov test",
 		TargetEntry: 1400, TargetExit: 1600,
 	})
-	data := watchlistData(mgr, nil, email)
+	data := watchlistData(context.Background(), mgr, nil, email)
 	assert.NotNil(t, data)
 }
 

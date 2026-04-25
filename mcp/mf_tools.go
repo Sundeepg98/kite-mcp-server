@@ -30,8 +30,9 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 }
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_orders", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFOrdersQuery{Email: session.Email})
+	h := NewToolHandler(manager)
+	return PaginatedToolHandler(manager, "get_mf_orders", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -64,8 +65,9 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 }
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_sips", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFSIPsQuery{Email: session.Email})
+	h := NewToolHandler(manager)
+	return PaginatedToolHandler(manager, "get_mf_sips", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFSIPsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -98,8 +100,9 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 }
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	return PaginatedToolHandler(manager, "get_mf_holdings", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMFHoldingsQuery{Email: session.Email})
+	h := NewToolHandler(manager)
+	return PaginatedToolHandler(manager, "get_mf_holdings", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFHoldingsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}

@@ -1678,7 +1678,7 @@ func TestSimpleToolHandler_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	handler := SimpleToolHandler(mgr, "test_tool", func(session *kc.KiteSessionData) (any, error) {
+	handler := SimpleToolHandler(mgr, "test_tool", func(_ context.Context, session *kc.KiteSessionData) (any, error) {
 		return map[string]string{"status": "ok"}, nil
 	})
 

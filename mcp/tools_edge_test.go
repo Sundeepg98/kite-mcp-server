@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -157,7 +158,7 @@ func TestPortfolioData_WithCredentials(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	// cred@example.com has credentials+token seeded in newFullDevModeManager
-	data := portfolioData(mgr, nil, "cred@example.com")
+	data := portfolioData(context.Background(), mgr, nil,"cred@example.com")
 	// brokerClientForEmail returns non-nil, but API calls fail (stub endpoint)
 	// so data should be an error map
 	assert.NotNil(t, data)
@@ -166,14 +167,14 @@ func TestPortfolioData_WithCredentials(t *testing.T) {
 func TestOrdersData_WithCredentials(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newFullDevModeManager(t)
-	data := ordersData(mgr, auditStore, "cred@example.com")
+	data := ordersData(context.Background(), mgr, auditStore,"cred@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestPaperData_WithEngine(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	data := paperData(mgr, nil, "dev@example.com")
+	data := paperData(context.Background(), mgr, nil,"dev@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -184,7 +185,7 @@ func TestPaperData_WithEngine_Enabled(t *testing.T) {
 	if pe != nil {
 		_ = pe.Enable("paper@example.com", 10000000)
 	}
-	data := paperData(mgr, nil, "paper@example.com")
+	data := paperData(context.Background(), mgr, nil,"paper@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -196,7 +197,7 @@ func TestAlertsData_WithCredentials(t *testing.T) {
 		_, _ = store.Add("cred@example.com", "INFY", "NSE", 256265, 1500, "above")
 		_, _ = store.Add("cred@example.com", "RELIANCE", "NSE", 408065, 2000, "below")
 	}
-	data := alertsData(mgr, nil, "cred@example.com")
+	data := alertsData(context.Background(), mgr, nil,"cred@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -211,14 +212,14 @@ func TestWatchlistData_WithCredentials(t *testing.T) {
 			TargetEntry: 1400, TargetExit: 1600,
 		})
 	}
-	data := watchlistData(mgr, nil, "cred@example.com")
+	data := watchlistData(context.Background(), mgr, nil,"cred@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestOrderFormData_WithCredentials(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	data := orderFormData(mgr, nil, "cred@example.com")
+	data := orderFormData(context.Background(), mgr, nil,"cred@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -506,7 +507,7 @@ func TestAllAppResources_WithCredentials(t *testing.T) {
 	mgr, auditStore := newFullDevModeManager(t)
 	for _, res := range appResources {
 		if res.DataFunc != nil {
-			_ = res.DataFunc(mgr, auditStore, "cred@example.com")
+			_ = res.DataFunc(context.Background(), mgr, auditStore,"cred@example.com")
 		}
 	}
 }
@@ -598,7 +599,7 @@ func TestOrdersData_WithToolCalls_FullManager(t *testing.T) {
 	})
 	// Wait for async write to flush
 	time.Sleep(100 * time.Millisecond)
-	data := ordersData(mgr, auditStore, "cred@example.com")
+	data := ordersData(context.Background(), mgr, auditStore,"cred@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -745,7 +746,7 @@ func TestPaperData_EnabledEngine_FullManager(t *testing.T) {
 	require.NotNil(t, pe)
 	require.NoError(t, pe.Enable(email, 10000000))
 
-	data := paperData(mgr, nil, email)
+	data := paperData(context.Background(), mgr, nil,email)
 	assert.NotNil(t, data)
 }
 
@@ -766,7 +767,7 @@ func TestAlertsData_WithAlertsAndCredentials_FullManager(t *testing.T) {
 	id3, _ := store.Add(email, "INFY", "NSE", 256265, 1400, "below")
 	store.MarkTriggered(id3, 1350)
 
-	data := alertsData(mgr, nil, email)
+	data := alertsData(context.Background(), mgr, nil,email)
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	if ok {
@@ -784,7 +785,7 @@ func TestAlertsData_WithAlertsAndCredentials_FullManager(t *testing.T) {
 func TestPortfolioData_WithCredentials_FullManager(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
-	data := portfolioData(mgr, nil, "cred@example.com")
+	data := portfolioData(context.Background(), mgr, nil,"cred@example.com")
 	// Should return error map (API fails to connect to stub)
 	assert.NotNil(t, data)
 }
@@ -810,6 +811,6 @@ func TestWatchlistData_WithCredsAndItems_FullManager(t *testing.T) {
 		TargetEntry: 2400, TargetExit: 2600,
 	})
 
-	data := watchlistData(mgr, nil, email)
+	data := watchlistData(context.Background(), mgr, nil,email)
 	assert.NotNil(t, data)
 }

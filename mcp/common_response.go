@@ -63,10 +63,11 @@ func wrapForStructuredContent(data any) any {
 	}
 }
 
-// HandleAPICall wraps common API call pattern with error handling and response marshalling
-func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(*kc.KiteSessionData) (any, error)) (*mcp.CallToolResult, error) {
+// HandleAPICall wraps common API call pattern with error handling and response marshalling.
+// The apiCall closure receives ctx so dispatches inherit request cancellation.
+func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCall func(context.Context, *kc.KiteSessionData) (any, error)) (*mcp.CallToolResult, error) {
 	return h.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-		data, err := apiCall(session)
+		data, err := apiCall(ctx, session)
 		if err != nil {
 			h.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -16,20 +17,20 @@ import (
 
 func TestChartData_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	result := chartData(nil, nil, "")
+	result := chartData(context.Background(), nil, nil,"")
 	assert.Nil(t, result)
 }
 
 func TestOptionsChainData_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	result := optionsChainData(nil, nil, "")
+	result := optionsChainData(context.Background(), nil, nil,"")
 	assert.Nil(t, result)
 }
 
 func TestOrderFormData_WithManager(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := orderFormData(mgr, nil, "test@example.com")
+	result := orderFormData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, result)
 	m, ok := result.(map[string]any)
 	assert.True(t, ok)
@@ -39,7 +40,7 @@ func TestOrderFormData_WithManager(t *testing.T) {
 func TestWatchlistData_NoStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := watchlistData(mgr, nil, "test@example.com")
+	result := watchlistData(context.Background(), mgr, nil,"test@example.com")
 	// watchlist store may be nil in test manager
 	_ = result // should not panic
 }
@@ -47,7 +48,7 @@ func TestWatchlistData_NoStore(t *testing.T) {
 func TestSafetyData_WithRiskGuard(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := safetyData(mgr, nil, "test@example.com")
+	result := safetyData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, result)
 	m, ok := result.(map[string]any)
 	assert.True(t, ok)
@@ -67,7 +68,7 @@ func TestSafetyData_WithAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	// Use a non-nil audit.Store placeholder (it won't be nil-checked)
-	result := safetyData(mgr, &audit.Store{}, "test@example.com")
+	result := safetyData(context.Background(), mgr, &audit.Store{},"test@example.com")
 	m := result.(map[string]any)
 	sebi := m["sebi"].(map[string]any)
 	assert.True(t, sebi["audit_trail"].(bool))
@@ -76,7 +77,7 @@ func TestSafetyData_WithAuditStore(t *testing.T) {
 func TestPaperData_NoPaperEngine(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := paperData(mgr, nil, "test@example.com")
+	result := paperData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, result)
 	m, ok := result.(map[string]any)
 	assert.True(t, ok)
@@ -88,7 +89,7 @@ func TestPaperData_NoPaperEngine(t *testing.T) {
 func TestAlertsData_NoAlertStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := alertsData(mgr, nil, "test@example.com")
+	result := alertsData(context.Background(), mgr, nil,"test@example.com")
 	// With no alert store, should return nil or basic data
 	_ = result
 }
@@ -96,7 +97,7 @@ func TestAlertsData_NoAlertStore(t *testing.T) {
 func TestHubData_WithManager(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := hubData(mgr, nil, "test@example.com")
+	result := hubData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, result)
 	m, ok := result.(map[string]any)
 	assert.True(t, ok)
@@ -111,14 +112,14 @@ func TestHubData_WithManager(t *testing.T) {
 
 func TestActivityData_NoAuditStore(t *testing.T) {
 	t.Parallel()
-	result := activityData(nil, nil, "test@example.com")
+	result := activityData(context.Background(), nil, nil,"test@example.com")
 	assert.Nil(t, result, "should return nil when audit store is nil")
 }
 
 func TestPortfolioData_NoSession(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := portfolioData(mgr, nil, "test@example.com")
+	result := portfolioData(context.Background(), mgr, nil,"test@example.com")
 	// Without a valid Kite client, should return nil or error data
 	_ = result // should not panic
 }
@@ -126,7 +127,7 @@ func TestPortfolioData_NoSession(t *testing.T) {
 func TestOrdersData_NoAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	result := ordersData(mgr, nil, "test@example.com")
+	result := ordersData(context.Background(), mgr, nil,"test@example.com")
 	// Without audit store, should still return some data
 	_ = result // should not panic
 }
@@ -134,7 +135,7 @@ func TestOrdersData_NoAuditStore(t *testing.T) {
 func TestPortfolioData_NilClient(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := portfolioData(mgr, nil, "nobody@example.com")
+	data := portfolioData(context.Background(), mgr, nil,"nobody@example.com")
 	// No Kite client → returns error map, not nil
 	errMap, ok := data.(map[string]string)
 	assert.True(t, ok)
@@ -144,21 +145,21 @@ func TestPortfolioData_NilClient(t *testing.T) {
 func TestActivityData_NilAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := activityData(mgr, nil, "nobody@example.com")
+	data := activityData(context.Background(), mgr, nil,"nobody@example.com")
 	assert.Nil(t, data)
 }
 
 func TestOrdersData_NilClient(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := ordersData(mgr, nil, "nobody@example.com")
+	data := ordersData(context.Background(), mgr, nil,"nobody@example.com")
 	assert.Nil(t, data)
 }
 
 func TestPaperData_NilEngine(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := paperData(mgr, nil, "nobody@example.com")
+	data := paperData(context.Background(), mgr, nil,"nobody@example.com")
 	// PaperEngine is nil for test managers, exercises early return
 	_ = data
 }
@@ -166,7 +167,7 @@ func TestPaperData_NilEngine(t *testing.T) {
 func TestWatchlistData_NoWatchlists(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := watchlistData(mgr, nil, "nobody@example.com")
+	data := watchlistData(context.Background(), mgr, nil,"nobody@example.com")
 	// Returns nil when no watchlists exist for the user, or may return empty struct
 	// The important thing is it exercises the function
 	_ = data
@@ -175,7 +176,7 @@ func TestWatchlistData_NoWatchlists(t *testing.T) {
 func TestSafetyData_Basic(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := safetyData(mgr, nil, "test@example.com")
+	data := safetyData(context.Background(), mgr, nil,"test@example.com")
 	// safetyData always returns something (riskguard status)
 	assert.NotNil(t, data)
 }
@@ -183,7 +184,7 @@ func TestSafetyData_Basic(t *testing.T) {
 func TestHubData_NilAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := hubData(mgr, nil, "nobody@example.com")
+	data := hubData(context.Background(), mgr, nil,"nobody@example.com")
 	// hubData may return partial data even without audit store
 	assert.NotNil(t, data)
 }
@@ -191,7 +192,7 @@ func TestHubData_NilAuditStore(t *testing.T) {
 func TestAlertsData_NoAlerts(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := alertsData(mgr, nil, "nobody@example.com")
+	data := alertsData(context.Background(), mgr, nil,"nobody@example.com")
 	// AlertStore exists but has no alerts for this user
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetAlertsResult)
@@ -205,7 +206,7 @@ func TestAlertsData_WithAlerts(t *testing.T) {
 	mgr := newTestManager(t)
 	// Create an alert first using proper signature
 	mgr.AlertStore().Add("alert@example.com", "INFY", "NSE", 256265, 1500.0, "above")
-	data := alertsData(mgr, nil, "alert@example.com")
+	data := alertsData(context.Background(), mgr, nil,"alert@example.com")
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetAlertsResult)
 	assert.True(t, ok)
@@ -215,7 +216,7 @@ func TestAlertsData_WithAlerts(t *testing.T) {
 func TestPaperData_NoEngineReturnsStatus(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := paperData(mgr, nil, "test@example.com")
+	data := paperData(context.Background(), mgr, nil,"test@example.com")
 	// Returns a status map even when engine is nil
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
@@ -228,14 +229,14 @@ func TestWatchlistData_WithWatchlists(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	mgr.WatchlistStore().CreateWatchlist("wl@example.com", "My Stocks")
-	data := watchlistData(mgr, nil, "wl@example.com")
+	data := watchlistData(context.Background(), mgr, nil,"wl@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestOrderFormData_Basic(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := orderFormData(mgr, nil, "test@example.com")
+	data := orderFormData(context.Background(), mgr, nil,"test@example.com")
 	// orderFormData returns a static config map
 	assert.NotNil(t, data)
 }
@@ -243,20 +244,20 @@ func TestOrderFormData_Basic(t *testing.T) {
 func TestOptionsChainData_ReturnsNil_V2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := optionsChainData(mgr, nil, "nobody@example.com")
+	data := optionsChainData(context.Background(), mgr, nil,"nobody@example.com")
 	assert.Nil(t, data)
 }
 
 func TestChartData_ReturnsNil_V2(t *testing.T) {
 	t.Parallel()
-	data := chartData(nil, nil, "nobody@example.com")
+	data := chartData(context.Background(), nil, nil,"nobody@example.com")
 	assert.Nil(t, data)
 }
 
 func TestSafetyData_WithRiskGuard_V2(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := safetyData(mgr, nil, "test@example.com")
+	data := safetyData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -271,7 +272,7 @@ func TestHubData_WithAlerts(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	mgr.AlertStore().Add("hub@example.com", "INFY", "NSE", 256265, 1500.0, "above")
-	data := hubData(mgr, nil, "hub@example.com")
+	data := hubData(context.Background(), mgr, nil,"hub@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -282,7 +283,7 @@ func TestHubData_WithAlerts(t *testing.T) {
 func TestOrderFormData_WithPaperEngineNil(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := orderFormData(mgr, nil, "test@example.com")
+	data := orderFormData(context.Background(), mgr, nil,"test@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -292,7 +293,7 @@ func TestOrderFormData_WithPaperEngineNil(t *testing.T) {
 func TestWatchlistData_EmptyReturnsStruct(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	data := watchlistData(mgr, nil, "empty@example.com")
+	data := watchlistData(context.Background(), mgr, nil,"empty@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -304,7 +305,7 @@ func TestWatchlistData_WithMultipleWatchlists(t *testing.T) {
 	mgr := newTestManager(t)
 	mgr.WatchlistStore().CreateWatchlist("wl2@example.com", "Stocks")
 	mgr.WatchlistStore().CreateWatchlist("wl2@example.com", "Options")
-	data := watchlistData(mgr, nil, "wl2@example.com")
+	data := watchlistData(context.Background(), mgr, nil,"wl2@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -335,7 +336,7 @@ func TestWatchlistData_WithItems(t *testing.T) {
 		Tradingsymbol:   "RELIANCE",
 		InstrumentToken: 408065,
 	})
-	data := watchlistData(mgr, nil, email)
+	data := watchlistData(context.Background(), mgr, nil,email)
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -358,7 +359,7 @@ func TestActivityData_WithAuditStore(t *testing.T) {
 		StartedAt:     now,
 		CompletedAt:   now,
 	})
-	data := activityData(mgr, store, "activity@example.com")
+	data := activityData(context.Background(), mgr, store,"activity@example.com")
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetActivityResult)
 	assert.True(t, ok)
@@ -369,7 +370,7 @@ func TestOrdersData_WithAuditStore_NoOrders(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	store := newTestAuditStore(t)
-	data := ordersData(mgr, store, "orders@example.com")
+	data := ordersData(context.Background(), mgr, store,"orders@example.com")
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetOrdersResult)
 	assert.True(t, ok)
@@ -390,7 +391,7 @@ func TestOrdersData_WithAuditStoreAndToolCalls(t *testing.T) {
 		InputSummary: "BUY 10 INFY",
 		InputParams:  `{"tradingsymbol":"INFY","exchange":"NSE","transaction_type":"BUY","quantity":10,"order_type":"MARKET"}`,
 	})
-	data := ordersData(mgr, store, "orders2@example.com")
+	data := ordersData(context.Background(), mgr, store,"orders2@example.com")
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetOrdersResult)
 	assert.True(t, ok)
@@ -401,7 +402,7 @@ func TestHubData_WithAuditStore(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	store := newTestAuditStore(t)
-	data := hubData(mgr, store, "hub2@example.com")
+	data := hubData(context.Background(), mgr, store,"hub2@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	assert.True(t, ok)
@@ -417,7 +418,7 @@ func TestHubData_WithAuditStoreAndCalls(t *testing.T) {
 		Email:    "hub3@example.com",
 		ToolName: "get_holdings",
 	})
-	data := hubData(mgr, store, "hub3@example.com")
+	data := hubData(context.Background(), mgr, store,"hub3@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -427,7 +428,7 @@ func TestAlertsData_WithTriggeredAlerts(t *testing.T) {
 	alertID, _ := mgr.AlertStore().Add("triggered@example.com", "INFY", "NSE", 256265, 1500.0, "above")
 	// Trigger the alert
 	mgr.AlertStore().MarkTriggered(alertID, 1550.0)
-	data := alertsData(mgr, nil, "triggered@example.com")
+	data := alertsData(context.Background(), mgr, nil,"triggered@example.com")
 	assert.NotNil(t, data)
 	result, ok := data.(*usecases.WidgetAlertsResult)
 	assert.True(t, ok)
@@ -454,14 +455,14 @@ func TestOrdersData_WithAuditStore_P7(t *testing.T) {
 	})
 	// Small sleep to allow async writer to flush
 	time.Sleep(50 * time.Millisecond)
-	data := ordersData(mgr, auditStore, "admin@example.com")
+	data := ordersData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestOrdersData_NoAuditStore_P7(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	data := ordersData(mgr, nil, "admin@example.com")
+	data := ordersData(context.Background(), mgr, nil,"admin@example.com")
 	assert.Nil(t, data)
 }
 
@@ -476,7 +477,7 @@ func TestActivityData_WithAuditStore_P7(t *testing.T) {
 		InputSummary:  "test",
 		OutputSummary: "ok",
 	})
-	data := activityData(mgr, auditStore, "admin@example.com")
+	data := activityData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -485,14 +486,14 @@ func TestPortfolioData_NoCreds(t *testing.T) {
 	mgr, _ := newRichDevModeManager(t)
 	// In DevMode, GetBrokerForEmail returns a mock client for all emails,
 	// so portfolioData always returns data even without stored credentials.
-	data := portfolioData(mgr, nil, "admin@example.com")
+	data := portfolioData(context.Background(), mgr, nil,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestPaperData_NoCreds(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	data := paperData(mgr, nil, "admin@example.com")
+	data := paperData(context.Background(), mgr, nil,"admin@example.com")
 	// Returns status message even without engine
 	assert.NotNil(t, data)
 }
@@ -500,14 +501,14 @@ func TestPaperData_NoCreds(t *testing.T) {
 func TestSafetyData_NoRiskGuard(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	data := safetyData(mgr, nil, "admin@example.com")
+	data := safetyData(context.Background(), mgr, nil,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestWatchlistData_WithStore_Empty(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newRichDevModeManager(t)
-	data := watchlistData(mgr, auditStore, "admin@example.com")
+	data := watchlistData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -527,7 +528,7 @@ func TestWatchlistData_WithItems_P7(t *testing.T) {
 			TargetEntry: 2400, TargetExit: 2600,
 		})
 	}
-	data := watchlistData(mgr, auditStore, "wl-admin@example.com")
+	data := watchlistData(context.Background(), mgr, auditStore,"wl-admin@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	if ok {
@@ -539,14 +540,14 @@ func TestWatchlistData_WithItems_P7(t *testing.T) {
 func TestHubData_P7(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newRichDevModeManager(t)
-	data := hubData(mgr, auditStore, "admin@example.com")
+	data := hubData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestAlertData_P7(t *testing.T) {
 	t.Parallel()
 	mgr, auditStore := newRichDevModeManager(t)
-	data := alertsData(mgr, auditStore, "admin@example.com")
+	data := alertsData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -559,7 +560,7 @@ func TestAlertData_WithAlerts_P7(t *testing.T) {
 		_, _ = store.Add("admin@example.com", "INFY", "NSE", 256265, 1500, "above")
 		_, _ = store.Add("admin@example.com", "RELIANCE", "NSE", 408065, 2000, "below")
 	}
-	data := alertsData(mgr, auditStore, "admin@example.com")
+	data := alertsData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 	dataMap, ok := data.(map[string]any)
 	if ok {
@@ -576,14 +577,14 @@ func TestAlertData_WithTriggeredAlerts_P7(t *testing.T) {
 		alertID, _ := store.Add("admin@example.com", "TCS", "NSE", 300000, 3000, "above")
 		store.MarkTriggered(alertID, 3100)
 	}
-	data := alertsData(mgr, auditStore, "admin@example.com")
+	data := alertsData(context.Background(), mgr, auditStore,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
 func TestOrderFormData_P7(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	data := orderFormData(mgr, nil, "admin@example.com")
+	data := orderFormData(context.Background(), mgr, nil,"admin@example.com")
 	assert.NotNil(t, data)
 }
 
@@ -601,11 +602,11 @@ func TestAdminOverviewData_P7(t *testing.T) {
 	// Test admin data functions by calling them through the appResources list
 	for _, res := range appResources {
 		if res.URI == "ui://kite-mcp/admin-overview" && res.DataFunc != nil {
-			data := res.DataFunc(mgr, auditStore, "admin@example.com")
+			data := res.DataFunc(context.Background(), mgr, auditStore,"admin@example.com")
 			assert.NotNil(t, data, "admin overview should return data for admin")
 
 			// Non-admin should get nil
-			data = res.DataFunc(mgr, auditStore, "nobody@example.com")
+			data = res.DataFunc(context.Background(), mgr, auditStore,"nobody@example.com")
 			assert.Nil(t, data, "admin overview should return nil for non-admin")
 		}
 	}
@@ -616,10 +617,10 @@ func TestAdminUsersData_P7(t *testing.T) {
 	mgr, auditStore := newRichDevModeManager(t)
 	for _, res := range appResources {
 		if res.URI == "ui://kite-mcp/admin-users" && res.DataFunc != nil {
-			data := res.DataFunc(mgr, auditStore, "admin@example.com")
+			data := res.DataFunc(context.Background(), mgr, auditStore,"admin@example.com")
 			assert.NotNil(t, data)
 
-			data = res.DataFunc(mgr, auditStore, "nobody@example.com")
+			data = res.DataFunc(context.Background(), mgr, auditStore,"nobody@example.com")
 			assert.Nil(t, data)
 		}
 	}
@@ -630,10 +631,10 @@ func TestAdminMetricsData_P7(t *testing.T) {
 	mgr, auditStore := newRichDevModeManager(t)
 	for _, res := range appResources {
 		if res.URI == "ui://kite-mcp/admin-metrics" && res.DataFunc != nil {
-			data := res.DataFunc(mgr, auditStore, "admin@example.com")
+			data := res.DataFunc(context.Background(), mgr, auditStore,"admin@example.com")
 			assert.NotNil(t, data)
 
-			data = res.DataFunc(mgr, auditStore, "nobody@example.com")
+			data = res.DataFunc(context.Background(), mgr, auditStore,"nobody@example.com")
 			assert.Nil(t, data)
 		}
 	}
@@ -644,7 +645,7 @@ func TestAdminRiskData_P7(t *testing.T) {
 	mgr, auditStore := newRichDevModeManager(t)
 	for _, res := range appResources {
 		if res.URI == "ui://kite-mcp/admin-risk" && res.DataFunc != nil {
-			data := res.DataFunc(mgr, auditStore, "admin@example.com")
+			data := res.DataFunc(context.Background(), mgr, auditStore,"admin@example.com")
 			assert.NotNil(t, data)
 		}
 	}
@@ -653,7 +654,7 @@ func TestAdminRiskData_P7(t *testing.T) {
 func TestOptionsChainData_NoCreds(t *testing.T) {
 	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
-	data := optionsChainData(mgr, nil, "admin@example.com")
+	data := optionsChainData(context.Background(), mgr, nil,"admin@example.com")
 	assert.Nil(t, data)
 }
 
@@ -663,7 +664,7 @@ func TestAllAppResourceDataFuncs_NonAdmin(t *testing.T) {
 	for _, res := range appResources {
 		if res.DataFunc != nil {
 			// Exercise all data functions with a non-admin, non-credentialed email
-			_ = res.DataFunc(mgr, auditStore, "nobody@example.com")
+			_ = res.DataFunc(context.Background(), mgr, auditStore,"nobody@example.com")
 		}
 	}
 }
@@ -673,7 +674,7 @@ func TestAllAppResourceDataFuncs_Admin(t *testing.T) {
 	mgr, auditStore := newRichDevModeManager(t)
 	for _, res := range appResources {
 		if res.DataFunc != nil {
-			_ = res.DataFunc(mgr, auditStore, "admin@example.com")
+			_ = res.DataFunc(context.Background(), mgr, auditStore,"admin@example.com")
 		}
 	}
 }

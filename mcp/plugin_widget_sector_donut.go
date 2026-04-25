@@ -25,14 +25,14 @@ import (
 // exercise this branch. Returns an error-shaped payload when the
 // QueryBus dispatch fails — widget renders an inline error rather than
 // leaving the user looking at an empty donut.
-func sectorDonutWidgetData(manager *kc.Manager, email string) any {
+func sectorDonutWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
 	if manager == nil {
 		return map[string]any{"error": "unavailable", "reason": "portfolio manager not configured"}
 	}
 	if email == "" {
 		return map[string]any{"error": "unauthenticated"}
 	}
-	raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: email})
+	raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: email})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}

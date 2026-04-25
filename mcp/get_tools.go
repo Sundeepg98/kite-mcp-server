@@ -26,8 +26,8 @@ func (*ProfileTool) Tool() mcp.Tool {
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (any, error) {
-		return h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
+	return SimpleToolHandler(manager, "get_profile", func(ctx context.Context, session *kc.KiteSessionData) (any, error) {
+		return h.QueryBus().DispatchWithResult(ctx, cqrs.GetProfileQuery{Email: session.Email})
 	})
 }
 
@@ -45,8 +45,8 @@ func (*MarginsTool) Tool() mcp.Tool {
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (any, error) {
-		return h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
+	return SimpleToolHandler(manager, "get_margins", func(ctx context.Context, session *kc.KiteSessionData) (any, error) {
+		return h.QueryBus().DispatchWithResult(ctx, cqrs.GetMarginsQuery{Email: session.Email})
 	})
 }
 
@@ -70,9 +70,9 @@ func (*HoldingsTool) Tool() mcp.Tool {
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]any, error) {
+	return PaginatedToolHandler(manager, "get_holdings", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		// Phase 2j: dispatch through CQRS query bus (handler registered in app/wire_bus.go).
-		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -112,8 +112,8 @@ func (*PositionsTool) Tool() mcp.Tool {
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]any, error) {
-		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(ctx context.Context, session *kc.KiteSessionData, args map[string]any) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -161,8 +161,8 @@ func (*TradesTool) Tool() mcp.Tool {
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
+	return PaginatedToolHandler(manager, "get_trades", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -196,8 +196,8 @@ func (*OrdersTool) Tool() mcp.Tool {
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
+	return PaginatedToolHandler(manager, "get_orders", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -231,8 +231,8 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
+	return PaginatedToolHandler(manager, "get_gtts", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}

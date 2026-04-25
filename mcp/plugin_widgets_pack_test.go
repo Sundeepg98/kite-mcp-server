@@ -94,7 +94,7 @@ func TestRegisterBuiltinWidgetPack_Idempotent(t *testing.T) {
 func TestSectorDonutData_HandlesNilManager(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	data := sectorDonutWidgetData(nil, "user@test.com")
+	data := sectorDonutWidgetData(context.Background(), nil, "user@test.com")
 	b, err := json.Marshal(data)
 	require.NoError(t, err)
 	j := string(b)
@@ -110,7 +110,7 @@ func TestSectorDonutData_HandlesNilManager(t *testing.T) {
 func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	data := pnlSparklineWidgetData(nil, "user@test.com")
+	data := pnlSparklineWidgetData(context.Background(), nil, "user@test.com")
 	assert.NotNil(t, data, "even nil manager yields a response object")
 }
 
@@ -118,7 +118,7 @@ func TestPnLSparklineData_HandlesNilManager(t *testing.T) {
 func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	data := marginGaugeWidgetData(nil, "user@test.com")
+	data := marginGaugeWidgetData(context.Background(), nil, "user@test.com")
 	assert.NotNil(t, data)
 }
 
@@ -129,7 +129,7 @@ func TestMarginGaugeData_HandlesNilManager(t *testing.T) {
 func TestIPWhitelistData_StaticFields(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	data := ipWhitelistWidgetData(nil, "user@test.com")
+	data := ipWhitelistWidgetData(context.Background(), nil, "user@test.com")
 	b, err := json.Marshal(data)
 	require.NoError(t, err)
 	j := string(b)
@@ -141,6 +141,6 @@ func TestIPWhitelistData_StaticFields(t *testing.T) {
 func TestReturnsMatrixData_HandlesNilManager(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	data := returnsMatrixWidgetData(nil, "user@test.com")
+	data := returnsMatrixWidgetData(context.Background(), nil, "user@test.com")
 	assert.NotNil(t, data)
 }

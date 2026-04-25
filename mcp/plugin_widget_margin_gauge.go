@@ -20,7 +20,7 @@ import (
 // Nil-safety: nil manager renders "not configured". Failed dispatch
 // renders an error banner. Zero total (fresh account) shows a
 // deterministic "no margin info" message rather than a NaN bar.
-func marginGaugeWidgetData(manager *kc.Manager, email string) any {
+func marginGaugeWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
 	type segmentView struct {
 		Segment   string  `json:"segment"`
 		Available float64 `json:"available"`
@@ -34,7 +34,7 @@ func marginGaugeWidgetData(manager *kc.Manager, email string) any {
 	if email == "" {
 		return map[string]any{"error": "unauthenticated"}
 	}
-	raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: email})
+	raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetMarginsQuery{Email: email})
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
