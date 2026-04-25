@@ -180,6 +180,7 @@ func TestBuiltinChecksRegisteredByDefault(t *testing.T) {
 		"kill_switch",
 		"confirmation_required",
 		"order_value",
+		"margin_check",  // T5: optional pre-trade margin (default off)
 		"circuit_limit", // T2: exchange circuit-band pre-trade reject
 		"quantity_limit",
 		"daily_order_count",

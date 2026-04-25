@@ -207,6 +207,7 @@ func builtinChecks(g *Guard) []Check {
 		&killSwitchCheck{g: g},
 		&confirmationRequiredCheck{g: g},
 		&orderValueCheck{g: g},
+		&marginCheck{g: g},       // T5: 325, optional (off by default)
 		&circuitLimitCheck{g: g}, // T2: 350, between order_value (300) and quantity_limit (400)
 		&quantityLimitCheck{g: g},
 		&dailyOrderCountCheck{g: g},
@@ -228,6 +229,7 @@ var (
 	_ Check = (*killSwitchCheck)(nil)
 	_ Check = (*confirmationRequiredCheck)(nil)
 	_ Check = (*orderValueCheck)(nil)
+	_ Check = (*marginCheck)(nil)
 	_ Check = (*circuitLimitCheck)(nil)
 	_ Check = (*quantityLimitCheck)(nil)
 	_ Check = (*dailyOrderCountCheck)(nil)

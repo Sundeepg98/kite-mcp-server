@@ -71,6 +71,26 @@ func (g *Guard) SetCircuitLookup(lookup CircuitLookup) {
 	g.circuitLookup = lookup
 }
 
+// SetMarginLookup wires the T5 pre-trade margin oracle. The lookup
+// alone does NOT enable the check — call SetMarginCheckEnabled(true)
+// separately. Splitting the two setters lets operators wire the
+// margin source eagerly (benefits the dashboard / activity feed)
+// without forcing pre-trade rejection on every user.
+func (g *Guard) SetMarginLookup(lookup MarginLookup) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.marginLookup = lookup
+}
+
+// SetMarginCheckEnabled toggles the T5 pre-trade margin check.
+// Default is FALSE (opt-in per the brief). Production wiring may
+// flip it true globally or per-tier; tests use it to scope a guard.
+func (g *Guard) SetMarginCheckEnabled(enabled bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.marginCheckEnabled = enabled
+}
+
 // SetBaselineProvider wires the rolling-baseline source used by the anomaly
 // check. Optional: when nil, checkAnomalyMultiplier is a silent no-op, which
 // is the correct behaviour for DevMode / tests without an audit store.

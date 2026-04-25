@@ -82,6 +82,12 @@ const (
 	// catching it client-side avoids a round trip + per-second rate
 	// pressure for a guaranteed-rejection.
 	ReasonCircuitBreached RejectionReason = "circuit_breached"
+	// ReasonInsufficientMargin fires when the optional pre-trade
+	// margin check (T5) computes notional > available. NOT a fat-
+	// finger or abuse signal — a legitimate margin exhaustion from
+	// prior fills produces this. RecordOnRejection=false on the
+	// check so it doesn't trigger auto-freeze.
+	ReasonInsufficientMargin RejectionReason = "insufficient_margin"
 )
 
 // Anomaly-detection tuning constants. Centralised here so the product team
@@ -166,6 +172,8 @@ type Guard struct {
 	freezeLookup        FreezeQuantityLookup
 	ltpLookup           LTPLookup        // SEBI OTR band oracle; nil ⇒ band check is a no-op
 	circuitLookup       CircuitLookup    // exchange circuit-band oracle; nil ⇒ circuit check is a no-op
+	marginLookup        MarginLookup     // available-margin oracle for the T5 pre-trade check
+	marginCheckEnabled  bool             // T5: opt-in flag; default false
 	baseline            BaselineProvider // optional — nil ⇒ anomaly check is a no-op
 	db                  *alerts.DB
 	logger              *slog.Logger
