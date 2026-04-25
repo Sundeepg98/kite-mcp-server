@@ -166,6 +166,47 @@ func TestFamilyInvitedEvent_Fields(t *testing.T) {
 	}
 }
 
+// TestOrderFilledEvent_StatusField pins the T4 contract: OrderFilledEvent
+// carries a Status field (COMPLETE / PARTIAL / AMO) so projections and
+// the activity feed can distinguish a partial fill from a full fill
+// without re-querying the broker.
+//
+// Pre-T4, OrderFilledEvent only fired on COMPLETE — but the broker may
+// also surface PARTIAL fills (multi-tranche execution) and AMO orders
+// (after-market, queued for next session). Carrying Status on the
+// event preserves the broker's classification for downstream consumers.
+func TestOrderFilledEvent_StatusField(t *testing.T) {
+	t.Parallel()
+	qty, _ := NewQuantity(10)
+	price := NewINR(101.5)
+	now := time.Now().UTC()
+
+	complete := OrderFilledEvent{
+		Email: "trader@example.com", OrderID: "ORD-1",
+		FilledQty: qty, FilledPrice: price,
+		Status:    "COMPLETE",
+		Timestamp: now,
+	}
+	if complete.Status != "COMPLETE" {
+		t.Errorf("Status = %q, want COMPLETE", complete.Status)
+	}
+
+	partial := OrderFilledEvent{Status: "PARTIAL", Timestamp: now}
+	if partial.Status != "PARTIAL" {
+		t.Errorf("Status = %q, want PARTIAL", partial.Status)
+	}
+
+	amo := OrderFilledEvent{Status: "AMO", Timestamp: now}
+	if amo.Status != "AMO" {
+		t.Errorf("Status = %q, want AMO", amo.Status)
+	}
+
+	// EventType still resolves to "order.filled" regardless of Status.
+	if complete.EventType() != "order.filled" {
+		t.Errorf("EventType drift: %q", complete.EventType())
+	}
+}
+
 // TestDispatcherSubscribeUnknownEventType dispatches an event type with no handlers
 // to cover the "no handlers found" path in Dispatch.
 func TestDispatcherDispatchUnknownEventType(t *testing.T) {

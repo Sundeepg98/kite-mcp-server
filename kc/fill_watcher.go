@@ -308,7 +308,14 @@ func (w *FillWatcher) pollLoop(placed domain.OrderPlacedEvent, ticker testutil.T
 				OrderID:     placed.OrderID,
 				FilledQty:   qty,
 				FilledPrice: domain.NewINR(latest.AveragePrice),
-				Timestamp:   w.clock.Now().UTC(),
+				// T4: carry the broker-reported terminal status so
+				// downstream projections distinguish full vs partial
+				// vs AMO without re-querying. latestComplete only
+				// returns rows whose IsComplete() is true; the
+				// underlying status string is whatever the broker
+				// reported on that row.
+				Status:    latest.Status,
+				Timestamp: w.clock.Now().UTC(),
 			})
 			return
 		}

@@ -50,11 +50,27 @@ func (e OrderCancelledEvent) EventType() string    { return "order.cancelled" }
 func (e OrderCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
 
 // OrderFilledEvent is emitted after an order is filled by the exchange.
+//
+// Status carries the broker-reported terminal status (T4):
+//
+//   - "COMPLETE" — full quantity filled, single tranche. The pre-T4
+//     default; fill_watcher only emitted on this case.
+//   - "PARTIAL" — partial fill (multi-tranche execution or kill-fill
+//     timeout). Downstream consumers should treat FilledQty as the
+//     actual matched quantity, not the order's requested quantity.
+//   - "AMO"      — after-market order, queued for next session. Emitted
+//     when the broker accepts the order outside trading hours; the
+//     "fill" here is logical placement, not an exchange match.
+//
+// Empty Status means the producer didn't set it (legacy emitters). New
+// emit sites must set Status explicitly so the projection / activity
+// feed can distinguish partial fills.
 type OrderFilledEvent struct {
 	Email      string
 	OrderID    string
 	FilledQty  Quantity
 	FilledPrice Money
+	Status     string
 	Timestamp  time.Time
 }
 

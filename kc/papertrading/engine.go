@@ -330,7 +330,13 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 				OrderID:     order.OrderID,
 				FilledQty:   qty,
 				FilledPrice: price,
-				Timestamp:   now,
+				// T4: paper-engine fills are always full-quantity and
+				// instantaneous (no exchange tranching), so Status is
+				// always COMPLETE. Aligns with the live fill-watcher
+				// emission so projections don't need to special-case
+				// paper trades.
+				Status:    "COMPLETE",
+				Timestamp: now,
 			})
 			e.dispatcher.Dispatch(domain.PositionOpenedEvent{
 				Email:           acct.Email,
