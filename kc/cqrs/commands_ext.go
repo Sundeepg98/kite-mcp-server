@@ -111,6 +111,19 @@ type AdminDeleteRegistryCommand struct {
 	ID string `json:"id"`
 }
 
+// ExportMyDataCommand exercises the user's DPDP §11 right to receive a
+// "personal data portability" export of every record we hold under
+// their identity. The use case returns a single JSON document covering
+// tool_calls (5y), alerts, watchlists, paper trades, sessions,
+// credentials (encrypted), consent log, and domain events.
+//
+// Plaintext email here is intentional — the requester IS the data
+// subject, and §11 is "give me MY data". The use case validates and
+// hashes for internal correlation, then ships plaintext records back.
+type ExportMyDataCommand struct {
+	Email string `json:"email"`
+}
+
 // WithdrawConsentCommand exercises the user's DPDP §6(4) right to
 // rescind previously-granted consent. The command stamps every active
 // grant in consent_log with withdrawn_at and appends a "withdraw" row
