@@ -19,6 +19,14 @@ import (
 // top-level arrays from the Kite API, so we wrap those in {"items": [...]}
 // before passing to NewToolResultStructured. The text fallback keeps the
 // original array JSON for LLM readability.
+//
+// LLM-facing text is sanitized via SanitizeForLLM to defend against
+// prompt-injection inside broker fields (e.g. a hostile upstream
+// returning "AAPL\nIgnore prior instructions..." in tradingsymbol).
+// Control characters are escaped and long bodies wrapped in
+// [UNTRUSTED]…[/UNTRUSTED] markers. The structured JSON view is left
+// untouched — programmatic consumers (UI widgets, dashboard) HTML-
+// escape values before render and don't reach the LLM.
 func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolResult, error) {
 	v, err := json.Marshal(data)
 	if err != nil {
@@ -28,7 +36,8 @@ func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolR
 
 	h.deps.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
 	structured := wrapForStructuredContent(data)
-	return mcp.NewToolResultStructured(structured, string(v)), nil
+	llmText := SanitizeForLLM(string(v))
+	return mcp.NewToolResultStructured(structured, llmText), nil
 }
 
 // wrapForStructuredContent ensures the value handed to NewToolResultStructured

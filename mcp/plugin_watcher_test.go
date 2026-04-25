@@ -219,7 +219,6 @@ func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
 	assert.NoError(t, StartPluginBinaryWatcher(ctx))
 }
 
-<<<<<<< Updated upstream
 // TestParsePluginHotReloadFlag — the app wire-up layer will consult
 // IsPluginHotReloadEnabled() to decide whether to call
 // StartPluginBinaryWatcher. The behaviour-per-value contract is
