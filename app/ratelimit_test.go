@@ -539,15 +539,22 @@ func TestAppStartTime(t *testing.T) {
 	assert.False(t, app.startTime.IsZero())
 }
 
-// TestAppDevMode_EnvIntegration is the single adapter test verifying the
-// DEV_MODE env → App.DevMode wiring chain. Behaviour-per-value of the
-// underlying parser is covered by parallel tests against parseDevMode
-// when it gets extracted; until then this one t.Setenv test owns the
-// wiring contract. Cannot t.Parallel because env is process-wide.
-func TestAppDevMode_EnvIntegration(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	app := newTestApp(t)
+// TestAppDevMode_FromConfig verifies the Config.DevMode → App.DevMode
+// wiring. cfg.DevMode is now the single source of truth (populated
+// upstream by ConfigFromMap reading DEV_MODE from the env), so tests
+// drop t.Setenv and run with t.Parallel.
+func TestAppDevMode_FromConfig(t *testing.T) {
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{DevMode: true, InstrumentsSkipFetch: true})
 	assert.True(t, app.DevMode)
+}
+
+// TestAppDevMode_FromConfig_FalseDefault verifies the zero value is
+// honoured: a Config with DevMode unset means the App is NOT in dev mode.
+func TestAppDevMode_FromConfig_FalseDefault(t *testing.T) {
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
+	assert.False(t, app.DevMode)
 }
 
 // ===========================================================================

@@ -15,7 +15,6 @@ package app
 // longer cover (by design, to keep CI green).
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,18 +26,15 @@ import (
 // instruments from api.kite.trade. Requires network access and runs only
 // under -tags integration.
 func TestInitializeServices_FetchesRealInstruments(t *testing.T) {
-	// Phase E.2 Task #42: most env reads replaced with a Config literal.
-	// DEV_MODE remains a t.Setenv because app.DevMode is derived from the
-	// env inside NewApp rather than Config. INSTRUMENTS_SKIP_FETCH is
-	// explicitly cleared so the real fetch path is exercised; the build
-	// tag `integration` keeps this out of default CI.
-	t.Setenv("DEV_MODE", "true")
-	os.Unsetenv("INSTRUMENTS_SKIP_FETCH")
-
+	// Phase E.2 Task #42: every env read is now a Config field. DevMode
+	// rides on cfg.DevMode (no t.Setenv needed); InstrumentsSkipFetch
+	// stays false to exercise the real fetch path. Build tag
+	// `integration` keeps this out of default CI.
 	cfg := &Config{
 		KiteAPIKey:    "test_key",
 		KiteAPISecret: "test_secret",
 		AlertDBPath:   ":memory:",
+		DevMode:       true,
 	}
 	app := NewAppWithConfig(cfg, testLogger())
 	t.Cleanup(func() {

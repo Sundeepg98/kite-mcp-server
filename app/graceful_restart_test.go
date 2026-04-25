@@ -148,23 +148,36 @@ func TestDrainInflight_TimeoutWhenStuck(t *testing.T) {
 	assert.Less(t, elapsed, 300*time.Millisecond, "must not wait much beyond the deadline")
 }
 
-// TestIsGracefulChild — the env-var gate that tells a freshly-
-// forked process whether it was launched by a parent doing
-// graceful restart.
-func TestIsGracefulChild(t *testing.T) {
-	t.Run("unset", func(t *testing.T) {
-		t.Setenv("KITE_GRACEFUL_CHILD", "")
-		assert.False(t, isGracefulChild())
-	})
-	t.Run("1", func(t *testing.T) {
-		t.Setenv("KITE_GRACEFUL_CHILD", "1")
-		assert.True(t, isGracefulChild())
-	})
-	t.Run("true", func(t *testing.T) {
-		// Only "1" enables — matches fork-exec spawn convention.
-		t.Setenv("KITE_GRACEFUL_CHILD", "true")
-		assert.False(t, isGracefulChild())
-	})
+// TestParseGracefulChild — the pure parser drives every input
+// branch of the env-var gate that tells a freshly-forked process
+// whether it was launched by a parent doing graceful restart.
+//
+// Calls parseGracefulChild directly with literals; no t.Setenv, no
+// process-state mutation, fully parallel-safe.
+func TestParseGracefulChild(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		raw  string
+		want bool
+	}{
+		{"", false},      // unset
+		{"1", true},      // canonical enable
+		{"true", false},  // exec.Cmd spawn convention requires literal "1"
+		{"yes", false},   // ditto
+		{"0", false},     // explicit disable
+		{"01", false},    // not exact match
+		{" 1", false},    // whitespace not trimmed (spawn writes raw "1")
+		{"1 ", false},    // ditto trailing
+		{"garbage", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, parseGracefulChild(tc.raw),
+				"parseGracefulChild(%q)", tc.raw)
+		})
+	}
 }
 
 // TestSignalReady_ClosesAfterWrite — signalReady writes "ready!"

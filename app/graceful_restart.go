@@ -92,8 +92,18 @@ func (c GracefulRestartConfig) WithDefaults() GracefulRestartConfig {
 // Only exact "1" — not "true", not "yes" — matches the exec.Cmd
 // spawn convention where parents set a boolean env var to the
 // literal string "1".
+//
+// Wraps parseGracefulChild(os.Getenv(...)) so tests can drive the
+// pure parser with literals — no t.Setenv, parallel-safe.
 func isGracefulChild() bool {
-	return os.Getenv("KITE_GRACEFUL_CHILD") == "1"
+	return parseGracefulChild(os.Getenv("KITE_GRACEFUL_CHILD"))
+}
+
+// parseGracefulChild is the pure parser. Returns true iff the env
+// value is the literal "1" — matches exec.Cmd spawn convention.
+// All other inputs (empty, "true", "yes", "0", garbage) return false.
+func parseGracefulChild(raw string) bool {
+	return raw == "1"
 }
 
 // askReady writes probeMessage to the handshake socket and waits

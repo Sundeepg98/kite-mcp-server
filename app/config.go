@@ -66,6 +66,7 @@ func ConfigFromEnv() *Config {
 		"STRIPE_SECRET_KEY":          os.Getenv("STRIPE_SECRET_KEY"),
 		"STRIPE_PRICE_PRO":           os.Getenv("STRIPE_PRICE_PRO"),
 		"STRIPE_PRICE_PREMIUM":       os.Getenv("STRIPE_PRICE_PREMIUM"),
+		"DEV_MODE":                   os.Getenv("DEV_MODE"),
 	})
 }
 
@@ -100,6 +101,7 @@ func ConfigFromMap(env map[string]string) *Config {
 		StripeSecretKey:      env["STRIPE_SECRET_KEY"],
 		StripePricePro:       env["STRIPE_PRICE_PRO"],
 		StripePricePremium:   env["STRIPE_PRICE_PREMIUM"],
+		DevMode:              env["DEV_MODE"] == "true",
 	}
 }
 

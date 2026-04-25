@@ -59,7 +59,20 @@ import (
 // into graceful shutdown should <-doneCh after closing stopCh to
 // demonstrate the goroutine has actually terminated — otherwise
 // goleak-style sentinels race the exit.
+//
+// Production wrapper around startRateLimitReloadLoopWithGetenv: the latter
+// accepts a getenv injection so tests can drive the SIGHUP-handler logic
+// with a literal env source — no t.Setenv, parallel-safe.
 func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}) (chan os.Signal, <-chan struct{}) {
+	return startRateLimitReloadLoopWithGetenv(rl, logger, stopCh, os.Getenv)
+}
+
+// startRateLimitReloadLoopWithGetenv is the parameterised variant. The
+// getenv callback is invoked once per SIGHUP — production code wires this
+// to os.Getenv; tests pass a closure backed by a map literal so the test
+// can both express "what env should the SIGHUP handler see" and run with
+// t.Parallel().
+func startRateLimitReloadLoopWithGetenv(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}, getenv func(string) string) (chan os.Signal, <-chan struct{}) {
 	sigCh := make(chan os.Signal, 1)
 	doneCh := make(chan struct{})
 	// Notify for SIGHUP. On platforms without SIGHUP (Windows),
@@ -72,10 +85,11 @@ func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stop
 		for {
 			select {
 			case <-sigCh:
-				limits, err := parseRateLimitEnv(os.Getenv("KITE_RATELIMIT"))
+				raw := getenv("KITE_RATELIMIT")
+				limits, err := parseRateLimitEnv(raw)
 				if err != nil {
 					logger.Error("SIGHUP rate-limit reload: parse failed",
-						"error", err, "raw", os.Getenv("KITE_RATELIMIT"))
+						"error", err, "raw", raw)
 					continue
 				}
 				if len(limits) == 0 {

@@ -359,6 +359,12 @@ type Config struct {
 	// Config so tests drop t.Setenv.
 	StripePricePro     string
 	StripePricePremium string
+
+	// DevMode is the app-wide debug toggle (DEV_MODE env var). When true,
+	// the mock broker is wired in (no real Kite credentials needed),
+	// pprof endpoints are exposed, billing is disabled, etc. Field on
+	// Config so tests drop t.Setenv("DEV_MODE", "true") and can t.Parallel.
+	DevMode bool
 }
 
 // Server mode constants
@@ -388,8 +394,9 @@ func NewApp(logger *slog.Logger) *App {
 }
 
 // NewAppWithConfig creates a new App instance from an explicit Config.
-// Reads only DEV_MODE from the environment (not a Config field); every
-// other env read now flows through the Config parameter.
+// Every env read now flows through the Config parameter — including
+// DevMode, which is sourced from cfg.DevMode (populated upstream by
+// ConfigFromMap or set directly by tests).
 //
 // cfg may be nil — a nil Config is replaced with a zero-valued Config
 // (treated as "everything empty"). Callers that want defaults should
@@ -398,11 +405,10 @@ func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	devMode := os.Getenv("DEV_MODE") == "true"
 
 	return &App{
 		Config:    cfg,
-		DevMode:   devMode,
+		DevMode:   cfg.DevMode,
 		Version:   "v0.0.0", // Ideally injected at build time
 		startTime: time.Now(),
 		logger:    logger,

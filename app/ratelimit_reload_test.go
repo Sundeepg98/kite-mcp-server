@@ -68,13 +68,20 @@ func TestParseRateLimitEnv_Malformed(t *testing.T) {
 // Skipped on Windows because syscall.SIGHUP is not supported — the
 // signal.Notify call is a platform no-op there (documented in
 // ratelimit_reload.go design note).
+//
+// Calls startRateLimitReloadLoopWithGetenv with a map-backed getenv so
+// the SIGHUP handler reads our literal config without touching the
+// process env — fully t.Parallel-compatible.
 func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
+	t.Parallel()
 	if _, ok := any(syscall.SIGHUP).(syscall.Signal); !ok {
 		t.Skip("SIGHUP not available on this platform")
 	}
 	// Also skip when running on Windows specifically — signal.Notify for
-	// SIGHUP is a no-op and the test cannot meaningfully assert.
-	if os.Getenv("OS") == "Windows_NT" || os.PathSeparator == '\\' {
+	// SIGHUP is a no-op and the test cannot meaningfully assert. Note: we
+	// inspect os.PathSeparator (a constant), not os.Getenv, so this is
+	// still parallel-safe.
+	if os.PathSeparator == '\\' {
 		t.Skip("SIGHUP reload not supported on Windows")
 	}
 
@@ -83,9 +90,14 @@ func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	t.Setenv("KITE_RATELIMIT", "place_order=3,modify_order=7")
+	getenv := func(k string) string {
+		if k == "KITE_RATELIMIT" {
+			return "place_order=3,modify_order=7"
+		}
+		return ""
+	}
 
-	sigCh, _ := startRateLimitReloadLoop(rl, logger, stopCh)
+	sigCh, _ := startRateLimitReloadLoopWithGetenv(rl, logger, stopCh, getenv)
 	// Send the signal directly into the channel — equivalent to kill -HUP
 	// from the operator's perspective and keeps the test independent of
 	// the OS signal-delivery timing window.
@@ -136,14 +148,18 @@ func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
 // Parallel-safe relative-count variant — absolute value can fluctuate
 // because other parallel tests create their own reload loops via
 // RunServer.
+//
+// Note: production startRateLimitReloadLoop now delegates to
+// startRateLimitReloadLoopWithGetenv where the actual goroutine lives,
+// so we look for that frame name.
 func countLoopGoroutines() int {
 	buf := make([]byte, 1<<16)
 	n := runtime.Stack(buf, true)
 	stacks := string(buf[:n])
 	// The goroutine runs an anonymous closure inside
-	// startRateLimitReloadLoop — its frame always contains the
-	// function name.
-	return strings.Count(stacks, "app.startRateLimitReloadLoop.func1")
+	// startRateLimitReloadLoopWithGetenv — its frame always contains
+	// that function name.
+	return strings.Count(stacks, "app.startRateLimitReloadLoopWithGetenv.func1")
 }
 
 // TestApp_StopRateLimitReload_Idempotent verifies the App helper that
