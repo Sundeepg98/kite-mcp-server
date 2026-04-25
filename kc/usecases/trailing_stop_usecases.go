@@ -21,14 +21,18 @@ type TrailingStopManager interface {
 
 // SetTrailingStopUseCase creates a new trailing stop-loss.
 type SetTrailingStopUseCase struct {
-	manager TrailingStopManager
-	logger  *slog.Logger
+	manager    TrailingStopManager
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewSetTrailingStopUseCase creates a SetTrailingStopUseCase with dependencies injected.
 func NewSetTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logger) *SetTrailingStopUseCase {
 	return &SetTrailingStopUseCase{manager: manager, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *SetTrailingStopUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute creates a trailing stop and returns the ID.
 func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrailingStopCommand) (string, error) {
@@ -65,6 +69,20 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 		return "", fmt.Errorf("usecases: set trailing stop: %w", err)
 	}
 
+	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", id, "trailing_stop.set", map[string]any{
+		"email":            cmd.Email,
+		"trailing_stop_id": id,
+		"exchange":         cmd.Exchange,
+		"tradingsymbol":    cmd.Tradingsymbol,
+		"order_id":         cmd.OrderID,
+		"variety":          cmd.Variety,
+		"direction":        cmd.Direction,
+		"trail_amount":     cmd.TrailAmount,
+		"trail_pct":        cmd.TrailPct,
+		"current_stop":     cmd.CurrentStop,
+		"reference_price":  cmd.ReferencePrice,
+	})
+
 	return id, nil
 }
 
@@ -94,14 +112,18 @@ func (uc *ListTrailingStopsUseCase) Execute(ctx context.Context, query cqrs.List
 
 // CancelTrailingStopUseCase deactivates a trailing stop.
 type CancelTrailingStopUseCase struct {
-	manager TrailingStopManager
-	logger  *slog.Logger
+	manager    TrailingStopManager
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewCancelTrailingStopUseCase creates a CancelTrailingStopUseCase with dependencies injected.
 func NewCancelTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logger) *CancelTrailingStopUseCase {
 	return &CancelTrailingStopUseCase{manager: manager, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *CancelTrailingStopUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute cancels a trailing stop.
 func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.CancelTrailingStopCommand) error {
@@ -116,6 +138,11 @@ func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.Cance
 		uc.logger.Error("Failed to cancel trailing stop", "email", cmd.Email, "id", cmd.TrailingStopID, "error", err)
 		return fmt.Errorf("usecases: cancel trailing stop: %w", err)
 	}
+
+	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", cmd.TrailingStopID, "trailing_stop.cancelled", map[string]any{
+		"email":            cmd.Email,
+		"trailing_stop_id": cmd.TrailingStopID,
+	})
 
 	return nil
 }

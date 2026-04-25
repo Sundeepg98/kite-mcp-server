@@ -275,6 +275,9 @@ func (m *Manager) registerMFCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceMFOrderUseCase(m.SessionSvc(), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -286,6 +289,9 @@ func (m *Manager) registerMFCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc(), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -297,6 +303,9 @@ func (m *Manager) registerMFCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceMFSIPUseCase(m.SessionSvc(), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -308,6 +317,9 @@ func (m *Manager) registerMFCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc(), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -440,6 +452,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 			return nil, err
 		}
 		uc := usecases.NewPlaceNativeAlertUseCase(m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, client, cmd)
 	}); err != nil {
 		return err
@@ -455,6 +470,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 			return nil, err
 		}
 		uc := usecases.NewModifyNativeAlertUseCase(m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, client, cmd)
 	}); err != nil {
 		return err
@@ -470,6 +488,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 			return nil, err
 		}
 		uc := usecases.NewDeleteNativeAlertUseCase(m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, client, cmd)
 	}); err != nil {
 		return err

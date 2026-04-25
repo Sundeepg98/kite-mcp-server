@@ -103,12 +103,16 @@ func (uc *GetMFHoldingsUseCase) Execute(ctx context.Context, query cqrs.GetMFHol
 // PlaceMFOrderUseCase places a mutual fund order.
 type PlaceMFOrderUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
 func NewPlaceMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceMFOrderUseCase {
 	return &PlaceMFOrderUseCase{brokerResolver: resolver, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *PlaceMFOrderUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrderCommand) (broker.MFOrderResponse, error) {
 	if cmd.Email == "" {
@@ -142,18 +146,31 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 		"order_id", resp.OrderID,
 	)
 
+	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", resp.OrderID, "mf.order_placed", map[string]any{
+		"email":            cmd.Email,
+		"tradingsymbol":    cmd.Tradingsymbol,
+		"transaction_type": cmd.TransactionType,
+		"amount":           cmd.Amount,
+		"quantity":         cmd.Quantity,
+		"order_id":         resp.OrderID,
+	})
+
 	return resp, nil
 }
 
 // CancelMFOrderUseCase cancels a pending mutual fund order.
 type CancelMFOrderUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
 func NewCancelMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *CancelMFOrderUseCase {
 	return &CancelMFOrderUseCase{brokerResolver: resolver, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *CancelMFOrderUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOrderCommand) (broker.MFOrderResponse, error) {
 	if cmd.Email == "" {
@@ -175,18 +192,28 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 	}
 
 	uc.logger.Info("MF order cancelled", "email", cmd.Email, "order_id", cmd.OrderID)
+
+	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", cmd.OrderID, "mf.order_cancelled", map[string]any{
+		"email":    cmd.Email,
+		"order_id": cmd.OrderID,
+	})
+
 	return resp, nil
 }
 
 // PlaceMFSIPUseCase places a new mutual fund SIP.
 type PlaceMFSIPUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
 func NewPlaceMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceMFSIPUseCase {
 	return &PlaceMFSIPUseCase{brokerResolver: resolver, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *PlaceMFSIPUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCommand) (broker.MFSIPResponse, error) {
 	if cmd.Email == "" {
@@ -224,18 +251,33 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 		"sip_id", resp.SIPID,
 	)
 
+	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", resp.SIPID, "mf.sip_placed", map[string]any{
+		"email":          cmd.Email,
+		"tradingsymbol":  cmd.Tradingsymbol,
+		"amount":         cmd.Amount,
+		"frequency":      cmd.Frequency,
+		"instalments":    cmd.Instalments,
+		"initial_amount": cmd.InitialAmount,
+		"instalment_day": cmd.InstalmentDay,
+		"sip_id":         resp.SIPID,
+	})
+
 	return resp, nil
 }
 
 // CancelMFSIPUseCase cancels an existing mutual fund SIP.
 type CancelMFSIPUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
 func NewCancelMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *CancelMFSIPUseCase {
 	return &CancelMFSIPUseCase{brokerResolver: resolver, logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *CancelMFSIPUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPCommand) (broker.MFSIPResponse, error) {
 	if cmd.Email == "" {
@@ -257,5 +299,11 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 	}
 
 	uc.logger.Info("MF SIP cancelled", "email", cmd.Email, "sip_id", cmd.SIPID)
+
+	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", cmd.SIPID, "mf.sip_cancelled", map[string]any{
+		"email":  cmd.Email,
+		"sip_id": cmd.SIPID,
+	})
+
 	return resp, nil
 }

@@ -184,6 +184,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: paper engine not configured")
 		}
 		uc := usecases.NewPaperTradingToggleUseCase(m.paperEngine, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -199,6 +202,9 @@ func (m *Manager) registerAccountCommands() error {
 			return nil, fmt.Errorf("cqrs: paper engine not configured")
 		}
 		uc := usecases.NewPaperTradingResetUseCase(m.paperEngine, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

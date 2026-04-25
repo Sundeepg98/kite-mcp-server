@@ -129,6 +129,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewPlaceGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -141,6 +144,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewModifyGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -153,6 +159,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewDeleteGTTUseCase(m.resolverFromContext(ctx), m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -169,6 +178,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
 		uc := usecases.NewConvertPositionUseCase(m.sessionSvc, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -187,6 +199,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: trailing stop manager not configured")
 		}
 		uc := usecases.NewSetTrailingStopUseCase(m.trailingStopMgr, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -202,6 +217,9 @@ func (m *Manager) registerOrderCommands() error {
 			return nil, fmt.Errorf("cqrs: trailing stop manager not configured")
 		}
 		uc := usecases.NewCancelTrailingStopUseCase(m.trailingStopMgr, m.Logger)
+		if m.eventStore != nil {
+			uc.SetEventStore(m.eventStore)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err

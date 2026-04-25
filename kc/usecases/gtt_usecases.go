@@ -51,6 +51,7 @@ func (uc *GetGTTsUseCase) Execute(ctx context.Context, query cqrs.GetGTTsQuery) 
 // PlaceGTTUseCase orchestrates GTT order placement.
 type PlaceGTTUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
@@ -61,6 +62,9 @@ func NewPlaceGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceGTTU
 		logger:         logger,
 	}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *PlaceGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute places a GTT order and returns the trigger ID.
 func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand) (broker.GTTResponse, error) {
@@ -123,12 +127,26 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 		"type", cmd.Type,
 	)
 
+	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", resp.TriggerID), "gtt.placed", map[string]any{
+		"email":            cmd.Email,
+		"trigger_id":       resp.TriggerID,
+		"exchange":         cmd.Instrument.Exchange,
+		"tradingsymbol":    cmd.Instrument.Tradingsymbol,
+		"transaction_type": cmd.TransactionType,
+		"product":          cmd.Product,
+		"type":             cmd.Type,
+		"trigger_value":    cmd.TriggerValue,
+		"quantity":         cmd.Quantity,
+		"limit_price":      cmd.LimitPrice.Amount,
+	})
+
 	return resp, nil
 }
 
 // ModifyGTTUseCase orchestrates GTT order modification.
 type ModifyGTTUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
@@ -139,6 +157,9 @@ func NewModifyGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *ModifyGT
 		logger:         logger,
 	}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *ModifyGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute modifies a GTT order and returns the trigger ID.
 func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTCommand) (broker.GTTResponse, error) {
@@ -200,12 +221,25 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 		"tradingsymbol", cmd.Instrument.Tradingsymbol,
 	)
 
+	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.modified", map[string]any{
+		"email":            cmd.Email,
+		"trigger_id":       cmd.TriggerID,
+		"tradingsymbol":    cmd.Instrument.Tradingsymbol,
+		"transaction_type": cmd.TransactionType,
+		"product":          cmd.Product,
+		"type":             cmd.Type,
+		"trigger_value":    cmd.TriggerValue,
+		"quantity":         cmd.Quantity,
+		"limit_price":      cmd.LimitPrice.Amount,
+	})
+
 	return resp, nil
 }
 
 // DeleteGTTUseCase orchestrates GTT order deletion.
 type DeleteGTTUseCase struct {
 	brokerResolver BrokerResolver
+	eventStore     EventAppender
 	logger         *slog.Logger
 }
 
@@ -216,6 +250,9 @@ func NewDeleteGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *DeleteGT
 		logger:         logger,
 	}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *DeleteGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute deletes a GTT order.
 func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTCommand) (broker.GTTResponse, error) {
@@ -241,6 +278,11 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 		"email", cmd.Email,
 		"trigger_id", cmd.TriggerID,
 	)
+
+	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.deleted", map[string]any{
+		"email":      cmd.Email,
+		"trigger_id": cmd.TriggerID,
+	})
 
 	return resp, nil
 }

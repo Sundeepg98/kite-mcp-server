@@ -21,13 +21,17 @@ type NativeAlertClient interface {
 
 // PlaceNativeAlertUseCase creates a server-side alert at Zerodha.
 type PlaceNativeAlertUseCase struct {
-	logger *slog.Logger
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewPlaceNativeAlertUseCase creates a PlaceNativeAlertUseCase with dependencies injected.
 func NewPlaceNativeAlertUseCase(logger *slog.Logger) *PlaceNativeAlertUseCase {
 	return &PlaceNativeAlertUseCase{logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *PlaceNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute creates a native alert via the provided client.
 func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.PlaceNativeAlertCommand) (any, error) {
@@ -40,6 +44,13 @@ func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAle
 		uc.logger.Error("Failed to create native alert", "email", cmd.Email, "error", err)
 		return nil, fmt.Errorf("usecases: create native alert: %w", err)
 	}
+
+	// Aggregate ID is the email (the broker assigns the alert UUID lazily;
+	// we don't always see it in the immediate response). Multiple
+	// native_alert.placed events for one user is normal.
+	appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", cmd.Email, "native_alert.placed", map[string]any{
+		"email": cmd.Email,
+	})
 
 	return result, nil
 }
@@ -75,13 +86,17 @@ func (uc *ListNativeAlertsUseCase) Execute(ctx context.Context, client NativeAle
 
 // ModifyNativeAlertUseCase modifies an existing native alert.
 type ModifyNativeAlertUseCase struct {
-	logger *slog.Logger
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewModifyNativeAlertUseCase creates a ModifyNativeAlertUseCase with dependencies injected.
 func NewModifyNativeAlertUseCase(logger *slog.Logger) *ModifyNativeAlertUseCase {
 	return &ModifyNativeAlertUseCase{logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *ModifyNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute modifies a native alert.
 func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.ModifyNativeAlertCommand) (any, error) {
@@ -98,6 +113,11 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 		return nil, fmt.Errorf("usecases: modify native alert: %w", err)
 	}
 
+	appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", cmd.UUID, "native_alert.modified", map[string]any{
+		"email": cmd.Email,
+		"uuid":  cmd.UUID,
+	})
+
 	return result, nil
 }
 
@@ -105,13 +125,17 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 
 // DeleteNativeAlertUseCase deletes one or more native alerts.
 type DeleteNativeAlertUseCase struct {
-	logger *slog.Logger
+	eventStore EventAppender
+	logger     *slog.Logger
 }
 
 // NewDeleteNativeAlertUseCase creates a DeleteNativeAlertUseCase with dependencies injected.
 func NewDeleteNativeAlertUseCase(logger *slog.Logger) *DeleteNativeAlertUseCase {
 	return &DeleteNativeAlertUseCase{logger: logger}
 }
+
+// SetEventStore opts the use case into event-sourced audit. nil disables.
+func (uc *DeleteNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
 // Execute deletes native alert(s).
 func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.DeleteNativeAlertCommand) error {
@@ -125,6 +149,14 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 	if err := client.DeleteAlerts(cmd.UUIDs...); err != nil {
 		uc.logger.Error("Failed to delete native alert(s)", "email", cmd.Email, "uuids", cmd.UUIDs, "error", err)
 		return fmt.Errorf("usecases: delete native alert: %w", err)
+	}
+
+	// One event per UUID so the per-aggregate replay stream stays clean.
+	for _, uuid := range cmd.UUIDs {
+		appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", uuid, "native_alert.deleted", map[string]any{
+			"email": cmd.Email,
+			"uuid":  uuid,
+		})
 	}
 
 	return nil
