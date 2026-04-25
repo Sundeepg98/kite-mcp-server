@@ -76,6 +76,12 @@ const (
 	// Catches fat-finger trades and keeps the user's OTR ratio clean
 	// without depending on the broker side throttling.
 	ReasonOTRBand RejectionReason = "otr_band_violation"
+	// ReasonCircuitBreached fires when the order's LIMIT price is
+	// outside the exchange-set daily circuit band (typically ±5/10/20%
+	// of previous-day close). Pre-T2 we relied on Kite to surface this;
+	// catching it client-side avoids a round trip + per-second rate
+	// pressure for a guaranteed-rejection.
+	ReasonCircuitBreached RejectionReason = "circuit_breached"
 )
 
 // Anomaly-detection tuning constants. Centralised here so the product team
@@ -159,6 +165,7 @@ type Guard struct {
 	limits              map[string]*UserLimits // per-user overrides
 	freezeLookup        FreezeQuantityLookup
 	ltpLookup           LTPLookup        // SEBI OTR band oracle; nil ⇒ band check is a no-op
+	circuitLookup       CircuitLookup    // exchange circuit-band oracle; nil ⇒ circuit check is a no-op
 	baseline            BaselineProvider // optional — nil ⇒ anomaly check is a no-op
 	db                  *alerts.DB
 	logger              *slog.Logger

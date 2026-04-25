@@ -62,6 +62,15 @@ func (g *Guard) SetLTPLookup(lookup LTPLookup) {
 	g.ltpLookup = lookup
 }
 
+// SetCircuitLookup wires the T2 circuit-band oracle. When non-nil,
+// circuitLimitCheck consults the lookup on every LIMIT order to verify
+// the price is inside the exchange-set daily band. nil → check no-ops.
+func (g *Guard) SetCircuitLookup(lookup CircuitLookup) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.circuitLookup = lookup
+}
+
 // SetBaselineProvider wires the rolling-baseline source used by the anomaly
 // check. Optional: when nil, checkAnomalyMultiplier is a silent no-op, which
 // is the correct behaviour for DevMode / tests without an audit store.

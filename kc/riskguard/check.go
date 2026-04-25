@@ -207,6 +207,7 @@ func builtinChecks(g *Guard) []Check {
 		&killSwitchCheck{g: g},
 		&confirmationRequiredCheck{g: g},
 		&orderValueCheck{g: g},
+		&circuitLimitCheck{g: g}, // T2: 350, between order_value (300) and quantity_limit (400)
 		&quantityLimitCheck{g: g},
 		&dailyOrderCountCheck{g: g},
 		&perSecondRateCheck{g: g},
@@ -214,7 +215,7 @@ func builtinChecks(g *Guard) []Check {
 		&clientOrderIDDupCheck{g: g},
 		&duplicateOrderCheck{g: g},
 		&dailyValueCheck{g: g},
-		&otrBandCheck{g: g}, // SEBI OTR Apr 2026 — reads g.ltpLookup at eval time
+		&otrBandCheck{g: g},  // SEBI OTR Apr 2026 — reads g.ltpLookup at eval time
 		&anomalyMultiplierCheck{g: g},
 		&offHoursCheck{g: g},
 	}
@@ -227,6 +228,7 @@ var (
 	_ Check = (*killSwitchCheck)(nil)
 	_ Check = (*confirmationRequiredCheck)(nil)
 	_ Check = (*orderValueCheck)(nil)
+	_ Check = (*circuitLimitCheck)(nil)
 	_ Check = (*quantityLimitCheck)(nil)
 	_ Check = (*dailyOrderCountCheck)(nil)
 	_ Check = (*perSecondRateCheck)(nil)
