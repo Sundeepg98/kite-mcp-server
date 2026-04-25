@@ -1303,3 +1303,112 @@ func TestIsKiteTokenExpired_AfternoonIST(t *testing.T) {
 		t.Error("Token stored two days ago afternoon should be expired")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// G99: Session-fixation defence (OWASP A07).
+//
+// CompleteSessionAndRotate is the post-auth replacement for CompleteSession.
+// On successful Kite token exchange the OLD sessionID is terminated and a
+// FRESH crypto-random sessionID is returned with the Kite session data
+// rebound to it. An attacker that pre-set the original sessionID can no
+// longer use it after the legitimate user finishes login.
+// ---------------------------------------------------------------------------
+
+// TestCompleteSessionAndRotate_GeneratesFreshID — happy path. Old ID
+// becomes terminated; new ID is non-empty and distinct.
+func TestCompleteSessionAndRotate_GeneratesFreshID(t *testing.T) {
+	t.Parallel()
+	ts := newMockKiteServer(t)
+	defer ts.Close()
+
+	m := newTestManagerWithDB(t)
+	oldID := m.GenerateSession()
+
+	kd, err := m.GetSession(oldID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	kd.Kite.Client.SetBaseURI(ts.URL)
+
+	newID, err := m.CompleteSessionAndRotate(oldID, "mock-request-token")
+	if err != nil {
+		t.Fatalf("CompleteSessionAndRotate: %v", err)
+	}
+	if newID == "" {
+		t.Fatal("rotated session ID must be non-empty")
+	}
+	if newID == oldID {
+		t.Fatalf("rotated session ID must DIFFER from old (got both = %q)", newID)
+	}
+	if !strings.HasPrefix(newID, mcpSessionPrefix) {
+		t.Errorf("rotated session ID missing prefix: %q", newID)
+	}
+}
+
+// TestCompleteSessionAndRotate_OldIDIsTerminated — the load-bearing
+// session-fixation defence. After rotation the OLD sessionID must NOT
+// authenticate — Validate surfaces it as terminated.
+func TestCompleteSessionAndRotate_OldIDIsTerminated(t *testing.T) {
+	t.Parallel()
+	ts := newMockKiteServer(t)
+	defer ts.Close()
+
+	m := newTestManagerWithDB(t)
+	oldID := m.GenerateSession()
+
+	kd, err := m.GetSession(oldID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	kd.Kite.Client.SetBaseURI(ts.URL)
+
+	if _, err := m.CompleteSessionAndRotate(oldID, "mock-request-token"); err != nil {
+		t.Fatalf("CompleteSessionAndRotate: %v", err)
+	}
+
+	terminated, _ := m.SessionManager().Validate(oldID)
+	if !terminated {
+		t.Error("OWASP A07 regression: old sessionID survived rotation — pre-set attacker can still authenticate")
+	}
+}
+
+// TestCompleteSessionAndRotate_NewIDHoldsKiteData — Kite session data
+// (email + token) migrates to the new sessionID; legitimate user can
+// continue their workflow.
+func TestCompleteSessionAndRotate_NewIDHoldsKiteData(t *testing.T) {
+	t.Parallel()
+	ts := newMockKiteServer(t)
+	defer ts.Close()
+
+	m := newTestManagerWithDB(t)
+	oldID := m.GenerateSession()
+
+	kd, err := m.GetSession(oldID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Email = "alice@example.com"
+
+	newID, err := m.CompleteSessionAndRotate(oldID, "mock-request-token")
+	if err != nil {
+		t.Fatalf("CompleteSessionAndRotate: %v", err)
+	}
+
+	newKd, err := m.GetSession(newID)
+	if err != nil {
+		t.Fatalf("new session must be retrievable: %v", err)
+	}
+	if newKd.Email != "alice@example.com" {
+		t.Errorf("Email did not migrate to rotated session: got %q", newKd.Email)
+	}
+}
+
+// TestCompleteSessionAndRotate_EmptyID — input validation.
+func TestCompleteSessionAndRotate_EmptyID(t *testing.T) {
+	t.Parallel()
+	m := newTestManagerWithDB(t)
+	if _, err := m.CompleteSessionAndRotate("", "tok"); err == nil {
+		t.Fatal("empty session ID must be rejected")
+	}
+}

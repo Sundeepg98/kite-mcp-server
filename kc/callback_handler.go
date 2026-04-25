@@ -26,12 +26,18 @@ func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Reque
 
 		m.Logger.Debug("Processing Kite callback for MCP session ID", "session_id", mcpSessionID, "request_token", requestToken)
 
-		if err := m.CompleteSession(mcpSessionID, requestToken); err != nil {
+		// G99 — rotate the session ID after successful Kite auth.
+		// Returning the new ID via the success template is downstream
+		// work (cookie + AppBridge propagation); for now we just log
+		// it so operators correlate. Crucially, the OLD id is now
+		// terminated — an attacker that pre-set it cannot use it.
+		newSessionID, err := m.CompleteSessionAndRotate(mcpSessionID, requestToken)
+		if err != nil {
 			m.handleCallbackError(w, sessionErrorMessage, http.StatusInternalServerError, "Error completing Kite session", "session_id", mcpSessionID, "error", err)
 			return
 		}
 
-		m.Logger.Info("Kite session completed successfully", "session_id", mcpSessionID)
+		m.Logger.Info("Kite session completed and rotated", "old_session_id", mcpSessionID, "new_session_id", newSessionID)
 
 		if err := m.renderSuccessTemplate(w); err != nil {
 			m.Logger.Error("Template failed to load - this is a fatal error", "error", err)

@@ -48,8 +48,16 @@ func (s *SessionLifecycleService) SessionLoginURL(mcpSessionID string) (string, 
 }
 
 // CompleteSession completes Kite authentication using the request token.
+// Back-compat wrapper around CompleteSessionAndRotate.
 func (s *SessionLifecycleService) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 	return s.m.sessionSvc.CompleteSession(mcpSessionID, kiteRequestToken)
+}
+
+// CompleteSessionAndRotate completes Kite authentication AND rotates the
+// MCP session ID for OWASP A07 (Session Fixation) defence. Returns the
+// post-rotation session ID.
+func (s *SessionLifecycleService) CompleteSessionAndRotate(mcpSessionID, kiteRequestToken string) (string, error) {
+	return s.m.sessionSvc.CompleteSessionAndRotate(mcpSessionID, kiteRequestToken)
 }
 
 // GetActiveSessionCount returns the number of active sessions.
@@ -96,8 +104,16 @@ func (m *Manager) SessionLoginURL(mcpSessionID string) (string, error) {
 }
 
 // CompleteSession completes Kite authentication using the request token.
+// Back-compat shim — new callers should use CompleteSessionAndRotate to
+// receive the post-auth rotated session ID (OWASP A07 defence).
 func (m *Manager) CompleteSession(mcpSessionID, kiteRequestToken string) error {
 	return m.sessionLifecycle.CompleteSession(mcpSessionID, kiteRequestToken)
+}
+
+// CompleteSessionAndRotate completes Kite authentication and rotates the
+// session ID. See SessionService.CompleteSessionAndRotate for semantics.
+func (m *Manager) CompleteSessionAndRotate(mcpSessionID, kiteRequestToken string) (string, error) {
+	return m.sessionLifecycle.CompleteSessionAndRotate(mcpSessionID, kiteRequestToken)
 }
 
 // GetActiveSessionCount returns the number of active sessions.

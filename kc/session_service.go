@@ -399,10 +399,46 @@ func (ss *SessionService) SessionLoginURL(mcpSessionID string) (string, error) {
 }
 
 // CompleteSession completes Kite authentication using the request token.
+//
+// Back-compat shim around CompleteSessionAndRotate. New callers should
+// use CompleteSessionAndRotate directly to receive the post-auth
+// rotated session ID — that's the OWASP A07 (session fixation) defence.
+// This wrapper discards the new ID and returns only the error so the
+// pre-G99 `error`-only signature continues to compile.
+//
+// In-tree callers (the HTTP callback handler in kc/callback_handler.go)
+// have been migrated; the handful of test fixtures that still call this
+// method don't care about the rotated ID.
 func (ss *SessionService) CompleteSession(mcpSessionID, kiteRequestToken string) error {
+	_, err := ss.CompleteSessionAndRotate(mcpSessionID, kiteRequestToken)
+	return err
+}
+
+// CompleteSessionAndRotate completes Kite authentication AND rotates the
+// MCP session ID — OWASP A07 (Session Fixation) defence.
+//
+// The flow:
+//  1. Validate the supplied (possibly attacker-influenced) session ID.
+//  2. Exchange Kite request token for the access token.
+//  3. Generate a fresh session ID via SessionRegistry.Generate (which
+//     uses crypto/rand-backed UUIDv4 — same RNG as the original
+//     session-issuance path).
+//  4. Migrate the Kite session data (token, email, user id) onto the
+//     new ID.
+//  5. Terminate the old ID so Validate() rejects it.
+//
+// The new ID is returned to the caller, which is responsible for
+// surfacing it back to the legitimate MCP client (e.g. via a signed
+// cookie on the callback response, or a server-side mapping keyed
+// by the user's email).
+//
+// On any pre-rotation failure the OLD session is left untouched —
+// nothing was authenticated, nothing to invalidate. Callers seeing a
+// non-nil error should NOT treat the old ID as terminated.
+func (ss *SessionService) CompleteSessionAndRotate(mcpSessionID, kiteRequestToken string) (string, error) {
 	if err := validateSessionID(mcpSessionID); err != nil {
-		ss.logger.Warn("CompleteSession called with empty MCP session ID")
-		return err
+		ss.logger.Warn("CompleteSessionAndRotate called with empty MCP session ID")
+		return "", err
 	}
 
 	ss.logger.Debug("Completing Kite auth for MCP session", "session_id", mcpSessionID, "request_token", kiteRequestToken)
@@ -410,20 +446,20 @@ func (ss *SessionService) CompleteSession(mcpSessionID, kiteRequestToken string)
 	kiteData, err := ss.GetSession(mcpSessionID)
 	if err != nil {
 		ss.logger.Error("Failed to complete session", "session_id", mcpSessionID, "error", err)
-		return ErrSessionNotFound
+		return "", ErrSessionNotFound
 	}
 
 	apiSecret := ss.credentialSvc.GetAPISecretForEmail(kiteData.Email)
 	if apiSecret == "" {
 		ss.logger.Error("No API secret configured", "session_id", mcpSessionID, "email", kiteData.Email)
-		return fmt.Errorf("no Kite API secret configured")
+		return "", fmt.Errorf("no Kite API secret configured")
 	}
 
 	ss.logger.Debug("Generating Kite session with request token")
 	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, apiSecret)
 	if err != nil {
 		ss.logger.Error("Failed to generate Kite session", "error", err)
-		return fmt.Errorf("failed to generate Kite session: %w", err)
+		return "", fmt.Errorf("failed to generate Kite session: %w", err)
 	}
 
 	ss.logger.Debug("Setting Kite access token for MCP session", "session_id", mcpSessionID)
@@ -439,11 +475,27 @@ func (ss *SessionService) CompleteSession(mcpSessionID, kiteRequestToken string)
 		ss.logger.Debug("Cached Kite token for user", "email", kiteData.Email, "user_id", userSess.UserID)
 	}
 
+	// G99 — rotate the MCP session ID. Generate a fresh ID, migrate
+	// the just-authenticated KiteSessionData onto it, and terminate
+	// the old ID so Validate() rejects subsequent requests bearing it.
+	// Order: GenerateWithData first (always succeeds for valid input),
+	// then Terminate (best-effort — logs but doesn't fail rotation).
+	newID := ss.sessionManager.GenerateWithData(kiteData)
+	if _, termErr := ss.sessionManager.Terminate(mcpSessionID); termErr != nil {
+		// Old-session termination failed — log but continue. The new
+		// session is still authoritative for the legitimate user; the
+		// old session staying valid is a known partial-rotation case
+		// that the cleanup goroutine will sweep.
+		ss.logger.Warn("Failed to terminate old session during rotation",
+			"old_session_id", mcpSessionID, "new_session_id", newID, "error", termErr)
+	}
+
 	// Compliance log for successful login
 	ss.logger.Info("COMPLIANCE: User login completed successfully",
 		"event", "user_login_success",
 		"user_id", userSess.UserID,
-		"session_id", mcpSessionID,
+		"old_session_id", mcpSessionID,
+		"new_session_id", newID,
 		"timestamp", time.Now().UTC().Format(time.RFC3339),
 		"user_name", userSess.UserName,
 		"user_type", userSess.UserType,
@@ -455,7 +507,7 @@ func (ss *SessionService) CompleteSession(mcpSessionID, kiteRequestToken string)
 		ss.metrics.Increment("user_logins")
 	}
 
-	return nil
+	return newID, nil
 }
 
 // GetActiveSessionCount returns the number of active sessions.
