@@ -169,7 +169,11 @@ func (uc *CreateAlertUseCase) appendCreatedEvent(alertID string, cmd cqrs.Create
 		OccurredAt:    occurredAt.UTC(),
 		Sequence:      seq,
 	}
-	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on alert.created", "alert_id", alertID, "error", err)
+	// Hot mutation path — route through outbox. See kc/eventsourcing/outbox.go.
+	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
+		uc.logger.Warn("outbox append failed on alert.created; trying direct path", "alert_id", alertID, "error", err)
+		if err := uc.eventStore.Append(evt); err != nil {
+			uc.logger.Warn("event store Append failed on alert.created", "alert_id", alertID, "error", err)
+		}
 	}
 }

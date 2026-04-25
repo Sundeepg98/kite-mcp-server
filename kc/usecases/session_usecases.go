@@ -24,8 +24,17 @@ type SessionDataClearer interface {
 // exposes LoadEvents / LoadEventsSince which are read-model concerns; the
 // use case only needs to append and ask for the next sequence number.
 // kc/eventsourcing.EventStore satisfies this natively.
+//
+// AppendToOutbox is the durability-first variant for hot mutation paths
+// (place_order, modify_order, cancel_order, create_alert) where audit
+// loss after the broker side-effect is unacceptable. The implementation
+// writes to a small staging table; an async pump drains it into the
+// canonical domain_events table. Crash recovery is automatic on the
+// next process restart. Use cases that don't need this guarantee call
+// Append directly. See kc/eventsourcing/outbox.go for full design.
 type EventAppender interface {
 	Append(events ...eventsourcing.StoredEvent) error
+	AppendToOutbox(evt eventsourcing.StoredEvent) error
 	NextSequence(aggregateID string) (int64, error)
 }
 

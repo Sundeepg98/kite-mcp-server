@@ -47,6 +47,14 @@ func OpenDB(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	// SQLite is single-writer by design — pinning the pool to one
+	// connection eliminates the modernc/sqlite ":memory:" gotcha where
+	// each pool connection gets its own in-memory database. For file-
+	// backed DBs the cap matches SQLite's actual concurrency. Without
+	// this, async writers (event outbox pump, audit buffer flush) can
+	// race-spawn fresh connections that don't see other goroutines'
+	// schema changes.
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil { // COVERAGE: unreachable — SQLite Open succeeds implies Ping succeeds
 		return nil, fmt.Errorf("ping db: %w", err)
 	}

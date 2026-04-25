@@ -124,6 +124,9 @@ func registerTestAppCleanup(t *testing.T, app *App) {
 			if app.hashPublisherCancel != nil {
 				app.hashPublisherCancel()
 			}
+			if app.outboxPump != nil {
+				app.outboxPump.Stop()
+			}
 			if app.auditStore != nil {
 				app.auditStore.Stop()
 			}
@@ -196,6 +199,9 @@ func cleanupInitializeServices(app *App, mgr *kc.Manager) {
 	}
 	if app.hashPublisherCancel != nil {
 		app.hashPublisherCancel()
+	}
+	if app.outboxPump != nil {
+		app.outboxPump.Stop()
 	}
 	if app.auditStore != nil {
 		app.auditStore.Stop()

@@ -90,6 +90,13 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.logger.Error("Server shutdown error", "error", err)
 		}
 
+		// Drain the event outbox before audit/manager shutdown so any
+		// in-flight events from the just-served requests land in
+		// domain_events. The pump's Stop() does one final drain.
+		if app.outboxPump != nil {
+			app.outboxPump.Stop()
+		}
+
 		// Then drain audit buffer (all in-flight requests have completed)
 		if app.auditStore != nil {
 			app.auditStore.Stop()

@@ -30,6 +30,18 @@ func (m *mockEventAppender) Append(events ...eventsourcing.StoredEvent) error {
 	return nil
 }
 
+// AppendToOutbox satisfies the PR-B EventAppender contract. The mock
+// treats outbox writes as Append: tests assert on the same `appended`
+// slice regardless of which path the use case picked. To exercise
+// outbox-only behaviour, drive the real eventsourcing.EventStore.
+func (m *mockEventAppender) AppendToOutbox(evt eventsourcing.StoredEvent) error {
+	if m.appendErr != nil {
+		return m.appendErr
+	}
+	m.appended = append(m.appended, evt)
+	return nil
+}
+
 func (m *mockEventAppender) NextSequence(aggregateID string) (int64, error) {
 	if m.nextSeqErr != nil {
 		return 0, m.nextSeqErr

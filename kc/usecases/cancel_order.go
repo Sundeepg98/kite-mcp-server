@@ -114,7 +114,11 @@ func (uc *CancelOrderUseCase) appendCancelledEvent(orderID string, occurredAt ti
 		OccurredAt:    occurredAt,
 		Sequence:      seq,
 	}
-	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on order.cancelled", "order_id", orderID, "error", err)
+	// Hot mutation path — route through outbox. See kc/eventsourcing/outbox.go.
+	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
+		uc.logger.Warn("outbox append failed on order.cancelled; trying direct path", "order_id", orderID, "error", err)
+		if err := uc.eventStore.Append(evt); err != nil {
+			uc.logger.Warn("event store Append failed on order.cancelled", "order_id", orderID, "error", err)
+		}
 	}
 }

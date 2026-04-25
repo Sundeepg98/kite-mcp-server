@@ -180,7 +180,12 @@ func (uc *ModifyOrderUseCase) appendModifiedEvent(cmd cqrs.ModifyOrderCommand, o
 		OccurredAt:    occurredAt,
 		Sequence:      seq,
 	}
-	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on order.modified", "order_id", cmd.OrderID, "error", err)
+	// Hot mutation path — route through outbox to shrink audit-loss
+	// window after the broker side-effect. See kc/eventsourcing/outbox.go.
+	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
+		uc.logger.Warn("outbox append failed on order.modified; trying direct path", "order_id", cmd.OrderID, "error", err)
+		if err := uc.eventStore.Append(evt); err != nil {
+			uc.logger.Warn("event store Append failed on order.modified", "order_id", cmd.OrderID, "error", err)
+		}
 	}
 }

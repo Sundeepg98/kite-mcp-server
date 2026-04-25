@@ -17,6 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
@@ -96,6 +97,10 @@ type App struct {
 	// the close-then-rebind port race that made parallel RunServer tests
 	// flake under heavy load.
 	preboundListener net.Listener
+	// outboxPump asynchronously drains event_outbox into domain_events.
+	// nil when the eventStore wasn't wired (DevMode without DB) or
+	// InitOutboxTable failed. Stopped during graceful shutdown.
+	outboxPump *eventsourcing.OutboxPump
 }
 
 // TriggerShutdown initiates a graceful shutdown without requiring an

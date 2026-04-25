@@ -77,6 +77,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			if app.hashPublisherCancel != nil {
 				app.hashPublisherCancel()
 			}
+			if app.outboxPump != nil {
+				app.outboxPump.Stop()
+			}
 			if app.auditStore != nil {
 				app.auditStore.Stop()
 			}
@@ -262,6 +265,17 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		if err := eventStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize domain_events table", "error", err)
 		} else {
+			// PR-B: outbox staging table + async pump for hot mutation
+			// paths. Drains event_outbox → domain_events every 100ms,
+			// recovers leftover entries from a previous crashed process
+			// at startup. Hot use cases (place/modify/cancel/create_alert)
+			// write to the outbox first; the pump consumes asynchronously.
+			if err := eventStore.InitOutboxTable(); err != nil {
+				app.logger.Error("Failed to initialize event_outbox table", "error", err)
+			} else {
+				app.outboxPump = eventsourcing.NewOutboxPump(eventStore, app.logger)
+				app.logger.Info("Event outbox pump started")
+			}
 			kcManager.SetEventStore(eventStore)
 			// Subscribe the domain audit log to persist all dispatched events.
 			// Phase C ES: order.placed / .modified / .cancelled are appended

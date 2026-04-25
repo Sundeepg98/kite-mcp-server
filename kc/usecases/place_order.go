@@ -241,9 +241,17 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 }
 
 // appendPlacedEvent writes an order.placed StoredEvent to the audit log.
-// Best-effort — the broker has already placed the order; a failed audit
-// append logs and returns. Payload matches OrderPlacedPayload in
-// kc/eventsourcing/order_aggregate.go for replay compatibility.
+//
+// Routes through the OUTBOX (AppendToOutbox) rather than Append directly:
+// the broker has already placed the order, so the audit-loss window
+// between the synchronous Append and a process crash is the worst-case
+// path here. The outbox shrinks the window to a single SQLite INSERT;
+// the async pump in kc/eventsourcing/outbox.go drains pending entries
+// into domain_events. Startup-recovery picks up rows from a previous
+// crashed process automatically.
+//
+// Payload matches OrderPlacedPayload in kc/eventsourcing/order_aggregate.go
+// for replay compatibility.
 func (uc *PlaceOrderUseCase) appendPlacedEvent(orderID string, cmd cqrs.PlaceOrderCommand, symbol, exchange string, qty int, price float64, occurredAt time.Time) {
 	if uc.eventStore == nil {
 		return
@@ -274,8 +282,13 @@ func (uc *PlaceOrderUseCase) appendPlacedEvent(orderID string, cmd cqrs.PlaceOrd
 		OccurredAt:    occurredAt,
 		Sequence:      seq,
 	}
-	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on order.placed", "order_id", orderID, "error", err)
+	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
+		uc.logger.Warn("outbox append failed on order.placed; trying direct path", "order_id", orderID, "error", err)
+		// Fallback to direct append so a transient outbox-table issue
+		// (rare) doesn't lose the audit entry on a single attempt.
+		if err := uc.eventStore.Append(evt); err != nil {
+			uc.logger.Warn("event store Append failed on order.placed", "order_id", orderID, "error", err)
+		}
 	}
 }
 
