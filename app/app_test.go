@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -11,9 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
@@ -326,7 +329,61 @@ func TestServeStatusPage_Root_WithLandingTemplate(t *testing.T) {
 // provisionUser adapter tests
 // ===========================================================================
 
+// newProvisionTestAdapter wires a kiteExchangerAdapter that dispatches
+// provisionUser through a bus pre-registered with the
+// ProvisionUserOnLoginCommand handler. Block 1 routed every adapter
+// write through the bus; this helper keeps the tests black-box (they
+// still check the visible store-state outcome) without leaking CQRS
+// boilerplate into every test body.
+func newProvisionTestAdapter(t *testing.T, store *users.Store) *kiteExchangerAdapter {
+	t.Helper()
+	logger := testLogger()
+	bus := cqrs.NewInMemoryBus()
+	mgrPort := &provisionUserAdapterTestPort{store: store}
+	if err := bus.Register(reflect.TypeFor[cqrs.ProvisionUserOnLoginCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd := msg.(cqrs.ProvisionUserOnLoginCommand)
+		uc := usecases.NewProvisionUserOnLoginUseCase(mgrPort, logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return &kiteExchangerAdapter{
+		userStore:  store,
+		logger:     logger,
+		commandBus: bus,
+	}
+}
+
+// provisionUserAdapterTestPort is a one-off implementation of
+// usecases.UserProvisioner backed by a *users.Store, used only by the
+// tests below. The production adapter lives in kc/manager_commands_oauth.go;
+// re-implementing it here avoids a circular import (app → kc → app).
+type provisionUserAdapterTestPort struct {
+	store *users.Store
+}
+
+func (p *provisionUserAdapterTestPort) GetStatus(email string) string {
+	return p.store.GetStatus(email)
+}
+func (p *provisionUserAdapterTestPort) EnsureUser(email, kiteUID, displayName, onboardedBy string) usecases.UserRecord {
+	u := p.store.EnsureUser(email, kiteUID, displayName, onboardedBy)
+	if u == nil {
+		return nil
+	}
+	return &provisionUserAdapterTestRecord{u: u}
+}
+func (p *provisionUserAdapterTestPort) UpdateLastLogin(email string)            { p.store.UpdateLastLogin(email) }
+func (p *provisionUserAdapterTestPort) UpdateKiteUID(email, kiteUID string)     { p.store.UpdateKiteUID(email, kiteUID) }
+
+type provisionUserAdapterTestRecord struct {
+	u *users.User
+}
+
+func (r *provisionUserAdapterTestRecord) GetKiteUID() string { return r.u.KiteUID }
+
 func TestProvisionUser_NilUserStore(t *testing.T) {
+	// Bus-less adapter: provisionUser fast-paths to nil (mirrors the
+	// dev-mode no-bus deployment).
 	adapter := &kiteExchangerAdapter{
 		userStore: nil,
 		logger:    testLogger(),
@@ -340,10 +397,7 @@ func TestProvisionUser_SuspendedUser(t *testing.T) {
 	store.EnsureUser("suspended@example.com", "", "", "self")
 	_ = store.UpdateStatus("suspended@example.com", users.StatusSuspended)
 
-	adapter := &kiteExchangerAdapter{
-		userStore: store,
-		logger:    testLogger(),
-	}
+	adapter := newProvisionTestAdapter(t, store)
 	err := adapter.provisionUser("suspended@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "suspended")
@@ -354,10 +408,7 @@ func TestProvisionUser_OffboardedUser(t *testing.T) {
 	store.EnsureUser("offboarded@example.com", "", "", "self")
 	_ = store.UpdateStatus("offboarded@example.com", users.StatusOffboarded)
 
-	adapter := &kiteExchangerAdapter{
-		userStore: store,
-		logger:    testLogger(),
-	}
+	adapter := newProvisionTestAdapter(t, store)
 	err := adapter.provisionUser("offboarded@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "offboarded")
@@ -365,10 +416,7 @@ func TestProvisionUser_OffboardedUser(t *testing.T) {
 
 func TestProvisionUser_NewUser(t *testing.T) {
 	store := users.NewStore()
-	adapter := &kiteExchangerAdapter{
-		userStore: store,
-		logger:    testLogger(),
-	}
+	adapter := newProvisionTestAdapter(t, store)
 	err := adapter.provisionUser("new@example.com", "UID789", "New User")
 	assert.NoError(t, err)
 

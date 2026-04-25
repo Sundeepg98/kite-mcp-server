@@ -291,6 +291,14 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
+	// --- CommandBus batch G: OAuth/login bridge (Block 1 CQRS round-up) ---
+	// Replaces 8 direct store mutations in app/adapters.go (kiteExchanger
+	// Adapter and clientPersisterAdapter) with bus-routed commands so every
+	// write hits LoggingMiddleware uniformly.
+	if err := m.registerOAuthBridgeCommands(); err != nil {
+		return err
+	}
+
 	// --- QueryBus batch D: remaining read tool migrations ---
 	if err := m.registerRemainingQueries(); err != nil {
 		return err

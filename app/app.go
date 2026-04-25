@@ -529,14 +529,15 @@ func (app *App) RunServer() error {
 		}
 		signer := &signerAdapter{signer: kcManager.SessionSigner()}
 		exchanger := &kiteExchangerAdapter{
-			apiKey:        app.Config.KiteAPIKey,
-			apiSecret:     app.Config.KiteAPISecret,
-			tokenStore:    kcManager.TokenStoreConcrete(),
+			apiKey:          app.Config.KiteAPIKey,
+			apiSecret:       app.Config.KiteAPISecret,
+			tokenStore:      kcManager.TokenStoreConcrete(),
 			credentialStore: kcManager.CredentialStoreConcrete(),
-			registryStore: kcManager.RegistryStoreConcrete(),
-			userStore:     kcManager.UserStoreConcrete(),
-			logger:        app.logger,
-			authenticator: zerodha.NewAuth(),
+			registryStore:   kcManager.RegistryStoreConcrete(),
+			userStore:       kcManager.UserStoreConcrete(),
+			logger:          app.logger,
+			authenticator:   zerodha.NewAuth(),
+			commandBus:      kcManager.CommandBus(), // CQRS: every write dispatches via bus
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
 
@@ -580,7 +581,11 @@ func (app *App) RunServer() error {
 
 		// Wire OAuth client registration persistence
 		if alertDB := kcManager.AlertDB(); alertDB != nil {
-			app.oauthHandler.SetClientPersister(&clientPersisterAdapter{db: alertDB}, app.logger)
+			app.oauthHandler.SetClientPersister(&clientPersisterAdapter{
+				db:         alertDB,
+				commandBus: kcManager.CommandBus(), // CQRS: writes dispatch via bus
+				logger:     app.logger,
+			}, app.logger)
 			if err := app.oauthHandler.LoadClientsFromDB(); err != nil {
 				app.logger.Error("Failed to load OAuth clients from DB", "error", err)
 			} else {
