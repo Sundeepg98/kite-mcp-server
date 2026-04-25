@@ -34,23 +34,21 @@ import (
 // initializeServices — exercise Stripe billing branch (non-DevMode)
 // ===========================================================================
 func TestInitializeServices_WithStripeAndPriceWarning(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_fake_key_for_billing_test_coverage")
-	t.Setenv("STRIPE_PRICE_PRO", "")      // empty triggers warning log
-	t.Setenv("STRIPE_PRICE_PREMIUM", "")   // empty triggers warning log
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeSecretKey:      "sk_test_fake_key_for_billing_test_coverage",
+		// Empty STRIPE_PRICE_* triggers the warning-log branch in wire.go.
+		StripePricePro:       "",
+		StripePricePremium:   "",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "https://test.example.com"
-	app.Config.AdminEmails = "admin@test.com"
 
 	mgr, mcpSrv, err := app.initializeServices()
 	require.NoError(t, err)
@@ -65,23 +63,20 @@ func TestInitializeServices_WithStripeAndPriceWarning(t *testing.T) {
 
 
 func TestInitializeServices_StripePricesSet(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_fake_key_prices_set_test")
-	t.Setenv("STRIPE_PRICE_PRO", "price_pro_123")
-	t.Setenv("STRIPE_PRICE_PREMIUM", "price_premium_456")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeSecretKey:      "sk_test_fake_key_prices_set_test",
+		StripePricePro:       "price_pro_123",
+		StripePricePremium:   "price_premium_456",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "https://test.example.com"
-	app.Config.AdminEmails = "admin@test.com"
 
 	mgr, mcpSrv, err := app.initializeServices()
 	require.NoError(t, err)

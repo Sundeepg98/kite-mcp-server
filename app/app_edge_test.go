@@ -653,19 +653,14 @@ func TestSetupMux_AcceptInvite_AllPaths_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunServer_InitServicesError_Push100(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "")     // Missing → error
-	t.Setenv("KITE_API_SECRET", "")  // Missing → error
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		// Empty Kite credentials + DevMode=false → initializeServices must fail.
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
-	app.Config.KiteAPIKey = ""
-	app.Config.KiteAPISecret = ""
-	app.Config.AlertDBPath = ":memory:"
 
 	err := app.RunServer()
 	// Should fail because no API key/secret and not DevMode
@@ -680,25 +675,8 @@ func TestRunServer_InitServicesError_Push100(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunServer_OAuthWiring_Push100(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("APP_MODE", "hybrid")
+	t.Parallel()
 
-	app := newTestApp(t)
-	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "https://test.example.com"
-	app.Config.KiteAPIKey = "test_key"
-	app.Config.KiteAPISecret = "test_secret"
-	app.Config.AppMode = ModeHybrid
-	app.Config.AppHost = "127.0.0.1"
 	// Reserve a fixed port so setup-graceful-shutdown can dial Shutdown
 	// before leaking listeners. Port 0 would bind randomly and we'd not
 	// get a reliable address for teardown.
@@ -706,7 +684,19 @@ func TestRunServer_OAuthWiring_Push100(t *testing.T) {
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
-	app.Config.AppPort = fmt.Sprintf("%d", port)
+
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		AppMode:              ModeHybrid,
+		AppHost:              "127.0.0.1",
+		AppPort:              fmt.Sprintf("%d", port),
+		InstrumentsSkipFetch: true,
+	})
+	app.DevMode = true
 
 	// Inject shutdownCh so we can trigger graceful shutdown without OS
 	// signals. Without this, RunServer's HTTP server goroutine blocks in

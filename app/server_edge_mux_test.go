@@ -98,6 +98,7 @@ func TestSetupMux_ServerCard_OptionsMethod(t *testing.T) {
 // setupMux — admin password seeding: already has password
 // ===========================================================================
 func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 	userStore := mgr.UserStoreConcrete()
 	require.NotNil(t, userStore)
@@ -106,10 +107,11 @@ func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
 	userStore.EnsureAdmin("admin@test.com")
 	_ = userStore.SetPasswordHash("admin@test.com", "$2a$12$fakehashfakehashfakehashfakehashfakehashfakehashfak")
 
-	t.Setenv("ADMIN_PASSWORD", "new-password-should-not-override")
-
-	app := newTestApp(t)
-	app.Config.AdminEmails = "admin@test.com"
+	app := newTestAppWithConfig(t, &Config{
+		AdminEmails:          "admin@test.com",
+		AdminPassword:        "new-password-should-not-override",
+		InstrumentsSkipFetch: true,
+	})
 
 	mux := app.setupMux(mgr)
 	defer app.rateLimiters.Stop()
@@ -121,9 +123,7 @@ func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
 // setupMux — Stripe webhook with billing store AND webhook events table
 // ===========================================================================
 func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_event_log_123")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 
 	// Set up a billing store on the manager so BillingStoreConcrete() != nil
@@ -133,7 +133,10 @@ func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
 		mgr.SetBillingStore(bs)
 	}
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		StripeWebhookSecret:  "whsec_test_event_log_123",
+		InstrumentsSkipFetch: true,
+	})
 
 	mux := app.setupMux(mgr)
 	defer app.rateLimiters.Stop()
@@ -891,11 +894,13 @@ func TestSetupMux_AcceptInvite_ValidInv_Cov(t *testing.T) {
 // setupMux — Stripe webhook with billing store but NO STRIPE_SECRET (warn branch)
 // ===========================================================================
 func TestSetupMux_StripeWebhookNoBillingStore_Cov(t *testing.T) {
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_no_billing_123")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
 	// Do NOT set billing store → the warning branch is exercised
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		StripeWebhookSecret:  "whsec_test_no_billing_123",
+		InstrumentsSkipFetch: true,
+	})
 
 	mux := app.setupMux(mgr)
 	defer app.rateLimiters.Stop()
@@ -1116,11 +1121,13 @@ func TestSetupMux_OpsHandler_AdminSecretPathFallback(t *testing.T) {
 // setupMux — admin password seeding (multiple admin emails)
 // ===========================================================================
 func TestSetupMux_AdminPassword_MultipleEmails(t *testing.T) {
-	t.Setenv("ADMIN_PASSWORD", "test-admin-password-123")
-
+	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	app := newTestApp(t)
-	app.Config.AdminEmails = "admin1@test.com, admin2@test.com"
+	app := newTestAppWithConfig(t, &Config{
+		AdminEmails:          "admin1@test.com, admin2@test.com",
+		AdminPassword:        "test-admin-password-123",
+		InstrumentsSkipFetch: true,
+	})
 
 	mux := app.setupMux(mgr)
 	defer app.rateLimiters.Stop()
