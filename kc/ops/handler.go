@@ -41,6 +41,25 @@ type Handler struct {
 	overviewTmpl  *htmltemplate.Template
 	adminTmpl     *htmltemplate.Template
 	opsTmpl       *htmltemplate.Template
+
+	// alertDBPath holds the SQLite DB path so metrics endpoints can stat
+	// the file for size reporting without reading os.Getenv at request
+	// time. Lives on the struct so tests can set it via SetAlertDBPath
+	// instead of t.Setenv("ALERT_DB_PATH", ...) — letting them run with
+	// t.Parallel(). Production wires app.Config.AlertDBPath through the
+	// setter at startup; empty path means "no DB size reported".
+	alertDBPath string
+}
+
+// SetAlertDBPath wires the SQLite DB path used by the metrics endpoint
+// for the db-size calculation branch. Lives outside New() so existing
+// callers don't need to change the constructor signature; production
+// calls this once at startup, tests call it once per fixture.
+//
+// Empty path means "no DB size reported" — same behaviour as the
+// pre-refactor os.Getenv("ALERT_DB_PATH") returning empty.
+func (h *Handler) SetAlertDBPath(path string) {
+	h.alertDBPath = path
 }
 
 // New creates a new ops Handler.

@@ -219,16 +219,16 @@ func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
 	assert.NoError(t, StartPluginBinaryWatcher(ctx))
 }
 
-// TestPluginWatcherEnvGating — the app wire-up layer will consult
+// TestParsePluginHotReloadFlag — the app wire-up layer will consult
 // IsPluginHotReloadEnabled() to decide whether to call
-// StartPluginBinaryWatcher. This test confirms the env-var
-// contract: "true" (case-insensitive) enables, anything else
-// disables.
-func TestPluginWatcherEnvGating(t *testing.T) {
-	// Not t.Parallel() — subtests use t.Setenv which is incompatible
-	// with a parallel parent. This test mutates an env var, not the
-	// plugin registry, so it doesn't need LockDefaultRegistryForTest
-	// either.
+// StartPluginBinaryWatcher. The behaviour-per-value contract is
+// owned by the pure parser parsePluginHotReloadFlag; this test
+// drives it directly so every case runs t.Parallel.
+//
+// "true" (case-insensitive, whitespace-tolerant) enables, anything
+// else disables.
+func TestParsePluginHotReloadFlag(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		env  string
 		want bool
@@ -236,15 +236,19 @@ func TestPluginWatcherEnvGating(t *testing.T) {
 		{"true", true},
 		{"TRUE", true},
 		{"True", true},
-		{"1", false},        // only "true" enables — explicit opt-in
+		{" true ", true},  // whitespace tolerated
+		{"\ttrue", true},  // tab tolerated
+		{"1", false},      // only "true" enables — explicit opt-in
 		{"yes", false},
 		{"false", false},
 		{"", false},
+		{"enabled", false},
 	}
 	for _, tc := range cases {
+		tc := tc
 		t.Run("env="+tc.env, func(t *testing.T) {
-			t.Setenv("KITE_PLUGIN_HOT_RELOAD", tc.env)
-			assert.Equal(t, tc.want, IsPluginHotReloadEnabled())
+			t.Parallel()
+			assert.Equal(t, tc.want, parsePluginHotReloadFlag(tc.env))
 		})
 	}
 }

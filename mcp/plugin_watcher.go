@@ -265,9 +265,19 @@ func runPluginBinaryWatcher(ctx context.Context, w *fsnotify.Watcher) {
 // watcher goroutine + an fsnotify OS handle. In production, those
 // resources are wasted (plugin binaries don't change in-flight).
 // Defaulting off prevents accidental consumption.
+//
+// Production wrapper around parsePluginHotReloadFlag — the latter is
+// a pure function tests drive directly with literals (no t.Setenv,
+// parallel-safe).
 func IsPluginHotReloadEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("KITE_PLUGIN_HOT_RELOAD")))
-	return v == "true"
+	return parsePluginHotReloadFlag(os.Getenv("KITE_PLUGIN_HOT_RELOAD"))
+}
+
+// parsePluginHotReloadFlag is the pure parser. Returns true iff the
+// raw value, after trim+lowercase, equals "true". Every other input
+// (including "1", "yes", "enabled", whitespace garbage) returns false.
+func parsePluginHotReloadFlag(raw string) bool {
+	return strings.ToLower(strings.TrimSpace(raw)) == "true"
 }
 
 // PluginWatcherCount returns the number of paths currently watched.

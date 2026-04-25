@@ -51,8 +51,8 @@ func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
 		gcPauseMs = float64(memStats.PauseNs[(memStats.NumGC+255)%256]) / 1e6
 	}
 	var dbSizeMB float64
-	if dbPath := os.Getenv("ALERT_DB_PATH"); dbPath != "" {
-		if info, err := os.Stat(dbPath); err == nil { // #nosec G703 — server-side config, not user input
+	if h.alertDBPath != "" {
+		if info, err := os.Stat(h.alertDBPath); err == nil { // #nosec G703 — server-side config, not user input
 			dbSizeMB = float64(info.Size()) / 1024 / 1024
 		}
 	}

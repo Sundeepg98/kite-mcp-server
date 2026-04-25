@@ -72,18 +72,22 @@ func TestMax_MetricsFragment_NilAdminTmpl(t *testing.T) {
 
 
 // ===========================================================================
-// handler.go: metricsAPI with ALERT_DB_PATH env (db size branch)
+// handler.go: metricsAPI with alertDBPath set on Handler (db size branch)
 // ===========================================================================
 func TestMax_MetricsAPI_WithDBPath(t *testing.T) {
-	// Cannot use t.Parallel() with t.Setenv
+	t.Parallel()
 	h := newHandlerWithAuditAndMetrics(t)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, noopAuth)
 
-	// Set ALERT_DB_PATH to exercise the db size calculation branch.
+	// Set the DB path on the Handler directly (replaces a prior
+	// t.Setenv("ALERT_DB_PATH", ...) — the env read moved to the app
+	// wire-up layer which now plumbs Config.AlertDBPath into the
+	// Handler via SetAlertDBPath, leaving tests free of t.Setenv and
+	// safely t.Parallel-compatible).
 	tmpFile := t.TempDir() + "/test.db"
 	require.NoError(t, os.WriteFile(tmpFile, []byte("test"), 0644))
-	t.Setenv("ALERT_DB_PATH", tmpFile)
+	h.SetAlertDBPath(tmpFile)
 
 	req := reqWithEmail(http.MethodGet, "/admin/ops/api/metrics?period=1h", "admin@test.com")
 	rec := httptest.NewRecorder()

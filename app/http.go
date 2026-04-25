@@ -260,6 +260,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	}
 
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
+	// Plumb the SQLite DB path from Config into the ops handler so the
+	// metrics endpoint can stat the file for db-size reporting without
+	// reading os.Getenv at request time. Empty AlertDBPath leaves the
+	// metrics endpoint reporting db_size_mb=0 (same behaviour as before).
+	opsHandler.SetAlertDBPath(app.Config.AlertDBPath)
 	// Admin auth middleware: checks kite_jwt cookie, redirects to /auth/admin-login if missing,
 	// and requires the authenticated email to be in ADMIN_EMAILS.
 	adminAuth := func(next http.Handler) http.Handler {
