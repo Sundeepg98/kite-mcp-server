@@ -95,6 +95,15 @@ func (ss *SessionService) SetBrokerFactory(f broker.Factory) {
 	ss.brokerFactory = f
 }
 
+// HasBrokerFactory reports whether an explicit broker.Factory is wired.
+// Used by /healthz?probe=deep to surface mis-wired deployments where
+// session creation would fail later under load. A nil factory is fine
+// in DevMode (the session lifecycle falls through to a lazy default);
+// production deployments should always wire one.
+func (ss *SessionService) HasBrokerFactory() bool {
+	return ss.brokerFactory != nil
+}
+
 // SetEventDispatcher wires the domain event dispatcher so the service can
 // emit SessionCreatedEvent on every new MCP session. Optional — a nil
 // dispatcher disables the side-effect (existing behavior). Called from the

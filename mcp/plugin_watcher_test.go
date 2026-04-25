@@ -219,6 +219,7 @@ func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
 	assert.NoError(t, StartPluginBinaryWatcher(ctx))
 }
 
+<<<<<<< Updated upstream
 // TestParsePluginHotReloadFlag — the app wire-up layer will consult
 // IsPluginHotReloadEnabled() to decide whether to call
 // StartPluginBinaryWatcher. The behaviour-per-value contract is
@@ -230,15 +231,15 @@ func TestWatchPluginBinary_StartIdempotent(t *testing.T) {
 func TestParsePluginHotReloadFlag(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		env  string
+		raw  string
 		want bool
 	}{
 		{"true", true},
 		{"TRUE", true},
 		{"True", true},
-		{" true ", true},  // whitespace tolerated
-		{"\ttrue", true},  // tab tolerated
-		{"1", false},      // only "true" enables — explicit opt-in
+		{" true ", true}, // whitespace tolerated
+		{"\ttrue", true}, // tab tolerated
+		{"1", false},     // only "true" enables — explicit opt-in
 		{"yes", false},
 		{"false", false},
 		{"", false},
@@ -246,9 +247,9 @@ func TestParsePluginHotReloadFlag(t *testing.T) {
 	}
 	for _, tc := range cases {
 		tc := tc
-		t.Run("env="+tc.env, func(t *testing.T) {
+		t.Run("raw="+tc.raw, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tc.want, parsePluginHotReloadFlag(tc.env))
+			assert.Equal(t, tc.want, parsePluginHotReloadFlag(tc.raw))
 		})
 	}
 }

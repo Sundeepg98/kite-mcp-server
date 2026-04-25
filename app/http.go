@@ -538,9 +538,13 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 //   - Default (no ?format=json): returns the legacy flat JSON body. Existing
 //     load balancers, container orchestrators, and uptime checkers keep
 //     working unchanged.
-//   - ?format=json: returns a richer component-level body. Ops tooling uses
-//     this to detect silent failures (audit disabled, audit buffer dropping
-//     entries, riskguard running on defaults only in DevMode, etc.).
+//   - ?format=json: returns a richer component-level body sourced from
+//     in-process state populated at startup (no I/O, fast).
+//   - ?probe=deep (implies format=json): performs runtime probes — DB
+//     SELECT 1, broker factory presence, WAL freshness — to surface
+//     silent failures the cheap probe can't see (DB file deleted, disk
+//     full, broker factory mis-wired). Slower; intended for periodic
+//     deep-health checks rather than every-100ms LB probes.
 //
 // The endpoint always returns 200 when the process is alive. A top-level
 // status of "degraded" signals that one or more components are unhealthy
@@ -551,7 +555,12 @@ func (app *App) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if r.URL.Query().Get("format") == "json" {
+	q := r.URL.Query()
+	if q.Get("probe") == "deep" {
+		_ = json.NewEncoder(w).Encode(app.buildDeepHealthzReport())
+		return
+	}
+	if q.Get("format") == "json" {
 		_ = json.NewEncoder(w).Encode(app.buildHealthzReport())
 		return
 	}
@@ -588,6 +597,137 @@ type healthzReport struct {
 	UptimeS    int64                       `json:"uptime_s"`
 	Version    string                      `json:"version"`
 	Components map[string]healthzComponent `json:"components"`
+}
+
+// healthzDeepProbeBudget caps each individual probe (DB ping, FS stat) so a
+// single hung dependency can't tie up the whole healthz response. The
+// aggregate request still completes within ~3x this budget in the worst
+// case; a global request-level timeout is applied by the http.Server.
+const healthzDeepProbeBudget = 1 * time.Second
+
+// healthzWALStaleAfter is the threshold past which a missing/stale WAL
+// file is reported as "stale". Litestream syncs every 10s; missing
+// WAL frames for >5x that interval indicates the replicator stopped or
+// the writer hasn't touched the DB in a long time. Both are worth an
+// operator glance but are not the server's responsibility to fix.
+const healthzWALStaleAfter = 60 * time.Second
+
+// buildDeepHealthzReport extends buildHealthzReport with runtime probes:
+// SELECT 1 against the DB, broker-factory presence, and a WAL-file
+// freshness stat for the Litestream-replicated database. Slower than
+// the cheap probe (sub-100ms typical, capped per probe by
+// healthzDeepProbeBudget) — intended for periodic deep checks, not
+// every-100ms load-balancer pings.
+func (app *App) buildDeepHealthzReport() healthzReport {
+	report := app.buildHealthzReport()
+	if report.Components == nil {
+		report.Components = map[string]healthzComponent{}
+	}
+
+	report.Components["database"] = app.databaseDeepStatus()
+	report.Components["broker_factory"] = app.brokerFactoryDeepStatus()
+	report.Components["litestream"] = app.litestreamDeepStatus()
+
+	// Recompute top-level status now that deep probes have populated.
+	report.Status = "ok"
+	for _, c := range report.Components {
+		switch c.Status {
+		case "ok", "unknown":
+		default:
+			report.Status = "degraded"
+		}
+	}
+	return report
+}
+
+// databaseDeepStatus runs a SELECT 1 against the alerts DB. Surfaces
+// disk-full / file-deleted / locked-DB scenarios that no in-process
+// state can detect.
+func (app *App) databaseDeepStatus() healthzComponent {
+	if app.kcManager == nil {
+		return healthzComponent{Status: "disabled", Note: "manager not wired"}
+	}
+	db := app.kcManager.AlertDB()
+	if db == nil {
+		return healthzComponent{Status: "disabled", Note: "alert DB not initialized"}
+	}
+	done := make(chan error, 1)
+	go func() { done <- db.Ping() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			return healthzComponent{Status: "failed", Note: "db ping: " + err.Error()}
+		}
+		return healthzComponent{Status: "ok"}
+	case <-time.After(healthzDeepProbeBudget):
+		return healthzComponent{Status: "failed", Note: "db ping: timeout"}
+	}
+}
+
+// brokerFactoryDeepStatus checks that a broker.Factory is wired on the
+// SessionService. A nil factory is allowed in DevMode (lazy default
+// kicks in at session-creation time); production deployments without
+// one fail later under load with a less obvious error.
+func (app *App) brokerFactoryDeepStatus() healthzComponent {
+	if app.kcManager == nil || app.kcManager.SessionSvc() == nil {
+		return healthzComponent{Status: "disabled", Note: "session service not wired"}
+	}
+	if app.kcManager.SessionSvc().HasBrokerFactory() {
+		return healthzComponent{Status: "ok"}
+	}
+	if app.DevMode {
+		return healthzComponent{
+			Status: "ok",
+			Note:   "dev mode — using implicit Zerodha factory default",
+		}
+	}
+	return healthzComponent{
+		Status: "degraded",
+		Note:   "broker.Factory not wired; session creation will fail",
+	}
+}
+
+// litestreamDeepStatus reports a best-effort WAL-freshness check. We
+// don't run Litestream in-process; the WAL file mtime is the closest
+// in-process observable proxy. Reports:
+//
+//   - "ok" if AlertDBPath is unset (no replication configured)
+//   - "ok" if the WAL is fresh (mtime within healthzWALStaleAfter)
+//   - "stale" if the WAL is older than the threshold
+//   - "unknown" if the DB path is set but no WAL file exists yet
+//     (cold start before first commit)
+//
+// This isn't a Litestream-status check (Litestream's own metrics aren't
+// exposed in-process); it's a "did the writer touch the DB recently"
+// proxy. Use Fly.io logs for the authoritative replicator status.
+func (app *App) litestreamDeepStatus() healthzComponent {
+	if app.Config == nil || app.Config.AlertDBPath == "" || app.Config.AlertDBPath == ":memory:" {
+		return healthzComponent{Status: "ok", Note: "no DB path configured — replication N/A"}
+	}
+	walPath := app.Config.AlertDBPath + "-wal"
+	done := make(chan healthzComponent, 1)
+	go func() {
+		info, err := os.Stat(walPath)
+		if err != nil {
+			done <- healthzComponent{Status: "unknown", Note: "WAL file not present (pre-first-commit?)"}
+			return
+		}
+		age := time.Since(info.ModTime())
+		if age > healthzWALStaleAfter {
+			done <- healthzComponent{
+				Status: "stale",
+				Note:   "WAL mtime " + age.Truncate(time.Second).String() + " ago — writer idle or replicator stopped",
+			}
+			return
+		}
+		done <- healthzComponent{Status: "ok"}
+	}()
+	select {
+	case c := <-done:
+		return c
+	case <-time.After(healthzDeepProbeBudget):
+		return healthzComponent{Status: "failed", Note: "WAL stat: timeout"}
+	}
 }
 
 // buildHealthzReport assembles the component-level health report from

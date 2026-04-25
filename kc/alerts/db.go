@@ -20,6 +20,27 @@ func (d *DB) SetEncryptionKey(key []byte) {
 	d.encryptionKey = key
 }
 
+// Ping verifies the SQLite connection is alive by issuing a no-op query.
+// Used by /healthz?probe=deep to surface DB-side outages (file deleted,
+// disk full, locked) that the in-process state alone cannot detect.
+//
+// We use a simple SELECT 1 rather than db.Ping() because modernc.org/sqlite
+// returns nil from Ping even on detached file handles in some scenarios;
+// a real round-trip query catches more failure modes.
+func (d *DB) Ping() error {
+	if d == nil || d.db == nil {
+		return fmt.Errorf("db: nil connection")
+	}
+	var v int
+	if err := d.db.QueryRow("SELECT 1").Scan(&v); err != nil {
+		return fmt.Errorf("db: ping query failed: %w", err)
+	}
+	if v != 1 {
+		return fmt.Errorf("db: ping returned unexpected value %d", v)
+	}
+	return nil
+}
+
 // OpenDB opens (or creates) the SQLite database at path and ensures tables exist.
 func OpenDB(path string) (*DB, error) {
 	db, err := sql.Open("sqlite", path)

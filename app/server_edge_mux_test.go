@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1276,4 +1277,131 @@ func TestSetupMux_AdminSeeding_EmptyEmailInList(t *testing.T) {
 	userStore := mgr.UserStoreConcrete()
 	assert.True(t, userStore.IsAdmin("admin@test.com"))
 	assert.True(t, userStore.IsAdmin("anotheradmin@test.com"))
+}
+
+// ===========================================================================
+// /healthz?probe=deep — runtime DB ping + broker-factory check + WAL stat
+// ===========================================================================
+
+func TestHealthz_DeepProbe_AllHealthy(t *testing.T) {
+	mgr := newTestManagerWithDB(t) // in-memory DB, real broker.Factory
+	app := newTestApp(t)
+	app.kcManager = mgr
+	app.Version = "v-deep-1"
+	app.riskGuard = riskguard.NewGuard(testLogger())
+	app.riskLimitsLoaded = true
+
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz?probe=deep", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	components, ok := body["components"].(map[string]any)
+	require.True(t, ok)
+	// Deep probes added on top of the cheap-probe components.
+	require.Contains(t, components, "database")
+	require.Contains(t, components, "broker_factory")
+	require.Contains(t, components, "litestream")
+
+	dbComp, _ := components["database"].(map[string]any)
+	assert.Equal(t, "ok", dbComp["status"], "in-memory DB should ping cleanly")
+
+	// broker_factory: in-memory test mgr uses kcfixture which doesn't
+	// inject a Factory by default → in DevMode, that's "ok" with note.
+	bf, _ := components["broker_factory"].(map[string]any)
+	assert.Contains(t, []any{"ok", "degraded"}, bf["status"],
+		"factory either wired (ok) or absent in DevMode (still ok with note)")
+
+	// litestream: :memory: AlertDBPath → "ok" with N/A note.
+	ls, _ := components["litestream"].(map[string]any)
+	assert.Equal(t, "ok", ls["status"])
+}
+
+func TestHealthz_DeepProbe_NoManager(t *testing.T) {
+	// App with no kcManager → database + broker_factory probes should
+	// surface the disabled state explicitly. Tests the nil-guard paths.
+	app := newTestApp(t)
+	app.kcManager = nil
+	app.Version = "v-deep-2"
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz?probe=deep", nil)
+	app.handleHealthz(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	components, _ := body["components"].(map[string]any)
+	dbComp, _ := components["database"].(map[string]any)
+	assert.Equal(t, "disabled", dbComp["status"])
+
+	bf, _ := components["broker_factory"].(map[string]any)
+	assert.Equal(t, "disabled", bf["status"])
+}
+
+func TestHealthz_DeepProbe_LitestreamStaleWAL(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/alerts.db"
+	walPath := dbPath + "-wal"
+	// Touch the DB so AlertDBPath is non-empty + non-:memory:.
+	require.NoError(t, os.WriteFile(dbPath, []byte("x"), 0644))
+	// Create a WAL whose mtime is well past healthzWALStaleAfter.
+	require.NoError(t, os.WriteFile(walPath, []byte("x"), 0644))
+	old := time.Now().Add(-10 * time.Minute)
+	require.NoError(t, os.Chtimes(walPath, old, old))
+
+	app := newTestApp(t)
+	app.Config = &Config{AlertDBPath: dbPath}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz?probe=deep", nil)
+	app.handleHealthz(rec, req)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	components, _ := body["components"].(map[string]any)
+	ls, _ := components["litestream"].(map[string]any)
+	assert.Equal(t, "stale", ls["status"], "WAL mtime 10m ago should be flagged")
+	assert.Contains(t, ls["note"], "stopped")
+}
+
+func TestHealthz_DeepProbe_LitestreamMissingWAL(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/alerts.db"
+	require.NoError(t, os.WriteFile(dbPath, []byte("x"), 0644))
+	// No WAL file at all → "unknown" (cold start before first commit).
+
+	app := newTestApp(t)
+	app.Config = &Config{AlertDBPath: dbPath}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz?probe=deep", nil)
+	app.handleHealthz(rec, req)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	components, _ := body["components"].(map[string]any)
+	ls, _ := components["litestream"].(map[string]any)
+	assert.Equal(t, "unknown", ls["status"])
+}
+
+func TestHealthz_DeepProbe_TopLevelDegraded(t *testing.T) {
+	// No manager → database "disabled" → top-level should be "degraded".
+	app := newTestApp(t)
+	app.kcManager = nil
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz?probe=deep", nil)
+	app.handleHealthz(rec, req)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "degraded", body["status"])
 }
