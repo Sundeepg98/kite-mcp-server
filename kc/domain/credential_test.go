@@ -3,10 +3,12 @@ package domain
 // credential_test.go — unit tests for the Credential aggregate and its
 // value objects (APIKey, APISecret). Covers construction invariants and
 // the rotation-detection rule that previously lived in
-// kc/credential_store.go.
+// kc/credential_store.go, plus the per-user-vs-global resolution rules
+// that previously lived in CredentialService accessors.
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -151,4 +153,125 @@ func TestCredential_IsRotationOf_CaseInsensitiveEmail(t *testing.T) {
 	replacement, _ := NewCredential("a@b.COM", k2, s)
 	assert.True(t, replacement.IsRotationOf(old),
 		"email match should be case-insensitive — rotations happen per user not per casing")
+}
+
+// ---------------------------------------------------------------------
+// CredentialResolution — per-user vs global vs none rule
+// ---------------------------------------------------------------------
+
+func TestResolveCredentials_PerUserPreferred(t *testing.T) {
+	t.Parallel()
+
+	// Per-user pair WINS even when global is also set.
+	k, _ := NewAPIKey("user-key")
+	s, _ := NewAPISecret("user-secret")
+	cred, _ := NewCredential("u@example.com", k, s)
+
+	res, ok := ResolveCredentials(cred, "global-key", "global-secret")
+	assert.True(t, ok)
+	assert.True(t, res.IsResolved())
+	assert.Equal(t, CredentialSourcePerUser, res.Source())
+	assert.Equal(t, "user-key", res.APIKey())
+	assert.Equal(t, "user-secret", res.APISecret())
+}
+
+func TestResolveCredentials_GlobalFallback(t *testing.T) {
+	t.Parallel()
+
+	// Empty per-user (zero value) → falls back to global.
+	res, ok := ResolveCredentials(Credential{}, "global-key", "global-secret")
+	assert.True(t, ok)
+	assert.True(t, res.IsResolved())
+	assert.Equal(t, CredentialSourceGlobal, res.Source())
+	assert.Equal(t, "global-key", res.APIKey())
+}
+
+func TestResolveCredentials_None_BothEmpty(t *testing.T) {
+	t.Parallel()
+
+	res, ok := ResolveCredentials(Credential{}, "", "")
+	assert.False(t, ok)
+	assert.False(t, res.IsResolved())
+	assert.Equal(t, CredentialSourceNone, res.Source())
+	assert.Equal(t, "", res.APIKey())
+}
+
+func TestResolveCredentials_PartialGlobal_TreatedAsNone(t *testing.T) {
+	t.Parallel()
+
+	// Half-configured global (key without secret) is not usable.
+	res, ok := ResolveCredentials(Credential{}, "global-key", "")
+	assert.False(t, ok)
+	assert.Equal(t, CredentialSourceNone, res.Source())
+}
+
+func TestCredentialSource_String(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "per_user", CredentialSourcePerUser.String())
+	assert.Equal(t, "global", CredentialSourceGlobal.String())
+	assert.Equal(t, "none", CredentialSourceNone.String())
+}
+
+// ---------------------------------------------------------------------
+// QualifiesForTrading — combined credential + session rule
+// ---------------------------------------------------------------------
+
+func TestQualifiesForTrading_FullyAuthorised(t *testing.T) {
+	t.Parallel()
+
+	k, _ := NewAPIKey("k")
+	s, _ := NewAPISecret("s")
+	cred, _ := NewCredential("trader@example.com", k, s)
+	res, _ := ResolveCredentials(cred, "", "")
+
+	// Fresh token (today, well before 6 AM IST cutoff) → authenticated.
+	sess := NewSessionFromData(SessionData{
+		Email:       "trader@example.com",
+		AccessToken: "kite-token",
+		IssuedAt:    time.Now(),
+	})
+	assert.True(t, res.QualifiesForTrading(sess))
+}
+
+func TestQualifiesForTrading_NoCredentials(t *testing.T) {
+	t.Parallel()
+
+	res, _ := ResolveCredentials(Credential{}, "", "")
+	sess := NewSessionFromData(SessionData{
+		Email:       "trader@example.com",
+		AccessToken: "kite-token",
+		IssuedAt:    time.Now(),
+	})
+	assert.False(t, res.QualifiesForTrading(sess),
+		"no credentials → can't trade, even with valid session")
+}
+
+func TestQualifiesForTrading_ExpiredSession(t *testing.T) {
+	t.Parallel()
+
+	k, _ := NewAPIKey("k")
+	s, _ := NewAPISecret("s")
+	cred, _ := NewCredential("trader@example.com", k, s)
+	res, _ := ResolveCredentials(cred, "", "")
+
+	// Token issued 48 hours ago → past 6 AM IST cutoff → expired.
+	sess := NewSessionFromData(SessionData{
+		Email:       "trader@example.com",
+		AccessToken: "old-token",
+		IssuedAt:    time.Now().Add(-48 * time.Hour),
+	})
+	assert.False(t, res.QualifiesForTrading(sess),
+		"expired session → can't trade, even with valid credentials")
+}
+
+func TestQualifiesForTrading_NoToken(t *testing.T) {
+	t.Parallel()
+
+	k, _ := NewAPIKey("k")
+	s, _ := NewAPISecret("s")
+	cred, _ := NewCredential("trader@example.com", k, s)
+	res, _ := ResolveCredentials(cred, "", "")
+
+	// Empty session (zero value) → no token → not authenticated.
+	assert.False(t, res.QualifiesForTrading(Session{}))
 }

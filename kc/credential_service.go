@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 )
 
@@ -47,43 +48,80 @@ func NewCredentialService(cfg CredentialServiceConfig) *CredentialService {
 	}
 }
 
+// resolveDomain looks up the per-user credential for email, lifts it into
+// a domain.Credential value object, then delegates the per-user-vs-global
+// fallback rule to domain.ResolveCredentials. Empty email → no per-user
+// lookup (just global). Invalid stored entries (e.g. blank apiKey) bypass
+// per-user and fall through to global, mirroring the legacy semantics.
+//
+// Centralising the lookup in one private helper means every public
+// accessor on CredentialService is a thin delegate to a domain rule.
+func (cs *CredentialService) resolveDomain(email string) domain.CredentialResolution {
+	var perUser domain.Credential
+	if email != "" {
+		if entry, ok := cs.credentialStore.Get(email); ok {
+			// Best-effort lift; invalid entries become the zero value
+			// which domain.ResolveCredentials treats as "no per-user".
+			if k, kerr := domain.NewAPIKey(entry.APIKey); kerr == nil {
+				if s, serr := domain.NewAPISecret(entry.APISecret); serr == nil {
+					if cred, cerr := domain.NewCredential(email, k, s); cerr == nil {
+						perUser = cred
+					}
+				}
+			}
+		}
+	}
+	res, _ := domain.ResolveCredentials(perUser, cs.apiKey, cs.apiSecret)
+	return res
+}
+
 // ResolveCredentials returns the (apiKey, apiSecret) for a user.
 // Per-user credentials take priority; global credentials are the fallback.
+//
+// Thin orchestrator: delegates the rule to domain.ResolveCredentials so
+// the per-user-vs-global decision lives on a value object that any layer
+// can consult independently.
 func (cs *CredentialService) ResolveCredentials(email string) (apiKey, apiSecret string, err error) {
-	apiKey = cs.GetAPIKeyForEmail(email)
-	apiSecret = cs.GetAPISecretForEmail(email)
-	if apiKey == "" || apiSecret == "" {
+	res := cs.resolveDomain(email)
+	if !res.IsResolved() {
 		return "", "", fmt.Errorf("no Kite credentials available for %q", email)
 	}
-	return apiKey, apiSecret, nil
+	return res.APIKey(), res.APISecret(), nil
 }
 
 // HasCredentials returns true if credentials can be resolved for the email
-// (either per-user or global).
+// (either per-user or global). Delegates to domain.CredentialResolution.IsResolved.
 func (cs *CredentialService) HasCredentials(email string) bool {
-	apiKey := cs.GetAPIKeyForEmail(email)
-	apiSecret := cs.GetAPISecretForEmail(email)
-	return apiKey != "" && apiSecret != ""
+	return cs.resolveDomain(email).IsResolved()
 }
 
 // GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
+// Thin delegate to domain.CredentialResolution.APIKey.
 func (cs *CredentialService) GetAPIKeyForEmail(email string) string {
-	if email != "" {
-		if entry, ok := cs.credentialStore.Get(email); ok {
-			return entry.APIKey
-		}
-	}
-	return cs.apiKey
+	return cs.resolveDomain(email).APIKey()
 }
 
 // GetAPISecretForEmail returns the API secret: per-user if registered, otherwise global.
+// Thin delegate to domain.CredentialResolution.APISecret.
 func (cs *CredentialService) GetAPISecretForEmail(email string) string {
-	if email != "" {
-		if entry, ok := cs.credentialStore.Get(email); ok {
-			return entry.APISecret
-		}
+	return cs.resolveDomain(email).APISecret()
+}
+
+// QualifiesForTrading is the canonical "can this user place orders right
+// now" rule. Combines credential availability + session authenticity via
+// the domain aggregate; no service-layer logic. Single source of truth so
+// every call site (place_order, modify_order, GTT, etc.) gets identical
+// answers.
+func (cs *CredentialService) QualifiesForTrading(email string) bool {
+	res := cs.resolveDomain(email)
+	if !res.IsResolved() {
+		return false
 	}
-	return cs.apiSecret
+	entry, ok := cs.tokenStore.Get(email)
+	if !ok {
+		return false
+	}
+	return res.QualifiesForTrading(ToDomainSession(email, entry))
 }
 
 // GetAccessTokenForEmail returns the cached access token for a given email.
@@ -215,4 +253,11 @@ func (m *Manager) GetAPISecretForEmail(email string) string {
 // GetAccessTokenForEmail returns the cached access token for the given email.
 func (m *Manager) GetAccessTokenForEmail(email string) string {
 	return m.credentialSvc.GetAccessTokenForEmail(email)
+}
+
+// QualifiesForTrading delegates to credentialSvc.QualifiesForTrading.
+// Returns true iff the user has resolvable credentials AND a non-expired
+// cached Kite token.
+func (m *Manager) QualifiesForTrading(email string) bool {
+	return m.credentialSvc.QualifiesForTrading(email)
 }

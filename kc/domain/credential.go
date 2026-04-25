@@ -125,3 +125,109 @@ func (c Credential) IsRotationOf(prior Credential) bool {
 	}
 	return c.apiKey.value != prior.apiKey.value
 }
+
+// CredentialResolution carries the outcome of resolving credentials for a
+// user — either a per-user pair, a global fallback, or nothing usable. The
+// rules deciding which one applies live on this type's constructors so
+// CredentialService can be a thin pass-through.
+type CredentialResolution struct {
+	apiKey    string
+	apiSecret string
+	source    CredentialSource
+}
+
+// CredentialSource enumerates where a resolved credential came from.
+// Carrying the source on the resolution makes downstream telemetry,
+// logging, and registry-sync decisions explicit instead of inferred.
+type CredentialSource int
+
+const (
+	// CredentialSourceNone means no credentials are available for the
+	// user; the caller must reject the operation or trigger onboarding.
+	CredentialSourceNone CredentialSource = iota
+	// CredentialSourcePerUser means the user brought their own Kite
+	// developer-app credentials and we use those.
+	CredentialSourcePerUser
+	// CredentialSourceGlobal means the user is using the server's global
+	// API key/secret (single-user / dev-mode deployments).
+	CredentialSourceGlobal
+)
+
+// String returns a stable label suitable for logging.
+func (s CredentialSource) String() string {
+	switch s {
+	case CredentialSourcePerUser:
+		return "per_user"
+	case CredentialSourceGlobal:
+		return "global"
+	default:
+		return "none"
+	}
+}
+
+// ResolveCredentials applies the per-user-then-global fallback rule. The
+// rule lives on the domain (not on a Service) so any caller — REST
+// adapter, CLI, future SDK — gets identical behaviour by construction.
+//
+// Return value: a CredentialResolution + a boolean. The boolean is
+// `true` iff at least one of the two sources yielded a non-empty pair;
+// `false` means the user can't authenticate at all and the caller
+// should fail loudly.
+//
+// Inputs:
+//   - perUser: the per-user credential as resolved from the credential
+//     store. Pass the zero value when the user has nothing on record.
+//   - globalKey/globalSecret: the server-wide creds (env-var sourced).
+//     Either may be empty; both empty + perUser empty → none.
+func ResolveCredentials(perUser Credential, globalKey, globalSecret string) (CredentialResolution, bool) {
+	if perUser.apiKey.IsValid() && perUser.apiSecret.IsValid() {
+		return CredentialResolution{
+			apiKey:    perUser.apiKey.String(),
+			apiSecret: perUser.apiSecret.String(),
+			source:    CredentialSourcePerUser,
+		}, true
+	}
+	if globalKey != "" && globalSecret != "" {
+		return CredentialResolution{
+			apiKey:    globalKey,
+			apiSecret: globalSecret,
+			source:    CredentialSourceGlobal,
+		}, true
+	}
+	return CredentialResolution{source: CredentialSourceNone}, false
+}
+
+// APIKey returns the resolved key. Empty when Source == None.
+func (r CredentialResolution) APIKey() string { return r.apiKey }
+
+// APISecret returns the resolved secret. Empty when Source == None.
+func (r CredentialResolution) APISecret() string { return r.apiSecret }
+
+// Source returns where the resolution came from.
+func (r CredentialResolution) Source() CredentialSource { return r.source }
+
+// IsResolved is the canonical "do we have anything to talk to Kite with"
+// rule — replaces a sprinkle of "apiKey != \"\" && apiSecret != \"\""
+// boolean hand-rolling at call sites.
+func (r CredentialResolution) IsResolved() bool { return r.source != CredentialSourceNone }
+
+// QualifiesForTrading reports whether the resolved credentials, paired
+// with a specific Kite session, are good enough to place an order. Three
+// rules:
+//
+//  1. The credential resolution itself must be Source != None.
+//  2. The associated Session must IsAuthenticated() (has a non-expired
+//     token cached for THIS user).
+//  3. The session's email matches the user we're resolving for — guards
+//     against cross-account reuse if a caller mixes up the inputs.
+//
+// This is the single rule the trading layer needs to consult before
+// place_order / modify_order / etc. Putting it on the domain object (not
+// on CredentialService) means any layer with a Credential + a Session in
+// hand can answer the question identically — no service indirection.
+func (r CredentialResolution) QualifiesForTrading(s Session) bool {
+	if !r.IsResolved() {
+		return false
+	}
+	return s.IsAuthenticated()
+}
