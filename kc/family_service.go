@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
@@ -68,10 +69,21 @@ func (f *FamilyService) MaxUsers(adminEmail string) int {
 }
 
 // CanInvite checks if the admin has room for one more family member.
+// Delegates the rule to domain.Family — the service is now a thin
+// orchestrator that fetches counts and lifts them into the aggregate.
+//
+// Returns (canInvite, currentCount, maxCount). On any error constructing
+// the aggregate (shouldn't happen for valid emails / non-negative counts)
+// returns (false, current, max) so the caller sees a "no" answer rather
+// than a misleading "yes".
 func (f *FamilyService) CanInvite(adminEmail string) (bool, int, int) {
 	current := f.MemberCount(adminEmail)
 	max := f.MaxUsers(adminEmail)
-	return current < max, current, max
+	fam, err := domain.NewFamily(adminEmail, current, max)
+	if err != nil {
+		return false, current, max
+	}
+	return fam.CanInvite(), current, max
 }
 
 // RemoveMember unlinks a family member from the admin.
