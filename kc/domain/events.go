@@ -331,6 +331,30 @@ type CredentialRevokedEvent struct {
 func (e CredentialRevokedEvent) EventType() string    { return "credential.revoked" }
 func (e CredentialRevokedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// ConsentWithdrawnEvent is emitted when a user invokes their DPDP §6(4)
+// right to rescind previously-granted consent. The withdrawal does not
+// erase the original grant from consent_log (the log is append-only and
+// auditors need to see the full history); instead, the prior grant row
+// gets stamped with withdrawn_at and a new "withdraw" action row is
+// appended.
+//
+// EmailHash is the SHA-256 hex digest of the lowercased email — same
+// canonical form audit.HashEmail produces — so the event correlates to
+// the audit log without leaking the plaintext email through the event
+// dispatcher / persister chain. Plaintext Email is retained alongside
+// for in-process consumers (Telegram notifier, riskguard) that need
+// it for operational outreach. PR-D Item 2 will migrate other domain
+// events to this dual-field shape.
+type ConsentWithdrawnEvent struct {
+	Email     string
+	EmailHash string
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e ConsentWithdrawnEvent) EventType() string    { return "consent.withdrawn" }
+func (e ConsentWithdrawnEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

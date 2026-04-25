@@ -110,3 +110,23 @@ type AdminUpdateRegistryCommand struct {
 type AdminDeleteRegistryCommand struct {
 	ID string `json:"id"`
 }
+
+// WithdrawConsentCommand exercises the user's DPDP §6(4) right to
+// rescind previously-granted consent. The command stamps every active
+// grant in consent_log with withdrawn_at and appends a "withdraw" row
+// describing the action. Reason is plain text recorded for operations;
+// DPDP doesn't require a justification, but operators benefit from
+// having one when correlating with support tickets.
+//
+// Email is plaintext — the use case hashes it via audit.HashEmail
+// before touching the consent_log so the table never carries the raw
+// address. NoticeVersion identifies which privacy notice is currently
+// in force; the use case records this on the withdraw row as the
+// "version withdrawn from".
+type WithdrawConsentCommand struct {
+	Email         string `json:"email"`
+	Reason        string `json:"reason,omitempty"`
+	NoticeVersion string `json:"notice_version,omitempty"`
+	IPAddress     string `json:"ip_address,omitempty"`
+	UserAgent     string `json:"user_agent,omitempty"`
+}

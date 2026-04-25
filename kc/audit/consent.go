@@ -47,6 +47,13 @@ const (
 // PII minimization: user_email_hash is SHA-256(lowercased email) — the raw
 // email never enters this table. Callers should log the email in the main
 // audit trail (kc/audit.Store) if they need it, not here.
+//
+// WithdrawnAt is non-zero on a "grant" row that has been subsequently
+// rescinded (DPDP §6(4)). The withdraw event itself is also a separate
+// "withdraw" row — WithdrawnAt is a fast-path column so processors can
+// filter active consents in a single index scan instead of correlating
+// grant/withdraw row pairs. NULL/zero means "still active" (or "this
+// row IS the withdraw event").
 type ConsentLogEntry struct {
 	ID            int64         `json:"id"`
 	UserEmailHash string        `json:"user_email_hash"`
@@ -58,6 +65,7 @@ type ConsentLogEntry struct {
 	Scope         string        `json:"scope"` // JSON-encoded — opaque to the store
 	Method        ConsentMethod `json:"method"`
 	ProofHash     string        `json:"proof_hash"`
+	WithdrawnAt   time.Time     `json:"withdrawn_at,omitempty"`
 }
 
 // ConsentStore persists consent-grant and consent-withdraw events for DPDP
@@ -92,13 +100,19 @@ CREATE TABLE IF NOT EXISTS consent_log (
     consent_action   TEXT NOT NULL CHECK(consent_action IN ('grant','withdraw')),
     scope            TEXT NOT NULL,
     method           TEXT NOT NULL CHECK(method IN ('oauth_callback','dashboard_toggle')),
-    proof_hash       TEXT NOT NULL
+    proof_hash       TEXT NOT NULL,
+    withdrawn_at     DATETIME
 );
 CREATE INDEX IF NOT EXISTS idx_consent_email_hash ON consent_log(user_email_hash);
-CREATE INDEX IF NOT EXISTS idx_consent_timestamp ON consent_log(timestamp_utc);`
+CREATE INDEX IF NOT EXISTS idx_consent_timestamp ON consent_log(timestamp_utc);
+CREATE INDEX IF NOT EXISTS idx_consent_active ON consent_log(user_email_hash) WHERE withdrawn_at IS NULL AND consent_action = 'grant';`
 	if err := c.db.ExecDDL(ddl); err != nil {
 		return fmt.Errorf("consent: create consent_log table: %w", err)
 	}
+	// Migration for pre-PR-D databases. ALTER TABLE IF NOT EXISTS isn't
+	// supported in SQLite; ignore the duplicate-column error and any
+	// other harmless ALTER outcome.
+	_ = c.db.ExecDDL(`ALTER TABLE consent_log ADD COLUMN withdrawn_at DATETIME`)
 	return nil
 }
 
@@ -115,10 +129,16 @@ func (c *ConsentStore) Insert(entry *ConsentLogEntry) error {
 	}
 	query := `INSERT INTO consent_log
 		(user_email_hash, timestamp_utc, ip_address, user_agent,
-		 notice_version, consent_action, scope, method, proof_hash)
-		VALUES (?,?,?,?,?,?,?,?,?)`
+		 notice_version, consent_action, scope, method, proof_hash, withdrawn_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`
 	// Format timestamp as RFC3339Nano so text-scan retrieval below can parse
-	// it round-trip without fractional-second loss.
+	// it round-trip without fractional-second loss. WithdrawnAt is NULL
+	// (Go zero-time → SQLite NULL) on insert; MarkWithdrawnByEmailHash
+	// stamps it later when the user invokes §6(4).
+	var withdrawnAt any // nil → SQL NULL
+	if !entry.WithdrawnAt.IsZero() {
+		withdrawnAt = entry.WithdrawnAt.UTC().Format(time.RFC3339Nano)
+	}
 	res, err := c.db.ExecResult(query,
 		entry.UserEmailHash,
 		entry.TimestampUTC.Format(time.RFC3339Nano),
@@ -129,6 +149,7 @@ func (c *ConsentStore) Insert(entry *ConsentLogEntry) error {
 		entry.Scope,
 		string(entry.Method),
 		entry.ProofHash,
+		withdrawnAt,
 	)
 	if err != nil {
 		return fmt.Errorf("consent: insert: %w", err)
@@ -145,7 +166,7 @@ func (c *ConsentStore) Insert(entry *ConsentLogEntry) error {
 // chronologically). Limit caps the result set; 0 or negative means "no cap".
 func (c *ConsentStore) ListByEmailHash(emailHash string, limit int) ([]*ConsentLogEntry, error) {
 	query := `SELECT id, user_email_hash, timestamp_utc, ip_address, user_agent,
-		notice_version, consent_action, scope, method, proof_hash
+		notice_version, consent_action, scope, method, proof_hash, withdrawn_at
 		FROM consent_log
 		WHERE user_email_hash = ?
 		ORDER BY timestamp_utc ASC, id ASC`
@@ -163,10 +184,11 @@ func (c *ConsentStore) ListByEmailHash(emailHash string, limit int) ([]*ConsentL
 	var out []*ConsentLogEntry
 	for rows.Next() {
 		var (
-			e      ConsentLogEntry
-			ts     string
-			action string
-			method string
+			e         ConsentLogEntry
+			ts        string
+			action    string
+			method    string
+			withdrawn *string // NULL-aware — pre-migration rows scan as nil
 		)
 		if err := rows.Scan(
 			&e.ID,
@@ -179,6 +201,7 @@ func (c *ConsentStore) ListByEmailHash(emailHash string, limit int) ([]*ConsentL
 			&e.Scope,
 			&method,
 			&e.ProofHash,
+			&withdrawn,
 		); err != nil {
 			return nil, fmt.Errorf("consent: scan: %w", err)
 		}
@@ -195,12 +218,105 @@ func (c *ConsentStore) ListByEmailHash(emailHash string, limit int) ([]*ConsentL
 		e.TimestampUTC = parsed
 		e.ConsentAction = ConsentAction(action)
 		e.Method = ConsentMethod(method)
+		if withdrawn != nil && *withdrawn != "" {
+			if w, err := time.Parse(time.RFC3339Nano, *withdrawn); err == nil {
+				e.WithdrawnAt = w
+			} else if w2, err2 := time.Parse("2006-01-02 15:04:05", *withdrawn); err2 == nil {
+				e.WithdrawnAt = w2.UTC()
+			}
+		}
 		out = append(out, &e)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("consent: rows: %w", err)
 	}
 	return out, nil
+}
+
+// MarkWithdrawnByEmailHash stamps every active grant row for the given
+// user_email_hash with withdrawnAt and inserts a "withdraw" action row
+// describing the withdrawal. Both writes happen in sequence (SQLite
+// single-writer pool serialises them); a partial failure leaves the
+// log internally consistent because grant rows are always findable
+// via consent_action='grant' AND withdrawn_at IS NULL.
+//
+// noticeVersion identifies which privacy notice the user accepted at
+// the time their grant was captured — copied onto the withdraw row
+// so the audit trail records "user withdrew consent to <version> at
+// <timestamp>". Caller passes the active notice version; ListByEmail
+// Hash can recover the original grant's notice from its own row.
+//
+// reason is plain text recorded as the withdraw row's scope field
+// (DPDP §6(4) doesn't require a reason; we capture it for operations).
+//
+// Returns the number of grant rows that were marked withdrawn. Zero
+// is a normal outcome when the user had nothing to withdraw — the
+// caller can decide whether to surface that as an error.
+func (c *ConsentStore) MarkWithdrawnByEmailHash(
+	emailHash string,
+	withdrawnAt time.Time,
+	noticeVersion, reason, ipAddress, userAgent string,
+) (int64, error) {
+	if emailHash == "" {
+		return 0, fmt.Errorf("consent: empty emailHash")
+	}
+	if withdrawnAt.IsZero() {
+		withdrawnAt = time.Now().UTC()
+	}
+	stamp := withdrawnAt.UTC().Format(time.RFC3339Nano)
+
+	// 1. Stamp every active grant row.
+	res, err := c.db.ExecResult(
+		`UPDATE consent_log SET withdrawn_at = ?
+		 WHERE user_email_hash = ? AND consent_action = 'grant' AND withdrawn_at IS NULL`,
+		stamp, emailHash,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("consent: mark withdrawn: %w", err)
+	}
+	updated, _ := res.RowsAffected()
+
+	// 2. Append the withdraw action row.
+	withdrawEntry := &ConsentLogEntry{
+		UserEmailHash: emailHash,
+		TimestampUTC:  withdrawnAt,
+		IPAddress:     ipAddress,
+		UserAgent:     userAgent,
+		NoticeVersion: noticeVersion,
+		ConsentAction: ConsentActionWithdraw,
+		Scope:         reason,
+		Method:        ConsentMethodDashboardToggle,
+		ProofHash:     ComputeProofHash(noticeVersion, "withdraw "+reason),
+	}
+	if err := c.Insert(withdrawEntry); err != nil {
+		return updated, fmt.Errorf("consent: insert withdraw row: %w", err)
+	}
+	return updated, nil
+}
+
+// HasActiveGrant reports whether the email-hash has at least one grant
+// row that has not been subsequently withdrawn. Returns (true, nil)
+// when an active consent exists; (false, nil) when none does (either
+// never granted, or every grant has been withdrawn).
+//
+// Used by tooling that must verify consent before performing user-
+// affecting work — e.g. scheduled briefings, marketing dispatch.
+func (c *ConsentStore) HasActiveGrant(emailHash string) (bool, error) {
+	if emailHash == "" {
+		return false, nil
+	}
+	row := c.db.QueryRow(
+		`SELECT 1 FROM consent_log
+		 WHERE user_email_hash = ? AND consent_action = 'grant' AND withdrawn_at IS NULL
+		 LIMIT 1`,
+		emailHash,
+	)
+	var one int
+	if err := row.Scan(&one); err != nil {
+		// sql.ErrNoRows is expected when nothing matches.
+		return false, nil //nolint:nilerr // ErrNoRows is the "no" answer
+	}
+	return true, nil
 }
 
 // HashEmail returns the hex-encoded SHA-256 digest of the lowercased email.

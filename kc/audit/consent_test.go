@@ -275,3 +275,145 @@ func TestConsentStore_IsolationByEmailHash(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, rowsC)
 }
+
+// ===========================================================================
+// PR-D Item 1: consent withdrawal (DPDP §6(4))
+// ===========================================================================
+
+// TestConsentStore_MarkWithdrawn_StampsActiveGrant verifies the canonical
+// flow: a prior grant is stamped with withdrawn_at, AND a new "withdraw"
+// row is appended. Both writes succeed so a downstream query sees the
+// full history plus a fast-path "is consent active?" check.
+func TestConsentStore_MarkWithdrawn_StampsActiveGrant(t *testing.T) {
+	t.Parallel()
+	cs := openTestConsentStore(t)
+	emailHash := HashEmail("withdraw-test@example.com")
+
+	scope, _ := json.Marshal(map[string]any{"trading": true, "analytics": true})
+	grant := &ConsentLogEntry{
+		UserEmailHash: emailHash,
+		TimestampUTC:  time.Now().UTC().Add(-1 * time.Hour),
+		IPAddress:     "10.0.0.1",
+		UserAgent:     "Mozilla/5.0",
+		NoticeVersion: "v1.0",
+		ConsentAction: ConsentActionGrant,
+		Scope:         string(scope),
+		Method:        ConsentMethodOAuthCallback,
+		ProofHash:     ComputeProofHash("v1.0", "grant:trading,analytics"),
+	}
+	require.NoError(t, cs.Insert(grant))
+
+	// Active before withdrawal.
+	active, err := cs.HasActiveGrant(emailHash)
+	require.NoError(t, err)
+	assert.True(t, active, "consent must be active immediately after grant")
+
+	// Withdraw.
+	withdrawnAt := time.Now().UTC()
+	updated, err := cs.MarkWithdrawnByEmailHash(
+		emailHash, withdrawnAt,
+		"v1.0", "user requested deletion via dashboard",
+		"10.0.0.1", "Mozilla/5.0",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), updated, "exactly one grant row should be marked withdrawn")
+
+	// No longer active.
+	active2, err := cs.HasActiveGrant(emailHash)
+	require.NoError(t, err)
+	assert.False(t, active2, "consent must NOT be active after withdrawal")
+
+	// History has BOTH the (now-stamped) grant AND the new withdraw row.
+	rows, err := cs.ListByEmailHash(emailHash, 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 2, "history must contain grant + withdraw rows")
+	assert.Equal(t, ConsentActionGrant, rows[0].ConsentAction)
+	assert.False(t, rows[0].WithdrawnAt.IsZero(), "grant row must be stamped withdrawn_at")
+	assert.Equal(t, ConsentActionWithdraw, rows[1].ConsentAction)
+	assert.True(t, rows[1].WithdrawnAt.IsZero(), "withdraw row itself has no withdrawn_at")
+	assert.Contains(t, rows[1].Scope, "user requested",
+		"withdraw row's scope captures the reason")
+}
+
+// TestConsentStore_MarkWithdrawn_NoActiveGrant returns 0 updates without
+// erroring. DPDP §6(4) doesn't require a prior grant to exist; the call
+// is idempotent and harmless.
+func TestConsentStore_MarkWithdrawn_NoActiveGrant(t *testing.T) {
+	t.Parallel()
+	cs := openTestConsentStore(t)
+
+	updated, err := cs.MarkWithdrawnByEmailHash(
+		HashEmail("never-granted@example.com"),
+		time.Now().UTC(),
+		"v1.0", "user request", "1.2.3.4", "ua",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), updated)
+}
+
+// TestConsentStore_RegrantAfterWithdraw verifies the round-trip: after
+// withdrawing, the user can grant fresh consent. The history retains the
+// old grant (stamped withdrawn) plus the withdraw row plus the new grant.
+func TestConsentStore_RegrantAfterWithdraw(t *testing.T) {
+	t.Parallel()
+	cs := openTestConsentStore(t)
+	emailHash := HashEmail("regrant@example.com")
+
+	// Grant 1.
+	require.NoError(t, cs.Insert(&ConsentLogEntry{
+		UserEmailHash: emailHash,
+		TimestampUTC:  time.Now().UTC().Add(-2 * time.Hour),
+		NoticeVersion: "v1.0",
+		ConsentAction: ConsentActionGrant,
+		Scope:         `{"trading":true}`,
+		Method:        ConsentMethodOAuthCallback,
+		ProofHash:     "h1",
+	}))
+
+	// Withdraw.
+	_, err := cs.MarkWithdrawnByEmailHash(
+		emailHash, time.Now().UTC().Add(-1*time.Hour),
+		"v1.0", "user request", "", "",
+	)
+	require.NoError(t, err)
+
+	active, err := cs.HasActiveGrant(emailHash)
+	require.NoError(t, err)
+	assert.False(t, active)
+
+	// Grant 2 (fresh consent under newer notice).
+	require.NoError(t, cs.Insert(&ConsentLogEntry{
+		UserEmailHash: emailHash,
+		TimestampUTC:  time.Now().UTC(),
+		NoticeVersion: "v2.0",
+		ConsentAction: ConsentActionGrant,
+		Scope:         `{"trading":true,"analytics":false}`,
+		Method:        ConsentMethodDashboardToggle,
+		ProofHash:     "h3",
+	}))
+
+	active2, err := cs.HasActiveGrant(emailHash)
+	require.NoError(t, err)
+	assert.True(t, active2, "fresh grant must be visible as active again")
+
+	// Full history: grant1 (withdrawn) + withdraw + grant2 (active).
+	rows, err := cs.ListByEmailHash(emailHash, 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+	assert.Equal(t, ConsentActionGrant, rows[0].ConsentAction)
+	assert.False(t, rows[0].WithdrawnAt.IsZero(), "first grant withdrawn")
+	assert.Equal(t, ConsentActionWithdraw, rows[1].ConsentAction)
+	assert.Equal(t, ConsentActionGrant, rows[2].ConsentAction)
+	assert.True(t, rows[2].WithdrawnAt.IsZero(), "fresh grant is active")
+}
+
+// TestConsentStore_HasActiveGrant_EmptyHash returns false without erroring.
+// Defensive guard so callers that forget to hash before checking don't get
+// a misleading "yes" from a SQL row matching empty string.
+func TestConsentStore_HasActiveGrant_EmptyHash(t *testing.T) {
+	t.Parallel()
+	cs := openTestConsentStore(t)
+	active, err := cs.HasActiveGrant("")
+	require.NoError(t, err)
+	assert.False(t, active)
+}

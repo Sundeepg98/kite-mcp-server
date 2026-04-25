@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -11,11 +12,13 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/plugins/rolegate"
@@ -23,6 +26,13 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	stripe "github.com/stripe/stripe-go/v82"
 )
+
+// emailHasherAdapter bridges kc/audit.HashEmail to the usecases.EmailHasher
+// port. Trivial passthrough — exists only because importing audit from the
+// usecases package would create a cycle (audit → usecases → audit).
+type emailHasherAdapter struct{}
+
+func (emailHasherAdapter) HashEmail(email string) string { return audit.HashEmail(email) }
 
 func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if err := app.envCheck(); err != nil {
@@ -168,6 +178,33 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.consentStore = nil
 		} else {
 			app.logger.Info("DPDP consent log enabled")
+		}
+	}
+
+	// PR-D Item 1: register the WithdrawConsentCommand bus handler.
+	// We do it here in app/wire.go (not kc/manager_commands_*.go)
+	// because consentStore lives in the app package — the alternative
+	// is plumbing it through the manager, but the consent log is
+	// strictly an audit concern with no manager-side consumers.
+	if app.consentStore != nil {
+		bus := kcManager.CommandBus()
+		if bus != nil {
+			err := bus.Register(reflect.TypeFor[cqrs.WithdrawConsentCommand](), func(ctx context.Context, msg any) (any, error) {
+				cmd, ok := msg.(cqrs.WithdrawConsentCommand)
+				if !ok {
+					return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+				}
+				uc := usecases.NewWithdrawConsentUseCase(
+					app.consentStore,
+					emailHasherAdapter{},
+					kcManager.EventDispatcher(),
+					app.logger,
+				)
+				return uc.Execute(ctx, cmd)
+			})
+			if err != nil {
+				app.logger.Error("Failed to register WithdrawConsentCommand handler", "error", err)
+			}
 		}
 	}
 
