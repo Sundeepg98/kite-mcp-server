@@ -858,13 +858,21 @@ func TestRunServer_HybridMode(t *testing.T) {
 // ---------------------------------------------------------------------------
 // startStdIOServer — exercise the real function with mocked IO
 // ---------------------------------------------------------------------------
+//
+// Refactored to use startStdIOServerIO (the parameterised entry point) so
+// the test injects io.Pipe-backed buffers instead of swapping process-wide
+// os.Stdin/os.Stdout. Production callers go through startStdIOServer
+// which is a thin os.Stdin/os.Stdout wrapper around startStdIOServerIO,
+// so this test exercises the same code path under parallel-safe conditions.
 func TestStartStdIOServer_RealFunction(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
+	t.Parallel()
 
 	mgr := newTestManager(t)
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 	_ = app.initStatusPageTemplate()
 
@@ -878,27 +886,14 @@ func TestStartStdIOServer_RealFunction(t *testing.T) {
 
 	srv := &http.Server{Addr: addr}
 
-	// Save original stdin/stdout and restore after test
-	origStdin := os.Stdin
-	origStdout := os.Stdout
-	defer func() {
-		os.Stdin = origStdin
-		os.Stdout = origStdout
-	}()
-
-	// Create pipes to replace stdin/stdout
-	stdinR, stdinW, err := os.Pipe()
-	require.NoError(t, err)
-	stdoutR, stdoutW, err := os.Pipe()
-	require.NoError(t, err)
-
-	os.Stdin = stdinR
-	os.Stdout = stdoutW
+	// Use io.Pipe for stdin/stdout — parallel-safe, no process globals.
+	stdinR, stdinW := io.Pipe()
+	stdoutR, stdoutW := io.Pipe()
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		app.startStdIOServer(srv, mgr, mcpSrv)
+		app.startStdIOServerIO(srv, mgr, mcpSrv, stdinR, stdoutW)
 	}()
 
 	// Wait a moment for the server to start, then close stdin to trigger shutdown
@@ -911,7 +906,6 @@ func TestStartStdIOServer_RealFunction(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Log("startStdIOServer did not exit within timeout, forcing close")
-		stdinW.Close()
 		stdoutW.Close()
 	}
 

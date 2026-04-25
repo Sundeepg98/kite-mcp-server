@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -888,8 +889,24 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 	app.configureAndStartServer(srv, mux)
 }
 
-// startStdIOServer starts a server in STDIO mode
+// startStdIOServer starts a server in STDIO mode using process stdin/stdout.
+// Production callers (RunServer) pass os.Stdin/os.Stdout; tests use
+// startStdIOServerIO with io.Pipe-backed buffers to exercise the same
+// code path without swapping process-wide os.Stdin/Stdout (which would
+// force the test to run non-parallel).
 func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer) {
+	app.startStdIOServerIO(srv, kcManager, mcpServer, os.Stdin, os.Stdout)
+}
+
+// startStdIOServerIO is the parameterised entry point: accepts arbitrary
+// io.Reader / io.Writer for stdio. This is the unit-of-execution that
+// startStdIOServer wraps; tests inject pipes here to drive the function
+// in parallel without touching process globals.
+//
+// stdin and stdout MUST be io.Reader / io.Writer respectively (mcp-go's
+// stdio.Listen takes io.Reader, io.Writer interfaces). The production
+// path passes the file descriptors backing os.Stdin/os.Stdout directly.
+func (app *App) startStdIOServerIO(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, stdin io.Reader, stdout io.Writer) {
 	app.logger.Info("Starting STDIO MCP server...")
 	stdio := server.NewStdioServer(mcpServer)
 
@@ -916,7 +933,7 @@ func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpSer
 			}
 		}()
 	}
-	if err := stdio.Listen(ctx, os.Stdin, os.Stdout); err != nil {
+	if err := stdio.Listen(ctx, stdin, stdout); err != nil {
 		app.logger.Error("STDIO server error", "error", err)
 	}
 }
