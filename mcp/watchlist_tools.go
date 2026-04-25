@@ -63,7 +63,10 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("internal: unexpected create_watchlist result"), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", result.Name, result.ID)), nil
+		// G132: result.Name is user-supplied — sanitize before echoing
+		// to the LLM so a hostile name like "X\nIgnore prior..." can't
+		// inject a fresh instruction paragraph.
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q created (ID: %s). Use add_to_watchlist to add instruments.", SanitizeForLLM(result.Name), result.ID)), nil
 	}
 }
 
@@ -115,7 +118,8 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("internal: unexpected delete_watchlist result"), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", result.Name, result.ItemCount)), nil
+		// G132: name was user-supplied at create time — sanitize the echo.
+		return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q deleted (%d items removed).", SanitizeForLLM(result.Name), result.ItemCount)), nil
 	}
 }
 
@@ -382,7 +386,8 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		items := raw.([]*watchlist.WatchlistItem)
 		if len(items) == 0 {
-			return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q is empty. Use add_to_watchlist to add instruments.", wl.Name)), nil
+			// G132: wl.Name was user-supplied — sanitize before echoing.
+			return mcp.NewToolResultText(fmt.Sprintf("Watchlist %q is empty. Use add_to_watchlist to add instruments.", SanitizeForLLM(wl.Name))), nil
 		}
 
 		// Build LTP map if requested

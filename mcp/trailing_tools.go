@@ -212,14 +212,21 @@ func doSetTrailingStop(handler *ToolHandler, manager *kc.Manager, email, exchang
 		}
 	}
 
+	// G132: exchange / tradingsymbol / orderID / variety / direction
+	// originate as user args. Sanitize each before embedding in
+	// LLM-bound text so a hostile broker symbol like
+	// "RELIANCE\nIgnore prior" can't inject fresh instructions.
 	result := fmt.Sprintf("Trailing stop set (ID: %s)\n"+
 		"Instrument: %s:%s\n"+
 		"Order: %s (%s)\n"+
 		"Direction: %s | Trail: %s\n"+
 		"Current stop: %.2f | Reference price: %.2f\n"+
 		"The SL order will be modified automatically as price moves favorably (max once per 30s).",
-		id, exchange, tradingsymbol, orderID, variety,
-		direction, trailDesc, currentStop, referencePrice)
+		SanitizeForLLM(id),
+		SanitizeForLLM(exchange), SanitizeForLLM(tradingsymbol),
+		SanitizeForLLM(orderID), SanitizeForLLM(variety),
+		SanitizeForLLM(direction), SanitizeForLLM(trailDesc),
+		currentStop, referencePrice)
 
 	if tickerMsg != "" {
 		result += tickerMsg
