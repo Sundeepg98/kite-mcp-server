@@ -38,30 +38,68 @@ import (
 //	StripeWebhookSecret  <- STRIPE_WEBHOOK_SECRET
 //
 // Defaults are applied via WithDefaults when the caller opts in.
+//
+// ConfigFromEnv is the production wrapper: reads each env var via os.Getenv
+// then delegates to ConfigFromMap. Tests should use ConfigFromMap with a
+// fixture map literal — no t.Setenv, parallel-safe.
 func ConfigFromEnv() *Config {
+	return ConfigFromMap(map[string]string{
+		"KITE_API_KEY":               os.Getenv("KITE_API_KEY"),
+		"KITE_API_SECRET":            os.Getenv("KITE_API_SECRET"),
+		"KITE_ACCESS_TOKEN":          os.Getenv("KITE_ACCESS_TOKEN"),
+		"APP_MODE":                   os.Getenv("APP_MODE"),
+		"APP_PORT":                   os.Getenv("APP_PORT"),
+		"APP_HOST":                   os.Getenv("APP_HOST"),
+		"EXCLUDED_TOOLS":             os.Getenv("EXCLUDED_TOOLS"),
+		"ADMIN_ENDPOINT_SECRET_PATH": os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
+		"OAUTH_JWT_SECRET":           os.Getenv("OAUTH_JWT_SECRET"),
+		"EXTERNAL_URL":               os.Getenv("EXTERNAL_URL"),
+		"TELEGRAM_BOT_TOKEN":         os.Getenv("TELEGRAM_BOT_TOKEN"),
+		"ALERT_DB_PATH":              os.Getenv("ALERT_DB_PATH"),
+		"ADMIN_EMAILS":               os.Getenv("ADMIN_EMAILS"),
+		"GOOGLE_CLIENT_ID":           os.Getenv("GOOGLE_CLIENT_ID"),
+		"GOOGLE_CLIENT_SECRET":       os.Getenv("GOOGLE_CLIENT_SECRET"),
+		"ENABLE_TRADING":             os.Getenv("ENABLE_TRADING"),
+		"INSTRUMENTS_SKIP_FETCH":     os.Getenv("INSTRUMENTS_SKIP_FETCH"),
+		"ADMIN_PASSWORD":             os.Getenv("ADMIN_PASSWORD"),
+		"STRIPE_WEBHOOK_SECRET":      os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		"STRIPE_SECRET_KEY":          os.Getenv("STRIPE_SECRET_KEY"),
+		"STRIPE_PRICE_PRO":           os.Getenv("STRIPE_PRICE_PRO"),
+		"STRIPE_PRICE_PREMIUM":       os.Getenv("STRIPE_PRICE_PREMIUM"),
+	})
+}
+
+// ConfigFromMap is the pure parser: builds a *Config from an arbitrary
+// env-name → value map. Fields are populated identically to ConfigFromEnv,
+// just sourced from the map instead of os.Getenv. Tests pass a literal
+// map and verify Config fields without t.Setenv.
+//
+// Bool flags (ENABLE_TRADING, INSTRUMENTS_SKIP_FETCH) parse via
+// strings.EqualFold("true") so values like "TRUE" and "True" also enable.
+func ConfigFromMap(env map[string]string) *Config {
 	return &Config{
-		KiteAPIKey:           os.Getenv("KITE_API_KEY"),
-		KiteAPISecret:        os.Getenv("KITE_API_SECRET"),
-		KiteAccessToken:      os.Getenv("KITE_ACCESS_TOKEN"),
-		AppMode:              os.Getenv("APP_MODE"),
-		AppPort:              os.Getenv("APP_PORT"),
-		AppHost:              os.Getenv("APP_HOST"),
-		ExcludedTools:        os.Getenv("EXCLUDED_TOOLS"),
-		AdminSecretPath:      os.Getenv("ADMIN_ENDPOINT_SECRET_PATH"),
-		OAuthJWTSecret:       os.Getenv("OAUTH_JWT_SECRET"),
-		ExternalURL:          os.Getenv("EXTERNAL_URL"),
-		TelegramBotToken:     os.Getenv("TELEGRAM_BOT_TOKEN"),
-		AlertDBPath:          os.Getenv("ALERT_DB_PATH"),
-		AdminEmails:          os.Getenv("ADMIN_EMAILS"),
-		GoogleClientID:       os.Getenv("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret:   os.Getenv("GOOGLE_CLIENT_SECRET"),
-		EnableTrading:        strings.EqualFold(os.Getenv("ENABLE_TRADING"), "true"),
-		InstrumentsSkipFetch: strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true"),
-		AdminPassword:        os.Getenv("ADMIN_PASSWORD"),
-		StripeWebhookSecret:  os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		StripeSecretKey:      os.Getenv("STRIPE_SECRET_KEY"),
-		StripePricePro:       os.Getenv("STRIPE_PRICE_PRO"),
-		StripePricePremium:   os.Getenv("STRIPE_PRICE_PREMIUM"),
+		KiteAPIKey:           env["KITE_API_KEY"],
+		KiteAPISecret:        env["KITE_API_SECRET"],
+		KiteAccessToken:      env["KITE_ACCESS_TOKEN"],
+		AppMode:              env["APP_MODE"],
+		AppPort:              env["APP_PORT"],
+		AppHost:              env["APP_HOST"],
+		ExcludedTools:        env["EXCLUDED_TOOLS"],
+		AdminSecretPath:      env["ADMIN_ENDPOINT_SECRET_PATH"],
+		OAuthJWTSecret:       env["OAUTH_JWT_SECRET"],
+		ExternalURL:          env["EXTERNAL_URL"],
+		TelegramBotToken:     env["TELEGRAM_BOT_TOKEN"],
+		AlertDBPath:          env["ALERT_DB_PATH"],
+		AdminEmails:          env["ADMIN_EMAILS"],
+		GoogleClientID:       env["GOOGLE_CLIENT_ID"],
+		GoogleClientSecret:   env["GOOGLE_CLIENT_SECRET"],
+		EnableTrading:        strings.EqualFold(env["ENABLE_TRADING"], "true"),
+		InstrumentsSkipFetch: strings.EqualFold(env["INSTRUMENTS_SKIP_FETCH"], "true"),
+		AdminPassword:        env["ADMIN_PASSWORD"],
+		StripeWebhookSecret:  env["STRIPE_WEBHOOK_SECRET"],
+		StripeSecretKey:      env["STRIPE_SECRET_KEY"],
+		StripePricePro:       env["STRIPE_PRICE_PRO"],
+		StripePricePremium:   env["STRIPE_PRICE_PREMIUM"],
 	}
 }
 

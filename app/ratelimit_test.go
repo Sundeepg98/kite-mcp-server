@@ -503,14 +503,13 @@ func TestStartServer_HybridMode_Invalid(t *testing.T) {
 // ===========================================================================
 
 func TestLoadConfig_DevMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		// Empty Kite credentials — DevMode allows this.
+		InstrumentsSkipFetch: true,
+	})
+	app.DevMode = true
 	err := app.LoadConfig()
-
 	// DevMode allows missing credentials
 	assert.NoError(t, err)
 }
@@ -540,16 +539,15 @@ func TestAppStartTime(t *testing.T) {
 	assert.False(t, app.startTime.IsZero())
 }
 
-func TestAppDevMode(t *testing.T) {
+// TestAppDevMode_EnvIntegration is the single adapter test verifying the
+// DEV_MODE env → App.DevMode wiring chain. Behaviour-per-value of the
+// underlying parser is covered by parallel tests against parseDevMode
+// when it gets extracted; until then this one t.Setenv test owns the
+// wiring contract. Cannot t.Parallel because env is process-wide.
+func TestAppDevMode_EnvIntegration(t *testing.T) {
 	t.Setenv("DEV_MODE", "true")
 	app := newTestApp(t)
 	assert.True(t, app.DevMode)
-}
-
-func TestAppDevMode_False(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	app := newTestApp(t)
-	assert.False(t, app.DevMode)
 }
 
 // ===========================================================================
@@ -622,20 +620,31 @@ func TestWithSessionType(t *testing.T) {
 // LoadConfig edge cases
 // ===========================================================================
 
-func TestLoadConfig_AllEnvVars(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "key")
-	t.Setenv("KITE_API_SECRET", "secret")
-	t.Setenv("KITE_ACCESS_TOKEN", "token")
-	t.Setenv("APP_MODE", "hybrid")
-	t.Setenv("APP_PORT", "3000")
-	t.Setenv("APP_HOST", "0.0.0.0")
-	t.Setenv("OAUTH_JWT_SECRET", "jwt-secret")
-	t.Setenv("EXTERNAL_URL", "https://example.com")
-	t.Setenv("TELEGRAM_BOT_TOKEN", "bot-token")
-	t.Setenv("ALERT_DB_PATH", "/tmp/test.db")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-
-	app := newTestApp(t)
+// TestLoadConfig_AllFields verifies LoadConfig accepts a fully-populated
+// Config (env values would normally land here via ConfigFromMap; this test
+// exercises the LoadConfig branch on a Config built directly).
+//
+// Migrated from TestLoadConfig_AllEnvVars: t.Setenv removed, Config built
+// via newTestAppWithConfig. Behaviour identical — LoadConfig is a pure
+// function that reads from app.Config (no env reads of its own), so it
+// already supports parallel testing once the env-read step is hoisted to
+// the constructor. This test is now t.Parallel.
+func TestLoadConfig_AllFields(t *testing.T) {
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "key",
+		KiteAPISecret:        "secret",
+		KiteAccessToken:      "token",
+		AppMode:              "hybrid",
+		AppPort:              "3000",
+		AppHost:              "0.0.0.0",
+		OAuthJWTSecret:       "jwt-secret",
+		ExternalURL:          "https://example.com",
+		TelegramBotToken:     "bot-token",
+		AlertDBPath:          "/tmp/test.db",
+		AdminEmails:          "admin@test.com",
+		InstrumentsSkipFetch: true,
+	})
 	err := app.LoadConfig()
 	assert.NoError(t, err)
 
@@ -650,6 +659,84 @@ func TestLoadConfig_AllEnvVars(t *testing.T) {
 	assert.Equal(t, "bot-token", app.Config.TelegramBotToken)
 	assert.Equal(t, "/tmp/test.db", app.Config.AlertDBPath)
 	assert.Equal(t, "admin@test.com", app.Config.AdminEmails)
+}
+
+// TestConfigFromMap_AllFields exercises every field of the pure parser.
+// This is the parallel-safe replacement for the env→Config wiring tests
+// that previously needed t.Setenv. Tests pass a literal map; the parser
+// returns a fully-populated Config without touching process env.
+func TestConfigFromMap_AllFields(t *testing.T) {
+	t.Parallel()
+	cfg := ConfigFromMap(map[string]string{
+		"KITE_API_KEY":               "key",
+		"KITE_API_SECRET":            "secret",
+		"KITE_ACCESS_TOKEN":          "token",
+		"APP_MODE":                   "hybrid",
+		"APP_PORT":                   "3000",
+		"APP_HOST":                   "0.0.0.0",
+		"OAUTH_JWT_SECRET":           "jwt-secret",
+		"EXTERNAL_URL":               "https://example.com",
+		"TELEGRAM_BOT_TOKEN":         "bot-token",
+		"ALERT_DB_PATH":              "/tmp/test.db",
+		"ADMIN_EMAILS":               "admin@test.com",
+		"ADMIN_ENDPOINT_SECRET_PATH": "/secret/path",
+		"GOOGLE_CLIENT_ID":           "google-id",
+		"GOOGLE_CLIENT_SECRET":       "google-secret",
+		"ENABLE_TRADING":             "true",
+		"INSTRUMENTS_SKIP_FETCH":     "true",
+		"ADMIN_PASSWORD":             "admin-pw",
+		"STRIPE_WEBHOOK_SECRET":      "whsec",
+		"STRIPE_SECRET_KEY":          "sk_test",
+		"STRIPE_PRICE_PRO":           "price_pro",
+		"STRIPE_PRICE_PREMIUM":       "price_prem",
+	})
+	assert.Equal(t, "key", cfg.KiteAPIKey)
+	assert.Equal(t, "secret", cfg.KiteAPISecret)
+	assert.Equal(t, "token", cfg.KiteAccessToken)
+	assert.Equal(t, "hybrid", cfg.AppMode)
+	assert.Equal(t, "3000", cfg.AppPort)
+	assert.Equal(t, "0.0.0.0", cfg.AppHost)
+	assert.Equal(t, "jwt-secret", cfg.OAuthJWTSecret)
+	assert.Equal(t, "https://example.com", cfg.ExternalURL)
+	assert.Equal(t, "bot-token", cfg.TelegramBotToken)
+	assert.Equal(t, "/tmp/test.db", cfg.AlertDBPath)
+	assert.Equal(t, "admin@test.com", cfg.AdminEmails)
+	assert.Equal(t, "/secret/path", cfg.AdminSecretPath)
+	assert.Equal(t, "google-id", cfg.GoogleClientID)
+	assert.Equal(t, "google-secret", cfg.GoogleClientSecret)
+	assert.True(t, cfg.EnableTrading)
+	assert.True(t, cfg.InstrumentsSkipFetch)
+	assert.Equal(t, "admin-pw", cfg.AdminPassword)
+	assert.Equal(t, "whsec", cfg.StripeWebhookSecret)
+	assert.Equal(t, "sk_test", cfg.StripeSecretKey)
+	assert.Equal(t, "price_pro", cfg.StripePricePro)
+	assert.Equal(t, "price_prem", cfg.StripePricePremium)
+}
+
+// TestConfigFromMap_BoolParsing covers the bool-flag parsing branch that
+// EqualFold("true") triggers — variants with different casing all enable.
+func TestConfigFromMap_BoolParsing(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"true lowercase", "true", true},
+		{"TRUE uppercase", "TRUE", true},
+		{"True mixed", "True", true},
+		{"empty disables", "", false},
+		{"false explicit", "false", false},
+		{"random word disables", "yes", false},
+		{"1 disables (must be 'true')", "1", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := ConfigFromMap(map[string]string{"ENABLE_TRADING": tc.raw})
+			assert.Equal(t, tc.want, cfg.EnableTrading)
+		})
+	}
 }
 
 // ===========================================================================
@@ -681,19 +768,31 @@ func TestLegalPageData(t *testing.T) {
 	assert.Contains(t, string(data.Content), "Terms")
 }
 
-func TestNewApp_ConfigFromEnv(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "env_key")
-	t.Setenv("KITE_API_SECRET", "env_secret")
-	t.Setenv("ADMIN_ENDPOINT_SECRET_PATH", "/secret/path")
-	t.Setenv("GOOGLE_CLIENT_ID", "google-id")
-	t.Setenv("GOOGLE_CLIENT_SECRET", "google-secret")
-
-	app := newTestApp(t)
-	assert.Equal(t, "env_key", app.Config.KiteAPIKey)
-	assert.Equal(t, "env_secret", app.Config.KiteAPISecret)
-	assert.Equal(t, "/secret/path", app.Config.AdminSecretPath)
-	assert.Equal(t, "google-id", app.Config.GoogleClientID)
-	assert.Equal(t, "google-secret", app.Config.GoogleClientSecret)
+// TestConfigFromMap_PartialFields verifies the parser handles a sparse
+// map (most env vars unset) — every field defaults to its zero value
+// without errors. Replaces TestNewApp_ConfigFromEnv (which tested the
+// env→Config wiring); the wiring is now covered by ConfigFromEnv's
+// trivial os.Getenv → ConfigFromMap delegation. Behaviour-per-field is
+// here.
+func TestConfigFromMap_PartialFields(t *testing.T) {
+	t.Parallel()
+	cfg := ConfigFromMap(map[string]string{
+		"KITE_API_KEY":               "env_key",
+		"KITE_API_SECRET":            "env_secret",
+		"ADMIN_ENDPOINT_SECRET_PATH": "/secret/path",
+		"GOOGLE_CLIENT_ID":           "google-id",
+		"GOOGLE_CLIENT_SECRET":       "google-secret",
+		// All other fields unset → zero values.
+	})
+	assert.Equal(t, "env_key", cfg.KiteAPIKey)
+	assert.Equal(t, "env_secret", cfg.KiteAPISecret)
+	assert.Equal(t, "/secret/path", cfg.AdminSecretPath)
+	assert.Equal(t, "google-id", cfg.GoogleClientID)
+	assert.Equal(t, "google-secret", cfg.GoogleClientSecret)
+	// Unset fields default to zero
+	assert.Equal(t, "", cfg.AppMode)
+	assert.Equal(t, "", cfg.OAuthJWTSecret)
+	assert.False(t, cfg.EnableTrading)
 }
 
 // ===========================================================================

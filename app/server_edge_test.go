@@ -629,12 +629,14 @@ func TestTruncKey_Long_Cov(t *testing.T) {
 // LoadConfig — OAuth + ExternalURL requirement
 // ===========================================================================
 func TestLoadConfig_OAuthRequiresExternalURL(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test-key")
-	t.Setenv("KITE_API_SECRET", "test-secret")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test-key",
+		KiteAPISecret:        "test-secret",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "", // intentionally empty → triggers validation error
+		InstrumentsSkipFetch: true,
+	})
 	err := app.LoadConfig()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "EXTERNAL_URL is required")
@@ -645,12 +647,14 @@ func TestLoadConfig_OAuthRequiresExternalURL(t *testing.T) {
 // LoadConfig — OAuth with ExternalURL succeeds
 // ===========================================================================
 func TestLoadConfig_OAuthWithExternalURL_Cov(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "test-key")
-	t.Setenv("KITE_API_SECRET", "test-secret")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test-key",
+		KiteAPISecret:        "test-secret",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		InstrumentsSkipFetch: true,
+	})
 	err := app.LoadConfig()
 	require.NoError(t, err)
 	assert.Equal(t, "test-jwt-secret-at-least-32-chars-long!!", app.Config.OAuthJWTSecret)
@@ -662,12 +666,13 @@ func TestLoadConfig_OAuthWithExternalURL_Cov(t *testing.T) {
 // LoadConfig — no credentials but with OAuth secret (zero-config mode)
 // ===========================================================================
 func TestLoadConfig_NoCredsWithOAuthSecret(t *testing.T) {
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		// Empty Kite credentials with OAuth secret → zero-config multi-user mode.
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "https://test.example.com",
+		InstrumentsSkipFetch: true,
+	})
 	err := app.LoadConfig()
 	require.NoError(t, err)
 }

@@ -767,7 +767,12 @@ func TestDashboardLink_P7(t *testing.T) {
 }
 
 func TestDashboardLink_WithExternalURL(t *testing.T) {
-	t.Setenv("EXTERNAL_URL", "https://test.example.com")
+	t.Parallel()
+	// newDevModeManager creates a manager with DevMode=true and empty
+	// AppMode → IsLocalMode() returns true → dashboardBaseURL returns
+	// "http://127.0.0.1:8080" regardless of any EXTERNAL_URL value.
+	// The previous t.Setenv was dead code: newDevModeManager does NOT
+	// read env vars during construction. Removed for parallel-safety.
 	mgr := newDevModeManager(t)
 	link := dashboardLink(mgr)
 	assert.NotEmpty(t, link)

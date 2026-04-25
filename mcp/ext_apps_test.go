@@ -496,8 +496,13 @@ func TestEnvVarGatingPrecedence(t *testing.T) {
 // RegisterAppResources wires the hook. The hook then fires on every
 // list_tools response.
 func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
-	t.Setenv("MCP_UI_ENABLED", "")
-
+	t.Parallel()
+	// Use clientSupportsUIWithOverride (the pure parser) directly with an
+	// empty kill-switch so the test exercises the same branch the
+	// production hook hits when MCP_UI_ENABLED is unset — without
+	// requiring t.Setenv. The wiring "production hook reads env →
+	// clientSupportsUIWithOverride(caps, env)" is covered by
+	// TestClientSupportsUI_KillSwitch_OffEnv (env-integration adapter).
 	buildHooks := func(t *testing.T) *server.Hooks {
 		t.Helper()
 		srv := server.NewMCPServer("test", "1.0", server.WithHooks(&server.Hooks{}))
@@ -525,7 +530,8 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 						caps = ci.GetClientCapabilities()
 					}
 				}
-				if clientSupportsUI(caps) {
+				// Use the pure parser with empty kill-switch (parallel-safe).
+				if clientSupportsUIWithOverride(caps, "") {
 					return
 				}
 				result.Tools = stripUIResourceURIFromTools(result.Tools)
@@ -547,6 +553,7 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 	}
 
 	t.Run("strips ui/resourceUri for session without UI extension", func(t *testing.T) {
+		t.Parallel()
 		hooks := buildHooks(t)
 		require.NotNil(t, hooks)
 		result := newResult()
@@ -570,6 +577,7 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 	})
 
 	t.Run("preserves ui/resourceUri for session that advertises UI extension", func(t *testing.T) {
+		t.Parallel()
 		hooks := buildHooks(t)
 		require.NotNil(t, hooks)
 		result := newResult()
@@ -598,9 +606,43 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 			"UI-capable session must still see the resource URI")
 	})
 
-	t.Run("env kill-switch strips even for UI-capable sessions", func(t *testing.T) {
-		t.Setenv("MCP_UI_ENABLED", "false")
-		hooks := buildHooks(t)
+	t.Run("kill-switch strips even for UI-capable sessions", func(t *testing.T) {
+		t.Parallel()
+		// Build a hook variant that simulates MCP_UI_ENABLED=false by
+		// passing "false" to clientSupportsUIWithOverride directly.
+		// This is the parallel-safe equivalent of t.Setenv.
+		buildKillSwitchHooks := func() *server.Hooks {
+			srv := server.NewMCPServer("test", "1.0", server.WithHooks(&server.Hooks{}))
+			tool := withAppUI(
+				gomcp.NewTool("get_holdings_test", gomcp.WithDescription("seed")),
+				"ui://kite-mcp/portfolio",
+			)
+			srv.AddTool(tool, func(_ context.Context, _ gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
+				return &gomcp.CallToolResult{}, nil
+			})
+			if hooks := srv.GetHooks(); hooks != nil {
+				hooks.AddAfterListTools(func(ctx context.Context, _ any, _ *gomcp.ListToolsRequest, result *gomcp.ListToolsResult) {
+					if result == nil {
+						return
+					}
+					var caps gomcp.ClientCapabilities
+					if session := server.ClientSessionFromContext(ctx); session != nil {
+						if ci, ok := session.(server.SessionWithClientInfo); ok {
+							caps = ci.GetClientCapabilities()
+						}
+					}
+					// Kill-switch = "false" — force-disable widgets even
+					// for UI-capable sessions.
+					if clientSupportsUIWithOverride(caps, "false") {
+						return
+					}
+					result.Tools = stripUIResourceURIFromTools(result.Tools)
+				})
+			}
+			return srv.GetHooks()
+		}
+
+		hooks := buildKillSwitchHooks()
 		require.NotNil(t, hooks)
 		result := newResult()
 		ctx := context.Background()
@@ -621,7 +663,7 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 		require.Len(t, result.Tools, 1)
 		if result.Tools[0].Meta != nil {
 			_, has := result.Tools[0].Meta.AdditionalFields["ui/resourceUri"]
-			assert.False(t, has, "MCP_UI_ENABLED=false must force-strip even for UI-capable sessions")
+			assert.False(t, has, "kill-switch must force-strip even for UI-capable sessions")
 		}
 	})
 }

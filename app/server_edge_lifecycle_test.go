@@ -58,23 +58,20 @@ func TestRunServer_OAuthValidationFailure(t *testing.T) {
 
 
 // TestRunServer_MissingExternalURL exercises the EXTERNAL_URL requirement
-// error. This test exercises LoadConfig's env-read path directly, so
-// t.Setenv and non-parallel execution are load-bearing — converting to
-// Config injection would defeat the subject under test. Trimmed STRIPE
-// env vars because DevMode short-circuits that branch regardless.
+// error. LoadConfig is a pure function reading from app.Config (not env),
+// so the test now drops t.Setenv and constructs Config directly via
+// newTestAppWithConfig — parallel-safe.
 func TestRunServer_MissingExternalURL(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-
-	app := newTestApp(t)
+	t.Parallel()
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "", // triggers EXTERNAL_URL required error
+		AppMode:              ModeHTTP,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "" // triggers EXTERNAL_URL required error
 
 	// LoadConfig should catch this
 	err := app.LoadConfig()
