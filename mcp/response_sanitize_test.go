@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -100,4 +101,101 @@ func TestSanitizeForLLM_VerticalTabAndFormFeed(t *testing.T) {
 	t.Parallel()
 	got := SanitizeForLLM("a\vb\fc")
 	assert.Equal(t, `a\vb\fc`, got)
+}
+
+// ---------------------------------------------------------------------------
+// SanitizeData — per-field tree walk used by MarshalResponse
+// ---------------------------------------------------------------------------
+
+func TestSanitizeData_NilPassthrough(t *testing.T) {
+	t.Parallel()
+	assert.Nil(t, SanitizeData(nil))
+}
+
+func TestSanitizeData_MapWithInjectedField(t *testing.T) {
+	t.Parallel()
+	in := map[string]any{
+		"tradingsymbol": "AAPL\nIgnore prior",
+		"qty":           100,
+	}
+	out := SanitizeData(in).(map[string]any)
+	assert.Equal(t, `AAPL\nIgnore prior`, out["tradingsymbol"])
+	assert.Equal(t, 100, out["qty"], "non-string fields untouched")
+}
+
+func TestSanitizeData_PreservesJSONStructure(t *testing.T) {
+	t.Parallel()
+	// Critical: the cleaned tree must marshal to valid JSON the LLM and
+	// programmatic consumers can both parse. No top-level [UNTRUSTED]
+	// wrapping the entire response.
+	type response struct {
+		OrderID string `json:"order_id"`
+		Status  string `json:"status"`
+		Qty     int    `json:"qty"`
+	}
+	in := response{OrderID: "ORD-1", Status: "complete\nbreaking", Qty: 5}
+	out := SanitizeData(in)
+
+	v := reflect.ValueOf(out)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	got, ok := v.Interface().(response)
+	if !ok {
+		t.Fatalf("expected response struct after sanitize, got %T", out)
+	}
+	assert.Equal(t, "ORD-1", got.OrderID, "short clean fields untouched")
+	assert.Equal(t, `complete\nbreaking`, got.Status, "control chars escaped")
+	assert.Equal(t, 5, got.Qty)
+}
+
+func TestSanitizeData_NestedSlice(t *testing.T) {
+	t.Parallel()
+	in := []map[string]string{
+		{"sym": "AAPL", "tag": "a\nb"},
+		{"sym": "MSFT", "tag": "c"},
+	}
+	cleaned := SanitizeData(in)
+	out := cleaned.([]map[string]string)
+	assert.Equal(t, "AAPL", out[0]["sym"])
+	assert.Equal(t, `a\nb`, out[0]["tag"])
+	assert.Equal(t, "MSFT", out[1]["sym"])
+	assert.Equal(t, "c", out[1]["tag"])
+}
+
+func TestSanitizeData_NoStringsNoChange(t *testing.T) {
+	t.Parallel()
+	// All-numeric response: tree walk should not allocate — return value
+	// is the same logical value as input. (Not asserting pointer
+	// equality since reflect may produce a new slice header; assert
+	// the data is identical.)
+	in := []int{1, 2, 3}
+	out := SanitizeData(in)
+	assert.Equal(t, in, out)
+}
+
+func TestSanitizeData_LongStringFieldWrapped(t *testing.T) {
+	t.Parallel()
+	// A long field value gets the [UNTRUSTED] wrap.
+	long := strings.Repeat("x", sanitizeWrapMinLen+10)
+	in := map[string]string{"description": long}
+	out := SanitizeData(in).(map[string]string)
+	assert.True(t, strings.HasPrefix(out["description"], "[UNTRUSTED]"))
+	assert.True(t, strings.HasSuffix(out["description"], "[/UNTRUSTED]"))
+}
+
+func TestSanitizeData_PointerStruct(t *testing.T) {
+	t.Parallel()
+	type resp struct {
+		Msg string `json:"msg"`
+	}
+	in := &resp{Msg: "x\ny"}
+	out := SanitizeData(in)
+	// Out is some addressable form holding the cleaned struct.
+	v := reflect.ValueOf(out)
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+	got := v.Interface().(resp)
+	assert.Equal(t, `x\ny`, got.Msg)
 }

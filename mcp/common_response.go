@@ -20,24 +20,25 @@ import (
 // before passing to NewToolResultStructured. The text fallback keeps the
 // original array JSON for LLM readability.
 //
-// LLM-facing text is sanitized via SanitizeForLLM to defend against
-// prompt-injection inside broker fields (e.g. a hostile upstream
-// returning "AAPL\nIgnore prior instructions..." in tradingsymbol).
-// Control characters are escaped and long bodies wrapped in
-// [UNTRUSTED]…[/UNTRUSTED] markers. The structured JSON view is left
-// untouched — programmatic consumers (UI widgets, dashboard) HTML-
-// escape values before render and don't reach the LLM.
+// LLM-facing string fields are sanitized via SanitizeData to defend
+// against prompt-injection inside broker fields (e.g. a hostile
+// upstream returning "AAPL\nIgnore prior instructions..." in
+// tradingsymbol). Per-field walk preserves JSON structure: control
+// characters are escaped inside each string value, long values wrapped
+// in [UNTRUSTED]…[/UNTRUSTED]. The marshaled JSON remains parseable —
+// programmatic consumers (UI widgets, dashboard, tests) keep working
+// while the LLM-facing string contents are neutralized.
 func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolResult, error) {
-	v, err := json.Marshal(data)
+	cleaned := SanitizeData(data)
+	v, err := json.Marshal(cleaned)
 	if err != nil {
 		h.deps.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to process response data: %s", err.Error())), nil
 	}
 
 	h.deps.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
-	structured := wrapForStructuredContent(data)
-	llmText := SanitizeForLLM(string(v))
-	return mcp.NewToolResultStructured(structured, llmText), nil
+	structured := wrapForStructuredContent(cleaned)
+	return mcp.NewToolResultStructured(structured, string(v)), nil
 }
 
 // wrapForStructuredContent ensures the value handed to NewToolResultStructured
