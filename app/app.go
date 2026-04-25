@@ -339,6 +339,18 @@ type Config struct {
 	// handler is not registered. Field lives on Config so tests that
 	// exercise the webhook path drop t.Setenv and can t.Parallel.
 	StripeWebhookSecret string
+
+	// StripeSecretKey gates billing tier middleware (STRIPE_SECRET_KEY env
+	// var). Empty or DevMode skips billing entirely. Field on Config so
+	// tests that exercise the billing path drop t.Setenv and can t.Parallel.
+	StripeSecretKey string
+
+	// StripePricePro and StripePricePremium are the Stripe price IDs for
+	// webhook tier mapping (STRIPE_PRICE_PRO, STRIPE_PRICE_PREMIUM env
+	// vars). Empty means the webhook defaults to Pro tier. Fields on
+	// Config so tests drop t.Setenv.
+	StripePricePro     string
+	StripePricePremium string
 }
 
 // Server mode constants

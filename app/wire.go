@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -385,9 +384,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	_, rateLimitReloadDone := startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
 	app.rateLimitReloadDone = rateLimitReloadDone
 	app.logger.Info("SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
-	// Billing tier middleware gates tools by subscription level (opt-in via STRIPE_SECRET_KEY).
-	// Skipped entirely in DEV_MODE — all tools are free tier.
-	if stripeKey := os.Getenv("STRIPE_SECRET_KEY"); stripeKey != "" && !app.DevMode {
+	// Billing tier middleware gates tools by subscription level (opt-in via
+	// app.Config.StripeSecretKey, populated from STRIPE_SECRET_KEY env by
+	// ConfigFromEnv). Skipped entirely in DEV_MODE — all tools are free tier.
+	if stripeKey := app.Config.StripeSecretKey; stripeKey != "" && !app.DevMode {
 		stripe.Key = stripeKey
 		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
 		if err := billingStore.InitTable(); err != nil {
@@ -413,7 +413,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			return tierRateMultiplier(billingStore.GetTierForUser(email, adminEmailFn))
 		})
 		app.logger.Info("Billing tier enforcement enabled")
-		if os.Getenv("STRIPE_PRICE_PRO") == "" || os.Getenv("STRIPE_PRICE_PREMIUM") == "" {
+		if app.Config.StripePricePro == "" || app.Config.StripePricePremium == "" {
 			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
 		}
 	}

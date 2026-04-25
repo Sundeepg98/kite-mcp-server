@@ -59,6 +59,9 @@ func ConfigFromEnv() *Config {
 		InstrumentsSkipFetch: strings.EqualFold(os.Getenv("INSTRUMENTS_SKIP_FETCH"), "true"),
 		AdminPassword:        os.Getenv("ADMIN_PASSWORD"),
 		StripeWebhookSecret:  os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripeSecretKey:      os.Getenv("STRIPE_SECRET_KEY"),
+		StripePricePro:       os.Getenv("STRIPE_PRICE_PRO"),
+		StripePricePremium:   os.Getenv("STRIPE_PRICE_PREMIUM"),
 	}
 }
 
