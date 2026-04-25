@@ -49,9 +49,16 @@ func (m *Manager) registerAdminUserCommands() error {
 		if m.userStore == nil {
 			return nil, fmt.Errorf("cqrs: user store not configured")
 		}
+		// Avoid passing typed-nil through an interface: if RiskGuard() is
+		// nil, send the use case an untyped-nil so its `!= nil` guard fires
+		// correctly. Same defence the account commands use.
+		var rg usecases.RiskGuardService
+		if guard := m.RiskGuard(); guard != nil {
+			rg = guard
+		}
 		uc := usecases.NewAdminSuspendUserUseCase(
 			m.userStore,
-			m.RiskGuard(),
+			rg,
 			m.sessionManager,
 			m.eventing.Dispatcher(),
 			m.Logger,

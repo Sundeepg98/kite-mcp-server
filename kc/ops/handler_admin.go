@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
-	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -56,7 +54,14 @@ func (h *Handler) suspendUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
-	if err := h.userStore.UpdateStatus(targetEmail, users.StatusSuspended); err != nil {
+	// Route through the CommandBus so the mutation hits LoggingMiddleware
+	// uniformly with the rest of the codebase. The handler stays in
+	// kc/ops because it owns the HTTP request shape (auth check,
+	// self-action guard, JSON shape); the bus owns the persistence.
+	if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminSuspendUserCommand{
+		AdminEmail:  adminEmail,
+		TargetEmail: targetEmail,
+	}); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -90,7 +95,10 @@ func (h *Handler) activateUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusServiceUnavailable, "user store not initialized")
 		return
 	}
-	if err := h.userStore.UpdateStatus(targetEmail, users.StatusActive); err != nil {
+	if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminActivateUserCommand{
+		AdminEmail:  adminEmail,
+		TargetEmail: targetEmail,
+	}); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -214,7 +222,11 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.userStore.UpdateRole(targetEmail, req.Role); err != nil {
+	if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminChangeRoleCommand{
+		AdminEmail:  adminEmail,
+		TargetEmail: targetEmail,
+		NewRole:     req.Role,
+	}); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -397,16 +409,14 @@ func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, map[string]string{"error": "id, api_key, and api_secret are required"})
 			return
 		}
-		reg := &registry.AppRegistration{
+		if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminRegisterAppCommand{
 			ID:           req.ID,
 			APIKey:       req.APIKey,
 			APISecret:    req.APISecret,
 			AssignedTo:   req.AssignedTo,
 			Label:        req.Label,
 			RegisteredBy: email,
-			Source:       registry.SourceAdmin,
-		}
-		if err := h.registryStore.Register(reg); err != nil {
+		}); err != nil {
 			w.WriteHeader(http.StatusConflict)
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return
@@ -454,7 +464,12 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, map[string]string{"error": "invalid JSON"})
 			return
 		}
-		if err := h.registryStore.Update(id, req.AssignedTo, req.Label, req.Status); err != nil {
+		if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminUpdateRegistryCommand{
+			ID:         id,
+			AssignedTo: req.AssignedTo,
+			Label:      req.Label,
+			Status:     req.Status,
+		}); err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return
@@ -464,7 +479,7 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
-		if err := h.registryStore.Delete(id); err != nil {
+		if err := h.manager.CommandBus().Dispatch(r.Context(), cqrs.AdminDeleteRegistryCommand{ID: id}); err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return

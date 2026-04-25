@@ -120,7 +120,78 @@ func (m *Manager) registerOAuthBridgeCommands() error {
 		return err
 	}
 
+	// Admin registry mutations — replaces the direct registryStore.Register
+	// /Update/Delete calls in kc/ops/handler_admin.go so admin writes hit
+	// LoggingMiddleware uniformly.
+	regWriter := func() usecases.RegistryAdminWriter {
+		if m.registryStore == nil {
+			return nil
+		}
+		return &registryAdminWriterAdapter{store: m.registryStore}
+	}
+
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminRegisterAppCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.AdminRegisterAppCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewAdminRegisterAppUseCase(regWriter(), m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminUpdateRegistryCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.AdminUpdateRegistryCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewAdminUpdateRegistryUseCase(regWriter(), m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
+	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminDeleteRegistryCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.AdminDeleteRegistryCommand)
+		if !ok {
+			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
+		}
+		uc := usecases.NewAdminDeleteRegistryUseCase(regWriter(), m.Logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// registryAdminWriterAdapter bridges *registry.Store to the admin
+// RegistryAdminWriter port. Defined separately from registrySyncAdapter
+// so the admin-write path doesn't depend on the (sync-rotation) port.
+type registryAdminWriterAdapter struct {
+	store *registry.Store
+}
+
+func (a *registryAdminWriterAdapter) Register(id, apiKey, apiSecret, assignedTo, label, status, source, registeredBy string) error {
+	return a.store.Register(&registry.AppRegistration{
+		ID:           id,
+		APIKey:       apiKey,
+		APISecret:    apiSecret,
+		AssignedTo:   assignedTo,
+		Label:        label,
+		Status:       status,
+		Source:       source,
+		RegisteredBy: registeredBy,
+	})
+}
+
+func (a *registryAdminWriterAdapter) Update(id, assignedTo, label, status string) error {
+	return a.store.Update(id, assignedTo, label, status)
+}
+
+func (a *registryAdminWriterAdapter) Delete(id string) error {
+	return a.store.Delete(id)
 }
 
 // --- adapter shims: bridge concrete stores to the narrow ports defined

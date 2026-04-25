@@ -305,3 +305,82 @@ func (uc *DeleteOAuthClientUseCase) Execute(_ context.Context, cmd cqrs.DeleteOA
 	}
 	return uc.store.DeleteClient(cmd.ClientID)
 }
+
+// --- Admin registry mutations ---
+//
+// RegistryAdminWriter is the narrow port for the three admin-side
+// registry-mutation use cases. Mirrors the methods kc/ops/handler_admin.go
+// previously called directly on registry.Store. Defined separately from
+// RegistrySync so the admin write path doesn't import the full
+// (rotation-handling) sync surface.
+
+// RegistryAdminWriter abstracts admin-side registry mutations.
+type RegistryAdminWriter interface {
+	Register(id, apiKey, apiSecret, assignedTo, label, status, source, registeredBy string) error
+	Update(id, assignedTo, label, status string) error
+	Delete(id string) error
+}
+
+// RegistrySourceAdmin is the source label for entries created by admins
+// from the ops dashboard (vs self-provisioned via OAuth callback).
+// Mirrors kc/registry.SourceAdmin so usecases stays independent.
+const RegistrySourceAdmin = "admin"
+
+// AdminRegisterAppUseCase persists a new key-registry entry created from
+// the admin dashboard.
+type AdminRegisterAppUseCase struct {
+	registry RegistryAdminWriter
+	logger   *slog.Logger
+}
+
+// NewAdminRegisterAppUseCase builds the use case.
+func NewAdminRegisterAppUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminRegisterAppUseCase {
+	return &AdminRegisterAppUseCase{registry: r, logger: logger}
+}
+
+// Execute runs the use case.
+func (uc *AdminRegisterAppUseCase) Execute(_ context.Context, cmd cqrs.AdminRegisterAppCommand) error {
+	if uc.registry == nil {
+		return nil
+	}
+	return uc.registry.Register(cmd.ID, cmd.APIKey, cmd.APISecret, cmd.AssignedTo, cmd.Label, RegistryStatusActive, RegistrySourceAdmin, cmd.RegisteredBy)
+}
+
+// AdminUpdateRegistryUseCase mutates an existing registry entry's
+// assignment, label, or status.
+type AdminUpdateRegistryUseCase struct {
+	registry RegistryAdminWriter
+	logger   *slog.Logger
+}
+
+// NewAdminUpdateRegistryUseCase builds the use case.
+func NewAdminUpdateRegistryUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminUpdateRegistryUseCase {
+	return &AdminUpdateRegistryUseCase{registry: r, logger: logger}
+}
+
+// Execute runs the use case.
+func (uc *AdminUpdateRegistryUseCase) Execute(_ context.Context, cmd cqrs.AdminUpdateRegistryCommand) error {
+	if uc.registry == nil {
+		return nil
+	}
+	return uc.registry.Update(cmd.ID, cmd.AssignedTo, cmd.Label, cmd.Status)
+}
+
+// AdminDeleteRegistryUseCase removes a registry entry.
+type AdminDeleteRegistryUseCase struct {
+	registry RegistryAdminWriter
+	logger   *slog.Logger
+}
+
+// NewAdminDeleteRegistryUseCase builds the use case.
+func NewAdminDeleteRegistryUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminDeleteRegistryUseCase {
+	return &AdminDeleteRegistryUseCase{registry: r, logger: logger}
+}
+
+// Execute runs the use case.
+func (uc *AdminDeleteRegistryUseCase) Execute(_ context.Context, cmd cqrs.AdminDeleteRegistryCommand) error {
+	if uc.registry == nil {
+		return nil
+	}
+	return uc.registry.Delete(cmd.ID)
+}

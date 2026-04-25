@@ -2,12 +2,10 @@ package ops
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -75,21 +73,18 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Route registry-side bookkeeping through SyncRegistryAfterLoginCommand
+		// so the dashboard credential POST hits LoggingMiddleware uniformly
+		// with the OAuth-callback flow that registers the same way.
 		if h.registryStore != nil {
-			if _, found := h.registryStore.GetByAPIKeyAnyStatus(req.APIKey); !found {
-				regID := fmt.Sprintf("self-%s-%s", authEmail, truncKey(req.APIKey, 8))
-				if err := h.registryStore.Register(&registry.AppRegistration{
-					ID:           regID,
-					APIKey:       req.APIKey,
-					APISecret:    req.APISecret,
-					AssignedTo:   authEmail,
-					Label:        "Self-provisioned (dashboard)",
-					Status:       registry.StatusActive,
-					Source:       registry.SourceSelfProvisioned,
-					RegisteredBy: authEmail,
-				}); err != nil {
-					h.logger.Warn("Failed to auto-register credentials in registry", "email", authEmail, "error", err)
-				}
+			if dispErr := h.manager.CommandBus().Dispatch(r.Context(), cqrs.SyncRegistryAfterLoginCommand{
+				Email:        authEmail,
+				APIKey:       req.APIKey,
+				APISecret:    req.APISecret,
+				Label:        "Self-provisioned (dashboard)",
+				AutoRegister: true,
+			}); dispErr != nil {
+				h.logger.Warn("Failed to dispatch SyncRegistryAfterLoginCommand", "email", authEmail, "error", dispErr)
 			}
 		}
 

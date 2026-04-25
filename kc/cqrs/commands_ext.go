@@ -82,3 +82,31 @@ type SaveOAuthClientCommand struct {
 type DeleteOAuthClientCommand struct {
 	ClientID string `json:"client_id"`
 }
+
+// AdminRegisterAppCommand requests registering a new key-registry entry
+// from the admin dashboard. Source is always admin (vs self-provisioned).
+// Replaces the direct registryStore.Register call in kc/ops/handler_admin.go.
+type AdminRegisterAppCommand struct {
+	ID           string `json:"id"`
+	APIKey       string `json:"api_key"`
+	APISecret    string `json:"api_secret"`
+	AssignedTo   string `json:"assigned_to"`
+	Label        string `json:"label"`
+	RegisteredBy string `json:"registered_by"` // admin email
+}
+
+// AdminUpdateRegistryCommand requests updating an existing key-registry
+// entry's assigned_to / label / status. Replaces the direct
+// registryStore.Update call.
+type AdminUpdateRegistryCommand struct {
+	ID         string `json:"id"`
+	AssignedTo string `json:"assigned_to"`
+	Label      string `json:"label"`
+	Status     string `json:"status"`
+}
+
+// AdminDeleteRegistryCommand requests removing a key-registry entry.
+// Replaces the direct registryStore.Delete call.
+type AdminDeleteRegistryCommand struct {
+	ID string `json:"id"`
+}
