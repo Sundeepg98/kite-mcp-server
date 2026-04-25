@@ -22,6 +22,9 @@ var flyRegionPattern = regexp.MustCompile(`^[a-z]{3,4}$`)
 
 // envCheck runs targeted validation of environment variables at startup.
 //
+// Production wrapper around envCheckWithGetenv: the latter is the pure
+// parser tests use directly with map literals (no t.Setenv, parallel-safe).
+//
 // It only validates vars where a wrong value causes subtle breakage
 // (silent downgrade, runtime panic, OAuth callback mismatch, etc.). For
 // most opt-in flags we rely on the feature itself to fail loudly when
@@ -36,6 +39,19 @@ var flyRegionPattern = regexp.MustCompile(`^[a-z]{3,4}$`)
 // Full inventory of every env var consumed by the server lives in
 // docs/env-vars.md. This function is intentionally a subset.
 func (app *App) envCheck() error {
+	return app.envCheckWithGetenv(os.Getenv)
+}
+
+// envCheckWithGetenv is the pure parser. Caller injects the env-lookup
+// function so tests can drive every branch with map literals — no env,
+// no t.Setenv, parallel-safe. Production calls with os.Getenv.
+//
+// Note: app.Config fields (KiteAPIKey, ExternalURL, AlertDBPath, AppMode,
+// OAuthJWTSecret) are read from the App struct, not the getenv callback —
+// those fields are populated upstream by ConfigFromMap. Only the env vars
+// NOT plumbed through Config (LOG_LEVEL, ENABLE_TRADING, FLY_REGION,
+// AUDIT_HASH_PUBLISH_*) flow through getenv.
+func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	logger := app.logger
 	var firstErr error
 	recordErr := func(err error) {
@@ -123,7 +139,7 @@ func (app *App) envCheck() error {
 	// main.go silently falls back to INFO when unrecognized — which
 	// hides debug-mode typos like `LOG_LEVEL=debugg` until an operator
 	// notices the missing logs. Call it out here.
-	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+	if lvl := getenv("LOG_LEVEL"); lvl != "" {
 		switch strings.ToLower(lvl) {
 		case "debug", "info", "warn", "error":
 			logger.Info("env var LOG_LEVEL set", "value", lvl)
@@ -158,7 +174,7 @@ func (app *App) envCheck() error {
 	// Config.EnableTrading silently becomes false — the operator thinks
 	// they enabled trading, but order tools are gated. Fail fast rather
 	// than ship a misconfigured deployment.
-	if raw := os.Getenv("ENABLE_TRADING"); raw != "" {
+	if raw := getenv("ENABLE_TRADING"); raw != "" {
 		switch strings.ToLower(raw) {
 		case "true":
 			logger.Warn("env var ENABLE_TRADING=true — order-placement tools ENABLED (intended for local single-user only)")
@@ -181,7 +197,7 @@ func (app *App) envCheck() error {
 	// group by region will silently split our metrics into two buckets.
 	// Validate format so the mistake is visible. Empty is fine — local
 	// dev / non-Fly deployments don't set it.
-	if raw := os.Getenv("FLY_REGION"); raw != "" {
+	if raw := getenv("FLY_REGION"); raw != "" {
 		if !flyRegionPattern.MatchString(raw) {
 			recordErr(fmt.Errorf("FLY_REGION %q is invalid; expected 3-4 lowercase letters (e.g. \"bom\", \"sin\", \"ord\")", raw))
 			logger.Error("env var FLY_REGION invalid format", "value", raw, "pattern", "^[a-z]{3,4}$")
@@ -209,10 +225,10 @@ func (app *App) envCheck() error {
 	//   - ACCESS_KEY / SECRET_KEY must be non-empty.
 	//
 	// Interval is validated below (separate block, already present).
-	hashEndpoint := os.Getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT")
-	hashBucket := os.Getenv("AUDIT_HASH_PUBLISH_BUCKET")
-	hashAccessKey := os.Getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY")
-	hashSecretKey := os.Getenv("AUDIT_HASH_PUBLISH_SECRET_KEY")
+	hashEndpoint := getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT")
+	hashBucket := getenv("AUDIT_HASH_PUBLISH_BUCKET")
+	hashAccessKey := getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY")
+	hashSecretKey := getenv("AUDIT_HASH_PUBLISH_SECRET_KEY")
 
 	hashKeys := map[string]string{
 		"AUDIT_HASH_PUBLISH_S3_ENDPOINT": hashEndpoint,
@@ -272,7 +288,7 @@ func (app *App) envCheck() error {
 	// LoadHashPublishConfig silently ignores an unparseable value and
 	// keeps the 1h default — operator thinks they set 5m, but nothing
 	// changes. Validate syntax here so the mistake is visible.
-	if raw := os.Getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
+	if raw := getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
 		if d, err := time.ParseDuration(raw); err != nil {
 			logger.Warn("env var AUDIT_HASH_PUBLISH_INTERVAL not a valid duration; keeping default 1h", "value", raw, "error", err)
 		} else if d <= 0 {
