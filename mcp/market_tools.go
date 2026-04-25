@@ -14,8 +14,17 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 )
 
+// ltpCacheMaxEntries caps the LTP cache so a long-running process or
+// hostile caller can't drive it into unbounded growth. 1000 entries at
+// ~200 bytes each = ~200KB — comfortable headroom for the active set
+// of NSE F&O symbols an active trader might hit in a 30-second window.
+// Tune up if production telemetry shows steady eviction churn.
+const ltpCacheMaxEntries = 1000
+
 // ltpCache caches LTP responses for 30 seconds to reduce API calls.
-var ltpCache = NewToolCache(30 * time.Second)
+// Bounded LRU (PR-E): evicts the least-recently-used entry once size
+// hits ltpCacheMaxEntries.
+var ltpCache = NewBoundedToolCache(30*time.Second, ltpCacheMaxEntries)
 
 // ShutdownLtpCache stops the ltpCache background cleanup goroutine. Called
 // from TestMain in packages that import mcp/ so goleak-style sentinels see

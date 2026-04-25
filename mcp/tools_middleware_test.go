@@ -63,10 +63,8 @@ func newMetricsManager(t *testing.T) *kc.Manager {
 
 func TestToolCache_Cleanup(t *testing.T) {
 	t.Parallel()
-	cache := &ToolCache{
-		entries: make(map[string]*cacheEntry),
-		ttl:     50 * time.Millisecond,
-	}
+	cache := NewToolCache(50 * time.Millisecond)
+	defer cache.Close()
 
 	// Add entries
 	cache.Set("key1", "value1")
@@ -83,17 +81,15 @@ func TestToolCache_Cleanup(t *testing.T) {
 
 func TestToolCache_CleanupKeepsValid(t *testing.T) {
 	t.Parallel()
-	cache := &ToolCache{
-		entries: make(map[string]*cacheEntry),
-		ttl:     1 * time.Second,
-	}
+	cache := NewToolCache(1 * time.Second)
+	defer cache.Close()
 
 	cache.Set("valid", "data")
-	// Manually insert an expired entry
-	cache.entries["expired"] = &cacheEntry{
-		data:      "old",
-		expiresAt: time.Now().Add(-1 * time.Second),
-	}
+	// Force a Set whose TTL has already expired by reaching through
+	// the same Set/list path the cleanup walks (pure black-box now —
+	// the LRU rewrite removed the public-state-poking shortcut).
+	cache.Set("expired", "old")
+	cache.expireForTest("expired", time.Now().Add(-1*time.Second))
 	assert.Equal(t, 2, cache.Size())
 
 	cache.cleanup()
@@ -106,10 +102,8 @@ func TestToolCache_CleanupKeepsValid(t *testing.T) {
 
 func TestToolCache_GetExpired(t *testing.T) {
 	t.Parallel()
-	cache := &ToolCache{
-		entries: make(map[string]*cacheEntry),
-		ttl:     1 * time.Millisecond,
-	}
+	cache := NewToolCache(1 * time.Millisecond)
+	defer cache.Close()
 	cache.Set("key", "value")
 	time.Sleep(5 * time.Millisecond)
 
