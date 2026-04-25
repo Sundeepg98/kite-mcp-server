@@ -518,31 +518,26 @@ func TestStartStdIOServer_ViaPipes(t *testing.T) {
 // RunServer with OAuth enabled — exercises the full OAuth wiring branch
 // ---------------------------------------------------------------------------
 func TestRunServer_WithOAuth(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long")
-	t.Setenv("EXTERNAL_URL", "http://localhost:19876")
-	t.Setenv("APP_MODE", "http")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-
-	app := newTestApp(t)
-	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long"
-	app.Config.ExternalURL = "http://localhost:19876"
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.AdminEmails = "admin@test.com"
+	t.Parallel()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
 
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = strconv.Itoa(port)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long",
+		ExternalURL:          "http://localhost:19876",
+		AppMode:              ModeHTTP,
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		AppHost:              "127.0.0.1",
+		AppPort:              strconv.Itoa(port),
+		InstrumentsSkipFetch: true,
+	})
+	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
@@ -580,19 +575,15 @@ func TestRunServer_WithOAuth(t *testing.T) {
 // initializeServices — error path (kc.New fails with invalid config)
 // ---------------------------------------------------------------------------
 func TestInitializeServices_Error(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "")
-	t.Setenv("KITE_API_SECRET", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		// Empty KiteAPIKey/Secret + DevMode=false → initializeServices must fail.
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
 
 	_, _, err := app.initializeServices()
-	// Without credentials/audit DB in production, initializeServices must fail.
 	require.Error(t, err)
 }
 
@@ -601,25 +592,22 @@ func TestInitializeServices_Error(t *testing.T) {
 // RunServer — invalid OAuth config branch
 // ---------------------------------------------------------------------------
 func TestRunServer_InvalidOAuthConfig_MissingExternalURL(t *testing.T) {
+	t.Parallel()
 	// JWT must be >=32 bytes to pass the env gate so the EXTERNAL_URL
 	// branch is the actual failure surface under test.
 	const testJWTSecret = "valid-secret-for-test-32-bytes-min-length-ok"
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", testJWTSecret)
-	t.Setenv("EXTERNAL_URL", "") // missing → Validate() fails
-	t.Setenv("APP_MODE", "http")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		OAuthJWTSecret:       testJWTSecret,
+		ExternalURL:          "", // missing → Validate() fails
+		AppMode:              ModeHTTP,
+		AppHost:              "127.0.0.1",
+		AppPort:              "0",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.OAuthJWTSecret = testJWTSecret
-	app.Config.ExternalURL = "" // force validation error
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = "0"
 
 	err := app.RunServer()
 	// Should fail because ExternalURL is empty → oauth.Config.Validate()
@@ -639,6 +627,7 @@ func TestRunServer_InvalidOAuthConfig_MissingExternalURL(t *testing.T) {
 // RunServer — full DevMode lifecycle: start → healthz → stop
 // ---------------------------------------------------------------------------
 func TestRunServer_FullDevMode(t *testing.T) {
+	t.Parallel()
 	// Pick a free port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -646,20 +635,15 @@ func TestRunServer_FullDevMode(t *testing.T) {
 	listener.Close()
 	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
 
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("APP_MODE", "http")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHTTP,
+		AppHost:              "127.0.0.1",
+		AppPort:              portStr,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = portStr
 	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
@@ -707,35 +691,28 @@ func TestRunServer_FullDevMode(t *testing.T) {
 // RunServer — with OAuth, DB, and all features enabled
 // ---------------------------------------------------------------------------
 func TestRunServer_FullOAuthMode(t *testing.T) {
+	t.Parallel()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
 	listener.Close()
 
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("EXTERNAL_URL", "http://127.0.0.1:"+portStr)
-	t.Setenv("APP_MODE", "http")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("ADMIN_PASSWORD", "test-pass-123")
-	t.Setenv("GOOGLE_CLIENT_ID", "google-test-id")
-	t.Setenv("GOOGLE_CLIENT_SECRET", "google-test-secret")
-
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		ExternalURL:          "http://127.0.0.1:" + portStr,
+		AppMode:              ModeHTTP,
+		AppHost:              "127.0.0.1",
+		AppPort:              portStr,
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		AdminPassword:        "test-pass-123",
+		GoogleClientID:       "google-test-id",
+		GoogleClientSecret:   "google-test-secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHTTP
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = portStr
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.ExternalURL = "http://127.0.0.1:" + portStr
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.AdminEmails = "admin@test.com"
-	app.Config.GoogleClientID = "google-test-id"
-	app.Config.GoogleClientSecret = "google-test-secret"
 	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
@@ -796,23 +773,21 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 // RunServer — exercises the SSE mode branch
 // ---------------------------------------------------------------------------
 func TestRunServer_SSEMode(t *testing.T) {
+	t.Parallel()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
 	listener.Close()
 
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeSSE,
+		AppHost:              "127.0.0.1",
+		AppPort:              portStr,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeSSE
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = portStr
 	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
@@ -841,23 +816,21 @@ func TestRunServer_SSEMode(t *testing.T) {
 // RunServer — exercises the Hybrid mode branch
 // ---------------------------------------------------------------------------
 func TestRunServer_HybridMode(t *testing.T) {
+	t.Parallel()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
 	listener.Close()
 
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              ModeHybrid,
+		AppHost:              "127.0.0.1",
+		AppPort:              portStr,
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = ModeHybrid
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = portStr
 	app.shutdownCh = make(chan struct{})
 
 	errCh := make(chan error, 1)
@@ -1022,19 +995,17 @@ func TestStartStdIOServer_WithPipeIO(t *testing.T) {
 // initializeServices — with DB for full branch coverage
 // ---------------------------------------------------------------------------
 func TestInitializeServices_WithDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.AdminEmails = "admin@test.com"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1064,15 +1035,13 @@ func TestInitializeServices_WithDB(t *testing.T) {
 // initializeServices — without DB (no audit, no paper trading, no events)
 // ---------------------------------------------------------------------------
 func TestInitializeServices_NoDB(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
 
 	kcManager, mcpServer, err := app.initializeServices()
@@ -1091,15 +1060,15 @@ func TestInitializeServices_NoDB(t *testing.T) {
 // initializeServices — DevMode=false, with valid credentials
 // ---------------------------------------------------------------------------
 func TestInitializeServices_ProdMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "jwt-secret-that-is-at-least-32-chars-long")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "jwt-secret-that-is-at-least-32-chars-long",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
 
 	kcManager, mcpServer, err := app.initializeServices()
@@ -1281,18 +1250,15 @@ func TestCreateHTTPServer_Fields(t *testing.T) {
 // initializeServices — with excluded tools
 // ---------------------------------------------------------------------------
 func TestInitializeServices_ExcludedTools(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("EXCLUDED_TOOLS", "place_order,modify_order")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		ExcludedTools:        "place_order,modify_order",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.ExcludedTools = "place_order,modify_order"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1307,21 +1273,18 @@ func TestInitializeServices_ExcludedTools(t *testing.T) {
 // initializeServices — with Stripe billing (non-DevMode)
 // ---------------------------------------------------------------------------
 func TestInitializeServices_WithStripeBilling(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_fake_key_for_testing_12345")
-	t.Setenv("STRIPE_PRICE_PRO", "")
-	t.Setenv("STRIPE_PRICE_PREMIUM", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeSecretKey:      "sk_test_fake_key_for_testing_12345",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.AdminEmails = "admin@test.com"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1339,19 +1302,18 @@ func TestInitializeServices_WithStripeBilling(t *testing.T) {
 // initializeServices — with Stripe billing and price IDs (non-DevMode)
 // ---------------------------------------------------------------------------
 func TestInitializeServices_WithStripePriceIDs(t *testing.T) {
-	t.Setenv("DEV_MODE", "false")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_fake_key_for_testing_12345")
-	t.Setenv("STRIPE_PRICE_PRO", "price_pro_test")
-	t.Setenv("STRIPE_PRICE_PREMIUM", "price_premium_test")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeSecretKey:      "sk_test_fake_key_for_testing_12345",
+		StripePricePro:       "price_pro_test",
+		StripePricePremium:   "price_premium_test",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = false
-	app.Config.AlertDBPath = ":memory:"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1369,17 +1331,16 @@ func TestInitializeServices_WithStripePriceIDs(t *testing.T) {
 // initializeServices — DevMode with Stripe (Stripe should be SKIPPED)
 // ---------------------------------------------------------------------------
 func TestInitializeServices_DevMode_StripeSkipped(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "sk_test_fake_key")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		StripeSecretKey:      "sk_test_fake_key",
+		AlertDBPath:          ":memory:",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1397,20 +1358,17 @@ func TestInitializeServices_DevMode_StripeSkipped(t *testing.T) {
 // RunServer — invalid mode should fail
 // ---------------------------------------------------------------------------
 func TestRunServer_InvalidMode(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("ALERT_DB_PATH", "")
-	t.Setenv("APP_MODE", "invalid_mode_xyz")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AppMode:              "invalid_mode_xyz",
+		AppHost:              "127.0.0.1",
+		AppPort:              "0",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AppMode = "invalid_mode_xyz"
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = "0"
 
 	err := app.RunServer()
 	assert.Error(t, err)
@@ -1424,21 +1382,18 @@ func TestRunServer_InvalidMode(t *testing.T) {
 // RunServer — OAuth wiring directly (exercises the token checker closure)
 // ---------------------------------------------------------------------------
 func TestRunServer_OAuthWiring_TokenChecker(t *testing.T) {
+	t.Parallel()
 	// This test exercises the SetKiteTokenChecker closure from RunServer
 	// by directly calling the wiring code.
 
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "")
-	t.Setenv("OAUTH_JWT_SECRET", "")
-
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
 
 	kcManager, _, err := app.initializeServices()
 	require.NoError(t, err)
@@ -1547,20 +1502,17 @@ func TestRunServer_OAuthWiring_TokenChecker(t *testing.T) {
 // this is hard. Instead we verify the success path works with DB.
 // ---------------------------------------------------------------------------
 func TestInitializeServices_WithDB_FullSetup(t *testing.T) {
-	t.Setenv("DEV_MODE", "true")
-	t.Setenv("KITE_API_KEY", "test_key")
-	t.Setenv("KITE_API_SECRET", "test_secret")
-	t.Setenv("STRIPE_SECRET_KEY", "")
-	t.Setenv("ADMIN_EMAILS", "admin@test.com")
-	t.Setenv("ALERT_DB_PATH", ":memory:")
-	t.Setenv("OAUTH_JWT_SECRET", "test-jwt-secret-at-least-32-chars-long!!")
-	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Parallel()
 
-	app := newTestApp(t)
+	app := newTestAppWithConfig(t, &Config{
+		KiteAPIKey:           "test_key",
+		KiteAPISecret:        "test_secret",
+		AdminEmails:          "admin@test.com",
+		AlertDBPath:          ":memory:",
+		OAuthJWTSecret:       "test-jwt-secret-at-least-32-chars-long!!",
+		InstrumentsSkipFetch: true,
+	})
 	app.DevMode = true
-	app.Config.AlertDBPath = ":memory:"
-	app.Config.OAuthJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
-	app.Config.AdminEmails = "admin@test.com"
 
 	kcManager, mcpServer, err := app.initializeServices()
 	require.NoError(t, err)
