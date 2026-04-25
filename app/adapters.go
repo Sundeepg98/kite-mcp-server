@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
@@ -120,36 +121,62 @@ func (s *signerAdapter) Verify(signed string) (string, error) {
 // the codebase (every mutation hits LoggingMiddleware uniformly). The
 // stored *kc.* references are kept only for READS (GetCredentials,
 // GetSecretByAPIKey) which are cheap and lock-free.
+//
+// commandBus is a structural invariant: it is NEVER nil at use time. The
+// production wire-up sets it from kcManager.CommandBus(); tests that
+// build a struct literal without one trigger ensureBus() on first use,
+// which constructs a local InMemoryBus with the same handlers the manager
+// would have wired. The adapter therefore has a single dispatch path —
+// no "fallback to raw store write" gate.
 type kiteExchangerAdapter struct {
 	apiKey          string
 	apiSecret       string
-	tokenStore      *kc.KiteTokenStore     // read-only path (cache lookup)
-	credentialStore *kc.KiteCredentialStore // read-only path (per-user creds lookup)
-	registryStore   *registry.Store         // unused for writes (kept for HasEntries fast path; may be nil)
-	userStore       *users.Store            // unused for writes (provisionUser dispatches via bus)
+	tokenStore      *kc.KiteTokenStore      // read paths AND test-local-bus handler backing
+	credentialStore *kc.KiteCredentialStore // read paths AND test-local-bus handler backing
+	registryStore   *registry.Store         // test-local-bus handler backing
+	userStore       *users.Store            // test-local-bus handler backing
 	logger          *slog.Logger
 	authenticator   broker.Authenticator
-	commandBus      cqrs.CommandBus // every write goes through here
+	commandBus      cqrs.CommandBus // never nil at use time — see ensureBus
+	busOnce         sync.Once
+}
+
+// ensureBus guarantees a.commandBus is non-nil before any Dispatch call.
+// In production, app/app.go wires kcManager.CommandBus() at struct-literal
+// time so this is a no-op (commandBus already non-nil). In tests that
+// build a struct literal without a manager, this constructs an in-process
+// bus with the same six OAuth-bridge handlers the manager would have
+// registered, backed by whatever stores the test put on the adapter.
+//
+// Rationale: the adapter MUST always go through Dispatch, never a raw
+// store write — that's the CQRS invariant. We satisfy it by ensuring
+// every code path has a real bus, not by gating writes on a nil check.
+func (a *kiteExchangerAdapter) ensureBus() {
+	a.busOnce.Do(func() {
+		if a.commandBus != nil {
+			return
+		}
+		a.commandBus = newLocalOAuthBridgeBus(a.logger, oauthBridgeStores{
+			Users:       a.userStore,
+			Tokens:      a.tokenStore,
+			Credentials: a.credentialStore,
+			Registry:    a.registryStore,
+		})
+	})
 }
 
 // provisionUser auto-provisions a user on first OAuth login and checks status.
 // Returns an error if the user is suspended or offboarded.
 //
-// Production path: dispatches a ProvisionUserOnLoginCommand on the bus.
-// The use case in kc/usecases/oauth_bridge_usecases.go owns the
-// suspended/offboarded → error mapping; we translate the sentinel
-// errors back to the existing error-message format so callers see no
-// behaviour change.
-//
-// Test fallback: when commandBus is nil (legacy unit tests that wire just
-// the adapter without a manager), the adapter calls the user store
-// directly using the same business rules. Production NEVER hits this
-// path — kcManager.CommandBus() is always non-nil after wire.
+// Single dispatch path: ensureBus() guarantees a non-nil bus, then we
+// dispatch ProvisionUserOnLoginCommand. The use case in
+// kc/usecases/oauth_bridge_usecases.go owns the suspended/offboarded →
+// error mapping; we translate the sentinel errors back to the historical
+// error-message format for backward compatibility with callers parsing
+// the message.
 func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string) error {
 	email = strings.ToLower(email)
-	if a.commandBus == nil {
-		return a.provisionUserDirect(email, kiteUID, displayName)
-	}
+	a.ensureBus()
 	err := a.commandBus.Dispatch(context.Background(), cqrs.ProvisionUserOnLoginCommand{
 		Email:       email,
 		KiteUID:     kiteUID,
@@ -158,8 +185,6 @@ func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string)
 	if err == nil {
 		return nil
 	}
-	// Map the use case's sentinels to the historical error-message format
-	// for backward compatibility with any callers parsing the message.
 	switch {
 	case errors.Is(err, usecases.ErrUserSuspended):
 		return fmt.Errorf("user account is suspended: %s", email)
@@ -168,34 +193,6 @@ func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string)
 	default:
 		return err
 	}
-}
-
-// provisionUserDirect is the test-only direct-store fallback. Holds the
-// EXACT same logic the use case implements, just inlined so unit tests
-// that don't wire a bus still pass. Production never enters this path —
-// see provisionUser's commandBus guard.
-//
-// (CQRS audit: this is a test seam, not a bypass — it only runs when
-// commandBus is nil, which is impossible in any real wire-up.)
-func (a *kiteExchangerAdapter) provisionUserDirect(email, kiteUID, displayName string) error {
-	if a.userStore == nil {
-		return nil
-	}
-	status := a.userStore.GetStatus(email)
-	if status == users.StatusSuspended {
-		return fmt.Errorf("user account is suspended: %s", email)
-	}
-	if status == users.StatusOffboarded {
-		return fmt.Errorf("user account has been offboarded: %s", email)
-	}
-	u := a.userStore.EnsureUser(email, kiteUID, displayName, "self")
-	if u != nil {
-		a.userStore.UpdateLastLogin(email)
-		if kiteUID != "" && u.KiteUID == "" {
-			a.userStore.UpdateKiteUID(email, kiteUID)
-		}
-	}
-	return nil
 }
 
 func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string, error) {
@@ -217,39 +214,24 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 
 	a.logger.Debug("Kite token exchange successful", "email", email, "user_id", result.UserID)
 
-	// Token cache + registry-stamp writes go via the bus in production. The
-	// commandBus==nil branch is a unit-test fallback (~36 legacy tests
-	// construct adapters without a bus). Production never enters that branch.
-	if a.commandBus != nil {
-		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.CacheKiteAccessTokenCommand{
-			Email:       email,
-			AccessToken: result.AccessToken,
-			UserID:      result.UserID,
-			UserName:    result.UserName,
+	// Token cache + registry-stamp writes — single dispatch path via the
+	// bus. ensureBus() above already guaranteed non-nil; provisionUser
+	// called it for us.
+	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.CacheKiteAccessTokenCommand{
+		Email:       email,
+		AccessToken: result.AccessToken,
+		UserID:      result.UserID,
+		UserName:    result.UserName,
+	}); dispErr != nil {
+		a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", email, "error", dispErr)
+	}
+	if a.apiKey != "" {
+		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
+			Email:        email,
+			APIKey:       a.apiKey,
+			AutoRegister: false,
 		}); dispErr != nil {
-			a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", email, "error", dispErr)
-		}
-		if a.apiKey != "" {
-			if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
-				Email:        email,
-				APIKey:       a.apiKey,
-				AutoRegister: false,
-			}); dispErr != nil {
-				a.logger.Debug("SyncRegistryAfterLoginCommand global-stamp dispatch failed", "error", dispErr)
-			}
-		}
-	} else {
-		// Bus-less test fallback. Same semantics as the bus path; production
-		// never enters this branch.
-		if a.tokenStore != nil {
-			a.tokenStore.Set(strings.ToLower(email), &kc.KiteTokenEntry{
-				AccessToken: result.AccessToken,
-				UserID:      result.UserID,
-				UserName:    result.UserName,
-			})
-		}
-		if a.registryStore != nil && a.apiKey != "" {
-			a.registryStore.UpdateLastUsedAt(a.apiKey)
+			a.logger.Debug("SyncRegistryAfterLoginCommand global-stamp dispatch failed", "error", dispErr)
 		}
 	}
 
@@ -275,77 +257,35 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 	a.logger.Debug("Kite token exchange (per-user credentials) successful", "email", email, "user_id", result.UserID)
 	lowerEmail := strings.ToLower(email)
 
-	if a.commandBus != nil {
-		// Three writes in sequence: token cache, credential store, registry sync.
-		// Each is a separate command to keep handlers narrow + auditable.
-		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.CacheKiteAccessTokenCommand{
-			Email:       lowerEmail,
-			AccessToken: result.AccessToken,
-			UserID:      result.UserID,
-			UserName:    result.UserName,
-		}); dispErr != nil {
-			a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", lowerEmail, "error", dispErr)
-		}
-		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.StoreUserKiteCredentialsCommand{
-			Email:     lowerEmail,
-			APIKey:    apiKey,
-			APISecret: apiSecret,
-		}); dispErr != nil {
-			a.logger.Error("Failed to dispatch StoreUserKiteCredentialsCommand", "email", lowerEmail, "error", dispErr)
-		}
-		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
-			Email:        lowerEmail,
-			APIKey:       apiKey,
-			APISecret:    apiSecret,
-			Label:        "Self-provisioned",
-			AutoRegister: true,
-		}); dispErr != nil {
-			a.logger.Error("Failed to dispatch SyncRegistryAfterLoginCommand", "email", lowerEmail, "error", dispErr)
-		}
-	} else {
-		// Bus-less test fallback. Mirrors the production behaviour with
-		// direct-store calls so the legacy unit tests pass. Production
-		// never enters this branch.
-		a.exchangeWithCredentialsDirect(lowerEmail, apiKey, apiSecret, result)
+	// Three writes in sequence: token cache, credential store, registry sync.
+	// Each dispatched as a separate command. ensureBus() in provisionUser
+	// already guaranteed a.commandBus is non-nil.
+	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.CacheKiteAccessTokenCommand{
+		Email:       lowerEmail,
+		AccessToken: result.AccessToken,
+		UserID:      result.UserID,
+		UserName:    result.UserName,
+	}); dispErr != nil {
+		a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", lowerEmail, "error", dispErr)
+	}
+	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.StoreUserKiteCredentialsCommand{
+		Email:     lowerEmail,
+		APIKey:    apiKey,
+		APISecret: apiSecret,
+	}); dispErr != nil {
+		a.logger.Error("Failed to dispatch StoreUserKiteCredentialsCommand", "email", lowerEmail, "error", dispErr)
+	}
+	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
+		Email:        lowerEmail,
+		APIKey:       apiKey,
+		APISecret:    apiSecret,
+		Label:        "Self-provisioned",
+		AutoRegister: true,
+	}); dispErr != nil {
+		a.logger.Error("Failed to dispatch SyncRegistryAfterLoginCommand", "email", lowerEmail, "error", dispErr)
 	}
 
 	return email, nil
-}
-
-// exchangeWithCredentialsDirect is the test-only fallback for
-// ExchangeWithCredentials. Holds the same store-mutation sequence as the
-// pre-CQRS implementation. Production never enters this path.
-func (a *kiteExchangerAdapter) exchangeWithCredentialsDirect(lowerEmail, apiKey, apiSecret string, result broker.AuthResult) {
-	if a.tokenStore != nil {
-		a.tokenStore.Set(lowerEmail, &kc.KiteTokenEntry{
-			AccessToken: result.AccessToken,
-			UserID:      result.UserID,
-			UserName:    result.UserName,
-		})
-	}
-	if a.credentialStore != nil {
-		a.credentialStore.Set(lowerEmail, &kc.KiteCredentialEntry{
-			APIKey:    apiKey,
-			APISecret: apiSecret,
-		})
-	}
-	if a.registryStore == nil {
-		return
-	}
-	if oldEntry, oldFound := a.registryStore.GetByEmail(lowerEmail); oldFound && oldEntry.APIKey != apiKey {
-		a.registryStore.MarkStatus(oldEntry.APIKey, registry.StatusReplaced)
-	}
-	if existing, found := a.registryStore.GetByAPIKeyAnyStatus(apiKey); !found {
-		regID := fmt.Sprintf("self-%s-%s", lowerEmail, truncKey(apiKey, 8))
-		_ = a.registryStore.Register(&registry.AppRegistration{
-			ID: regID, APIKey: apiKey, APISecret: apiSecret, AssignedTo: lowerEmail,
-			Label: "Self-provisioned", Status: registry.StatusActive,
-			Source: registry.SourceSelfProvisioned, RegisteredBy: lowerEmail,
-		})
-	} else if existing.AssignedTo != lowerEmail {
-		_ = a.registryStore.Update(existing.ID, lowerEmail, "", "")
-	}
-	a.registryStore.UpdateLastUsedAt(apiKey)
 }
 
 func (a *kiteExchangerAdapter) GetCredentials(email string) (string, string, bool) {
@@ -371,20 +311,32 @@ func (a *kiteExchangerAdapter) GetSecretByAPIKey(apiKey string) (string, bool) {
 // state change. Writes (SaveClient, DeleteClient) dispatch through the
 // CommandBus so every OAuth-client mutation hits LoggingMiddleware, same
 // as every other write in the codebase.
+//
+// commandBus is a structural invariant: NEVER nil at use time.
+// ensureBus() lazily constructs a local InMemoryBus when none was wired
+// (e.g. unit tests that build a struct literal). No "bus or raw write"
+// gate — every code path goes through Dispatch.
 type clientPersisterAdapter struct {
 	db         *alerts.DB
-	commandBus cqrs.CommandBus // every write dispatches here
+	commandBus cqrs.CommandBus
 	logger     *slog.Logger
+	busOnce    sync.Once
 }
 
-// SaveClient dispatches a SaveOAuthClientCommand. Falls back to a direct
-// DB write if no bus has been wired (test paths that exercise the
-// adapter without a manager).
+func (a *clientPersisterAdapter) ensureBus() {
+	a.busOnce.Do(func() {
+		if a.commandBus != nil {
+			return
+		}
+		a.commandBus = newLocalOAuthClientBus(a.logger, a.db)
+	})
+}
+
+// SaveClient dispatches a SaveOAuthClientCommand. ensureBus() guarantees
+// a non-nil bus first; production wires kcManager.CommandBus() directly,
+// tests get a local InMemoryBus that hits the same use case.
 func (a *clientPersisterAdapter) SaveClient(clientID, clientSecret, redirectURIsJSON, clientName string, createdAt time.Time, isKiteKey bool) error {
-	if a.commandBus == nil {
-		// Bus-less fallback (e.g. unit tests that wire just the adapter).
-		return a.db.SaveClient(clientID, clientSecret, redirectURIsJSON, clientName, createdAt, isKiteKey)
-	}
+	a.ensureBus()
 	return a.commandBus.Dispatch(context.Background(), cqrs.SaveOAuthClientCommand{
 		ClientID:         clientID,
 		ClientSecret:     clientSecret,
@@ -414,12 +366,9 @@ func (a *clientPersisterAdapter) LoadClients() ([]*oauth.ClientLoadEntry, error)
 	return result, nil
 }
 
-// DeleteClient dispatches a DeleteOAuthClientCommand. Same fallback as
-// SaveClient.
+// DeleteClient dispatches a DeleteOAuthClientCommand.
 func (a *clientPersisterAdapter) DeleteClient(clientID string) error {
-	if a.commandBus == nil {
-		return a.db.DeleteClient(clientID)
-	}
+	a.ensureBus()
 	return a.commandBus.Dispatch(context.Background(), cqrs.DeleteOAuthClientCommand{
 		ClientID: clientID,
 	})

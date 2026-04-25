@@ -186,11 +186,14 @@ func (uc *StoreUserKiteCredentialsUseCase) Execute(_ context.Context, cmd cqrs.S
 // --- SyncRegistryAfterLogin ---
 
 // Registry status / source sentinels mirrored from kc/registry to keep
-// usecases free of an import on that package.
+// usecases free of an import on that package. Values must match
+// kc/registry/store.go's StatusActive / StatusReplaced /
+// SourceSelfProvisioned constants exactly — they're persisted to SQLite
+// and consumed by registry queries.
 const (
 	RegistryStatusActive          = "active"
 	RegistryStatusReplaced        = "replaced"
-	RegistrySourceSelfProvisioned = "self_provisioned"
+	RegistrySourceSelfProvisioned = "self-provisioned"
 )
 
 // SyncRegistryAfterLoginUseCase mirrors kiteExchangerAdapter.ExchangeWith
