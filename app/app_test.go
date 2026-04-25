@@ -11,9 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
@@ -352,6 +354,17 @@ func TestProvisionUser_SuspendedUser(t *testing.T) {
 	err := adapter.provisionUser("suspended@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "suspended")
+
+	// E1: sentinel chain preserved across the wrap so caller-side
+	// errors.Is checks still match.
+	assert.ErrorIs(t, err, usecases.ErrUserSuspended,
+		"sentinel must propagate via %w wrap")
+
+	// E4: email is hashed in the error string, not plaintext.
+	assert.NotContains(t, err.Error(), "suspended@example.com",
+		"plaintext email must NOT appear in error message")
+	assert.Contains(t, err.Error(), audit.HashEmail("suspended@example.com"),
+		"email_hash must appear so operators can correlate")
 }
 
 func TestProvisionUser_OffboardedUser(t *testing.T) {
@@ -363,6 +376,13 @@ func TestProvisionUser_OffboardedUser(t *testing.T) {
 	err := adapter.provisionUser("offboarded@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "offboarded")
+
+	// E1: sentinel chain preserved.
+	assert.ErrorIs(t, err, usecases.ErrUserOffboarded)
+
+	// E4: plaintext absent, hash present.
+	assert.NotContains(t, err.Error(), "offboarded@example.com")
+	assert.Contains(t, err.Error(), audit.HashEmail("offboarded@example.com"))
 }
 
 func TestProvisionUser_NewUser(t *testing.T) {

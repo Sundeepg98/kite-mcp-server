@@ -204,9 +204,14 @@ func (a *kiteExchangerAdapter) ensureBus() {
 // Single dispatch path: ensureBus() guarantees a non-nil bus, then we
 // dispatch ProvisionUserOnLoginCommand. The use case in
 // kc/usecases/oauth_bridge_usecases.go owns the suspended/offboarded →
-// error mapping; we translate the sentinel errors back to the historical
-// error-message format for backward compatibility with callers parsing
-// the message.
+// error mapping.
+//
+// E1+E4: errors wrap the upstream sentinel via %w so caller-side
+// errors.Is checks still match, AND the email is hashed (audit.HashEmail
+// — same canonical form the consent log uses) before being embedded
+// in the message. Plaintext emails in error strings leak through every
+// log layer the error touches; the hash gives operators correlation
+// power without the PII exposure.
 func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string) error {
 	email = strings.ToLower(email)
 	a.ensureBus()
@@ -220,9 +225,9 @@ func (a *kiteExchangerAdapter) provisionUser(email, kiteUID, displayName string)
 	}
 	switch {
 	case errors.Is(err, usecases.ErrUserSuspended):
-		return fmt.Errorf("user account is suspended: %s", email)
+		return fmt.Errorf("user account is suspended (email_hash=%s): %w", audit.HashEmail(email), usecases.ErrUserSuspended)
 	case errors.Is(err, usecases.ErrUserOffboarded):
-		return fmt.Errorf("user account has been offboarded: %s", email)
+		return fmt.Errorf("user account has been offboarded (email_hash=%s): %w", audit.HashEmail(email), usecases.ErrUserOffboarded)
 	default:
 		return err
 	}
