@@ -98,7 +98,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		period := NewArgParser(args).String("period", "24h")
 		adminEmail := oauth.EmailFromContext(ctx)
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

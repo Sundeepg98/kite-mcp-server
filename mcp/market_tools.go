@@ -77,7 +77,7 @@ func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_quotes", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instruments})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get quotes: %s", err.Error())), nil
 			}
@@ -274,7 +274,7 @@ func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// expose them. They are silently ignored for now.
 
 		return handler.WithSession(ctx, "get_historical_data", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
 				Email:           session.Email,
 				InstrumentToken: instrumentToken,
 				Interval:        interval,
@@ -335,7 +335,7 @@ func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return handler.MarshalResponse(cached, "get_ltp")
 			}
 
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instruments})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get latest trading prices: %s", err.Error())), nil
 			}
@@ -386,7 +386,7 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_ohlc", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOHLCQuery{Email: session.Email, Instruments: instruments})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOHLCQuery{Email: session.Email, Instruments: instruments})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get OHLC data: %s", err.Error())), nil
 			}

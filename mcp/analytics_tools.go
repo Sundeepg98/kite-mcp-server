@@ -56,7 +56,7 @@ func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "portfolio_summary")
 
 		return handler.WithSession(ctx, "portfolio_summary", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_summary", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -218,7 +218,7 @@ func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandl
 		handler.trackToolCall(ctx, "portfolio_concentration")
 
 		return handler.WithSession(ctx, "portfolio_concentration", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_concentration", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -374,7 +374,7 @@ func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		handler.trackToolCall(ctx, "position_analysis")
 
 		return handler.WithSession(ctx, "position_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "position_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get positions: " + err.Error()), nil

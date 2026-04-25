@@ -90,7 +90,7 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			ctx := kc.WithBroker(ctx, session.Broker)
-			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderMarginsQuery{
+			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderMarginsQuery{
 				Email: session.Email,
 				Orders: []cqrs.OrderMarginQueryParam{{
 					Exchange:        p.String("exchange", "NSE"),
@@ -171,7 +171,7 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			ctx := kc.WithBroker(ctx, session.Broker)
-			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetBasketMarginsQuery{
+			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetBasketMarginsQuery{
 				Email:             session.Email,
 				Orders:            orderParams,
 				ConsiderPositions: considerPositions,
@@ -230,7 +230,7 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			ctx := kc.WithBroker(ctx, session.Broker)
-			resp, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderChargesQuery{
+			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderChargesQuery{
 				Email:  session.Email,
 				Orders: orderParams,
 			})

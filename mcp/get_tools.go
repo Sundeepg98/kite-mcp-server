@@ -25,8 +25,9 @@ func (*ProfileTool) Tool() mcp.Tool {
 }
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return SimpleToolHandler(manager, "get_profile", func(session *kc.KiteSessionData) (any, error) {
-		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
+		return h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetProfileQuery{Email: session.Email})
 	})
 }
 
@@ -43,8 +44,9 @@ func (*MarginsTool) Tool() mcp.Tool {
 }
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return SimpleToolHandler(manager, "get_margins", func(session *kc.KiteSessionData) (any, error) {
-		return manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
+		return h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetMarginsQuery{Email: session.Email})
 	})
 }
 
@@ -67,9 +69,10 @@ func (*HoldingsTool) Tool() mcp.Tool {
 }
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_holdings", func(session *kc.KiteSessionData) ([]any, error) {
 		// Phase 2j: dispatch through CQRS query bus (handler registered in app/wire_bus.go).
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -108,8 +111,9 @@ func (*PositionsTool) Tool() mcp.Tool {
 }
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return PaginatedToolHandlerWithArgs(manager, "get_positions", func(session *kc.KiteSessionData, args map[string]any) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -156,8 +160,9 @@ func (*TradesTool) Tool() mcp.Tool {
 }
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_trades", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -190,8 +195,9 @@ func (*OrdersTool) Tool() mcp.Tool {
 }
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_orders", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -224,8 +230,9 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 }
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
+	h := NewToolHandler(manager)
 	return PaginatedToolHandler(manager, "get_gtts", func(session *kc.KiteSessionData) ([]any, error) {
-		raw, err := manager.QueryBus().DispatchWithResult(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
+		raw, err := h.QueryBus().DispatchWithResult(context.Background(), cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
 		}
@@ -272,7 +279,7 @@ func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_trades", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderTradesQuery{Email: session.Email, OrderID: orderID})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderTradesQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order trades: %s", err.Error())), nil
 			}
@@ -318,7 +325,7 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{Email: session.Email, OrderID: orderID})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{Email: session.Email, OrderID: orderID})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get order history: %s", err.Error())), nil
 			}

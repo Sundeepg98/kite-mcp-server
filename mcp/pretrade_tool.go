@@ -135,7 +135,7 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "order_risk_report", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Route data gathering through CQRS query bus.
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.PreTradeCheckQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.PreTradeCheckQuery{
 				Email:           session.Email,
 				Exchange:        exchange,
 				Tradingsymbol:   tradingsymbol,

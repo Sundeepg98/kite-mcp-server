@@ -276,7 +276,7 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.WithSession(ctx, "options_greeks", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 			// Fetch option LTP
 			optionKey := exchange + ":" + tradingsymbol
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: []string{optionKey}})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: []string{optionKey}})
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option LTP for %s: %s", optionKey, err.Error())), nil
 			}
@@ -297,7 +297,7 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					"NSE:" + underlying,
 					"NSE:" + underlying + "-EQ",
 				}
-				if spotRaw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
+				if spotRaw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
 					spotResp := spotRaw.(map[string]broker.LTP)
 					for _, key := range spotKeys {
 						if q, ok := spotResp[key]; ok && q.LastPrice > 0 {
@@ -600,7 +600,7 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			if len(instrumentKeys) > 500 {
 				instrumentKeys = instrumentKeys[:500]
 			}
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instrumentKeys})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instrumentKeys})
 			if err != nil {
 				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option premiums: %s", err.Error())), nil
 			}

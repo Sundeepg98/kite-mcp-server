@@ -76,7 +76,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// stack instead of hot-pathing the use case directly.
 			tokenStatus := "VALID"
 			probeCtx := kc.WithBroker(ctx, session.Broker)
-			if _, err := manager.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email}); err != nil {
+			if _, err := handler.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email}); err != nil {
 				tokenStatus = "EXPIRED"
 			}
 
