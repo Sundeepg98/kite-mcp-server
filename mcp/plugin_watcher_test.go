@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -251,6 +253,33 @@ func TestParsePluginHotReloadFlag(t *testing.T) {
 			assert.Equal(t, tc.want, parsePluginHotReloadFlag(tc.raw))
 		})
 	}
+}
+
+// Plugin#4: SetPluginWatcherLogger lets ops wire a logger so fsnotify
+// errors surface during normal operation (debounced kernel quirks,
+// inotify watch evictions on Linux). Pre-fix the errors were silently
+// swallowed.
+//
+// Verifies the setter accepts a non-nil logger and the getter returns
+// it. The error-logging path itself is exercised indirectly: the
+// production runner calls watcherLogger().Warn on every w.Errors event.
+func TestSetPluginWatcherLogger_RoundTrip(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	SetPluginWatcherLogger(logger)
+	t.Cleanup(func() { SetPluginWatcherLogger(nil) }) // restore default
+	// Getter returns what we set.
+	assert.Same(t, logger, watcherLogger())
+}
+
+// TestPluginWatcherLogger_NilFallsBackToDefault — when nothing is
+// wired, watcherLogger() must return slog.Default() (never nil) so
+// the fsnotify error path can call .Warn without nil-deref.
+func TestPluginWatcherLogger_NilFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	SetPluginWatcherLogger(nil)
+	got := watcherLogger()
+	require.NotNil(t, got, "fallback logger must never be nil")
 }
 
 // --- helpers ---

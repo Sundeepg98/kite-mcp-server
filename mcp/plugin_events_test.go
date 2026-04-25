@@ -88,3 +88,57 @@ func TestInstallPluginEventSubscriptions_NilDispatcher(t *testing.T) {
 	// Must not panic on nil dispatcher.
 	InstallPluginEventSubscriptions(nil)
 }
+
+// Plugin#5: SubscribePluginEvent after Install must NOT silently
+// vanish. The pre-fix posture was "silently ignored" — plugins
+// loaded by hot-reload after the dispatcher was wired had their
+// subscriptions discarded with no log line. T2 wires a warn-and-
+// accept: the subscription is recorded so the next Install picks
+// it up, and the registration call returns nil (still successful)
+// so caller code stays simple.
+func TestSubscribePluginEvent_AfterInstall_StillRecorded(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
+
+	d := domain.NewEventDispatcher()
+	// Install once (with no subscriptions yet) to flip the installed flag.
+	InstallPluginEventSubscriptions(d)
+
+	// Plugin loaded after install registers. Pre-fix: silent drop.
+	// Post-fix: still returned nil error AND the subscription IS in
+	// the registry so a re-Install picks it up.
+	require.NoError(t, SubscribePluginEvent("order.placed", func(e domain.Event) {}))
+
+	// Verify the subscription IS recorded.
+	types := ListPluginEventSubscriptions()
+	assert.Equal(t, 1, types["order.placed"],
+		"post-install subscription must still be recorded for next Install pass")
+}
+
+// Plugin#14: handler panic isolation. A buggy plugin handler that
+// panics must NOT crash the dispatcher goroutine — Dispatch is
+// called synchronously from use cases on the request path.
+func TestInstallPluginEventSubscriptions_HandlerPanicIsolated(t *testing.T) {
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
+
+	var sawSafe atomic.Int32
+	require.NoError(t, SubscribePluginEvent("order.placed", func(e domain.Event) {
+		panic("buggy plugin")
+	}))
+	require.NoError(t, SubscribePluginEvent("order.placed", func(e domain.Event) {
+		sawSafe.Add(1)
+	}))
+
+	d := domain.NewEventDispatcher()
+	InstallPluginEventSubscriptions(d)
+
+	// Dispatch must not propagate the panic — both subscribers fire,
+	// the panicking one is caught by SafeInvoke, and the safe one
+	// still increments.
+	assert.NotPanics(t, func() {
+		d.Dispatch(domain.OrderPlacedEvent{Timestamp: time.Now()})
+	})
+	assert.Equal(t, int32(1), sawSafe.Load(),
+		"non-panicking handler must still fire after sibling panic")
+}

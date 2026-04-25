@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
@@ -72,6 +73,12 @@ type Registry struct {
 	// Plugin-contributed domain-event subscriptions.
 	eventMu            sync.RWMutex
 	eventSubscriptions []pluginEventSubscription
+	// installedAt is set the first time InstallPluginEventSubscriptions
+	// runs, indicating the dispatcher window has closed for "fire-and-
+	// forget" subscriptions. Plugin#5: post-Install registrations are
+	// still recorded (so a future re-Install picks them up) but a
+	// warning surfaces in the log so hot-reload code can be flagged.
+	installedAt atomic.Pointer[domain.EventDispatcher]
 
 	// Lifecycle hooks (Init/Shutdown/Reload).
 	lifecycleMu      sync.RWMutex
@@ -416,6 +423,11 @@ func (r *Registry) WidgetCount() int {
 // --- Event-subscription methods ---
 
 // SubscribePluginEvent registers a plugin handler for a domain event.
+//
+// Plugin#5: post-Install subscriptions are still recorded (so a future
+// re-Install pass picks them up) but a warning surfaces — silent drops
+// are a footgun for hot-reload-loaded plugins. The function still
+// returns nil on validation success regardless of install state.
 func (r *Registry) SubscribePluginEvent(eventType string, handler func(domain.Event)) error {
 	if eventType == "" {
 		return fmt.Errorf("mcp: plugin event subscription has empty event type")
@@ -424,15 +436,32 @@ func (r *Registry) SubscribePluginEvent(eventType string, handler func(domain.Ev
 		return fmt.Errorf("mcp: plugin event subscription for %q has nil handler", eventType)
 	}
 	r.eventMu.Lock()
-	defer r.eventMu.Unlock()
 	r.eventSubscriptions = append(r.eventSubscriptions, pluginEventSubscription{
 		eventType: eventType,
 		handler:   handler,
 	})
+	r.eventMu.Unlock()
+	if d := r.installedAt.Load(); d != nil {
+		// Already installed — caller (likely a hot-reloaded plugin) is
+		// past the dispatcher's wiring window. Subscribe directly so
+		// the handler still fires for THIS dispatcher; the recorded
+		// entry above means a future Install also picks it up.
+		watcherLogger().Warn(
+			"plugin event subscription registered post-Install; subscribing directly",
+			"event_type", eventType,
+		)
+		d.Subscribe(eventType, safeEventHandler(eventType, handler))
+	}
 	return nil
 }
 
-// InstallPluginEventSubscriptions wires registered plugin handlers onto a dispatcher.
+// InstallPluginEventSubscriptions wires registered plugin handlers onto a
+// dispatcher. Each handler is wrapped with SafeInvoke (Plugin#14) so a
+// buggy plugin's panic doesn't crash the dispatcher goroutine — Dispatch
+// is called synchronously on the request path.
+//
+// Marks the registry as installed-at-this-dispatcher so future
+// SubscribePluginEvent calls subscribe directly (and warn).
 func (r *Registry) InstallPluginEventSubscriptions(d *domain.EventDispatcher) {
 	if d == nil {
 		return
@@ -441,7 +470,20 @@ func (r *Registry) InstallPluginEventSubscriptions(d *domain.EventDispatcher) {
 	subs := append([]pluginEventSubscription(nil), r.eventSubscriptions...)
 	r.eventMu.RUnlock()
 	for _, s := range subs {
-		d.Subscribe(s.eventType, s.handler)
+		d.Subscribe(s.eventType, safeEventHandler(s.eventType, s.handler))
+	}
+	r.installedAt.Store(d)
+}
+
+// safeEventHandler wraps a plugin handler in SafeInvoke. A handler
+// panic during dispatch is converted to a logged error rather than
+// propagated up the synchronous Dispatch chain — Plugin#14.
+func safeEventHandler(eventType string, h func(domain.Event)) func(domain.Event) {
+	return func(e domain.Event) {
+		_ = SafeInvoke("plugin_event:"+eventType, func() error {
+			h(e)
+			return nil
+		})
 	}
 }
 

@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -49,6 +51,30 @@ var watcherState = struct {
 	cancel  context.CancelFunc
 	started bool
 }{}
+
+// pluginWatcherLogger holds the slog.Logger the watcher goroutine logs
+// fsnotify errors to. atomic.Pointer (not a plain *slog.Logger field)
+// lets ops swap loggers at runtime without coordinating with a mutex
+// the watcher goroutine doesn't otherwise hold. nil → fall back to
+// slog.Default() so the error path can never nil-deref.
+var pluginWatcherLogger atomic.Pointer[slog.Logger]
+
+// SetPluginWatcherLogger wires the logger that runPluginBinaryWatcher
+// uses for fsnotify error reporting (Plugin#4). Pre-fix, errors were
+// silently swallowed; this exposes them to ops dashboards. Pass nil to
+// clear (fall back to slog.Default()).
+func SetPluginWatcherLogger(logger *slog.Logger) {
+	pluginWatcherLogger.Store(logger)
+}
+
+// watcherLogger returns the current logger, falling back to
+// slog.Default() when none is set. Never returns nil.
+func watcherLogger() *slog.Logger {
+	if l := pluginWatcherLogger.Load(); l != nil {
+		return l
+	}
+	return slog.Default()
+}
 
 // WatchPluginBinary registers a (path, reloadable) pair for the
 // watcher to monitor. Path must be non-empty and reloadable
@@ -243,14 +269,19 @@ func runPluginBinaryWatcher(ctx context.Context, w *fsnotify.Watcher) {
 				continue
 			}
 			scheduleReload(abs)
-		case _, ok := <-w.Errors:
+		case err, ok := <-w.Errors:
 			if !ok {
 				return
 			}
 			// fsnotify errors during normal operation are rare and
 			// usually transient (e.g. a watched directory was
-			// temporarily unmountable). Swallow and continue —
-			// the event channel will resume emitting.
+			// temporarily unmountable, inotify watch evicted under
+			// memory pressure). Plugin#4: log via the configured
+			// logger so ops see them — silently swallowing was the
+			// pre-fix behaviour and obscured production diagnostics.
+			watcherLogger().Warn("plugin watcher: fsnotify error",
+				"error", err.Error(),
+			)
 		}
 	}
 }
