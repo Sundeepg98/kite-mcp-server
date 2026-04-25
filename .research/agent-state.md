@@ -47,6 +47,22 @@ This document lets a fresh post-compact session dispatch follow-up work without 
   - `Pen-1` — Stolen JWT read-abuse invisible to circuit breaker (~60 LOC).
 - **If resumed brief** (1-line): "Resume executor scope from HEAD `aea6a7c`. Pick next item from `agent-state.md` Agent A `still owed` list — recommend `C1` (cleanest follow-on to `5b3d0da`) or `Plugin#9` (closes a CI-flake CRIT). TDD-first per `.claude/CLAUDE.md`; path-form commits with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`; STOP if estimate exceeds 50%."
 
+### Agent C — Test-Arch Executor (predecessor to Agent A; rate-limited)
+
+- **Role**: Narrow-scope executor focused on test-architecture refactors — Stripe config thread-through (drop `os.Getenv` at runtime → `app.Config` fields, unblocking `t.Parallel`) and Task #43 ephemeral-port refactor for `server_lifecycle_test.go`. TDD-first, path-form commits, plain-merge on push reject. Operated on an earlier task rubric pre-dating the 138-gap catalogue.
+- **Catalogue scope owned** (sections of `final-138-gap-catalogue.md`):
+  - **None originated or verified** — this agent's work pre-dates the catalogue's authority. Operated against legacy "Task #43" + Stripe-billing wiring rubric, not the 25-pass audit deliverables.
+  - Adjacent / related to catalogue gap-area: test-parallelism enables faster `go test ./... -count=1` runs that Agent A relies on (Standing Rule #4).
+- **Last commit on master**: `b371bfd` — `refactor(app): thread Stripe config through Config struct (drop os.Getenv at runtime)` (sole commit; landed pre-rate-limit before standdown).
+- **Authored commits** (newest first):
+  - `b371bfd` — Stripe config thread-through: `StripeSecretKey` / `StripePricePro` / `StripePricePremium` fields on `app.Config`, populated by `ConfigFromEnv`. Replaced 3 `os.Getenv` calls in `app/wire.go:initializeServices`. Behavior-preserving; webhook handler in `kc/billing/webhook.go` still reads env directly (separate concern, not yet hoisted). 3 files +20/-5.
+- **Specific gaps still owed** (work NOT completed before standdown — rate-limit hit before Tasks 2-4):
+  - **Task 2** — `server_test.go` test migrations (~15-25 tests originally estimated). On audit at standdown, file already had 70 tests with `t.Parallel()` and 0 `t.Setenv()` calls; **likely already complete** — needs Agent A or fresh executor verification.
+  - **Task 3** — Task #43: ephemeral-port refactor for `server_lifecycle_test.go` (28 port-binding tests, ~200 LOC, helper `allocateEphemeralPort` + per-test parallelization). **Untouched.** File still has 13 `t.Setenv("STRIPE_SECRET_KEY", ...)` references that the Stripe Config thread-through (commit `b371bfd`) now unblocks for migration.
+  - **Task 4** — Final 10-dimension scorecard audit (CQRS, Hex, DDD, ES, Middleware, SOLID, Plugin, Decorator, Test-arch, Overall) with file-path evidence. **Untouched.** Subsumed/superseded by Agent B's 25-pass audit and `final-138-gap-catalogue.md`.
+  - **Webhook handler env-hoisting** — `kc/billing/webhook.go:26-27` still reads `STRIPE_PRICE_PRO`/`STRIPE_PRICE_PREMIUM` via `os.Getenv`; would need to thread `billing.Config` through. Tracked, not started.
+- **If resumed brief** (1-line): "Verify Task 2 status (`server_test.go` migrations may already be complete — count `t.Setenv` and tests-without-`t.Parallel`); then execute Task 3 — Task #43 ephemeral-port refactor in `server_lifecycle_test.go` (28 port-bind tests, helper `allocateEphemeralPort`, drop 13 `STRIPE_SECRET_KEY` `t.Setenv` calls now that `b371bfd` thread-through landed). Skip Task 4 — superseded by Agent B's catalogue. Resume from HEAD `ef6f85b`. Path-form commits with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`."
+
 ### Agent B — Read-Only Auditor (`a64b2771b9c6e6d68`)
 
 - **Role**: Read-only researcher — performs N-pass adversarial audits, writes `.research/*.md` deliverables, does NOT touch source. Output is gap catalogues + scorecards consumed by Agent A.
