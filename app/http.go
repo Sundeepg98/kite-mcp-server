@@ -772,9 +772,25 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 	app.logger.Info("Telegram bot webhook registered", "url", webhookURL)
 }
 
-// serveHTTPServer starts the HTTP server with error handling
+// serveHTTPServer starts the HTTP server with error handling.
+//
+// When app.preboundListener is non-nil (test-only seam), srv.Serve is
+// called against the pre-bound listener instead of srv.ListenAndServe.
+// This eliminates the close-then-rebind port race that flaked parallel
+// RunServer tests: tests bind once with kernel-allocated port (:0),
+// pass the listener through Config, and srv.Serve adopts it directly
+// without the listener ever closing between allocation and bind.
+//
+// Production: preboundListener is nil, srv.ListenAndServe binds via
+// srv.Addr — the standard path, behaviour unchanged.
 func (app *App) serveHTTPServer(srv *http.Server) {
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	var err error
+	if app.preboundListener != nil {
+		err = srv.Serve(app.preboundListener)
+	} else {
+		err = srv.ListenAndServe()
+	}
+	if err != nil && err != http.ErrServerClosed {
 		app.logger.Error("HTTP server error", "error", err)
 	}
 }

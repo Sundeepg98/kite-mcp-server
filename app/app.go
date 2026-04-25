@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -88,6 +89,13 @@ type App struct {
 	// SIGUSR2 racing with the normal SIGTERM path, must NOT panic
 	// with "close of closed channel".
 	shutdownOnce sync.Once
+	// preboundListener is a test-only seam: when non-nil, serveHTTPServer
+	// calls srv.Serve(preboundListener) instead of srv.ListenAndServe().
+	// Production callers leave this nil and rely on srv.Addr; tests pass
+	// a kernel-allocated listener (net.Listen "127.0.0.1:0") to eliminate
+	// the close-then-rebind port race that made parallel RunServer tests
+	// flake under heavy load.
+	preboundListener net.Listener
 }
 
 // TriggerShutdown initiates a graceful shutdown without requiring an

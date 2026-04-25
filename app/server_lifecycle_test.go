@@ -403,24 +403,30 @@ func TestInitializeServices_WithEncryption(t *testing.T) {
 // ===========================================================================
 func TestRunServer_DevMode_FullLifecycle(t *testing.T) {
 	t.Parallel()
+	// Pre-bind listener and inject via app.preboundListener — eliminates
+	// the close-then-rebind port race that previously made this test flaky
+	// under parallel load.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	port := listener.Addr().(*net.TCPAddr).Port
+
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
 		KiteAPISecret:        "test_secret",
 		AppMode:              ModeHTTP,
+		AppHost:              "127.0.0.1",
+		AppPort:              fmt.Sprintf("%d", port),
 		InstrumentsSkipFetch: true,
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
-	app.Config.AppHost = "127.0.0.1"
-	app.Config.AppPort = fmt.Sprintf("%d", port)
+	app.preboundListener = listener
+
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.RunServer() }()
-	waitForServerReady(t, fmt.Sprintf("127.0.0.1:%d", port))
-	resp, _ := http.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
+	waitForServerReady(t, addr)
+	resp, _ := http.Get(fmt.Sprintf("http://%s/healthz", addr))
 	if resp != nil {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		resp.Body.Close()
@@ -520,10 +526,11 @@ func TestStartStdIOServer_ViaPipes(t *testing.T) {
 func TestRunServer_WithOAuth(t *testing.T) {
 	t.Parallel()
 
+	// Pre-bind listener — eliminates the close-then-rebind port race
+	// that flaked this test under parallel load.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
 
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
@@ -539,6 +546,7 @@ func TestRunServer_WithOAuth(t *testing.T) {
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
+	app.preboundListener = listener
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -692,10 +700,10 @@ func TestRunServer_FullDevMode(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestRunServer_FullOAuthMode(t *testing.T) {
 	t.Parallel()
+	// Pre-bind listener — eliminates the close-then-rebind port race.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
-	listener.Close()
 
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
@@ -714,6 +722,7 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
+	app.preboundListener = listener
 
 	errCh := make(chan error, 1)
 	go func() {
