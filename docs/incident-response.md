@@ -606,6 +606,67 @@ users and regulators trust you again.
 
 ---
 
+## Region failover (deferred)
+
+Single-region (bom) is the current production posture. PR-MR
+documented `sin` as a candidate secondary in `fly.toml`, but
+**failover is gated on a non-Kite broker landing.** Why deferred:
+
+1. **SEBI static-IP contract.** Each user's Kite developer console
+   allow-lists our `bom` egress IP (209.71.68.157). A `sin` machine
+   has a different egress IP and every order fails with
+   "IP not whitelisted". A reactive failover during a `bom` outage
+   would mass-reject every live user's trades — worse than the
+   outage itself.
+2. **Egress geography.** Kite API is India-only; a `sin` machine's
+   outbound calls still traverse the BOM peering. The "lower
+   latency" pitch is illusory.
+3. **Database consistency.** SQLite + Litestream replicates one-way
+   to R2. Running write workloads in two regions silently diverges
+   the local copies. Multi-region needs Postgres or single-active.
+
+### When to activate
+
+The footgun goes away when EITHER of these holds:
+
+- A second broker (Upstox / Groww) is wired via `broker/<name>/`
+  adapters. Users with no Kite dependency can hit the `sin`
+  machine without IP allow-list issues.
+- The SEBI static-IP rule is amended to allow CIDR ranges. (Watch
+  SEBI circulars; not currently planned per Apr-2026 disclosures.)
+
+### Procedure when activation criteria are met
+
+1. `flyctl machines clone <bom-machine-id> --region sin -a kite-mcp-server`
+2. Update `fly.toml` to record `secondary_region = "sin"` (still
+   documentation only — Fly's scheduler reads this opportunistically,
+   but `min_machines_running = 1` already keeps both alive).
+3. Verify post-deploy: `flyctl machines list -a kite-mcp-server`
+   should show one machine in each region.
+4. Verify health from each region:
+   `flyctl ssh console --region sin -C '/usr/local/bin/wget -qO- http://localhost:8080/healthz?probe=deep'`
+5. Update this section: replace "deferred" with the activation date
+   + confirmed broker list + IP allow-list strategy.
+
+### Failure modes during activation
+
+- **Litestream divergence.** Disable Litestream on the `sin` machine
+  for the first 24h to prevent two writers — the `sin` machine
+  serves reads only until the architecture moves to Postgres.
+- **bom-locked tools.** Kite-touching paths must short-circuit on a
+  `sin` machine with a clear error rather than fail at the Kite
+  API. Expose `kc_region` via `/healthz?probe=deep` (already
+  present); each tool's pre-flight checks the region.
+
+### What "failover" means today (single-region)
+
+`bom` outage → `flyctl status` shows red → wait. Fly.io's bom region
+SLA is 99.9% (≈8.7h/year unplanned). Meanwhile users see HTTP 503;
+the `withClientMetadata` middleware tags every retry attempt in
+audit so post-mortem reconstructs the affected window.
+
+---
+
 ## Contact directory
 
 Keep this list current. If a contact changes, the wrong address in a

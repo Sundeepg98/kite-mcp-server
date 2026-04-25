@@ -1,6 +1,25 @@
 app = "kite-mcp-server"
 primary_region = "bom"
 
+# Secondary region prepared for future activation: "sin" (Singapore).
+# Activation is GATED on adding a non-Kite broker — see
+# docs/operator-playbook.md "Multi-region" and
+# docs/incident-response.md "Region failover (deferred)".
+#
+# Do NOT add to a regions list while Kite is the only broker:
+#   1. SEBI April-2026 mandate ties our static egress IP (209.71.68.157,
+#      bom region) to each user's Kite developer console allow-list. A
+#      sin-region machine has a different egress IP and would fail
+#      every order with "IP not whitelisted".
+#   2. Kite API is India-only; sin-region health checks against
+#      api.kite.trade still traverse the BOM peering, so latency
+#      "improvement" is illusory.
+#
+# When a non-Kite broker (Upstox / Groww via broker/ adapters) is
+# wired, add the secondary via `flyctl machines clone --region sin`
+# AND add `secondary_region = "sin"` here as documentation. Failover
+# procedure: see incident-response.md.
+
 [http_service]
   internal_port = 8080
   force_https = true
