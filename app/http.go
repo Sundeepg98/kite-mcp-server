@@ -1017,9 +1017,11 @@ func securityHeaders(next http.Handler) http.Handler {
 //  2. withRequestID — so every downstream handler, middleware, and log
 //     line can observe the correlation ID via RequestIDFromCtx.
 //  3. securityHeaders — applies standard response hardening headers.
-//  4. mux — application routes.
+//  4. withClientMetadata — captures client IP + User-Agent and threads
+//     them through context for the MCP audit middleware (SEBI Annexure-I).
+//  5. mux — application routes.
 func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
-	srv.Handler = recoverPanic(app.logger, withRequestID(securityHeaders(mux)))
+	srv.Handler = recoverPanic(app.logger, withRequestID(securityHeaders(withClientMetadata(mux))))
 	app.serveHTTPServer(srv)
 }
 

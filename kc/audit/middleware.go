@@ -45,6 +45,11 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 				StartedAt:    start,
 				CompletedAt:  end,
 				DurationMs:   durationMs,
+				// SEBI Annexure-I: propagate client IP + UA from HTTP-layer
+				// context. Empty when no upstream populated them (stdio
+				// MCP, tests, dev mode).
+				IPAddress: ClientIPFromCtx(ctx),
+				UserAgent: ClientUAFromCtx(ctx),
 			}
 
 			// Sanitize and store params as JSON.

@@ -214,6 +214,7 @@ func builtinChecks(g *Guard) []Check {
 		&clientOrderIDDupCheck{g: g},
 		&duplicateOrderCheck{g: g},
 		&dailyValueCheck{g: g},
+		&otrBandCheck{g: g}, // SEBI OTR Apr 2026 — reads g.ltpLookup at eval time
 		&anomalyMultiplierCheck{g: g},
 		&offHoursCheck{g: g},
 	}
@@ -233,6 +234,7 @@ var (
 	_ Check = (*clientOrderIDDupCheck)(nil)
 	_ Check = (*duplicateOrderCheck)(nil)
 	_ Check = (*dailyValueCheck)(nil)
+	_ Check = (*otrBandCheck)(nil)
 	_ Check = (*anomalyMultiplierCheck)(nil)
 	_ Check = (*offHoursCheck)(nil)
 )

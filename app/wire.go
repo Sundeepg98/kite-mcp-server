@@ -205,6 +205,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		// Wrap instruments manager as FreezeQuantityLookup
 		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
 	}
+	// PR-C: SEBI OTR band check oracle. The adapter pulls live quotes via
+	// any active Kite session — see riskguardLTPAdapter / paperLTPAdapter.
+	// nil-safe: the band check no-ops when no quote is available.
+	riskGuard.SetLTPLookup(&riskguardLTPAdapter{manager: kcManager})
 	// Wire the anomaly-detection baseline. audit.Store.UserOrderStats matches
 	// riskguard.BaselineProvider exactly (same signature), so it's a direct
 	// assignment — no adapter shim needed. Without this wire the anomaly

@@ -70,6 +70,12 @@ const (
 	// betting the account owner is asleep. Power users can opt out via
 	// UserLimits.AllowOffHours.
 	ReasonOffHoursBlocked RejectionReason = "off_hours_blocked"
+	// ReasonOTRBand fires when the order's price is outside the SEBI
+	// OTR exemption band around LTP. ±0.75% for cash + futures, ±40%
+	// for equity options (SEBI circular Feb 2026, effective Apr 6 2026).
+	// Catches fat-finger trades and keeps the user's OTR ratio clean
+	// without depending on the broker side throttling.
+	ReasonOTRBand RejectionReason = "otr_band_violation"
 )
 
 // Anomaly-detection tuning constants. Centralised here so the product team
@@ -152,6 +158,7 @@ type Guard struct {
 	trackers            map[string]*UserTracker
 	limits              map[string]*UserLimits // per-user overrides
 	freezeLookup        FreezeQuantityLookup
+	ltpLookup           LTPLookup        // SEBI OTR band oracle; nil ⇒ band check is a no-op
 	baseline            BaselineProvider // optional — nil ⇒ anomaly check is a no-op
 	db                  *alerts.DB
 	logger              *slog.Logger

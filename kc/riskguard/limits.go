@@ -51,6 +51,17 @@ func (g *Guard) SetDB(db *alerts.DB) { g.db = db }
 // SetFreezeQuantityLookup sets the instrument lookup for quantity checks.
 func (g *Guard) SetFreezeQuantityLookup(lookup FreezeQuantityLookup) { g.freezeLookup = lookup }
 
+// SetLTPLookup wires the SEBI OTR-band check's LTP oracle. When non-nil,
+// otrBandCheck consults this on every priced (LIMIT/SL) order to verify
+// the price is inside the asset-class exemption band. nil means the
+// band check no-ops (acceptable in DevMode / tests where no live LTP
+// stream is wired).
+func (g *Guard) SetLTPLookup(lookup LTPLookup) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.ltpLookup = lookup
+}
+
 // SetBaselineProvider wires the rolling-baseline source used by the anomaly
 // check. Optional: when nil, checkAnomalyMultiplier is a silent no-op, which
 // is the correct behaviour for DevMode / tests without an audit store.

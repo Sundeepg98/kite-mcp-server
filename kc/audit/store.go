@@ -15,6 +15,13 @@ import (
 )
 
 // ToolCall represents a single MCP tool invocation record.
+//
+// IPAddress + UserAgent are populated from the originating HTTP request
+// (X-Forwarded-For preferred; falls back to RemoteAddr) so the audit
+// trail satisfies SEBI Annexure-I compliance: every order-placing tool
+// invocation must carry a verifiable client identifier. Empty strings
+// indicate either a non-HTTP transport (stdio MCP) or an upstream that
+// didn't propagate the client IP.
 type ToolCall struct {
 	ID            int64     `json:"id"`
 	CallID        string    `json:"call_id"`
@@ -35,6 +42,8 @@ type ToolCall struct {
 	DurationMs    int64     `json:"duration_ms"`
 	PrevHash      string    `json:"prev_hash,omitempty"`
 	EntryHash     string    `json:"entry_hash,omitempty"`
+	IPAddress     string    `json:"ip_address,omitempty"` // SEBI Annexure-I — client IP at tool-call time
+	UserAgent     string    `json:"user_agent,omitempty"` // SEBI Annexure-I — client UA at tool-call time
 }
 
 // ListOptions controls filtering and pagination for List queries.
@@ -202,7 +211,9 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     entry_hash      TEXT DEFAULT '',
     started_at      TEXT NOT NULL,
     completed_at    TEXT NOT NULL,
-    duration_ms     INTEGER NOT NULL DEFAULT 0
+    duration_ms     INTEGER NOT NULL DEFAULT 0,
+    ip_address      TEXT NOT NULL DEFAULT '',
+    user_agent      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_tc_email_time ON tool_calls(email, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tc_tool_time ON tool_calls(tool_name, started_at DESC);
@@ -219,6 +230,9 @@ CREATE INDEX IF NOT EXISTS idx_tc_error ON tool_calls(is_error) WHERE is_error =
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN email_encrypted TEXT`)
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN prev_hash TEXT DEFAULT ''`)
 	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN entry_hash TEXT DEFAULT ''`)
+	// PR-C: SEBI Annexure-I — IP + UA on every tool call.
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN ip_address TEXT NOT NULL DEFAULT ''`)
+	_ = s.db.ExecDDL(`ALTER TABLE tool_calls ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`)
 
 	// Create index on email_hash AFTER migration ensures the column exists
 	_ = s.db.ExecDDL(`CREATE INDEX IF NOT EXISTS idx_tc_email_hash ON tool_calls(email_hash, started_at DESC)`)

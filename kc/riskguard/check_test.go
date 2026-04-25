@@ -187,6 +187,7 @@ func TestBuiltinChecksRegisteredByDefault(t *testing.T) {
 		"client_order_id_duplicate",
 		"duplicate_order",
 		"daily_value",
+		"otr_band", // PR-C: SEBI OTR Apr 2026
 		"anomaly_multiplier",
 		"off_hours",
 	}

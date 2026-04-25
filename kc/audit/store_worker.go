@@ -137,8 +137,9 @@ func (s *Store) Record(entry *ToolCall) error {
 		 input_params, input_summary, output_summary, output_size,
 		 is_error, error_message, error_type, order_id,
 		 email_hash, email_encrypted, prev_hash, entry_hash,
-		 started_at, completed_at, duration_ms)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+		 started_at, completed_at, duration_ms,
+		 ip_address, user_agent)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 	err := s.db.ExecInsert(query,
 		entry.CallID,
 		emailForDB,
@@ -160,6 +161,8 @@ func (s *Store) Record(entry *ToolCall) error {
 		entry.StartedAt.Format(time.RFC3339Nano),
 		entry.CompletedAt.Format(time.RFC3339Nano),
 		entry.DurationMs,
+		entry.IPAddress,
+		entry.UserAgent,
 	)
 	if err != nil {
 		return fmt.Errorf("audit: record tool call: %w", err)
