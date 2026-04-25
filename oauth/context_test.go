@@ -648,3 +648,107 @@ func TestEmailFromContext_NoEmail(t *testing.T) {
 		t.Errorf("EmailFromContext = %q, want empty string", email)
 	}
 }
+
+// ===========================================================================
+// PR-DR: dual-key JWT rotation
+// ===========================================================================
+
+func TestJWTManager_PreviousSecret_AcceptsOldTokens(t *testing.T) {
+	t.Parallel()
+	// Simulate a rotation: an old JWT manager signed a token with KEY_OLD;
+	// the running server has rotated to KEY_NEW with KEY_OLD as the
+	// previousSecret. The server must still verify the existing token.
+	old := NewJWTManager("KEY_OLD_with_at_least_32_bytes_padding", time.Hour)
+	tok, err := old.GenerateToken("alice@test.com", "client-1")
+	if err != nil {
+		t.Fatalf("generate with old key: %v", err)
+	}
+
+	rotated := NewJWTManager("KEY_NEW_with_at_least_32_bytes_padding", time.Hour)
+	rotated.SetPreviousSecret("KEY_OLD_with_at_least_32_bytes_padding")
+
+	claims, err := rotated.ValidateToken(tok)
+	if err != nil {
+		t.Fatalf("validate after rotation must succeed via fallback: %v", err)
+	}
+	if claims.Subject != "alice@test.com" {
+		t.Errorf("subject = %q want alice@test.com", claims.Subject)
+	}
+}
+
+func TestJWTManager_PreviousSecret_NewTokensSignWithCurrent(t *testing.T) {
+	t.Parallel()
+	// New tokens must always sign with the primary, not the previous.
+	jm := NewJWTManager("PRIMARY_with_at_least_32_bytes_pad", time.Hour)
+	jm.SetPreviousSecret("PREV_with_at_least_32_bytes_pad____")
+
+	tok, err := jm.GenerateToken("bob@test.com", "client-2")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	// A manager that only knows the primary still validates.
+	primaryOnly := NewJWTManager("PRIMARY_with_at_least_32_bytes_pad", time.Hour)
+	if _, err := primaryOnly.ValidateToken(tok); err != nil {
+		t.Errorf("new tokens must validate against the primary alone: %v", err)
+	}
+
+	// A manager that only knows the previous must reject.
+	prevOnly := NewJWTManager("PREV_with_at_least_32_bytes_pad____", time.Hour)
+	if _, err := prevOnly.ValidateToken(tok); err == nil {
+		t.Error("new tokens must NOT validate via the previous-only key")
+	}
+}
+
+func TestJWTManager_PreviousSecret_EmptyPreviousIsNoOp(t *testing.T) {
+	t.Parallel()
+	// Calling SetPreviousSecret("") clears the slot. Verifies that
+	// the rotation cleanup step works.
+	jm := NewJWTManager("PRIMARY_with_at_least_32_bytes_pad", time.Hour)
+	jm.SetPreviousSecret("OLD_with_at_least_32_bytes_padding_")
+
+	old := NewJWTManager("OLD_with_at_least_32_bytes_padding_", time.Hour)
+	tok, _ := old.GenerateToken("c@test.com", "client-3")
+
+	// Token validates while previous is set.
+	if _, err := jm.ValidateToken(tok); err != nil {
+		t.Fatalf("pre-cleanup validate: %v", err)
+	}
+
+	// After clearing, the same token must fail to validate.
+	jm.SetPreviousSecret("")
+	if _, err := jm.ValidateToken(tok); err == nil {
+		t.Error("post-cleanup: token signed with cleared previous must be rejected")
+	}
+}
+
+func TestJWTManager_PreviousSecret_PrimaryAlwaysTriedFirst(t *testing.T) {
+	t.Parallel()
+	// If both keys would validate (extremely contrived — operator set
+	// previous = primary), the primary path runs and succeeds. No
+	// behavioural difference from the caller's perspective; this just
+	// pins the order.
+	jm := NewJWTManager("KEY_with_at_least_32_bytes_padding_x", time.Hour)
+	jm.SetPreviousSecret("KEY_with_at_least_32_bytes_padding_x")
+
+	tok, err := jm.GenerateToken("d@test.com", "client-4")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := jm.ValidateToken(tok); err != nil {
+		t.Errorf("validate: %v", err)
+	}
+}
+
+func TestJWTManager_NoPreviousSecret_RejectsRotatedTokens(t *testing.T) {
+	t.Parallel()
+	// Pre-PR-DR behaviour: no previous secret installed → tokens signed
+	// with the rotated-out key are rejected (regression guard).
+	old := NewJWTManager("KEY_A_with_at_least_32_bytes_padding", time.Hour)
+	tok, _ := old.GenerateToken("e@test.com", "client-5")
+
+	rotated := NewJWTManager("KEY_B_with_at_least_32_bytes_padding", time.Hour)
+	if _, err := rotated.ValidateToken(tok); err == nil {
+		t.Error("expected rejection when no previousSecret set")
+	}
+}

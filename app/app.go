@@ -301,7 +301,13 @@ type Config struct {
 
 	// OAuth 2.1 (opt-in: set OAUTH_JWT_SECRET to enable)
 	OAuthJWTSecret string
-	ExternalURL    string
+	// OAuthJWTSecretPrevious supplies the second-chance verify key during
+	// graceful rotation. Tokens signed with this key continue to validate
+	// alongside OAuthJWTSecret-signed tokens; new tokens still sign with
+	// the primary. Empty = no rotation in progress. See JWTManager docs
+	// for the rotation procedure.
+	OAuthJWTSecretPrevious string
+	ExternalURL            string
 
 	// Telegram (opt-in: set TELEGRAM_BOT_TOKEN to enable price alert notifications)
 	TelegramBotToken string
@@ -540,6 +546,16 @@ func (app *App) RunServer() error {
 			commandBus:      kcManager.CommandBus(), // CQRS: every write dispatches via bus
 		}
 		app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
+
+		// PR-DR: install the second-chance verify key for graceful JWT
+		// rotation. When OAUTH_JWT_SECRET_PREVIOUS is set, tokens signed
+		// with that key continue to validate alongside the new primary —
+		// rotation no longer mass-invalidates live sessions. Empty value
+		// = no rotation in progress.
+		if app.Config.OAuthJWTSecretPrevious != "" {
+			app.oauthHandler.JWTManager().SetPreviousSecret(app.Config.OAuthJWTSecretPrevious)
+			app.logger.Info("OAUTH_JWT_SECRET_PREVIOUS installed — graceful rotation active")
+		}
 
 		// Wire Kite token expiry check into OAuth middleware.
 		// When a cached Kite token expires (~6 AM IST daily), RequireAuth returns 401,
