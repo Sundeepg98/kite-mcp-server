@@ -19,74 +19,63 @@ func TestVersionVariables(t *testing.T) {
 	assert.Equal(t, "dev build", buildString)
 }
 
-func TestInitLogger_DefaultLevel(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-
-	// Default level is INFO — debug messages should not be enabled.
-	assert.False(t, logger.Enabled(nil, slog.LevelDebug))
-	assert.True(t, logger.Enabled(nil, slog.LevelInfo))
+// TestParseLogLevel covers the pure parser that initLogger delegates to.
+// Migrated from TestInitLogger_* (7 t.Setenv tests) to a single table-driven
+// parallel test — the env-reading code (initLogger calling os.Getenv) is
+// covered by the one TestInitLogger_EnvIntegration adapter test below;
+// every behaviour branch lives here against string literals.
+func TestParseLogLevel(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		raw  string
+		want slog.Level
+	}{
+		{"empty defaults to info", "", slog.LevelInfo},
+		{"info explicit", "info", slog.LevelInfo},
+		{"debug", "debug", slog.LevelDebug},
+		{"warn", "warn", slog.LevelWarn},
+		{"error", "error", slog.LevelError},
+		{"garbage defaults to info (fail-open)", "garbage", slog.LevelInfo},
+		{"uppercase NOT recognised (fail-open to info)", "DEBUG", slog.LevelInfo},
+		{"whitespace NOT trimmed (current contract)", " info", slog.LevelInfo},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, parseLogLevel(tc.raw))
+		})
+	}
 }
 
-func TestInitLogger_DebugLevel(t *testing.T) {
+// TestInitLogger_EnvIntegration is the single adapter test that verifies
+// initLogger reads LOG_LEVEL from the environment and feeds it to
+// parseLogLevel. Behaviour-per-value is covered by TestParseLogLevel above;
+// this test only proves the os.Getenv → parser chain wiring. Cannot run
+// in parallel because t.Setenv mutates process-wide env.
+func TestInitLogger_EnvIntegration(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "debug")
 	logger, logBuffer := initLogger()
 	require.NotNil(t, logger)
 	require.NotNil(t, logBuffer)
-
+	// Wiring proof: env="debug" → parser returns LevelDebug → logger
+	// enabled at debug. If parseLogLevel were called with the wrong env
+	// value, the assertion below would fail.
 	assert.True(t, logger.Enabled(nil, slog.LevelDebug))
-	assert.True(t, logger.Enabled(nil, slog.LevelInfo))
 }
 
-func TestInitLogger_WarnLevel(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "warn")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-
-	assert.False(t, logger.Enabled(nil, slog.LevelInfo))
-	assert.True(t, logger.Enabled(nil, slog.LevelWarn))
-}
-
-func TestInitLogger_ErrorLevel(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "error")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-
-	assert.False(t, logger.Enabled(nil, slog.LevelWarn))
-	assert.True(t, logger.Enabled(nil, slog.LevelError))
-}
-
-func TestInitLogger_InvalidLevel(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "garbage")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-
-	// Invalid level defaults to INFO.
-	assert.False(t, logger.Enabled(nil, slog.LevelDebug))
-	assert.True(t, logger.Enabled(nil, slog.LevelInfo))
-}
-
-func TestInitLogger_InfoExplicit(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "info")
-	logger, logBuffer := initLogger()
-	require.NotNil(t, logger)
-	require.NotNil(t, logBuffer)
-
-	assert.False(t, logger.Enabled(nil, slog.LevelDebug))
-	assert.True(t, logger.Enabled(nil, slog.LevelInfo))
-}
-
+// TestInitLogger_LogBufferCaptures verifies the LogBuffer side-effect of
+// initLogger (separate from level parsing). Doesn't depend on env reading
+// — the level is whatever ambient env says, the test only asserts the
+// buffer captures any log line.
 func TestInitLogger_LogBufferCaptures(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "info")
+	t.Parallel()
 	logger, logBuffer := initLogger()
-
-	// Write a log message and verify the buffer captured it.
-	logger.Info("test-message-for-buffer")
+	// Force an info-level write regardless of ambient LOG_LEVEL by using
+	// the lowest level that always fires. If the ambient env set
+	// LOG_LEVEL=error this Info call would be filtered, so emit Error
+	// to be safe across all ambient configurations.
+	logger.Error("test-message-for-buffer")
 	entries := logBuffer.Recent(10)
 	found := false
 	for _, e := range entries {

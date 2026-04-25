@@ -21,23 +21,32 @@ var (
 	buildString = "dev build"
 )
 
-func initLogger() (*slog.Logger, *ops.LogBuffer) {
-	// Default to INFO level, can be overridden by LOG_LEVEL env var
-	// Valid levels: debug, info, warn, error
-	var level slog.Level
-	logLevel := os.Getenv("LOG_LEVEL")
-	switch logLevel {
+// parseLogLevel maps a raw LOG_LEVEL env value to a slog.Level. Empty string
+// or unrecognised values default to LevelInfo. Pure function so tests can
+// drive every branch with string literals — no t.Setenv, parallel-safe.
+//
+// Valid input values: "debug", "info", "warn", "error", "" (empty defaults
+// to info). Anything else also defaults to info; the "default to INFO if
+// invalid" branch is fail-open: a typo'd LOG_LEVEL must not silence logs.
+func parseLogLevel(raw string) slog.Level {
+	switch raw {
 	case "debug":
-		level = slog.LevelDebug
+		return slog.LevelDebug
 	case "info", "":
-		level = slog.LevelInfo
+		return slog.LevelInfo
 	case "warn":
-		level = slog.LevelWarn
+		return slog.LevelWarn
 	case "error":
-		level = slog.LevelError
+		return slog.LevelError
 	default:
-		level = slog.LevelInfo // Default to INFO if invalid
+		return slog.LevelInfo
 	}
+}
+
+func initLogger() (*slog.Logger, *ops.LogBuffer) {
+	// LOG_LEVEL env override; parseLogLevel is the pure parser and is
+	// covered by parallel TestParseLogLevel_* table tests in main_test.go.
+	level := parseLogLevel(os.Getenv("LOG_LEVEL"))
 
 	opts := &slog.HandlerOptions{
 		Level: level,
