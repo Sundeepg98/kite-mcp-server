@@ -189,17 +189,37 @@ func newTestAuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 	return s
 }
 
-// cleanupInitializeServices stops background goroutines started by initializeServices.
-// Call order mirrors setupGracefulShutdown (reverse of start order) so shutdown
-// semantics match production. Every Shutdown call is idempotent (sync.Once or
-// nil-guard) so invoking this helper after RunServer has already shut down is safe.
+// cleanupInitializeServices stops background goroutines started by
+// initializeServices.
+//
+// Production graceful-shutdown path delegates worker teardown to
+// app.lifecycle.Shutdown() (registered via registerLifecycle at end of
+// initializeServices). This helper does too — but it ALSO runs an
+// inline backstop because some tests bypass initializeServices and
+// directly mutate app fields (e.g. `app.rateLimiters = newRateLimiters()`
+// in app_edge_test.go), in which case the lifecycle manager has zero
+// stops registered and the backstop is the only thing that prevents a
+// goroutine leak.
+//
+// Order matches app/wire.go:registerLifecycle plus Phase A. Every step
+// is idempotent (sync.Once or nil-guard) so the duplication between
+// inline backstop and lifecycle.Shutdown is safe — the second call is
+// a no-op for any worker the lifecycle already stopped.
+//
+// The mgr argument is retained for back-compat with existing call
+// sites (~10 _test.go files); kcManager.Shutdown is invoked here AND
+// via the lifecycle's "kc_manager" stop. Both paths are nil/once safe.
 func cleanupInitializeServices(app *App, mgr *kc.Manager) {
+	// Phase A — block new work.
 	if app.scheduler != nil {
 		app.scheduler.Stop()
 	}
 	if app.hashPublisherCancel != nil {
 		app.hashPublisherCancel()
 	}
+	// Phase C, inline backstop — covers tests that directly mutate app
+	// fields and never invoked registerLifecycle. Each call is
+	// idempotent so a successful lifecycle.Shutdown below is safe.
 	if app.outboxPump != nil {
 		app.outboxPump.Stop()
 	}
@@ -209,7 +229,9 @@ func cleanupInitializeServices(app *App, mgr *kc.Manager) {
 	if app.telegramBot != nil {
 		app.telegramBot.Shutdown()
 	}
-	mgr.Shutdown()
+	if mgr != nil {
+		mgr.Shutdown()
+	}
 	if app.oauthHandler != nil {
 		app.oauthHandler.Close()
 	}
@@ -225,6 +247,12 @@ func cleanupInitializeServices(app *App, mgr *kc.Manager) {
 	}
 	if app.metrics != nil {
 		app.metrics.Shutdown()
+	}
+	// Phase C, canonical path — the lifecycle manager owns this for any
+	// app that went through initializeServices. Idempotent vs the
+	// inline backstop above.
+	if app.lifecycle != nil {
+		app.lifecycle.Shutdown()
 	}
 }
 

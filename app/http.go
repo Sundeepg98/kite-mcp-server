@@ -72,72 +72,35 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		<-ctx.Done()
 		app.logger.Info("Shutting down server...")
 
-		// Stop briefing scheduler first (prevent new Kite API calls).
+		// Phase A — block new work. These two run BEFORE the HTTP drain
+		// so no new tool calls hit the in-flight drain and no new audit
+		// publish attempts queue against a draining buffer. Phase A
+		// stays imperative here (per-server unique to AppMode); the
+		// lifecycle manager owns Phase C below.
 		if app.scheduler != nil {
 			app.scheduler.Stop()
 		}
-
-		// Stop audit hash-chain publisher (no-op if never started).
 		if app.hashPublisherCancel != nil {
 			app.hashPublisherCancel()
 		}
 
-		// Shutdown HTTP server first (stop accepting new requests, drain in-flight)
+		// Phase B — HTTP server drain (stop accepting new requests,
+		// drain in-flight). Per-mode (different *http.Server per AppMode);
+		// cannot abstract cleanly into lifecycle.
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			app.logger.Error("Server shutdown error", "error", err)
 		}
 
-		// Drain the event outbox before audit/manager shutdown so any
-		// in-flight events from the just-served requests land in
-		// domain_events. The pump's Stop() does one final drain.
-		if app.outboxPump != nil {
-			app.outboxPump.Stop()
-		}
-
-		// Then drain audit buffer (all in-flight requests have completed)
-		if app.auditStore != nil {
-			app.auditStore.Stop()
-		}
-
-		// Shutdown Telegram bot cleanup goroutine.
-		if app.telegramBot != nil {
-			app.telegramBot.Shutdown()
-		}
-
-		// Then shutdown Kite manager (session cleanup and instruments scheduler)
-		kcManager.Shutdown()
-
-		// Close OAuth auth code store cleanup goroutine
-		if app.oauthHandler != nil {
-			app.oauthHandler.Close()
-		}
-
-		// Stop rate limiter cleanup goroutine
-		if app.rateLimiters != nil {
-			app.rateLimiters.Stop()
-		}
-
-		// Stop the SIGHUP rate-limit hot-reload goroutine (idempotent no-op
-		// if never wired — stopRateLimitReload guards the channel internally).
-		app.stopRateLimitReload()
-
-		// Stop the invitation-cleanup goroutine (idempotent no-op if never started).
-		if app.invitationCleanupCancel != nil {
-			app.invitationCleanupCancel()
-		}
-
-		// Stop the paper-trading monitor goroutine (sync.Once-guarded, blocks
-		// until the loop exits so the process can cleanly terminate).
-		if app.paperMonitor != nil {
-			app.paperMonitor.Stop()
-		}
-
-		// Stop the metrics auto-cleanup goroutine (sync.Once-guarded).
-		if app.metrics != nil {
-			app.metrics.Shutdown()
+		// Phase C — drain in-flight events + tear down every worker that
+		// initializeServices wired. Order is registered in
+		// app/wire.go's registerLifecycle() and is the SINGLE source of
+		// truth for graceful-shutdown order. sync.Once-guarded; safe to
+		// call from this signal handler AND from the success-defer in
+		// initializeServices (error-path cleanup).
+		if app.lifecycle != nil {
+			app.lifecycle.Shutdown()
 		}
 
 		app.logger.Info("Server shutdown complete")
@@ -170,8 +133,18 @@ func (app *App) startServer(srv *http.Server, kcManager *kc.Manager, mcpServer *
 func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Initialize per-IP rate limiters (cleanup goroutine runs in background)
+	// Initialize per-IP rate limiters (cleanup goroutine runs in background).
+	// Register the Stop on the lifecycle manager here — not in
+	// registerLifecycle at end of initializeServices — because setupMux is
+	// also exercised by tests that bypass initializeServices entirely
+	// (server_edge_lifecycle_test.go's TestStartServer_AllModes is the
+	// canonical case). Registering here ensures every code path that
+	// allocates a rateLimiter also wires its Stop onto the lifecycle.
 	app.rateLimiters = newRateLimiters()
+	if app.lifecycle != nil {
+		rl := app.rateLimiters
+		app.lifecycle.Append("rate_limiters", func() error { rl.Stop(); return nil })
+	}
 
 	// Unified /callback handler: dispatches by flow param
 	// - flow=oauth → MCP OAuth callback (Kite → JWT → MCP auth code)

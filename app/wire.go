@@ -567,8 +567,100 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Initialize scheduled Telegram briefings (morning + daily P&L).
 	app.initScheduler(kcManager)
 
+	// Register graceful-shutdown order with the lifecycle manager. Order
+	// here mirrors the historical setupGracefulShutdown sequence in
+	// app/http.go:75-141: scheduler first, hash-publisher next, then
+	// in-flight drains (outbox + audit), then per-component teardowns.
+	// LifecycleManager.Shutdown() runs these in append order via the
+	// success-defer below AND from setupGracefulShutdown after the HTTP
+	// server has drained — sync.Once-guarded, safe to call from both.
+	//
+	// New workers added in future commits should register here, NOT in
+	// the (4 historical) hand-maintained shutdown blocks. See
+	// app/lifecycle.go for the full rationale.
+	app.registerLifecycle(kcManager)
+
 	success = true
 	return kcManager, mcpServer, nil
+}
+
+// registerLifecycle declares the graceful-shutdown order for every
+// background worker initializeServices wires. Each Append is nil-safe
+// at call time (the wrapped Stop/Cancel func gets a nil-check before
+// invoke), so conditionally-allocated workers can be unconditionally
+// registered.
+//
+// Phasing model — the production graceful shutdown in app/http.go has
+// THREE phases that lifecycle does not collapse:
+//
+//   Phase A (block new work): scheduler.Stop, hashPublisher cancel.
+//     Stays in setupGracefulShutdown — must run BEFORE the HTTP server
+//     starts draining so no new tool calls / no new audit publish
+//     attempts hit the in-flight drain.
+//   Phase B (HTTP drain): srv.Shutdown(timeout).
+//     Per-mode (different *http.Server per AppMode); cannot abstract
+//     cleanly. Stays in setupGracefulShutdown.
+//   Phase C (drain in-flight + tear down workers): everything below.
+//     Owned by lifecycle. setupGracefulShutdown calls lifecycle.Shutdown()
+//     after Phase B completes.
+//
+// Order within Phase C matches app/http.go:96-141 exactly. When that
+// function migrates to delegate via lifecycle.Shutdown (next commit),
+// this list becomes the single source of truth.
+func (app *App) registerLifecycle(kcManager *kc.Manager) {
+	app.lifecycle.Append("outbox_pump", func() error {
+		if app.outboxPump != nil {
+			app.outboxPump.Stop()
+		}
+		return nil
+	})
+	app.lifecycle.Append("audit_store", func() error {
+		if app.auditStore != nil {
+			app.auditStore.Stop()
+		}
+		return nil
+	})
+	app.lifecycle.Append("telegram_bot", func() error {
+		if app.telegramBot != nil {
+			app.telegramBot.Shutdown()
+		}
+		return nil
+	})
+	app.lifecycle.Append("kc_manager", func() error {
+		kcManager.Shutdown()
+		return nil
+	})
+	app.lifecycle.Append("oauth_handler", func() error {
+		if app.oauthHandler != nil {
+			app.oauthHandler.Close()
+		}
+		return nil
+	})
+	// rate_limiters is registered by setupMux (see app/http.go) at the
+	// allocation site, so it's wired even for tests that bypass
+	// initializeServices entirely (server_edge_lifecycle_test.go).
+	app.lifecycle.Append("rate_limit_reload", func() error {
+		app.stopRateLimitReload()
+		return nil
+	})
+	app.lifecycle.Append("invitation_cleanup", func() error {
+		if app.invitationCleanupCancel != nil {
+			app.invitationCleanupCancel()
+		}
+		return nil
+	})
+	app.lifecycle.Append("paper_monitor", func() error {
+		if app.paperMonitor != nil {
+			app.paperMonitor.Stop()
+		}
+		return nil
+	})
+	app.lifecycle.Append("metrics", func() error {
+		if app.metrics != nil {
+			app.metrics.Shutdown()
+		}
+		return nil
+	})
 }
 
 // initScheduler wires the Telegram morning briefing, daily P&L summary, and

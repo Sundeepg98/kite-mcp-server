@@ -41,6 +41,11 @@ type App struct {
 	legalTemplate   *template.Template
 	logger         *slog.Logger
 	metrics        *metrics.Manager
+	// lifecycle owns the ordered teardown of background workers wired
+	// during initializeServices. Each worker registers its stop func via
+	// lifecycle.Append at allocation time; graceful shutdown invokes
+	// lifecycle.Shutdown() once. See app/lifecycle.go for the contract.
+	lifecycle *LifecycleManager
 	logBuffer      *ops.LogBuffer
 	rateLimiters   *rateLimiters
 	auditStore     *audit.Store
@@ -428,6 +433,7 @@ func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
 			AdminSecretPath: cfg.AdminSecretPath,
 			AutoCleanup:     true,
 		}),
+		lifecycle: NewLifecycleManager(logger),
 	}
 }
 
@@ -493,36 +499,23 @@ func (app *App) RunServer() error {
 	// kcManager + app.auditStore + app.oauthHandler spawned. Production
 	// graceful shutdown also owns this chain via setupGracefulShutdown;
 	// the defer here covers the error-before-serve gap.
+	//
+	// initializeServices has already called registerLifecycle() before
+	// returning, so the lifecycle manager carries the canonical Phase C
+	// teardown order. Phase A (scheduler + hashPublisher) runs inline
+	// since the HTTP server hasn't started accepting traffic yet. Phase
+	// B (HTTP drain) is moot — no server to drain on this error path.
 	runSuccess := false
 	defer func() {
 		if !runSuccess {
-			// Mirror the teardown order from setupGracefulShutdown /
-			// cleanupInitializeServices. Every Stop is idempotent / nil-safe.
 			if app.scheduler != nil {
 				app.scheduler.Stop()
 			}
 			if app.hashPublisherCancel != nil {
 				app.hashPublisherCancel()
 			}
-			if app.auditStore != nil {
-				app.auditStore.Stop()
-			}
-			if app.telegramBot != nil {
-				app.telegramBot.Shutdown()
-			}
-			kcManager.Shutdown()
-			if app.oauthHandler != nil {
-				app.oauthHandler.Close()
-			}
-			if app.rateLimiters != nil {
-				app.rateLimiters.Stop()
-			}
-			app.stopRateLimitReload()
-			if app.invitationCleanupCancel != nil {
-				app.invitationCleanupCancel()
-			}
-			if app.paperMonitor != nil {
-				app.paperMonitor.Stop()
+			if app.lifecycle != nil {
+				app.lifecycle.Shutdown()
 			}
 		}
 	}()
