@@ -10,67 +10,116 @@ content hash, not on the path.
 
 ## Root cause
 
-SAC permits a binary if **either** of these is true:
+SAC enforcement mode permits a binary if **either** of these is true:
 
-1. It is signed by a publisher whose cert is in a trusted root store, or
+1. The binary is signed by a code-signing certificate issued by a CA
+   in **Microsoft's Trusted Root Program** (publicly-trusted CA, not a
+   self-signed cert in your user store), OR
 2. Microsoft's ISG cloud reputation service knows the binary's hash as
    "good" (reputation accumulates from population-wide telemetry).
 
+Source: [Smart App Control overview — Microsoft Learn](https://learn.microsoft.com/windows/apps/develop/smart-app-control/overview)
+> "Apps cannot be run unless they are recognized by Microsoft's app
+> intelligence services, or they are signed with a trusted certificate
+> [issued by a CA in the Microsoft Trusted Root Program]."
+
 `go test` recompiles its test binary on every run with random Go
 build IDs, so the content hash changes every time. Therefore Go test
-binaries will **never** develop ISG reputation. The only durable fix
-is signing.
+binaries will **never** develop ISG reputation.
 
-This is the same class of issue as `gopls.exe` being blocked when
-freshly compiled via `go install` — see the user-scope memory under
-"Smart App Control (SAC)" for the original fix.
+### Why self-signed certs don't fully work
 
-## Fix: `scripts/go-test-sac.cmd`
+The user-scope `GoTools Local Dev` cert (in `CurrentUser\Root`) makes
+`Get-AuthenticodeSignature` report `Valid` — but that's standard
+Authenticode, **not** SAC enforcement. SAC's CodeIntegrity (CI)
+engine evaluates a separate `ValidatedSigningLevel` field; user-store
+roots evaluate to `1` ("Unsigned" from CI's view, equivalent to no
+signature at all for SAC enforcement).
 
-A `go test -exec` wrapper that signs the test binary in place with
-the existing `GoTools Local Dev` cert (thumbprint
-`4ABCEECC23F524EB460409F66B5306C2E1787272`, already trusted in
-`CurrentUser\Root`) before launching it.
+Diagnostic to confirm on your box: after a SAC block, run
 
-### Usage
+```powershell
+Get-WinEvent -LogName "Microsoft-Windows-CodeIntegrity/Operational" `
+  -MaxEvents 30 | Where-Object { $_.Id -eq 3089 } |
+  Select-Object -First 1 |
+  ForEach-Object { ([xml]$_.ToXml()).Event.EventData.Data |
+    Where-Object Name -in 'ValidatedSigningLevel','PublisherName','KnownRoot' }
+```
+
+`ValidatedSigningLevel: 1` + `KnownRoot: 2` confirms that SAC saw
+the cert but rejected the trust level.
+
+### What used to seem to work, and why
+
+Earlier verifications appeared to pass after signing. That was
+**ISG cloud reputation winning the race**, not the cert: Defender
+behavioral telemetry sometimes whitelists a recently-launched-but-
+not-blocked path, and the next launch of any binary at that path
+(even a fresh hash) succeeds for a brief window. As soon as ISG
+flips the path back to neutral, blocks resume. Signing with the
+self-signed cert is not what unblocked those runs.
+
+## Mitigation: `scripts/go-test-sac.cmd` + ISG cooldown
+
+There is **no fully-deterministic userspace fix** while SAC is on. The
+two effective options are:
+
+### Option 1 (recommended for routine work): wrapper + ISG cooldown
+
+`scripts/go-test-sac.cmd` signs the test binary with the
+`GoTools Local Dev` cert (thumbprint
+`4ABCEECC23F524EB460409F66B5306C2E1787272`). The signing **does not
+unblock SAC enforcement directly** (see "Why self-signed certs don't
+fully work" above), but it does:
+
+- Help when SAC's WDAC policy is later upgraded to honor the user-store
+  root (e.g., in audit-only modes for dev workflows).
+- Make the binary's signature visible in audit logs, easing diagnosis.
+- Cost essentially nothing at the wrapper layer (~50ms per launch).
+
+In practice, runs succeed when ISG happens to whitelist the launch path
+and fail otherwise. **Expect 30-50% of full-suite runs to fail** with
+SAC On. To reduce flake:
+
+1. Wait **30+ seconds** between consecutive full-suite runs. ISG
+   reputation telemetry settles in that window.
+2. Run smaller `-run TestX` subsets first to "warm" the path.
+3. Don't rotate `GOTMPDIR`/`GOCACHE` if a recent run succeeded — reuse
+   the path so behavioral whitelisting carries over.
 
 ```bash
 # From repo root, in any shell:
 go test -exec="$PWD/scripts/go-test-sac.cmd" ./kc/riskguard/... -count=1
 ```
 
-Or for any other package:
+### Option 2 (fastest for hot loops): trusted-CA code-signing cert
+
+For a deterministic fix that survives across sessions, sign with a
+real publicly-trusted code-signing certificate (Microsoft Trusted
+Signing, or any CA in Microsoft's Trusted Root Program). Cost: ~₹6k/yr
+or free via [Microsoft Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/)
+for individuals. Once a binary is signed by a publicly-trusted CA,
+SAC honors it without ISG involvement.
+
+Update `~/go/bin/sign-bin.ps1` to point at the trusted-CA thumbprint
+instead of `4ABCEECC23F524EB460409F66B5306C2E1787272`. The wrapper
+itself doesn't change.
+
+### Option 3 (CI / heavy work): build on Linux/WSL
+
+SAC is Windows-only. Run the suite under WSL2 or a Linux container
+when the work is verification-heavy:
 
 ```bash
-go test -exec="$PWD/scripts/go-test-sac.cmd" ./mcp/ -run TestSomething -count=1
+wsl -- go test ./kc/riskguard/... -count=1
 ```
 
-### How it works
-
-1. `go test -exec=<cmd>` tells Go to pass the freshly-built test binary
-   to `<cmd>` instead of executing it directly.
-2. The wrapper signs the binary in place using
-   `~/go/bin/sign-bin.ps1` (which uses the trusted dev cert).
-3. The wrapper then `exec`s the now-signed binary with the original
-   args. Signing adds a digital signature appendix; SAC validates the
-   signature against the trusted root and lets the binary run.
-
-### Constraints
-
-- The cert must already be installed and trusted (one-time setup,
-  done previously for gopls). Verify with:
-
-  ```powershell
-  Get-ChildItem Cert:\CurrentUser\My\4ABCEECC23F524EB460409F66B5306C2E1787272
-  ```
-
-- The wrapper is **best-effort** — if signing fails (cert missing,
-  expired, etc.) it still exec's the binary so the underlying SAC
-  block error surfaces clearly rather than being masked by a sign
-  error.
+### Constraints (any option)
 
 - The wrapper runs only on Windows (`.cmd`). On Linux/macOS the
   wrapper is unused — `go test` runs as normal without `-exec`.
+- The wrapper is **best-effort** — if signing fails it still execs
+  the binary so the underlying SAC block error surfaces clearly.
 
 ### Re-signing the cert
 
@@ -84,22 +133,6 @@ Cert is valid until 2031-02-13. If/when it expires:
    - This file
    - `scripts/go-test-sac.cmd` (no thumbprint hardcoded — it calls
      sign-bin.ps1)
-
-## Fallback: wait-for-cooldown + rotate
-
-If for some reason signing is unavailable (e.g., cert expired and not
-yet replaced), the only alternative known to work is:
-
-1. Rotate `GOTMPDIR` and `GOCACHE` to fresh paths (forces a fresh
-   build path).
-2. Retry. Sometimes SAC enforces a short ban on a recently-blocked
-   path; the rotation bypasses path-based bans even though the
-   underlying content-hash issue is unchanged.
-3. After several minutes of cooldown, the same content may go through
-   if Defender's behavioral telemetry has had time to settle.
-
-This is **flaky** and should never be relied on in CI. Use the
-signing wrapper.
 
 ## What NOT to do
 
