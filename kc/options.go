@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 )
 
@@ -212,5 +213,17 @@ func WithInstrumentsSkipFetch(skip bool) Option {
 func WithSessionSigner(s *SessionSigner) Option {
 	return func(o *options) {
 		o.Config.SessionSigner = s
+	}
+}
+
+// WithBotFactory installs a per-Manager Telegram bot factory. When
+// supplied, the manager constructs its TelegramNotifier via the factory
+// instead of consulting the kc/alerts package-level newBotFunc global —
+// this is the t.Parallel-safe entry point for tests that need a fake
+// Telegram server. Production wiring omits this so the default
+// tgbotapi.NewBotAPI path is used.
+func WithBotFactory(factory alerts.BotFactory) Option {
+	return func(o *options) {
+		o.Config.BotFactory = factory
 	}
 }

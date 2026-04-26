@@ -49,6 +49,15 @@ type Config struct {
 	// — isolates the test suite from external-API rate limits / outages.
 	// Ignored when InstrumentsManager is already provided.
 	InstrumentsSkipFetch bool
+
+	// BotFactory is an optional per-Manager Telegram bot factory. When
+	// non-nil, alerts.NewTelegramNotifierWithFactory is used to construct
+	// the notifier — bypassing the kc/alerts package-level newBotFunc
+	// global. Tests pass a fake-server-backed factory here to avoid the
+	// global-mutex OverrideNewBotFunc pattern, unblocking t.Parallel.
+	// Production wiring leaves this nil so the default tgbotapi.NewBotAPI
+	// path is used.
+	BotFactory alerts.BotFactory
 }
 
 // New creates a new kc Manager with the given configuration.

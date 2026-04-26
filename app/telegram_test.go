@@ -53,14 +53,16 @@ func fakeTelegramAPIServer() *httptest.Server {
 
 // newTelegramTestManager creates a kc.Manager with a TelegramNotifier that uses
 // a fake Telegram API server, bypassing real network calls.
+//
+// Uses kc.WithBotFactory for per-Manager bot injection — does NOT touch the
+// kc/alerts package-level newBotFunc global, so multiple parallel tests can
+// each carry their own factory without racing on the global mutex.
 func newTelegramTestManager(t *testing.T, tgServerURL string) *kc.Manager {
 	t.Helper()
-	// Override the alert package's bot factory to use our fake server
-	restore := alerts.OverrideNewBotFunc(func(token string) (alerts.BotAPI, error) {
-		endpoint := tgServerURL + "/bot%s/%s"
+	endpoint := tgServerURL + "/bot%s/%s"
+	factory := func(token string) (alerts.BotAPI, error) {
 		return tgbotapi.NewBotAPIWithClient(token, endpoint, &http.Client{})
-	})
-	t.Cleanup(restore)
+	}
 
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
@@ -76,6 +78,7 @@ func newTelegramTestManager(t *testing.T, tgServerURL string) *kc.Manager {
 		kc.WithInstrumentsManager(instrMgr),
 		kc.WithAlertDBPath(":memory:"),
 		kc.WithTelegramBotToken("fake-telegram-token"),
+		kc.WithBotFactory(factory),
 	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
@@ -87,6 +90,7 @@ func newTelegramTestManager(t *testing.T, tgServerURL string) *kc.Manager {
 // ===========================================================================
 
 func TestRegisterTelegramWebhook_Success(t *testing.T) {
+	t.Parallel()
 	tgServer := fakeTelegramAPIServer()
 	defer tgServer.Close()
 
@@ -119,6 +123,7 @@ func TestRegisterTelegramWebhook_Success(t *testing.T) {
 // ===========================================================================
 
 func TestRegisterTelegramWebhook_NilNotifier_Inject(t *testing.T) {
+	t.Parallel()
 	instrMgr, err := instruments.New(instruments.Config{
 		Logger:   testLogger(),
 		TestData: map[uint32]*instruments.Instrument{},

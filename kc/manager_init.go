@@ -209,11 +209,22 @@ func (m *Manager) initCredentialWiring() {
 
 // initTelegramNotifier wires the Telegram bot when a token is provided.
 // Failure is non-fatal; the server runs without Telegram notifications.
+//
+// When cfg.BotFactory is non-nil (test injection), the per-Manager factory
+// is used directly — bypassing the kc/alerts package-level newBotFunc global.
+// Production wiring leaves BotFactory nil and the package-default tgbotapi
+// factory is consulted.
 func (m *Manager) initTelegramNotifier(cfg Config) {
 	if cfg.TelegramBotToken == "" {
 		return
 	}
-	notifier, tgErr := alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
+	var notifier *alerts.TelegramNotifier
+	var tgErr error
+	if cfg.BotFactory != nil {
+		notifier, tgErr = alerts.NewTelegramNotifierWithFactory(cfg.TelegramBotToken, m.alertStore, cfg.Logger, cfg.BotFactory)
+	} else {
+		notifier, tgErr = alerts.NewTelegramNotifier(cfg.TelegramBotToken, m.alertStore, cfg.Logger)
+	}
 	if tgErr != nil {
 		cfg.Logger.Warn("Telegram notifier failed to initialize", "error", tgErr)
 		return

@@ -17,6 +17,12 @@ type BotAPI interface {
 	Request(c tgbotapi.Chattable) (*tgbotapi.APIResponse, error)
 }
 
+// BotFactory constructs a BotAPI from a token. Used by
+// NewTelegramNotifierWithFactory to inject per-call bot creation —
+// the t.Parallel-safe alternative to the package-level newBotFunc
+// global mutated via OverrideNewBotFunc.
+type BotFactory func(token string) (BotAPI, error)
+
 // newBotFunc is the function used to create a BotAPI instance.
 // Protected by newBotFuncMu to allow safe override in tests.
 var (
@@ -41,19 +47,37 @@ type TelegramNotifier struct {
 	logger *slog.Logger
 }
 
-// NewTelegramNotifier creates a new Telegram notifier.
-// Returns nil if botToken is empty (Telegram notifications disabled).
+// NewTelegramNotifier creates a new Telegram notifier using the package-level
+// newBotFunc factory. Returns nil if botToken is empty (Telegram notifications
+// disabled).
+//
+// Prefer NewTelegramNotifierWithFactory when wiring tests that need a fake
+// Telegram server — the per-call factory bypasses the global mutex on
+// newBotFunc and is t.Parallel-safe.
 func NewTelegramNotifier(botToken string, store *Store, logger *slog.Logger) (*TelegramNotifier, error) {
+	newBotFuncMu.Lock()
+	createBot := newBotFunc
+	newBotFuncMu.Unlock()
+	return NewTelegramNotifierWithFactory(botToken, store, logger, createBot)
+}
+
+// NewTelegramNotifierWithFactory creates a Telegram notifier using a
+// caller-supplied BotFactory instead of the package-level newBotFunc global.
+// Returns nil if botToken is empty (Telegram notifications disabled).
+//
+// Tests inject a fake-server-backed factory here to keep the kc/alerts
+// global state untouched — multiple parallel tests can each carry their
+// own factory without racing on newBotFuncMu.
+func NewTelegramNotifierWithFactory(botToken string, store *Store, logger *slog.Logger, factory BotFactory) (*TelegramNotifier, error) {
 	if botToken == "" {
 		logger.Info("Telegram bot token not configured, notifications disabled")
 		return nil, nil
 	}
+	if factory == nil {
+		return nil, fmt.Errorf("alerts: BotFactory required (nil factory passed)")
+	}
 
-	newBotFuncMu.Lock()
-	createBot := newBotFunc
-	newBotFuncMu.Unlock()
-
-	bot, err := createBot(botToken)
+	bot, err := factory(botToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Telegram bot: %w", err)
 	}

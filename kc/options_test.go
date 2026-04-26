@@ -4,10 +4,13 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 )
 
@@ -182,4 +185,46 @@ func TestWithInstrumentsManager_OverridesAutoBuild(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Same(t, instMgr, mgr.Instruments, "pre-built instruments manager threaded through")
+}
+
+// stubBotAPI is a minimal alerts.BotAPI for testing factory injection.
+type stubBotAPI struct{}
+
+func (stubBotAPI) Send(_ tgbotapi.Chattable) (tgbotapi.Message, error) {
+	return tgbotapi.Message{}, nil
+}
+func (stubBotAPI) Request(_ tgbotapi.Chattable) (*tgbotapi.APIResponse, error) {
+	return &tgbotapi.APIResponse{Ok: true}, nil
+}
+
+// TestWithBotFactory_PerManagerInjection verifies the per-Manager Telegram bot
+// factory option threads through Manager construction without touching the
+// kc/alerts package-level newBotFunc global. This is the t.Parallel-safe
+// entry point — multiple Managers in parallel tests can each carry their own
+// factory; the alerts.OverrideNewBotFunc global mutator is no longer required
+// for cross-package wiring tests.
+func TestWithBotFactory_PerManagerInjection(t *testing.T) {
+	t.Parallel()
+
+	logger := newTestOptionsLogger()
+
+	var factoryCalled atomic.Int32
+	factory := func(token string) (alerts.BotAPI, error) {
+		factoryCalled.Add(1)
+		assert.Equal(t, "per-manager-token", token, "factory receives the token from cfg.TelegramBotToken")
+		return stubBotAPI{}, nil
+	}
+
+	mgr, err := NewWithOptions(context.Background(),
+		WithLogger(logger),
+		WithKiteCredentials("k", "s"),
+		WithTelegramBotToken("per-manager-token"),
+		WithBotFactory(factory),
+		WithInstrumentsSkipFetch(true),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, mgr)
+
+	assert.Equal(t, int32(1), factoryCalled.Load(), "injected factory must be invoked exactly once during Manager init")
+	require.NotNil(t, mgr.TelegramNotifier(), "Manager.TelegramNotifier should be wired when token + factory are supplied")
 }
