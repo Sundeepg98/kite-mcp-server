@@ -49,7 +49,7 @@ func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		resp := &adminServerStatusResponse{
-			ActiveSessions: manager.GetActiveSessionCount(),
+			ActiveSessions: handler.deps.Sessions.GetActiveSessionCount(),
 			Uptime:         time.Since(serverStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
 			Goroutines:     runtime.NumGoroutine(),

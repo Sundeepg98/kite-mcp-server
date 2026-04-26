@@ -63,7 +63,7 @@ func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -150,7 +150,7 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -247,7 +247,7 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminSuspendUserCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminSuspendUserCommand{
 			AdminEmail:  adminEmail,
 			TargetEmail: targetEmail,
 			Reason:      reason,
@@ -299,7 +299,7 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminActivateUserCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminActivateUserCommand{
 			TargetEmail: targetEmail,
 		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -369,7 +369,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			}
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminChangeRoleCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminChangeRoleCommand{
 			TargetEmail: targetEmail,
 			NewRole:     newRole,
 		})

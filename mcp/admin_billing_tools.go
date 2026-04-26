@@ -74,7 +74,7 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}
 		maxUsers = max(maxUsers, 1)
 
-		bs := manager.BillingStore()
+		bs := handler.deps.Billing.BillingStore()
 		if bs == nil {
 			return mcp.NewToolResultError("billing store not configured"), nil
 		}

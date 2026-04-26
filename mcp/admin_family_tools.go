@@ -46,7 +46,7 @@ func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 			return mcp.NewToolResultError("invited_email is required."), nil
 		}
 
-		bus := manager.CommandBus()
+		bus := handler.CommandBus()
 		if bus == nil {
 			return mcp.NewToolResultError("command bus not available"), nil
 		}
@@ -107,7 +107,7 @@ func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 50)
 
-		bus := manager.QueryBus()
+		bus := handler.QueryBus()
 		if bus == nil {
 			return mcp.NewToolResultError("query bus not available"), nil
 		}
@@ -205,7 +205,7 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 			return mcp.NewToolResultError("confirm must be true. Member will lose tier access."), nil
 		}
 
-		bus := manager.CommandBus()
+		bus := handler.CommandBus()
 		if bus == nil {
 			return mcp.NewToolResultError("command bus not available"), nil
 		}

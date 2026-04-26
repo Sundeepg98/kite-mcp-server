@@ -54,12 +54,12 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		rg := manager.RiskGuard()
+		rg := handler.deps.RiskGuard.RiskGuard()
 		if rg == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -125,20 +125,20 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
-		guard := manager.RiskGuard()
+		guard := handler.deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Freeze trading for %s? Reason: %s", targetEmail, reason)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Freeze cancelled: %s", err.Error())), nil
 			}
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeUserCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeUserCommand{
 			AdminEmail:  adminEmail,
 			TargetEmail: targetEmail,
 			Reason:      reason,
@@ -193,12 +193,12 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		guard := manager.RiskGuard()
+		guard := handler.deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeUserCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeUserCommand{
 			TargetEmail: targetEmail,
 		}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -258,13 +258,13 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError("confirm must be true. This action blocks ALL users from placing orders."), nil
 		}
 
-		guard := manager.RiskGuard()
+		guard := handler.deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Double elicitation: two sequential confirmations.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg1 := fmt.Sprintf("WARNING: Freeze trading for ALL users on the server? Reason: %s", reason)
 			if err := requestConfirmation(ctx, srv, msg1); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Global freeze cancelled: %s", err.Error())), nil
@@ -275,7 +275,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeGlobalCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminFreezeGlobalCommand{
 			AdminEmail: adminEmail,
 			Reason:     reason,
 		}); err != nil {
@@ -322,11 +322,11 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
-		guard := manager.RiskGuard()
+		guard := handler.deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return handler.MarshalResponse(map[string]string{
