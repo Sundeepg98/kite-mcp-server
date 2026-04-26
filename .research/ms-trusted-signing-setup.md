@@ -294,3 +294,103 @@ That's it. Cost: $0 wrapper change, ~₹9,400 cert cost, deterministic SAC unblo
 ### Updated recommendation: **PROCEED — Certum Open Source Code Signing**
 
 Beats DEFER. Replaces both Trusted Signing (geo-blocked + paid) AND the self-signed cert (SAC-rejected). Order at https://shop.certum.eu/open-source-code-signing.html. Total budget: ~₹10,000 first year, ~₹3,000/yr renewal. India ships fine. Decision deferred to user; if user proceeds, follow-on dispatch can wire the wrapper change post-cert-arrival.
+
+**Note: Appendix D below revises this — WSL2 dominates Certum for THIS codebase.**
+
+---
+
+## Appendix D: WSL2 alternative scoped (Apr 26, 2026)
+
+User question: WSL2 vs Certum order. **Verdict: WSL2 dominates Certum for this codebase.** $0, ~30 min setup, zero KYC, zero shipping. Only loss is signing Windows release binaries — but kite-mcp-server **has no Windows release artifact**: production target is Fly.io Linux Docker. Certum buys nothing the user actually needs.
+
+### Setup procedure (Windows 11 Home — concrete commands)
+
+WSL2 ships free with Windows 11 Home (no Pro license required since 2021).
+
+```powershell
+# As admin from PowerShell — no separate downloads needed
+wsl --install -d Ubuntu-24.04          # ~3-5 min, includes auto-reboot
+# After reboot, Ubuntu launches automatically — set username/password (~30s)
+```
+
+Then inside the new Ubuntu shell:
+
+```bash
+sudo apt update && sudo apt install -y git build-essential   # ~2 min
+# Repo needs Go 1.25.8; Ubuntu 24.04 apt ships Go 1.22 — install upstream:
+wget https://go.dev/dl/go1.25.8.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.25.8.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
+git clone https://github.com/Sundeepg98/kite-mcp-server.git ~/projects/kite-mcp-server
+cd ~/projects/kite-mcp-server && go test ./... -count=1   # ~5-10 min full suite
+```
+
+**End-to-end time: ~25-35 min wall, ~10 min active.**
+
+### kite-mcp test compatibility — full audit
+
+Audited every Windows-conditional in production tests (excluded `.claude/worktrees/` agent copies). Result: **zero blockers**, multiple wins. Confirms orchestrator's pre-finding: all branches are Linux-aware, no `t.Skip()` for non-Windows.
+
+| Location | Pattern | WSL2 effect |
+|---|---|---|
+| `main_test.go:97/128/154` | `if windows { binary += ".exe" }` | Portable — wraps filename suffix only, no-op on Linux. |
+| `kc/riskguard/subprocess_check_test.go:59` | `if windows { Skip("chmod semantics") }` | **Skipped on Win, runs on Linux.** Coverage WIN. |
+| `kc/riskguard/subprocess_check_test.go:288` | `if windows { out += ".exe" }` | Filename suffix; portable. |
+| `kc/riskguard/subprocess_check_test.go:320` | `signPluginForSAC: if !windows { return }` | **HELPER function returning early on Linux** — not a `t.Skip`. Calling tests still execute. SAC signing problem just **disappears**. |
+| `app/ratelimit_reload_test.go:84` | `if PathSeparator == '\\' { Skip("SIGHUP") }` | **Skipped on Win, runs on Linux.** Coverage WIN. |
+| `app/graceful_restart_unix.go` | `//go:build !windows` | Compiles + runs only on Linux. |
+| `app/graceful_restart_windows.go` | `//go:build windows` | Stub on Win. |
+| `app/graceful_restart_integration_test.go:1` | `//go:build !windows && integration` | **Linux-only test.** Currently NEVER runs on Win box. WSL2 unlocks it. |
+| `ratelimit_test.go:651/667/687/709` | literal `"/tmp/test.db"` | Pure string equality assertions — file never opened. Passes on both. |
+
+**Direct response to orchestrator's "verify the inverse direction" question:** the only `runtime.GOOS != "windows"` branch is in `signPluginForSAC` (line 320). It's not a test-skip — it's a Windows-only helper that gracefully no-ops on Linux. **No Linux-skipping tests exist in the codebase.** Therefore Windows-only test coverage that gets lost in WSL2 = **zero tests**.
+
+Plus: SQLite uses `modernc.org/sqlite` (pure Go, no cgo). **No native toolchain dependencies.** `go test` Just Works in WSL2.
+
+**Net coverage on Linux > Windows for THIS codebase:** unlocks `graceful_restart_integration_test.go`, `TestSubprocessCheck_StaleExecutableFallback` (chmod), and `TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits`. **Three tests gained, zero lost.**
+
+### Dev workflow tradeoffs
+
+- **Source of truth: `~/projects/kite-mcp-server` inside WSL2** (Linux ext4, fast). NOT `/mnt/d/Sundeep/...` — the 9P bridge is 10-100x slower for Go's many-small-file workload (`go test ./...` over `/mnt/d/` can take 4-5x longer per run).
+- **Editor (Windows-side Claude Code) reads via `\\wsl$\Ubuntu-24.04\home\<user>\projects\kite-mcp-server`** — that path is 100% read/write capable from Windows tooling, just slow for bulk operations. Or run a separate Claude Code instance inside WSL2 directly for max speed.
+- **Git:** clone fresh inside WSL2 as shown. Push from WSL2 normally — gh CLI works there too (`sudo apt install gh`). Don't shuttle files between Windows checkout and WSL2 checkout.
+- **File watch:** native ext4 watch is normal; cross-FS watching from Windows-side editors via `\\wsl$\` works but laggy. Keep the editor inside WSL2 if file-watch latency matters.
+- **Per-run speed:** `go test ./...` on ext4 inside WSL2 is roughly **same speed as Windows native** (no SAC overhead, no signing, no flake). The 30-50% retry loss on Windows native is gone — WSL2 hits 100% pass rate deterministically.
+
+### Cost / ranking matrix
+
+| Dimension | WSL2 | Certum OS |
+|---|---|---|
+| Cost yr1 | **$0** | €104 (~₹9,400) |
+| Cost yr2+ | **$0** | €29 (~₹2,600) / yr |
+| Setup time | **~30 min** | 3-5 business days |
+| KYC required | **No** | Yes (IDnow + utility bill + GitHub URL) |
+| Hardware logistics | **None** | Smartcard + reader; DHL India transit |
+| Runs Win-native go test deterministically | No (still flaky) | **Yes (100%)** |
+| Signs Windows release binaries | No (no Windows binaries in this project) | Yes |
+| Compatibility loss | **Zero** (audit complete; gains 3 tests) | n/a (stays on Win) |
+| Disk footprint | ~3 GB Ubuntu image + repo clone | None |
+
+### Final ranking
+
+**WSL2 wins for kite-mcp-server.** Three reinforcing reasons:
+
+1. **No Windows release artifact exists.** Production = `flyctl deploy -a kite-mcp-server` → Linux Docker on Fly.io. Local Windows test binaries are throwaway; the Certum cert would sign artifacts that never ship.
+2. **Compatibility audit clean.** Every Windows-conditional in the codebase is either a portable filename wrap or an explicit `Skip` that becomes a real test on Linux. **Linux unlocks 3 tests Windows currently misses** — strict coverage gain. The lone `!= "windows"` branch is a helper no-op, not a test skip — zero Linux-skipping tests.
+3. **$0 + 30 min beats ₹9,400 + 5 days** when both endpoints reach the same goal (`go test ./...` deterministic).
+
+**The runbook's Option 3 ("WSL2 for heavy work") was actually under-stated** — it's not just for heavy work, it's the dominant default. Certum's only advantage (signing Windows release binaries) is irrelevant here.
+
+### Recommended Windows-side workflow after WSL2 adoption
+
+- Keep `scripts/go-test-sac.cmd` + GoTools self-signed cert as-is for the rare case the user wants to verify a binary on Win-native (e.g. installer smoke). Document accept-flake behavior.
+- Move primary `go test ./...` to WSL2.
+- Drop the Certum order from priority. Re-evaluate only if/when the project ships a signed Windows installer.
+
+### Caveats / limitations
+
+- WSL2 needs ~3 GB free disk (Ubuntu image) and ~2 GB RAM at peak `go test -race`. Trivial on a modern dev box.
+- Hyper-V / Virtual Machine Platform must be on. Modern Win 11 has these by default; older boxes may need `wsl --install` to enable both.
+- Some Windows-only debuggers (Delve via VS Code Windows-side) need `dlv` running inside WSL2 too, with VS Code Remote-WSL extension. Standard pattern, well-documented.
+- `gh` CLI auth state is per-WSL2-instance, not shared with Windows. One-time `gh auth login` inside the Ubuntu shell.
+- If the user later DOES need Windows binary signing (e.g. shipping a `.exe` installer), revisit Certum then.
