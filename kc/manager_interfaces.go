@@ -3,6 +3,7 @@ package kc
 import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -169,6 +170,15 @@ type RiskGuardProvider interface {
 // Deprecated: prefer ports.AlertPort.
 type TelegramNotifierProvider interface {
 	TelegramNotifier() *alerts.TelegramNotifier
+}
+
+// EventDispatcherProvider exposes the domain event dispatcher. Returns nil
+// when event-sourcing is disabled (no AlertDB / no event store wiring).
+// Authored to unblock Phase 3a Batch 5 — ext_apps.go + admin_risk_tools.go
+// reach manager.EventDispatcher() directly; this provider lets them go
+// through ToolHandlerDeps.Events instead.
+type EventDispatcherProvider interface {
+	EventDispatcher() *domain.EventDispatcher
 }
 
 // TrailingStopManagerProvider exposes the trailing stop manager.

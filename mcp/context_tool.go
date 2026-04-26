@@ -98,13 +98,13 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			email := oauth.EmailFromContext(ctx)
 
 			// Route data gathering through CQRS query bus.
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.TradingContextQuery{Email: email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.TradingContextQuery{Email: email})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			ucResult, terr := BusResult[*usecases.TradingContextResult](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("trading_context bus result type mismatch", "error", terr)
+				handler.Logger().Error("trading_context bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 

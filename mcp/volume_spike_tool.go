@@ -137,7 +137,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			// One batched quotes call covers every instrument's current
 			// volume + price. Kite supports up to 500 symbols per call;
 			// we're capped at 100 above so this is always a single RPC.
-			quotesRaw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{
+			quotesRaw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{
 				Email:       session.Email,
 				Instruments: instrumentIDs,
 			})
@@ -190,7 +190,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 					continue
 				}
 
-				histRaw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
+				histRaw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
 					Email:           session.Email,
 					InstrumentToken: int(inst.InstrumentToken),
 					Interval:        "day",

@@ -147,7 +147,7 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		// Dispatch domain event (transport concern — stays in handler).
-		if ed := manager.EventDispatcher(); ed != nil {
+		if ed := handler.deps.Events.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.UserFrozenEvent{
 				Email:    targetEmail,
 				FrozenBy: "admin",
@@ -282,7 +282,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		if ed := manager.EventDispatcher(); ed != nil {
+		if ed := handler.deps.Events.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.GlobalFreezeEvent{
 				By:        adminEmail,
 				Reason:    reason,

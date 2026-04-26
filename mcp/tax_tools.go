@@ -119,7 +119,7 @@ func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
 		return handler.WithSession(ctx, "tax_loss_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "tax_loss_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil

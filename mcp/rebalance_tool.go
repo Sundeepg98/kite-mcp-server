@@ -128,7 +128,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 
 		return handler.WithSession(ctx, "portfolio_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Fetch current holdings via CQRS query bus
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
 				handler.trackToolError(ctx, "portfolio_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
@@ -167,7 +167,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			// Fetch LTP for symbols not in holdings via use case
 			ltpMap := make(map[string]float64) // symbol -> lastPrice
 			if len(ltpNeeded) > 0 {
-				raw, ltpErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: ltpNeeded})
+				raw, ltpErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: ltpNeeded})
 				if ltpErr != nil {
 					handler.trackToolError(ctx, "portfolio_analysis", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil

@@ -48,7 +48,7 @@ func (*GetAlertHistoryReconstitutedTool) Handler(manager *kc.Manager) server.Too
 		alertID := p.String("alert_id", "")
 
 		return handler.WithSession(ctx, "get_alert_history_reconstituted", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetAlertHistoryReconstitutedQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetAlertHistoryReconstitutedQuery{
 				Email:   session.Email,
 				AlertID: alertID,
 			})

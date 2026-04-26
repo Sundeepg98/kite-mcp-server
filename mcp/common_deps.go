@@ -47,6 +47,7 @@ type ToolHandlerDeps struct {
 	MCPServer      kc.MCPServerProvider
 	BrokerResolver kc.BrokerResolverProvider
 	TrailingStop   kc.TrailingStopManagerProvider
+	Events         kc.EventDispatcherProvider
 
 	// CQRS bus providers — handlers that dispatch commands/queries
 	// depend on these narrow ports rather than pulling the full
@@ -97,6 +98,7 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			MCPServer:      manager,
 			BrokerResolver: manager,
 			TrailingStop:   manager,
+			Events:         manager,
 			CommandBusP:    manager,
 			QueryBusP:      manager,
 		},

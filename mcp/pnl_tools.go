@@ -91,7 +91,7 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid 'to' date format: %s (expected YYYY-MM-DD)", toDate)), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPnLJournalQuery{
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPnLJournalQuery{
 			Email:    email,
 			FromDate: fromDate,
 			ToDate:   toDate,

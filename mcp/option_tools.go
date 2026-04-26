@@ -190,7 +190,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// For indices like NIFTY, BANKNIFTY the spot is on NSE as an index
-			if raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
+			if raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: spotKeys}); err == nil {
 				ltpResp := raw.(map[string]broker.LTP)
 				for _, key := range spotKeys {
 					if q, ok := ltpResp[key]; ok && q.LastPrice > 0 {
@@ -245,7 +245,7 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Step 8: Batch get quotes
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instrumentKeys})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetQuotesQuery{Email: session.Email, Instruments: instrumentKeys})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch option quotes: %s", err.Error())), nil
 			}

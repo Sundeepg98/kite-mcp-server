@@ -63,7 +63,7 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			// Fetch historical data
 			now := time.Now()
 			from := now.AddDate(0, 0, -days)
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetHistoricalDataQuery{
 				Email:           session.Email,
 				InstrumentToken: token,
 				Interval:        interval,
