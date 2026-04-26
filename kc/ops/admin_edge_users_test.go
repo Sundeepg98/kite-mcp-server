@@ -80,6 +80,17 @@ func TestMax_ActivateUser_UpdateStatusError(t *testing.T) {
 // Coverage note: The nil-userStore guard in offboardUser (handler.go:545) is unreachable
 // because isAdmin() returns false when userStore is nil, causing a 403 before the guard.
 // This is a defensive pattern; the guard exists but cannot be triggered via HTTP.
+//
+// Behaviour note (Phase B-Audit #25): the offboard handler dispatches
+// DeleteMyAccountCommand which uses DeleteMyAccountUseCase. That use case treats
+// the teardown as best-effort — credential/token/session/alert/watchlist deletes
+// run unconditionally, then UpdateStatus is attempted and any error is LOGGED
+// (kc/usecases/account_usecases.go:109-111), not surfaced. Rationale: the
+// security-critical deletes have already succeeded by the time UpdateStatus
+// runs; failing the response would imply rollback semantics that the use case
+// does not provide. So an offboard request for a nonexistent user returns
+// 200 OK — the no-op deletes succeed and the status-update miss is logged.
+// This test pins the post-#25 contract: 200 OK, not 400.
 func TestMax_OffboardUser_UpdateStatusError(t *testing.T) {
 	t.Parallel()
 	h := newHandlerWithAuditAndMetrics(t)
@@ -89,7 +100,7 @@ func TestMax_OffboardUser_UpdateStatusError(t *testing.T) {
 	req := adminReq(http.MethodPost, "/admin/ops/api/users/offboard?email=nonexistent@test.com", `{"confirm": true}`)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 
