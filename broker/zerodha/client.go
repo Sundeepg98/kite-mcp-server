@@ -57,62 +57,72 @@ func (c *Client) BrokerName() broker.Name {
 
 // GetProfile returns the authenticated user's profile.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetProfile() (broker.Profile, error) {
-	return retryOnTransient(func() (broker.Profile, error) {
+	p, err := retryOnTransient(func() (broker.Profile, error) {
 		p, err := c.sdk.GetUserProfile()
 		if err != nil {
 			return broker.Profile{}, err
 		}
 		return convertProfile(p), nil
 	}, 2)
+	return p, wrapKiteError(err, "get_profile")
 }
 
 // GetMargins returns margin/funds information.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetMargins() (broker.Margins, error) {
-	return retryOnTransient(func() (broker.Margins, error) {
+	m, err := retryOnTransient(func() (broker.Margins, error) {
 		m, err := c.sdk.GetUserMargins()
 		if err != nil {
 			return broker.Margins{}, err
 		}
 		return convertMargins(m), nil
 	}, 2)
+	return m, wrapKiteError(err, "get_margins")
 }
 
 // GetHoldings returns the user's portfolio holdings.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetHoldings() ([]broker.Holding, error) {
-	return retryOnTransient(func() ([]broker.Holding, error) {
+	h, err := retryOnTransient(func() ([]broker.Holding, error) {
 		h, err := c.sdk.GetHoldings()
 		if err != nil {
 			return nil, err
 		}
 		return convertHoldings(h), nil
 	}, 2)
+	return h, wrapKiteError(err, "get_holdings")
 }
 
 // GetPositions returns current day and net positions.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetPositions() (broker.Positions, error) {
-	return retryOnTransient(func() (broker.Positions, error) {
+	p, err := retryOnTransient(func() (broker.Positions, error) {
 		p, err := c.sdk.GetPositions()
 		if err != nil {
 			return broker.Positions{}, err
 		}
 		return convertPositions(p), nil
 	}, 2)
+	return p, wrapKiteError(err, "get_positions")
 }
 
 // GetOrders returns all orders for the current trading day.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetOrders() ([]broker.Order, error) {
-	return retryOnTransient(func() ([]broker.Order, error) {
+	o, err := retryOnTransient(func() ([]broker.Order, error) {
 		o, err := c.sdk.GetOrders()
 		if err != nil {
 			return nil, err
 		}
 		return convertOrders(o), nil
 	}, 2)
+	return o, wrapKiteError(err, "get_orders")
 }
 
 // GetOrderHistory returns the state history of a specific order.
@@ -141,67 +151,77 @@ func (c *Client) GetTrades() ([]broker.Trade, error) {
 
 // PlaceOrder places a new order and returns the order ID.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) PlaceOrder(params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
-	return retryOnTransient(func() (broker.OrderResponse, error) {
+	resp, err := retryOnTransient(func() (broker.OrderResponse, error) {
 		resp, err := c.sdk.PlaceOrder(variety, kp)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
 		return broker.OrderResponse{OrderID: resp.OrderID}, nil
 	}, 2)
+	return resp, wrapKiteError(err, "place_order")
 }
 
 // ModifyOrder modifies an existing pending order.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) ModifyOrder(orderID string, params broker.OrderParams) (broker.OrderResponse, error) {
 	variety, kp := convertOrderParamsToKite(params)
-	return retryOnTransient(func() (broker.OrderResponse, error) {
+	resp, err := retryOnTransient(func() (broker.OrderResponse, error) {
 		resp, err := c.sdk.ModifyOrder(variety, orderID, kp)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
 		return broker.OrderResponse{OrderID: resp.OrderID}, nil
 	}, 2)
+	return resp, wrapKiteError(err, "modify_order")
 }
 
 // CancelOrder cancels an existing pending order.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) CancelOrder(orderID string, variety string) (broker.OrderResponse, error) {
 	if variety == "" {
 		variety = kiteconnect.VarietyRegular
 	}
-	return retryOnTransient(func() (broker.OrderResponse, error) {
+	resp, err := retryOnTransient(func() (broker.OrderResponse, error) {
 		resp, err := c.sdk.CancelOrder(variety, orderID, nil)
 		if err != nil {
 			return broker.OrderResponse{}, err
 		}
 		return broker.OrderResponse{OrderID: resp.OrderID}, nil
 	}, 2)
+	return resp, wrapKiteError(err, "cancel_order")
 }
 
 // GetLTP returns the last traded price for the given instruments.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetLTP(instruments ...string) (map[string]broker.LTP, error) {
-	return retryOnTransient(func() (map[string]broker.LTP, error) {
+	q, err := retryOnTransient(func() (map[string]broker.LTP, error) {
 		q, err := c.sdk.GetLTP(instruments...)
 		if err != nil {
 			return nil, err
 		}
 		return convertLTP(q), nil
 	}, 2)
+	return q, wrapKiteError(err, "get_ltp")
 }
 
 // GetOHLC returns OHLC data for the given instruments.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetOHLC(instruments ...string) (map[string]broker.OHLC, error) {
-	return retryOnTransient(func() (map[string]broker.OHLC, error) {
+	q, err := retryOnTransient(func() (map[string]broker.OHLC, error) {
 		q, err := c.sdk.GetOHLC(instruments...)
 		if err != nil {
 			return nil, err
 		}
 		return convertOHLC(q), nil
 	}, 2)
+	return q, wrapKiteError(err, "get_ohlc")
 }
 
 // GetHistoricalData returns historical candle data for an instrument.
@@ -218,14 +238,16 @@ func (c *Client) GetHistoricalData(instrumentToken int, interval string, from, t
 
 // GetQuotes returns full market quotes for the given instruments.
 // Retries up to 2 times on transient network errors.
+// On exhausted retries, 429 throttles surface as *broker.RateLimitError.
 func (c *Client) GetQuotes(instruments ...string) (map[string]broker.Quote, error) {
-	return retryOnTransient(func() (map[string]broker.Quote, error) {
+	q, err := retryOnTransient(func() (map[string]broker.Quote, error) {
 		q, err := c.sdk.GetQuote(instruments...)
 		if err != nil {
 			return nil, err
 		}
 		return convertQuotes(q), nil
 	}, 2)
+	return q, wrapKiteError(err, "get_quotes")
 }
 
 // GetOrderTrades returns executed trades for a specific order.
