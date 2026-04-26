@@ -127,6 +127,7 @@ func TestDevMode_PaperTradingReset_NoEmail(t *testing.T) {
 
 
 func TestDevMode_Watchlist_CreateAndUse(t *testing.T) {
+	t.Parallel()
 	// Create a watchlist and try operations on it
 	mgr := newDevModeManager(t)
 

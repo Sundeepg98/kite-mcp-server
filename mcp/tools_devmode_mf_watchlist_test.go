@@ -768,6 +768,7 @@ func TestGetWatchlist_SortByEntry(t *testing.T) {
 // compliance_tool deeper paths
 // ---------------------------------------------------------------------------
 func TestPaperToggle_DoubleEnable(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	email := "double@example.com"
 	r1 := callToolDevMode(t, mgr, "paper_trading_toggle", email, map[string]any{"enable": true})

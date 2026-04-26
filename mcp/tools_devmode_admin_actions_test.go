@@ -42,6 +42,7 @@ func TestAdminGetRiskStatus_P7(t *testing.T) {
 
 
 func TestAdminFreezeGlobal_P7(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
 	result := callToolAdmin(t, mgr, "admin_freeze_global", "admin@example.com", map[string]any{
 		"reason":  "test freeze",
@@ -58,6 +59,7 @@ func TestAdminFreezeGlobal_P7(t *testing.T) {
 
 
 func TestAdminSuspendUser_P7(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
 	// Create a user to suspend
 	uStore := mgr.UserStoreConcrete()
@@ -94,6 +96,7 @@ func TestAdminGetUser_P7(t *testing.T) {
 
 
 func TestAdminChangeRole_P7(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
 	// Create a user to change role
 	uStore := mgr.UserStoreConcrete()
@@ -111,6 +114,7 @@ func TestAdminChangeRole_P7(t *testing.T) {
 
 
 func TestAdminFreezeUser_P7(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newRichDevModeManager(t)
 	// Create a user to freeze
 	uStore := mgr.UserStoreConcrete()

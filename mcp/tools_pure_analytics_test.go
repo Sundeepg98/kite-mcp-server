@@ -15,6 +15,7 @@ import (
 
 
 func TestComputeSectorExposure_Empty(t *testing.T) {
+	t.Parallel()
 	result := computeSectorExposure([]broker.Holding{})
 	assert.NotNil(t, result)
 	assert.Equal(t, 0, result.HoldingsCount)
@@ -22,6 +23,7 @@ func TestComputeSectorExposure_Empty(t *testing.T) {
 
 
 func TestComputeSectorExposure_ZeroValue(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "INFY", Quantity: 10, LastPrice: 0},
 	}
@@ -32,6 +34,7 @@ func TestComputeSectorExposure_ZeroValue(t *testing.T) {
 
 
 func TestComputeSectorExposure_MappedStocks(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "INFY", Quantity: 10, LastPrice: 1500},
 		{Tradingsymbol: "TCS", Quantity: 5, LastPrice: 3500},
@@ -46,6 +49,7 @@ func TestComputeSectorExposure_MappedStocks(t *testing.T) {
 
 
 func TestComputeSectorExposure_UnmappedStocks(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "UNKNOWNSTOCK", Quantity: 10, LastPrice: 100},
 	}
@@ -56,6 +60,7 @@ func TestComputeSectorExposure_UnmappedStocks(t *testing.T) {
 
 
 func TestComputeSectorExposure_OverExposed(t *testing.T) {
+	t.Parallel()
 	// Single stock = 100% in one sector = over-exposed
 	holdings := []broker.Holding{
 		{Tradingsymbol: "INFY", Quantity: 100, LastPrice: 1500},
@@ -66,6 +71,7 @@ func TestComputeSectorExposure_OverExposed(t *testing.T) {
 
 
 func TestComputeDividendCalendar_Empty(t *testing.T) {
+	t.Parallel()
 	result := computeDividendCalendar([]broker.Holding{}, 90)
 	assert.NotNil(t, result)
 	assert.Equal(t, 0, result.Summary.HoldingsCount)
@@ -73,6 +79,7 @@ func TestComputeDividendCalendar_Empty(t *testing.T) {
 
 
 func TestComputeDividendCalendar_WithHoldings(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "INFY", Quantity: 10, LastPrice: 1500, AveragePrice: 1400},
 		{Tradingsymbol: "TCS", Quantity: 5, LastPrice: 3500, AveragePrice: 3200},
@@ -84,6 +91,7 @@ func TestComputeDividendCalendar_WithHoldings(t *testing.T) {
 
 
 func TestComputeDividendCalendar_ZeroDayLookAhead(t *testing.T) {
+	t.Parallel()
 	holdings := []broker.Holding{
 		{Tradingsymbol: "RELIANCE", Quantity: 10, LastPrice: 2500},
 	}
