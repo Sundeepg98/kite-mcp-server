@@ -19,6 +19,8 @@ import (
 // get_positions + portfolio_concentration) with one server-side call.
 type PreTradeCheckTool struct{}
 
+func init() { RegisterInternalTool(&PreTradeCheckTool{}) }
+
 func (*PreTradeCheckTool) Tool() mcp.Tool {
 	return mcp.NewTool("order_risk_report",
 		mcp.WithDescription("Factual pre-submission review of a prospective order. Computes margin required vs available, portfolio concentration %, existing position in the symbol, current LTP, and mechanical stop-loss levels in a single call. Composite wrapper over get_ltp + get_order_margins + get_margins + get_positions + portfolio_concentration. Output includes warnings and a status field (PROCEED / PROCEED WITH CAUTION / BLOCKED) derived purely from margin sufficiency and concentration thresholds. Not investment advice."),

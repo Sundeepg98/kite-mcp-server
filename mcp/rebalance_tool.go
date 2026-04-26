@@ -20,6 +20,8 @@ import (
 
 type PortfolioRebalanceTool struct{}
 
+func init() { RegisterInternalTool(&PortfolioRebalanceTool{}) }
+
 func (*PortfolioRebalanceTool) Tool() mcp.Tool {
 	return mcp.NewTool("portfolio_analysis",
 		mcp.WithDescription("Analyze current portfolio allocation vs target percentages. Shows deviations and suggested adjustment quantities for user consideration. Not investment advice."),

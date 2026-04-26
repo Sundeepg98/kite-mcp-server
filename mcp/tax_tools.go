@@ -32,6 +32,8 @@ const (
 // TaxHarvestTool analyses a portfolio for tax-loss harvesting opportunities.
 type TaxHarvestTool struct{}
 
+func init() { RegisterInternalTool(&TaxHarvestTool{}) }
+
 func (*TaxHarvestTool) Tool() mcp.Tool {
 	return mcp.NewTool("tax_loss_analysis",
 		mcp.WithDescription(

@@ -134,11 +134,9 @@ func GetAllToolsForRegistry(reg *Registry) []Tool {
 		&SectorExposureTool{},
 		&VolumeSpikeDetectorTool{},
 
-		// Portfolio rebalancing
-		&PortfolioRebalanceTool{},
-
-		// Tax analysis
-		&TaxHarvestTool{},
+		// (Portfolio rebalancing → portfolio_analysis: registered via init() in
+		// rebalance_tool.go; Tax analysis → tax_loss_analysis: registered via
+		// init() in tax_tools.go — Investment J migration in progress.)
 
 		// Earnings-call analysis (frames the LLM — returns pointer + themes,
 		// LLM fetches transcript client-side via WebFetch / Tavily).
@@ -159,8 +157,8 @@ func GetAllToolsForRegistry(reg *Registry) []Tool {
 		&PaperTradingStatusTool{},
 		&PaperTradingResetTool{},
 
-		// Pre-trade composite check (replaces 5 separate tool calls)
-		&PreTradeCheckTool{},
+		// (Pre-trade composite check → order_risk_report: registered via init()
+		// in pretrade_tool.go — Investment J migration in progress.)
 
 		// Tools for margin and charges calculation
 		&OrderMarginsTool{},
