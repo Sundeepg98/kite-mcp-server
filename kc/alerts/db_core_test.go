@@ -203,3 +203,40 @@ func TestOpenDB_PingFail(t *testing.T) {
 	_, err := OpenDB(badPath)
 	require.Error(t, err)
 }
+
+// TestOpenDB_ForeignKeysEnabled pins the DB1 fix: modernc.org/sqlite defaults
+// `foreign_keys` to OFF on every fresh connection, which would silently
+// disable any ON DELETE/RESTRICT clauses in the schema. The DSN-level
+// `_pragma=foreign_keys(1)` parameter is applied per-connection by the
+// driver, so the PRAGMA must report 1 from any handle the pool hands out.
+func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	var fk int
+	err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fk, "foreign_keys PRAGMA must be ON for ON DELETE/RESTRICT clauses to fire")
+}
+
+// TestDSNWithFKPragma covers the helper for both bare paths (which get a
+// fresh `?` query) and pre-existing URIs with query params (which need an
+// `&` separator).
+func TestDSNWithFKPragma(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"bare path", "foo.db", "foo.db?_pragma=foreign_keys(1)"},
+		{"memory", ":memory:", ":memory:?_pragma=foreign_keys(1)"},
+		{"file uri no query", "file:foo.db", "file:foo.db?_pragma=foreign_keys(1)"},
+		{"file uri with query", "file:foo.db?cache=shared", "file:foo.db?cache=shared&_pragma=foreign_keys(1)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, dsnWithFKPragma(tc.input))
+		})
+	}
+}

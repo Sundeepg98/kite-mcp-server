@@ -3,6 +3,7 @@ package alerts
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -71,9 +72,31 @@ func (d *DB) Ping() error {
 	return nil
 }
 
+// dsnWithFKPragma appends `_pragma=foreign_keys(1)` to the given SQLite path
+// so modernc.org/sqlite enables FK enforcement on every connection (the
+// default is OFF per-connection). modernc parses query params from the DSN
+// even when the path is not a `file:` URI — it strips the `?...` tail
+// before handing the path to SQLite — so a plain `path?_pragma=...` form
+// works for bare paths, `:memory:`, and pre-built `file:` URIs alike.
+// (DB1 fix from gap catalogue.)
+func dsnWithFKPragma(path string) string {
+	const fkParam = "_pragma=foreign_keys(1)"
+	if strings.Contains(path, "?") {
+		return path + "&" + fkParam
+	}
+	return path + "?" + fkParam
+}
+
 // OpenDB opens (or creates) the SQLite database at path and ensures tables exist.
 func OpenDB(path string) (*DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// modernc.org/sqlite reads `_pragma=` query params from the DSN and
+	// applies them on every connection it opens (see applyQueryParams in
+	// the driver's conn.go). foreign_keys=ON is set per-connection here
+	// rather than via a one-shot Exec because SQLite defaults the pragma
+	// to OFF on every fresh connection — a pool re-open would silently
+	// drop FK enforcement otherwise. (DB1 fix from gap catalogue.)
+	dsn := dsnWithFKPragma(path)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
