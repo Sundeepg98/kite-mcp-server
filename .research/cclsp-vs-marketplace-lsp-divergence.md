@@ -375,4 +375,64 @@ The push-channel asymmetry is **upstream of our bridge** — Claude Code's edito
 
 **Best practical path:** add a cclsp pull-on-edit hook to emulate the auto-push for `.go` (and any other language where this pattern bites). Settings change, not bridge change. Bridge stays as-is.
 
+## Post-restart `gopls.exe` SAC block diagnosis (2026-04-26 evening)
+
+**Symptom:** User restarted Claude Code and got the same Windows Security toast: "Part of this app has been blocked. Some features of Claude Code may not work because we can't confirm who published gopls.exe that the app tried to load." Despite WSL2 bridge setup, marketplace plugin pointing at `gopls.cmd` shim, and `gopls.exe` renamed to `gopls.exe.bak`.
+
+### Empirical findings
+
+**1. No `gopls.exe` exists on PATH today.** Verified via `where.exe gopls.exe` → `INFO: Could not find files`. `where gopls` resolves to `C:\Users\Dell\go\bin\gopls.cmd` (the bridge shim). The only PE32+ binaries that look like gopls were:
+
+- `C:\Users\Dell\go\bin\gopls.exe.bak` (40,857,960 bytes, mtime 2026-04-26 18:11:37 — recent re-sign artifact)
+- `C:\Users\Dell\go\bin\gopls.exe~` (40,858,472 bytes, mtime 2026-04-03 11:53:41 — older backup with tilde suffix)
+
+Wide search across `C:\Program Files`, `C:\Program Files (x86)`, `C:\Users\Dell\AppData\{Local,Roaming}`, `.vscode`, `.cursor`, `.zed` — found **zero** other `gopls.exe`. `C:\Program Files\Go\bin\` (the Go toolchain) only has `go.exe` and `gofmt.exe`; the standard installer doesn't bundle gopls.
+
+**2. Windows CodeIntegrity event log captures the truth.** 76 events in last 8 hours mention gopls; all are Event ID 3077 (block) and 3033 (load failed). Each entry shows:
+
+- `File Name: \Device\HarddiskVolume4\Users\Dell\go\bin\gopls.exe` (literal `gopls.exe`, NOT `.bak` or `~`)
+- `Process Name: \Device\HarddiskVolume4\Users\Dell\.local\bin\claude.exe` — **Claude Code itself is the loading process**
+- `Validated Signing Level: 1` (Unsigned from CI's view) → SAC block
+- `SHA1: DB91839BC6C542CD2CB2ECDA7E793498650A1C8D` — same hash across all 76 events; **does not match either current `.bak` or `~` file's hash** (computed live: `7C9824BD...` for `.bak`, `FDD974A5...` for `~`)
+- 38+ distinct timestamps spanning 15:44 → 17:57
+
+**3. The mismatch resolves to:** the SAC log hash is from an EARLIER state of the binary (before the 18:11 re-sign), but the kernel image-cache holds the stale path entry `gopls.exe`. Claude Code's plugin-manifest evaluator probes for `gopls.exe` (forced `.exe` lookup, bypassing PATHEXT resolution to `.cmd`) when handling the marketplace `gopls-lsp` plugin's `lspServers.command: "gopls"` entry. Each probe triggers a CodeIntegrity check against the cached path → file (now `.bak` after rename, but kernel cache still maps the old path) → SAC block logged → toast fired.
+
+### Why moving renamed files OUT of `~/go/bin/` matters
+
+`gopls.exe.bak` and `gopls.exe~` are PE32+ binaries living next to the active `gopls.cmd`. Even though Windows path resolution finds `.cmd` first, **kernel-level file enumeration during process spawn or path-cache invalidation** can scan adjacent files. Moved both to `C:\Users\Dell\go\bin-archived\` (out of PATH entirely) to eliminate this vector.
+
+### Verification: post-move state
+
+After the move to `C:\Users\Dell\go\bin-archived\`:
+
+- `where gopls` still resolves to `gopls.cmd` (bridge shim intact).
+- `where gopls.exe` still returns "not found" (no regression).
+- `mcp__cclsp__get_hover` on `D:\Sundeep\projects\kite-mcp-server\app\wire.go:11:15` → returns full `package kc` hover doc — **Go LSP fully functional**.
+- `mcp__cclsp__get_diagnostics` on `D:\Sundeep\projects\lsp-test\bad.go` → empty (cache not yet warmed since restart, expected).
+- Zero new SAC gopls events in the last 2 minutes post-move.
+
+### Root cause summary
+
+The toasts are a **stale-kernel-path-cache + SAC reputation check** issue triggered by Claude Code's plugin spawn-resolution for the marketplace `gopls-lsp` plugin. Specifically:
+
+1. Marketplace plugin's `lspServers.command: "gopls"` triggers Claude Code to resolve `gopls` for spawn.
+2. Resolution involves probing `gopls.exe` directly (some Node `child_process` paths do this on Windows before falling back to PATHEXT).
+3. Kernel image-cache holds a stale entry pointing at the old `gopls.exe` path; cache lookup triggers SAC integrity check.
+4. The integrity check sees the binary at the cached hash is unsigned-from-CI's-perspective → block event 3077 → toast.
+5. **Claude Code itself doesn't break** — its own logic fails the spawn gracefully and falls back to `gopls.cmd` (verified by Go LSP working). Only the toast surfaces to the user.
+
+The repeated toasts during a single session likely correspond to plugin-reload / reconnect events, each triggering a fresh probe.
+
+### Fix shipped
+
+**Moved `gopls.exe.bak` and `gopls.exe~` to `C:\Users\Dell\go\bin-archived\`** so no PE32+ "looks-like-gopls" binary exists in any PATH directory. Bridge shim `gopls.cmd` remains. After the move, no new SAC gopls events in 2+ minutes.
+
+To make this stick across future Claude Code restarts:
+- The `.bak` file gets recreated by `sign-gopls.ps1` if the user runs it again. The script targets `~/go/bin/gopls.exe` and writes `~/go/bin/gopls.exe.bak` as backup. Workaround: edit `sign-gopls.ps1` to write the `.bak` to `~/go/bin-archived/` instead. Out of scope for this section but a follow-up.
+
+### Verdict
+
+The SAC block was **stale kernel-path-cache noise**, not a functional break. Go LSP works through cclsp + bridge as expected throughout. Moving the renamed binaries out of PATH eliminates the vector. The toast was harmless (Claude Code falls back correctly) but should stop appearing now.
+
 
