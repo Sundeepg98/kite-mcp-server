@@ -8,6 +8,36 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// SQLDB is the dialect-portable surface that *DB exposes. Captures the
+// driver-level operations callers consume (ExecDDL/ExecInsert/ExecResult/
+// QueryRow/RawQuery/Close/Ping/SetEncryptionKey) without coupling to the
+// SQLite-specific helpers (GetConfig/SetConfig use INSERT OR REPLACE,
+// which is SQLite-only — those stay on *DB and would have a Postgres-
+// flavored sibling on a hypothetical PostgresDB).
+//
+// Postgres-readiness contract: a future Postgres adapter ships as a
+// new struct (e.g. PostgresDB) implementing this interface plus its own
+// dialect-specific helpers. Schema files in kc/alerts/db.go's DDL block
+// use SQLite-flavored syntax; a Postgres port would need a parallel DDL
+// pass (different INTEGER PRIMARY KEY semantics, no INSERT OR REPLACE,
+// JSONB instead of TEXT for conditions_json, etc.) — but the
+// driver-level method surface stays identical.
+//
+// This interface exists to make the readiness explicit (compile-time
+// assertion at db_test.go) without inventing a real Postgres adapter
+// today (per .research/path-to-100-per-class-deep-dive.md Class 3:
+// "interface-only proof, real adapter scale-gated").
+type SQLDB interface {
+	ExecDDL(ddl string) error
+	ExecInsert(query string, args ...any) error
+	ExecResult(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+	RawQuery(query string, args ...any) (*sql.Rows, error)
+	Close() error
+	Ping() error
+	SetEncryptionKey(key []byte)
+}
+
 // DB provides SQLite persistence for alerts and Telegram chat IDs.
 type DB struct {
 	db            *sql.DB

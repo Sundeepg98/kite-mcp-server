@@ -21,6 +21,28 @@ func openTestDB(t *testing.T) *DB {
 	return db
 }
 
+// TestSQLDB_DBSatisfiesInterface pins the Postgres-readiness contract:
+// *alerts.DB must satisfy the SQLDB interface, which describes the
+// SQL-driver-portable subset of the *alerts.DB API. Adding a Postgres
+// adapter (kc/alerts/postgres.go or similar) becomes a 1-line proof of
+// concept: `var _ SQLDB = (*PostgresDB)(nil)` and the interface
+// guarantees the consumer-facing method signatures match.
+//
+// The interface is intentionally NARROW — it captures only the
+// driver-level surface (ExecDDL/ExecInsert/ExecResult/QueryRow/RawQuery/
+// Close/Ping/SetEncryptionKey), not the SQLite-specific helpers
+// (GetConfig/SetConfig use INSERT OR REPLACE which is SQLite-only;
+// those stay on *DB and would have a Postgres-flavored sibling on the
+// hypothetical PostgresDB).
+func TestSQLDB_DBSatisfiesInterface(t *testing.T) {
+	t.Parallel()
+	var _ SQLDB = (*DB)(nil) // compile-time assertion; runtime body is for documentation
+	db := openTestDB(t)
+	var iface SQLDB = db
+	require.NotNil(t, iface, "*alerts.DB must satisfy SQLDB interface")
+	require.NoError(t, iface.Ping(), "Ping through interface must work end-to-end")
+}
+
 
 
 // ===========================================================================
