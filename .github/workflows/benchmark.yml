@@ -1,0 +1,221 @@
+# Benchmark regression gate.
+#
+# Runs Go benchmarks on the PR branch and the base branch, then compares
+# results with `benchstat`. Fails the PR if any benchmark regresses on
+# either sec/op (latency) or allocs/op (allocations) by more than the
+# configured threshold (default 10%). New benchmarks (only present on
+# HEAD) and removed benchmarks (only present on base) are reported but
+# do not fail the build.
+#
+# Why 10%? Microbenchmark noise on shared GitHub runners is routinely
+# 3-7%. Anything tighter would flake. Bump per-package via the env
+# block below if a hot path needs stricter SLO enforcement.
+#
+# Scope: currently `./kc/instruments/...` — the only package with
+# build-tag-free `BenchmarkXxx` functions. Other benchmarks (e.g.
+# `kc/session_signing_test.go`) are gated by `goexperiment.synctest`
+# and excluded here to keep the gate deterministic. To extend coverage,
+# add the package to BENCH_PACKAGES below; ensure the bench compiles
+# without GOEXPERIMENT flags or wire those flags in explicitly.
+#
+# Trigger: PRs that touch `*.go` files. Push events skip this — base
+# would be HEAD~1 which makes regression comparison meaningless on
+# squash-merge histories.
+
+name: Benchmark Regression
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/benchmark.yml'
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Regression threshold (percent). Anything worse fails the build.'
+        required: false
+        default: '10'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Packages whose benchmarks gate the merge.
+  BENCH_PACKAGES: ./kc/instruments/...
+  # Bench duration per func (passed to -benchtime). Short enough to fit
+  # the runner budget, long enough to dampen jitter. Adjust if results
+  # become noisy.
+  BENCHTIME: '500ms'
+  # Repeat count — benchstat needs >=6 samples per side for a t-test
+  # confidence interval; 8 keeps confidence intervals tight without
+  # blowing the runner.
+  BENCH_COUNT: '8'
+  # Default regression threshold (percent). workflow_dispatch can override.
+  REGRESSION_THRESHOLD_PCT: '10'
+
+jobs:
+  benchmark:
+    name: bench compare (PR vs base)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR HEAD (full history for base checkout)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Install benchstat
+        run: |
+          go install golang.org/x/perf/cmd/benchstat@latest
+          which benchstat
+
+      - name: Resolve threshold
+        id: threshold
+        run: |
+          if [ -n "${{ github.event.inputs.threshold }}" ]; then
+            echo "value=${{ github.event.inputs.threshold }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${REGRESSION_THRESHOLD_PCT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run benchmarks on base (${{ github.base_ref }})
+        run: |
+          set -eo pipefail
+          base_sha=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          echo "Base merge-base: $base_sha"
+          git checkout "$base_sha" --
+          go version
+          go test -bench=. -benchmem -run=^$ \
+            -count=${BENCH_COUNT} -benchtime=${BENCHTIME} -timeout=20m \
+            ${BENCH_PACKAGES} | tee base.txt
+          # Restore PR HEAD for the next step.
+          git checkout - --
+
+      - name: Run benchmarks on PR HEAD
+        run: |
+          set -eo pipefail
+          go version
+          go test -bench=. -benchmem -run=^$ \
+            -count=${BENCH_COUNT} -benchtime=${BENCHTIME} -timeout=20m \
+            ${BENCH_PACKAGES} | tee head.txt
+
+      - name: benchstat comparison (text)
+        run: |
+          set -eo pipefail
+          benchstat base.txt head.txt | tee benchstat.txt
+
+      - name: benchstat comparison (CSV for parsing)
+        run: |
+          set -eo pipefail
+          # CSV format makes the regression gate parser simple and
+          # robust: column 6 is the "vs base" delta as "+12.3%" /
+          # "-5.6%" / "~". Warnings go to stderr; we discard them.
+          benchstat -format=csv base.txt head.txt 2>/dev/null > benchstat.csv
+          cat benchstat.csv
+
+      - name: Gate on regression threshold
+        run: |
+          set -eo pipefail
+          python3 - <<'PY'
+          import csv
+          import os
+          import sys
+
+          threshold = float(os.environ["THRESHOLD"])
+          # benchstat CSV alternates: blank-or-summary row, then
+          # header row "(blank),<file_a>,,<file_b>,,,", then a column
+          # spec row "(blank),<metric>,CI,<metric>,CI,vs base,P", then
+          # data rows until the next blank line. Each metric (sec/op,
+          # B/op, allocs/op) is its own section.
+          gating_metrics = {"sec/op", "ns/op", "allocs/op"}
+          regressions = []
+          current_metric = None
+
+          with open("benchstat.csv", newline="") as f:
+              reader = csv.reader(f)
+              for row in reader:
+                  if not row or all(not c.strip() for c in row):
+                      current_metric = None
+                      continue
+                  # Header rows: column 1 names the metric we're
+                  # entering. The first cell is empty.
+                  if row[0] == "" and len(row) >= 6 and row[5] == "vs base":
+                      current_metric = row[1]
+                      continue
+                  if current_metric is None:
+                      continue
+                  if current_metric not in gating_metrics:
+                      continue
+                  # Data row layout:
+                  #   [name, base_val, base_ci, head_val, head_ci, delta, p]
+                  if len(row) < 6:
+                      continue
+                  bench_name = row[0].strip()
+                  delta_str = row[5].strip()
+                  # Skip "geomean" summary; per-bench is the gate.
+                  if bench_name.lower() == "geomean":
+                      continue
+                  # "~" means delta is statistically indistinguishable
+                  # from zero — definitely not a regression.
+                  if delta_str in ("", "~"):
+                      continue
+                  # Strip trailing % and parse the signed number.
+                  numeric = delta_str.rstrip("%")
+                  try:
+                      delta = float(numeric)
+                  except ValueError:
+                      continue
+                  # Only positive deltas are regressions for sec/op
+                  # and allocs/op (more time / more allocs = worse).
+                  if delta > threshold:
+                      regressions.append(
+                          f"{current_metric}: {bench_name} regressed by {delta:.2f}% "
+                          f"(threshold {threshold}%)"
+                      )
+
+          if regressions:
+              print("REGRESSIONS DETECTED (gating):")
+              for r in regressions:
+                  print(f"  - {r}")
+              sys.exit(1)
+          print(f"No regression beyond {threshold}% threshold on sec/op or allocs/op.")
+          PY
+        env:
+          THRESHOLD: ${{ steps.threshold.outputs.value }}
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Benchmark regression gate"
+            echo ""
+            echo "Packages: \`${BENCH_PACKAGES}\`"
+            echo "Threshold: ${{ steps.threshold.outputs.value }}% (sec/op, allocs/op)"
+            echo "Samples: ${BENCH_COUNT} x ${BENCHTIME}"
+            echo ""
+            echo '```'
+            cat benchstat.txt 2>/dev/null || echo '(benchstat output unavailable)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bench artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks
+          path: |
+            base.txt
+            head.txt
+            benchstat.txt
+            benchstat.csv
+          if-no-files-found: warn
+          retention-days: 14
