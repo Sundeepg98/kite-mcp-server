@@ -130,6 +130,21 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 			"order_id", cmd.OrderID,
 			"error", err,
 		)
+		// Emit OrderRejectedEvent so the existing order aggregate stream
+		// (keyed by OrderID) shows broker rejections inline with place /
+		// modify / cancel transitions — without it, a forensic walk of
+		// "ORD-123" would skip from placed → cancel and miss the reject
+		// in between. Best-effort: dispatch failures must not mask the
+		// original modification error.
+		if uc.events != nil {
+			uc.events.Dispatch(domain.OrderRejectedEvent{
+				Email:     cmd.Email,
+				OrderID:   cmd.OrderID,
+				ToolName:  "modify_order",
+				Reason:    err.Error(),
+				Timestamp: time.Now().UTC(),
+			})
+		}
 		return broker.OrderResponse{}, fmt.Errorf("usecases: modify order: %w", err)
 	}
 

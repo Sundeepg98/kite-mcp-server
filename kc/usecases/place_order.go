@@ -193,6 +193,19 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			"tradingsymbol", symbol,
 			"error", err,
 		)
+		// Emit OrderRejectedEvent so the order audit stream surfaces
+		// post-riskguard broker failures (rate limit, margin, invalid
+		// symbol, etc.). OrderID is empty here — the broker never
+		// assigned one. Best-effort: dispatch failures must not mask
+		// the original placement error.
+		if uc.events != nil {
+			uc.events.Dispatch(domain.OrderRejectedEvent{
+				Email:     cmd.Email,
+				ToolName:  "place_order",
+				Reason:    err.Error(),
+				Timestamp: time.Now().UTC(),
+			})
+		}
 		return "", fmt.Errorf("usecases: place order: %w", err)
 	}
 

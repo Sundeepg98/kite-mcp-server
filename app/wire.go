@@ -448,6 +448,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("riskguard.kill_switch_tripped", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
 			eventDispatcher.Subscribe("riskguard.daily_counter_reset", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
 			eventDispatcher.Subscribe("riskguard.rejection_recorded", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
+			// order.rejected dispatches from place/modify/cancel use cases
+			// when the broker round-trip fails (post-riskguard). Persisting
+			// it lands the failure path on the order aggregate stream so
+			// projector queries can render full place→modify→reject→cancel
+			// timelines without joining against a separate broker-error log.
+			eventDispatcher.Subscribe("order.rejected", makeEventPersister(eventStore, "Order", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

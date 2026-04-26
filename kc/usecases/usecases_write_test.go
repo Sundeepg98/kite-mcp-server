@@ -1221,3 +1221,144 @@ func TestCancelOrder_EventStoreFailureDoesNotRollback(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+// --- ES: OrderRejectedEvent dispatch on broker failure ---
+//
+// These tests pin the contract that broker round-trip failures
+// (post-riskguard) emit a typed domain.OrderRejectedEvent so the audit
+// stream isn't silent on the failure path. Without this, a forensic walk
+// of an order ID would show "placed → cancelled" with no record of the
+// modify-reject in between, leaving auditors blind to broker push-back.
+
+// TestPlaceOrder_BrokerFailureDispatchesRejectedEvent verifies that when
+// the broker rejects placement (rate limit, margin, invalid symbol),
+// the use case dispatches OrderRejectedEvent with empty OrderID (broker
+// never assigned one), the matching ToolName, and the broker error
+// surface preserved in Reason.
+func TestPlaceOrder_BrokerFailureDispatchesRejectedEvent(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeErr: errors.New("MARGIN_INSUFFICIENT")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("order.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceOrderUseCase(resolver, nil, events, testLogger())
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"trader@example.com", "NSE", "RELIANCE", "BUY", "LIMIT", "CNC", 10, 2500.0,
+	))
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "OrderRejectedEvent must be dispatched on broker failure")
+	rej, ok := captured.(domain.OrderRejectedEvent)
+	require.True(t, ok, "captured event should be OrderRejectedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", rej.Email)
+	assert.Empty(t, rej.OrderID, "place_order rejection has no broker-assigned OrderID")
+	assert.Equal(t, "place_order", rej.ToolName)
+	assert.Contains(t, rej.Reason, "MARGIN_INSUFFICIENT",
+		"broker error must surface in Reason for forensic auditing")
+	assert.False(t, rej.Timestamp.IsZero(), "Timestamp must be populated")
+}
+
+// TestPlaceOrder_BrokerFailure_NilEventsDispatcherSafe verifies the nil-
+// dispatcher path: when the use case is constructed without an events
+// dispatcher (test or bootstrap configuration), broker rejection still
+// returns the broker error without panicking on a nil Dispatch call.
+func TestPlaceOrder_BrokerFailure_NilEventsDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeErr: errors.New("RATE_LIMIT")}
+	resolver := &mockBrokerResolver{client: client}
+
+	uc := NewPlaceOrderUseCase(resolver, nil, nil, testLogger())
+	_, err := uc.Execute(context.Background(), testPlaceCmd(
+		"trader@example.com", "NSE", "RELIANCE", "BUY", "LIMIT", "CNC", 10, 2500.0,
+	))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "place order")
+}
+
+// TestModifyOrder_BrokerFailureDispatchesRejectedEvent verifies that
+// modify-order broker failures dispatch OrderRejectedEvent keyed by the
+// caller-supplied OrderID — the rejection joins the existing order
+// aggregate stream so a chronological walk of "ORD-555" sees place →
+// modify-reject inline.
+func TestModifyOrder_BrokerFailureDispatchesRejectedEvent(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{modifyErr: errors.New("ORDER_FROZEN")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("order.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewModifyOrderUseCase(resolver, nil, events, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.ModifyOrderCommand{
+		Email:    "trader@example.com",
+		OrderID:  "ORD-555",
+		Quantity: 5,
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "OrderRejectedEvent must be dispatched on broker modify failure")
+	rej, ok := captured.(domain.OrderRejectedEvent)
+	require.True(t, ok, "captured event should be OrderRejectedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", rej.Email)
+	assert.Equal(t, "ORD-555", rej.OrderID,
+		"modify rejection must preserve OrderID so it joins the order aggregate stream")
+	assert.Equal(t, "modify_order", rej.ToolName)
+	assert.Contains(t, rej.Reason, "ORDER_FROZEN")
+}
+
+// TestCancelOrder_BrokerFailureDispatchesRejectedEvent verifies that
+// cancel-order broker failures dispatch OrderRejectedEvent so a forensic
+// walk of an order ID surfaces the cancel rejection in the chronological
+// place → modify → cancel-reject view.
+func TestCancelOrder_BrokerFailureDispatchesRejectedEvent(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{cancelErr: errors.New("ALREADY_FILLED")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("order.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelOrderUseCase(resolver, events, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
+		Email:   "trader@example.com",
+		OrderID: "ORD-777",
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "OrderRejectedEvent must be dispatched on broker cancel failure")
+	rej, ok := captured.(domain.OrderRejectedEvent)
+	require.True(t, ok, "captured event should be OrderRejectedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", rej.Email)
+	assert.Equal(t, "ORD-777", rej.OrderID)
+	assert.Equal(t, "cancel_order", rej.ToolName)
+	assert.Contains(t, rej.Reason, "ALREADY_FILLED")
+}
+
+// TestCancelOrder_BrokerFailure_NilEventsDispatcherSafe verifies the
+// nil-dispatcher path on the cancel rejection branch is safe.
+func TestCancelOrder_BrokerFailure_NilEventsDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{cancelErr: errors.New("ORDER_NOT_FOUND")}
+	resolver := &mockBrokerResolver{client: client}
+
+	uc := NewCancelOrderUseCase(resolver, nil, testLogger())
+	_, err := uc.Execute(context.Background(), cqrs.CancelOrderCommand{
+		Email:   "trader@example.com",
+		OrderID: "ORD-888",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cancel order")
+}

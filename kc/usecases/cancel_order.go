@@ -69,6 +69,19 @@ func (uc *CancelOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelOrderC
 			"order_id", cmd.OrderID,
 			"error", err,
 		)
+		// Emit OrderRejectedEvent so the order aggregate stream (keyed
+		// by OrderID) surfaces the cancel rejection in chronological
+		// place→modify→cancel→reject view. Best-effort: dispatch
+		// failures must not mask the original cancellation error.
+		if uc.events != nil {
+			uc.events.Dispatch(domain.OrderRejectedEvent{
+				Email:     cmd.Email,
+				OrderID:   cmd.OrderID,
+				ToolName:  "cancel_order",
+				Reason:    err.Error(),
+				Timestamp: time.Now().UTC(),
+			})
+		}
 		return broker.OrderResponse{}, fmt.Errorf("usecases: cancel order: %w", err)
 	}
 

@@ -319,6 +319,21 @@ func TestDeriveAggregateID(t *testing.T) {
 			event:    domain.PluginWatcherStoppedEvent{Timestamp: now},
 			expected: "plugin-watcher:global",
 		},
+		// ES: OrderRejectedEvent — when the broker round-trip fails after
+		// riskguard allowed the call. With OrderID present (modify/cancel
+		// rejection), the event joins the existing order aggregate stream;
+		// with OrderID empty (place_order failure, no broker ID issued),
+		// it falls back to the synthetic "rejected:<email>:<ts>" key.
+		{
+			name:     "OrderRejectedEvent (modify) uses OrderID",
+			event:    domain.OrderRejectedEvent{Email: "trader@example.com", OrderID: "ORD-MOD-1", ToolName: "modify_order", Reason: "ORDER_FROZEN", Timestamp: now},
+			expected: "ORD-MOD-1",
+		},
+		{
+			name:     "OrderRejectedEvent (place, empty OrderID) uses synthetic rejected:<email>:<ts>",
+			event:    domain.OrderRejectedEvent{Email: "trader@example.com", OrderID: "", ToolName: "place_order", Reason: "RATE_LIMIT", Timestamp: now},
+			expected: "rejected:trader@example.com:" + now.Format(time.RFC3339Nano),
+		},
 	}
 
 	for _, tt := range tests {

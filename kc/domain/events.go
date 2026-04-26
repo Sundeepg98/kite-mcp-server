@@ -705,6 +705,68 @@ func TelegramSubscriptionAggregateID(email string) string {
 	return "telegram:" + email
 }
 
+// OrderRejectedEvent is emitted when the broker fails an order mutation —
+// place, modify, or cancel — for any reason that surfaces from the
+// Kite API (rate limit, exchange reject, insufficient margin, invalid
+// symbol, etc.). Captures the user-visible failure path on the order
+// pipeline so the audit/projection stream isn't silent on broker
+// rejections; previously these errors were logged but not event-sourced,
+// leaving a hole in the order aggregate's lifecycle.
+//
+// Distinct from RiskLimitBreachedEvent (pre-broker, riskguard-internal):
+// OrderRejected fires only AFTER riskguard allowed the call AND the
+// broker round-trip returned an error. Together the two events cover
+// the two failure surfaces — internal pre-trade gates and external
+// post-broker rejections — so an auditor walking the user's stream
+// sees every reason an order didn't reach a placed/modified/cancelled
+// terminal state.
+//
+// OrderID may be empty when the rejection is on place_order — the
+// broker never assigned an ID before failing. For modify/cancel the
+// caller-supplied OrderID is preserved so the rejection joins the
+// existing order aggregate stream. ToolName tags the failure surface
+// ("place_order", "modify_order", "cancel_order") so projector queries
+// can partition rejections by mutation type without parsing Reason.
+//
+// Reason is the broker error message (best-effort string); kept verbose
+// so a forensic walk can distinguish "MARGIN_INSUFFICIENT" from "RATE_LIMIT"
+// without re-querying the broker. Caller is responsible for stripping
+// PII from the error before emit (Kite errors don't carry user identifiers
+// in practice — but the contract is "don't ship plaintext credentials").
+type OrderRejectedEvent struct {
+	Email     string
+	OrderID   string // may be empty for place_order failures (no broker-assigned ID)
+	ToolName  string // "place_order" / "modify_order" / "cancel_order"
+	Reason    string // broker error message, best-effort
+	Timestamp time.Time
+}
+
+func (e OrderRejectedEvent) EventType() string    { return "order.rejected" }
+func (e OrderRejectedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// OrderRejectedAggregateID returns the natural aggregate key for an
+// OrderRejectedEvent. When OrderID is non-empty (modify/cancel paths,
+// where the caller supplied the broker-assigned ID), the rejection
+// joins the existing order aggregate stream — a downstream projector
+// walking aggregate_id="ORD-123" sees place→reject→modify→reject→cancel
+// transitions in one chronological view. When OrderID is empty
+// (place_order failure, no broker ID was assigned), the event keys by
+// "rejected:<email>:<unix-nanos>" so each rejection lands in its own
+// aggregate slot without colliding with other users' rejections or
+// future rejections from the same user. The "rejected:" prefix keeps
+// these stand-alone streams disjoint from real order streams so a
+// projector that filters by aggregate_type="Order" doesn't conflate
+// "no broker ID issued" rejections with placed orders.
+func OrderRejectedAggregateID(orderID, email string, occurredAt time.Time) string {
+	if orderID != "" {
+		return orderID
+	}
+	if email == "" {
+		return "rejected:unknown"
+	}
+	return "rejected:" + email + ":" + occurredAt.UTC().Format(time.RFC3339Nano)
+}
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

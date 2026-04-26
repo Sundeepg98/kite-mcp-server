@@ -432,6 +432,64 @@ func TestDeriveEmailHash_ConsentWithdrawn_PrefersPreHashed(t *testing.T) {
 	assert.Equal(t, "deadbeef", deriveEmailHash(ev))
 }
 
+// TestDeriveEmailHash_OrderRejected pins the rejection-event PII path:
+// OrderRejectedEvent carries a plaintext Email that must hash through
+// audit.HashEmail like every other email-bearing domain event, so the
+// persisted row's email_hash column is consistent with the consent log
+// and per-user data export queries (no plaintext leakage on the audit
+// row, but per-user replay still works via hash-based WHERE filters).
+func TestDeriveEmailHash_OrderRejected(t *testing.T) {
+	t.Parallel()
+	ev := domain.OrderRejectedEvent{
+		Email:    "Trader@Example.COM",
+		OrderID:  "ORD-REJ",
+		ToolName: "modify_order",
+		Reason:   "MARGIN_INSUFFICIENT",
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+	assert.NotEqual(t, "", got, "Email-bearing rejection must produce non-empty hash")
+}
+
+// TestDeriveAggregateID_OrderRejected_WithOrderID covers the modify/
+// cancel rejection path: when the caller supplied an OrderID, the
+// rejection joins the existing order aggregate stream (aggregate_id =
+// the broker order ID) so a forensic walk of "ORD-MOD-1" sees place →
+// modify-reject in chronological order.
+func TestDeriveAggregateID_OrderRejected_WithOrderID(t *testing.T) {
+	t.Parallel()
+	ev := domain.OrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "ORD-MOD-1",
+		ToolName:  "modify_order",
+		Reason:    "ORDER_FROZEN",
+		Timestamp: time.Now().UTC(),
+	}
+	assert.Equal(t, "ORD-MOD-1", deriveAggregateID(ev))
+}
+
+// TestDeriveAggregateID_OrderRejected_PlaceOrderEmptyOrderID covers the
+// place-order rejection path: the broker never assigned an OrderID
+// before failing, so the aggregate ID falls back to the synthetic
+// "rejected:<email>:<rfc3339-nanos>" form. The timestamp component
+// keeps each rejection in its own aggregate slot — no collisions
+// across users or future rejections from the same user.
+func TestDeriveAggregateID_OrderRejected_PlaceOrderEmptyOrderID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 26, 10, 30, 0, 0, time.UTC)
+	ev := domain.OrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "",
+		ToolName:  "place_order",
+		Reason:    "RATE_LIMIT_EXCEEDED",
+		Timestamp: now,
+	}
+	got := deriveAggregateID(ev)
+	want := "rejected:trader@example.com:" + now.Format(time.RFC3339Nano)
+	assert.Equal(t, want, got)
+}
+
 // ===========================================================================
 // briefingCredAdapter with per-user credentials
 // ===========================================================================

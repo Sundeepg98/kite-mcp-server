@@ -609,6 +609,8 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.UserEmail)
 	case domain.TelegramChatBoundEvent:
 		return audit.HashEmail(ev.UserEmail)
+	case domain.OrderRejectedEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -688,6 +690,14 @@ func deriveAggregateID(e domain.Event) string {
 		return domain.TelegramSubscriptionAggregateID(ev.UserEmail)
 	case domain.TelegramChatBoundEvent:
 		return domain.TelegramSubscriptionAggregateID(ev.UserEmail)
+	case domain.OrderRejectedEvent:
+		// When OrderID is non-empty (modify/cancel rejections) the event
+		// joins the existing order aggregate stream so a forensic walk
+		// of the order ID sees place→reject inline. When OrderID is
+		// empty (place_order failures, no broker ID issued) it falls
+		// back to a per-rejection synthetic key built from email + the
+		// event's own timestamp. See domain.OrderRejectedAggregateID.
+		return domain.OrderRejectedAggregateID(ev.OrderID, ev.Email, ev.Timestamp)
 	default:
 		return "unknown"
 	}

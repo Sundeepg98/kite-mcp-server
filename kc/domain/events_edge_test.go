@@ -20,6 +20,7 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"OrderModifiedEvent", OrderModifiedEvent{Timestamp: now}, "order.modified"},
 		{"OrderCancelledEvent", OrderCancelledEvent{Timestamp: now}, "order.cancelled"},
 		{"OrderFilledEvent", OrderFilledEvent{Timestamp: now}, "order.filled"},
+		{"OrderRejectedEvent", OrderRejectedEvent{Timestamp: now}, "order.rejected"},
 		{"PositionOpenedEvent", PositionOpenedEvent{Timestamp: now}, "position.opened"},
 		{"PositionClosedEvent", PositionClosedEvent{Timestamp: now}, "position.closed"},
 		{"AlertCreatedEvent", AlertCreatedEvent{Timestamp: now}, "alert.created"},
@@ -204,6 +205,112 @@ func TestOrderFilledEvent_StatusField(t *testing.T) {
 	// EventType still resolves to "order.filled" regardless of Status.
 	if complete.EventType() != "order.filled" {
 		t.Errorf("EventType drift: %q", complete.EventType())
+	}
+}
+
+// TestOrderRejectedEvent_Fields pins OrderRejectedEvent's interface
+// contract and the field surface the use cases populate. The event
+// fires on broker round-trip failures (place/modify/cancel) so the
+// audit stream surfaces post-riskguard rejections that would otherwise
+// be silent — see place_order.go / modify_order.go / cancel_order.go
+// emit sites for the dispatch contract.
+func TestOrderRejectedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := OrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "ORD-REJ-1",
+		ToolName:  "modify_order",
+		Reason:    "MARGIN_INSUFFICIENT",
+		Timestamp: now,
+	}
+
+	if e.EventType() != "order.rejected" {
+		t.Errorf("EventType() = %q, want order.rejected", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.Email != "trader@example.com" {
+		t.Errorf("Email = %q", e.Email)
+	}
+	if e.OrderID != "ORD-REJ-1" {
+		t.Errorf("OrderID = %q", e.OrderID)
+	}
+	if e.ToolName != "modify_order" {
+		t.Errorf("ToolName = %q", e.ToolName)
+	}
+	if e.Reason != "MARGIN_INSUFFICIENT" {
+		t.Errorf("Reason = %q", e.Reason)
+	}
+}
+
+// TestOrderRejectedEvent_PlaceOrderEmptyOrderID pins the place_order
+// rejection shape: no broker-assigned OrderID, so the event's OrderID
+// stays empty. Aggregate-ID derivation falls back to the synthetic
+// "rejected:<email>:<ts>" form (covered separately in
+// TestOrderRejectedAggregateID).
+func TestOrderRejectedEvent_PlaceOrderEmptyOrderID(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := OrderRejectedEvent{
+		Email:     "trader@example.com",
+		ToolName:  "place_order",
+		Reason:    "RATE_LIMIT_EXCEEDED",
+		Timestamp: now,
+	}
+
+	if e.OrderID != "" {
+		t.Errorf("OrderID = %q, want empty for place_order rejection", e.OrderID)
+	}
+	if e.EventType() != "order.rejected" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestOrderRejectedAggregateID covers the OrderID-vs-synthetic-key
+// branching: modify/cancel rejections (OrderID set) join the existing
+// order aggregate stream; place rejections (OrderID empty) get a per-
+// rejection synthetic key built from email + timestamp; pathological
+// "no email + no order ID" falls back to the unknown sentinel.
+func TestOrderRejectedAggregateID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 26, 10, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		orderID  string
+		email    string
+		want     string
+	}{
+		{
+			name:    "OrderID present joins existing order stream",
+			orderID: "ORD-123",
+			email:   "trader@example.com",
+			want:    "ORD-123",
+		},
+		{
+			name:    "Empty OrderID with email uses synthetic key",
+			orderID: "",
+			email:   "trader@example.com",
+			want:    "rejected:trader@example.com:" + now.Format(time.RFC3339Nano),
+		},
+		{
+			name:    "Empty OrderID and email falls back to unknown",
+			orderID: "",
+			email:   "",
+			want:    "rejected:unknown",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := OrderRejectedAggregateID(tc.orderID, tc.email, now)
+			if got != tc.want {
+				t.Errorf("OrderRejectedAggregateID(%q, %q, %v) = %q, want %q",
+					tc.orderID, tc.email, now, got, tc.want)
+			}
+		})
 	}
 }
 
