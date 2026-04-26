@@ -247,3 +247,50 @@ No free path forward via existing certs. The system has no MS-trusted code-signi
 Stop condition #2 from the cert-investigation brief triggers: **"No certs found / all chain-invalid → STOP, confirm DEFER."**
 
 Same recommendation stands: keep `scripts/go-test-sac.cmd` + self-signed for routine, use WSL2 for hot loops, accept 30-50% Win pass rate. Cheapest worldwide-individual upgrade path remains Certum OV cert (~$70/yr first-year promo, hardware token) — separate scoping if/when justified.
+
+---
+
+## Appendix C: alternative cert-acquisition packages (Apr 26, 2026)
+
+Followup to user question: "why don't we download a package that has a cert?" Investigated 7 candidates that put a chain-valid cert into the user's store. **One winner: Certum Open Source Code Signing.**
+
+### Comparison table
+
+| Option | Cost (yr1 / renewal) | India OK | SAC accepts? | Setup time | Friction |
+|---|---|---|---|---|---|
+| **Certum Open Source Code Signing** | **€104 (~₹9,400) yr1 / €29 (~₹2,600)/yr** | **Yes** (DHL ships worldwide; verified UK case) | **Yes — chain confirmed** (Certum Trusted Network CA already in user's CurrentUser\Root from Windows Update) | ~3 days end-to-end | Hardware smartcard + reader required; one-time IDnow video KYC + utility bill + GitHub OSS proof |
+| Certum SimplySign cloud individual (non-OS variant) | ~€199/yr | Yes | Yes (same chain) | ~2-3 days | Higher cost; same KYC; cloud (no hardware) |
+| SSL.com IV Code Signing — eSigner cloud | $180/yr (~₹15,000) | Likely yes (worldwide) | Yes (Authenticode-issued) | ~2-3 days | Cloud HSM; KYC required; quotas (240 sigs/yr) |
+| SSL.com IV Code Signing — Yubikey FIPS token | $180/yr + token shipping | Likely yes | Yes | ~5-7 days | Hardware token logistics + India customs |
+| DigiCert KeyLocker (cloud) | ~$370+/yr (KeyLocker is **add-on** to base cert) | Likely yes | Yes | ~3-5 days | Most expensive; per-operation crypto cost |
+| **Sigstore Cosign + Fulcio** (FREE, OSS) | **$0** | Yes | **NO — TWO blockers**: (1) Cosign uses **ECC**, SAC requires **RSA**; (2) Cosign produces detached/sigstore signatures, NOT Authenticode | n/a | Hard blocker — cannot be made to work for PE/SAC today |
+| GitHub Actions ephemeral signing via Sigstore | $0 | Yes | NO (same Sigstore blockers) | n/a | Same blocker |
+| Codegic 30-day "free" trial | $0 trial | Yes | **NO** — Codegic explicitly states "not a publicly trusted CA"; not in MS Trusted Root | n/a | Useless for SAC |
+| Self-hosted Smallstep / private CA | $0 | Yes | NO (same as GoTools — root not in MS Trusted Root) | n/a | Same problem we already have |
+
+### Verdict: Certum Open Source Code Signing wins
+
+**Why Certum-OS is the actionable path:**
+
+1. **India eligibility confirmed.** Certum (Asseco/Unizeto, Poland) ships worldwide via DHL. The 2025 first-hand walkthrough at piers.rocks documents a successful UK purchase (Poland → UK in 1 day via DHL); India shipping is the same DHL international network. Certum requires no in-region presence; KYC is via IDnow video (driving licence + selfie) which works globally.
+2. **SAC acceptance verified theoretically.** The Certum Trusted Network CA root (`07E032E020...`) is **already** in `CurrentUser\Root` on the user's box, delivered by Windows Update via the Microsoft Trusted Root Program. Any cert Certum issues chains to that root → SAC's CodeIntegrity engine will see `KnownRoot=4` (trusted-program root) and `ValidatedSigningLevel ≥ 8` (Authenticode-trusted). **No theoretical reason SAC will reject a Certum-OS-signed binary.** Empirical confirmation requires the cert in hand — cannot be tested today.
+3. **Cheapest worldwide individual option.** €104 first year / €29 renewal beats every alternative by 2-15x. ~₹9,400 yr1 then ~₹2,600/yr.
+4. **Hardware smartcard is acceptable for solo dev box** — one signing machine is the workflow already.
+
+**Eligibility caveat (must verify before ordering):** kite-mcp-server qualifies as an active OSS project — public on GitHub at `Sundeepg98/kite-mcp-server` with commit history. Certum requires "active developer in at least one Open Source project" + URL of an active OSS project. Apache-2.0 license preferred but not strictly mandated by Certum (typically OSI-approved license suffices). User to confirm which license the kite-mcp-server repo is under before applying.
+
+**Estimated time-to-first-signed-binary if user proceeds:** **3-5 business days** (1 day order + KYC; 2 days Certum issue; 1 day DHL India transit; ~2 hours driver/SignService install).
+
+### Wrapper integration (1-line change, post-cert-arrival)
+
+After cert is on the smartcard and Windows recognises it via `proCertum CardManager`:
+
+1. Find the Certum-issued cert in `Cert:\CurrentUser\My` — note its thumbprint (e.g. `XXXXXXXX...`).
+2. Edit `~/go/bin/sign-bin.ps1` line referencing `4ABCEECC23F524EB460409F66B5306C2E1787272`, replace with the new thumbprint.
+3. `scripts/go-test-sac.cmd` requires **zero changes** — it just calls `sign-bin.ps1`.
+
+That's it. Cost: $0 wrapper change, ~₹9,400 cert cost, deterministic SAC unblocking.
+
+### Updated recommendation: **PROCEED — Certum Open Source Code Signing**
+
+Beats DEFER. Replaces both Trusted Signing (geo-blocked + paid) AND the self-signed cert (SAC-rejected). Order at https://shop.certum.eu/open-source-code-signing.html. Total budget: ~₹10,000 first year, ~₹3,000/yr renewal. India ships fine. Decision deferred to user; if user proceeds, follow-on dispatch can wire the wrapper change post-cert-arrival.
