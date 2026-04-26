@@ -114,3 +114,9 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		return gomcp.NewToolResultText("Paper trading portfolio RESET. All positions, holdings, and orders cleared. Cash restored to initial amount."), nil
 	}
 }
+
+func init() {
+	RegisterInternalTool(&PaperTradingResetTool{})
+	RegisterInternalTool(&PaperTradingStatusTool{})
+	RegisterInternalTool(&PaperTradingToggleTool{})
+}

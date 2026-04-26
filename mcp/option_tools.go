@@ -434,3 +434,5 @@ func fillGreeks(e *optionChainEntry, spot, strike, t, r, marketPrice float64, is
 		e.PEIV = ivPct
 	}
 }
+
+func init() { RegisterInternalTool(&OptionChainTool{}) }

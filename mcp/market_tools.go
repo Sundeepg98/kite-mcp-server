@@ -396,3 +396,11 @@ func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&HistoricalDataTool{})
+	RegisterInternalTool(&InstrumentsSearchTool{})
+	RegisterInternalTool(&LTPTool{})
+	RegisterInternalTool(&OHLCTool{})
+	RegisterInternalTool(&QuotesTool{})
+}

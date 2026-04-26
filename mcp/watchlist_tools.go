@@ -564,3 +564,12 @@ func parseInstrumentList(s string) []string {
 	}
 	return result
 }
+
+func init() {
+	RegisterInternalTool(&AddToWatchlistTool{})
+	RegisterInternalTool(&CreateWatchlistTool{})
+	RegisterInternalTool(&DeleteWatchlistTool{})
+	RegisterInternalTool(&GetWatchlistTool{})
+	RegisterInternalTool(&ListWatchlistsTool{})
+	RegisterInternalTool(&RemoveFromWatchlistTool{})
+}

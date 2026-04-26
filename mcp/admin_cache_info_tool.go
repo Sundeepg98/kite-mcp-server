@@ -146,3 +146,5 @@ func (*AdminStatsCacheInfoTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		return handler.MarshalResponse(&resp, "admin_stats_cache_info")
 	})
 }
+
+func init() { RegisterInternalTool(&AdminStatsCacheInfoTool{}) }

@@ -385,3 +385,11 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}, "admin_change_role")
 	}
 }
+
+func init() {
+	RegisterInternalTool(&AdminActivateUserTool{})
+	RegisterInternalTool(&AdminChangeRoleTool{})
+	RegisterInternalTool(&AdminGetUserTool{})
+	RegisterInternalTool(&AdminListUsersTool{})
+	RegisterInternalTool(&AdminSuspendUserTool{})
+}

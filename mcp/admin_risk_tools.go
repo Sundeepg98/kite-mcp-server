@@ -334,3 +334,11 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}, "admin_unfreeze_global")
 	}
 }
+
+func init() {
+	RegisterInternalTool(&AdminFreezeGlobalTool{})
+	RegisterInternalTool(&AdminFreezeUserTool{})
+	RegisterInternalTool(&AdminGetRiskStatusTool{})
+	RegisterInternalTool(&AdminUnfreezeGlobalTool{})
+	RegisterInternalTool(&AdminUnfreezeUserTool{})
+}

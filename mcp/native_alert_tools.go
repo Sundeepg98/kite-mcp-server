@@ -565,3 +565,11 @@ func splitAndTrim(s string) []string {
 	}
 	return result
 }
+
+func init() {
+	RegisterInternalTool(&DeleteNativeAlertTool{})
+	RegisterInternalTool(&GetNativeAlertHistoryTool{})
+	RegisterInternalTool(&ListNativeAlertsTool{})
+	RegisterInternalTool(&ModifyNativeAlertTool{})
+	RegisterInternalTool(&PlaceNativeAlertTool{})
+}

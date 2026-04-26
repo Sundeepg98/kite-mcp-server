@@ -78,3 +78,5 @@ func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		return handler.MarshalResponse(resp, "admin_server_status")
 	}
 }
+
+func init() { RegisterInternalTool(&AdminServerStatusTool{}) }

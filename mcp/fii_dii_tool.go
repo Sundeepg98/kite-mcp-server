@@ -151,3 +151,5 @@ func latestTradingDay(now time.Time) string {
 	return d.Format("2006-01-02")
 }
 
+
+func init() { RegisterInternalTool(&GetFIIDIIFlowTool{}) }

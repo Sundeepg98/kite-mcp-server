@@ -362,3 +362,13 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&CancelMFOrderTool{})
+	RegisterInternalTool(&CancelMFSIPTool{})
+	RegisterInternalTool(&MFHoldingsTool{})
+	RegisterInternalTool(&MFOrdersTool{})
+	RegisterInternalTool(&MFSIPsTool{})
+	RegisterInternalTool(&PlaceMFOrderTool{})
+	RegisterInternalTool(&PlaceMFSIPTool{})
+}

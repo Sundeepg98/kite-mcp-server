@@ -107,3 +107,5 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}, "admin_set_billing_tier")
 	})
 }
+
+func init() { RegisterInternalTool(&AdminSetBillingTierTool{}) }

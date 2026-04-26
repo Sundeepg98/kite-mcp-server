@@ -485,3 +485,10 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 // ModifyGTTOrderTool moved to mcp/gtt_tools.go alongside the other
 // GTT-specific handlers.
+
+func init() {
+	RegisterInternalTool(&CancelOrderTool{})
+	RegisterInternalTool(&ConvertPositionTool{})
+	RegisterInternalTool(&ModifyOrderTool{})
+	RegisterInternalTool(&PlaceOrderTool{})
+}

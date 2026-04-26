@@ -104,3 +104,5 @@ func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		})
 	}
 }
+
+func init() { RegisterInternalTool(&TestIPWhitelistTool{}) }

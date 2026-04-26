@@ -326,3 +326,10 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return mcp.NewToolResultText(fmt.Sprintf("Alert %s deleted.", alertID)), nil
 	}
 }
+
+func init() {
+	RegisterInternalTool(&DeleteAlertTool{})
+	RegisterInternalTool(&ListAlertsTool{})
+	RegisterInternalTool(&SetAlertTool{})
+	RegisterInternalTool(&SetupTelegramTool{})
+}

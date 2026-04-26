@@ -191,3 +191,8 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&CloseAllPositionsTool{})
+	RegisterInternalTool(&ClosePositionTool{})
+}

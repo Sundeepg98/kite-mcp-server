@@ -335,3 +335,15 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&GTTOrdersTool{})
+	RegisterInternalTool(&HoldingsTool{})
+	RegisterInternalTool(&MarginsTool{})
+	RegisterInternalTool(&OrderHistoryTool{})
+	RegisterInternalTool(&OrdersTool{})
+	RegisterInternalTool(&OrderTradesTool{})
+	RegisterInternalTool(&PositionsTool{})
+	RegisterInternalTool(&ProfileTool{})
+	RegisterInternalTool(&TradesTool{})
+}

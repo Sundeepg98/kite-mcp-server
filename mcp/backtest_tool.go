@@ -576,3 +576,5 @@ func computeSharpeRatio(trades []BacktestTrade, initialCapital float64) float64 
 }
 
 // round2 is defined in options_greeks_tool.go (shared within the mcp package).
+
+func init() { RegisterInternalTool(&BacktestStrategyTool{}) }

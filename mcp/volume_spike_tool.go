@@ -362,3 +362,5 @@ func averageVolumeAndClose(candles []broker.HistoricalCandle) (float64, float64)
 	n := float64(len(candles))
 	return volSum / n, priceSum / n
 }
+
+func init() { RegisterInternalTool(&VolumeSpikeDetectorTool{}) }

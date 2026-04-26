@@ -63,3 +63,5 @@ func (*GetAlertHistoryReconstitutedTool) Handler(manager *kc.Manager) server.Too
 		})
 	}
 }
+
+func init() { RegisterInternalTool(&GetAlertHistoryReconstitutedTool{}) }

@@ -224,3 +224,9 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 		}, "admin_remove_family_member")
 	}
 }
+
+func init() {
+	RegisterInternalTool(&AdminInviteFamilyMemberTool{})
+	RegisterInternalTool(&AdminListFamilyTool{})
+	RegisterInternalTool(&AdminRemoveFamilyMemberTool{})
+}

@@ -253,3 +253,5 @@ func (*PeerCompareTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.MarshalResponse(resp, "peer_compare")
 	}
 }
+
+func init() { RegisterInternalTool(&PeerCompareTool{}) }

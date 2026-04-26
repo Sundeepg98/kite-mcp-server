@@ -51,184 +51,23 @@ func GetAllToolsForRegistry(reg *Registry) []Tool {
 	registered := append([]Tool(nil), internalToolRegistry...)
 	internalToolRegistryMu.Unlock()
 
-	builtIn := []Tool{
-		// Tools for setting up the client
-		&LoginTool{},
-		&OpenDashboardTool{},
-		&TestIPWhitelistTool{},
-
-		// Tools that get data from Kite Connect
-		&ProfileTool{},
-		&MarginsTool{},
-		&HoldingsTool{},
-		&PositionsTool{},
-		&TradesTool{},
-		&OrdersTool{},
-		&OrderHistoryTool{},
-		&OrderTradesTool{},
-		&GTTOrdersTool{},
-		&MFHoldingsTool{},
-		&MFOrdersTool{},
-		&MFSIPsTool{},
-		&PlaceMFOrderTool{},
-		&CancelMFOrderTool{},
-		&PlaceMFSIPTool{},
-		&CancelMFSIPTool{},
-
-		// Tools for market data
-		&QuotesTool{},
-		&InstrumentsSearchTool{},
-		&HistoricalDataTool{},
-		&LTPTool{},
-		&OHLCTool{},
-		&OptionChainTool{},
-		&OptionsGreeksTool{},
-		&OptionsStrategyTool{},
-		&TechnicalIndicatorsTool{},
-		&BacktestStrategyTool{},
-
-		// Tools for real-time market data (WebSocket ticker)
-		&StartTickerTool{},
-		&StopTickerTool{},
-		&TickerStatusTool{},
-		&SubscribeInstrumentsTool{},
-		&UnsubscribeInstrumentsTool{},
-
-		// Tools for price alerts (custom, MCP server-side)
-		&SetupTelegramTool{},
-		&SetAlertTool{},
-		&CompositeAlertTool{},
-		&ListAlertsTool{},
-		&DeleteAlertTool{},
-
-		// Native alerts (Zerodha server-side, survive MCP server restarts)
-		&PlaceNativeAlertTool{},
-		&ListNativeAlertsTool{},
-		&ModifyNativeAlertTool{},
-		&DeleteNativeAlertTool{},
-		&GetNativeAlertHistoryTool{},
-
-		// Trailing stop-loss tools
-		&SetTrailingStopTool{},
-		&ListTrailingStopsTool{},
-		&CancelTrailingStopTool{},
-
-		// Watchlist tools
-		&CreateWatchlistTool{},
-		&DeleteWatchlistTool{},
-		&AddToWatchlistTool{},
-		&RemoveFromWatchlistTool{},
-		&GetWatchlistTool{},
-		&ListWatchlistsTool{},
-
-		// P&L journal
-		&GetPnLJournalTool{},
-
-		// Trading context (unified snapshot — start here)
-		&TradingContextTool{},
-
-		// Portfolio analytics
-		&PortfolioSummaryTool{},
-		&PortfolioConcentrationTool{},
-		&PositionAnalysisTool{},
-		&SectorExposureTool{},
-		&VolumeSpikeDetectorTool{},
-
-		// (Portfolio rebalancing → portfolio_analysis: registered via init() in
-		// rebalance_tool.go; Tax analysis → tax_loss_analysis: registered via
-		// init() in tax_tools.go — Investment J migration in progress.)
-
-		// Earnings-call analysis (frames the LLM — returns pointer + themes,
-		// LLM fetches transcript client-side via WebFetch / Tavily).
-		&AnalyzeConcallTool{},
-
-		// get_fii_dii_flow — FII/DII daily institutional flow (frames the LLM;
-		// returns NSE + Moneycontrol URL pointers, LLM fetches via WebFetch / Tavily).
-		&GetFIIDIIFlowTool{},
-
-		// peer_compare — side-by-side fundamental-strength comparison for 2-6
-		// stocks (PEG, Piotroski F-score, Altman Z-score + key ratios). Frames
-		// the LLM: returns Screener.in URL pointers + formulas, LLM fetches
-		// fundamentals via WebFetch/Tavily and computes scores client-side.
-		&PeerCompareTool{},
-
-		// Paper trading management
-		&PaperTradingToggleTool{},
-		&PaperTradingStatusTool{},
-		&PaperTradingResetTool{},
-
-		// (Pre-trade composite check → order_risk_report: registered via init()
-		// in pretrade_tool.go — Investment J migration in progress.)
-
-		// Tools for margin and charges calculation
-		&OrderMarginsTool{},
-		&BasketMarginsTool{},
-		&OrderChargesTool{},
-
-		// Tools that post data to Kite Connect
-		&PlaceOrderTool{},
-		&ModifyOrderTool{},
-		&CancelOrderTool{},
-		&ConvertPositionTool{},
-		&ClosePositionTool{},
-		&CloseAllPositionsTool{},
-		&PlaceGTTOrderTool{},
-		&ModifyGTTOrderTool{},
-		&DeleteGTTOrderTool{},
-
-		// Self-service account management
-		&DeleteMyAccountTool{},
-		&UpdateMyCredentialsTool{},
-
-		// Per-user session management (not admin-only — each user sees their own)
-		&ListMCPSessionsTool{},
-		&RevokeMCPSessionTool{},
-
-		// Server observability
-		&ServerMetricsTool{},
-		&GetOrderProjectionTool{},
-		&GetOrderHistoryReconstitutedTool{},
-		&GetAlertHistoryReconstitutedTool{},
-		&GetPositionHistoryReconstitutedTool{},
-
-		// Admin tools (admin-only, gated by IsAdmin check in handlers)
-		&AdminListUsersTool{},
-		&AdminGetUserTool{},
-		&AdminGetUserBaselineTool{},
-		&AdminStatsCacheInfoTool{},
-		&AdminListAnomalyFlagsTool{},
-		&AdminServerStatusTool{},
-		&AdminGetRiskStatusTool{},
-		&AdminSuspendUserTool{},
-		&AdminActivateUserTool{},
-		&AdminChangeRoleTool{},
-		&AdminFreezeUserTool{},
-		&AdminUnfreezeUserTool{},
-		&AdminFreezeGlobalTool{},
-		&AdminUnfreezeGlobalTool{},
-		&AdminInviteFamilyMemberTool{},
-		&AdminListFamilyTool{},
-		&AdminRemoveFamilyMemberTool{},
-		&AdminSetBillingTierTool{},
-	}
-
-	// Prepend init()-registered tools (Investment J — see migration path
-	// note above). Order matters only for the SHA256 surface lock test
-	// indirectly via the sorted-name list it computes; the wire-protocol
-	// itself is order-insensitive.
-	if len(registered) > 0 {
-		builtIn = append(registered, builtIn...)
-	}
+	// Investment J — drain complete. Every built-in tool now self-registers
+	// via init() in its own *_tools.go file calling RegisterInternalTool.
+	// Mode-2 conflict probability on this file dropped from 50%/wk
+	// (highest in codebase per .research/agent-concurrency-decoupling-plan.md
+	// §3.5) to ~0%/wk for tool-addition work. New tools should NOT be
+	// added here — register via init() in the feature file.
+	tools := append([]Tool(nil), registered...)
 
 	// Append App-scoped plugin tools from the supplied registry. Skips
 	// the consult when reg is nil — see GetAllToolsForRegistry doc.
 	if reg != nil {
 		if plugins := reg.Tools(); len(plugins) > 0 {
-			builtIn = append(builtIn, plugins...)
+			tools = append(tools, plugins...)
 		}
 	}
 
-	return builtIn
+	return tools
 }
 
 // parseExcludedTools parses a comma-separated string of tool names and returns a set of excluded tools.

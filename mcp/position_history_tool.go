@@ -78,3 +78,5 @@ func (*GetPositionHistoryReconstitutedTool) Handler(manager *kc.Manager) server.
 		})
 	}
 }
+
+func init() { RegisterInternalTool(&GetPositionHistoryReconstitutedTool{}) }

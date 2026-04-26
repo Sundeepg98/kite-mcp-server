@@ -356,3 +356,9 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&DeleteGTTOrderTool{})
+	RegisterInternalTool(&ModifyGTTOrderTool{})
+	RegisterInternalTool(&PlaceGTTOrderTool{})
+}

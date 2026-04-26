@@ -409,3 +409,5 @@ var stockSectors = map[string]string{
 	"INDIGO":   "Aviation",
 	"SPICEJET": "Aviation",
 }
+
+func init() { RegisterInternalTool(&SectorExposureTool{}) }

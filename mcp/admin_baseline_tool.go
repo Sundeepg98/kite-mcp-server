@@ -131,3 +131,5 @@ func (*AdminGetUserBaselineTool) Handler(manager *kc.Manager) server.ToolHandler
 		return handler.MarshalResponse(&resp, "admin_get_user_baseline")
 	})
 }
+
+func init() { RegisterInternalTool(&AdminGetUserBaselineTool{}) }

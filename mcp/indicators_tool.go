@@ -317,3 +317,5 @@ func safeBBWidth(upper, lower, middle []float64) float64 {
 	}
 	return (u - l) / m * 100
 }
+
+func init() { RegisterInternalTool(&TechnicalIndicatorsTool{}) }

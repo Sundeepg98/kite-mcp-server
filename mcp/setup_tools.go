@@ -581,3 +581,8 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}, nil
 	}
 }
+
+func init() {
+	RegisterInternalTool(&LoginTool{})
+	RegisterInternalTool(&OpenDashboardTool{})
+}

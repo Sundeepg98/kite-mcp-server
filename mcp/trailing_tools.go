@@ -322,3 +322,9 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		return mcp.NewToolResultText(fmt.Sprintf("Trailing stop %s cancelled. The underlying SL order remains in place.", tsID)), nil
 	}
 }
+
+func init() {
+	RegisterInternalTool(&CancelTrailingStopTool{})
+	RegisterInternalTool(&ListTrailingStopsTool{})
+	RegisterInternalTool(&SetTrailingStopTool{})
+}

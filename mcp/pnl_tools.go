@@ -108,3 +108,5 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.MarshalResponse(result, "get_pnl_journal")
 	}
 }
+
+func init() { RegisterInternalTool(&GetPnLJournalTool{}) }

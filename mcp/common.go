@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -41,12 +42,23 @@ func SessionTypeFromContext(ctx context.Context) string {
 	return SessionTypeUnknown // default fallback for undetermined sessions
 }
 
-// writeTools is derived from tool annotations at init time.
+// writeTools is derived from tool annotations.
 // A tool is a "write tool" if ReadOnlyHint is not explicitly true.
 // Users with the "viewer" role are blocked from calling these tools.
-var writeTools map[string]bool
+//
+// Lazy-initialized via writeToolsOnce (Investment J — see
+// .research/agent-concurrency-decoupling-plan.md): per-tool-file init()
+// calls to RegisterInternalTool run in lex-order of filename, which
+// for files alphabetically AFTER common.go means common.go's prior
+// init()-time iteration of GetAllTools() saw a partial registry. The
+// once-guarded buildWriteTools defers population until first use, by
+// which time all package init()s have completed.
+var (
+	writeTools     map[string]bool
+	writeToolsOnce sync.Once
+)
 
-func init() {
+func buildWriteTools() {
 	writeTools = make(map[string]bool)
 	for _, t := range GetAllTools() {
 		tool := t.Tool()
@@ -56,11 +68,19 @@ func init() {
 	}
 }
 
+// isWriteTool reports whether the named tool is a write tool. Lazily
+// builds the map on first call so init-order across tool files doesn't
+// matter.
+func isWriteTool(name string) bool {
+	writeToolsOnce.Do(buildWriteTools)
+	return writeTools[name]
+}
+
 // WithViewerBlock enforces the viewer role: blocks write tools for read-only users.
 // Returns a non-nil result if the user is blocked, nil otherwise.
 func (h *ToolHandler) WithViewerBlock(ctx context.Context, toolName string) *mcp.CallToolResult {
 	email := oauth.EmailFromContext(ctx)
-	if email == "" || !writeTools[toolName] {
+	if email == "" || !isWriteTool(toolName) {
 		return nil
 	}
 	if uStore := h.deps.UserStore; uStore != nil {

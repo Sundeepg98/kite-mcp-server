@@ -295,3 +295,5 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.A
 
 	return tc
 }
+
+func init() { RegisterInternalTool(&TradingContextTool{}) }

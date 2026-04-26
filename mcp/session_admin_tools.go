@@ -233,3 +233,8 @@ func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}, "revoke_mcp_session")
 	}
 }
+
+func init() {
+	RegisterInternalTool(&ListMCPSessionsTool{})
+	RegisterInternalTool(&RevokeMCPSessionTool{})
+}

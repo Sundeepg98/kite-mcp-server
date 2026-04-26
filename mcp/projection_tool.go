@@ -57,3 +57,5 @@ func (*GetOrderProjectionTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		})
 	}
 }
+
+func init() { RegisterInternalTool(&GetOrderProjectionTool{}) }

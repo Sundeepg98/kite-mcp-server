@@ -300,3 +300,11 @@ func resolveTickerMode(mode string) ticker.Mode {
 		return ticker.ModeFull
 	}
 }
+
+func init() {
+	RegisterInternalTool(&StartTickerTool{})
+	RegisterInternalTool(&StopTickerTool{})
+	RegisterInternalTool(&SubscribeInstrumentsTool{})
+	RegisterInternalTool(&TickerStatusTool{})
+	RegisterInternalTool(&UnsubscribeInstrumentsTool{})
+}

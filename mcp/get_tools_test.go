@@ -450,7 +450,7 @@ func TestReadToolDefinitions(t *testing.T) {
 				"tool %s should be read-only", tc.name)
 
 			// Read tools should NOT be in the writeTools set
-			assert.False(t, writeTools[tc.name],
+			assert.False(t, isWriteTool(tc.name),
 				"read tool %s should not be in writeTools", tc.name)
 		})
 	}
@@ -474,7 +474,7 @@ func TestWriteToolDefinitions(t *testing.T) {
 			assert.NotEmpty(t, tool.Description)
 
 			// Write tools should be in writeTools set
-			assert.True(t, writeTools[tc.name],
+			assert.True(t, isWriteTool(tc.name),
 				"tool %s should be in writeTools", tc.name)
 		})
 	}

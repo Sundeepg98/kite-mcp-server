@@ -242,3 +242,9 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		})
 	}
 }
+
+func init() {
+	RegisterInternalTool(&BasketMarginsTool{})
+	RegisterInternalTool(&OrderChargesTool{})
+	RegisterInternalTool(&OrderMarginsTool{})
+}

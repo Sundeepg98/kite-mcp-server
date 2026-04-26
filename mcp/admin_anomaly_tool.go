@@ -321,3 +321,5 @@ func numericAnomalyField(m map[string]any, key string) float64 {
 	}
 	return 0
 }
+
+func init() { RegisterInternalTool(&AdminListAnomalyFlagsTool{}) }

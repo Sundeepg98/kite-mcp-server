@@ -812,3 +812,8 @@ func round4(x float64) float64 {
 func round6(x float64) float64 {
 	return math.Round(x*1000000) / 1000000
 }
+
+func init() {
+	RegisterInternalTool(&OptionsGreeksTool{})
+	RegisterInternalTool(&OptionsStrategyTool{})
+}

@@ -176,3 +176,5 @@ func latestIndianFiscalQuarter(now time.Time) string {
 	}
 	return fmt.Sprintf("Q%dFY%02d", q, fy%100)
 }
+
+func init() { RegisterInternalTool(&AnalyzeConcallTool{}) }

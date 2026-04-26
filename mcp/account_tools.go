@@ -108,3 +108,8 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		return gomcp.NewToolResultText(fmt.Sprintf("Credentials updated successfully. Your cached Kite token has been cleared. Please use the login tool to re-authenticate with the new credentials.")), nil
 	}
 }
+
+func init() {
+	RegisterInternalTool(&DeleteMyAccountTool{})
+	RegisterInternalTool(&UpdateMyCredentialsTool{})
+}

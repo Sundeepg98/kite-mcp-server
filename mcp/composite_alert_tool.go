@@ -327,3 +327,5 @@ func validCompositeExchange(exchange string) bool {
 	}
 	return false
 }
+
+func init() { RegisterInternalTool(&CompositeAlertTool{}) }

@@ -480,3 +480,9 @@ func computePositionAnalysis(netPositions []broker.Position) *positionAnalysisRe
 func roundTo2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
+
+func init() {
+	RegisterInternalTool(&PortfolioConcentrationTool{})
+	RegisterInternalTool(&PortfolioSummaryTool{})
+	RegisterInternalTool(&PositionAnalysisTool{})
+}

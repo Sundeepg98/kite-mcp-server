@@ -162,3 +162,5 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		return handler.MarshalResponse(resp, "server_metrics")
 	}
 }
+
+func init() { RegisterInternalTool(&ServerMetricsTool{}) }
