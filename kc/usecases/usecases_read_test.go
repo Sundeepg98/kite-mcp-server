@@ -118,6 +118,39 @@ func TestGetProfile_ResolveError(t *testing.T) {
 }
 
 
+// TestGetProfile_KiteErrorTextPassthrough verifies that the typed broker
+// error strings the test_ip_whitelist tool relies on (IP whitelist,
+// credentials, token expiry) survive the use case's %w wrapping. Setup
+// tool routes through the QueryBus → GetProfileUseCase and does substring
+// matching on the wrapped error to classify the failure mode; if the wrap
+// ever changes to mask the original text, this test fires.
+func TestGetProfile_KiteErrorTextPassthrough(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		brokerErr string
+		want     string // substring that must survive wrapping
+	}{
+		{"ip_whitelist", "Your IP_address is not whitelisted", "ip_address"},
+		{"credentials_invalid", "invalid_key: API key rejected", "invalid_key"},
+		{"token_expired", "TokenException: token expired", "token"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &mockBrokerClient{profileErr: fmt.Errorf("%s", tc.brokerErr)}
+			resolver := &mockBrokerResolver{client: client}
+			uc := NewGetProfileUseCase(resolver, testLogger())
+
+			_, err := uc.Execute(context.Background(), cqrs.GetProfileQuery{Email: "u@t.com"})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want, "test_ip_whitelist substring matching depends on this")
+		})
+	}
+}
+
+
 // --- GetMarginsUseCase tests ---
 func TestGetMargins_Success(t *testing.T) {
 	t.Parallel()

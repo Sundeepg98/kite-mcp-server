@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // setupStaticEgressIP is the server's static egress IP which users must
@@ -60,7 +62,11 @@ func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 			// GetProfile is the cheapest read-only Kite call and exercises the
 			// whole auth + network path: credentials, IP whitelist, and token.
-			_, err := session.Broker.GetProfile()
+			// Routed through QueryBus to keep this tool inside the CQRS read
+			// path (same pattern as get_profile and sebi_compliance_status).
+			email := oauth.EmailFromContext(ctx)
+			probeCtx := kc.WithBroker(ctx, session.Broker)
+			_, err := handler.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email})
 			if err == nil {
 				resp.Status = setupStatusPass
 				resp.Message = "Kite API reachable. Credentials valid, IP whitelist OK."
