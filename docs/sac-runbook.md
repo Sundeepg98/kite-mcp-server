@@ -108,6 +108,31 @@ signing wrapper.
   excludes from realtime AV, which is a security regression).
 - Do **NOT** lower the policy on the existing trusted cert.
 
+## Subprocess plugins (spawned children)
+
+Signing the parent test binary via `scripts/go-test-sac.cmd` is **not
+enough** when a test spawns a subprocess plugin via `os/exec`. SAC
+evaluates each child launch independently against its own content
+hash, and freshly-built plugin binaries have no reputation either.
+
+**Symptom:**
+
+```
+launch subprocess: fork/exec ...\plugin.exe:
+  An Application Control policy has blocked this file.
+```
+
+**Fix pattern:** sign the spawned binary right after building it,
+before the parent execs it. See `kc/riskguard/subprocess_check_test.go`
+`signPluginForSAC` for a concrete example used by the
+`buildExamplePlugin` test helper (commit `55b7387`).
+
+The same pattern applies to any operator-deployed third-party plugin:
+sign the plugin binary once (`powershell -File ~/go/bin/sign-bin.ps1
+-Path /path/to/plugin.exe`) post-build, ship the signed binary.
+Production `subprocess_check.go` does not embed signing — it is the
+operator's responsibility.
+
 ## See also
 
 - `~/go/bin/sign-bin.ps1` — generic signing wrapper (1 file argument)
