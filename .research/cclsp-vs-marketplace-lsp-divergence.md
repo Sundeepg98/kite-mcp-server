@@ -111,7 +111,57 @@ The MCP-tool surface for agent-driven LSP queries is **cclsp-only** today. Until
 4. **Watch for marketplace plugins to expose the missing agent-callable surface.** When `find_definition` / `rename_symbol` etc. show up as `mcp__*` tools from a plugin source, re-evaluate cclsp.
 5. **Set a tripwire on cclsp's repo activity.** Maintainer's #40 is a slow-burn risk. If cclsp doesn't ship any commits in 6 months from Apr 2026, consider forking under your own user (rebase issue #43's patch + any other 3-LOC fixes that accumulate). The fork is cheap (it's published TypeScript; no native deps).
 
-## Sources
+## Direct verdict: which to drop today (2026-04-26 — surface enumeration)
+
+**Verdict: KEEP-CCLSP. The marketplace `golang` plugin contributes ZERO agent-callable MCP tools** — it's a pure editor-surface registration shim. Per the user's pre-set criteria (drop X if other has ≥80% of X's MCP-callable surface; the marketplace plugin has ~8% of cclsp's, and even that 1 shared tool is `mcp__ide__getDiagnostics` which is a built-in, not contributed by the plugin), cclsp wins decisively for orchestrator-driven code intelligence.
+
+### Hard evidence: complete enumeration of every `mcp__*` LSP tool in this session
+
+Captured directly from Claude Code's deferred-tools registry — the authoritative source for what the orchestrator can call.
+
+**Built-in `mcp__ide__*`:** 2 tools.
+- `mcp__ide__executeCode`, `mcp__ide__getDiagnostics`
+
+**That is the entire `mcp__ide__*` surface.** No `mcp__ide__getHover`, no `mcp__ide__findDefinition`, no `mcp__ide__findReferences`, no `mcp__ide__rename`, no `mcp__ide__workspaceSymbols`, no `mcp__ide__callHierarchy`. Editor-surface LSP features (hover-when-you-hover, completion-when-you-type) fire only on human-IDE interaction; **the orchestrator cannot invoke them programmatically**.
+
+**`mcp__cclsp__*`:** 12 tools — `find_definition`, `find_implementation`, `find_references`, `find_workspace_symbols`, `get_diagnostics`, `get_hover`, `get_incoming_calls`, `get_outgoing_calls`, `prepare_call_hierarchy`, `rename_symbol`, `rename_symbol_strict`, `restart_server`.
+
+### Marketplace `golang` plugin manifest (decisive proof)
+
+`plugins/golang/.claude-plugin/plugin.json` and `.lsp.json` from `claude-contrib/claude-languages` show the plugin is a pure LSP registration shim — `{ "name": "golang", "version": "1.1.0" }` + `{ "go": { "command": "gopls", "transport": "stdio" } }`. **No `tools` field.** The plugin does NOT register any new `mcp__*` tools — confirmed by both the manifest AND by the deferred-tools list above (no `mcp__golang__*` or similar entries exist).
+
+The README's "Code completion / Go-to-definition / Find references / Rename symbol" features are all editor-surface — consumed by Claude Code's IDE pane when the human user interacts with it.
+
+### Coverage scorecard
+
+| LSP capability | cclsp MCP tool | Marketplace plugin MCP tool |
+|---|---|---|
+| Diagnostics | `mcp__cclsp__get_diagnostics` ✓ | `mcp__ide__getDiagnostics` ✓ (built-in, plugin-agnostic) |
+| Hover | `mcp__cclsp__get_hover` ✓ | none |
+| Go-to-definition | `mcp__cclsp__find_definition` ✓ | none |
+| Find references | `mcp__cclsp__find_references` ✓ | none |
+| Find implementation | `mcp__cclsp__find_implementation` ✓ | none |
+| Rename | `mcp__cclsp__rename_symbol`/`_strict` ✓ | none |
+| Workspace symbols | `mcp__cclsp__find_workspace_symbols` ✓ (buggy, issue #43) | none |
+| Call hierarchy | `mcp__cclsp__prepare_call_hierarchy` + incoming/outgoing ✓ | none |
+
+**Marketplace MCP-tool surface is ~8% of cclsp's (1 tool out of 12, and that 1 is a built-in).** The user's pre-set criterion A (drop cclsp if marketplace ≥80%) is decisively NOT met.
+
+### Honorable mention: Serena
+
+Deferred-tools list also exposes `mcp__plugin_serena_serena__*` (15 tools). Serena offers operations cclsp doesn't: `find_symbol` / `find_referencing_symbols` (lookup by name not position), `replace_symbol_body`, `insert_before_symbol` / `insert_after_symbol`, `safe_delete_symbol`, `get_symbols_overview` (file outline). For agent-driven refactors **Serena + cclsp together > cclsp alone**. Future evaluation item; out of scope for this doc.
+
+### Direct answer to "if the marketplace is not exactly dependable now, why not?"
+
+It's not "undependable" — it's **scoped**. The marketplace `golang` plugin reliably does its one job (tell the IDE pane to use gopls for `.go` files). What it does NOT do is expose agent-callable tools. The orchestrator cannot ask the marketplace plugin "find definition of X" because that capability simply does not exist as an `mcp__*` tool. **For orchestrator-driven workflows, cclsp is irreplaceable today.**
+
+### Updated ranking
+
+1. **Keep cclsp running** (status quo) — primary source of agent-callable LSP intelligence.
+2. **Keep the marketplace `golang` plugin too** — gives the human user editor-surface hover/completion in the IDE pane. Doesn't compete with cclsp; doesn't subtract from cclsp's value.
+3. **Mitigate cclsp's known bugs** — avoid `find_workspace_symbols` (issue #43); use `find_definition` by symbol name as the workaround.
+4. **Tripwire still applies** — if cclsp goes silent for 6 months, fork.
+5. **Evaluate Serena separately** — its 15 tools complement cclsp's 12 with non-overlapping operations (especially the symbol-level edit tools). Promising for agent-driven refactors.
 
 ## Verification log (2026-04-26)
 
