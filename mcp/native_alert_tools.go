@@ -172,7 +172,7 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 
 		// Request user confirmation for ATO alerts (they place real orders)
 		if alertType == "ato" {
-			if srv := manager.MCPServer(); srv != nil {
+			if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Create ATO alert '%s' — %s:%s %s %s → auto-order on trigger",
 					params.Name, params.LHSExchange, params.LHSTradingSymbol,
 					params.Operator, formatNativeAlertRHS(params))
@@ -189,7 +189,7 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			alert, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceNativeAlertCommand{
+			alert, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PlaceNativeAlertCommand{
 				Email:  email,
 				Params: params,
 			})
@@ -245,7 +245,7 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			email := oauth.EmailFromContext(ctx)
 			adapter := &nativeAlertAdapter{nac: nac}
 			dispatchCtx := cqrs.WithNativeAlertClient(ctx, usecases.NativeAlertClient(adapter))
-			alertsRaw, err := manager.QueryBus().DispatchWithResult(dispatchCtx, cqrs.ListNativeAlertsQuery{Email: email, Filters: filters})
+			alertsRaw, err := handler.QueryBus().DispatchWithResult(dispatchCtx, cqrs.ListNativeAlertsQuery{Email: email, Filters: filters})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -388,7 +388,7 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Confirm ATO modifications
 		if alertType == "ato" {
-			if srv := manager.MCPServer(); srv != nil {
+			if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Modify ATO alert %s → %s:%s %s %s",
 					uuid, params.LHSExchange, params.LHSTradingSymbol,
 					params.Operator, formatNativeAlertRHS(params))
@@ -405,7 +405,7 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			alert, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.ModifyNativeAlertCommand{
+			alert, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.ModifyNativeAlertCommand{
 				Email:  email,
 				UUID:   uuid,
 				Params: params,
@@ -467,7 +467,7 @@ func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 
 			email := oauth.EmailFromContext(ctx)
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteNativeAlertCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteNativeAlertCommand{
 				Email: email,
 				UUIDs: uuids,
 			}); err != nil {
@@ -524,7 +524,7 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 			email := oauth.EmailFromContext(ctx)
 			adapter := &nativeAlertAdapter{nac: nac}
 			dispatchCtx := cqrs.WithNativeAlertClient(ctx, usecases.NativeAlertClient(adapter))
-			historyRaw, err := manager.QueryBus().DispatchWithResult(dispatchCtx, cqrs.GetNativeAlertHistoryQuery{Email: email, UUID: uuid})
+			historyRaw, err := handler.QueryBus().DispatchWithResult(dispatchCtx, cqrs.GetNativeAlertHistoryQuery{Email: email, UUID: uuid})
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

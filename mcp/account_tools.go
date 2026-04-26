@@ -45,7 +45,7 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return gomcp.NewToolResultError("This permanently deletes ALL your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading). Set confirm: true to proceed."), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteMyAccountCommand{Email: email}); err != nil {
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteMyAccountCommand{Email: email}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -101,7 +101,7 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		// UpdateMyCredentialsUseCase which persists via CredentialUpdater and
 		// invalidates the cached token. No direct .Set/.Delete on stores here —
 		// the bus is the single write entry point for credentials.
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{Email: email, APIKey: apiKey, APISecret: apiSecret}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 

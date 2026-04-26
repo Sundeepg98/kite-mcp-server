@@ -154,7 +154,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the order.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "place_order", "user_declined")
@@ -169,7 +169,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// credential lookup.
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
 			qty, _ := domain.NewQuantity(orderParams.Quantity)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceOrderCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceOrderCommand{
 				Email:           session.Email,
 				Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
 				TransactionType: orderParams.TransactionType,
@@ -187,7 +187,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Confirmed: true,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to place order", "error", err)
+				handler.Logger().Error("Failed to place order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
 			}
 			orderID, _ := raw.(string)
@@ -196,7 +196,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Order history dispatch also rides the bus (QueryBus side).
 			if orderID != "" {
 				time.Sleep(1500 * time.Millisecond)
-				histRaw, histErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
+				histRaw, histErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
 					Email:   session.Email,
 					OrderID: orderID,
 				})
@@ -301,7 +301,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before modifying the order.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("modify_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "modify_order", "user_declined")
@@ -311,7 +311,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyOrderCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyOrderCommand{
 				Email:            session.Email,
 				OrderID:          orderID,
 				Variety:          variety,
@@ -327,12 +327,12 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Confirmed: true,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to modify order", "error", err)
+				handler.Logger().Error("Failed to modify order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
 			resp, terr := BusResult[broker.OrderResponse](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("modify_order bus result type mismatch", "error", terr)
+				handler.Logger().Error("modify_order bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "modify_order")
@@ -379,18 +379,18 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.CancelOrderCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.CancelOrderCommand{
 				Email:   session.Email,
 				OrderID: orderID,
 				Variety: variety,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to cancel order", "error", err)
+				handler.Logger().Error("Failed to cancel order", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
 			resp, terr := BusResult[broker.OrderResponse](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("cancel_order bus result type mismatch", "error", terr)
+				handler.Logger().Error("cancel_order bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "cancel_order")
@@ -464,7 +464,7 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			// convert_position goes through SessionSvc on the handler side,
 			// so we don't attach a session-pinned broker to ctx. Pre-migration
 			// behavior is preserved exactly.
-			raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.ConvertPositionCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.ConvertPositionCommand{
 				Email:           session.Email,
 				Exchange:        p.String("exchange", ""),
 				Tradingsymbol:   p.String("tradingsymbol", ""),

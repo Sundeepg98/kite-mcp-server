@@ -54,7 +54,7 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		symbol := parts[1]
 
 		// Request user confirmation via elicitation.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("close_position", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "close_position", "user_declined")
@@ -67,14 +67,14 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// shared pipeline. The session-pinned broker client rides on ctx so
 			// the handler-side resolver reuses it without another lookup.
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ClosePositionCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ClosePositionCommand{
 				Email:         session.Email,
 				Exchange:      exchange,
 				Symbol:        symbol,
 				ProductFilter: productFilter,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to close position", "error", err)
+				handler.Logger().Error("Failed to close position", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_position: %s", err.Error())), nil
 			}
 			result, _ := raw.(*usecases.ClosePositionResult)
@@ -133,7 +133,7 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		// Request user confirmation via elicitation (in addition to the confirm param).
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("close_all_positions", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "close_all_positions", "user_declined")
@@ -147,12 +147,12 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			// Dispatch through CommandBus so CloseAllPositionsUseCase runs under
 			// the shared pipeline. Session-pinned broker client rides on ctx.
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.CloseAllPositionsCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.CloseAllPositionsCommand{
 				Email:         session.Email,
 				ProductFilter: productFilter,
 			})
 			if err != nil {
-				handler.manager.Logger.Error("Failed to close all positions", "error", err)
+				handler.Logger().Error("Failed to close all positions", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: %s", err.Error())), nil
 			}
 			result, _ := raw.(*usecases.CloseAllResult)

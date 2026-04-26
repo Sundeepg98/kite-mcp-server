@@ -53,7 +53,7 @@ func (*GetOrderHistoryReconstitutedTool) Handler(manager *kc.Manager) server.Too
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_history_reconstituted", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryReconstitutedQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryReconstitutedQuery{
 				Email:   session.Email,
 				OrderID: orderID,
 			})

@@ -45,7 +45,7 @@ func (*GetOrderProjectionTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "get_order_projection", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderProjectionQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderProjectionQuery{
 				Email:   session.Email,
 				OrderID: orderID,
 			})

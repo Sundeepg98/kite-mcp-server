@@ -61,7 +61,7 @@ func (*GetPositionHistoryReconstitutedTool) Handler(manager *kc.Manager) server.
 		product := p.String("product", "")
 
 		return handler.WithSession(ctx, "get_position_history_reconstituted", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPositionHistoryReconstitutedQuery{
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPositionHistoryReconstitutedQuery{
 				Email:         session.Email,
 				Exchange:      exchange,
 				Tradingsymbol: tradingsymbol,

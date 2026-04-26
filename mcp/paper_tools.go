@@ -37,7 +37,7 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		enable, _ := args["enable"].(bool)
 		initialCash := NewArgParser(args).Float("initial_cash", 10000000)
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingToggleCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingToggleCommand{
 			Email:       email,
 			Enable:      enable,
 			InitialCash: initialCash,
@@ -73,7 +73,7 @@ func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.PaperTradingStatusQuery{Email: email})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.PaperTradingStatusQuery{Email: email})
 		if err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
@@ -108,7 +108,7 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return gomcp.NewToolResultError("Paper trading requires database configuration (ALERT_DB_PATH). Contact the server admin."), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingResetCommand{Email: email}); err != nil {
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingResetCommand{Email: email}); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 		return gomcp.NewToolResultText("Paper trading portfolio RESET. All positions, holdings, and orders cleared. Cash restored to initial amount."), nil

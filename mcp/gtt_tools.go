@@ -100,7 +100,7 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the GTT.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_gtt_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "place_gtt_order", "user_declined")
@@ -130,7 +130,7 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceGTTCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceGTTCommand{
 				Email:             session.Email,
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
 				LastPrice:         domain.NewINR(p.Float("last_price", 0.0)),
@@ -152,7 +152,7 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 			resp, terr := BusResult[broker.GTTResponse](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("place_gtt_order bus result type mismatch", "error", terr)
+				handler.Logger().Error("place_gtt_order bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "place_gtt_order")
@@ -193,7 +193,7 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.DeleteGTTCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.DeleteGTTCommand{
 				Email:     session.Email,
 				TriggerID: triggerID,
 			})
@@ -202,7 +202,7 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 			resp, terr := BusResult[broker.GTTResponse](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("delete_gtt_order bus result type mismatch", "error", terr)
+				handler.Logger().Error("delete_gtt_order bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "delete_gtt_order")
@@ -297,7 +297,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before modifying the GTT.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("modify_gtt_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "modify_gtt_order", "user_declined")
@@ -326,7 +326,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := manager.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyGTTCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyGTTCommand{
 				Email:             session.Email,
 				TriggerID:         p.Int("trigger_id", 0),
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
@@ -349,7 +349,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 			resp, terr := BusResult[broker.GTTResponse](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("modify_gtt_order bus result type mismatch", "error", terr)
+				handler.Logger().Error("modify_gtt_order bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "modify_gtt_order")

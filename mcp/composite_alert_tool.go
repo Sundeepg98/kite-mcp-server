@@ -218,7 +218,7 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateCompositeAlertCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CreateCompositeAlertCommand{
 			Email:      email,
 			Name:       name,
 			Logic:      logic,

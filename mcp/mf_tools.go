@@ -160,7 +160,7 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the MF order.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_mf_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "place_mf_order", "user_declined")
@@ -182,7 +182,7 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFOrderCommand{
+			resp, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFOrderCommand{
 				Email:           session.Email,
 				Tradingsymbol:   p.String("tradingsymbol", ""),
 				TransactionType: txnType,
@@ -227,7 +227,7 @@ func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := NewArgParser(args).String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFOrderCommand{
+			resp, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFOrderCommand{
 				Email:   session.Email,
 				OrderID: orderID,
 			})
@@ -289,7 +289,7 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the SIP.
-		if srv := manager.MCPServer(); srv != nil {
+		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_mf_sip", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				handler.trackToolError(ctx, "place_mf_sip", "user_declined")
@@ -304,7 +304,7 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFSIPCommand{
+			resp, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PlaceMFSIPCommand{
 				Email:         session.Email,
 				Tradingsymbol: p.String("tradingsymbol", ""),
 				Amount:        amount,
@@ -351,7 +351,7 @@ func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		sipID := NewArgParser(args).String("sip_id", "")
 
 		return handler.WithSession(ctx, "cancel_mf_sip", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			resp, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFSIPCommand{
+			resp, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CancelMFSIPCommand{
 				Email: session.Email,
 				SIPID: sipID,
 			})
