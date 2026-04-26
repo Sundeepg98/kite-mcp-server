@@ -101,6 +101,7 @@ func newTestNotifier(t *testing.T, failSend bool) (*TelegramNotifier, *httptest.
 // --- NewTelegramNotifier tests ---
 
 func TestMock_NewTelegramNotifier_EmptyToken(t *testing.T) {
+	t.Parallel()
 	store := newTestStore()
 	logger := slog.Default()
 	notifier, err := NewTelegramNotifier("", store, logger)
@@ -172,6 +173,7 @@ func TestNewTelegramNotifier_InvalidToken(t *testing.T) {
 // --- SendMessage tests ---
 
 func TestSendMessage_Success(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -180,6 +182,7 @@ func TestSendMessage_Success(t *testing.T) {
 }
 
 func TestSendMessage_Error(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, true)
 	defer server.Close()
 
@@ -189,6 +192,7 @@ func TestSendMessage_Error(t *testing.T) {
 }
 
 func TestSendMessage_NilNotifier(t *testing.T) {
+	t.Parallel()
 	var notifier *TelegramNotifier
 	err := notifier.SendMessage(12345, "test")
 	assert.Error(t, err)
@@ -196,6 +200,7 @@ func TestSendMessage_NilNotifier(t *testing.T) {
 }
 
 func TestSendMessage_NilBot(t *testing.T) {
+	t.Parallel()
 	notifier := &TelegramNotifier{bot: nil}
 	err := notifier.SendMessage(12345, "test")
 	assert.Error(t, err)
@@ -205,6 +210,7 @@ func TestSendMessage_NilBot(t *testing.T) {
 // --- SendHTMLMessage tests ---
 
 func TestSendHTMLMessage_Success(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -213,6 +219,7 @@ func TestSendHTMLMessage_Success(t *testing.T) {
 }
 
 func TestSendHTMLMessage_Error(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, true)
 	defer server.Close()
 
@@ -222,6 +229,7 @@ func TestSendHTMLMessage_Error(t *testing.T) {
 }
 
 func TestSendHTMLMessage_NilNotifier(t *testing.T) {
+	t.Parallel()
 	var notifier *TelegramNotifier
 	err := notifier.SendHTMLMessage(12345, "test")
 	assert.Error(t, err)
@@ -229,6 +237,7 @@ func TestSendHTMLMessage_NilNotifier(t *testing.T) {
 }
 
 func TestSendHTMLMessage_NilBot(t *testing.T) {
+	t.Parallel()
 	notifier := &TelegramNotifier{bot: nil}
 	err := notifier.SendHTMLMessage(12345, "test")
 	assert.Error(t, err)
@@ -238,6 +247,7 @@ func TestSendHTMLMessage_NilBot(t *testing.T) {
 // --- Notify tests ---
 
 func TestNotify_DirectionAbove(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -257,6 +267,7 @@ func TestNotify_DirectionAbove(t *testing.T) {
 }
 
 func TestNotify_DirectionBelow(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -272,6 +283,7 @@ func TestNotify_DirectionBelow(t *testing.T) {
 }
 
 func TestNotify_DirectionDropPct(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -287,6 +299,7 @@ func TestNotify_DirectionDropPct(t *testing.T) {
 }
 
 func TestNotify_DirectionRisePct(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -302,6 +315,7 @@ func TestNotify_DirectionRisePct(t *testing.T) {
 }
 
 func TestNotify_SendFailure(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, true)
 	defer server.Close()
 
@@ -318,6 +332,7 @@ func TestNotify_SendFailure(t *testing.T) {
 }
 
 func TestNotify_NoChatID(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -334,6 +349,7 @@ func TestNotify_NoChatID(t *testing.T) {
 }
 
 func TestNotify_NilNotifier(t *testing.T) {
+	t.Parallel()
 	var notifier *TelegramNotifier
 	alert := &Alert{
 		Email:         "user@test.com",
@@ -347,6 +363,7 @@ func TestNotify_NilNotifier(t *testing.T) {
 }
 
 func TestNotify_NilBot(t *testing.T) {
+	t.Parallel()
 	notifier := &TelegramNotifier{bot: nil, store: newTestStore(), logger: slog.Default()}
 	alert := &Alert{
 		Email:         "user@test.com",
@@ -362,6 +379,7 @@ func TestNotify_NilBot(t *testing.T) {
 // --- Verify request content reaches the mock server ---
 
 func TestSendMessage_VerifiesParseMode(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var receivedParseMode string
 
@@ -406,6 +424,7 @@ func TestSendMessage_VerifiesParseMode(t *testing.T) {
 }
 
 func TestSendHTMLMessage_VerifiesParseMode(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var receivedParseMode string
 
@@ -452,6 +471,7 @@ func TestSendHTMLMessage_VerifiesParseMode(t *testing.T) {
 // --- Accessor method tests ---
 
 func TestTelegramNotifier_Bot(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -459,11 +479,13 @@ func TestTelegramNotifier_Bot(t *testing.T) {
 }
 
 func TestTelegramNotifier_Bot_Nil(t *testing.T) {
+	t.Parallel()
 	var notifier *TelegramNotifier
 	assert.Nil(t, notifier.Bot())
 }
 
 func TestTelegramNotifier_Store(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -471,6 +493,7 @@ func TestTelegramNotifier_Store(t *testing.T) {
 }
 
 func TestTelegramNotifier_Logger(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
@@ -480,6 +503,7 @@ func TestTelegramNotifier_Logger(t *testing.T) {
 // --- EscapeMarkdown test ---
 
 func TestEscapeMarkdown(t *testing.T) {
+	t.Parallel()
 	input := "Hello_World *bold* [link](url) ~strike~ `code`"
 	escaped := EscapeMarkdown(input)
 	assert.Contains(t, escaped, "\\_")
@@ -493,6 +517,7 @@ func TestEscapeMarkdown(t *testing.T) {
 }
 
 func TestEscapeMarkdown_AllSpecialChars(t *testing.T) {
+	t.Parallel()
 	specials := []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
 	for _, ch := range specials {
 		escaped := EscapeMarkdown(ch)
@@ -501,6 +526,7 @@ func TestEscapeMarkdown_AllSpecialChars(t *testing.T) {
 }
 
 func TestEscapeMarkdown_NoSpecialChars(t *testing.T) {
+	t.Parallel()
 	input := "Hello World 123"
 	assert.Equal(t, input, EscapeMarkdown(input))
 }
@@ -508,6 +534,7 @@ func TestEscapeMarkdown_NoSpecialChars(t *testing.T) {
 // --- Notify with ReferencePrice zero (edge case for percentage direction) ---
 
 func TestNotify_DropPct_ZeroReferencePrice(t *testing.T) {
+	t.Parallel()
 	notifier, server := newTestNotifier(t, false)
 	defer server.Close()
 
