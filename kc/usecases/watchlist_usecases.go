@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
@@ -31,6 +32,7 @@ type WatchlistStore interface {
 type CreateWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -41,6 +43,15 @@ func NewCreateWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *Creat
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
 func (uc *CreateWatchlistUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the domain event dispatcher so a typed
+// domain.WatchlistCreatedEvent is dispatched on every successful create.
+// The dispatcher path is for runtime subscribers (read-side projector,
+// future consumers); audit persistence is owned by SetEventStore via the
+// appendWatchlistEvent direct path to avoid double-write — wire.go does
+// NOT subscribe makeEventPersister for watchlist.* event types. Pattern
+// mirrors CreateAlertUseCase. Nil-safe.
+func (uc *CreateWatchlistUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // CreateWatchlistResult holds the result of creating a watchlist.
 type CreateWatchlistResult struct {
@@ -67,11 +78,20 @@ func (uc *CreateWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.CreateWa
 		return nil, fmt.Errorf("usecases: create watchlist: %w", err)
 	}
 
+	now := time.Now()
 	appendWatchlistEvent(uc.eventStore, uc.logger, id, "watchlist.created", map[string]any{
 		"email":        cmd.Email,
 		"watchlist_id": id,
 		"name":         cmd.Name,
 	})
+	if uc.events != nil {
+		uc.events.Dispatch(domain.WatchlistCreatedEvent{
+			Email:       cmd.Email,
+			WatchlistID: id,
+			Name:        cmd.Name,
+			Timestamp:   now,
+		})
+	}
 
 	return &CreateWatchlistResult{ID: id, Name: cmd.Name}, nil
 }
@@ -82,6 +102,7 @@ func (uc *CreateWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.CreateWa
 type DeleteWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -92,6 +113,11 @@ func NewDeleteWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *Delet
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
 func (uc *DeleteWatchlistUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the domain event dispatcher for typed
+// WatchlistDeletedEvent emission. See CreateWatchlistUseCase
+// SetEventDispatcher for the dispatch-vs-audit rationale. Nil-safe.
+func (uc *DeleteWatchlistUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // DeleteWatchlistResult holds the result of deleting a watchlist.
 type DeleteWatchlistResult struct {
@@ -125,12 +151,22 @@ func (uc *DeleteWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.DeleteWa
 		return nil, fmt.Errorf("usecases: delete watchlist: %w", err)
 	}
 
+	now := time.Now()
 	appendWatchlistEvent(uc.eventStore, uc.logger, cmd.WatchlistID, "watchlist.deleted", map[string]any{
 		"email":        cmd.Email,
 		"watchlist_id": cmd.WatchlistID,
 		"name":         wlName,
 		"item_count":   itemCount,
 	})
+	if uc.events != nil {
+		uc.events.Dispatch(domain.WatchlistDeletedEvent{
+			Email:       cmd.Email,
+			WatchlistID: cmd.WatchlistID,
+			Name:        wlName,
+			ItemCount:   itemCount,
+			Timestamp:   now,
+		})
+	}
 
 	return &DeleteWatchlistResult{Name: wlName, ItemCount: itemCount}, nil
 }
@@ -182,6 +218,7 @@ func (uc *ListWatchlistsUseCase) Execute(ctx context.Context, query cqrs.ListWat
 type AddToWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -192,6 +229,11 @@ func NewAddToWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *AddToW
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
 func (uc *AddToWatchlistUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the domain event dispatcher for typed
+// WatchlistItemAddedEvent emission. See CreateWatchlistUseCase
+// SetEventDispatcher for the dispatch-vs-audit rationale. Nil-safe.
+func (uc *AddToWatchlistUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute adds an instrument to a watchlist.
 func (uc *AddToWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.AddToWatchlistCommand) error {
@@ -216,12 +258,21 @@ func (uc *AddToWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.AddToWatc
 		return fmt.Errorf("usecases: add to watchlist: %w", err)
 	}
 
+	now := time.Now()
 	appendWatchlistEvent(uc.eventStore, uc.logger, cmd.WatchlistID, "watchlist.item_added", map[string]any{
 		"email":         cmd.Email,
 		"watchlist_id":  cmd.WatchlistID,
 		"exchange":      cmd.Exchange,
 		"tradingsymbol": cmd.Tradingsymbol,
 	})
+	if uc.events != nil {
+		uc.events.Dispatch(domain.WatchlistItemAddedEvent{
+			Email:       cmd.Email,
+			WatchlistID: cmd.WatchlistID,
+			Instrument:  domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
+			Timestamp:   now,
+		})
+	}
 
 	return nil
 }
@@ -257,6 +308,7 @@ func (uc *GetWatchlistUseCase) Execute(ctx context.Context, query cqrs.GetWatchl
 type RemoveFromWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -267,6 +319,11 @@ func NewRemoveFromWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *R
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
 func (uc *RemoveFromWatchlistUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the domain event dispatcher for typed
+// WatchlistItemRemovedEvent emission. See CreateWatchlistUseCase
+// SetEventDispatcher for the dispatch-vs-audit rationale. Nil-safe.
+func (uc *RemoveFromWatchlistUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute removes an item from a watchlist.
 func (uc *RemoveFromWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.RemoveFromWatchlistCommand) error {
@@ -285,11 +342,20 @@ func (uc *RemoveFromWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.Remo
 		return fmt.Errorf("usecases: remove from watchlist: %w", err)
 	}
 
+	now := time.Now()
 	appendWatchlistEvent(uc.eventStore, uc.logger, cmd.WatchlistID, "watchlist.item_removed", map[string]any{
 		"email":        cmd.Email,
 		"watchlist_id": cmd.WatchlistID,
 		"item_id":      cmd.ItemID,
 	})
+	if uc.events != nil {
+		uc.events.Dispatch(domain.WatchlistItemRemovedEvent{
+			Email:       cmd.Email,
+			WatchlistID: cmd.WatchlistID,
+			ItemID:      cmd.ItemID,
+			Timestamp:   now,
+		})
+	}
 
 	return nil
 }

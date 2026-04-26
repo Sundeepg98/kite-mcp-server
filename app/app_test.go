@@ -209,6 +209,29 @@ func TestDeriveAggregateID(t *testing.T) {
 			event:    domain.SessionCreatedEvent{SessionID: "sess-abc", Timestamp: now},
 			expected: "sess-abc",
 		},
+		// ES pilot: watchlist aggregate uses WatchlistID as the natural key
+		// so all four lifecycle events (created/deleted/item_added/item_removed)
+		// for the same watchlist sort under one aggregate stream.
+		{
+			name:     "WatchlistCreatedEvent uses WatchlistID",
+			event:    domain.WatchlistCreatedEvent{WatchlistID: "wl-1", Email: "u@t.com", Name: "Tech", Timestamp: now},
+			expected: "wl-1",
+		},
+		{
+			name:     "WatchlistDeletedEvent uses WatchlistID",
+			event:    domain.WatchlistDeletedEvent{WatchlistID: "wl-2", Email: "u@t.com", Timestamp: now},
+			expected: "wl-2",
+		},
+		{
+			name:     "WatchlistItemAddedEvent uses WatchlistID",
+			event:    domain.WatchlistItemAddedEvent{WatchlistID: "wl-3", Email: "u@t.com", Instrument: domain.NewInstrumentKey("NSE", "INFY"), Timestamp: now},
+			expected: "wl-3",
+		},
+		{
+			name:     "WatchlistItemRemovedEvent uses WatchlistID",
+			event:    domain.WatchlistItemRemovedEvent{WatchlistID: "wl-4", Email: "u@t.com", ItemID: "it-1", Timestamp: now},
+			expected: "wl-4",
+		},
 	}
 
 	for _, tt := range tests {

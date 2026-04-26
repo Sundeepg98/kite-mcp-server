@@ -632,6 +632,14 @@ func deriveAggregateID(e domain.Event) string {
 		return ev.SessionID
 	case domain.TierChangedEvent:
 		return ev.UserEmail
+	case domain.WatchlistCreatedEvent:
+		return ev.WatchlistID
+	case domain.WatchlistDeletedEvent:
+		return ev.WatchlistID
+	case domain.WatchlistItemAddedEvent:
+		return ev.WatchlistID
+	case domain.WatchlistItemRemovedEvent:
+		return ev.WatchlistID
 	default:
 		return "unknown"
 	}

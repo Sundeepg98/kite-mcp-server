@@ -124,6 +124,13 @@ func (m *Manager) registerAccountCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		// ES pilot: typed WatchlistCreatedEvent dispatch for runtime
+		// subscribers (projector etc.). Audit persistence stays on the
+		// SetEventStore direct path; wire.go does NOT subscribe the
+		// persister for watchlist.* event types (would double-write).
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -138,6 +145,9 @@ func (m *Manager) registerAccountCommands() error {
 		uc := usecases.NewDeleteWatchlistUseCase(m.watchlistStore, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
@@ -154,6 +164,9 @@ func (m *Manager) registerAccountCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -168,6 +181,9 @@ func (m *Manager) registerAccountCommands() error {
 		uc := usecases.NewRemoveFromWatchlistUseCase(m.watchlistStore, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
