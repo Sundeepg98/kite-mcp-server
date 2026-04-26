@@ -205,3 +205,45 @@ These follow-up edits should be tracked but are **out of scope** for this scopin
 
 1. `docs/sac-runbook.md` line 99-100: claim "or free via Microsoft Trusted Signing for individuals" is **factually incorrect**. Should read: "Microsoft Trusted Signing — $9.99/month, currently US/Canada individuals only, individual onboarding paused since Apr 2025."
 2. User-scope MEMORY.md "Smart App Control" section: add note that Trusted Signing is not a viable migration target for the user's geography until eligibility expands. (Updated below.)
+
+---
+
+## Appendix B: existing-cert investigation (Apr 26, 2026)
+
+Before finalising DEFER, audited every cert store on the system to rule out a free reusable cert from a prior package install. **Result: no usable trusted-CA cert exists.** DEFER confirmed.
+
+### Inventory: ALL certs system-wide with private keys (any EKU)
+
+| # | Store | Thumbprint (prefix) | Subject | EKU | Source | SAC-usable? |
+|---|---|---|---|---|---|---|
+| 1 | `CurrentUser\My` | `4ABCEEC...` | CN=GoTools Local Dev | Code Signing | self-signed (our own gopls fix) | **No** — self-signed root, fails CI level 1 |
+| 2 | `CurrentUser\My` | `B7A1A13...` | CN=bf8b6f81-...-907862d87331 | (none / all uses) | likely Windows Hello / WebAuthn / MeshKit dev sandbox | No — no Code Signing EKU |
+| 3 | `CurrentUser\My` | `9E69EE7...` | CN=515e280f-...-c9b4b2c1038f | Client Authentication | Microsoft Entra ID device-join (issuer `MS-Organization-Access`) | No — no Code Signing EKU |
+| 4 | `CurrentUser\My` | `869E943...` | CN=4e0e732d-...-88e83a598cd7 | (none / all uses) | dev sandbox (paired with #6) | No — no Code Signing EKU |
+| 5 | `CurrentUser\My` | `50ECB06...` | CN=trust_4e0e732d-...-88e83a598cd7 | (none / all uses) | dev sandbox companion | No — no Code Signing EKU |
+| 6 | `CurrentUser\My` | `1AEF4B6...` | CN=trust_bf8b6f81-...-907862d87331 | (none / all uses) | dev sandbox companion | No — no Code Signing EKU |
+
+Plus 1 entry without private key (Apple iPhone Device CA `5FA62D8...`) — not signing-capable.
+
+`LocalMachine\My`: **0** certs. `LocalMachine\Root`: 0 Microsoft-issued certs with private keys. The 12 Microsoft Trusted Root CAs in `CurrentUser\Root` (Authenticode, Identity Verification 2020, Root CA 2010/2011/2017, etc.) are **public-key-only roots** — they validate signatures but cannot issue them.
+
+### Chain validation on the only Code Signing EKU candidate
+
+```
+Cert: 4ABCEECC... (GoTools Local Dev)
+Chain elements: [self] only — chain root = the cert itself
+Issuer: CN=GoTools Local Dev (== Subject)
+Chain.Build = True (because we placed it in CurrentUser\Root)
+But: chain root is NOT in Microsoft Trusted Root Program
+→ SAC sees ValidatedSigningLevel=1 (= Unsigned), KnownRoot=2
+```
+
+Confirmed: the only existing Code Signing cert is exactly the one the runbook already calls out as inadequate for SAC. SAC test-sign step skipped — no point re-confirming a known-failing cert.
+
+### Updated recommendation: **DEFER confirmed**
+
+No free path forward via existing certs. The system has no MS-trusted code-signing cert installed by Visual Studio, .NET SDK, Windows SDK, GitHub Desktop, or any other package. The `bf8b6f81/4e0e732d/trust_*` certs look like MeshKit / Loop / Windows-Hello dev sandbox material — none have Code Signing EKU, all are self-signed or chain to non-Trusted-Root issuers.
+
+Stop condition #2 from the cert-investigation brief triggers: **"No certs found / all chain-invalid → STOP, confirm DEFER."**
+
+Same recommendation stands: keep `scripts/go-test-sac.cmd` + self-signed for routine, use WSL2 for hot loops, accept 30-50% Win pass rate. Cheapest worldwide-individual upgrade path remains Certum OV cert (~$70/yr first-year promo, hardware token) — separate scoping if/when justified.
