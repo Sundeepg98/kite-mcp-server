@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 )
 
@@ -20,7 +19,7 @@ import (
 // Nil-safety: nil manager renders "not configured". Failed dispatch
 // renders an error banner. Zero total (fresh account) shows a
 // deterministic "no margin info" message rather than a NaN bar.
-func marginGaugeWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
+func marginGaugeWidgetData(ctx context.Context, manager extAppManagerPort, email string) any {
 	type segmentView struct {
 		Segment   string  `json:"segment"`
 		Available float64 `json:"available"`

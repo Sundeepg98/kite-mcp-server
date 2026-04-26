@@ -21,7 +21,11 @@ import (
 // time via closure — they may be nil when widgets are registered in
 // tests without a live manager, and handlers defensively handle that
 // case.
-type builtinWidgetDataFunc func(ctx context.Context, manager *kc.Manager, email string) any
+// Phase 3a Batch 6b: manager param narrowed from *kc.Manager to
+// extAppManagerPort. *kc.Manager satisfies the interface (per the
+// provider assertions in kc/manager_interfaces.go), so existing test
+// callers passing `mgr` compile unchanged.
+type builtinWidgetDataFunc func(ctx context.Context, manager extAppManagerPort, email string) any
 
 // builtinWidgetDef describes one widget in the pack.
 type builtinWidgetDef struct {

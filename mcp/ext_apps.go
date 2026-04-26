@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -132,6 +133,44 @@ const dataPlaceholder = `"__INJECTED_DATA__"`
 // and reset styles inline.
 const cssPlaceholder = "/*__INJECTED_CSS__*/"
 
+// extAppManagerPort is the narrow port surface ext_apps DataFuncs and the
+// plugin_widget_* DataFuncs use. *kc.Manager satisfies this interface
+// implicitly via its provider assertions in kc/manager_interfaces.go;
+// 80+ test callsites that pass `mgr` to a DataFunc continue to compile
+// unchanged because the manager's concrete type still matches.
+//
+// Phase 3a Batch 6b cleavage: previously each DataFunc signature took
+// *kc.Manager directly, leaking the full manager surface into the
+// widget data layer. Narrowing to a UNION of provider interfaces
+// (a) prevents new DataFuncs from accidentally reaching for accessors
+// outside the documented surface, (b) lets tests mock with a stub that
+// implements just this interface, and (c) closes the last big "service
+// locator" pocket flagged in Phase 3a Batch 5's deferral note.
+type extAppManagerPort interface {
+	// StoreAccessor composes the 15 store-provider interfaces (token,
+	// credential, alert, telegram, watchlist, user, registry, audit,
+	// billing, ticker, paper, instruments, alertDB, riskguard, mcpServer)
+	// — gives the DataFuncs all the read-side store access they need
+	// without listing each provider individually.
+	kc.StoreAccessor
+	// QueryBusProvider for CQRS read dispatch.
+	kc.QueryBusProvider
+	// AppConfigProvider for IsLocalMode + ExternalURL.
+	kc.AppConfigProvider
+	// BrokerResolverProvider for brokerClientForEmail's SessionSvc()
+	// access in setupData/credentialsData.
+	kc.BrokerResolverProvider
+	// GetActiveSessionCount for the admin DataFuncs that report session
+	// count (live in the same admin-only DataFunc closures that need
+	// UserStore-based admin checks).
+	GetActiveSessionCount() int
+	// RegistryStoreConcrete for the admin DataFunc that reads the key
+	// registry. Concrete-type access matches the pattern documented on
+	// admin_baseline_tool.go's AuditStoreConcrete usage — admin
+	// forensics is the legitimate concrete-type consumer.
+	RegistryStoreConcrete() *registry.Store
+}
+
 // appResource defines a UI resource served as an MCP App widget.
 type appResource struct {
 	URI          string
@@ -139,7 +178,7 @@ type appResource struct {
 	TemplateFile string // *_app.html widget file
 	// DataFunc returns JSON-serializable data to inject as window.__DATA__.
 	// Receives the authenticated email. Returns nil if unauthenticated.
-	DataFunc func(ctx context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any
+	DataFunc func(ctx context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any
 }
 
 // appResources lists the widget pages exposed as MCP App resources.
@@ -214,7 +253,7 @@ var appResources = []appResource{
 	{
 		URI: "ui://kite-mcp/admin-overview", Name: "Admin Overview",
 		TemplateFile: "admin_overview_app.html",
-		DataFunc: func(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+		DataFunc: func(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
 				return nil
 			}
@@ -242,7 +281,7 @@ var appResources = []appResource{
 	{
 		URI: "ui://kite-mcp/admin-users", Name: "Admin Users",
 		TemplateFile: "admin_users_app.html",
-		DataFunc: func(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+		DataFunc: func(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
 				return nil
 			}
@@ -272,7 +311,7 @@ var appResources = []appResource{
 	{
 		URI: "ui://kite-mcp/admin-metrics", Name: "Admin Metrics",
 		TemplateFile: "admin_metrics_app.html",
-		DataFunc: func(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+		DataFunc: func(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
 				return nil
 			}
@@ -303,7 +342,7 @@ var appResources = []appResource{
 	{
 		URI: "ui://kite-mcp/admin-registry", Name: "Admin Registry",
 		TemplateFile: "admin_registry_app.html",
-		DataFunc: func(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+		DataFunc: func(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
 				return nil
 			}
@@ -548,7 +587,7 @@ func RegisterAppResources(srv *server.MCPServer, manager *kc.Manager, auditStore
 // back to manager.AuditStoreConcrete() for production callers.
 
 // portfolioData fetches holdings + positions via the portfolio widget use case.
-func portfolioData(ctx context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func portfolioData(ctx context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	result, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioForWidgetQuery{Email: email})
 	if err != nil {
 		return map[string]string{"error": err.Error()}
@@ -563,7 +602,7 @@ func portfolioData(ctx context.Context, manager *kc.Manager, _ *audit.Store, ema
 // it (TestActivityData_NoAuditStore short-circuits at the nil-auditStore
 // guard above). Removing the fallback makes every widget-activity read go
 // through the QueryBus uniformly.
-func activityData(ctx context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+func activityData(ctx context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 	if auditStore == nil || manager == nil {
 		return nil
 	}
@@ -576,7 +615,7 @@ func activityData(ctx context.Context, manager *kc.Manager, auditStore *audit.St
 }
 
 // ordersData fetches recent order entries via the orders widget use case.
-func ordersData(ctx context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+func ordersData(ctx context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 	if auditStore == nil {
 		return nil
 	}
@@ -589,7 +628,7 @@ func ordersData(ctx context.Context, manager *kc.Manager, auditStore *audit.Stor
 }
 
 // alertsData fetches active/triggered alerts via the alerts widget use case.
-func alertsData(ctx context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func alertsData(ctx context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	if manager.AlertStore() == nil {
 		return nil
 	}
@@ -601,7 +640,7 @@ func alertsData(ctx context.Context, manager *kc.Manager, _ *audit.Store, email 
 }
 
 // paperData fetches paper trading status, holdings, and positions for the widget.
-func paperData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func paperData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	engine := manager.PaperEngine()
 	if engine == nil {
 		return map[string]any{"status": map[string]any{"enabled": false, "message": "Paper trading engine not configured."}}
@@ -658,7 +697,7 @@ func paperData(_ context.Context, manager *kc.Manager, _ *audit.Store, email str
 }
 
 // safetyData fetches riskguard status and limits for the safety widget.
-func safetyData(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+func safetyData(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 	guard := manager.RiskGuard()
 	if guard == nil {
 		return map[string]any{
@@ -697,7 +736,7 @@ func safetyData(_ context.Context, manager *kc.Manager, auditStore *audit.Store,
 // orderFormData returns paper-mode status for the order form widget.
 // Margins are fetched dynamically via callServerTool('order_risk_report')
 // rather than pre-injected, since the form needs fresh data at submission time.
-func orderFormData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func orderFormData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	paperMode := false
 	if engine := manager.PaperEngine(); engine != nil {
 		paperMode = engine.IsEnabled(email)
@@ -708,7 +747,7 @@ func orderFormData(_ context.Context, manager *kc.Manager, _ *audit.Store, email
 }
 
 // watchlistData fetches all watchlists with items and LTP for the watchlist widget.
-func watchlistData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func watchlistData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	store := manager.WatchlistStore()
 	if store == nil {
 		return nil
@@ -821,7 +860,7 @@ func watchlistData(_ context.Context, manager *kc.Manager, _ *audit.Store, email
 }
 
 // hubData returns account status, quick stats, and external URL for the hub widget.
-func hubData(_ context.Context, manager *kc.Manager, auditStore *audit.Store, email string) any {
+func hubData(_ context.Context, manager extAppManagerPort, auditStore *audit.Store, email string) any {
 	_, hasCreds := manager.CredentialStore().Get(email)
 
 	kiteConnected := false
@@ -870,14 +909,14 @@ func hubData(_ context.Context, manager *kc.Manager, auditStore *audit.Store, em
 // optionsChainData returns nil because the options chain widget boots into an
 // idle state. The user picks the underlying interactively and loads data via
 // AppBridge calls to get_option_chain / options_greeks.
-func optionsChainData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func optionsChainData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	return nil
 }
 
 // chartData returns nil because the chart widget boots into an idle state.
 // The user picks the symbol interactively and loads data via AppBridge calls
 // to search_instruments, get_historical_data, and technical_indicators.
-func chartData(_ context.Context, _ *kc.Manager, _ *audit.Store, _ string) any {
+func chartData(_ context.Context, _ extAppManagerPort, _ *audit.Store, _ string) any {
 	return nil
 }
 
@@ -886,7 +925,7 @@ func chartData(_ context.Context, _ *kc.Manager, _ *audit.Store, _ string) any {
 // Step 2 (IP whitelisted) can't be verified independently — it's confirmed
 // indirectly when Step 3 (test_ip_whitelist tool) passes. Until then the
 // widget shows Step 2 as unverified.
-func setupData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func setupData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	credsRegistered := false
 	apiKeyMasked := ""
 	if store := manager.CredentialStore(); store != nil {
@@ -918,7 +957,7 @@ func maskAPIKey(apiKey string) string {
 // Only the API key is surfaced (masked) — the secret is never read back into
 // the widget. last_updated comes from KiteCredentialEntry.StoredAt which is
 // set on every Set() call in the credential store.
-func credentialsData(_ context.Context, manager *kc.Manager, _ *audit.Store, email string) any {
+func credentialsData(_ context.Context, manager extAppManagerPort, _ *audit.Store, email string) any {
 	resp := map[string]any{
 		"credentials_registered": false,
 		"api_key_masked":         "",
@@ -942,7 +981,11 @@ func credentialsData(_ context.Context, manager *kc.Manager, _ *audit.Store, ema
 
 // brokerClientForEmail resolves a broker.Client for the given email,
 // or nil if credentials/token are not available.
-func brokerClientForEmail(manager *kc.Manager, email string) broker.Client {
+//
+// Phase 3a Batch 6b: signature narrowed to extAppManagerPort
+// (which composes BrokerResolverProvider). *kc.Manager satisfies the
+// interface so existing test callers compile unchanged.
+func brokerClientForEmail(manager extAppManagerPort, email string) broker.Client {
 	client, err := manager.SessionSvc().GetBrokerForEmail(email)
 	if err != nil {
 		return nil

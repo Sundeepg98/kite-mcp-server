@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 
-	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
@@ -24,7 +23,7 @@ import (
 // historical_data tool's output through a rolling cache.
 //
 // Defensive on nil manager and missing broker.
-func returnsMatrixWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
+func returnsMatrixWidgetData(ctx context.Context, manager extAppManagerPort, email string) any {
 	type row struct {
 		Symbol       string  `json:"symbol"`
 		Qty          int     `json:"qty"`

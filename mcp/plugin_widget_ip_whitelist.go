@@ -3,8 +3,6 @@ package mcp
 import (
 	"context"
 	"os"
-
-	"github.com/zerodha/kite-mcp-server/kc"
 )
 
 // ipWhitelistWidgetData returns the deployment's static egress IP
@@ -27,7 +25,7 @@ import (
 // un-whitelisted IP, and we only learn that by placing a real order).
 // The widget exists to tell the user WHAT to do; they verify the
 // outcome by placing a test order.
-func ipWhitelistWidgetData(_ context.Context, _ *kc.Manager, email string) any {
+func ipWhitelistWidgetData(_ context.Context, _ extAppManagerPort, email string) any {
 	// Static egress IP baseline — the actual Fly.io bom-region IP
 	// assigned to app kite-mcp-server. Operators running a different
 	// region set FLY_EGRESS_IP.

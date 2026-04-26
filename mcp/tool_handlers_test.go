@@ -1586,6 +1586,27 @@ func TestToolHandler_WatchlistStoreAccessor_ReturnsManagerWatchlistStore(t *test
 		"handler.WatchlistStore() must return the same pointer as manager.WatchlistStore()")
 }
 
+// ── Phase 3a Batch 6b: extAppManagerPort interface assertion ────────────
+//
+// The ext_apps DataFunc + plugin_widget DataFunc signatures take
+// extAppManagerPort instead of *kc.Manager directly. *kc.Manager must
+// satisfy this interface implicitly so all 80 test callsites that pass
+// `mgr` to portfolioData / activityData / etc. continue to compile
+// without modification. This compile-time assertion plus a runtime test
+// pin the contract.
+func TestExtAppManagerPort_KcManagerSatisfies(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	// Compile-time assertion at the var line below. This runtime check
+	// proves the interface satisfaction is real, not just a Go-rules
+	// accident — any drift in the manager's accessor signatures (e.g. an
+	// accidental rename of QueryBus to GetQueryBus) breaks this test
+	// instead of breaking 80 ext_apps test callsites silently.
+	var port extAppManagerPort = mgr
+	assert.NotNil(t, port, "*kc.Manager must satisfy extAppManagerPort")
+	assert.NotNil(t, port.QueryBus(), "extAppManagerPort.QueryBus must be non-nil for a wired Manager")
+}
+
 
 // ── Scheduler.MarketStatus ───────────────────────────────────────────────
 func TestSchedulerMarketStatus(t *testing.T) {

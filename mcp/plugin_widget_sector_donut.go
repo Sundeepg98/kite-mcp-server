@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 
-	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
@@ -25,7 +24,7 @@ import (
 // exercise this branch. Returns an error-shaped payload when the
 // QueryBus dispatch fails — widget renders an inline error rather than
 // leaving the user looking at an empty donut.
-func sectorDonutWidgetData(ctx context.Context, manager *kc.Manager, email string) any {
+func sectorDonutWidgetData(ctx context.Context, manager extAppManagerPort, email string) any {
 	if manager == nil {
 		return map[string]any{"error": "unavailable", "reason": "portfolio manager not configured"}
 	}

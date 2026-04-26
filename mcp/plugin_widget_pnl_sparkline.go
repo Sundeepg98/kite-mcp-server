@@ -3,8 +3,6 @@ package mcp
 import (
 	"context"
 	"time"
-
-	"github.com/zerodha/kite-mcp-server/kc"
 )
 
 // pnlSparklineWidgetData reads the last 30 days of daily P&L snapshots
@@ -20,7 +18,7 @@ import (
 //
 // Handles nil manager (test path) by returning a zero-point payload.
 // Handles missing DB (dev mode without ALERT_DB_PATH) the same way.
-func pnlSparklineWidgetData(_ context.Context, manager *kc.Manager, email string) any {
+func pnlSparklineWidgetData(_ context.Context, manager extAppManagerPort, email string) any {
 	type pnlPoint struct {
 		Date   string  `json:"date"`
 		NetPnL float64 `json:"net_pnl"`
