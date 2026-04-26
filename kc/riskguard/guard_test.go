@@ -17,6 +17,11 @@ func TestCheckKillSwitch(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
 
+	// Pin clock to in-market-hours IST so off_hours doesn't shadow the
+	// kill-switch check we're isolating. See TestCheckOrderValue comment.
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 10, 30, 0, 0, ist) })
+
 	t.Run("unfrozen user passes", func(t *testing.T) {
 		// Confirmed=true bypasses the new default-on require-confirm gate so
 		// this test isolates the kill-switch behaviour.
@@ -42,6 +47,15 @@ func TestCheckKillSwitch(t *testing.T) {
 func TestCheckOrderValue(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+
+	// Pin the clock to a deterministic in-market-hours IST time so the
+	// off_hours check (chain order 1200, blocks 02:00-06:00 IST) stays
+	// quiet regardless of when the test is run. Without this, runs
+	// during the off-hours window block the order before order_value
+	// can fire and contaminate the rejection counter that drives
+	// auto-freeze. Same fix pattern as clock_test.go and anomaly_test.go.
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 10, 30, 0, 0, ist) })
 
 	// Tightened Free-tier default: Rs 50,000 per order. Tests updated to reflect
 	// the new cap. Confirmed=true bypasses the new default-on require-confirm
