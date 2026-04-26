@@ -172,8 +172,13 @@ func (s *Store) Record(entry *ToolCall) error {
 	// baseline cache so the next UserOrderStats query re-reads fresh data.
 	// Non-order tools (get_ltp, get_holdings, etc.) do not invalidate —
 	// they have no effect on the mean/stdev of order values.
+	//
+	// "order_recorded" is the reason tag on the
+	// domain.AnomalyCacheInvalidatedEvent emitted from the cache when a
+	// dispatcher is wired — distinguishes order-driven invalidation
+	// from admin/test-driven invalidation in the event stream.
 	if entry.Email != "" && isOrderTool(entry.ToolName) {
-		s.statsCache.Invalidate(entry.Email)
+		s.statsCache.InvalidateWithReason(entry.Email, "order_recorded")
 	}
 	return nil
 }

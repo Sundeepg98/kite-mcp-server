@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // DefaultMaxStatsCacheEntries is the default size cap for statsCache.
@@ -53,6 +55,19 @@ type statsCache struct {
 	// contention on the hot read path for metrics scraping.
 	hits   uint64
 	misses uint64
+
+	// events is the optional domain event dispatcher. When non-nil, every
+	// successful baseline snapshot (Set), every user-scoped invalidation,
+	// and every TTL/size-overflow eviction dispatches a typed
+	// domain.AnomalyCache*Event so runtime subscribers (read-side
+	// projector, future consumers) observe the cache aggregate state
+	// machine without scraping internals. Nil-safe: every emit-site
+	// guards on c.events != nil. Dispatch happens AFTER the mutex is
+	// released to avoid blocking the cache hot path on slow handlers
+	// and to prevent re-entrant deadlocks if a handler ever calls back
+	// into the cache. Pattern mirrors the watchlist ES wiring (commit
+	// aeb3e8c) and the TierChangedEvent template (commit 562f623).
+	events *domain.EventDispatcher
 }
 
 // cachedEntry is one row in the cache: a snapshot of UserOrderStats output
@@ -90,6 +105,43 @@ func cacheKey(email string, days int) string {
 	return fmt.Sprintf("%s:%d", email, days)
 }
 
+// parseCacheKey is the inverse of cacheKey: splits "email:days" back
+// into its components for forensic event payloads. Returns ok=false
+// when the key shape is malformed (the days suffix isn't an integer
+// or there's no colon at all). Callers MUST tolerate ok=false — the
+// emit path falls through to a best-effort event without breaking
+// the cache mutation.
+func parseCacheKey(key string) (email string, days int, ok bool) {
+	idx := strings.LastIndex(key, ":")
+	if idx <= 0 || idx == len(key)-1 {
+		return "", 0, false
+	}
+	var d int
+	if _, err := fmt.Sscanf(key[idx+1:], "%d", &d); err != nil {
+		return "", 0, false
+	}
+	return key[:idx], d, true
+}
+
+// SetEventDispatcher wires the domain event dispatcher so typed
+// domain.AnomalyCache*Event values are dispatched on every baseline
+// snapshot, user-scoped invalidation, and per-entry eviction. The
+// dispatcher path is for runtime subscribers (read-side projector,
+// future consumers) — audit-log persistence stays single-pathed via
+// the existing tool_calls table writer in store_worker.go, so
+// app/wire.go does NOT subscribe makeEventPersister for anomaly.*
+// event types. Nil-safe; passing nil restores the legacy
+// no-dispatch behaviour. Pattern mirrors the watchlist ES wiring
+// (commit aeb3e8c).
+func (c *statsCache) SetEventDispatcher(d *domain.EventDispatcher) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.events = d
+	c.mu.Unlock()
+}
+
 // Get returns the cached (mean, stdev, count) for the given (email, days)
 // if the entry exists and is within TTL. Misses and expired entries return
 // ok=false. A nil receiver is treated as a perpetual miss — lets callers
@@ -113,12 +165,29 @@ func (c *statsCache) Get(email string, days int) (mean, stdev, count float64, ok
 		// Lazy eviction: drop the stale entry so repeat misses don't hold
 		// memory indefinitely for dormant users.
 		c.mu.Lock()
+		evicted := false
 		if cur, stillThere := c.entries[key]; stillThere && cur.storedAt.Equal(e.storedAt) {
 			delete(c.entries, key)
+			evicted = true
 		}
+		dispatcher := c.events
 		c.mu.Unlock()
 
 		atomic.AddUint64(&c.misses, 1)
+
+		// Dispatch the eviction event AFTER releasing the lock. Two
+		// concurrent Get() calls can race for the lazy-evict slot —
+		// only the goroutine that actually deleted (evicted=true)
+		// emits, so the event stream stays once-per-evicted-row.
+		if evicted && dispatcher != nil {
+			emailPart, daysPart, _ := parseCacheKey(key)
+			dispatcher.Dispatch(domain.AnomalyCacheEvictedEvent{
+				UserEmail: emailPart,
+				Days:      daysPart,
+				Reason:    "ttl_expired",
+				Timestamp: time.Now(),
+			})
+		}
 		return 0, 0, 0, false
 	}
 
@@ -139,13 +208,21 @@ func (c *statsCache) Set(email string, days int, mean, stdev, count float64) {
 		return
 	}
 	key := cacheKey(email, days)
+	now := time.Now()
+
 	c.mu.Lock()
 	// Bound the map size. We only need to evict when this is a net-new key
 	// AND we're already at the cap — replacing an existing entry leaves
 	// len unchanged.
+	var (
+		evictedKey string
+		didEvict   bool
+	)
 	if _, present := c.entries[key]; !present && len(c.entries) >= c.maxEntries {
 		for k := range c.entries {
 			delete(c.entries, k)
+			evictedKey = k
+			didEvict = true
 			break
 		}
 	}
@@ -153,26 +230,101 @@ func (c *statsCache) Set(email string, days int, mean, stdev, count float64) {
 		mean:     mean,
 		stdev:    stdev,
 		count:    count,
-		storedAt: time.Now(),
+		storedAt: now,
 	}
+	dispatcher := c.events
 	c.mu.Unlock()
+
+	// Dispatch all events AFTER releasing the lock — handlers may be
+	// slow and we never want to back-pressure the cache hot path. Two
+	// events can fire from one Set() call: the size-overflow eviction
+	// (if any) and the new baseline snapshot.
+	if dispatcher != nil {
+		if didEvict {
+			evictedEmail, evictedDays, _ := parseCacheKey(evictedKey)
+			dispatcher.Dispatch(domain.AnomalyCacheEvictedEvent{
+				UserEmail: evictedEmail,
+				Days:      evictedDays,
+				Reason:    "size_overflow",
+				Timestamp: now,
+			})
+		}
+		// BelowFloor maps to "store_worker emitted the floor sentinel
+		// (mean=0, stdev=0) because count<minBaselineOrders". The
+		// caller in anomaly.go (UserOrderStats) is the only writer
+		// that distinguishes the two paths; here we infer BelowFloor
+		// from (mean==0 && stdev==0) with non-zero count, matching
+		// the contract documented in anomaly.go.
+		belowFloor := mean == 0 && stdev == 0 && count > 0
+		dispatcher.Dispatch(domain.AnomalyBaselineSnapshottedEvent{
+			UserEmail:  email,
+			Days:       days,
+			Mean:       mean,
+			Stdev:      stdev,
+			Count:      count,
+			BelowFloor: belowFloor,
+			Timestamp:  now,
+		})
+	}
 }
 
 // Invalidate drops every cached entry for the given email, regardless of
 // the days window. Called whenever a new order row lands in the audit log
 // so the next anomaly check sees the fresh data. A nil receiver is a no-op.
+//
+// When at least one entry was actually purged AND a dispatcher is wired,
+// emits a single domain.AnomalyCacheInvalidatedEvent (not one per
+// days-window) — the aggregate-level invalidation event is what
+// downstream projectors care about, not the per-key delete count.
+// Empty-email and no-op invalidations stay silent so the audit log
+// reflects real state transitions, matching the TierChangedEvent
+// "silent on no-op" contract.
 func (c *statsCache) Invalidate(email string) {
+	c.invalidate(email, "manual")
+}
+
+// InvalidateWithReason is the reason-tagged form of Invalidate, used by
+// store_worker.go's Record() path so the resulting event payload
+// distinguishes order-driven invalidation ("order_recorded") from
+// admin/test-driven invalidation ("manual"). Public so callers outside
+// this file can supply the trigger context, kept tightly scoped to the
+// reasons documented on AnomalyCacheInvalidatedEvent.
+func (c *statsCache) InvalidateWithReason(email, reason string) {
+	c.invalidate(email, reason)
+}
+
+func (c *statsCache) invalidate(email, reason string) {
 	if c == nil {
 		return
 	}
+	if email == "" {
+		// Per-user invalidation with empty email would purge nothing
+		// and emit a misleading event. Match the original silent no-op.
+		return
+	}
 	prefix := email + ":"
+
 	c.mu.Lock()
+	purged := 0
 	for k := range c.entries {
 		if strings.HasPrefix(k, prefix) {
 			delete(c.entries, k)
+			purged++
 		}
 	}
+	dispatcher := c.events
 	c.mu.Unlock()
+
+	if purged > 0 && dispatcher != nil {
+		if reason == "" {
+			reason = "manual"
+		}
+		dispatcher.Dispatch(domain.AnomalyCacheInvalidatedEvent{
+			UserEmail: email,
+			Reason:    reason,
+			Timestamp: time.Now(),
+		})
+	}
 }
 
 // cacheHitRate returns the fraction of Get() calls that resulted in a hit

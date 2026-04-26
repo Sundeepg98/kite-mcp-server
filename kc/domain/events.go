@@ -401,6 +401,310 @@ type ConsentWithdrawnEvent struct {
 func (e ConsentWithdrawnEvent) EventType() string    { return "consent.withdrawn" }
 func (e ConsentWithdrawnEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// RiskguardKillSwitchTrippedEvent is emitted when riskguard's global trading
+// freeze (a.k.a. the "kill switch") is engaged at the riskguard layer —
+// distinct from the admin-tool-level GlobalFreezeEvent which records the
+// admin command. This event captures the riskguard state mutation itself
+// (kill switch went 0→1), making the counters aggregate's freeze lifecycle
+// fully reconstructable from the event stream.
+//
+// Active is true when the kill switch was tripped (off→on); when an
+// operator unfreezes globally, a separate event with Active=false is
+// emitted so the on/off transitions are symmetric in the audit log.
+//
+// FrozenBy carries the operator/system tag passed into FreezeGlobal —
+// typically an admin email but may be a synthetic tag like
+// "riskguard:auto" in future auto-trip scenarios.
+type RiskguardKillSwitchTrippedEvent struct {
+	UserEmail string // empty for global kill-switch (the canonical case)
+	FrozenBy  string
+	Reason    string
+	Active    bool // true=tripped (frozen), false=lifted (unfrozen)
+	Timestamp time.Time
+}
+
+func (e RiskguardKillSwitchTrippedEvent) EventType() string    { return "riskguard.kill_switch_tripped" }
+func (e RiskguardKillSwitchTrippedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// RiskguardDailyCounterResetEvent is emitted when riskguard rolls a user's
+// per-day counters (DailyOrderCount, DailyPlacedValue) on the 9:15 AM IST
+// trading-day boundary. Mostly observable for forensic timeline replay —
+// auditors who walk the counters aggregate stream see explicit reset
+// boundaries rather than having to infer them from gaps in the event log.
+//
+// Reason is currently always "trading_day_boundary"; reserved as a string
+// so future paths (admin-forced reset, end-of-week rollover) can tag
+// themselves without bumping the event schema.
+type RiskguardDailyCounterResetEvent struct {
+	UserEmail string
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e RiskguardDailyCounterResetEvent) EventType() string    { return "riskguard.daily_counter_reset" }
+func (e RiskguardDailyCounterResetEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// RiskguardRejectionEvent is emitted when the circuit-breaker's sliding
+// rejection window for a user is incremented (recordRejection called).
+// Distinct from RiskLimitBreachedEvent which is emitted at the use-case
+// layer when an order is blocked: this event captures the COUNTER
+// mutation inside the riskguard aggregate, so the counters aggregate
+// stream can be replayed to reconstruct the auto-freeze state machine
+// without joining against the order pipeline.
+//
+// Reason mirrors the RejectionReason that drove the recordRejection call
+// (e.g. "order_value_limit", "daily_value_limit", "anomaly_high"). Used
+// by future read-side projectors that count by reason to surface
+// "user X is hitting the order_value cap repeatedly" without scanning
+// the full audit log.
+type RiskguardRejectionEvent struct {
+	UserEmail string
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e RiskguardRejectionEvent) EventType() string    { return "riskguard.rejection_recorded" }
+func (e RiskguardRejectionEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// RiskguardCountersAggregateID returns the natural aggregate key for
+// per-user riskguard counter events. Format: "riskguard:<email>" or
+// "riskguard:global" for the kill-switch (global-scope) events. The
+// "riskguard:" prefix keeps these aggregate streams disjoint from
+// per-email user-aggregate streams (UserFrozenEvent, etc.) so a future
+// projector can replay the counters aggregate cleanly.
+func RiskguardCountersAggregateID(email string) string {
+	if email == "" {
+		return "riskguard:global"
+	}
+	return "riskguard:" + email
+}
+
+// AnomalyBaselineSnapshottedEvent is emitted when the audit Store's
+// in-memory UserOrderStats baseline cache writes a fresh (mean, stdev,
+// count) tuple for a (user, days) pair. Carries the user email plus
+// the snapshotted statistical fields so a downstream consumer can
+// reconstruct the anomaly baseline projection without re-querying the
+// 30-day order history.
+//
+// Aggregate-ID rule: keyed by AnomalyCacheAggregateID(UserEmail) (one
+// logical baseline per user across all days windows; Days is a payload
+// field, not part of the aggregate key). Below-threshold snapshots
+// (count < minBaselineOrders) write the floor sentinel
+// (mean=0, stdev=0) — BelowFloor=true so projector consumers can
+// distinguish "user is new and we suppressed stats" from "real
+// distribution centred at zero" (the latter is impossible at the SQL
+// layer but BelowFloor makes the intent unambiguous).
+type AnomalyBaselineSnapshottedEvent struct {
+	UserEmail  string
+	Days       int
+	Mean       float64
+	Stdev      float64
+	Count      float64
+	BelowFloor bool // true when count<minBaselineOrders and mean/stdev are zeroed sentinels
+	Timestamp  time.Time
+}
+
+func (e AnomalyBaselineSnapshottedEvent) EventType() string    { return "anomaly.baseline_snapshotted" }
+func (e AnomalyBaselineSnapshottedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// AnomalyCacheInvalidatedEvent is emitted when every cached
+// UserOrderStats entry for a given user is purged — typically when a
+// new place_order / modify_order row lands in the audit log so the
+// next anomaly check sees the fresh data. Reason tags the trigger
+// ("order_recorded" / "manual" / "admin_clear").
+//
+// Aggregate-ID rule: keyed by AnomalyCacheAggregateID(UserEmail) —
+// invalidation is per user, all days windows at once.
+type AnomalyCacheInvalidatedEvent struct {
+	UserEmail string
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e AnomalyCacheInvalidatedEvent) EventType() string    { return "anomaly.cache_invalidated" }
+func (e AnomalyCacheInvalidatedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// AnomalyCacheEvictedEvent is emitted when the cache drops a single
+// entry for a reason other than user-scoped invalidation. Reason
+// distinguishes the two eviction paths:
+//
+//   - "ttl_expired"   — lazy eviction on Get() when storedAt+ttl < now
+//   - "size_overflow" — random single-entry eviction on Set() when
+//     len(entries) >= maxEntries and the incoming key is net-new
+//
+// Aggregate-ID rule: keyed by AnomalyCacheAggregateID(UserEmail).
+// UserEmail may be empty for size_overflow when the evicted entry's
+// key was not parseable — defence in depth, since cacheKey() is the
+// only writer, but the event still carries enough to forensically
+// trace the dropped slot.
+type AnomalyCacheEvictedEvent struct {
+	UserEmail string
+	Days      int
+	Reason    string // "ttl_expired" / "size_overflow"
+	Timestamp time.Time
+}
+
+func (e AnomalyCacheEvictedEvent) EventType() string    { return "anomaly.cache_evicted" }
+func (e AnomalyCacheEvictedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// AnomalyCacheAggregateID returns the natural aggregate key for
+// anomaly-cache events. Format: "anomaly:<email>". The "anomaly:"
+// prefix keeps these streams disjoint from per-email user-aggregate
+// streams (UserFrozenEvent, etc.) and the "riskguard:<email>" stream,
+// so a future projector can replay the anomaly cache aggregate
+// cleanly without filtering by event type.
+func AnomalyCacheAggregateID(email string) string {
+	if email == "" {
+		return "anomaly:unknown"
+	}
+	return "anomaly:" + email
+}
+
+// PluginRegisteredEvent is emitted when a plugin binary is registered
+// for hot-reload watching via WatchPluginBinary. Captures the
+// (plugin-name, path) pair so the plugin-watcher aggregate stream lets
+// auditors / read-side projectors reconstruct the full set of currently-
+// watched binaries by replaying the (registered, unregistered) pairs.
+//
+// PluginName is the logical plugin identifier (typically the basename
+// of Path, derived inside WatchPluginBinary). Path is the absolute
+// filesystem path that subscribed to fsnotify events. Both fields are
+// required at emit time.
+type PluginRegisteredEvent struct {
+	PluginName string
+	Path       string
+	Timestamp  time.Time
+}
+
+func (e PluginRegisteredEvent) EventType() string     { return "plugin.registered" }
+func (e PluginRegisteredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PluginUnregisteredEvent is emitted when a plugin path is removed from
+// the watcher's registry — currently only via ClearPluginWatches (test
+// path), but reserved for a future production unregister API. Pairs
+// with PluginRegisteredEvent so the watcher aggregate stream is closed
+// (registered + unregistered events have matching Path).
+type PluginUnregisteredEvent struct {
+	PluginName string
+	Path       string
+	Timestamp  time.Time
+}
+
+func (e PluginUnregisteredEvent) EventType() string     { return "plugin.unregistered" }
+func (e PluginUnregisteredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PluginReloadTriggeredEvent is emitted when the watcher debounce timer
+// fires Close() on a registered BinaryReloadable, signaling that the
+// plugin's subprocess will be relaunched on the next tool invocation.
+// This is the workhorse event of the plugin-watcher aggregate: every
+// dev-loop rebuild surfaces here, giving the audit log an explicit
+// reload boundary that read-side projectors can use to compute
+// "reloads/hour by plugin" without scanning fsnotify-level traces.
+type PluginReloadTriggeredEvent struct {
+	PluginName string
+	Path       string
+	Timestamp  time.Time
+}
+
+func (e PluginReloadTriggeredEvent) EventType() string     { return "plugin.reload_triggered" }
+func (e PluginReloadTriggeredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PluginWatcherStartedEvent is emitted exactly once per
+// StartPluginBinaryWatcher invocation that actually starts the watcher
+// goroutine (idempotent re-Start calls are silent). Captures the
+// fsnotify watcher coming online so the aggregate stream has explicit
+// "watcher up" boundaries between reload bursts.
+type PluginWatcherStartedEvent struct {
+	Timestamp time.Time
+}
+
+func (e PluginWatcherStartedEvent) EventType() string     { return "plugin.watcher_started" }
+func (e PluginWatcherStartedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PluginWatcherStoppedEvent is emitted exactly once per
+// StopPluginBinaryWatcher invocation that actually stops a running
+// watcher (no-op stops on never-started watchers are silent). Pairs
+// with PluginWatcherStartedEvent so the aggregate stream's lifecycle
+// transitions are symmetric.
+type PluginWatcherStoppedEvent struct {
+	Timestamp time.Time
+}
+
+func (e PluginWatcherStoppedEvent) EventType() string     { return "plugin.watcher_stopped" }
+func (e PluginWatcherStoppedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PluginWatcherAggregateID returns the natural aggregate key for plugin-
+// watcher events. Per-path mutations (registered, unregistered,
+// reload_triggered) key by the absolute Path so a single plugin's
+// lifecycle replays as a coherent stream. Watcher-lifecycle events
+// (started, stopped) have no path and key by the singleton string
+// "plugin-watcher:global" so they form their own aggregate stream
+// disjoint from per-plugin streams.
+func PluginWatcherAggregateID(path string) string {
+	if path == "" {
+		return "plugin-watcher:global"
+	}
+	return "plugin-watcher:" + path
+}
+
+// TelegramSubscribedEvent is emitted the first time a user binds a
+// Telegram chat ID to their account (no prior chat-ID mapping in the
+// alerts.Store). Distinct from TelegramChatBoundEvent so auditors can
+// tell first-time onboarding from re-binding without walking the full
+// Telegram-subscription history.
+//
+// Aggregate-ID rule: keyed by TelegramSubscriptionAggregateID(UserEmail)
+// — one logical Telegram subscription per user. ChatID can change over
+// time (re-bind to a new chat, e.g. user lost device); the email is the
+// stable aggregate identifier.
+type TelegramSubscribedEvent struct {
+	UserEmail string
+	ChatID    int64
+	Timestamp time.Time
+}
+
+func (e TelegramSubscribedEvent) EventType() string     { return "telegram.subscribed" }
+func (e TelegramSubscribedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// TelegramChatBoundEvent is emitted when an existing Telegram subscriber
+// re-binds to a different chat ID (rotation) — e.g. the user lost
+// access to the old chat or moved to a new device. OldChatID and
+// NewChatID are both captured so projector consumers can render the
+// rotation history without joining against a separate snapshot.
+//
+// Stays silent for no-op writes (same chat ID in, same chat ID out)
+// so the event log reflects real state transitions, not redundant
+// setup-tool replays. Pattern mirrors TierChangedEvent's
+// "real transitions only" contract.
+//
+// Aggregate-ID rule: same as TelegramSubscribedEvent — keyed by
+// TelegramSubscriptionAggregateID(UserEmail). The full chat-bind
+// lifecycle for a user lives under one aggregate stream regardless of
+// how many times the chat ID rotates.
+type TelegramChatBoundEvent struct {
+	UserEmail string
+	OldChatID int64
+	NewChatID int64
+	Timestamp time.Time
+}
+
+func (e TelegramChatBoundEvent) EventType() string     { return "telegram.chat_bound" }
+func (e TelegramChatBoundEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// TelegramSubscriptionAggregateID returns the natural aggregate key for
+// per-user Telegram subscription events. Format: "telegram:<email>".
+// The "telegram:" prefix keeps these aggregate streams disjoint from
+// per-email user-aggregate streams (UserFrozenEvent, etc.) and the
+// "riskguard:<email>" / "anomaly:<email>" streams, so a future
+// projector can replay the Telegram subscription aggregate cleanly
+// without filtering by event type.
+func TelegramSubscriptionAggregateID(email string) string {
+	if email == "" {
+		return "telegram:unknown"
+	}
+	return "telegram:" + email
+}
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

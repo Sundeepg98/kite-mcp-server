@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // ToolCall represents a single MCP tool invocation record.
@@ -138,6 +139,16 @@ func (s *Store) StatsCacheHitRate() float64 {
 // exposed publicly for tests and callers that bypass Record().
 func (s *Store) InvalidateStatsCache(email string) {
 	s.statsCache.Invalidate(email)
+}
+
+// SetAnomalyCacheEventDispatcher wires the domain event dispatcher into
+// the in-memory UserOrderStats cache so every baseline snapshot,
+// user-scoped invalidation, and per-entry eviction is published as a
+// typed domain.AnomalyCache*Event. Pure plumbing — the Store does not
+// itself subscribe to these events. app/wire.go calls this once at
+// startup; passing nil restores the legacy no-dispatch behaviour.
+func (s *Store) SetAnomalyCacheEventDispatcher(d *domain.EventDispatcher) {
+	s.statsCache.SetEventDispatcher(d)
 }
 
 // SetLogger assigns a structured logger for background worker diagnostics.

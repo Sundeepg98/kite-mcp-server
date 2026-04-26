@@ -587,6 +587,28 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.Email)
 	case domain.TierChangedEvent:
 		return audit.HashEmail(ev.UserEmail)
+	case domain.AnomalyBaselineSnapshottedEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.AnomalyCacheInvalidatedEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.AnomalyCacheEvictedEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.RiskguardKillSwitchTrippedEvent:
+		// Global kill-switch typically has empty UserEmail; hash falls
+		// back to "" so the email_hash WHERE query excludes it (system
+		// event, not user-correlated).
+		if ev.UserEmail == "" {
+			return ""
+		}
+		return audit.HashEmail(ev.UserEmail)
+	case domain.RiskguardDailyCounterResetEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.RiskguardRejectionEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.TelegramSubscribedEvent:
+		return audit.HashEmail(ev.UserEmail)
+	case domain.TelegramChatBoundEvent:
+		return audit.HashEmail(ev.UserEmail)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -640,6 +662,32 @@ func deriveAggregateID(e domain.Event) string {
 		return ev.WatchlistID
 	case domain.WatchlistItemRemovedEvent:
 		return ev.WatchlistID
+	case domain.AnomalyBaselineSnapshottedEvent:
+		return domain.AnomalyCacheAggregateID(ev.UserEmail)
+	case domain.AnomalyCacheInvalidatedEvent:
+		return domain.AnomalyCacheAggregateID(ev.UserEmail)
+	case domain.AnomalyCacheEvictedEvent:
+		return domain.AnomalyCacheAggregateID(ev.UserEmail)
+	case domain.PluginRegisteredEvent:
+		return domain.PluginWatcherAggregateID(ev.Path)
+	case domain.PluginUnregisteredEvent:
+		return domain.PluginWatcherAggregateID(ev.Path)
+	case domain.PluginReloadTriggeredEvent:
+		return domain.PluginWatcherAggregateID(ev.Path)
+	case domain.PluginWatcherStartedEvent:
+		return domain.PluginWatcherAggregateID("")
+	case domain.PluginWatcherStoppedEvent:
+		return domain.PluginWatcherAggregateID("")
+	case domain.RiskguardKillSwitchTrippedEvent:
+		return domain.RiskguardCountersAggregateID(ev.UserEmail)
+	case domain.RiskguardDailyCounterResetEvent:
+		return domain.RiskguardCountersAggregateID(ev.UserEmail)
+	case domain.RiskguardRejectionEvent:
+		return domain.RiskguardCountersAggregateID(ev.UserEmail)
+	case domain.TelegramSubscribedEvent:
+		return domain.TelegramSubscriptionAggregateID(ev.UserEmail)
+	case domain.TelegramChatBoundEvent:
+		return domain.TelegramSubscriptionAggregateID(ev.UserEmail)
 	default:
 		return "unknown"
 	}

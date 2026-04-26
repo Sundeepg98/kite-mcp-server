@@ -382,6 +382,23 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// This is a write-only audit trail — events are never read back for state reconstitution.
 	eventDispatcher := domain.NewEventDispatcher()
 	kcManager.SetEventDispatcher(eventDispatcher)
+	// Riskguard counters aggregate emits typed Riskguard*Event values
+	// (kill-switch trip/lift, daily-counter reset, rejection recorded)
+	// onto the same dispatcher. Nil-safe — calling SetEventDispatcher
+	// before subscribers are registered is fine; dispatch is synchronous
+	// and the dispatcher's handler map is empty until subscriptions land
+	// below. See kc/riskguard/lifecycle.go for the emit sites.
+	if riskGuard != nil {
+		riskGuard.SetEventDispatcher(eventDispatcher)
+	}
+	// Anomaly cache aggregate emits typed AnomalyCache*Event values
+	// (baseline snapshot, user-scoped invalidation, per-entry eviction)
+	// onto the shared dispatcher. Nil-safe — auditStore may be nil in
+	// DevMode without ALERT_DB_PATH, and the cache itself tolerates a
+	// nil dispatcher. See kc/audit/anomaly_cache.go for the emit sites.
+	if app.auditStore != nil {
+		app.auditStore.SetAnomalyCacheEventDispatcher(eventDispatcher)
+	}
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		eventStore := eventsourcing.NewEventStore(alertDB)
 		if err := eventStore.InitTable(); err != nil {
@@ -424,6 +441,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
 			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
 			eventDispatcher.Subscribe("billing.tier_changed", makeEventPersister(eventStore, "Billing", app.logger))
+			// Riskguard counters aggregate — three event types share the
+			// "RiskguardCounters" aggregate type so projector queries can
+			// pull the full counters stream by aggregate_type without
+			// joining across event_type rows.
+			eventDispatcher.Subscribe("riskguard.kill_switch_tripped", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
+			eventDispatcher.Subscribe("riskguard.daily_counter_reset", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
+			eventDispatcher.Subscribe("riskguard.rejection_recorded", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

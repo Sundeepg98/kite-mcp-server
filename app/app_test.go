@@ -232,6 +232,93 @@ func TestDeriveAggregateID(t *testing.T) {
 			event:    domain.WatchlistItemRemovedEvent{WatchlistID: "wl-4", Email: "u@t.com", ItemID: "it-1", Timestamp: now},
 			expected: "wl-4",
 		},
+		// ES: telegram subscription aggregate keyed by email under the
+		// "telegram:" prefix so it stays disjoint from other per-email
+		// aggregate streams (UserFrozenEvent, riskguard:*, anomaly:*).
+		{
+			name:     "TelegramSubscribedEvent uses TelegramSubscriptionAggregateID",
+			event:    domain.TelegramSubscribedEvent{UserEmail: "alice@example.com", ChatID: 12345, Timestamp: now},
+			expected: "telegram:alice@example.com",
+		},
+		{
+			name:     "TelegramChatBoundEvent uses TelegramSubscriptionAggregateID",
+			event:    domain.TelegramChatBoundEvent{UserEmail: "bob@example.com", OldChatID: 11111, NewChatID: 22222, Timestamp: now},
+			expected: "telegram:bob@example.com",
+		},
+		// ES: riskguard counters aggregate keyed under "riskguard:<email>"
+		// or "riskguard:global" for the kill-switch (system-scope) events.
+		{
+			name:     "RiskguardKillSwitchTrippedEvent (global) uses riskguard:global",
+			event:    domain.RiskguardKillSwitchTrippedEvent{FrozenBy: "admin@example.com", Reason: "incident", Active: true, Timestamp: now},
+			expected: "riskguard:global",
+		},
+		{
+			name:     "RiskguardKillSwitchTrippedEvent (per-user) uses riskguard:<email>",
+			event:    domain.RiskguardKillSwitchTrippedEvent{UserEmail: "scoped@example.com", Active: true, Timestamp: now},
+			expected: "riskguard:scoped@example.com",
+		},
+		{
+			name:     "RiskguardDailyCounterResetEvent uses riskguard:<email>",
+			event:    domain.RiskguardDailyCounterResetEvent{UserEmail: "trader@example.com", Reason: "trading_day_boundary", Timestamp: now},
+			expected: "riskguard:trader@example.com",
+		},
+		{
+			name:     "RiskguardRejectionEvent uses riskguard:<email>",
+			event:    domain.RiskguardRejectionEvent{UserEmail: "rejected@example.com", Reason: "order_value_limit", Timestamp: now},
+			expected: "riskguard:rejected@example.com",
+		},
+		// ES: anomaly cache aggregate keyed under "anomaly:<email>" so the
+		// per-user baseline / invalidation / eviction stream stays disjoint
+		// from other per-email aggregates (riskguard:*, telegram:*, etc.).
+		{
+			name:     "AnomalyBaselineSnapshottedEvent uses anomaly:<email>",
+			event:    domain.AnomalyBaselineSnapshottedEvent{UserEmail: "alice@example.com", Days: 30, Mean: 1000, Stdev: 200, Count: 12, Timestamp: now},
+			expected: "anomaly:alice@example.com",
+		},
+		{
+			name:     "AnomalyCacheInvalidatedEvent uses anomaly:<email>",
+			event:    domain.AnomalyCacheInvalidatedEvent{UserEmail: "bob@example.com", Reason: "order_recorded", Timestamp: now},
+			expected: "anomaly:bob@example.com",
+		},
+		{
+			name:     "AnomalyCacheEvictedEvent uses anomaly:<email>",
+			event:    domain.AnomalyCacheEvictedEvent{UserEmail: "carol@example.com", Days: 30, Reason: "ttl_expired", Timestamp: now},
+			expected: "anomaly:carol@example.com",
+		},
+		{
+			name:     "AnomalyCacheEvictedEvent (empty email) falls back to anomaly:unknown",
+			event:    domain.AnomalyCacheEvictedEvent{UserEmail: "", Days: 30, Reason: "size_overflow", Timestamp: now},
+			expected: "anomaly:unknown",
+		},
+		// ES: plugin watcher aggregate keyed under "plugin-watcher:<path>"
+		// for per-plugin path mutations (registered, unregistered,
+		// reload_triggered) and "plugin-watcher:global" for the watcher
+		// lifecycle events (started, stopped) which have no path.
+		{
+			name:     "PluginRegisteredEvent uses plugin-watcher:<path>",
+			event:    domain.PluginRegisteredEvent{PluginName: "p1", Path: "/abs/foo", Timestamp: now},
+			expected: "plugin-watcher:/abs/foo",
+		},
+		{
+			name:     "PluginUnregisteredEvent uses plugin-watcher:<path>",
+			event:    domain.PluginUnregisteredEvent{PluginName: "p1", Path: "/abs/foo", Timestamp: now},
+			expected: "plugin-watcher:/abs/foo",
+		},
+		{
+			name:     "PluginReloadTriggeredEvent uses plugin-watcher:<path>",
+			event:    domain.PluginReloadTriggeredEvent{PluginName: "p1", Path: "/abs/bar", Timestamp: now},
+			expected: "plugin-watcher:/abs/bar",
+		},
+		{
+			name:     "PluginWatcherStartedEvent uses plugin-watcher:global",
+			event:    domain.PluginWatcherStartedEvent{Timestamp: now},
+			expected: "plugin-watcher:global",
+		},
+		{
+			name:     "PluginWatcherStoppedEvent uses plugin-watcher:global",
+			event:    domain.PluginWatcherStoppedEvent{Timestamp: now},
+			expected: "plugin-watcher:global",
+		},
 	}
 
 	for _, tt := range tests {
