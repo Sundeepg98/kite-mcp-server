@@ -423,8 +423,18 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			eventDispatcher.Subscribe("family.member_removed", makeEventPersister(eventStore, "Family", app.logger))
 			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
 			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
+			eventDispatcher.Subscribe("billing.tier_changed", makeEventPersister(eventStore, "Billing", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
+	}
+
+	// Wire the shared event dispatcher into the billing store so
+	// SetSubscription emits TierChangedEvent on real tier transitions.
+	// Billing store is constructed earlier (line ~90) and may be nil
+	// in DEV_MODE or when STRIPE_SECRET_KEY is unset; the SetEventDispatcher
+	// helper is nil-safe via the dispatcher field on Store.
+	if preBillingStore != nil {
+		preBillingStore.SetEventDispatcher(eventDispatcher)
 	}
 
 	// Initialize paper trading engine.

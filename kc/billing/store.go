@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // Subscription status constants.
@@ -36,6 +37,42 @@ type Store struct {
 	subs   map[string]*Subscription // keyed by lowercase email
 	db     *alerts.DB
 	logger *slog.Logger
+	// dispatcher is the optional domain event dispatcher. When set,
+	// SetSubscription emits a domain.TierChangedEvent on every
+	// effective tier transition. Nil-safe — older wirings or in-memory
+	// test stores that never call SetEventDispatcher continue to
+	// function without emitting events.
+	dispatcher *domain.EventDispatcher
+	// changeReason is consulted by SetSubscription to label the next
+	// emitted TierChangedEvent. Cleared after each emit so callers
+	// must opt in per call (defaulting to "" when not set).
+	changeReason string
+}
+
+// SetEventDispatcher attaches a domain event dispatcher to the store.
+// Once set, SetSubscription emits TierChangedEvent on every effective
+// tier transition. Pattern mirrors usecases.CreateAlertUseCase /
+// SessionService — the store stays usable without a dispatcher (older
+// tests, in-memory wirings) and gains domain-event emission once wired.
+func (s *Store) SetEventDispatcher(d *domain.EventDispatcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dispatcher = d
+}
+
+// SetChangeReason labels the next TierChangedEvent with the supplied
+// reason string ("stripe_checkout", "stripe_subscription_updated",
+// "stripe_subscription_deleted", "admin_set_billing_tier"). The reason
+// is consumed by the next SetSubscription call and cleared afterwards,
+// so each call site must opt in by pairing this with its mutation.
+// Concurrency-safe (held under store lock) but not transactional — if
+// two callers race, the second overrides the first; given that
+// SetSubscription is per-email and tier changes are infrequent, this
+// is acceptable for an audit-log-only signal.
+func (s *Store) SetChangeReason(reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.changeReason = reason
 }
 
 // NewStore creates a new billing store with SQLite persistence.
@@ -165,6 +202,12 @@ func (s *Store) GetTierForUser(email string, adminEmailFn func(string) string) T
 }
 
 // SetSubscription creates or updates a subscription for the given email.
+// On every successful write where the **effective** tier has changed
+// (computed via effectiveTierOf below — applies the same status/expiry
+// gating as GetTier), the store dispatches a domain.TierChangedEvent
+// describing the transition. Identical-tier writes (idempotent webhook
+// replays, status-only updates that don't shift the access tier) are
+// silent so the audit log only records real state changes.
 func (s *Store) SetSubscription(sub *Subscription) error {
 	key := strings.ToLower(strings.TrimSpace(sub.AdminEmail))
 	if key == "" {
@@ -177,7 +220,13 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 	stored.UpdatedAt = now
 
 	s.mu.Lock()
+	prev := s.subs[key]
+	fromTier := effectiveTierOf(prev, now)
 	s.subs[key] = &stored
+	toTier := effectiveTierOf(&stored, now)
+	dispatcher := s.dispatcher
+	reason := s.changeReason
+	s.changeReason = ""
 	s.mu.Unlock()
 
 	if s.db != nil {
@@ -206,7 +255,39 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			return fmt.Errorf("persist subscription: %w", err)
 		}
 	}
+
+	// Dispatch tier-change event after persistence succeeds. We emit
+	// only on real transitions so idempotent webhook replays don't
+	// litter the audit log with no-op rows. Dispatcher is nil-safe.
+	if dispatcher != nil && fromTier != toTier {
+		dispatcher.Dispatch(domain.TierChangedEvent{
+			UserEmail: key,
+			FromTier:  int(fromTier),
+			ToTier:    int(toTier),
+			Reason:    reason,
+			Timestamp: now,
+		})
+	}
 	return nil
+}
+
+// effectiveTierOf returns the tier a subscription would expose to
+// downstream tool-access checks at the given instant. Mirrors GetTier
+// semantics (status must be Active or Trialing; expired subscriptions
+// fall back to Free) so TierChangedEvent reflects what tools actually
+// see, not the raw stored Tier column. nil sub → Free (the default
+// for users with no subscription row yet).
+func effectiveTierOf(sub *Subscription, at time.Time) Tier {
+	if sub == nil {
+		return TierFree
+	}
+	if sub.Status != StatusActive && sub.Status != StatusTrialing {
+		return TierFree
+	}
+	if !sub.ExpiresAt.IsZero() && at.After(sub.ExpiresAt) {
+		return TierFree
+	}
+	return sub.Tier
 }
 
 // GetSubscription returns the subscription for an email. Returns nil if not found.

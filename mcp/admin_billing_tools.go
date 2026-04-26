@@ -86,6 +86,13 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			UpdatedAt:  time.Now().UTC(),
 			MaxUsers:   maxUsers,
 		}
+		// Label the next emitted TierChangedEvent so the audit log
+		// distinguishes operator-driven changes from Stripe webhooks.
+		// SetChangeReason is exposed on *billing.Store; route through
+		// the concrete type for now (BillingStoreInterface kept narrow).
+		if concrete, ok := bs.(*billing.Store); ok {
+			concrete.SetChangeReason("admin_set_billing_tier")
+		}
 		if err := bs.SetSubscription(sub); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("set subscription: %s", err.Error())), nil
 		}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // newTestStore creates a billing Store backed only by the in-memory map
@@ -156,6 +157,189 @@ func TestInitTable_Idempotent(t *testing.T) {
 	got := s.GetSubscription("idempotent@example.com")
 	require.NotNil(t, got, "TestInitTable_Idempotent: got")
 	assert.Equal(t, TierPro, got.Tier, "TestInitTable_Idempotent: want=%v got=%v", TierPro, got.Tier)
+}
+
+// ---------------------------------------------------------------------------
+// TierChangedEvent emission tests
+// ---------------------------------------------------------------------------
+
+// TestSetSubscription_EmitsTierChangedOnUpgrade verifies that a transition
+// from no-subscription (effective Free) to an active paid tier emits a
+// domain.TierChangedEvent with FromTier=0/ToTier=paid and the labelled
+// reason. This is the primary path: free → paid upgrade.
+func TestSetSubscription_EmitsTierChangedOnUpgrade(t *testing.T) {
+	t.Parallel()
+	s := newTestStore()
+	dispatcher := domain.NewEventDispatcher()
+	s.SetEventDispatcher(dispatcher)
+
+	var captured domain.TierChangedEvent
+	seen := false
+	dispatcher.Subscribe("billing.tier_changed", func(e domain.Event) {
+		captured = e.(domain.TierChangedEvent)
+		seen = true
+	})
+
+	s.SetChangeReason("stripe_checkout")
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "newpayer@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	require.True(t, seen, "TierChangedEvent should be dispatched on free→pro upgrade")
+	assert.Equal(t, "newpayer@example.com", captured.UserEmail)
+	assert.Equal(t, int(TierFree), captured.FromTier, "from tier should be Free (no prior sub)")
+	assert.Equal(t, int(TierPro), captured.ToTier, "to tier should be Pro")
+	assert.Equal(t, "stripe_checkout", captured.Reason)
+	assert.WithinDuration(t, time.Now(), captured.Timestamp, 2*time.Second)
+}
+
+// TestSetSubscription_EmitsTierChangedOnDowngrade verifies a paid→free
+// transition fires the event with the correct from/to and labels the
+// cancellation reason.
+func TestSetSubscription_EmitsTierChangedOnDowngrade(t *testing.T) {
+	t.Parallel()
+	s := newTestStore()
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "exiter@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	dispatcher := domain.NewEventDispatcher()
+	s.SetEventDispatcher(dispatcher)
+
+	var events []domain.TierChangedEvent
+	dispatcher.Subscribe("billing.tier_changed", func(e domain.Event) {
+		events = append(events, e.(domain.TierChangedEvent))
+	})
+
+	s.SetChangeReason("stripe_subscription_deleted")
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "exiter@example.com",
+		Tier:       TierFree,
+		Status:     StatusCanceled,
+	}))
+
+	require.Len(t, events, 1, "exactly one tier-change event for pro→free")
+	assert.Equal(t, int(TierPro), events[0].FromTier)
+	assert.Equal(t, int(TierFree), events[0].ToTier)
+	assert.Equal(t, "stripe_subscription_deleted", events[0].Reason)
+}
+
+// TestSetSubscription_NoEmissionOnSameTier ensures redundant writes that
+// don't shift the effective tier (idempotent webhook replays, status-only
+// updates) stay silent — the audit log should record state changes,
+// not redundant writes.
+func TestSetSubscription_NoEmissionOnSameTier(t *testing.T) {
+	t.Parallel()
+	s := newTestStore()
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "stable@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	dispatcher := domain.NewEventDispatcher()
+	s.SetEventDispatcher(dispatcher)
+
+	count := 0
+	dispatcher.Subscribe("billing.tier_changed", func(e domain.Event) {
+		count++
+	})
+
+	// Same tier and status — no transition.
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "stable@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	assert.Equal(t, 0, count, "no event should fire when effective tier is unchanged")
+}
+
+// TestSetSubscription_EmitsOnCrossGrade verifies a paid→paid transition
+// (Pro → Premium) also fires, since the access tier shifts.
+func TestSetSubscription_EmitsOnCrossGrade(t *testing.T) {
+	t.Parallel()
+	s := newTestStore()
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "upgrader@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	dispatcher := domain.NewEventDispatcher()
+	s.SetEventDispatcher(dispatcher)
+
+	var captured domain.TierChangedEvent
+	seen := false
+	dispatcher.Subscribe("billing.tier_changed", func(e domain.Event) {
+		captured = e.(domain.TierChangedEvent)
+		seen = true
+	})
+
+	s.SetChangeReason("stripe_subscription_updated")
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "upgrader@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
+	}))
+
+	require.True(t, seen)
+	assert.Equal(t, int(TierPro), captured.FromTier)
+	assert.Equal(t, int(TierPremium), captured.ToTier)
+	assert.Equal(t, "stripe_subscription_updated", captured.Reason)
+}
+
+// TestSetSubscription_NilDispatcherIsSafe verifies the store still works
+// without a dispatcher attached (the legacy path / older tests).
+func TestSetSubscription_NilDispatcherIsSafe(t *testing.T) {
+	t.Parallel()
+	s := newTestStore() // no SetEventDispatcher call
+
+	require.NoError(t, s.SetSubscription(&Subscription{
+		AdminEmail: "nodispatch@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+	}))
+
+	assert.Equal(t, TierPro, s.GetTier("nodispatch@example.com"))
+}
+
+// TestEffectiveTierOf_ExpiredFallsBackToFree pins the effectiveTierOf
+// helper so the TierChangedEvent emission semantics match GetTier
+// semantics (status/expiry-gated, not raw Tier column).
+func TestEffectiveTierOf_ExpiredFallsBackToFree(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	expired := &Subscription{
+		AdminEmail: "expired@example.com",
+		Tier:       TierPro,
+		Status:     StatusActive,
+		ExpiresAt:  now.Add(-time.Hour),
+	}
+	assert.Equal(t, TierFree, effectiveTierOf(expired, now),
+		"expired sub should resolve to Free (matches GetTier semantics)")
+
+	canceled := &Subscription{
+		AdminEmail: "canceled@example.com",
+		Tier:       TierPremium,
+		Status:     StatusCanceled,
+	}
+	assert.Equal(t, TierFree, effectiveTierOf(canceled, now),
+		"canceled sub should resolve to Free")
+
+	active := &Subscription{
+		AdminEmail: "active@example.com",
+		Tier:       TierPremium,
+		Status:     StatusActive,
+	}
+	assert.Equal(t, TierPremium, effectiveTierOf(active, now))
+
+	assert.Equal(t, TierFree, effectiveTierOf(nil, now),
+		"nil sub should resolve to Free")
 }
 
 

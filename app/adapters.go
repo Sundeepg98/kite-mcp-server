@@ -585,6 +585,8 @@ func deriveEmailHash(e domain.Event) string {
 			return ev.EmailHash
 		}
 		return audit.HashEmail(ev.Email)
+	case domain.TierChangedEvent:
+		return audit.HashEmail(ev.UserEmail)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -628,6 +630,8 @@ func deriveAggregateID(e domain.Event) string {
 		return ev.Email
 	case domain.SessionCreatedEvent:
 		return ev.SessionID
+	case domain.TierChangedEvent:
+		return ev.UserEmail
 	default:
 		return "unknown"
 	}

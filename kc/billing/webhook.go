@@ -150,6 +150,7 @@ func handleCheckoutCompleted(store *Store, event *stripe.Event, pricePro, priceP
 		MaxUsers:         maxUsers,
 	}
 
+	store.SetChangeReason("stripe_checkout")
 	if err := store.SetSubscription(sub); err != nil {
 		logger.Error("stripe webhook: failed to set subscription on checkout", "email", email, "error", err)
 		return
@@ -212,6 +213,7 @@ func handleSubscriptionUpdated(store *Store, event *stripe.Event, pricePro, pric
 		existing.StripeCustomerID = customerID
 	}
 
+	store.SetChangeReason("stripe_subscription_updated")
 	if err := store.SetSubscription(existing); err != nil {
 		logger.Error("stripe webhook: failed to update subscription", "email", email, "error", err)
 		return
@@ -255,6 +257,7 @@ func handleSubscriptionDeleted(store *Store, event *stripe.Event, logger *slog.L
 	existing.Tier = TierFree
 	existing.Status = StatusCanceled
 
+	store.SetChangeReason("stripe_subscription_deleted")
 	if err := store.SetSubscription(existing); err != nil {
 		logger.Error("stripe webhook: failed to cancel subscription", "email", email, "error", err)
 		return

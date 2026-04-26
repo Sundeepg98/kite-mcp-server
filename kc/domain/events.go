@@ -347,6 +347,36 @@ type CredentialRevokedEvent struct {
 func (e CredentialRevokedEvent) EventType() string    { return "credential.revoked" }
 func (e CredentialRevokedEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// TierChangedEvent is emitted when a user's billing subscription tier
+// transitions — free→paid (upgrade), paid→free (cancellation), or
+// paid→paid (cross-grade between Pro/Premium/SoloPro). Emitted from the
+// billing.Store on every successful SetSubscription call where the
+// effective tier differs from the prior persisted tier. Stays silent
+// for no-op writes (same tier in, same tier out) so the audit log
+// reflects real state transitions, not redundant webhook replays.
+//
+// FromTier and ToTier are integer codes matching billing.Tier (0=Free,
+// 1=Pro, 2=Premium, 3=SoloPro). Stored as int rather than the typed
+// billing.Tier to keep kc/domain free of an upward dependency on
+// kc/billing — the convention mirrors UserFrozenEvent.FrozenBy / Reason
+// which carry semantic strings without importing their producer.
+//
+// Reason tags the lifecycle narrative ("stripe_checkout",
+// "stripe_subscription_updated", "stripe_subscription_deleted",
+// "admin_set_billing_tier") so auditors can distinguish webhook-driven
+// changes from operator-driven changes without joining against another
+// table.
+type TierChangedEvent struct {
+	UserEmail string
+	FromTier  int
+	ToTier    int
+	Reason    string
+	Timestamp time.Time
+}
+
+func (e TierChangedEvent) EventType() string    { return "billing.tier_changed" }
+func (e TierChangedEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // ConsentWithdrawnEvent is emitted when a user invokes their DPDP §6(4)
 // right to rescind previously-granted consent. The withdrawal does not
 // erase the original grant from consent_log (the log is append-only and
