@@ -17,6 +17,8 @@ import (
 // SEBIComplianceTool reports the user's SEBI algo trading compliance posture.
 type SEBIComplianceTool struct{}
 
+func init() { RegisterInternalTool(&SEBIComplianceTool{}) }
+
 func (*SEBIComplianceTool) Tool() mcp.Tool {
 	return mcp.NewTool("sebi_compliance_status",
 		mcp.WithDescription("Check SEBI algo trading compliance status. Shows: static IP whitelist status, Kite session validity, order rate (OPS), order tagging, API rate limits, and audit trail status. All API orders are classified as algorithmic under SEBI's April 2026 framework."),

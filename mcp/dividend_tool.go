@@ -103,6 +103,8 @@ var dividendSeasonality = map[int]string{
 // DividendCalendarTool analyses portfolio holdings for dividend yield and upcoming corporate actions.
 type DividendCalendarTool struct{}
 
+func init() { RegisterInternalTool(&DividendCalendarTool{}) }
+
 func (*DividendCalendarTool) Tool() mcp.Tool {
 	return mcp.NewTool("dividend_calendar",
 		mcp.WithDescription(

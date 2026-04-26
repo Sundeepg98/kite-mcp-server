@@ -24,6 +24,8 @@ import (
 // `server_version` is the complementary "what am I running?" tool.
 type ServerVersionTool struct{}
 
+func init() { RegisterInternalTool(&ServerVersionTool{}) }
+
 func (*ServerVersionTool) Tool() mcp.Tool {
 	return mcp.NewTool("server_version",
 		mcp.WithDescription("Returns the running server's build SHA, build time, deployment region, and Go version. For debugging which deployment you're connected to."),

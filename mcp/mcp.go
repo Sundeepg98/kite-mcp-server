@@ -18,7 +18,18 @@ type Tool interface {
 
 // GetAllTools returns all available tools for registration, including
 // any externally registered plugins.
+//
+// Migration path (Investment J): the literal slice below is being
+// incrementally drained as `<feature>_tools.go` files migrate to
+// init()-based RegisterInternalTool calls. New tools should NOT be
+// appended to this slice — register them via init() in their feature
+// file instead. Once empty, GetAllTools() collapses to a registry +
+// plugin merge.
 func GetAllTools() []Tool {
+	internalToolRegistryMu.Lock()
+	registered := append([]Tool(nil), internalToolRegistry...)
+	internalToolRegistryMu.Unlock()
+
 	builtIn := []Tool{
 		// Tools for setting up the client
 		&LoginTool{},
@@ -108,9 +119,6 @@ func GetAllTools() []Tool {
 		// Tax analysis
 		&TaxHarvestTool{},
 
-		// Dividend & corporate actions
-		&DividendCalendarTool{},
-
 		// Earnings-call analysis (frames the LLM — returns pointer + themes,
 		// LLM fetches transcript client-side via WebFetch / Tavily).
 		&AnalyzeConcallTool{},
@@ -119,19 +127,11 @@ func GetAllTools() []Tool {
 		// returns NSE + Moneycontrol URL pointers, LLM fetches via WebFetch / Tavily).
 		&GetFIIDIIFlowTool{},
 
-		// server_version — build SHA, build time, region, Go version. For
-		// debugging which deployment you're connected to (complements
-		// server_metrics which covers per-tool latency/errors).
-		&ServerVersionTool{},
-
 		// peer_compare — side-by-side fundamental-strength comparison for 2-6
 		// stocks (PEG, Piotroski F-score, Altman Z-score + key ratios). Frames
 		// the LLM: returns Screener.in URL pointers + formulas, LLM fetches
 		// fundamentals via WebFetch/Tavily and computes scores client-side.
 		&PeerCompareTool{},
-
-		// SEBI compliance
-		&SEBIComplianceTool{},
 
 		// Paper trading management
 		&PaperTradingToggleTool{},
@@ -191,6 +191,14 @@ func GetAllTools() []Tool {
 		&AdminListFamilyTool{},
 		&AdminRemoveFamilyMemberTool{},
 		&AdminSetBillingTierTool{},
+	}
+
+	// Prepend init()-registered tools (Investment J — see migration path
+	// note above). Order matters only for the SHA256 surface lock test
+	// indirectly via the sorted-name list it computes; the wire-protocol
+	// itself is order-insensitive.
+	if len(registered) > 0 {
+		builtIn = append(registered, builtIn...)
 	}
 
 	// Append registered plugins (lives on DefaultRegistry now).
