@@ -643,9 +643,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		app.logger.Info("Paper trading engine and monitor initialized")
 	}
 
-	// Register tools that will interact with MCP sessions and Kite API
+	// Register tools that will interact with MCP sessions and Kite API.
+	// B77 Phase 2: pass app.registry so App-scoped plugins (registered
+	// via app.Registry().RegisterPlugin) surface in the live MCP server.
+	// Strictly isolated — DefaultRegistry plugins do NOT leak in.
 	app.logger.Info("Registering MCP tools...")
-	mcp.RegisterTools(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger, app.Config.EnableTrading)
+	mcp.RegisterToolsForRegistry(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger, app.Config.EnableTrading, app.registry)
 	app.logger.Debug("MCP tools registered successfully")
 
 	// Initialize scheduled Telegram briefings (morning + daily P&L).

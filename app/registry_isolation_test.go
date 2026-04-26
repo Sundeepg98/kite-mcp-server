@@ -24,8 +24,10 @@ import (
 	"testing"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/mcp"
 )
 
@@ -102,4 +104,73 @@ func TestApp_RegistryHookIsolation_SilencesAcrossApps(t *testing.T) {
 
 	assert.False(t, aHookFired,
 		"a's hook must not fire when HookMiddlewareFor runs against b's registry — registries are isolated")
+}
+
+// TestApp_GetAllToolsForRegistry_IncludesAppScopedPlugins verifies the
+// per-App tool-registration path — App-scoped plugins (registered via
+// app.Registry().RegisterPlugin) must appear in GetAllToolsForRegistry's
+// output. This completes the B77-Phase-2 plugin isolation contract:
+// not just hooks (B77 1/2) but also tool registration consults the
+// per-App registry.
+//
+// internalToolRegistry (init()-time mcp.RegisterInternalTool calls in
+// compliance_tool.go / dividend_tool.go / version_tool.go) is included
+// for production correctness — those are the package-baseline tools
+// every App needs, registered before any App exists.
+//
+// DefaultRegistry plugins are NOT consulted — the keystone isolation
+// property (next test) requires that App-1 plugins don't leak to
+// App-2. The legacy GetAllTools() shim consults DefaultRegistry for
+// status/info read paths (app/http.go:323/554/1157) where the count
+// is informational only.
+func TestApp_GetAllToolsForRegistry_IncludesAppScopedPlugins(t *testing.T) {
+	t.Parallel()
+	a := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
+
+	// Sentinel tool with a unique name we can search for.
+	a.Registry().RegisterPlugin(&sentinelTool{name: "b77_phase2_sentinel_app_a"})
+
+	tools := mcp.GetAllToolsForRegistry(a.Registry())
+	var names []string
+	for _, tl := range tools {
+		names = append(names, tl.Tool().Name)
+	}
+	assert.Contains(t, names, "b77_phase2_sentinel_app_a",
+		"App-scoped RegisterPlugin must surface in GetAllToolsForRegistry's output")
+}
+
+// TestApp_GetAllToolsForRegistry_DoesNotLeakAcrossApps verifies the
+// keystone B77-Phase-2 isolation property: a plugin registered on
+// App-1's registry must NOT appear in App-2's GetAllToolsForRegistry
+// output. This unblocks parallel App-construction tests that register
+// distinct plugins.
+func TestApp_GetAllToolsForRegistry_DoesNotLeakAcrossApps(t *testing.T) {
+	t.Parallel()
+	a := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
+	b := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
+
+	a.Registry().RegisterPlugin(&sentinelTool{name: "b77_phase2_sentinel_only_a"})
+
+	bTools := mcp.GetAllToolsForRegistry(b.Registry())
+	var bNames []string
+	for _, tl := range bTools {
+		bNames = append(bNames, tl.Tool().Name)
+	}
+	assert.NotContains(t, bNames, "b77_phase2_sentinel_only_a",
+		"plugin registered on a.Registry() must NOT appear in b's GetAllToolsForRegistry output")
+}
+
+// sentinelTool is a minimal mcp.Tool used by the B77-Phase-2 isolation
+// tests. The handler is a no-op — these tests only check the tool's
+// presence in the registration output, not its execution.
+type sentinelTool struct{ name string }
+
+func (s *sentinelTool) Tool() gomcp.Tool {
+	return gomcp.NewTool(s.name)
+}
+
+func (*sentinelTool) Handler(*kc.Manager) server.ToolHandlerFunc {
+	return func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
+		return gomcp.NewToolResultText("sentinel"), nil
+	}
 }

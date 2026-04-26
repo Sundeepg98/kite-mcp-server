@@ -25,7 +25,28 @@ type Tool interface {
 // appended to this slice — register them via init() in their feature
 // file instead. Once empty, GetAllTools() collapses to a registry +
 // plugin merge.
+//
+// GetAllTools is a backward-compat shim around GetAllToolsForRegistry
+// that consults the package-level DefaultRegistry for plugin tools.
+// Production callers that own a per-App registry should call
+// GetAllToolsForRegistry(app.Registry()) directly — that path is
+// isolated from cross-App plugin registrations (B77 Phase 2).
 func GetAllTools() []Tool {
+	return GetAllToolsForRegistry(DefaultRegistry)
+}
+
+// GetAllToolsForRegistry returns the merged list of internal init()-time-
+// registered tools, package-baseline built-in tools, and the App-scoped
+// plugin tools held by reg. Unlike GetAllTools, this variant does NOT
+// consult DefaultRegistry — two parallel Apps using NewRegistry()
+// instances will see strictly disjoint plugin sets.
+//
+// reg may be nil — a nil registry is treated as "no plugins"; only
+// internalToolRegistry + the package-baseline tools are returned. This
+// keeps the read-side paths (e.g. app/http.go status pages that count
+// tools) defensive against a wiring regression that left app.registry
+// unset.
+func GetAllToolsForRegistry(reg *Registry) []Tool {
 	internalToolRegistryMu.Lock()
 	registered := append([]Tool(nil), internalToolRegistry...)
 	internalToolRegistryMu.Unlock()
@@ -201,9 +222,12 @@ func GetAllTools() []Tool {
 		builtIn = append(registered, builtIn...)
 	}
 
-	// Append registered plugins (lives on DefaultRegistry now).
-	if plugins := DefaultRegistry.Tools(); len(plugins) > 0 {
-		builtIn = append(builtIn, plugins...)
+	// Append App-scoped plugin tools from the supplied registry. Skips
+	// the consult when reg is nil — see GetAllToolsForRegistry doc.
+	if reg != nil {
+		if plugins := reg.Tools(); len(plugins) > 0 {
+			builtIn = append(builtIn, plugins...)
+		}
 	}
 
 	return builtIn
@@ -312,7 +336,21 @@ func filterToolsWithGating(allTools []Tool, excludedSet map[string]bool, enableT
 	return kept, len(kept), gated
 }
 
+// RegisterTools is the legacy/shim entry-point — consults DefaultRegistry
+// for plugin tools. Production callers that own a per-App registry should
+// use RegisterToolsForRegistry directly to keep tool sets App-isolated
+// (B77 Phase 2).
 func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools string, auditStore *audit.Store, logger *slog.Logger, enableTrading bool) {
+	RegisterToolsForRegistry(srv, manager, excludedTools, auditStore, logger, enableTrading, DefaultRegistry)
+}
+
+// RegisterToolsForRegistry is the App-isolated variant — plugin tools
+// come from the supplied registry rather than DefaultRegistry. wire.go
+// uses this with app.registry so two parallel Apps in one process see
+// disjoint tool sets without polluting each other.
+//
+// reg may be nil — see GetAllToolsForRegistry for the nil semantics.
+func RegisterToolsForRegistry(srv *server.MCPServer, manager *kc.Manager, excludedTools string, auditStore *audit.Store, logger *slog.Logger, enableTrading bool, reg *Registry) {
 	// Parse excluded tools list
 	excludedSet := parseExcludedTools(excludedTools)
 
@@ -322,7 +360,7 @@ func RegisterTools(srv *server.MCPServer, manager *kc.Manager, excludedTools str
 	}
 
 	// Apply trading gate + exclusions.
-	allTools := GetAllTools()
+	allTools := GetAllToolsForRegistry(reg)
 	filteredTools, registeredCount, gatedCount := filterToolsWithGating(allTools, excludedSet, enableTrading)
 	// excludedCount is recomputed separately so the startup log keeps
 	// its original semantics (explicit EXCLUDED_TOOLS only).
