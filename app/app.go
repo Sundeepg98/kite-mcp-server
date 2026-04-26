@@ -16,6 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
@@ -112,6 +113,13 @@ type App struct {
 	// Stopped via fillWatcher.Stop() during graceful shutdown to avoid
 	// orphaning poll goroutines for up to MaxDuration (60s default).
 	fillWatcher *kc.FillWatcher
+	// alertDB is the SQLite handle opened by app/wire.go BEFORE
+	// kc.NewWithOptions (cycle inversion step 3). The manager honors
+	// cfg.AlertDB by setting ownsAlertDB=false; lifecycle "alert_db"
+	// stop closes this handle AFTER kc_manager.Shutdown so no manager
+	// write races the close. nil when no AlertDBPath was supplied
+	// (in-memory mode).
+	alertDB *alerts.DB
 }
 
 // TriggerShutdown initiates a graceful shutdown without requiring an

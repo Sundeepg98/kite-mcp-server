@@ -47,6 +47,50 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// literal instead. Never set in production.
 	skipInstrumentsFetch := app.Config.InstrumentsSkipFetch
 
+	// AlertDB cycle inversion (step 3): open the SQLite DB BEFORE
+	// kc.NewWithOptions so DB-backed stores (audit/riskguard/billing/
+	// invitation) can be constructed and threaded through as With*
+	// options instead of post-wired via SetX setters. The DB lifecycle
+	// is owned by app/lifecycle here (registered below) — the manager
+	// honors cfg.AlertDB by setting ownsAlertDB=false on its side.
+	//
+	// Failure modes:
+	//   - empty path: in-memory mode, alertDB stays nil (matches legacy).
+	//   - open error: log + fall through with nil alertDB; same downgrade
+	//     path as before (manager would have logged the same error).
+	var alertDB *alerts.DB
+	if app.Config.AlertDBPath != "" {
+		if opened, dbErr := alerts.OpenDB(app.Config.AlertDBPath); dbErr != nil {
+			app.logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
+		} else {
+			alertDB = opened
+			app.alertDB = opened // lifecycle "alert_db" closes this on shutdown
+		}
+	}
+
+	// Pre-construct the 4 cycle-affected stores so they can be passed
+	// via With* options. Gate each one on the SAME conditions the
+	// legacy post-NewWithOptions wiring used, so kcManager.X() accessors
+	// return the same nil/non-nil shape as before:
+	//   - audit / invitation: gated on alertDB != nil (legacy: same).
+	//   - billing: additionally gated on Stripe key + non-DevMode
+	//     (legacy: line 504's stripeKey != "" && !app.DevMode).
+	//   - riskGuard: always allocated (legacy: line 218 unconditional).
+	// InitTable / LoadFromDB calls run AFTER NewWithOptions on the same
+	// pointer — the alert-trigger closure in kc/manager_init.go reads
+	// m.auditStore lazily, so allocation-vs-InitTable order is moot.
+	var preAuditStore *audit.Store
+	var preBillingStore *billing.Store
+	var preInvStore *users.InvitationStore
+	preRiskGuard := riskguard.NewGuard(app.logger)
+	if alertDB != nil {
+		preAuditStore = audit.New(alertDB)
+		preInvStore = users.NewInvitationStore(alertDB)
+		if app.Config.StripeSecretKey != "" && !app.DevMode {
+			preBillingStore = billing.NewStore(alertDB, app.logger)
+		}
+	}
+
 	// Migrated to kc.NewWithOptions — the functional-options pattern
 	// aligns with the rest of the codebase (testutil/kcfixture,
 	// kc/ticker/config.go, kc/scheduler/provider.go). Each With* helper
@@ -58,6 +102,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		kc.WithAccessToken(app.Config.KiteAccessToken),
 		kc.WithMetrics(app.metrics),
 		kc.WithTelegramBotToken(app.Config.TelegramBotToken),
+		kc.WithAlertDB(alertDB),
 		kc.WithAlertDBPath(app.Config.AlertDBPath),
 		kc.WithAppMode(app.Config.AppMode),
 		kc.WithExternalURL(app.Config.ExternalURL),
@@ -65,6 +110,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		kc.WithEncryptionSecret(app.Config.OAuthJWTSecret),
 		kc.WithDevMode(app.DevMode),
 		kc.WithInstrumentsSkipFetch(skipInstrumentsFetch),
+		kc.WithAuditStore(preAuditStore),
+		kc.WithRiskGuard(preRiskGuard),
+		kc.WithBillingStore(preBillingStore),
+		kc.WithInvitationStore(preInvStore),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
@@ -113,7 +162,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	app.logger.Debug("Kite Connect manager created successfully")
 
-	// Create audit store (reuse the same SQLite DB used for alerts).
+	// Audit store: the pointer was constructed pre-NewWithOptions and
+	// already threaded into the manager via WithAuditStore (cycle inversion
+	// step 3). app.auditStore tracks the same pointer so post-construction
+	// setup (InitTable / encryption / StartWorker / middleware build) keeps
+	// working unchanged. The previous kcManager.SetAuditStore(app.auditStore)
+	// call site is now redundant — the manager's m.auditStore field was
+	// populated by initInjectedStores during NewWithOptions.
 	//
 	// H1 fix (phase 2i): audit trail is a compliance requirement. In production
 	// mode, fail fast if the audit table cannot be created — silently running
@@ -121,7 +176,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// DevMode, log and continue so local dev without a DB still works.
 	var auditMiddleware server.ToolHandlerMiddleware
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		app.auditStore = audit.New(alertDB)
+		app.auditStore = preAuditStore
 		if err := app.auditStore.InitTable(); err != nil {
 			if !app.DevMode {
 				return nil, nil, fmt.Errorf("audit trail required in production: init table: %w", err)
@@ -147,9 +202,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.auditStore.StartWorker()
 			app.logger.Info("Audit trail enabled")
 			auditMiddleware = audit.Middleware(app.auditStore)
-
-			// Wire audit store into manager for alert trigger + trailing stop notifications.
-			kcManager.SetAuditStore(app.auditStore)
+			// Note: kcManager.SetAuditStore(app.auditStore) is no longer
+			// needed — the manager's auditStore field was populated by
+			// initInjectedStores via WithAuditStore at construction time.
 
 			// Start audit hash-chain external publisher. Opt-in via
 			// AUDIT_HASH_PUBLISH_* env vars — disabled (no-op) otherwise.
@@ -215,7 +270,13 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// H2 fix (phase 2i): LoadLimits failure used to silently fall back to
 	// in-memory defaults — which would WIPE a user-configured kill switch and
 	// allow trading to proceed without their limits. Fail fast in production.
-	riskGuard := riskguard.NewGuard(app.logger)
+	//
+	// Cycle inversion step 3: riskGuard was constructed pre-NewWithOptions
+	// (preRiskGuard) and threaded into the manager via WithRiskGuard. The
+	// reassignment here keeps the local name 'riskGuard' for the rest of
+	// the setup block (DB init, anomaly baseline, auto-freeze closure)
+	// without changing semantics — same pointer the manager holds.
+	riskGuard := preRiskGuard
 	// Default to "loaded" — if there's no DB (DevMode without ALERT_DB_PATH)
 	// the guard runs with SystemDefaults, which is the intended DevMode path;
 	// we only flip this to false when LoadLimits is actually attempted and fails.
@@ -296,7 +357,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
 		}
 	}
-	kcManager.SetRiskGuard(riskGuard)
+	// Note: kcManager.SetRiskGuard(riskGuard) is no longer needed — the
+	// manager's riskGuard field was populated by initInjectedStores via
+	// WithRiskGuard at construction time (cycle inversion step 3).
 
 	// Initialize domain event dispatcher and audit log.
 	// Events flow: use case -> EventDispatcher.Dispatch() -> makeEventPersister() -> domain_events table.
@@ -444,15 +507,22 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Billing tier middleware gates tools by subscription level (opt-in via
 	// app.Config.StripeSecretKey, populated from STRIPE_SECRET_KEY env by
 	// ConfigFromEnv). Skipped entirely in DEV_MODE — all tools are free tier.
-	if stripeKey := app.Config.StripeSecretKey; stripeKey != "" && !app.DevMode {
+	//
+	// Cycle inversion step 3: billingStore was pre-constructed (preBillingStore)
+	// when StripeSecretKey + non-DevMode + alertDB conditions all hold, and
+	// threaded into the manager via WithBillingStore. The reassignment here
+	// keeps the local name 'billingStore' for the rest of the block — same
+	// pointer the manager holds. The previous kcManager.SetBillingStore call
+	// is now redundant (manager's billingStore field was populated by
+	// initInjectedStores during NewWithOptions).
+	if stripeKey := app.Config.StripeSecretKey; stripeKey != "" && !app.DevMode && preBillingStore != nil {
 		stripe.Key = stripeKey
-		billingStore := billing.NewStore(kcManager.AlertDB(), app.logger)
+		billingStore := preBillingStore
 		if err := billingStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize billing table", "error", err)
 		} else if err := billingStore.LoadFromDB(); err != nil {
 			app.logger.Error("Failed to load billing data from DB", "error", err)
 		}
-		kcManager.SetBillingStore(billingStore)
 		// Create adminEmailFn closure for family tier resolution.
 		adminEmailFn := func(email string) string {
 			u, ok := kcManager.UserStore().Get(email)
@@ -476,14 +546,19 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 
 	// Initialize family invitation store.
+	//
+	// Cycle inversion step 3: invStore was pre-constructed (preInvStore)
+	// when alertDB != nil, and threaded into the manager via
+	// WithInvitationStore. The local name 'invStore' below points to the
+	// same pointer the manager holds; the previous kcManager.SetInvitationStore
+	// call is now redundant.
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		invStore := users.NewInvitationStore(alertDB)
+		invStore := preInvStore
 		if err := invStore.InitTable(); err != nil {
 			app.logger.Error("Failed to initialize invitations table", "error", err)
 		} else if err := invStore.LoadFromDB(); err != nil {
 			app.logger.Error("Failed to load invitations from DB", "error", err)
 		}
-		kcManager.SetInvitationStore(invStore)
 
 		// Wire family service (extracts family billing logic from manager).
 		famSvc := kc.NewFamilyService(kcManager.UserStore(), kcManager.BillingStore(), invStore)
@@ -624,6 +699,19 @@ func (app *App) registerLifecycle(kcManager *kc.Manager) {
 	})
 	app.lifecycle.Append("kc_manager", func() error {
 		kcManager.Shutdown()
+		return nil
+	})
+	// Cycle inversion step 3: app/wire.go opens the alert DB itself
+	// (preceded kc.NewWithOptions) so app/lifecycle owns the close.
+	// Runs AFTER kc_manager so no manager-side write can race a closed
+	// connection. Manager.Shutdown sets ownsAlertDB=false → it does
+	// NOT close the DB itself (responsibility now lives here).
+	app.lifecycle.Append("alert_db", func() error {
+		if app.alertDB != nil {
+			if err := app.alertDB.Close(); err != nil {
+				app.logger.Error("Failed to close alert DB", "error", err)
+			}
+		}
 		return nil
 	})
 	app.lifecycle.Append("oauth_handler", func() error {
