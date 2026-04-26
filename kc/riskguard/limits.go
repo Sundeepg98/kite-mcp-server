@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // limits.go — UserLimits type + per-collaborator Set* hooks +
@@ -99,6 +100,23 @@ func (g *Guard) SetBaselineProvider(p BaselineProvider) { g.baseline = p }
 // SetAutoFreezeNotifier registers a callback invoked when the circuit breaker
 // auto-freezes a user. The callback receives the user email and the freeze reason.
 func (g *Guard) SetAutoFreezeNotifier(fn AutoFreezeNotifier) { g.autoFreezeNotifier = fn }
+
+// SetEventDispatcher wires the domain event dispatcher so the counters
+// aggregate emits typed Riskguard*Event values on its mutation surface
+// (kill-switch trip/lift, daily-counter reset, rejection recorded).
+//
+// Pattern mirrors billing.Store.SetEventDispatcher / watchlist use cases'
+// SetEventDispatcher: nil-safe (a Guard constructed without one behaves
+// identically to the pre-ES code path), idempotent (re-calling replaces
+// the dispatcher), and write-only from the riskguard side — the
+// dispatcher's own subscribers handle persistence via makeEventPersister
+// in app/wire.go. Acquires the writer-lock so concurrent CheckOrder paths
+// see a consistent snapshot.
+func (g *Guard) SetEventDispatcher(d *domain.EventDispatcher) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.events = d
+}
 
 // --- Effective-limits resolution ------------------------------------------
 

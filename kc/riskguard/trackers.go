@@ -48,9 +48,9 @@ type UserStatus struct {
 func (g *Guard) GetUserStatus(email string) UserStatus {
 	email = strings.ToLower(email)
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
-	g.maybeResetDay(t)
+	didReset := g.maybeResetDay(t)
+	dispatcher := g.events
 
 	status := UserStatus{
 		DailyOrderCount:  t.DailyOrderCount,
@@ -62,6 +62,8 @@ func (g *Guard) GetUserStatus(email string) UserStatus {
 		status.FrozenReason = l.FrozenReason
 		status.FrozenAt = l.FrozenAt
 	}
+	g.mu.Unlock()
+	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
 	return status
 }
 
@@ -78,7 +80,13 @@ func (g *Guard) getOrCreateTracker(email string) *UserTracker {
 
 // maybeResetDay resets the daily counter if we've crossed 9:15 AM IST since
 // last reset. Uses g.clock so tests can drive the reset deterministically.
-func (g *Guard) maybeResetDay(t *UserTracker) {
+//
+// Returns true when an actual reset occurred (DayResetAt was before the
+// trading-day boundary, counters were rolled to zero). Callers that hold
+// g.mu can pass this signal up to dispatch RiskguardDailyCounterResetEvent
+// AFTER releasing the lock — handlers must never run under the riskguard
+// mutex. False return ⇒ no reset, no event.
+func (g *Guard) maybeResetDay(t *UserTracker) bool {
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	now := g.clock().In(ist)
 	resetTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
@@ -90,5 +98,7 @@ func (g *Guard) maybeResetDay(t *UserTracker) {
 		t.DailyOrderCount = 0
 		t.DailyPlacedValue = 0
 		t.DayResetAt = now
+		return true
 	}
+	return false
 }

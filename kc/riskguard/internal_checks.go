@@ -92,13 +92,16 @@ func (g *Guard) checkQuantityLimit(req OrderCheckRequest) CheckResult {
 func (g *Guard) checkDailyOrderCount(email string) CheckResult {
 	limits := g.GetEffectiveLimits(email)
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
-	g.maybeResetDay(t)
-	if t.DailyOrderCount >= limits.MaxOrdersPerDay {
+	didReset := g.maybeResetDay(t)
+	count := t.DailyOrderCount
+	dispatcher := g.events
+	g.mu.Unlock()
+	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
+	if count >= limits.MaxOrdersPerDay {
 		return CheckResult{
 			Allowed: false, Reason: ReasonDailyOrderLimit,
-			Message: fmt.Sprintf("You have placed %d orders today (limit: %d). Resets at next market open.", t.DailyOrderCount, limits.MaxOrdersPerDay),
+			Message: fmt.Sprintf("You have placed %d orders today (limit: %d). Resets at next market open.", count, limits.MaxOrdersPerDay),
 		}
 	}
 	return CheckResult{Allowed: true}
@@ -195,15 +198,18 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 	orderValue := float64(req.Quantity) * req.Price
 
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
-	g.maybeResetDay(t)
+	didReset := g.maybeResetDay(t)
+	placed := t.DailyPlacedValue
+	dispatcher := g.events
+	g.mu.Unlock()
+	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
 
-	if t.DailyPlacedValue+orderValue > limits.MaxDailyValueINR {
+	if placed+orderValue > limits.MaxDailyValueINR {
 		return CheckResult{
 			Allowed: false, Reason: ReasonDailyValueLimit,
 			Message: fmt.Sprintf("Cumulative placed value Rs %.0f + this order Rs %.0f exceeds daily limit Rs %.0f",
-				t.DailyPlacedValue, orderValue, limits.MaxDailyValueINR),
+				placed, orderValue, limits.MaxDailyValueINR),
 		}
 	}
 	return CheckResult{Allowed: true}

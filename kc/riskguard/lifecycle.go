@@ -3,6 +3,8 @@ package riskguard
 import (
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // lifecycle.go — freeze lifecycle (per-user + global) and the auto-freeze
@@ -21,28 +23,58 @@ type GlobalFreezeStatus struct {
 }
 
 // FreezeGlobal activates a server-wide trading freeze that blocks ALL users.
+//
+// Emits RiskguardKillSwitchTrippedEvent (Active=true) on a real off→on
+// transition. Idempotent re-emission: a second FreezeGlobal call while
+// already frozen is a no-op and emits no event, so projection replays
+// see one trip per actual lifecycle. The dispatcher field is read under
+// the same writer-lock that mutates the freeze state, then the actual
+// Dispatch happens after the lock is released to avoid handlers running
+// under the riskguard mutex.
 func (g *Guard) FreezeGlobal(frozenBy, reason string) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	wasFrozen := g.globalFrozen
 	g.globalFrozen = true
 	g.globalFrozenBy = frozenBy
 	g.globalFrozenReason = reason
 	g.globalFrozenAt = time.Now()
+	dispatcher := g.events
+	g.mu.Unlock()
 	if g.logger != nil {
 		g.logger.Warn("GLOBAL TRADING FREEZE ACTIVATED", "by", frozenBy, "reason", reason)
+	}
+	if !wasFrozen && dispatcher != nil {
+		dispatcher.Dispatch(domain.RiskguardKillSwitchTrippedEvent{
+			FrozenBy:  frozenBy,
+			Reason:    reason,
+			Active:    true,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 }
 
 // UnfreezeGlobal lifts the server-wide trading freeze.
+//
+// Emits RiskguardKillSwitchTrippedEvent (Active=false) on a real on→off
+// transition. Idempotent: unfreeze when already unfrozen is a no-op and
+// emits no event.
 func (g *Guard) UnfreezeGlobal() {
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	wasFrozen := g.globalFrozen
 	g.globalFrozen = false
 	g.globalFrozenBy = ""
 	g.globalFrozenReason = ""
 	g.globalFrozenAt = time.Time{}
+	dispatcher := g.events
+	g.mu.Unlock()
 	if g.logger != nil {
 		g.logger.Info("Global trading freeze lifted")
+	}
+	if wasFrozen && dispatcher != nil {
+		dispatcher.Dispatch(domain.RiskguardKillSwitchTrippedEvent{
+			Active:    false,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 }
 
@@ -103,12 +135,46 @@ func (g *Guard) IsFrozen(email string) bool {
 
 // --- Circuit Breaker ---
 
+// dispatchDailyResetIfNeeded is the centralised emit-helper for the
+// trading-day rollover event. Callers that observed a true return from
+// maybeResetDay AFTER releasing g.mu pass the captured dispatcher (under
+// the lock) and let this function handle the nil-checks and event
+// construction. Keeping this in one place means future event-shape
+// changes touch one site, not three.
+func (g *Guard) dispatchDailyResetIfNeeded(email string, didReset bool, dispatcher *domain.EventDispatcher) {
+	if !didReset || dispatcher == nil {
+		return
+	}
+	dispatcher.Dispatch(domain.RiskguardDailyCounterResetEvent{
+		UserEmail: email,
+		Reason:    "trading_day_boundary",
+		Timestamp: time.Now().UTC(),
+	})
+}
+
 // recordRejection appends the current time to the user's recent rejections list.
-func (g *Guard) recordRejection(email string) {
+//
+// Emits RiskguardRejectionEvent capturing the counter mutation. Distinct
+// from the use-case-layer RiskLimitBreachedEvent (which records that an
+// ORDER was blocked); this event records that the COUNTER was bumped, so
+// the counters aggregate stream can reconstruct the auto-freeze sliding
+// window without joining against the order pipeline. Reason is the
+// RejectionReason that drove the call, threaded through from CheckOrder
+// for downstream projector aggregation by reason. The event is dispatched
+// after the lock is released so handlers don't run under riskguard's mutex.
+func (g *Guard) recordRejection(email string, reason RejectionReason) {
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
 	t.RecentRejections = append(t.RecentRejections, time.Now())
+	dispatcher := g.events
+	g.mu.Unlock()
+	if dispatcher != nil {
+		dispatcher.Dispatch(domain.RiskguardRejectionEvent{
+			UserEmail: email,
+			Reason:    string(reason),
+			Timestamp: time.Now().UTC(),
+		})
+	}
 }
 
 // checkAutoFreeze checks if the user has accumulated enough recent rejections

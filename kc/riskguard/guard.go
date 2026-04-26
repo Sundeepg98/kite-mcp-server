@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // System defaults — overridable via env vars or per-user DB config.
@@ -207,6 +208,16 @@ type Guard struct {
 	// evaluation order. Guarded by mu (writer-lock on RegisterCheck; reader
 	// snapshot on CheckOrder).
 	checks []Check
+	// events is the optional domain event dispatcher. When non-nil, the
+	// counters aggregate's mutation surface (FreezeGlobal kill-switch
+	// trip/lift, maybeResetDay daily-counter reset, recordRejection
+	// rejection-window increment) emits typed Riskguard*Event values so
+	// the stream can be replayed by a future read-side projector. Nil-safe
+	// throughout: a Guard constructed without SetEventDispatcher behaves
+	// identically to the pre-ES code path. Mutated only via
+	// SetEventDispatcher (which acquires mu); read paths take a snapshot
+	// under the existing locks already held at the call site.
+	events *domain.EventDispatcher
 }
 
 // NewGuard creates a new Guard with system defaults. All built-in risk
@@ -383,7 +394,7 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 			continue
 		}
 		if c.RecordOnRejection() {
-			g.recordRejection(email)
+			g.recordRejection(email, r.Reason)
 			if frozen := g.checkAutoFreeze(email); frozen {
 				r.Message += " [Account auto-frozen due to repeated violations]"
 			}
@@ -435,6 +446,11 @@ func safeEvaluate(logger *slog.Logger, c Check, req OrderCheckRequest) (result C
 func lowerEmail(email string) string { return strings.ToLower(email) }
 
 // RecordOrder records a successful order for all tracking: daily count, rate window, duplicate detection, and daily value.
+//
+// When maybeResetDay rolls the trading-day boundary (DayResetAt < today's
+// 9:15 IST), a RiskguardDailyCounterResetEvent is dispatched AFTER the
+// lock is released so handlers don't run under the riskguard mutex —
+// dispatcher captured under the writer-lock for snapshot consistency.
 func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 	email = strings.ToLower(email)
 	// Bump the per-calendar-second counter first — it has its own mutex and
@@ -442,9 +458,8 @@ func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 	// same "now" the CheckOrder path sees.
 	g.recordPerSecondOrder(email)
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	t := g.getOrCreateTracker(email)
-	g.maybeResetDay(t)
+	didReset := g.maybeResetDay(t)
 	t.DailyOrderCount++
 
 	now := time.Now()
@@ -463,6 +478,9 @@ func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 			t.DailyPlacedValue += float64(r.Quantity) * r.Price
 		}
 	}
+	dispatcher := g.events
+	g.mu.Unlock()
+	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
 }
 
 // GetEffectiveLimits lives in limits.go (merges per-user overrides with
