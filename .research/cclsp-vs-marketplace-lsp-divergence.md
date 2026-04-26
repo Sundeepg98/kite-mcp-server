@@ -435,4 +435,125 @@ To make this stick across future Claude Code restarts:
 
 The SAC block was **stale kernel-path-cache noise**, not a functional break. Go LSP works through cclsp + bridge as expected throughout. Moving the renamed binaries out of PATH eliminates the vector. The toast was harmless (Claude Code falls back correctly) but should stop appearing now.
 
+## Final cleanup + post-/reload-plugins verification (2026-04-26 evening)
+
+After moving `gopls.exe.bak` and `gopls.exe~` out of PATH, the user `/reload-plugins`'d. This section captures the full verification + cleanup pass.
+
+### Step 1 — cclsp route verification (PASS)
+
+| Check | Result |
+|---|---|
+| `mcp__cclsp__get_hover` on `wire.go:11:15` | Returned full `package kc` doc — gopls indexed kite-mcp-server workspace |
+| `mcp__cclsp__get_diagnostics` on `bad.go` | Returned 4 real errors (UnusedImport, IncompatibleAssign×2, UndeclaredName) — push channel into cclsp's cache works |
+| `where gopls` | Resolves to `C:\Users\Dell\go\bin\gopls.cmd` (bridge shim) |
+| `where gopls.exe` | Not found (exit 1) |
+| WSL2 `pgrep -af gopls` | 2 alive instances (PIDs 1625/1636 and 2553/2566 with telemetry pairs) |
+| SAC events for gopls in last 15 min | Zero. Latest gopls SAC event ever: 04/26/2026 17:57 — 3+ hours ago, before file move |
+
+### Step 1 — marketplace plugin verification (expected lazy-spawn gap)
+
+| Check | Result |
+|---|---|
+| `mcp__ide__getDiagnostics` for `bad.go` | `[{"uri":"file:///d:/Sundeep/projects/lsp-test/bad.go","diagnostics":[]}]` — empty, marketplace gopls hasn't lazy-spawned |
+| Win-side bridge process count | 2 instances, BOTH parented to `cclsp/dist/index.js` (PIDs 19804 and 9968 → grandparent `cmd /c cclsp`). Zero parented to `gopls.cmd`. |
+| WSL2 gopls processes attributable to marketplace plugin | 0 — both WSL gopls pairs trace to cclsp bridges |
+| Bridge log files | None — `WSL_LSP_BRIDGE_LOG` not set this session |
+
+This empirically confirms `53633cd`'s finding: **the marketplace `gopls-lsp` plugin lazy-spawns**. It only fires when a `.go` buffer opens in the editor pane, NOT on `/reload-plugins` or orchestrator file operations. No `.go` editor-pane buffer = marketplace gopls never started = `mcp__ide__getDiagnostics` returns empty for that URI. **Expected**, not a regression.
+
+### Step 2 — Windows-side gopls cleanup (DONE)
+
+Files deleted:
+- `C:\Users\Dell\go\bin-archived\gopls.exe.bak` (40 MB) — was the renamed self-signed binary, no longer needed
+- `C:\Users\Dell\go\bin-archived\gopls.exe~` (40 MB) — older backup with tilde suffix
+- `C:\Users\Dell\go\bin-archived\` directory itself — empty after the binary deletes
+- `C:\Users\Dell\go\bin\sign-gopls.ps1` — would have recreated the SAC trap if re-run; WSL2 gopls doesn't need signing
+- `C:\Users\Dell\go\bin\sign-bin.ps1` — generic signer, same recreation-trap reasoning
+
+Files kept:
+- `C:\Users\Dell\go\bin\gopls.cmd` — bridge shim, REQUIRED for marketplace plugin's PATH-based `gopls` lookup
+- `C:\Users\Dell\go\bin\` itself — still has 7 other Go binaries (`deadcode.exe`, `go1.25.8.exe`, `gocovmerge.exe`, `goimports.exe`, `gosec.exe`, `govulncheck.exe`, `staticcheck.exe`)
+- `GoTools Local Dev` cert in `CurrentUser\Root` — harmless residue
+
+Post-cleanup sanity check: `mcp__cclsp__get_hover` on `wire.go:11:15` still returns full `package kc` doc → cclsp + bridge unaffected.
+
+### Honest verdict on dual-route status post-reload
+
+**cclsp route: FULLY OPERATIONAL.** Bridge spawns gopls, hover and diagnostics work, push channel into cclsp's internal cache works, all `mcp__cclsp__*` agent tools functional.
+
+**Marketplace `golang` plugin route: REGISTERED BUT DORMANT.** Plugin manifest registered with Claude Code's editor harness; `gopls.cmd` shim still on PATH for when it does spawn. Will lazy-spawn the moment a `.go` buffer opens in the editor pane. Until then, `mcp__ide__getDiagnostics` returns empty for Go files.
+
+The two routes are complementary, not redundant: cclsp owns orchestrator-callable agent tools; marketplace plugin owns editor-UI surface for human users. Deleting Win-side gopls binaries did not affect either route because both go through `gopls.cmd → wsl-lsp-bridge → WSL2 gopls`.
+
+## Why pyright pushes `<new-diagnostics>` but gopls doesn't — root cause (2026-04-26 evening)
+
+User question: pyright pushes `<new-diagnostics>` system-reminders; gopls doesn't. Why?
+
+### Empirical finding: pyright ALSO doesn't push right now
+
+`mcp__ide__getDiagnostics` no-arg call returns `[]`. For `bad.py` specifically: `[{"uri":"file:///d:/Sundeep/projects/lsp-test/bad.py","diagnostics":[]}]` — empty. **The IDE bridge cache is currently empty for ALL files**, Python and Go alike.
+
+Earlier in this session pyright did appear to push reminders on `Write`/`Edit` of `bad.py`. **It's not pushing now.** This invalidates the simple "pyright is special" framing.
+
+### Pyright process tree audit
+
+All 4 pyright instances currently running (PIDs 14276, 16304, 7804, 23032) are spawned by **cclsp instances** (PIDs 19804 and 9968 → grandparent `cmd /c cclsp`). **Zero pyright instances are spawned by Claude Code's editor harness directly.** This is the same picture as for gopls: cclsp owns the LSP servers via its own spawning logic; Claude Code's editor harness is not in the loop.
+
+### cclsp's publishDiagnostics handling — does NOT forward to IDE bridge
+
+Source-read of `cclsp 0.7.0` `dist/index.js`. `publishDiagnostics` notification handler at L29374-29385:
+
+```js
+} else if (message.method === "textDocument/publishDiagnostics") {
+  const params = message.params;
+  if (params?.uri) {
+    serverState.diagnostics.set(params.uri, params.diagnostics || []);
+    serverState.lastDiagnosticUpdate.set(params.uri, Date.now());
+    if (params.version !== undefined) {
+      serverState.diagnosticVersions.set(params.uri, params.version);
+    }
+  }
+}
+```
+
+**That's the entire handler.** It writes to cclsp's internal `serverState.diagnostics` Map. **Nothing is forwarded to Claude Code's IDE bridge channel.** Grep across all 31,465 lines of `dist/index.js` for `ide|IDE|forward|publish|broadcast` found no IDE-bridge integration code.
+
+### So how does pyright EVER push `<new-diagnostics>`?
+
+Three remaining hypotheses:
+
+**(H1) An earlier-session pyright instance, owned by the editor harness, was alive and feeding the IDE bridge cache.** When the user opens a `.py` buffer in the editor pane (not via orchestrator `Edit`), Claude Code's editor harness spawns its own pyright as part of editor LSP integration. That pyright reports `publishDiagnostics` directly to the editor harness, which surfaces them to the orchestrator via `<new-diagnostics>` reminders AND populates `mcp__ide__getDiagnostics`. **No such instance exists right now**, which is why the cache is empty.
+
+**(H2) Claude Code's harness has a built-in `Edit`/`Write` post-hook that calls `mcp__ide__getDiagnostics` and surfaces deltas as `<new-diagnostics>`.** This would explain the auto-surface behavior and is consistent with the cache being the source of truth. The cache being empty means no LSP server is feeding it.
+
+**(H1) and (H2) together explain everything**: the editor harness spawns LSP servers when buffers open in the editor pane; those servers feed the IDE-bridge cache via publishDiagnostics; Claude Code's `Edit`/`Write` post-hook reads from the cache and surfaces deltas. Without an editor-pane buffer, no LSP server, no cache, no deltas, no reminder.
+
+### Why this makes the asymmetry symmetric
+
+Both pyright and gopls behave identically: they push `<new-diagnostics>` ONLY when:
+1. A file of their language extension is opened in the editor pane (triggering harness spawn), AND
+2. The file is touched (triggering publishDiagnostics)
+
+The user observed pyright "working" earlier because they had a `.py` buffer open in the editor pane in this or a recent session. They observed gopls "not working" because they never opened a `.go` buffer in the editor pane (only orchestrator `Edit`/`Write`/`Read` operations).
+
+### Can we engineer parity for gopls?
+
+**Yes, two options:**
+
+1. **Open a `.go` file in the editor pane.** Triggers Claude Code's editor harness to lazy-spawn the marketplace `golang` plugin's gopls (via `gopls.cmd` shim → bridge → WSL gopls). Once that pyright-equivalent gopls instance is alive, future `Edit`/`Write` operations on `.go` files should produce `<new-diagnostics>` reminders. **Free fix.**
+
+2. **Add a `PostToolUse` hook for `Edit|Write` on `*.go`** that pulls `mcp__cclsp__get_diagnostics` and surfaces results. Emulates the auto-push using cclsp's pull channel (which works deterministically post-`32fa08b`). **30-line settings change**, doesn't depend on editor-pane state.
+
+Both options work; (1) is the natural Claude Code workflow; (2) is the orchestrator-driven workflow that doesn't require human IDE interaction.
+
+### Verdict
+
+**The asymmetry is not pyright-vs-gopls; it's editor-pane-buffer-vs-not-buffer.** Pyright happens to be running with publishDiagnostics flowing to Claude Code's IDE-bridge cache *only when a `.py` buffer is open in the editor pane*. Same is true for gopls if a `.go` buffer is open.
+
+**cclsp does NOT forward publishDiagnostics to the IDE bridge** — its publishDiagnostics handler writes only to its own internal cache for `mcp__cclsp__get_diagnostics` to serve. The IDE bridge channel and the cclsp channel are separate; they don't cross-feed.
+
+**Bridge fixes can't help.** The editor-harness spawn condition is upstream of the bridge.
+
+**Practical fix:** keep a `.go` file open in the editor pane during Go work (for IDE-bridge auto-push), OR install a hook that pulls cclsp diagnostics on `Edit`/`Write` (for orchestrator-only Go work). Both are valid; pick based on workflow.
+
 
