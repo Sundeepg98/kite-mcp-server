@@ -636,12 +636,13 @@ func TestRunServer_InvalidOAuthConfig_MissingExternalURL(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestRunServer_FullDevMode(t *testing.T) {
 	t.Parallel()
-	// Pick a free port
+	// Pre-bind listener and inject via app.preboundListener — eliminates
+	// the close-then-rebind port race that previously flaked this test
+	// under parallel load.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
-	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
+	portStr := strconv.Itoa(port)
 
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
@@ -653,6 +654,7 @@ func TestRunServer_FullDevMode(t *testing.T) {
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
+	app.preboundListener = listener
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -783,10 +785,10 @@ func TestRunServer_FullOAuthMode(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestRunServer_SSEMode(t *testing.T) {
 	t.Parallel()
+	// Pre-bind via app.preboundListener — see TestRunServer_FullDevMode comment.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
-	listener.Close()
+	portStr := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
@@ -798,6 +800,7 @@ func TestRunServer_SSEMode(t *testing.T) {
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
+	app.preboundListener = listener
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -826,10 +829,10 @@ func TestRunServer_SSEMode(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestRunServer_HybridMode(t *testing.T) {
 	t.Parallel()
+	// Pre-bind via app.preboundListener — see TestRunServer_FullDevMode comment.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	portStr := strings.TrimPrefix(listener.Addr().String(), "127.0.0.1:")
-	listener.Close()
+	portStr := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 
 	app := newTestAppWithConfig(t, &Config{
 		KiteAPIKey:           "test_key",
@@ -841,6 +844,7 @@ func TestRunServer_HybridMode(t *testing.T) {
 	})
 	app.DevMode = true
 	app.shutdownCh = make(chan struct{})
+	app.preboundListener = listener
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -887,11 +891,11 @@ func TestStartStdIOServer_RealFunction(t *testing.T) {
 
 	mcpSrv := newTestMCPServer()
 
-	// Bind a port for the HTTP sidecar
+	// Pre-bind sidecar listener — eliminates close-then-rebind race.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := listener.Addr().String()
-	listener.Close()
+	app.preboundListener = listener
 
 	srv := &http.Server{Addr: addr}
 
@@ -948,11 +952,12 @@ func TestStartStdIOServer_WithPipeIO(t *testing.T) {
 	// Setup mux just like startStdIOServer does
 	mux := app.setupMux(mgr)
 
-	// Bind a port for the HTTP sidecar
+	// Pre-bind sidecar listener — configureAndStartServer routes through
+	// serveHTTPServer which honours app.preboundListener.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := listener.Addr().String()
-	listener.Close()
+	app.preboundListener = listener
 
 	srv := &http.Server{Addr: addr}
 	go app.configureAndStartServer(srv, mux)
@@ -1099,11 +1104,12 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 	require.NoError(t, app.auditStore.InitTable())
 	app.auditStore.StartWorker()
 
-	// Create an HTTP server on a free port
+	// Create an HTTP server on a free port. Use srv.Serve(listener) to
+	// adopt the pre-bound listener directly — eliminates the close-then-
+	// rebind race that flaked this test under parallel load.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := listener.Addr().String()
-	listener.Close()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -1115,9 +1121,9 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 		Handler: mux,
 	}
 
-	// Start the server
+	// Start the server using the pre-bound listener.
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			t.Logf("Server error: %v", err)
 		}
 	}()
@@ -1181,11 +1187,12 @@ func TestStartServer_StdIOMode(t *testing.T) {
 	os.Stdin = stdinR
 	os.Stdout = stdoutW
 
-	// Bind a port for the sidecar HTTP server
+	// Pre-bind sidecar listener — startStdIOServer's sidecar goes through
+	// app.serveHTTPServer which honours preboundListener.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := listener.Addr().String()
-	listener.Close()
+	app.preboundListener = listener
 
 	srv := &http.Server{Addr: addr}
 
@@ -1549,10 +1556,11 @@ func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
 	app := newTestApp(t)
 
+	// Use srv.Serve(listener) on a pre-bound listener — eliminates the
+	// close-then-rebind race that flaked this test under parallel load.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := listener.Addr().String()
-	listener.Close()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -1563,7 +1571,7 @@ func TestSetupGracefulShutdown_SignalTriggersShutdown(t *testing.T) {
 
 	serverDone := make(chan struct{})
 	go func() {
-		if sErr := srv.ListenAndServe(); sErr != nil && sErr != http.ErrServerClosed {
+		if sErr := srv.Serve(listener); sErr != nil && sErr != http.ErrServerClosed {
 			t.Logf("server error: %v", sErr)
 		}
 		close(serverDone)
