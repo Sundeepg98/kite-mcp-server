@@ -113,6 +113,22 @@ The MCP-tool surface for agent-driven LSP queries is **cclsp-only** today. Until
 
 ## Sources
 
+## Verification log (2026-04-26)
+
+Empirical confirmation that both routes are operational, recorded after `mcp__cclsp__*` tools were re-enabled by the user. Observations taken from the live Claude Code session — no synthetic test harness.
+
+| Surface | Tool | Input | Result |
+|---|---|---|---|
+| cclsp via bridge | `mcp__cclsp__get_hover` | `D:\Sundeep\projects\kite-mcp-server\app\wire.go` line 11 char 15 | Returned the full `package kc` hover doc: "Package kc provides store interfaces for hexagonal architecture..." (rendered from gopls markdown) |
+| cclsp via bridge | `mcp__cclsp__get_diagnostics` | Same file | "No diagnostics found... no errors, warnings, or hints" — clean file, gopls indexed the workspace successfully |
+| Marketplace gopls-lsp plugin | `mcp__ide__getDiagnostics` | Same file | Equivalent clean response via `gopls.cmd` shim → bridge → WSL2 gopls |
+
+Both clients hit the **same** WSL2 gopls process through the **same** `wsl-lsp-bridge`. Backing-LSP consistency is guaranteed by construction.
+
+The hover proof is decisive: gopls returns a populated `result.contents.value` only after `Created View` fires AND the file's `didOpen` has been processed. Both prerequisites involved (a) the bridge's bidirectional URI translation `file:///D:/Sundeep/...` ↔ `file:///mnt/d/Sundeep/...`, and (b) the explicit PATH prefix that lets gopls find the `go` binary inside WSL2.
+
+## Sources
+
 - [cclsp issue #40 — Discontinuation announcement](https://github.com/ktnyt/cclsp/issues/40)
 - [cclsp issue #43 — find_workspace_symbols missing ensureFileOpen](https://github.com/ktnyt/cclsp/issues/43)
 - [cclsp source (dist/index.js)](https://github.com/ktnyt/cclsp/blob/main/dist/index.js) — workspaceSymbol L30239-30258, getDiagnostics L30125-30221, hover L30222-30238, ensureFileOpen L29539-29572, pathToUri L28789
