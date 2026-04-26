@@ -69,6 +69,21 @@ type Config struct {
 	// ignored when this is non-nil (the manager does not close a DB it
 	// did not open).
 	AlertDB *alerts.DB
+
+	// AuditStore, RiskGuard, BillingStore, InvitationStore are optional
+	// pre-constructed stores. When non-nil, the manager populates the
+	// matching field directly during init, replacing the post-construction
+	// SetX setter pattern (which is retained as deprecated shims for
+	// backward compatibility with the ~70+ test sites that still use it).
+	//
+	// Production wiring (app/wire.go) uses these in combination with
+	// AlertDB to break the construction cycle. Tests that don't need
+	// these stores can leave them nil and the manager runs without them
+	// (matching legacy behaviour).
+	AuditStore      *audit.Store
+	RiskGuard       *riskguard.Guard
+	BillingStore    *billing.Store
+	InvitationStore *users.InvitationStore
 }
 
 // New creates a new kc Manager with the given configuration.
@@ -139,6 +154,7 @@ func NewWithOptions(ctx context.Context, opts ...Option) (*Manager, error) {
 	m.initAlertEvaluator(cfg)
 	m.initTrailingStop(cfg)
 	m.initSideStores(cfg)
+	m.initInjectedStores(cfg) // populate auditStore/riskGuard/billingStore/invitationStore from cfg
 	m.initCredentialService(cfg) // also wires trailing-stop order modifier
 	m.initTickerService(cfg)
 

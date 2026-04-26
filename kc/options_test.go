@@ -11,7 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
 // newTestLogger returns a quiet logger for options tests — the init
@@ -259,4 +263,49 @@ func TestWithAlertDB_AcceptsExternallyOpened(t *testing.T) {
 	// Manager must hold the SAME DB pointer — not open a duplicate.
 	assert.Same(t, db, mgr.AlertDB(),
 		"WithAlertDB must thread the externally-opened DB through; manager.AlertDB() returns the same pointer")
+}
+
+// TestWithStores_ConstructorInjection verifies the 4 store options
+// (WithAuditStore, WithRiskGuard, WithBillingStore, WithInvitationStore)
+// thread externally-constructed stores into the Manager via
+// constructor-injection — eliminating the post-construction SetX setters
+// that previously required kcManager.AlertDB() to be readable mid-init.
+//
+// Combined with WithAlertDB (step 1), this lets app/wire.go build the
+// full DB-backed wiring graph in app-package code: open DB → build
+// stores → pass them all to NewWithOptions in a single hop.
+func TestWithStores_ConstructorInjection(t *testing.T) {
+	t.Parallel()
+
+	logger := newTestOptionsLogger()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	auditStore := audit.New(db)
+	riskGuard := riskguard.NewGuard(logger)
+	billingStore := billing.NewStore(db, logger)
+	invStore := users.NewInvitationStore(db)
+
+	mgr, err := NewWithOptions(context.Background(),
+		WithLogger(logger),
+		WithKiteCredentials("k", "s"),
+		WithAlertDB(db),
+		WithAuditStore(auditStore),
+		WithRiskGuard(riskGuard),
+		WithBillingStore(billingStore),
+		WithInvitationStore(invStore),
+		WithInstrumentsSkipFetch(true),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, mgr)
+
+	assert.Same(t, auditStore, mgr.AuditStore(),
+		"WithAuditStore must populate Manager.auditStore")
+	assert.Same(t, riskGuard, mgr.RiskGuard(),
+		"WithRiskGuard must populate Manager.riskGuard")
+	assert.Same(t, billingStore, mgr.BillingStore(),
+		"WithBillingStore must populate Manager.billingStore")
+	assert.Same(t, invStore, mgr.InvitationStore(),
+		"WithInvitationStore must populate Manager.invitationStore")
 }

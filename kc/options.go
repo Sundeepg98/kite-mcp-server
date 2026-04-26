@@ -6,7 +6,11 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
 // options is the internal payload that Option functions mutate. A plain
@@ -246,5 +250,41 @@ func WithBotFactory(factory alerts.BotFactory) Option {
 func WithAlertDB(db *alerts.DB) Option {
 	return func(o *options) {
 		o.Config.AlertDB = db
+	}
+}
+
+// WithAuditStore threads a pre-constructed audit.Store through Manager
+// construction, eliminating the post-init kcManager.SetAuditStore call
+// site in app/wire.go. The legacy SetAuditStore setter is retained as
+// a deprecated shim so the ~5+ test sites that mutate the manager
+// after construction continue to work unchanged.
+func WithAuditStore(s *audit.Store) Option {
+	return func(o *options) {
+		o.Config.AuditStore = s
+	}
+}
+
+// WithRiskGuard threads a pre-constructed riskguard.Guard through
+// Manager construction. Same deprecation contract as WithAuditStore.
+func WithRiskGuard(g *riskguard.Guard) Option {
+	return func(o *options) {
+		o.Config.RiskGuard = g
+	}
+}
+
+// WithBillingStore threads a pre-constructed billing.Store through
+// Manager construction. Same deprecation contract as WithAuditStore.
+func WithBillingStore(s *billing.Store) Option {
+	return func(o *options) {
+		o.Config.BillingStore = s
+	}
+}
+
+// WithInvitationStore threads a pre-constructed users.InvitationStore
+// through Manager construction. Same deprecation contract as
+// WithAuditStore.
+func WithInvitationStore(s *users.InvitationStore) Option {
+	return func(o *options) {
+		o.Config.InvitationStore = s
 	}
 }

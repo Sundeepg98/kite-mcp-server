@@ -366,6 +366,31 @@ func (m *Manager) initSideStores(cfg Config) {
 	}
 }
 
+// initInjectedStores populates the four DB-backed store fields
+// (auditStore, riskGuard, billingStore, invitationStore) from the
+// matching Config fields when supplied via With* options. This is the
+// constructor-injection seam that replaces the post-init SetX setters
+// for production wiring (app/wire.go); the SetX setters remain as
+// deprecated shims for the ~70+ test sites that mutate the manager
+// after construction.
+//
+// nil-tolerant: any field left nil on Config is a no-op here, matching
+// the legacy "store wired later via SetX or never wired at all" path.
+func (m *Manager) initInjectedStores(cfg Config) {
+	if cfg.AuditStore != nil {
+		m.auditStore = cfg.AuditStore
+	}
+	if cfg.RiskGuard != nil {
+		m.riskGuard = cfg.RiskGuard
+	}
+	if cfg.BillingStore != nil {
+		m.billingStore = cfg.BillingStore
+	}
+	if cfg.InvitationStore != nil {
+		m.invitationStore = cfg.InvitationStore
+	}
+}
+
 // initCredentialService builds the focused CredentialService on top of
 // the three stores (credentialStore, tokenStore, registryStore) and
 // wires it into the trailing-stop order-modifier hook. The backfill
