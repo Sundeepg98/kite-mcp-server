@@ -53,6 +53,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 	// an order of Rs 50,001 fails.
 	t.Run("per-order cap Rs 50,000 enforces", func(t *testing.T) {
 		g := newTestGuard()
+		pinClockInMarketHours(g)
 		// Disable confirm-all for this focused test — we're asserting the
 		// value limit specifically.
 		g.mu.Lock()
@@ -80,11 +81,13 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 	// Daily count: 20 orders/day.
 	t.Run("daily count 20 enforces", func(t *testing.T) {
 		g := newTestGuard()
+		pinClockInMarketHours(g)
 		email := "countcap@t.com"
 		g.mu.Lock()
 		// Pre-populate so tracker says user has placed 20 today.
 		tr := g.getOrCreateTracker(email)
 		tr.DailyOrderCount = 20
+		tr.DayResetAt = g.clock() // align with pinned clock so maybeResetDay does not wipe count
 		// Disable confirm-all + auto-freeze + duplicate checks so this test
 		// cleanly isolates the daily-count branch.
 		g.limits[email] = &UserLimits{
@@ -107,10 +110,12 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 	// Daily notional: Rs 2,00,000.
 	t.Run("daily notional Rs 2,00,000 enforces", func(t *testing.T) {
 		g := newTestGuard()
+		pinClockInMarketHours(g)
 		email := "notional@t.com"
 		g.mu.Lock()
 		tr := g.getOrCreateTracker(email)
 		tr.DailyPlacedValue = 199000 // Rs 1,99,000 already placed
+		tr.DayResetAt = g.clock()    // align with pinned clock
 		g.limits[email] = &UserLimits{
 			RequireConfirmAllOrders: false,
 			AutoFreezeOnLimitHit:    false,
@@ -154,6 +159,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 
 	t.Run("fresh guard: confirmed order passes", func(t *testing.T) {
 		g := newTestGuard()
+		pinClockInMarketHours(g)
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "ack@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
@@ -166,6 +172,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 
 	t.Run("per-user override can disable require-confirm", func(t *testing.T) {
 		g := newTestGuard()
+		pinClockInMarketHours(g)
 		// Power user explicitly opts out.
 		g.mu.Lock()
 		g.limits["power@t.com"] = &UserLimits{

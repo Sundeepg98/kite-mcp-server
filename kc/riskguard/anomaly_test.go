@@ -68,6 +68,7 @@ func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
 func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
+	pinClockInMarketHours(g)
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 500, count: 20})
 	g.mu.Lock()
 	g.limits["steady@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
@@ -88,6 +89,7 @@ func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
 func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
+	pinClockInMarketHours(g)
 	// Huge stdev → μ+3σ is higher than 10×μ.
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 100000, count: 20})
 	g.mu.Lock()
@@ -116,6 +118,7 @@ func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
+	pinClockInMarketHours(g)
 	g.SetBaselineProvider(&mockBaseline{mean: 0, stdev: 0, count: 2}) // below floor
 	g.mu.Lock()
 	g.limits["newbie@test.com"] = &UserLimits{
@@ -139,6 +142,7 @@ func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
+	pinClockInMarketHours(g)
 	g.SetBaselineProvider(&mockBaseline{mean: 5000, stdev: 500, count: 20})
 	g.mu.Lock()
 	g.limits["mo@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
@@ -158,6 +162,7 @@ func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
 func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
+	pinClockInMarketHours(g)
 	g.mu.Lock()
 	g.limits["np@test.com"] = &UserLimits{
 		RequireConfirmAllOrders: false,

@@ -24,6 +24,7 @@ func newIntegrationGuard(t *testing.T) *Guard {
 	g := NewGuard(logger)
 	g.SetDB(db)
 	require.NoError(t, g.InitTable())
+	pinClockInMarketHours(g)
 	return g
 }
 
@@ -223,7 +224,7 @@ func TestFullChain_DailyOrderLimit(t *testing.T) {
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
 	tracker.DailyOrderCount = 20
-	tracker.DayResetAt = time.Now()
+	tracker.DayResetAt = g.clock()
 	g.mu.Unlock()
 
 	r := g.CheckOrder(validSmallOrder(email))
@@ -383,7 +384,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
 	tracker.DailyPlacedValue = 190000
-	tracker.DayResetAt = time.Now()
+	tracker.DayResetAt = g.clock()
 	g.mu.Unlock()
 
 	// An order for Rs 12,000 would push total to Rs 2,02,000 > Rs 2,00,000

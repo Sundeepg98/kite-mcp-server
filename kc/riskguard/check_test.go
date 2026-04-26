@@ -21,6 +21,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 	t.Parallel()
 	t.Run("custom check rejects otherwise-valid order", func(t *testing.T) {
 		g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		pinClockInMarketHours(g)
 
 		// Synthetic custom check: always reject.
 		g.RegisterCheck(&stubCheck{
@@ -52,6 +53,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 
 	t.Run("Order() ordering is respected", func(t *testing.T) {
 		g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		pinClockInMarketHours(g)
 
 		// Record the order in which checks fire.
 		var seen []string
@@ -109,6 +111,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 
 	t.Run("custom check between built-ins fires between them", func(t *testing.T) {
 		g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		pinClockInMarketHours(g)
 
 		// Built-ins occupy OrderKillSwitch=100 through OrderOffHours=1200.
 		// Put a stub at 650 (between daily-value and anomaly) that rejects

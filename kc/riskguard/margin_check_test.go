@@ -26,6 +26,7 @@ func newGuardWithMargin(lookup MarginLookup, enabled bool) *Guard {
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	g.SetMarginLookup(lookup)
 	g.SetMarginCheckEnabled(enabled)
+	pinClockInMarketHours(g)
 	return g
 }
 
@@ -51,6 +52,16 @@ func TestMarginCheck_RejectsInsufficientMargin(t *testing.T) {
 	g := newGuardWithMargin(newStubMargin(map[string]float64{
 		"trader@test.com": 50000,
 	}), true)
+	// Raise the per-user single-order cap so order_value (chain order 300)
+	// does not preempt the margin check (chain order 325) we are isolating.
+	// The tightened Free-tier default of Rs 50,000 would otherwise reject
+	// our Rs 100,000 notional before margin sees it.
+	g.mu.Lock()
+	g.limits["trader@test.com"] = &UserLimits{
+		MaxSingleOrderINR:       1000000,
+		RequireConfirmAllOrders: false,
+	}
+	g.mu.Unlock()
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: 1000, Confirmed: true,

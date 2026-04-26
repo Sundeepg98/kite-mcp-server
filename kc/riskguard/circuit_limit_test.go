@@ -29,6 +29,7 @@ func (s *stubCircuitLookup) GetCircuitLimits(exchange, tradingsymbol string) (lo
 func newGuardWithCircuit(lookup CircuitLookup) *Guard {
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	g.SetCircuitLookup(lookup)
+	pinClockInMarketHours(g)
 	return g
 }
 

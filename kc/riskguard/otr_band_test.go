@@ -26,6 +26,7 @@ func (s *stubLTPLookup) GetLTP(exchange, tradingsymbol string) (float64, bool) {
 func newGuardWithLookup(lookup LTPLookup) *Guard {
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	g.SetLTPLookup(lookup)
+	pinClockInMarketHours(g)
 	return g
 }
 

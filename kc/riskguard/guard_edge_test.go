@@ -23,6 +23,7 @@ import (
 func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 
 	// Initially not frozen
 	assert.False(t, g.IsGloballyFrozen())
@@ -262,6 +263,7 @@ func TestMiddleware_BlockedOrder(t *testing.T) {
 func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	mw := Middleware(g)
 
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -295,6 +297,7 @@ func TestMiddleware_AllowedOrderRecordsSuccess(t *testing.T) {
 func TestMiddleware_TriggerPriceFallback(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	mw := Middleware(g)
 
 	handler := mw(func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -515,6 +518,7 @@ func TestLoadLimits_WithFrozenAtSet(t *testing.T) {
 func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "resetday@test.com"
 
 	g.mu.Lock()
@@ -583,6 +587,7 @@ func TestGetEffectiveLimits_AllZerosFilled(t *testing.T) {
 func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "nodup@test.com"
 
 	g.mu.Lock()
@@ -663,6 +668,7 @@ func TestGetUserStatus_FrozenUser(t *testing.T) {
 func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	// No SetFreezeQuantityLookup called => nil
 
 	// Use price=0 (MARKET) to skip order value check
@@ -682,6 +688,7 @@ func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:ZEROFQ": 0,
 	}})
@@ -703,6 +710,7 @@ func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:INFY": 1800,
 	}})
@@ -978,6 +986,7 @@ func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
 func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "dupautofreeze@test.com"
 
 	g.mu.Lock()

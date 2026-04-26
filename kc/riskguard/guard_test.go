@@ -13,14 +13,32 @@ func newTestGuard() *Guard {
 	return NewGuard(slog.Default())
 }
 
+// pinClockInMarketHours pins g.clock() to today at 10:30 IST (in-market-
+// hours, clear of the 02:00-06:00 IST off_hours window). Use it from any
+// test helper or test body where the test calls g.CheckOrder(...) on a
+// path that would otherwise hit the off_hours check during deep-night
+// CI runs. The pin uses today's date (real time.Now().In(ist).{Y,M,D})
+// so tests that compute relative-to-now expectations (e.g.
+// TestMaybeResetDay_OldResetTriggersReset using DayResetAt =
+// time.Now().AddDate(0, 0, -3)) keep their relative-time semantics.
+//
+// Tests that exercise day-reset semantics directly (TestMaybeResetDay_*,
+// TestCheckOrder_AutoFreezeOnDailyOrderCount, etc.) — i.e. tests that
+// pre-populate tracker.DayResetAt with time.Now() and rely on the same
+// real-time being visible to maybeResetDay — must NOT use this helper.
+// Those tests stay on the unpinned newTestGuard().
+func pinClockInMarketHours(g *Guard) {
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+	g.SetClock(func() time.Time {
+		now := time.Now().In(ist)
+		return time.Date(now.Year(), now.Month(), now.Day(), 10, 30, 0, 0, ist)
+	})
+}
+
 func TestCheckKillSwitch(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
-
-	// Pin clock to in-market-hours IST so off_hours doesn't shadow the
-	// kill-switch check we're isolating. See TestCheckOrderValue comment.
-	ist, _ := time.LoadLocation("Asia/Kolkata")
-	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 10, 30, 0, 0, ist) })
+	pinClockInMarketHours(g)
 
 	t.Run("unfrozen user passes", func(t *testing.T) {
 		// Confirmed=true bypasses the new default-on require-confirm gate so
@@ -47,15 +65,7 @@ func TestCheckKillSwitch(t *testing.T) {
 func TestCheckOrderValue(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
-
-	// Pin the clock to a deterministic in-market-hours IST time so the
-	// off_hours check (chain order 1200, blocks 02:00-06:00 IST) stays
-	// quiet regardless of when the test is run. Without this, runs
-	// during the off-hours window block the order before order_value
-	// can fire and contaminate the rejection counter that drives
-	// auto-freeze. Same fix pattern as clock_test.go and anomaly_test.go.
-	ist, _ := time.LoadLocation("Asia/Kolkata")
-	g.SetClock(func() time.Time { return time.Date(2026, 4, 8, 10, 30, 0, 0, ist) })
+	pinClockInMarketHours(g)
 
 	// Tightened Free-tier default: Rs 50,000 per order. Tests updated to reflect
 	// the new cap. Confirmed=true bypasses the new default-on require-confirm
@@ -101,6 +111,7 @@ func (m *mockFreezeQty) GetFreezeQuantity(exchange, symbol string) (uint32, bool
 func TestCheckQuantityLimit(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	g.SetFreezeQuantityLookup(&mockFreezeQty{data: map[string]uint32{
 		"NSE:RELIANCE": 1800,
 		"NFO:NIFTY":    1800,
@@ -138,6 +149,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 func TestCheckDailyOrderCount(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 
 	t.Run("under limit passes", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
@@ -148,7 +160,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 		// Set a low limit for testing
 		g.mu.Lock()
 		g.limits["u@t.com"] = &UserLimits{MaxOrdersPerDay: 3}
-		g.trackers["u@t.com"] = &UserTracker{DailyOrderCount: 3, DayResetAt: time.Now()}
+		g.trackers["u@t.com"] = &UserTracker{DailyOrderCount: 3, DayResetAt: g.clock()}
 		g.mu.Unlock()
 
 		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
@@ -213,6 +225,7 @@ func TestGetEffectiveLimits(t *testing.T) {
 func TestCheckRateLimit(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "rate@test.com"
 
 	// Set a low per-minute limit for testing
@@ -261,6 +274,7 @@ func TestCheckRateLimit(t *testing.T) {
 func TestCheckDuplicate(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "dup@test.com"
 
 	baseReq := OrderCheckRequest{
@@ -314,6 +328,7 @@ func TestCheckDuplicate(t *testing.T) {
 func TestCheckDailyValue(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "value@test.com"
 
 	// Set a low daily value limit for testing
@@ -334,7 +349,7 @@ func TestCheckDailyValue(t *testing.T) {
 		g.mu.Lock()
 		tracker := g.getOrCreateTracker(email)
 		tracker.DailyPlacedValue = 90000
-		tracker.DayResetAt = time.Now()
+		tracker.DayResetAt = g.clock()
 		g.mu.Unlock()
 
 		r := g.CheckOrder(OrderCheckRequest{
@@ -387,6 +402,7 @@ func TestFreezeUnfreeze(t *testing.T) {
 func TestAutoFreeze(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	email := "autofreeze@test.com"
 
 	// Set a very low single order limit to easily trigger rejections.

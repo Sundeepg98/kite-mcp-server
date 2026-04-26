@@ -130,6 +130,7 @@ func TestDedup_CleanupRemovesStaleEntries(t *testing.T) {
 func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	// Submit twice without ClientOrderID — should both pass the new dedup
 	// check (time-based dedup still applies but that's different signature).
 	req := OrderCheckRequest{
@@ -151,6 +152,7 @@ func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
 func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	req := OrderCheckRequest{
 		Email: "u@t.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
@@ -172,6 +174,7 @@ func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	base := OrderCheckRequest{
 		ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
@@ -202,6 +205,7 @@ func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
 func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	mw := Middleware(g)
 
 	handlerCalls := 0
@@ -243,6 +247,7 @@ func TestMiddleware_ClientOrderID_Blocked_OnRetry(t *testing.T) {
 func TestMiddleware_ClientOrderID_ModifyOrder(t *testing.T) {
 	t.Parallel()
 	g := newTestGuard()
+	pinClockInMarketHours(g)
 	mw := Middleware(g)
 
 	handlerCalls := 0
