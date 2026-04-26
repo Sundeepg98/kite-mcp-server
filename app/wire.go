@@ -461,18 +461,25 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Register the rolegate plugin before wiring the middleware so its hook is
 	// active from the first tool call. First production consumer of the plugin
 	// system — family viewers get role-gated tool access via mcp.ToolHook.
-	mcp.OnBeforeToolExecution(rolegate.Hook(kcManager.UserStoreConcrete()))
+	//
+	// B77: hooks register on the App-scoped registry (app.registry) instead of
+	// the package-level mcp.DefaultRegistry. Two parallel App tests can each
+	// carry their own hook chain without polluting each other's. The
+	// HookMiddlewareFor below consults the same per-App registry — production
+	// behavior is identical, only the storage moves from a package global to
+	// an App field.
+	app.registry.OnBeforeToolExecution(rolegate.Hook(kcManager.UserStoreConcrete()))
 	// Second production consumer — telegramnotify sends an after-hook DM to
 	// the family admin when a family member runs a trade-affecting tool.
 	// Demonstrates the OnAfterToolExecution half of the plugin API (rolegate
 	// uses the Before side). Any nil dep disables the plugin (fail-open).
-	mcp.OnAfterToolExecution(telegramnotify.Hook(telegramnotify.Deps{
+	app.registry.OnAfterToolExecution(telegramnotify.Hook(telegramnotify.Deps{
 		Users:   kcManager.UserStoreConcrete(),
 		ChatIDs: kcManager.AlertStoreConcrete(),
 		Sender:  kcManager.TelegramNotifier(),
 		Logger:  app.logger,
 	}))
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddleware()))
+	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddlewareFor(app.registry)))
 	// Circuit breaker protects against cascading failures from Kite API outages.
 	circuitBreaker := mcp.NewCircuitBreaker(5, 30*time.Second)
 	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(circuitBreaker.Middleware()))
