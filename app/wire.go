@@ -361,6 +361,22 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// manager's riskGuard field was populated by initInjectedStores via
 	// WithRiskGuard at construction time (cycle inversion step 3).
 
+	// Plugin discovery: scan RISKGUARD_PLUGIN_DIR for a plugins.json
+	// manifest of subprocess checks and register each via the existing
+	// RegisterSubprocessCheck path. Empty dir = no-op (default).
+	// Failed entries log + continue — one broken plugin must not block
+	// the rest from loading. See kc/riskguard/plugin_discovery.go.
+	if app.Config.RiskguardPluginDir != "" {
+		if err := riskguard.DiscoverPlugins(
+			app.Config.RiskguardPluginDir,
+			riskGuard.RegisterSubprocessCheck,
+			app.logger,
+		); err != nil {
+			app.logger.Warn("riskguard plugin discovery had errors (continuing)",
+				"plugin_dir", app.Config.RiskguardPluginDir, "error", err)
+		}
+	}
+
 	// Initialize domain event dispatcher and audit log.
 	// Events flow: use case -> EventDispatcher.Dispatch() -> makeEventPersister() -> domain_events table.
 	// This is a write-only audit trail — events are never read back for state reconstitution.

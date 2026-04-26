@@ -36,6 +36,7 @@ import (
 //	InstrumentsSkipFetch <- INSTRUMENTS_SKIP_FETCH == "true" (case-insensitive)
 //	AdminPassword        <- ADMIN_PASSWORD
 //	StripeWebhookSecret  <- STRIPE_WEBHOOK_SECRET
+//	RiskguardPluginDir   <- RISKGUARD_PLUGIN_DIR
 //
 // Defaults are applied via WithDefaults when the caller opts in.
 //
@@ -62,6 +63,7 @@ func ConfigFromEnv() *Config {
 		"GOOGLE_CLIENT_SECRET":       os.Getenv("GOOGLE_CLIENT_SECRET"),
 		"ENABLE_TRADING":             os.Getenv("ENABLE_TRADING"),
 		"INSTRUMENTS_SKIP_FETCH":     os.Getenv("INSTRUMENTS_SKIP_FETCH"),
+		"RISKGUARD_PLUGIN_DIR":       os.Getenv("RISKGUARD_PLUGIN_DIR"),
 		"ADMIN_PASSWORD":             os.Getenv("ADMIN_PASSWORD"),
 		"STRIPE_WEBHOOK_SECRET":      os.Getenv("STRIPE_WEBHOOK_SECRET"),
 		"STRIPE_SECRET_KEY":          os.Getenv("STRIPE_SECRET_KEY"),
@@ -98,6 +100,7 @@ func ConfigFromMap(env map[string]string) *Config {
 		GoogleClientSecret:   env["GOOGLE_CLIENT_SECRET"],
 		EnableTrading:        strings.EqualFold(env["ENABLE_TRADING"], "true"),
 		InstrumentsSkipFetch: strings.EqualFold(env["INSTRUMENTS_SKIP_FETCH"], "true"),
+		RiskguardPluginDir:   env["RISKGUARD_PLUGIN_DIR"],
 		AdminPassword:        env["ADMIN_PASSWORD"],
 		StripeWebhookSecret:  env["STRIPE_WEBHOOK_SECRET"],
 		StripeSecretKey:      env["STRIPE_SECRET_KEY"],

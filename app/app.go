@@ -370,6 +370,18 @@ type Config struct {
 	// builds set ENABLE_TRADING=true to unlock order placement.
 	EnableTrading bool
 
+	// RiskguardPluginDir is the directory containing a `plugins.json`
+	// manifest of subprocess riskguard checks to load at startup
+	// (RISKGUARD_PLUGIN_DIR env var). Empty = no discovery (compile-time
+	// or explicit RegisterSubprocessCheck still work). Each manifest
+	// entry registers a hashicorp/go-plugin subprocess check via
+	// riskguard.DiscoverPlugins → Guard.RegisterSubprocessCheck.
+	//
+	// The manifest format is documented in kc/riskguard/plugin_discovery.go.
+	// Failed-to-load plugins log a warning but do not block startup —
+	// runtime evaluation will fail-closed on those checks.
+	RiskguardPluginDir string
+
 	// InstrumentsSkipFetch is a test-only seam (INSTRUMENTS_SKIP_FETCH env
 	// var) that causes the instruments manager to load an empty map instead
 	// of fetching api.kite.trade/instruments.json at startup. Lives on the
