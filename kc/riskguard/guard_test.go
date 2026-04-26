@@ -14,25 +14,52 @@ func newTestGuard() *Guard {
 }
 
 // pinClockInMarketHours pins g.clock() to today at 10:30 IST (in-market-
-// hours, clear of the 02:00-06:00 IST off_hours window). Use it from any
-// test helper or test body where the test calls g.CheckOrder(...) on a
-// path that would otherwise hit the off_hours check during deep-night
-// CI runs. The pin uses today's date (real time.Now().In(ist).{Y,M,D})
-// so tests that compute relative-to-now expectations (e.g.
-// TestMaybeResetDay_OldResetTriggersReset using DayResetAt =
-// time.Now().AddDate(0, 0, -3)) keep their relative-time semantics.
+// hours, clear of the 02:00-06:00 IST off_hours window AND inside the
+// [09:15, 15:30) NSE/BSE session). When today is Sat/Sun, the pin rolls
+// back to the preceding Friday so the new market_hours guard (T1) does
+// not reject every existing order test on a weekend CI run.
+//
+// IMPORTANT: callers that ALSO populate tracker fields with time.Now()
+// (DayResetAt, RecentOrders, etc.) and expect the date-component to
+// match g.clock() must use markerTimeOnPinnedDay (below) instead of
+// time.Now() when computing those relative timestamps. See
+// TestMaybeResetDay_CrossesBoundary for an example.
 //
 // Tests that exercise day-reset semantics directly (TestMaybeResetDay_*,
 // TestCheckOrder_AutoFreezeOnDailyOrderCount, etc.) — i.e. tests that
 // pre-populate tracker.DayResetAt with time.Now() and rely on the same
-// real-time being visible to maybeResetDay — must NOT use this helper.
-// Those tests stay on the unpinned newTestGuard().
+// real-time being visible to maybeResetDay — must EITHER use this helper
+// AND use markerTimeOnPinnedDay for the tracker fixture, OR stay on the
+// unpinned newTestGuard().
 func pinClockInMarketHours(g *Guard) {
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	g.SetClock(func() time.Time {
 		now := time.Now().In(ist)
+		switch now.Weekday() {
+		case time.Saturday:
+			now = now.AddDate(0, 0, -1)
+		case time.Sunday:
+			now = now.AddDate(0, 0, -2)
+		}
 		return time.Date(now.Year(), now.Month(), now.Day(), 10, 30, 0, 0, ist)
 	})
+}
+
+// markerTimeOnPinnedDay returns the same date as pinClockInMarketHours
+// would produce (today rolled back to the preceding Friday on weekends),
+// but at the requested time-of-day. Use to pre-populate tracker fields
+// in tests that mix time.Now()-style timestamps with a pinned g.clock(),
+// so the date-component matches what the guard reads from g.clock().
+func markerTimeOnPinnedDay(hour, min int) time.Time {
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+	now := time.Now().In(ist)
+	switch now.Weekday() {
+	case time.Saturday:
+		now = now.AddDate(0, 0, -1)
+	case time.Sunday:
+		now = now.AddDate(0, 0, -2)
+	}
+	return time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, ist)
 }
 
 func TestCheckKillSwitch(t *testing.T) {
@@ -372,9 +399,10 @@ func TestCheckDailyValue(t *testing.T) {
 	t.Run("reset at 9:15 clears daily value", func(t *testing.T) {
 		g.mu.Lock()
 		tracker := g.getOrCreateTracker(email)
-		// Set the last reset to well before today's 9:15 AM
-		ist, _ := time.LoadLocation("Asia/Kolkata")
-		tracker.DayResetAt = time.Now().In(ist).AddDate(0, 0, -1)
+		// Set the last reset to well before today's 9:15 AM. Use
+		// markerTimeOnPinnedDay so the date-component matches g.clock()
+		// on weekend CI runs (where the pin rolls back to Friday).
+		tracker.DayResetAt = markerTimeOnPinnedDay(10, 30).AddDate(0, 0, -1)
 		tracker.DailyPlacedValue = 99999
 		g.mu.Unlock()
 

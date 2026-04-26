@@ -88,6 +88,14 @@ const (
 	// prior fills produces this. RecordOnRejection=false on the
 	// check so it doesn't trigger auto-freeze.
 	ReasonInsufficientMargin RejectionReason = "insufficient_margin"
+	// ReasonMarketClosed fires on any non-AMO order placed outside
+	// NSE/BSE equity-cash market hours (weekdays, [09:15, 15:30) IST).
+	// Variety="amo" bypasses the check (next-session queue). T1 in the
+	// gap catalogue. Holiday calendar is intentionally NOT enforced
+	// client-side — Kite's OMS rejects holiday orders anyway, and
+	// shipping a stale calendar would create false-rejects on every
+	// SEBI-announced special session.
+	ReasonMarketClosed RejectionReason = "market_closed"
 )
 
 // Anomaly-detection tuning constants. Centralised here so the product team
@@ -322,6 +330,12 @@ type OrderCheckRequest struct {
 	// ReasonDuplicateOrder. Empty means "no idempotency semantics" —
 	// backward-compatible with the existing time-based duplicate check.
 	ClientOrderID string
+	// Variety is the Kite order variety (regular/amo/co/iceberg/auction).
+	// Currently consulted only by checkMarketHours: variety="amo" bypasses
+	// the [09:15, 15:30) IST market-hours block because AMO orders are
+	// queued for the next session by Kite's OMS. Empty defaults to
+	// "regular" semantics (i.e. NOT an AMO bypass).
+	Variety string
 }
 
 // CheckOrder evaluates the registered check chain in Order ascending.

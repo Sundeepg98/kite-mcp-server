@@ -64,6 +64,7 @@ const (
 	OrderDailyValue            = 1000 // per-day cumulative notional
 	OrderAnomalyMultiplier     = 1100 // rolling baseline statistical anomaly
 	OrderOffHours              = 1200 // 02:00–06:00 IST hard-block
+	OrderMarketHours           = 1300 // T1: NSE/BSE market-hours rejection (AMO bypasses)
 )
 
 // --- Built-in Check adapters ---
@@ -197,6 +198,20 @@ func (c *offHoursCheck) Evaluate(req OrderCheckRequest) CheckResult {
 	return c.g.checkOffHours(req)
 }
 
+// marketHoursCheck wraps g.checkMarketHours (T1 in the gap catalogue).
+// Rejects any non-AMO order placed outside [09:15, 15:30) IST on a
+// weekday. Variety="amo" bypasses; weekends always reject. Holidays are
+// NOT enforced — Kite's OMS handles those (avoid stale-calendar
+// false-rejects on SEBI-announced special sessions).
+type marketHoursCheck struct{ g *Guard }
+
+func (c *marketHoursCheck) Name() string            { return "market_hours" }
+func (c *marketHoursCheck) Order() int              { return OrderMarketHours }
+func (c *marketHoursCheck) RecordOnRejection() bool { return true }
+func (c *marketHoursCheck) Evaluate(req OrderCheckRequest) CheckResult {
+	return c.g.checkMarketHours(req)
+}
+
 // builtinChecks returns the default Check set pre-registered by NewGuard.
 // Listed here (rather than assembled inline in NewGuard) so the list is
 // visible in one place for auditors and reviewers. Order of the slice is
@@ -219,6 +234,7 @@ func builtinChecks(g *Guard) []Check {
 		&otrBandCheck{g: g},  // SEBI OTR Apr 2026 — reads g.ltpLookup at eval time
 		&anomalyMultiplierCheck{g: g},
 		&offHoursCheck{g: g},
+		&marketHoursCheck{g: g}, // T1: NSE/BSE market-hours rejection (AMO bypasses)
 	}
 }
 
@@ -241,4 +257,5 @@ var (
 	_ Check = (*otrBandCheck)(nil)
 	_ Check = (*anomalyMultiplierCheck)(nil)
 	_ Check = (*offHoursCheck)(nil)
+	_ Check = (*marketHoursCheck)(nil)
 )

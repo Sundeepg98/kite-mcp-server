@@ -9,7 +9,6 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"go.uber.org/goleak"
 )
 
@@ -95,6 +94,6 @@ func newTestManagerOnce() *kc.Manager {
 		panic("newTestManagerOnce: kc.New: " + err.Error())
 	}
 
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 	return mgr
 }

@@ -523,9 +523,10 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	ist, _ := time.LoadLocation("Asia/Kolkata")
-	// Set DayResetAt to 2 days ago
-	tracker.DayResetAt = time.Now().In(ist).AddDate(0, 0, -2)
+	// Set DayResetAt to 2 days before the pinned clock so reset fires.
+	// Using markerTimeOnPinnedDay keeps the date-component aligned with
+	// g.clock() on weekend CI runs (where the pin rolls back to Friday).
+	tracker.DayResetAt = markerTimeOnPinnedDay(10, 30).AddDate(0, 0, -2)
 	tracker.DailyOrderCount = 150
 	tracker.DailyPlacedValue = 500000
 	g.mu.Unlock()

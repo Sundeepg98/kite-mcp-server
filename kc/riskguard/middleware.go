@@ -42,6 +42,9 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 				// When supplied, the same key within 15 min is rejected as a
 				// duplicate — primary defence against mcp-remote retry storms.
 				ClientOrderID: safeString(args["client_order_id"]),
+				// Variety threads through so checkMarketHours can see "amo"
+				// and bypass the [09:15, 15:30) IST market-hours block.
+				Variety: safeString(args["variety"]),
 			}
 
 			// For SL/SL-M, use trigger_price if price is 0

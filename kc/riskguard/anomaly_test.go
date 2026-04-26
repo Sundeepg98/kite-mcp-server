@@ -223,6 +223,9 @@ func TestCheckOffHours_BlocksAtBoundary0200(t *testing.T) {
 }
 
 // TestCheckOffHours_AllowsAtBoundary0600: the window ends at 06:00 exclusive.
+// Variety="amo" bypasses the new market_hours check (T1) so this test
+// isolates the off_hours decision — at 06:00 IST the market is closed,
+// so a non-AMO order would still be rejected by checkMarketHours.
 func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
@@ -235,6 +238,7 @@ func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "b2@test.com", ToolName: "place_order",
 		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Variety:   "amo", // bypass market_hours; we only test off_hours here
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "06:00 IST is outside the off-hours block window")
@@ -259,7 +263,10 @@ func TestCheckOffHours_AllowsAtMarketHours(t *testing.T) {
 }
 
 // TestCheckOffHours_AllowOptIn: a power user with AllowOffHours=true can
-// trade 24/7 — the check becomes a no-op for them.
+// bypass the off-hours block. Variety="amo" additionally bypasses the new
+// market_hours check (T1) so this test isolates the AllowOffHours opt-in;
+// 03:00 IST is well before market open so a non-AMO order would still be
+// rejected by checkMarketHours.
 func TestCheckOffHours_AllowOptIn(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.Default())
@@ -275,6 +282,7 @@ func TestCheckOffHours_AllowOptIn(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "owl@test.com", ToolName: "place_order",
 		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Variety:   "amo", // bypass market_hours; we only test off_hours opt-in here
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "AllowOffHours=true bypasses the off-hours block")

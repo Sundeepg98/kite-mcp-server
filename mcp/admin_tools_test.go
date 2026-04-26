@@ -13,7 +13,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -48,7 +47,7 @@ func newAdminTestManager(t *testing.T) *kc.Manager {
 	t.Cleanup(mgr.Shutdown)
 
 	// Wire up a RiskGuard so freeze-related tools work.
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 
 	// Wire FamilyService so admin_family_tools that dispatch via CommandBus/QueryBus
 	// return real results instead of "family service not configured".

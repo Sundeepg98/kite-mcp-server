@@ -142,6 +142,9 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Price:           price,
 			OrderType:       cmd.OrderType,
 			Confirmed:       cmd.Confirmed,
+			// Variety threads through so the market-hours check can see
+			// "amo" and bypass the [09:15, 15:30) IST block (T1).
+			Variety: cmd.Variety,
 		})
 		if !result.Allowed {
 			uc.logger.Warn("Order blocked by riskguard",

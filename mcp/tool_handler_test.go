@@ -248,6 +248,9 @@ func TestRiskguardMiddleware_BlocksOverValueOrder(t *testing.T) {
 
 func TestRiskguardMiddleware_AllowsValidOrder(t *testing.T) {
 	guard := riskguard.NewGuard(slog.Default())
+	// Pin to weekday 10:30 IST so the market_hours check (T1) passes
+	// regardless of when CI runs the test.
+	riskguard.PinClockToMarketHoursForTest(guard)
 
 	mw := riskguard.Middleware(guard)
 
@@ -360,6 +363,9 @@ func TestRiskguardMiddleware_NoAuthPassesThrough(t *testing.T) {
 
 func TestRiskguardMiddleware_RecordsSuccessfulOrder(t *testing.T) {
 	guard := riskguard.NewGuard(slog.Default())
+	// Pin to weekday 10:30 IST so the market_hours check (T1) passes
+	// regardless of when CI runs the test.
+	riskguard.PinClockToMarketHoursForTest(guard)
 
 	mw := riskguard.Middleware(guard)
 

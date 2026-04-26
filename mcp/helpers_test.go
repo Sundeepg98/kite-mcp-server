@@ -115,6 +115,17 @@ func callToolWithSession(t *testing.T, mgr *kc.Manager, toolName string, email s
 	return nil
 }
 
+// newPinnedTestGuard builds a riskguard.Guard with the clock pinned to
+// weekday 10:30 IST so the time-based checks (off_hours 02:00–06:00 IST
+// and market_hours T1: weekday 09:15–15:30 IST) don't reject orders on
+// weekend or deep-night CI runs. Use everywhere a manager-test needs a
+// guard that should accept valid orders.
+func newPinnedTestGuard(logger *slog.Logger) *riskguard.Guard {
+	g := riskguard.NewGuard(logger)
+	riskguard.PinClockToMarketHoursForTest(g)
+	return g
+}
+
 func newDevModeManager(t *testing.T) *kc.Manager {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -144,7 +155,7 @@ func newDevModeManager(t *testing.T) *kc.Manager {
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
 
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 	return mgr
 }
 
@@ -176,7 +187,7 @@ func newRichDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 
 	// Wire up audit store (in-memory SQLite)
 	db, err := alerts.OpenDB(":memory:")
@@ -239,7 +250,7 @@ func newFullDevModeManager(t *testing.T) (*kc.Manager, *audit.Store) {
 	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 
 	// SQLite-backed stores
 	db, err := alerts.OpenDB(":memory:")
@@ -428,7 +439,7 @@ func newNFODevModeManager(t *testing.T) *kc.Manager {
 	)
 	require.NoError(t, err)
 	t.Cleanup(mgr.Shutdown)
-	mgr.SetRiskGuard(riskguard.NewGuard(logger))
+	mgr.SetRiskGuard(newPinnedTestGuard(logger))
 	return mgr
 }
 

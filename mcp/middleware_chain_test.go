@@ -53,8 +53,10 @@ func setupChain(t *testing.T, handler server.ToolHandlerFunc) (server.ToolHandle
 	billingStore := billing.NewStore(db, logger)
 	require.NoError(t, billingStore.InitTable())
 
-	// Riskguard
+	// Riskguard. Pin to weekday 10:30 IST so the new market_hours check
+	// (T1) does not reject orders on weekend / deep-night CI runs.
 	guard := riskguard.NewGuard(logger)
+	riskguard.PinClockToMarketHoursForTest(guard)
 
 	// Build the chain: audit -> billing -> riskguard -> handler
 	// Applied in reverse so that audit is outermost (runs first).

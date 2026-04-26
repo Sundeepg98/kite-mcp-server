@@ -444,17 +444,25 @@ func (c *ordersErrClient) GetOrders() ([]broker.Order, error) {
 	return nil, fmt.Errorf("orders API error")
 }
 
-// newTestGuard creates a riskguard with default limits for testing.
+// newTestGuard creates a riskguard with default limits for testing. The
+// clock is pinned to the most recent weekday at 10:30 IST so the off-hours
+// (02:00–06:00 IST) and market-hours (T1: weekday 09:15–15:30 IST) checks
+// don't reject orders during weekend or deep-night CI runs.
 func newTestGuard(t *testing.T) *riskguard.Guard {
 	t.Helper()
-	return riskguard.NewGuard(testLogger())
+	g := riskguard.NewGuard(testLogger())
+	riskguard.PinClockToMarketHoursForTest(g)
+	return g
 }
 
 
-// newFrozenGuard creates a riskguard with global freeze enabled.
+// newFrozenGuard creates a riskguard with global freeze enabled. The
+// market-hours pin is applied for parity, though the global freeze short-
+// circuits the chain ahead of the time-based checks.
 func newFrozenGuard(t *testing.T) *riskguard.Guard {
 	t.Helper()
 	g := riskguard.NewGuard(testLogger())
+	riskguard.PinClockToMarketHoursForTest(g)
 	g.FreezeGlobal("test", "test freeze")
 	return g
 }

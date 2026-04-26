@@ -195,6 +195,7 @@ func TestBuiltinChecksRegisteredByDefault(t *testing.T) {
 		"otr_band", // PR-C: SEBI OTR Apr 2026
 		"anomaly_multiplier",
 		"off_hours",
+		"market_hours", // T1: NSE/BSE [09:15, 15:30) IST market-hours rejection
 	}
 	if len(names) != len(want) {
 		t.Fatalf("expected %d built-in checks, got %d: %v", len(want), len(names), names)
