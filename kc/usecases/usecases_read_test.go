@@ -131,7 +131,7 @@ func TestGetProfile_KiteErrorTextPassthrough(t *testing.T) {
 		brokerErr string
 		want     string // substring that must survive wrapping
 	}{
-		{"ip_whitelist", "Your IP_address is not whitelisted", "ip_address"},
+		{"ip_whitelist", "Your ip_address is not whitelisted", "ip_address"},
 		{"credentials_invalid", "invalid_key: API key rejected", "invalid_key"},
 		{"token_expired", "TokenException: token expired", "token"},
 	}
