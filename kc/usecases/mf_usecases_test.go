@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
@@ -587,6 +588,120 @@ func TestConvertPosition_BrokerError(t *testing.T) {
 		Email: "u@test.com", Tradingsymbol: "INFY", Quantity: 10,
 	})
 	assert.ErrorContains(t, err, "convert position")
+}
+
+// --- ES: PositionConvertedEvent dispatch on success ---
+
+// TestConvertPosition_DispatchesPositionConvertedEvent verifies that on
+// a successful broker convert, the use case dispatches a typed
+// domain.PositionConvertedEvent capturing the email, instrument,
+// pre/post product, quantity, and PositionType. Replaces the prior
+// untyped appendAuxEvent emit so projector consumers receive the
+// transition under a stable schema.
+func TestConvertPosition_DispatchesPositionConvertedEvent(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{convertOK: true}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("position.converted", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewConvertPositionUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	ok, err := uc.Execute(context.Background(), cqrs.ConvertPositionCommand{
+		Email:           "trader@example.com",
+		Exchange:        "NSE",
+		Tradingsymbol:   "RELIANCE",
+		TransactionType: "BUY",
+		Quantity:        10,
+		OldProduct:      "MIS",
+		NewProduct:      "CNC",
+		PositionType:    "day",
+	})
+
+	require.NoError(t, err)
+	assert.True(t, ok)
+	require.NotNil(t, captured, "PositionConvertedEvent must be dispatched on success")
+	conv, isPos := captured.(domain.PositionConvertedEvent)
+	require.True(t, isPos, "captured event should be PositionConvertedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", conv.Email)
+	assert.Equal(t, "NSE", conv.Instrument.Exchange)
+	assert.Equal(t, "RELIANCE", conv.Instrument.Tradingsymbol)
+	assert.Equal(t, "MIS", conv.OldProduct)
+	assert.Equal(t, "CNC", conv.NewProduct)
+	assert.Equal(t, 10, conv.Quantity)
+	assert.Equal(t, "day", conv.PositionType)
+	assert.Equal(t, "BUY", conv.TransactionType)
+	assert.False(t, conv.Timestamp.IsZero())
+}
+
+// TestConvertPosition_BrokerErrorSuppressesEvent: when the broker
+// rejects the conversion, no PositionConvertedEvent should fire — the
+// audit stream must reflect actual state transitions, not failed
+// requests. Pairs with TestConvertPosition_BrokerError which covers
+// the error-return contract.
+func TestConvertPosition_BrokerErrorSuppressesEvent(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{convertErr: errors.New("api fail")}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("position.converted", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewConvertPositionUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.ConvertPositionCommand{
+		Email: "u@test.com", Tradingsymbol: "INFY", Quantity: 10,
+		OldProduct: "MIS", NewProduct: "CNC",
+	})
+	require.Error(t, err)
+	assert.Nil(t, captured, "no event should fire when broker rejects conversion")
+}
+
+// TestConvertPosition_NilDispatcherSafe: bootstrap / DEV_MODE configurations
+// may construct the use case without an events dispatcher. Successful
+// conversion must not panic on a nil Dispatch call.
+func TestConvertPosition_NilDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{convertOK: true}
+	uc := NewConvertPositionUseCase(&mockBrokerResolver{client: client}, testLogger())
+
+	ok, err := uc.Execute(context.Background(), cqrs.ConvertPositionCommand{
+		Email: "u@test.com", Tradingsymbol: "INFY", Quantity: 10,
+		OldProduct: "MIS", NewProduct: "CNC",
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+// TestConvertPosition_AuxEventStillAppended: the existing untyped
+// appendAuxEvent path is preserved alongside the new typed dispatch
+// so audit consumers depending on the historical "position.converted"
+// StoredEvent rows aren't broken by the migration. Both paths fire on
+// success.
+func TestConvertPosition_AuxEventStillAppended(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{convertOK: true}
+	store := &mockEventAppender{}
+	uc := NewConvertPositionUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventStore(store)
+
+	ok, err := uc.Execute(context.Background(), cqrs.ConvertPositionCommand{
+		Email: "u@test.com", Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10,
+		OldProduct: "MIS", NewProduct: "CNC",
+	})
+	require.NoError(t, err)
+	assert.True(t, ok)
+	require.Len(t, store.appended, 1)
+	assert.Equal(t, "position.converted", store.appended[0].EventType)
+	assert.Equal(t, "Position", store.appended[0].AggregateType)
+	assert.Equal(t, "u@test.com|NSE|INFY|MIS", store.appended[0].AggregateID)
 }
 
 // ===========================================================================

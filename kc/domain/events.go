@@ -767,6 +767,105 @@ func OrderRejectedAggregateID(orderID, email string, occurredAt time.Time) strin
 	return "rejected:" + email + ":" + occurredAt.UTC().Format(time.RFC3339Nano)
 }
 
+// PositionConvertedEvent is emitted when a user converts a position
+// from one product type to another (e.g. CNC->MIS for intraday squaring,
+// MIS->CNC to carry forward overnight). Replaces the prior untyped
+// appendAuxEvent("position.converted", map[string]any{...}) emit in
+// kc/usecases/convert_position.go so the audit stream uses a typed
+// domain.Event with stable field names — projector consumers no longer
+// need to type-assert against an opaque map[string]any payload.
+//
+// Aggregate-ID rule: keyed by (email, exchange, tradingsymbol, OLD
+// product) via PositionConvertedAggregateID. Using the OLD product
+// (not the new) means a CNC->MIS->CNC sequence threads through a
+// stable aggregate stream rooted on the original holding's product.
+// Stable across reverse conversions, matches the pre-ES key shape
+// so existing rows aren't orphaned by the migration.
+//
+// PositionType ("day" / "overnight") is preserved verbatim from the
+// Kite ConvertPosition API param so a forensic walk can distinguish
+// intraday squaring from carry-forward conversions without re-querying
+// position state.
+type PositionConvertedEvent struct {
+	Email           string
+	Instrument      InstrumentKey
+	TransactionType string // "BUY" or "SELL" (the position direction being converted)
+	Quantity        int
+	OldProduct      string // MIS, CNC, NRML — pre-conversion product
+	NewProduct      string // MIS, CNC, NRML — post-conversion product
+	PositionType    string // "day" or "overnight" — Kite Convert API param
+	Timestamp       time.Time
+}
+
+func (e PositionConvertedEvent) EventType() string    { return "position.converted" }
+func (e PositionConvertedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PositionConvertedAggregateID returns the natural aggregate key for
+// position-conversion events. Format:
+// "<email>|<exchange>|<tradingsymbol>|<oldProduct>". The pipe separator
+// (rather than colon) avoids ambiguity with the time.RFC3339 colons
+// projector consumers parse out of OrderRejectedEvent's synthetic
+// keys. Empty email falls back to "position-converted:unknown" so a
+// malformed dispatch lands in its own quarantine slot rather than
+// colliding with real rows.
+func PositionConvertedAggregateID(email, exchange, tradingsymbol, oldProduct string) string {
+	if email == "" {
+		return "position-converted:unknown"
+	}
+	return email + "|" + exchange + "|" + tradingsymbol + "|" + oldProduct
+}
+
+// PaperOrderRejectedEvent is emitted when the paper-trading engine
+// rejects a virtual order. Sources:
+//
+//   - "place_market"   — MARKET order rejected because LTP unavailable
+//                        (no LTP provider, instrument not subscribed).
+//   - "place_limit"    — LIMIT BUY rejected at place time because the
+//                        notional exceeds the user's cash balance.
+//   - "fill_immediate" — fillOrder rejected a BUY because the snap-to-
+//                        LTP price exceeded cash balance (covers the
+//                        market path and marketable-LIMIT path).
+//   - "fill_monitor"   — background monitor rejected a queued BUY at
+//                        fill time when cash dropped below required
+//                        notional between place and fill.
+//
+// Distinct event type from real OrderRejectedEvent so projector
+// consumers (activity feeds, dashboards) can filter "real broker
+// rejection" vs "virtual-account rejection" without parsing OrderID
+// prefixes — paper IDs use "PAPER_<n>" but relying on prefix-sniffing
+// for projection-side classification is fragile, so we surface the
+// distinction at the event type itself.
+//
+// Aggregate-ID rule: keyed by OrderID via PaperOrderAggregateID. Paper
+// order IDs ("PAPER_<n>") are already process-unique via the atomic
+// orderSeq counter in kc/papertrading/engine.go, so no email prefix
+// is needed to disambiguate. Empty OrderID falls back to
+// "paper:unknown" — never observed in practice (orderID is assigned
+// before any rejection branch) but defence in depth keeps malformed
+// dispatches out of real rows.
+type PaperOrderRejectedEvent struct {
+	Email     string
+	OrderID   string
+	Reason    string // human-readable rejection reason (cash shortage, LTP unavailable)
+	Source    string // "place_market" / "place_limit" / "fill_immediate" / "fill_monitor"
+	Timestamp time.Time
+}
+
+func (e PaperOrderRejectedEvent) EventType() string    { return "paper.order_rejected" }
+func (e PaperOrderRejectedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PaperOrderAggregateID returns the natural aggregate key for paper-
+// trading order events. Currently used by PaperOrderRejectedEvent only;
+// future paper.* events should reuse this helper so the per-paper-
+// order aggregate stream stays coherent. Empty OrderID falls back to
+// "paper:unknown" so malformed dispatches don't collide with real rows.
+func PaperOrderAggregateID(orderID string) string {
+	if orderID == "" {
+		return "paper:unknown"
+	}
+	return orderID
+}
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

@@ -454,6 +454,20 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// projector queries can render full place→modify→reject→cancel
 			// timelines without joining against a separate broker-error log.
 			eventDispatcher.Subscribe("order.rejected", makeEventPersister(eventStore, "Order", app.logger))
+			// position.converted dispatches from ConvertPositionUseCase on
+			// successful CNC<->MIS<->NRML conversions. Replaces the prior
+			// untyped appendAuxEvent path with a typed event so projector
+			// consumers receive a stable schema. The legacy aux-event path
+			// still fires alongside during the migration window so audit
+			// readers depending on the historical map[string]any payload
+			// aren't broken.
+			eventDispatcher.Subscribe("position.converted", makeEventPersister(eventStore, "Position", app.logger))
+			// paper.order_rejected dispatches from the paper-trading
+			// engine on virtual-account rejections (LTP unavailable,
+			// insufficient cash). Distinct from order.rejected (real
+			// broker) so projector consumers can filter virtual vs real
+			// without parsing OrderID prefixes.
+			eventDispatcher.Subscribe("paper.order_rejected", makeEventPersister(eventStore, "PaperOrder", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

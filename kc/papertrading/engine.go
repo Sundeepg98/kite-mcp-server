@@ -60,6 +60,32 @@ func (e *PaperEngine) SetDispatcher(d *domain.EventDispatcher) {
 	e.dispatcher = d
 }
 
+// dispatchRejection emits a PaperOrderRejectedEvent for the given order
+// rejection. Centralised so the four rejection branches (place_market,
+// place_limit, fill_immediate, fill_monitor) stay in lock-step on the
+// event payload shape. Nil-safe — callers without a wired dispatcher
+// (tests, bootstrap) skip silently.
+//
+// Source values are constrained to the documented PaperOrderRejectedEvent
+// vocabulary so projector consumers can rely on stable strings:
+//
+//   - "place_market"   — MARKET order, LTP unavailable at place time.
+//   - "place_limit"    — LIMIT BUY, cash short at place time (pre-OPEN).
+//   - "fill_immediate" — fillOrder cash check failed (BUY notional > cash).
+//   - "fill_monitor"   — background monitor cash check failed at fill.
+func (e *PaperEngine) dispatchRejection(email, orderID, reason, source string) {
+	if e.dispatcher == nil {
+		return
+	}
+	e.dispatcher.Dispatch(domain.PaperOrderRejectedEvent{
+		Email:     email,
+		OrderID:   orderID,
+		Reason:    reason,
+		Source:    source,
+		Timestamp: time.Now().UTC(),
+	})
+}
+
 // IsEnabled returns whether paper trading is enabled for the given email.
 func (e *PaperEngine) IsEnabled(email string) bool {
 	acct, err := e.store.GetAccount(email)
@@ -203,6 +229,10 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 			if err := e.store.InsertOrder(order); err != nil {
 				return nil, fmt.Errorf("insert rejected order: %w", err)
 			}
+			// ES: typed rejection event for projector consumers — distinct
+			// from the live-broker order.rejected so virtual-vs-real can
+			// be filtered without parsing OrderID prefixes.
+			e.dispatchRejection(email, orderID, order.Tag, "place_market")
 			return map[string]any{"order_id": orderID, "status": "REJECTED", "reason": order.Tag}, nil
 		}
 		return e.fillOrder(acct, order, ltp)
@@ -229,6 +259,8 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 				if err := e.store.InsertOrder(order); err != nil {
 					return nil, fmt.Errorf("insert rejected order: %w", err)
 				}
+				// ES: typed rejection event for projector consumers.
+				e.dispatchRejection(email, orderID, order.Tag, "place_limit")
 				return map[string]any{"order_id": orderID, "status": "REJECTED", "reason": order.Tag}, nil
 			}
 		}
@@ -263,6 +295,10 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 			if err := e.store.InsertOrder(order); err != nil {
 				return nil, fmt.Errorf("insert rejected order: %w", err)
 			}
+			// ES: typed rejection event — fillOrder rejection branch
+			// (covers MARKET path snap-to-LTP and marketable-LIMIT path
+			// where cash dropped between place and fill).
+			e.dispatchRejection(acct.Email, order.OrderID, order.Tag, "fill_immediate")
 			return map[string]any{"order_id": order.OrderID, "status": "REJECTED", "reason": order.Tag}, nil
 		}
 	}

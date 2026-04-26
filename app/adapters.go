@@ -611,6 +611,10 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.UserEmail)
 	case domain.OrderRejectedEvent:
 		return audit.HashEmail(ev.Email)
+	case domain.PositionConvertedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PaperOrderRejectedEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -698,6 +702,17 @@ func deriveAggregateID(e domain.Event) string {
 		// back to a per-rejection synthetic key built from email + the
 		// event's own timestamp. See domain.OrderRejectedAggregateID.
 		return domain.OrderRejectedAggregateID(ev.OrderID, ev.Email, ev.Timestamp)
+	case domain.PositionConvertedEvent:
+		// Keyed by (email, exchange, tradingsymbol, OLD product) so a
+		// CNC->MIS->CNC sequence threads through a stable aggregate
+		// stream rooted on the original holding's product. Matches the
+		// pre-ES untyped key shape so existing rows aren't orphaned.
+		return domain.PositionConvertedAggregateID(ev.Email, ev.Instrument.Exchange, ev.Instrument.Tradingsymbol, ev.OldProduct)
+	case domain.PaperOrderRejectedEvent:
+		// Paper IDs ("PAPER_<n>") are process-unique via atomic counter,
+		// no email prefix needed. Empty OrderID (defence in depth) lands
+		// in "paper:unknown" rather than colliding with real rows.
+		return domain.PaperOrderAggregateID(ev.OrderID)
 	default:
 		return "unknown"
 	}

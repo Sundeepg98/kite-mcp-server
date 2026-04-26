@@ -1,6 +1,7 @@
 package papertrading
 
 import (
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -181,6 +182,14 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 			}
 			m.logger.Warn("monitor: order rejected, insufficient cash",
 				"order_id", o.OrderID, "needed", cost, "available", acct.CashBalance)
+			// ES: typed rejection event — monitor branch (place passed,
+			// fill failed because cash dropped between place and fill).
+			// Source "fill_monitor" lets projector consumers identify
+			// the time-delayed rejection branch for forensic timeline
+			// reconstruction.
+			m.engine.dispatchRejection(o.Email, o.OrderID,
+				fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost, acct.CashBalance),
+				"fill_monitor")
 			return
 		}
 	}

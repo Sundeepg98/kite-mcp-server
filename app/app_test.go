@@ -334,6 +334,21 @@ func TestDeriveAggregateID(t *testing.T) {
 			event:    domain.OrderRejectedEvent{Email: "trader@example.com", OrderID: "", ToolName: "place_order", Reason: "RATE_LIMIT", Timestamp: now},
 			expected: "rejected:trader@example.com:" + now.Format(time.RFC3339Nano),
 		},
+		// ES: PositionConvertedEvent — typed replacement for the prior
+		// untyped appendAuxEvent. Keyed by OLD product so a
+		// CNC->MIS->CNC sequence threads through a stable stream.
+		{
+			name:     "PositionConvertedEvent uses (email|exchange|symbol|oldProduct)",
+			event:    domain.PositionConvertedEvent{Email: "trader@example.com", Instrument: domain.NewInstrumentKey("NSE", "RELIANCE"), OldProduct: "MIS", NewProduct: "CNC", Quantity: 10, Timestamp: now},
+			expected: "trader@example.com|NSE|RELIANCE|MIS",
+		},
+		// ES: PaperOrderRejectedEvent — paper IDs are already process-
+		// unique so no email prefix needed.
+		{
+			name:     "PaperOrderRejectedEvent uses OrderID directly",
+			event:    domain.PaperOrderRejectedEvent{Email: "trader@example.com", OrderID: "PAPER_42", Reason: "insufficient cash", Source: "place_limit", Timestamp: now},
+			expected: "PAPER_42",
+		},
 	}
 
 	for _, tt := range tests {

@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // ConvertPositionUseCase converts a position from one product type to another.
 type ConvertPositionUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -26,6 +29,18 @@ func NewConvertPositionUseCase(resolver BrokerResolver, logger *slog.Logger) *Co
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *ConvertPositionUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so the use
+// case emits a domain.PositionConvertedEvent on success — replacing the
+// prior untyped appendAuxEvent payload with a stable typed schema for
+// projector consumers. Nil-safe: when unset, only the legacy aux-event
+// path runs (preserves backward compatibility for tests / bootstrap
+// configurations that don't wire the dispatcher). Both paths fire on
+// success during the migration window so audit consumers depending on
+// the historical untyped row aren't broken.
+func (uc *ConvertPositionUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
 
 // Execute converts a position from one product type to another.
 func (uc *ConvertPositionUseCase) Execute(ctx context.Context, cmd cqrs.ConvertPositionCommand) (bool, error) {
@@ -69,9 +84,32 @@ func (uc *ConvertPositionUseCase) Execute(ctx context.Context, cmd cqrs.ConvertP
 		"new_product", cmd.NewProduct,
 	)
 
-	// Audit-trail event. Aggregate key composed of email+symbol+old_product
-	// so a position-conversion sequence (CNC→MIS→CNC) replays cleanly.
-	aggregateID := cmd.Email + "|" + cmd.Exchange + "|" + cmd.Tradingsymbol + "|" + cmd.OldProduct
+	now := time.Now().UTC()
+
+	// Typed domain event — preferred path for new projector consumers.
+	// Replaces the prior untyped map[string]any payload with a stable
+	// schema. Nil-safe: dispatcher is optional in bootstrap / tests.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.PositionConvertedEvent{
+			Email:           cmd.Email,
+			Instrument:      domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
+			TransactionType: cmd.TransactionType,
+			Quantity:        cmd.Quantity,
+			OldProduct:      cmd.OldProduct,
+			NewProduct:      cmd.NewProduct,
+			PositionType:    cmd.PositionType,
+			Timestamp:       now,
+		})
+	}
+
+	// Legacy untyped audit path retained for backward compatibility —
+	// existing audit-trail readers may already consume the
+	// "position.converted" StoredEvent rows under the historical
+	// map[string]any payload. Aggregate key composed of
+	// email+exchange+symbol+old_product so a CNC→MIS→CNC sequence
+	// replays cleanly under stable IDs (matches
+	// domain.PositionConvertedAggregateID).
+	aggregateID := domain.PositionConvertedAggregateID(cmd.Email, cmd.Exchange, cmd.Tradingsymbol, cmd.OldProduct)
 	appendAuxEvent(uc.eventStore, uc.logger, "Position", aggregateID, "position.converted", map[string]any{
 		"email":            cmd.Email,
 		"exchange":         cmd.Exchange,

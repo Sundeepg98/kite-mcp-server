@@ -21,8 +21,10 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"OrderCancelledEvent", OrderCancelledEvent{Timestamp: now}, "order.cancelled"},
 		{"OrderFilledEvent", OrderFilledEvent{Timestamp: now}, "order.filled"},
 		{"OrderRejectedEvent", OrderRejectedEvent{Timestamp: now}, "order.rejected"},
+		{"PaperOrderRejectedEvent", PaperOrderRejectedEvent{Timestamp: now}, "paper.order_rejected"},
 		{"PositionOpenedEvent", PositionOpenedEvent{Timestamp: now}, "position.opened"},
 		{"PositionClosedEvent", PositionClosedEvent{Timestamp: now}, "position.closed"},
+		{"PositionConvertedEvent", PositionConvertedEvent{Timestamp: now}, "position.converted"},
 		{"AlertCreatedEvent", AlertCreatedEvent{Timestamp: now}, "alert.created"},
 		{"AlertTriggeredEvent", AlertTriggeredEvent{Timestamp: now}, "alert.triggered"},
 		{"AlertDeletedEvent", AlertDeletedEvent{Timestamp: now}, "alert.deleted"},
@@ -309,6 +311,163 @@ func TestOrderRejectedAggregateID(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("OrderRejectedAggregateID(%q, %q, %v) = %q, want %q",
 					tc.orderID, tc.email, now, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPositionConvertedEvent_Fields pins the field surface of the typed
+// position.converted event. Replaces the prior untyped appendAuxEvent
+// payload (kc/usecases/convert_position.go pre-ES) so the audit stream
+// uses a real domain.Event with stable field names rather than a
+// map[string]any blob projector consumers had to type-assert.
+func TestPositionConvertedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := PositionConvertedEvent{
+		Email:           "trader@example.com",
+		Instrument:      NewInstrumentKey("NSE", "RELIANCE"),
+		TransactionType: "BUY",
+		Quantity:        10,
+		OldProduct:      "MIS",
+		NewProduct:      "CNC",
+		PositionType:    "day",
+		Timestamp:       now,
+	}
+
+	if e.EventType() != "position.converted" {
+		t.Errorf("EventType() = %q, want position.converted", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.Email != "trader@example.com" {
+		t.Errorf("Email = %q", e.Email)
+	}
+	if e.OldProduct != "MIS" {
+		t.Errorf("OldProduct = %q", e.OldProduct)
+	}
+	if e.NewProduct != "CNC" {
+		t.Errorf("NewProduct = %q", e.NewProduct)
+	}
+	if e.Quantity != 10 {
+		t.Errorf("Quantity = %d", e.Quantity)
+	}
+}
+
+// TestPositionConvertedAggregateID pins the natural aggregate key for
+// position-conversion events: keyed by (email, exchange, symbol, OLD
+// product) so a CNC->MIS->CNC sequence over time replays as a coherent
+// stream under stable IDs. Using OldProduct (not NewProduct) matches
+// the pre-ES appendAuxEvent payload's key derivation in
+// kc/usecases/convert_position.go so the new typed events drop into
+// the same aggregate slot existing un-typed conversions live under —
+// no migration of in-flight aggregate IDs needed.
+func TestPositionConvertedAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		email      string
+		exchange   string
+		symbol     string
+		oldProduct string
+		want       string
+	}{
+		{
+			name:       "Standard CNC->MIS conversion key",
+			email:      "trader@example.com",
+			exchange:   "NSE",
+			symbol:     "RELIANCE",
+			oldProduct: "CNC",
+			want:       "trader@example.com|NSE|RELIANCE|CNC",
+		},
+		{
+			name:       "MIS->CNC keyed by old (MIS) so reverse sequence joins same stream slot",
+			email:      "trader@example.com",
+			exchange:   "NSE",
+			symbol:     "RELIANCE",
+			oldProduct: "MIS",
+			want:       "trader@example.com|NSE|RELIANCE|MIS",
+		},
+		{
+			name:       "Empty email falls back to unknown sentinel",
+			email:      "",
+			exchange:   "NSE",
+			symbol:     "RELIANCE",
+			oldProduct: "CNC",
+			want:       "position-converted:unknown",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PositionConvertedAggregateID(tc.email, tc.exchange, tc.symbol, tc.oldProduct)
+			if got != tc.want {
+				t.Errorf("PositionConvertedAggregateID(%q,%q,%q,%q) = %q, want %q",
+					tc.email, tc.exchange, tc.symbol, tc.oldProduct, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPaperOrderRejectedEvent_Fields pins the field surface of the
+// paper-trading rejection event. Distinct event type from real
+// OrderRejectedEvent so projector consumers (activity feeds, dashboards)
+// can filter "real broker rejection" vs "virtual-account rejection"
+// without parsing OrderID prefixes — paper IDs use "PAPER_<n>" but
+// relying on prefix-sniffing for projection-side classification is
+// fragile, so we surface the distinction at the event type itself.
+func TestPaperOrderRejectedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := PaperOrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "PAPER_42",
+		Reason:    "insufficient cash: need 1000.00, have 500.00",
+		Source:    "place_limit",
+		Timestamp: now,
+	}
+
+	if e.EventType() != "paper.order_rejected" {
+		t.Errorf("EventType() = %q, want paper.order_rejected", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.Email != "trader@example.com" {
+		t.Errorf("Email = %q", e.Email)
+	}
+	if e.OrderID != "PAPER_42" {
+		t.Errorf("OrderID = %q", e.OrderID)
+	}
+	if e.Source != "place_limit" {
+		t.Errorf("Source = %q", e.Source)
+	}
+	if e.Reason == "" {
+		t.Error("Reason should be populated")
+	}
+}
+
+// TestPaperOrderAggregateID pins the natural aggregate key for paper
+// trading order events: keyed by OrderID alone since paper IDs are
+// already process-unique ("PAPER_<n>" with monotonic atomic counter)
+// so no email-prefix is needed to disambiguate. Empty OrderID falls
+// back to "paper:unknown" so a malformed dispatch doesn't collide
+// with real rows.
+func TestPaperOrderAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		orderID string
+		want    string
+	}{
+		{"Standard paper ID joins by OrderID", "PAPER_42", "PAPER_42"},
+		{"Empty OrderID falls back to unknown", "", "paper:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PaperOrderAggregateID(tc.orderID)
+			if got != tc.want {
+				t.Errorf("PaperOrderAggregateID(%q) = %q, want %q", tc.orderID, got, tc.want)
 			}
 		})
 	}

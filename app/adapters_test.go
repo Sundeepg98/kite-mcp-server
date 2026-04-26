@@ -490,6 +490,73 @@ func TestDeriveAggregateID_OrderRejected_PlaceOrderEmptyOrderID(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+// TestDeriveEmailHash_PositionConverted pins the PII path for the typed
+// position-conversion event. Email is the data-subject field; hashing
+// through audit.HashEmail gives the persisted row a PII-free
+// correlation key consistent with consent_log and per-user export.
+func TestDeriveEmailHash_PositionConverted(t *testing.T) {
+	t.Parallel()
+	ev := domain.PositionConvertedEvent{
+		Email:      "Trader@Example.COM",
+		Instrument: domain.NewInstrumentKey("NSE", "RELIANCE"),
+		OldProduct: "MIS",
+		NewProduct: "CNC",
+		Quantity:   10,
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+	assert.NotEqual(t, "", got, "Email-bearing position-conversion must produce non-empty hash")
+}
+
+// TestDeriveAggregateID_PositionConverted pins the natural aggregate
+// key derivation: the persister adapter routes through
+// domain.PositionConvertedAggregateID so a CNC<->MIS<->CNC sequence
+// replays under stable IDs (keyed by OLD product). Matches the pre-ES
+// untyped key shape — existing rows aren't orphaned by the migration.
+func TestDeriveAggregateID_PositionConverted(t *testing.T) {
+	t.Parallel()
+	ev := domain.PositionConvertedEvent{
+		Email:      "trader@example.com",
+		Instrument: domain.NewInstrumentKey("NSE", "RELIANCE"),
+		OldProduct: "MIS",
+		NewProduct: "CNC",
+	}
+	assert.Equal(t, "trader@example.com|NSE|RELIANCE|MIS", deriveAggregateID(ev))
+}
+
+// TestDeriveEmailHash_PaperOrderRejected pins the PII path for paper-
+// trading rejection events. Even though paper trades are virtual, the
+// email is real user data — must hash like every other email-bearing
+// event so per-user data-portability export queries pull the row.
+func TestDeriveEmailHash_PaperOrderRejected(t *testing.T) {
+	t.Parallel()
+	ev := domain.PaperOrderRejectedEvent{
+		Email:   "Trader@Example.COM",
+		OrderID: "PAPER_42",
+		Reason:  "insufficient cash",
+		Source:  "place_limit",
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+}
+
+// TestDeriveAggregateID_PaperOrderRejected pins the OrderID-keyed
+// aggregate routing: paper IDs are process-unique via the atomic
+// orderSeq counter, so no email prefix is needed to disambiguate the
+// per-paper-order stream.
+func TestDeriveAggregateID_PaperOrderRejected(t *testing.T) {
+	t.Parallel()
+	ev := domain.PaperOrderRejectedEvent{
+		Email:   "trader@example.com",
+		OrderID: "PAPER_42",
+		Reason:  "insufficient cash",
+		Source:  "fill_monitor",
+	}
+	assert.Equal(t, "PAPER_42", deriveAggregateID(ev))
+}
+
 // ===========================================================================
 // briefingCredAdapter with per-user credentials
 // ===========================================================================
