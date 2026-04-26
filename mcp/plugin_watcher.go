@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // BinaryReloadable is the narrow interface the binary watcher
@@ -60,6 +61,37 @@ var watcherState = struct {
 // slog.Default() so the error path can never nil-deref.
 var pluginWatcherLogger atomic.Pointer[slog.Logger]
 
+// pluginWatcherDispatcher holds the domain.EventDispatcher the watcher
+// emits its lifecycle / mutation events through. atomic.Pointer (vs. a
+// plain *domain.EventDispatcher field) lets app/wire.go swap the
+// dispatcher at runtime without coordinating with the
+// pluginBinaryWatchRegistry / watcherState mutexes; mutation paths
+// load-and-emit lock-free.
+//
+// nil → no-op dispatch (every emit site checks Load() != nil), which
+// matches the SetEventDispatcher contract on every other ES-wired
+// aggregate (Watchlist, TierChanged, Riskguard counters).
+var pluginWatcherDispatcher atomic.Pointer[domain.EventDispatcher]
+
+// SetPluginWatcherEventDispatcher wires the EventDispatcher the
+// watcher uses to emit typed plugin.* domain events. Pass nil to
+// clear (mutation-site emits become no-ops).
+//
+// Pattern mirrors SetPluginWatcherLogger: atomic.Pointer-backed setter
+// so live callers (app/wire.go) install the dispatcher right after
+// constructing it, without coordinating with the watcher goroutine
+// or the registry mutex. Multiple SetEventDispatcher calls overwrite
+// last-wins.
+func SetPluginWatcherEventDispatcher(d *domain.EventDispatcher) {
+	pluginWatcherDispatcher.Store(d)
+}
+
+// pluginEventBus returns the currently-installed dispatcher (nil if
+// none). Callers must nil-check before Dispatch.
+func pluginEventBus() *domain.EventDispatcher {
+	return pluginWatcherDispatcher.Load()
+}
+
 // SetPluginWatcherLogger wires the logger that runPluginBinaryWatcher
 // uses for fsnotify error reporting (Plugin#4). Pre-fix, errors were
 // silently swallowed; this exposes them to ops dashboards. Pass nil to
@@ -98,8 +130,23 @@ func WatchPluginBinary(path string, r BinaryReloadable) error {
 		return fmt.Errorf("mcp: WatchPluginBinary: resolve path %q: %w", path, err)
 	}
 	pluginBinaryWatchRegistry.mu.Lock()
+	_, existed := pluginBinaryWatchRegistry.entries[abs]
 	pluginBinaryWatchRegistry.entries[abs] = r
 	pluginBinaryWatchRegistry.mu.Unlock()
+
+	// ES: emit PluginRegisteredEvent only on net-new entries. Re-watching
+	// the same path with a new BinaryReloadable (e.g. swap a stub for the
+	// real handle in tests) is a state-update, not a registration —
+	// auditors care about lifecycle boundaries, not value churn.
+	if !existed {
+		if d := pluginEventBus(); d != nil {
+			d.Dispatch(domain.PluginRegisteredEvent{
+				PluginName: filepath.Base(abs),
+				Path:       abs,
+				Timestamp:  time.Now(),
+			})
+		}
+	}
 
 	// Subscribe immediately if the watcher is already running. fsnotify
 	// tolerates non-existent paths on most platforms; where it doesn't,
@@ -139,10 +186,31 @@ func subscribeToPath(w *fsnotify.Watcher, abs string) error {
 // ClearPluginWatches drops every registered watch entry. Test-only.
 // Does NOT stop the watcher goroutine — call StopPluginBinaryWatcher
 // for that.
+//
+// ES: every dropped entry emits a PluginUnregisteredEvent so the
+// watcher aggregate stream's (registered, unregistered) pairs stay
+// balanced even when tests cycle the registry between cases.
+// Snapshot-then-reset under the registry lock guarantees we don't
+// race the snapshot against a concurrent WatchPluginBinary.
 func ClearPluginWatches() {
 	pluginBinaryWatchRegistry.mu.Lock()
-	defer pluginBinaryWatchRegistry.mu.Unlock()
+	dropped := make([]string, 0, len(pluginBinaryWatchRegistry.entries))
+	for path := range pluginBinaryWatchRegistry.entries {
+		dropped = append(dropped, path)
+	}
 	pluginBinaryWatchRegistry.entries = make(map[string]BinaryReloadable)
+	pluginBinaryWatchRegistry.mu.Unlock()
+
+	if d := pluginEventBus(); d != nil {
+		now := time.Now()
+		for _, p := range dropped {
+			d.Dispatch(domain.PluginUnregisteredEvent{
+				PluginName: filepath.Base(p),
+				Path:       p,
+				Timestamp:  now,
+			})
+		}
+	}
 }
 
 // StartPluginBinaryWatcher spins up the fsnotify watcher goroutine.
@@ -183,6 +251,16 @@ func StartPluginBinaryWatcher(ctx context.Context) error {
 		defer close(done)
 		runPluginBinaryWatcher(ctx, w)
 	}()
+
+	// ES: emit started AFTER the goroutine launch so subscribers that
+	// react synchronously (e.g. record "watcher up at T") see the event
+	// only on a successful spin-up, not on the fsnotify.NewWatcher error
+	// path above. Idempotent re-Start calls return at the started==true
+	// guard before reaching here, so this fires exactly once per
+	// lifecycle transition (matches PluginWatcherStartedEvent contract).
+	if d := pluginEventBus(); d != nil {
+		d.Dispatch(domain.PluginWatcherStartedEvent{Timestamp: time.Now()})
+	}
 	return nil
 }
 
@@ -215,6 +293,14 @@ func StopPluginBinaryWatcher() {
 	if done != nil {
 		<-done
 	}
+
+	// ES: emit stopped AFTER the deterministic join so subscribers see
+	// the event only when the goroutine has actually exited (not while
+	// it's still draining). Pairs with the started emit above so the
+	// aggregate stream's lifecycle transitions are symmetric.
+	if d := pluginEventBus(); d != nil {
+		d.Dispatch(domain.PluginWatcherStoppedEvent{Timestamp: time.Now()})
+	}
 }
 
 // runPluginBinaryWatcher is the watcher goroutine entry point. It
@@ -245,6 +331,18 @@ func runPluginBinaryWatcher(ctx context.Context, w *fsnotify.Watcher) {
 					r.Close()
 					return nil
 				})
+				// ES: emit reload_triggered ONLY when a registered
+				// reloadable was actually closed — not for events that
+				// raced an unregister or hit a nil entry. Read-side
+				// projectors counting "reloads/hour" want real reload
+				// boundaries, not no-op fsnotify wakeups.
+				if d := pluginEventBus(); d != nil {
+					d.Dispatch(domain.PluginReloadTriggeredEvent{
+						PluginName: filepath.Base(path),
+						Path:       path,
+						Timestamp:  time.Now(),
+					})
+				}
 			}
 			timersMu.Lock()
 			delete(timers, path)
