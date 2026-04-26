@@ -163,6 +163,78 @@ It's not "undependable" — it's **scoped**. The marketplace `golang` plugin rel
 4. **Tripwire still applies** — if cclsp goes silent for 6 months, fork.
 5. **Evaluate Serena separately** — its 15 tools complement cclsp's 12 with non-overlapping operations (especially the symbol-level edit tools). Promising for agent-driven refactors.
 
+## Marketplace LSP plugin uniformity check (2026-04-26)
+
+**Question:** does gopls-lsp uniquely lack MCP tools, or do ALL marketplace LSP plugins behave the same?
+
+**Answer:** all 12 LSP plugins in `anthropics/claude-plugins-official` are uniformly 0-MCP-tool. The pattern is "pure LSP registration, editor-UI only" by design. gopls-lsp is normal.
+
+### Evidence path
+
+The marketplace dispatches via a single `marketplace.json` file at the repo root: `repos/anthropics/claude-plugins-official/contents/.claude-plugin/marketplace.json`. Each of 160 plugin entries declares its capabilities via top-level fields. Across all 160 plugins, the field-frequency tally is:
+
+| Field | # plugins | Purpose |
+|---|---|---|
+| `name`, `description`, `source` | 160 | identity |
+| `homepage` | 144 | metadata |
+| `category` | 134 | UI grouping |
+| `author` | 59 | attribution |
+| `strict` | 14 | validation flag |
+| `version` | 13 | versioning |
+| **`lspServers`** | **12** | **LSP server registrations — present on exactly the 12 LSP plugins** |
+| `tags` | 3 | metadata |
+| `skills` | 2 | (related to skills system) |
+| `keywords` | 1 | metadata |
+
+**No marketplace plugin uses a `tools`, `mcpServers`, `commands`, `agents`, or `hooks` field at the marketplace.json level.** Those would have to live in per-plugin `.claude-plugin/plugin.json` — and the LSP plugins explicitly don't have one (verified via recursive git tree: each LSP plugin contains exactly `LICENSE` + `README.md`, nothing else).
+
+### All 12 LSP plugins side-by-side
+
+Captured from marketplace.json (all use `lspServers` field, none expose anything else):
+
+| Plugin | LSP server registered | MCP tools / commands / agents |
+|---|---|---|
+| `clangd-lsp` | `clangd` for `.c .h .cpp .cc .cxx .hpp .hxx .C .H` | none |
+| `csharp-lsp` | `csharp-ls` for `.cs` | none |
+| `gopls-lsp` | `gopls` for `.go` | none |
+| `jdtls-lsp` | (Java) | none |
+| `kotlin-lsp` | (Kotlin) | none |
+| `lua-lsp` | (Lua) | none |
+| `php-lsp` | (PHP) | none |
+| `pyright-lsp` | `pyright` for `.py .pyi` | none |
+| `ruby-lsp` | (Ruby) | none |
+| `rust-analyzer-lsp` | `rust-analyzer` for `.rs` | none |
+| `swift-lsp` | (Swift) | none |
+| `typescript-lsp` | `typescript-language-server` for `.ts .tsx .js .jsx` | none |
+
+### Cross-check against this session's deferred-tools registry
+
+Claude Code's authoritative inventory of every MCP tool the orchestrator can call contains:
+
+- `mcp__cclsp__*` — 12 tools.
+- `mcp__ide__*` — 2 tools (`executeCode`, `getDiagnostics`).
+- `mcp__plugin_serena_serena__*` — 26 tools (Serena MCP server, marketplace plugin).
+- Various unrelated MCPs (`mcp__gmail__*`, `mcp__kite__*`, `mcp__plugin_playwright_*`, etc.).
+
+**Zero `mcp__pyright__*`, `mcp__typescript__*`, `mcp__clangd__*`, `mcp__rust__*`, `mcp__golang__*`, `mcp__rust-analyzer__*` tools.** The empirical session state confirms what the manifests promise: marketplace LSP plugins contribute no agent-callable tools.
+
+### Direct answer to "Python LSP and others work fine — why is gopls different?"
+
+They work fine **for editor-UI consumption** (in-IDE hover, completion, quick fixes when the human user interacts with the IDE pane). They are **identically silent at the orchestrator/MCP-tool level** — the orchestrator cannot ask any of them anything programmatically, including pyright. The user is conflating two surfaces:
+
+- **Editor-UI surface (uniform across all 12 plugins):** "When I hover, I see hover doc; when I type, I see completions." This works fine for Python via pyright-lsp, for TypeScript via typescript-lsp, AND for Go via gopls-lsp once the WSL2 path issue was fixed in our bridge.
+- **Orchestrator-MCP surface (cclsp-only today):** "Claude can call `find_definition` from a tool." This works for any language cclsp is configured for, regardless of which marketplace LSP plugin is installed. Pyright, TypeScript, Go, Rust — all the same: cclsp handles agent tooling; the marketplace plugin handles editor tooling.
+
+If Python "feels fine" while Go "didn't," it's perception bias: Python work probably went through editor-UI hovers (which the marketplace plugin fulfills uniformly), while Go work involved orchestrator queries (which no marketplace plugin can fulfill, regardless of language).
+
+### Could a marketplace plugin expose MCP tools like cclsp does?
+
+Architecturally yes — a marketplace plugin could declare `mcpServers` pointing to a TypeScript/Go server that wraps an LSP and re-exposes operations as MCP tools. **No marketplace LSP plugin does this today.** The closest precedent is `mcp__plugin_serena_serena__*` (a marketplace plugin that DOES declare an MCP server with 26 tools, including symbol-level edits — see Honorable Mention earlier). Serena isn't an LSP-registration plugin; it's an MCP server first that uses LSP-like primitives internally.
+
+### Updated verdict (unchanged, now reinforced)
+
+**KEEP-CCLSP** for orchestrator-driven LSP intelligence. The marketplace LSP plugin family is by design editor-UI only across all 12 plugins; expecting any of them to fill cclsp's role is a category error.
+
 ## Verification log (2026-04-26)
 
 Empirical confirmation that both routes are operational, recorded after `mcp__cclsp__*` tools were re-enabled by the user. Observations taken from the live Claude Code session — no synthetic test harness.
