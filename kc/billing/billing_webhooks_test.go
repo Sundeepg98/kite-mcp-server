@@ -1626,3 +1626,73 @@ func TestHandlePaymentFailed_SetSubError(t *testing.T) {
 	// Should not panic — error is logged.
 	handlePaymentFailed(s, event, logger)
 }
+
+// TestWebhookHandlerWithConfig_UsesInjectedConfig verifies that
+// WebhookHandlerWithConfig reads price IDs from the injected Config struct,
+// NOT from os.Getenv. This is the t.Parallel-safe entry point — tests that
+// need specific price-ID-to-tier mapping construct a Config literal instead
+// of calling os.Setenv. T1.1 ships this constructor as the primary path;
+// WebhookHandler stays as a thin shim calling WebhookHandlerWithConfig with
+// ConfigFromEnv().
+func TestWebhookHandlerWithConfig_UsesInjectedConfig(t *testing.T) {
+	t.Parallel()
+
+	// Sentinel env values that we explicitly do NOT set — proves the
+	// handler is reading from cfg, not the process env.
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	cfg := Config{
+		PricePro:     "price_via_config_pro",
+		PricePremium: "price_via_config_premium",
+		PriceSoloPro: "price_via_config_solo",
+	}
+
+	secret := "whsec_test_inject"
+	var upgradedEmail string
+	adminUpgrade := func(email string) { upgradedEmail = email }
+	handler := WebhookHandlerWithConfig(store, secret, logger, adminUpgrade, cfg)
+
+	// Build a checkout.session.completed payload whose subscription's first
+	// line item references our config-injected Pro price ID. If the handler
+	// is reading from cfg, the resulting subscription should be tagged TierPro.
+	evt := map[string]interface{}{
+		"id":          "evt_inject_001",
+		"object":      "event",
+		"type":        "checkout.session.completed",
+		"api_version": stripe.APIVersion,
+		"data": map[string]interface{}{
+			"object": map[string]interface{}{
+				"object":           "checkout.session",
+				"customer_details": map[string]interface{}{"email": "inject@example.com"},
+				"customer":         "cus_inject",
+				"subscription": map[string]interface{}{
+					"id": "sub_inject",
+					"items": map[string]interface{}{
+						"data": []interface{}{
+							map[string]interface{}{
+								"price": map[string]interface{}{"id": "price_via_config_pro"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+	sig := signTestPayload(payload, secret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	sub := store.GetSubscription("inject@example.com")
+	require.NotNil(t, sub, "subscription should exist")
+	assert.Equal(t, TierPro, sub.Tier, "tier must come from injected Config.PricePro, not env")
+	assert.Equal(t, "inject@example.com", upgradedEmail)
+}

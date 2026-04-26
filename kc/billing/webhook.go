@@ -5,7 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -22,10 +21,23 @@ import (
 //
 // Events are checked for idempotency via the webhook_events table before processing.
 // The handler returns 200 immediately; processing is synchronous but fast (no API calls).
+//
+// Reads STRIPE_PRICE_* from the environment via ConfigFromEnv. Prefer
+// WebhookHandlerWithConfig when you can pass a Config constructed at app
+// wiring time — it makes tests t.Parallel-safe.
 func WebhookHandler(store *Store, signingSecret string, logger *slog.Logger, adminUpgrade func(email string)) http.HandlerFunc {
-	pricePro := os.Getenv("STRIPE_PRICE_PRO")
-	pricePremium := os.Getenv("STRIPE_PRICE_PREMIUM")
-	priceSoloPro := os.Getenv("STRIPE_PRICE_SOLO_PRO")
+	return WebhookHandlerWithConfig(store, signingSecret, logger, adminUpgrade, ConfigFromEnv())
+}
+
+// WebhookHandlerWithConfig is the injected-config variant of WebhookHandler.
+// Production wiring passes ConfigFromEnv(); tests pass a hand-built Config so
+// they can run with t.Parallel() instead of relying on os.Setenv. Mirrors
+// CheckoutHandlerWithConfig (kc/billing/checkout.go:36) — same pattern, same
+// rationale.
+func WebhookHandlerWithConfig(store *Store, signingSecret string, logger *slog.Logger, adminUpgrade func(email string), cfg Config) http.HandlerFunc {
+	pricePro := cfg.PricePro
+	pricePremium := cfg.PricePremium
+	priceSoloPro := cfg.PriceSoloPro
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
