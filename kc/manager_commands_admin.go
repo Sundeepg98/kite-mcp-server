@@ -266,6 +266,12 @@ func (m *Manager) registerAlertCommands() error {
 			return nil, fmt.Errorf("cqrs: telegram (alert) store not configured")
 		}
 		uc := usecases.NewSetupTelegramUseCase(m.alertStore, m.Logger)
+		// ES: typed TelegramSubscribed/ChatBound dispatch for runtime
+		// subscribers (projector etc.). Pattern mirrors watchlist
+		// command-bus wiring (commit aeb3e8c).
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
