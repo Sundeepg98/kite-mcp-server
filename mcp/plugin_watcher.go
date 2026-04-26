@@ -49,6 +49,7 @@ var watcherState = struct {
 	mu      sync.Mutex
 	watcher *fsnotify.Watcher
 	cancel  context.CancelFunc
+	done    chan struct{} // closed by the goroutine on exit; nil before Start.
 	started bool
 }{}
 
@@ -172,22 +173,28 @@ func StartPluginBinaryWatcher(ctx context.Context) error {
 	pluginBinaryWatchRegistry.mu.RUnlock()
 
 	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	watcherState.watcher = w
 	watcherState.cancel = cancel
+	watcherState.done = done
 	watcherState.started = true
 
-	go runPluginBinaryWatcher(ctx, w)
+	go func() {
+		defer close(done)
+		runPluginBinaryWatcher(ctx, w)
+	}()
 	return nil
 }
 
 // StopPluginBinaryWatcher cancels the watcher context and closes
 // the fsnotify watcher. Safe to call multiple times; no-op if
 // never started. Blocks until the goroutine has exited (short —
-// the goroutine closes its channels on context-done).
+// the goroutine returns on ctx.Done() or watcher channel close,
+// then signals via the done channel; Plugin#9 deterministic join).
 func StopPluginBinaryWatcher() {
 	watcherState.mu.Lock()
-	defer watcherState.mu.Unlock()
 	if !watcherState.started {
+		watcherState.mu.Unlock()
 		return
 	}
 	if watcherState.cancel != nil {
@@ -197,8 +204,17 @@ func StopPluginBinaryWatcher() {
 		_ = watcherState.watcher.Close()
 		watcherState.watcher = nil
 	}
+	done := watcherState.done
 	watcherState.started = false
 	watcherState.cancel = nil
+	watcherState.done = nil
+	watcherState.mu.Unlock()
+	// Wait OUTSIDE the lock so the goroutine — which acquires no
+	// watcherState.mu but may briefly contend on registry locks —
+	// can drain its select and exit without deadlock risk.
+	if done != nil {
+		<-done
+	}
 }
 
 // runPluginBinaryWatcher is the watcher goroutine entry point. It
