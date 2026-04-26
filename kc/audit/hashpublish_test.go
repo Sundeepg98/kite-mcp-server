@@ -193,3 +193,75 @@ func TestValidateS3Endpoint_ErrorMessageIncludesReason(t *testing.T) {
 		t.Errorf("error message should identify the private address: %q", msg)
 	}
 }
+
+// TestLoadHashPublishConfigFromGetenv_PureParser verifies the pure-parser
+// variant accepts a caller-supplied getenv func so tests can drive every
+// AUDIT_HASH_PUBLISH_* branch via a map literal — no t.Setenv, t.Parallel
+// safe. Mirrors the envCheckWithGetenv pattern (app/envcheck.go:54).
+//
+// T1.2: prior LoadHashPublishConfig read env directly inside the function
+// body. This test asserts the new pure parser reads from the injected
+// callback only — the production shim wires os.Getenv at the boundary.
+func TestLoadHashPublishConfigFromGetenv_PureParser(t *testing.T) {
+	t.Parallel()
+	getenv := func(k string) string {
+		return map[string]string{
+			"AUDIT_HASH_PUBLISH_S3_ENDPOINT": "https://example-account.r2.cloudflarestorage.com",
+			"AUDIT_HASH_PUBLISH_BUCKET":      "my-bucket",
+			"AUDIT_HASH_PUBLISH_ACCESS_KEY":  "AKIA-test",
+			"AUDIT_HASH_PUBLISH_SECRET_KEY":  "secret-test",
+			"AUDIT_HASH_PUBLISH_REGION":      "apac",
+			"AUDIT_HASH_PUBLISH_INTERVAL":    "30m",
+			"AUDIT_HASH_PUBLISH_KEY":         "dedicated-hmac-key",
+		}[k]
+	}
+	cfg := LoadHashPublishConfigFromGetenv([]byte("jwt-fallback"), getenv)
+	if cfg.S3Endpoint != "https://example-account.r2.cloudflarestorage.com" {
+		t.Errorf("S3Endpoint not from injected getenv: %q", cfg.S3Endpoint)
+	}
+	if cfg.Bucket != "my-bucket" {
+		t.Errorf("Bucket not from injected getenv: %q", cfg.Bucket)
+	}
+	if cfg.AccessKey != "AKIA-test" {
+		t.Errorf("AccessKey not from injected getenv: %q", cfg.AccessKey)
+	}
+	if cfg.SecretKey != "secret-test" {
+		t.Errorf("SecretKey not from injected getenv: %q", cfg.SecretKey)
+	}
+	if cfg.Region != "apac" {
+		t.Errorf("Region not from injected getenv: %q", cfg.Region)
+	}
+	if cfg.Interval.String() != "30m0s" {
+		t.Errorf("Interval not parsed from injected getenv: %v", cfg.Interval)
+	}
+	if string(cfg.SigningKey) != "dedicated-hmac-key" {
+		t.Errorf("SigningKey not from injected AUDIT_HASH_PUBLISH_KEY: %q", string(cfg.SigningKey))
+	}
+	if cfg.SchemaVersion != 1 {
+		t.Errorf("SchemaVersion default not 1: %d", cfg.SchemaVersion)
+	}
+	if !cfg.Enabled() {
+		t.Errorf("Enabled() should be true with all required fields set")
+	}
+}
+
+// TestLoadHashPublishConfigFromGetenv_DefaultsAndJWTFallback verifies the
+// default Region ("auto"), default Interval (1h), and JWT fallback when
+// AUDIT_HASH_PUBLISH_KEY is unset.
+func TestLoadHashPublishConfigFromGetenv_DefaultsAndJWTFallback(t *testing.T) {
+	t.Parallel()
+	getenv := func(k string) string { return "" } // empty environment
+	cfg := LoadHashPublishConfigFromGetenv([]byte("jwt-fallback"), getenv)
+	if cfg.Region != "auto" {
+		t.Errorf("Region default should be 'auto' (R2): %q", cfg.Region)
+	}
+	if cfg.Interval != 3600_000_000_000 { // 1h in nanoseconds
+		t.Errorf("Interval default should be 1h: %v", cfg.Interval)
+	}
+	if string(cfg.SigningKey) != "jwt-fallback" {
+		t.Errorf("SigningKey should fall back to passed signingKey: %q", string(cfg.SigningKey))
+	}
+	if cfg.Enabled() {
+		t.Errorf("Enabled() should be false without S3Endpoint/Bucket/AccessKey/SecretKey")
+	}
+}

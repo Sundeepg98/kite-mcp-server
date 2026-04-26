@@ -80,16 +80,28 @@ func (c HashPublishConfig) Enabled() bool {
 	return c.S3Endpoint != "" && c.Bucket != "" && c.AccessKey != "" && c.SecretKey != ""
 }
 
-// LoadHashPublishConfig reads the AUDIT_HASH_PUBLISH_* env vars.
-// The signingKey fallback argument should typically be the OAUTH_JWT_SECRET
-// bytes so the HMAC uses an already-strong secret.
+// LoadHashPublishConfig reads the AUDIT_HASH_PUBLISH_* env vars from the
+// process environment. The signingKey fallback argument should typically be
+// the OAUTH_JWT_SECRET bytes so the HMAC uses an already-strong secret.
+//
+// Production wiring path. Tests should prefer LoadHashPublishConfigFromGetenv
+// with a literal map-driven getenv callback so they can drop t.Setenv and
+// run with t.Parallel — same pattern as app/envcheck.go's envCheckWithGetenv.
 func LoadHashPublishConfig(signingKey []byte) HashPublishConfig {
+	return LoadHashPublishConfigFromGetenv(signingKey, os.Getenv)
+}
+
+// LoadHashPublishConfigFromGetenv is the pure-parser variant. Caller injects
+// the env-lookup function so tests can drive every branch with literal maps —
+// no t.Setenv, parallel-safe. Production calls with os.Getenv via the
+// LoadHashPublishConfig shim.
+func LoadHashPublishConfigFromGetenv(signingKey []byte, getenv func(string) string) HashPublishConfig {
 	cfg := HashPublishConfig{
-		S3Endpoint:    os.Getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT"),
-		Bucket:        os.Getenv("AUDIT_HASH_PUBLISH_BUCKET"),
-		AccessKey:     os.Getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY"),
-		SecretKey:     os.Getenv("AUDIT_HASH_PUBLISH_SECRET_KEY"),
-		Region:        os.Getenv("AUDIT_HASH_PUBLISH_REGION"),
+		S3Endpoint:    getenv("AUDIT_HASH_PUBLISH_S3_ENDPOINT"),
+		Bucket:        getenv("AUDIT_HASH_PUBLISH_BUCKET"),
+		AccessKey:     getenv("AUDIT_HASH_PUBLISH_ACCESS_KEY"),
+		SecretKey:     getenv("AUDIT_HASH_PUBLISH_SECRET_KEY"),
+		Region:        getenv("AUDIT_HASH_PUBLISH_REGION"),
 		SchemaVersion: 1,
 		SigningKey:    signingKey,
 	}
@@ -99,14 +111,14 @@ func LoadHashPublishConfig(signingKey []byte) HashPublishConfig {
 
 	// Interval — default 1h, override via env.
 	cfg.Interval = time.Hour
-	if raw := os.Getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
+	if raw := getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
 		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
 			cfg.Interval = d
 		}
 	}
 
 	// Dedicated HMAC key overrides JWT-derived fallback.
-	if raw := os.Getenv("AUDIT_HASH_PUBLISH_KEY"); raw != "" {
+	if raw := getenv("AUDIT_HASH_PUBLISH_KEY"); raw != "" {
 		cfg.SigningKey = []byte(raw)
 	}
 
