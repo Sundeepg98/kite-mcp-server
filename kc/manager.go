@@ -58,6 +58,17 @@ type Config struct {
 	// Production wiring leaves this nil so the default tgbotapi.NewBotAPI
 	// path is used.
 	BotFactory alerts.BotFactory
+
+	// AlertDB is an optional pre-opened SQLite database. When non-nil,
+	// initPersistence uses this DB directly instead of calling
+	// alerts.OpenDB(AlertDBPath). This is the inversion seam that lets
+	// app/wire.go open the DB once and construct DB-backed stores
+	// (audit, riskguard, billing, invitation) BEFORE kc.NewWithOptions —
+	// breaking the cycle where those stores were post-wired via SetX
+	// setters from the manager's own AlertDB() accessor. AlertDBPath is
+	// ignored when this is non-nil (the manager does not close a DB it
+	// did not open).
+	AlertDB *alerts.DB
 }
 
 // New creates a new kc Manager with the given configuration.
@@ -247,6 +258,7 @@ type Manager struct {
 	registryStore     *registry.Store             // pre-registered Kite app credentials (key registry)
 	telegramNotifier  *alerts.TelegramNotifier    // Telegram alert sender
 	alertDB           *alerts.DB                  // optional: SQLite persistence for alerts
+	ownsAlertDB       bool                        // true => Manager.Shutdown closes alertDB; false when supplied via Config.AlertDB
 	auditStore        *audit.Store                // optional: audit trail for synthetic events
 	riskGuard         *riskguard.Guard            // optional: financial safety controls
 	paperEngine       *papertrading.PaperEngine   // optional: virtual trading engine

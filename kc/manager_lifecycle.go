@@ -58,8 +58,11 @@ func (m *Manager) Shutdown() {
 	// Shutdown ticker service (stops all WebSocket connections)
 	m.tickerService.Shutdown()
 
-	// Close alert DB after ticker (ticker's OnTick writes through to DB)
-	if m.alertDB != nil {
+	// Close alert DB after ticker (ticker's OnTick writes through to DB).
+	// Only close DBs the manager opened itself. When AlertDB was supplied
+	// via Config.AlertDB the caller (app/wire.go) owns the lifecycle and
+	// will Close via its own LifecycleManager registration.
+	if m.alertDB != nil && m.ownsAlertDB {
 		if err := m.alertDB.Close(); err != nil {
 			m.Logger.Error("Failed to close alert DB", "error", err)
 		}

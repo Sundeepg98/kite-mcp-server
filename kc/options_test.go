@@ -228,3 +228,35 @@ func TestWithBotFactory_PerManagerInjection(t *testing.T) {
 	assert.Equal(t, int32(1), factoryCalled.Load(), "injected factory must be invoked exactly once during Manager init")
 	require.NotNil(t, mgr.TelegramNotifier(), "Manager.TelegramNotifier should be wired when token + factory are supplied")
 }
+
+// TestWithAlertDB_AcceptsExternallyOpened verifies that an *alerts.DB opened
+// outside kc.NewWithOptions can be threaded through via WithAlertDB. This is
+// the keystone of the AlertDB-cycle inversion: stores that depend on the DB
+// (audit, riskguard, billing, invitation) can now be constructed in
+// app/wire.go BEFORE kc.NewWithOptions runs and passed in via With* options
+// instead of being post-construction-wired through SetX setters.
+//
+// Backward-compat: when WithAlertDB is omitted but cfg.AlertDBPath is set,
+// the legacy path-open behaviour still applies. Verified by the existing
+// AlertDBPath tests; this test pins the new option path.
+func TestWithAlertDB_AcceptsExternallyOpened(t *testing.T) {
+	t.Parallel()
+
+	logger := newTestOptionsLogger()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	mgr, err := NewWithOptions(context.Background(),
+		WithLogger(logger),
+		WithKiteCredentials("k", "s"),
+		WithAlertDB(db),
+		WithInstrumentsSkipFetch(true),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, mgr)
+
+	// Manager must hold the SAME DB pointer — not open a duplicate.
+	assert.Same(t, db, mgr.AlertDB(),
+		"WithAlertDB must thread the externally-opened DB through; manager.AlertDB() returns the same pointer")
+}

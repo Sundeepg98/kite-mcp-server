@@ -145,20 +145,36 @@ func (m *Manager) initAlertSystem(cfg Config) {
 	m.alertStore.SetLogger(cfg.Logger)
 }
 
-// initPersistence opens the SQLite-backed alert DB (if configured) and
-// wires it into the alert / token / credential stores. Credential
-// encryption is enabled when Config.EncryptionSecret is supplied.
-// Errors at each step are logged and tolerated — the server falls back
-// to in-memory storage rather than failing startup (matches the prior
-// inline behaviour).
+// initPersistence wires an alert DB into the alert / token / credential
+// stores. Credential encryption is enabled when Config.EncryptionSecret
+// is supplied. Errors at each step are logged and tolerated — the
+// server falls back to in-memory storage rather than failing startup
+// (matches the prior inline behaviour).
+//
+// DB sourcing precedence:
+//  1. cfg.AlertDB (externally-opened) — used as-is, manager does NOT
+//     own its lifecycle. This is the inversion seam for app/wire.go,
+//     which opens the DB once and constructs DB-backed stores
+//     (audit/riskguard/billing/invitation) before kc.NewWithOptions.
+//  2. cfg.AlertDBPath (legacy) — manager opens via alerts.OpenDB and
+//     owns the lifecycle (closes on Manager.Shutdown).
+//  3. Both empty — in-memory mode, no persistence.
 func (m *Manager) initPersistence(cfg Config) {
-	if cfg.AlertDBPath == "" {
-		return
-	}
-	alertDB, dbErr := alerts.OpenDB(cfg.AlertDBPath)
-	if dbErr != nil {
-		cfg.Logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
-		return
+	var alertDB *alerts.DB
+	if cfg.AlertDB != nil {
+		alertDB = cfg.AlertDB
+		m.ownsAlertDB = false
+	} else {
+		if cfg.AlertDBPath == "" {
+			return
+		}
+		opened, dbErr := alerts.OpenDB(cfg.AlertDBPath)
+		if dbErr != nil {
+			cfg.Logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
+			return
+		}
+		alertDB = opened
+		m.ownsAlertDB = true
 	}
 	m.alertDB = alertDB
 	// Set up credential encryption if a secret is provided

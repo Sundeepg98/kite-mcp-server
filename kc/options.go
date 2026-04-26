@@ -227,3 +227,24 @@ func WithBotFactory(factory alerts.BotFactory) Option {
 		o.Config.BotFactory = factory
 	}
 }
+
+// WithAlertDB threads a pre-opened *alerts.DB through Manager
+// construction. When supplied, initPersistence skips the
+// alerts.OpenDB(AlertDBPath) call and uses the externally-opened DB
+// directly. This is the inversion seam for the AlertDB construction
+// cycle: app/wire.go opens the DB once, constructs DB-backed stores
+// (audit/riskguard/billing/invitation) via the matching With* options,
+// then passes them all to NewWithOptions in one hop — eliminating the
+// post-construction SetX setters that previously required
+// kcManager.AlertDB() to be readable BEFORE the manager finished
+// initialising.
+//
+// Lifetime: the manager does NOT close a DB it did not open. Callers
+// that pass a DB via WithAlertDB own the DB lifecycle and are
+// responsible for closing it during graceful shutdown. The
+// app/lifecycle.go LifecycleManager handles this for app/wire.go.
+func WithAlertDB(db *alerts.DB) Option {
+	return func(o *options) {
+		o.Config.AlertDB = db
+	}
+}
