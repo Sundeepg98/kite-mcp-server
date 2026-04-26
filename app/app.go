@@ -25,6 +25,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -120,6 +121,18 @@ type App struct {
 	// write races the close. nil when no AlertDBPath was supplied
 	// (in-memory mode).
 	alertDB *alerts.DB
+	// registry is the App-scoped *mcp.Registry that owns plugin/hook/
+	// widget/event registrations for THIS App instance (B77 isolation).
+	// Replaces the package-level mcp.DefaultRegistry as the production
+	// path for the rolegate / telegramnotify hooks wired in wire.go and
+	// the tools registered via mcp.RegisterToolsWithRegistry. The
+	// package-level mcp.DefaultRegistry is retained as the legacy
+	// shim for the ~140 free-function call sites and the init()-time
+	// plugin registrations (e.g. plugins/example/plugin.go); App-scoped
+	// hook fires consult only this registry and never DefaultRegistry,
+	// which is the property that unblocks t.Parallel for hook-using
+	// tests at the App layer.
+	registry *mcp.Registry
 }
 
 // TriggerShutdown initiates a graceful shutdown without requiring an
@@ -448,7 +461,21 @@ func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
 			AutoCleanup:     true,
 		}),
 		lifecycle: NewLifecycleManager(logger),
+		// B77: per-App *mcp.Registry isolates plugin/hook/widget state
+		// from other Apps in the same process. Production wiring
+		// installs hooks here (wire.go); the legacy package-level
+		// mcp.DefaultRegistry is preserved for init()-time plugin
+		// registrations and unmigrated callers.
+		registry: mcp.NewRegistry(),
 	}
+}
+
+// Registry returns the App-scoped *mcp.Registry. Hooks / widgets / event
+// subscriptions registered here are isolated from mcp.DefaultRegistry —
+// the property that unblocks t.Parallel for hook-using tests at the App
+// layer. See B77 for rationale.
+func (app *App) Registry() *mcp.Registry {
+	return app.registry
 }
 
 // SetVersion sets the server version

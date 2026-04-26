@@ -151,8 +151,10 @@ func ClearHooks() {
 	DefaultRegistry.mutableAroundHookMu.Unlock()
 }
 
-// HookMiddleware returns a ToolHandlerMiddleware that runs registered
-// before/around/after hooks around every tool invocation.
+// HookMiddleware returns a ToolHandlerMiddleware that runs hooks
+// registered on DefaultRegistry. Backward-compat shim — production
+// callers wired through an App should use HookMiddlewareFor(app.Registry())
+// for per-App isolation (B77).
 //
 // Execution order, outermost first:
 //
@@ -170,9 +172,28 @@ func ClearHooks() {
 // handler is NOT called after a panicking around-hook, matching the
 // semantics of a short-circuit reject.
 func HookMiddleware() server.ToolHandlerMiddleware {
+	return HookMiddlewareFor(DefaultRegistry)
+}
+
+// HookMiddlewareFor returns a ToolHandlerMiddleware that runs hooks
+// registered on the given Registry. This is the App-isolated entry
+// point — hooks installed on app.Registry() fire only when the
+// middleware was built with that same registry. Two parallel Apps
+// in one process can each carry their own hook chain without
+// pollution (B77).
+//
+// reg may be nil — a nil registry is treated as an empty hook chain
+// (the middleware passes the request straight through to the next
+// handler). This keeps the code path defensive against a wiring
+// regression: if an agent forgets to construct app.registry, tools
+// still respond instead of panicking.
+func HookMiddlewareFor(reg *Registry) server.ToolHandlerMiddleware {
 	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			if err := RunBeforeHooks(ctx, request.Params.Name, request.GetArguments()); err != nil {
+			if reg == nil {
+				return next(ctx, request)
+			}
+			if err := reg.RunBeforeHooks(ctx, request.Params.Name, request.GetArguments()); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Hook blocked execution: %s", err.Error())), nil
 			}
 			// Build the around chain around the real handler.
@@ -182,7 +203,7 @@ func HookMiddleware() server.ToolHandlerMiddleware {
 			// ends up as the outermost wrapper — matches HTTP
 			// middleware convention and gives plugin authors a
 			// single intuitive rule regardless of hook kind.
-			merged := DefaultRegistry.mergedAroundChain()
+			merged := reg.mergedAroundChain()
 
 			// Compose right-to-left.
 			handler := ToolHandlerNext(next)
@@ -204,7 +225,7 @@ func HookMiddleware() server.ToolHandlerMiddleware {
 			}
 
 			result, err := handler(ctx, request)
-			RunAfterHooks(ctx, request.Params.Name, request.GetArguments())
+			reg.RunAfterHooks(ctx, request.Params.Name, request.GetArguments())
 			return result, err
 		}
 	}
