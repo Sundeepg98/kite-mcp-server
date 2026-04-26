@@ -181,6 +181,7 @@ func TestHookMiddleware_RunsAfterHooks(t *testing.T) {
 }
 
 func TestDashboardBaseURL_NoExternalURL(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	// Manager without ExternalURL or LocalMode should return empty
 	base := dashboardBaseURL(mgr)
@@ -190,6 +191,7 @@ func TestDashboardBaseURL_NoExternalURL(t *testing.T) {
 }
 
 func TestDashboardLink_NoBaseURL(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	link := dashboardLink(mgr)
 	// Without external URL or local mode, should return empty
@@ -197,6 +199,7 @@ func TestDashboardLink_NoBaseURL(t *testing.T) {
 }
 
 func TestDashboardPageURL_NoBaseURL(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	url := dashboardPageURL(mgr, "/dashboard")
 	// Without base URL, returns empty
@@ -209,6 +212,7 @@ func TestPageRoutes_Count(t *testing.T) {
 }
 
 func TestToolDashboardPage_PaperTradingTools(t *testing.T) {
+	t.Parallel()
 	paperTools := []string{"paper_trading_toggle", "paper_trading_status", "paper_trading_reset"}
 	for _, tool := range paperTools {
 		path, ok := toolDashboardPage[tool]
@@ -218,6 +222,7 @@ func TestToolDashboardPage_PaperTradingTools(t *testing.T) {
 }
 
 func TestToolDashboardPage_WatchlistTools(t *testing.T) {
+	t.Parallel()
 	watchlistTools := []string{
 		"list_watchlists", "get_watchlist", "create_watchlist",
 		"delete_watchlist", "add_to_watchlist", "remove_from_watchlist",
@@ -230,6 +235,7 @@ func TestToolDashboardPage_WatchlistTools(t *testing.T) {
 }
 
 func TestToolDashboardPage_OptionsTools(t *testing.T) {
+	t.Parallel()
 	optionsTools := []string{"get_option_chain", "options_greeks", "options_payoff_builder"}
 	for _, tool := range optionsTools {
 		path, ok := toolDashboardPage[tool]
@@ -239,6 +245,7 @@ func TestToolDashboardPage_OptionsTools(t *testing.T) {
 }
 
 func TestToolDashboardPage_ChartTools(t *testing.T) {
+	t.Parallel()
 	chartTools := []string{"technical_indicators", "historical_price_analyzer", "get_quotes", "get_ltp", "get_ohlc", "get_historical_data", "search_instruments"}
 	for _, tool := range chartTools {
 		path, ok := toolDashboardPage[tool]
@@ -248,6 +255,7 @@ func TestToolDashboardPage_ChartTools(t *testing.T) {
 }
 
 func TestDashboardURLForTool_MappedTool(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	// This will return empty if no external URL, but shouldn't panic
 	url := DashboardURLForTool(mgr, "get_holdings")
@@ -255,6 +263,7 @@ func TestDashboardURLForTool_MappedTool(t *testing.T) {
 }
 
 func TestDashboardURLMiddleware_AddsDashboardURL(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	middleware := DashboardURLMiddleware(mgr)
 
@@ -279,6 +288,7 @@ func TestDashboardURLMiddleware_AddsDashboardURL(t *testing.T) {
 }
 
 func TestDashboardURLMiddleware_SkipsUnmappedTools(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	middleware := DashboardURLMiddleware(mgr)
 
@@ -300,6 +310,7 @@ func TestDashboardURLMiddleware_SkipsUnmappedTools(t *testing.T) {
 }
 
 func TestDashboardURLMiddleware_SkipsErrors(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	middleware := DashboardURLMiddleware(mgr)
 
@@ -317,6 +328,7 @@ func TestDashboardURLMiddleware_SkipsErrors(t *testing.T) {
 }
 
 func TestDashboardURLMiddleware_SkipsNilResult(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	middleware := DashboardURLMiddleware(mgr)
 
@@ -334,6 +346,7 @@ func TestDashboardURLMiddleware_SkipsNilResult(t *testing.T) {
 }
 
 func TestDashboardURLMiddleware_PropagatesError(t *testing.T) {
+	t.Parallel()
 	mgr := newTestManager(t)
 	middleware := DashboardURLMiddleware(mgr)
 
@@ -741,6 +754,7 @@ func TestToolCache_Expiration_P7(t *testing.T) {
 }
 
 func TestDashboardBaseURL_Variations(t *testing.T) {
+	t.Parallel()
 	mgr := newDevModeManager(t)
 	url := dashboardBaseURL(mgr)
 	_ = url
@@ -755,6 +769,7 @@ func TestDashboardBaseURL_WithExternalURL(t *testing.T) {
 }
 
 func TestDashboardLink_P7(t *testing.T) {
+	t.Parallel()
 	mgr := newDevModeManager(t)
 	link := dashboardLink(mgr)
 	_ = link
@@ -773,6 +788,7 @@ func TestDashboardLink_WithExternalURL(t *testing.T) {
 }
 
 func TestDashboardPageURL_P7(t *testing.T) {
+	t.Parallel()
 	mgr := newDevModeManager(t)
 	url := dashboardPageURL(mgr, "/test")
 	_ = url
