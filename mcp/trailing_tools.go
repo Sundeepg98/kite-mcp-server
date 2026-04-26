@@ -150,24 +150,24 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 					referencePrice = ltpData.LastPrice
 				}
 
-				return doSetTrailingStop(handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+				return doSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 					orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 			})
 		}
 
-		return doSetTrailingStop(handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+		return doSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 			orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 	}
 }
 
-func doSetTrailingStop(handler *ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
+func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
 	orderID, variety, direction string, trailAmount, trailPct, currentStop, referencePrice float64) (*mcp.CallToolResult, error) {
 
 	if handler.deps.TrailingStop.TrailingStopManager() == nil {
 		return mcp.NewToolResultError("Trailing stop manager not available (requires database persistence)"), nil
 	}
 
-	raw, err := handler.CommandBus().DispatchWithResult(context.Background(), cqrs.SetTrailingStopCommand{
+	raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.SetTrailingStopCommand{
 		Email:           email,
 		Exchange:        exchange,
 		Tradingsymbol:   tradingsymbol,

@@ -1210,7 +1210,7 @@ func TestDoSetTrailingStop_WithAmount(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	h := NewToolHandler(mgr)
-	result, err := doSetTrailingStop(h, mgr, "test@example.com", "NSE", "INFY", 256265,
+	result, err := doSetTrailingStop(context.Background(), h, mgr, "test@example.com", "NSE", "INFY", 256265,
 		"order123", "regular", "long", 20, 0, 1480, 1500)
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
@@ -1223,7 +1223,7 @@ func TestDoSetTrailingStop_WithPct(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	h := NewToolHandler(mgr)
-	result, err := doSetTrailingStop(h, mgr, "test2@example.com", "NSE", "RELIANCE", 408065,
+	result, err := doSetTrailingStop(context.Background(), h, mgr, "test2@example.com", "NSE", "RELIANCE", 408065,
 		"order456", "regular", "short", 0, 2.5, 2550, 2500)
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
