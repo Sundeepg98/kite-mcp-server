@@ -33,6 +33,7 @@ import (
 // ExchangeWithCredentials — registry store branches
 // ===========================================================================
 func TestExchangeWithCredentials_ExistingKeyDifferentUser(t *testing.T) {
+	t.Parallel()
 	regStore := registry.New()
 
 	// Pre-register a key assigned to a different user
@@ -65,6 +66,7 @@ func TestExchangeWithCredentials_ExistingKeyDifferentUser(t *testing.T) {
 
 
 func TestExchangeWithCredentials_OldKeyReplacement(t *testing.T) {
+	t.Parallel()
 	regStore := registry.New()
 
 	// Pre-register an old key for the user
@@ -100,6 +102,7 @@ func TestExchangeWithCredentials_OldKeyReplacement(t *testing.T) {
 // ExchangeRequestToken — with registryStore branch
 // ===========================================================================
 func TestExchangeRequestToken_WithRegistryStore(t *testing.T) {
+	t.Parallel()
 	regStore := registry.New()
 	adapter := &kiteExchangerAdapter{
 		apiKey: "test-key", apiSecret: "test-secret",
@@ -121,6 +124,7 @@ func TestExchangeRequestToken_WithRegistryStore(t *testing.T) {
 // ExchangeWithCredentials — provision error branch
 // ===========================================================================
 func TestExchangeWithCredentials_NoRegistryStore(t *testing.T) {
+	t.Parallel()
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
@@ -139,6 +143,7 @@ func TestExchangeWithCredentials_NoRegistryStore(t *testing.T) {
 // clientPersisterAdapter
 // ===========================================================================
 func TestClientPersisterAdapter_SaveLoadDelete(t *testing.T) {
+	t.Parallel()
 	db, err := alerts.OpenDB(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

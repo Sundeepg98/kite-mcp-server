@@ -20,6 +20,7 @@ import (
 // TestPrivacyHandler_ServesHTML verifies GET /privacy returns 200 with an
 // HTML content-type and a body containing "Privacy" (title/heading).
 func TestPrivacyHandler_ServesHTML(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
@@ -48,6 +49,7 @@ func TestPrivacyHandler_ServesHTML(t *testing.T) {
 // TestTermsHandler_ServesHTML verifies GET /terms returns 200 with an HTML
 // content-type and a body containing "Terms of Service".
 func TestTermsHandler_ServesHTML(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
@@ -69,6 +71,7 @@ func TestTermsHandler_ServesHTML(t *testing.T) {
 // (identifiable by a Markdown heading "# Privacy" which HTML would render
 // as <h1>).
 func TestPrivacyHandler_FormatMd(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
@@ -91,6 +94,7 @@ func TestPrivacyHandler_FormatMd(t *testing.T) {
 
 // TestTermsHandler_FormatMd verifies the same ?format=md behaviour for /terms.
 func TestTermsHandler_FormatMd(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
@@ -111,6 +115,7 @@ func TestTermsHandler_FormatMd(t *testing.T) {
 // TestPrivacyHandler_CacheHeader verifies the response carries
 // Cache-Control: public, max-age=3600.
 func TestPrivacyHandler_CacheHeader(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 
@@ -134,6 +139,7 @@ func TestPrivacyHandler_CacheHeader(t *testing.T) {
 
 // TestTermsHandler_CacheHeader verifies the same cache behaviour for /terms.
 func TestTermsHandler_CacheHeader(t *testing.T) {
+	t.Parallel()
 	app := newTestApp(t)
 	require.NoError(t, app.initStatusPageTemplate())
 

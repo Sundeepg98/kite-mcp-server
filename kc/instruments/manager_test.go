@@ -140,6 +140,7 @@ func getTestInstruments() []*Instrument {
 
 // TestManagerBasicOperations verifies basic Manager functionality
 func TestManagerBasicOperations(t *testing.T) {
+	t.Parallel()
 	manager := newTestManager()
 
 	// Test Count
@@ -173,6 +174,7 @@ func TestManagerBasicOperations(t *testing.T) {
 
 // TestManagerConcurrentOperations tests thread safety - this is the critical test
 func TestManagerConcurrentOperations(t *testing.T) {
+	t.Parallel()
 	manager := &Manager{
 		isinToInstruments: make(map[string][]*Instrument),
 		idToInst:          make(map[string]*Instrument),
@@ -231,6 +233,7 @@ func TestManagerConcurrentOperations(t *testing.T) {
 
 // TestManagerLoadMapConcurrent tests LoadMap thread safety
 func TestManagerLoadMapConcurrent(t *testing.T) {
+	t.Parallel()
 	manager := newTestManager()
 	defer manager.Shutdown()
 
@@ -273,6 +276,7 @@ func TestManagerLoadMapConcurrent(t *testing.T) {
 
 // TestManagerIntensiveRaceConditions creates intensive concurrent operations to stress test race conditions
 func TestManagerIntensiveRaceConditions(t *testing.T) {
+	t.Parallel()
 	manager := newTestManager()
 	defer manager.Shutdown()
 
@@ -366,6 +370,7 @@ func TestManagerIntensiveRaceConditions(t *testing.T) {
 
 // TestManagerUpdateInstrumentsConcurrency tests UpdateInstruments() race conditions
 func TestManagerUpdateInstrumentsConcurrency(t *testing.T) {
+	t.Parallel()
 	manager := newTestManager()
 	defer manager.Shutdown()
 
@@ -435,6 +440,7 @@ func TestManagerUpdateInstrumentsConcurrency(t *testing.T) {
 
 // TestManagerMapCorruption tests for map corruption under concurrent access
 func TestManagerMapCorruption(t *testing.T) {
+	t.Parallel()
 	manager := newTestManagerWithoutUpdate()
 	defer manager.Shutdown()
 
@@ -526,6 +532,7 @@ func TestManagerMapCorruption(t *testing.T) {
 
 // TestManagerConfigurationAndScheduling tests the new configuration and scheduling features
 func TestManagerConfigurationAndScheduling(t *testing.T) {
+	t.Parallel()
 	// Test default configuration
 	config := DefaultUpdateConfig()
 	if config.UpdateHour != defaultUpdateHour {
@@ -547,6 +554,7 @@ func TestManagerConfigurationAndScheduling(t *testing.T) {
 
 // TestManagerWithCustomConfig tests manager creation with custom configuration
 func TestManagerWithCustomConfig(t *testing.T) {
+	t.Parallel()
 	config := &UpdateConfig{
 		UpdateHour:      9,
 		UpdateMinute:    30,
@@ -585,6 +593,7 @@ func TestManagerWithCustomConfig(t *testing.T) {
 
 // TestManagerUpdateStats tests update statistics tracking with mock server
 func TestManagerUpdateStats(t *testing.T) {
+	t.Parallel()
 	// Setup mock server
 	server := setupTestServer()
 	defer server.Close()
@@ -621,6 +630,7 @@ func TestManagerUpdateStats(t *testing.T) {
 
 // TestManagerUpdateConfig tests configuration updates
 func TestManagerUpdateConfig(t *testing.T) {
+	t.Parallel()
 	manager := newTestManagerWithoutUpdate()
 	defer manager.Shutdown()
 
@@ -653,6 +663,7 @@ func TestManagerUpdateConfig(t *testing.T) {
 
 // TestManagerSchedulerShutdown tests proper scheduler shutdown
 func TestManagerSchedulerShutdown(t *testing.T) {
+	t.Parallel()
 	config := DefaultUpdateConfig()
 	config.EnableScheduler = false // We'll start manually
 
@@ -695,6 +706,7 @@ func TestManagerSchedulerShutdown(t *testing.T) {
 
 // TestManagerConcurrentShutdown tests concurrent shutdown calls
 func TestManagerConcurrentShutdown(t *testing.T) {
+	t.Parallel()
 	manager := newTestManagerWithoutUpdate()
 
 	var wg sync.WaitGroup
@@ -723,6 +735,7 @@ func TestManagerConcurrentShutdown(t *testing.T) {
 
 // TestManagerForceUpdate tests forced updates with mock server
 func TestManagerForceUpdate(t *testing.T) {
+	t.Parallel()
 	// Setup mock server
 	server := setupTestServer()
 	defer server.Close()
@@ -756,6 +769,7 @@ func TestManagerForceUpdate(t *testing.T) {
 
 // TestMemoryOptimizations tests memory usage optimizations
 func TestMemoryOptimizations(t *testing.T) {
+	t.Parallel()
 	manager := newTestManagerWithoutUpdate()
 	defer manager.Shutdown()
 
@@ -770,6 +784,7 @@ func TestMemoryOptimizations(t *testing.T) {
 
 // TestNewConfigConstructor tests the new Config-based constructor
 func TestNewConfigConstructor(t *testing.T) {
+	t.Parallel()
 	// Test production mode (with HTTP loading disabled for tests)
 	t.Run("production_mode", func(t *testing.T) {
 		config := DefaultUpdateConfig()
