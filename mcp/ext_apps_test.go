@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
@@ -486,15 +485,24 @@ func TestUIMetadataGating_JSONOutput(t *testing.T) {
 }
 
 func TestEnvVarGatingPrecedence(t *testing.T) {
-	// Confirm that unsetting the env var and letting capability advertisement
-	// drive the decision produces the behavior described in the task: when
-	// the client advertises UI, widgets stay on.
-	t.Run("unset env var leaves capability-advertising clients enabled", func(t *testing.T) {
-		_ = os.Unsetenv("MCP_UI_ENABLED")
+	t.Parallel()
+	// Confirm that an empty kill-switch (the value the production hook
+	// passes when MCP_UI_ENABLED is unset) leaves capability-advertising
+	// clients enabled — the gating contract pins "no env override =
+	// honour client capability".
+	//
+	// Hardening pass: previously called os.Unsetenv("MCP_UI_ENABLED")
+	// which mutated process-global state and blocked t.Parallel.
+	// Migrated to the pure-parser variant clientSupportsUIWithOverride —
+	// same pattern the 5 sibling subtests in TestClientSupportsUI use
+	// (kill-switch arg "" ≡ "env unset", "false" ≡ "operator override",
+	// "true" ≡ "force-enable attempt"). Process env is no longer touched.
+	t.Run("empty kill-switch leaves capability-advertising clients enabled", func(t *testing.T) {
+		t.Parallel()
 		caps := gomcp.ClientCapabilities{
 			Extensions: map[string]any{UICapabilityExtensionKey: map[string]any{}},
 		}
-		assert.True(t, clientSupportsUI(caps))
+		assert.True(t, clientSupportsUIWithOverride(caps, ""))
 	})
 }
 
