@@ -295,7 +295,49 @@ func buildExamplePlugin(t *testing.T) string {
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("failed to build example plugin (skipping subprocess-dependent test): %v\n%s", err, b)
 	}
+	signPluginForSAC(t, out)
 	return out
+}
+
+// signPluginForSAC signs the freshly-built plugin binary on Windows
+// so Smart App Control (SAC) does not block its launch when the
+// host test (also signed by scripts/go-test-sac.cmd) tries to spawn
+// it via os/exec. SAC keys on content hash, and Go-built binaries
+// have random build IDs, so they never accumulate cloud reputation.
+//
+// This mirrors the pattern in scripts/go-test-sac.cmd (see
+// docs/sac-runbook.md) but applied at the spawned-child layer
+// instead of the parent-test layer. Without this, every
+// subprocess-plugin test fails with:
+//
+//	"An Application Control policy has blocked this file."
+//
+// On non-Windows this is a no-op. On Windows, the sign is
+// best-effort: if the cert is missing or signtool fails the test
+// continues; the underlying SAC error will surface clearly.
+func signPluginForSAC(t *testing.T, binPath string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Logf("signPluginForSAC: cannot resolve home dir, skipping sign: %v", err)
+		return
+	}
+	signScript := filepath.Join(home, "go", "bin", "sign-bin.ps1")
+	if _, err := os.Stat(signScript); err != nil {
+		t.Logf("signPluginForSAC: sign-bin.ps1 not found at %s, skipping sign: %v", signScript, err)
+		return
+	}
+	cmd := exec.Command("powershell",
+		"-NoProfile", "-ExecutionPolicy", "Bypass",
+		"-File", signScript,
+		"-Path", binPath)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Logf("signPluginForSAC: signing %s failed (continuing): %v\n%s",
+			binPath, err, b)
+	}
 }
 
 // findRepoRoot walks up from the current test file's directory
