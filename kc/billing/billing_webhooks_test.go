@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +24,7 @@ import (
 
 
 func TestHandleCheckoutCompleted_CreatesSubscription(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -68,6 +68,7 @@ func TestHandleCheckoutCompleted_CreatesSubscription(t *testing.T) {
 // CheckoutHandler plan validation (solo_pro accepted)
 // ---------------------------------------------------------------------------
 func TestCheckoutHandler_SoloProPlanValidation(t *testing.T) {
+	t.Parallel()
 	// This test validates that "solo_pro" is an accepted plan value
 	// by checking the checkout handler's plan parsing logic directly.
 	// We verify via the store that a SoloPro subscription round-trips correctly.
@@ -93,6 +94,7 @@ func TestCheckoutHandler_SoloProPlanValidation(t *testing.T) {
 // CheckoutHandler early validation paths (no Stripe API calls reached)
 // ---------------------------------------------------------------------------
 func TestCheckoutHandler_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := CheckoutHandler(s, logger)
@@ -106,6 +108,7 @@ func TestCheckoutHandler_MethodNotAllowed(t *testing.T) {
 
 
 func TestCheckoutHandler_Unauthorized(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := CheckoutHandler(s, logger)
@@ -119,6 +122,7 @@ func TestCheckoutHandler_Unauthorized(t *testing.T) {
 
 
 func TestCheckoutHandler_InvalidPlan(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := CheckoutHandler(s, logger)
@@ -135,12 +139,12 @@ func TestCheckoutHandler_InvalidPlan(t *testing.T) {
 
 
 func TestCheckoutHandler_MissingPriceConfig(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := CheckoutHandler(s, logger)
-
-	// Ensure env vars are empty so priceID will be "".
-	os.Unsetenv("STRIPE_PRICE_SOLO_PRO")
+	// T2.2: empty Config literal asserts the "pricing not configured"
+	// path without touching the process env. Was os.Unsetenv before.
+	handler := CheckoutHandlerWithConfig(s, logger, Config{})
 
 	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=solo_pro", nil)
@@ -157,6 +161,7 @@ func TestCheckoutHandler_MissingPriceConfig(t *testing.T) {
 // PortalHandler early validation paths
 // ---------------------------------------------------------------------------
 func TestPortalHandler_Unauthorized(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := PortalHandler(s, logger)
@@ -170,6 +175,7 @@ func TestPortalHandler_Unauthorized(t *testing.T) {
 
 
 func TestPortalHandler_NoSubscription(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := PortalHandler(s, logger)
@@ -187,6 +193,7 @@ func TestPortalHandler_NoSubscription(t *testing.T) {
 
 
 func TestPortalHandler_NoStripeCustomerID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	_ = s.SetSubscription(&Subscription{
 		AdminEmail: "user@example.com",
@@ -210,12 +217,14 @@ func TestPortalHandler_NoStripeCustomerID(t *testing.T) {
 
 
 func TestCheckoutHandler_ValidPlansSoloProAndPremium(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := CheckoutHandler(s, logger)
+	// T2.2: empty Config asserts the "pricing not configured" branches
+	// for pro+premium without env mutation.
+	handler := CheckoutHandlerWithConfig(s, logger, Config{})
 
 	// Test "pro" plan — also missing price config
-	os.Unsetenv("STRIPE_PRICE_PRO")
 	ctx := oauth.ContextWithEmail(context.Background(), "user@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=pro", nil)
 	req = req.WithContext(ctx)
@@ -225,7 +234,6 @@ func TestCheckoutHandler_ValidPlansSoloProAndPremium(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "pricing not configured")
 
 	// Test "premium" plan — also missing price config
-	os.Unsetenv("STRIPE_PRICE_PREMIUM")
 	req2 := httptest.NewRequest(http.MethodPost, "/checkout?plan=premium", nil)
 	req2 = req2.WithContext(ctx)
 	rr2 := httptest.NewRecorder()
@@ -239,6 +247,7 @@ func TestCheckoutHandler_ValidPlansSoloProAndPremium(t *testing.T) {
 // Webhook handler internal function tests (pure functions, no Stripe API)
 // ---------------------------------------------------------------------------
 func TestHandleCheckoutCompleted(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -283,6 +292,7 @@ func TestHandleCheckoutCompleted(t *testing.T) {
 
 
 func TestHandleCheckoutCompleted_MissingEmail(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -302,6 +312,7 @@ func TestHandleCheckoutCompleted_MissingEmail(t *testing.T) {
 
 
 func TestHandleCheckoutCompleted_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -317,6 +328,7 @@ func TestHandleCheckoutCompleted_InvalidJSON(t *testing.T) {
 
 
 func TestHandleCheckoutCompleted_NoAdminUpgrade(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -343,6 +355,7 @@ func TestHandleCheckoutCompleted_NoAdminUpgrade(t *testing.T) {
 
 
 func TestHandleCheckoutCompleted_PremiumTier(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -370,6 +383,7 @@ func TestHandleCheckoutCompleted_PremiumTier(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -408,6 +422,7 @@ func TestHandleSubscriptionUpdated(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated_Downgrade(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -443,6 +458,7 @@ func TestHandleSubscriptionUpdated_Downgrade(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated_UnknownCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -464,6 +480,7 @@ func TestHandleSubscriptionUpdated_UnknownCustomer(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -479,6 +496,7 @@ func TestHandleSubscriptionUpdated_InvalidJSON(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated_WithCancelAt(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -515,6 +533,7 @@ func TestHandleSubscriptionUpdated_WithCancelAt(t *testing.T) {
 
 
 func TestHandleSubscriptionDeleted(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -548,6 +567,7 @@ func TestHandleSubscriptionDeleted(t *testing.T) {
 
 
 func TestHandleSubscriptionDeleted_UnknownCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -564,6 +584,7 @@ func TestHandleSubscriptionDeleted_UnknownCustomer(t *testing.T) {
 
 
 func TestHandleSubscriptionDeleted_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -579,6 +600,7 @@ func TestHandleSubscriptionDeleted_InvalidJSON(t *testing.T) {
 
 
 func TestHandlePaymentFailed(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -609,6 +631,7 @@ func TestHandlePaymentFailed(t *testing.T) {
 
 
 func TestHandlePaymentFailed_UnknownCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -625,6 +648,7 @@ func TestHandlePaymentFailed_UnknownCustomer(t *testing.T) {
 
 
 func TestHandlePaymentFailed_NoCustomerMapping(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -642,6 +666,7 @@ func TestHandlePaymentFailed_NoCustomerMapping(t *testing.T) {
 
 
 func TestHandlePaymentFailed_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -657,6 +682,7 @@ func TestHandlePaymentFailed_InvalidJSON(t *testing.T) {
 
 
 func TestHandleCheckoutCompleted_NoCustomerID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -682,6 +708,7 @@ func TestHandleCheckoutCompleted_NoCustomerID(t *testing.T) {
 
 
 func TestHandleSubscriptionUpdated_StatusChange(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -718,6 +745,7 @@ func TestHandleSubscriptionUpdated_StatusChange(t *testing.T) {
 
 
 func TestHandleSubscriptionDeleted_ExistingSub(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -752,6 +780,7 @@ func TestHandleSubscriptionDeleted_ExistingSub(t *testing.T) {
 // WebhookHandler early-path tests (no Stripe signature needed)
 // ---------------------------------------------------------------------------
 func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := WebhookHandler(s, "whsec_test", logger, nil)
@@ -765,6 +794,7 @@ func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
 
 
 func TestWebhookHandler_InvalidSignature(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := WebhookHandler(s, "whsec_test_secret", logger, nil)
@@ -779,6 +809,7 @@ func TestWebhookHandler_InvalidSignature(t *testing.T) {
 
 
 func TestWebhookHandler_ValidSignature_CheckoutCompleted(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -818,6 +849,7 @@ func TestWebhookHandler_ValidSignature_CheckoutCompleted(t *testing.T) {
 
 
 func TestWebhookHandler_WrongSecret_Rejected(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -846,6 +878,7 @@ func TestWebhookHandler_WrongSecret_Rejected(t *testing.T) {
 
 
 func TestWebhookHandler_DuplicateEvent(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -880,6 +913,7 @@ func TestWebhookHandler_DuplicateEvent(t *testing.T) {
 
 
 func TestWebhookHandler_MissingSignatureHeader(t *testing.T) {
+	t.Parallel()
 	store := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := WebhookHandler(store, "whsec_test", logger, nil)
@@ -895,6 +929,7 @@ func TestWebhookHandler_MissingSignatureHeader(t *testing.T) {
 
 
 func TestWebhookHandler_SubscriptionDeleted(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -947,6 +982,7 @@ func TestWebhookHandler_SubscriptionDeleted(t *testing.T) {
 
 
 func TestWebhookHandler_PaymentFailed(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -999,6 +1035,7 @@ func TestWebhookHandler_PaymentFailed(t *testing.T) {
 
 
 func TestWebhookHandler_SubscriptionUpdated(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -1062,6 +1099,7 @@ func TestWebhookHandler_SubscriptionUpdated(t *testing.T) {
 
 
 func TestWebhookHandler_UnhandledEventType(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := NewStore(db, logger)
@@ -1102,6 +1140,7 @@ func TestWebhookHandler_UnhandledEventType(t *testing.T) {
 // Additional coverage: handlePaymentFailed with known customer but nil subscription
 // ---------------------------------------------------------------------------
 func TestHandlePaymentFailed_KnownCustomerNoSubscription(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -1147,6 +1186,7 @@ func TestHandlePaymentFailed_KnownCustomerNoSubscription(t *testing.T) {
 
 // TestHandleCheckoutCompleted_NilCustomerDetails tests when customer_details is nil.
 func TestHandleCheckoutCompleted_NilCustomerDetails(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1164,6 +1204,7 @@ func TestHandleCheckoutCompleted_NilCustomerDetails(t *testing.T) {
 
 // TestHandleCheckoutCompleted_NoMetadata tests checkout with no metadata.
 func TestHandleCheckoutCompleted_NoMetadata(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1187,6 +1228,7 @@ func TestHandleCheckoutCompleted_NoMetadata(t *testing.T) {
 
 // TestHandleCheckoutCompleted_InvalidMaxUsers tests checkout with non-numeric max_users.
 func TestHandleCheckoutCompleted_InvalidMaxUsers(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1211,6 +1253,7 @@ func TestHandleCheckoutCompleted_InvalidMaxUsers(t *testing.T) {
 
 // TestHandleSubscriptionUpdated_NilCustomer tests when customer field is nil.
 func TestHandleSubscriptionUpdated_NilCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1232,6 +1275,7 @@ func TestHandleSubscriptionUpdated_NilCustomer(t *testing.T) {
 
 // TestHandleSubscriptionDeleted_NilCustomer tests when customer field is nil.
 func TestHandleSubscriptionDeleted_NilCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1249,6 +1293,7 @@ func TestHandleSubscriptionDeleted_NilCustomer(t *testing.T) {
 
 // TestHandlePaymentFailed_NilCustomer tests when customer field is nil.
 func TestHandlePaymentFailed_NilCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1267,6 +1312,7 @@ func TestHandlePaymentFailed_NilCustomer(t *testing.T) {
 // TestHandleSubscriptionUpdated_NoExistingSub tests when no existing subscription
 // exists in the store (existing == nil → creates new Subscription).
 func TestHandleSubscriptionUpdated_NoExistingSub(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -1313,6 +1359,7 @@ func TestHandleSubscriptionUpdated_NoExistingSub(t *testing.T) {
 
 // TestHandleSubscriptionUpdated_NilItems tests when subscription items are nil/empty.
 func TestHandleSubscriptionUpdated_NilItems(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -1348,6 +1395,7 @@ func TestHandleSubscriptionUpdated_NilItems(t *testing.T) {
 // TestHandleSubscriptionDeleted_ExistingNilSub tests when GetSubscription returns nil
 // for a known customer.
 func TestHandleSubscriptionDeleted_ExistingNilSub(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1391,6 +1439,7 @@ func TestHandleSubscriptionDeleted_ExistingNilSub(t *testing.T) {
 // TestHandlePaymentFailed_ExistingSubSetFails tests the path where
 // SetSubscription fails in handlePaymentFailed (DB write error).
 func TestHandlePaymentFailed_ExistingSubNoRecord(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1428,6 +1477,7 @@ func TestHandlePaymentFailed_ExistingSubNoRecord(t *testing.T) {
 // TestHandleSubscriptionUpdated_NilExisting tests subscription.updated when
 // no existing subscription exists (creates new).
 func TestHandleSubscriptionUpdated_NewSubscription(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1463,6 +1513,7 @@ func TestHandleSubscriptionUpdated_NewSubscription(t *testing.T) {
 
 // TestWebhookHandler_EmptyBody tests that empty request body is handled.
 func TestWebhookHandler_EmptyBody(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	handler := WebhookHandler(s, "whsec_test", logger, nil)
@@ -1479,6 +1530,7 @@ func TestWebhookHandler_EmptyBody(t *testing.T) {
 // TestCheckoutHandler_ExistingCustomer tests the path where existing subscription
 // has a StripeCustomerID (reuses customer, clears CustomerEmail).
 func TestCheckoutHandler_ExistingCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1490,11 +1542,9 @@ func TestCheckoutHandler_ExistingCustomer(t *testing.T) {
 		Status:           StatusActive,
 	}))
 
-	handler := CheckoutHandler(s, logger)
-
-	// Set a price env var so we don't hit the "pricing not configured" path.
-	os.Setenv("STRIPE_PRICE_PRO", "price_test_pro")
-	defer os.Unsetenv("STRIPE_PRICE_PRO")
+	// Inject Config literal so we don't hit the "pricing not configured" path.
+	// T1.1+T2.2: dropped os.Setenv("STRIPE_PRICE_PRO") — t.Parallel-safe via CheckoutHandlerWithConfig.
+	handler := CheckoutHandlerWithConfig(s, logger, Config{PricePro: "price_test_pro"})
 
 	ctx := oauth.ContextWithEmail(context.Background(), "existing@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=pro", nil)
@@ -1511,6 +1561,7 @@ func TestCheckoutHandler_ExistingCustomer(t *testing.T) {
 // TestPortalHandler_ExistingCustomerStripeError tests the portal handler when
 // the Stripe API call fails (covers the error return path).
 func TestPortalHandler_ExistingCustomerStripeError(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -1539,12 +1590,11 @@ func TestPortalHandler_ExistingCustomerStripeError(t *testing.T) {
 
 // TestCheckoutHandler_NewCustomer tests checkout for a user with no prior subscription.
 func TestCheckoutHandler_NewCustomer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := CheckoutHandler(s, logger)
-
-	os.Setenv("STRIPE_PRICE_SOLO_PRO", "price_test_solo")
-	defer os.Unsetenv("STRIPE_PRICE_SOLO_PRO")
+	// T1.1+T2.2: dropped os.Setenv — t.Parallel-safe via CheckoutHandlerWithConfig.
+	handler := CheckoutHandlerWithConfig(s, logger, Config{PriceSoloPro: "price_test_solo"})
 
 	ctx := oauth.ContextWithEmail(context.Background(), "newcust@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=solo_pro", nil)
@@ -1559,12 +1609,11 @@ func TestCheckoutHandler_NewCustomer(t *testing.T) {
 
 // TestCheckoutHandler_PremiumPlan tests checkout with premium plan (exercises the switch branch).
 func TestCheckoutHandler_PremiumPlan(t *testing.T) {
+	t.Parallel()
 	s := newTestStore()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := CheckoutHandler(s, logger)
-
-	os.Setenv("STRIPE_PRICE_PREMIUM", "price_test_premium")
-	defer os.Unsetenv("STRIPE_PRICE_PREMIUM")
+	// T1.1+T2.2: dropped os.Setenv — t.Parallel-safe via CheckoutHandlerWithConfig.
+	handler := CheckoutHandlerWithConfig(s, logger, Config{PricePremium: "price_test_premium"})
 
 	ctx := oauth.ContextWithEmail(context.Background(), "premcust@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/checkout?plan=premium", nil)
@@ -1578,6 +1627,7 @@ func TestCheckoutHandler_PremiumPlan(t *testing.T) {
 
 
 func TestHandleSubscriptionDeleted_SetSubError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
@@ -1605,6 +1655,7 @@ func TestHandleSubscriptionDeleted_SetSubError(t *testing.T) {
 
 
 func TestHandlePaymentFailed_SetSubError(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := NewStore(db, logger)
