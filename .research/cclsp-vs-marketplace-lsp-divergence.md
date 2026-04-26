@@ -314,4 +314,65 @@ The asymmetry was real but **fully fixable in our bridge** — not a deficiency 
 
 **This was a true bug** — discovery driven by the user's empirical observation that pyright "worked" while gopls didn't. Without that comparison, the asymmetry was invisible (cclsp silently swallows the cache miss as `[]`). Crediting empirical-observation-driven debugging.
 
+## Push-channel asymmetry — auto-`<new-diagnostics>` for Python but not Go (2026-04-26)
+
+**Different question.** Previous fix was the cclsp pull path. The user's actual concern is the **push channel**: when the orchestrator does `Write`/`Edit` on a `.py` file, Claude Code's harness sometimes auto-pushes a `<new-diagnostics>` system-reminder with all pyright errors, no tool call. For `.go` files this never happens. **Why?**
+
+### Empirical investigation
+
+Process tree captured during this session:
+
+| LSP server | Spawned by | Bridge in path? | Currently running? |
+|---|---|---|---|
+| pyright (5 instances, PIDs 1688/19356/2396/21872/16240) | All 4 cclsp instances + Claude Code itself (PID 4668) | No bridge — Windows-native binary | YES |
+| WSL2 gopls (3 instances, WSL PIDs 1597/1625/2108) | All via cclsp's bridge processes | wsl-lsp-bridge | YES, but only as cclsp's child |
+| `gopls.cmd` shim (marketplace plugin's spawn path) | NOTHING — never invoked this session | n/a | **No** |
+
+**Decisive empirical test:** added `set WSL_LSP_BRIDGE_LOG=...` to `gopls.cmd` to capture if Claude Code ever invokes the marketplace plugin's path. Then performed `Edit` on `bad.go` (and `bad.py` as control). Both edits succeeded.
+
+Results:
+
+- **No `<new-diagnostics>` system-reminder fired** for either edit — even pyright didn't auto-push in this session.
+- **Marketplace bridge log file did not exist after edits** — `gopls.cmd` was never invoked. Claude Code's editor LSP harness did not spawn gopls in response to the orchestrator's `Edit` on bad.go.
+
+This rules out the bridge-level hypothesis: the bridge can't drop diagnostics it never receives, because gopls.cmd never started. **The asymmetry is upstream of the bridge.**
+
+### Root cause
+
+Claude Code's editor LSP harness only spawns an LSP server for an extension when a buffer of that extension is opened **in the editor pane** (a human-driven action). Pyright is currently running because the user has had Python buffers open in the editor pane this session. **Gopls is not running at the editor-harness level** because no `.go` buffer has been opened in the editor pane (only `Edit` tool calls have touched `.go` files; tool-driven file operations don't open editor buffers).
+
+Result:
+- **For `.py` edits when a Python buffer is open in the editor:** pyright (already running, attached to the editor harness) sees the file change, runs analysis, publishes diagnostics; the harness pushes `<new-diagnostics>` to the orchestrator.
+- **For `.go` edits at any time:** gopls (NOT running at the editor-harness level) receives no notification. Diagnostics never enter the harness's cache. No `<new-diagnostics>` push.
+
+The earlier `mcp__ide__getDiagnostics` empty result has the same root cause: the editor harness has no diagnostics for `.go` files because gopls isn't running in its scope.
+
+### Pyright also doesn't push when no buffer is open
+
+This session demonstrated empirically that even an `Edit` on `bad.py` did **not** trigger a `<new-diagnostics>` push. The auto-push isn't unconditional on the LSP server merely being alive. The probable additional condition: the file must be opened as an editor buffer (not just `Edit`-touched). The user's earlier observation of pyright auto-pushing was likely from a session where `.py` buffers were actively open in the editor pane during edits.
+
+### Why bridge-side fixes can't help
+
+The bridge sits between LSP-clients and the WSL2 gopls process. If Claude Code's editor harness never spawns the LSP client (`gopls.cmd`), there's no traffic for the bridge to translate, drop, or surface. **The bridge is bypassed entirely**, not buggy.
+
+### Smoking-gun test for "bridge breaks routing" — DISPROVED
+
+User's pre-set hypothesis: "if we test by removing the bridge — running gopls.exe Windows-native — does the auto-push start working?" The empirical answer: **no, the bridge isn't the issue** because gopls isn't being spawned at all by the editor harness. Replacing the bridge with native gopls.exe still wouldn't help unless Claude Code's harness can be persuaded to spawn it. Bridge is a non-factor in this asymmetry.
+
+### What's actually fixable
+
+**Nothing on our side**, fundamentally. The trigger condition for `<new-diagnostics>` lives inside Claude Code's closed-source editor harness; it ties LSP-server spawn to editor-pane buffer opens, not to tool-driven file operations.
+
+**Workarounds that DO help orchestrator-driven workflows:**
+
+1. **Use `mcp__cclsp__get_diagnostics` actively after edits** — fully works post-`32fa08b` URI fix, returns gopls's 4 errors. This is pull, not push, but reliable.
+2. **Open the relevant `.go` file in the editor pane** before asking Claude to work on it. This triggers the harness to spawn gopls and (probably) enables auto-push for subsequent edits in that buffer.
+3. **Add an orchestrator-side `PostToolUse` hook** matching `Edit|Write` for `*.go` paths that auto-calls `mcp__cclsp__get_diagnostics` and surfaces results into context. Emulates auto-push using cclsp's pull channel. ~30 lines of hook config in `~/.claude/settings.json`. Not in scope here; flagged for follow-up.
+
+### Verdict
+
+The push-channel asymmetry is **upstream of our bridge** — Claude Code's editor harness ties LSP-server spawn to editor-pane buffer opens, not to tool-driven file operations. Pyright is running because the user has Python buffers open; gopls isn't running because no Go buffer is open. Bridge fixes cannot influence this; the trigger lives in Claude Code's closed harness.
+
+**Best practical path:** add a cclsp pull-on-edit hook to emulate the auto-push for `.go` (and any other language where this pattern bites). Settings change, not bridge change. Bridge stays as-is.
+
 
