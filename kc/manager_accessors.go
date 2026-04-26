@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // manager_accessors.go holds the Manager's service-accessor methods —
@@ -46,6 +47,20 @@ func (m *Manager) AlertSvc() *AlertService {
 // FamilyService returns the family billing service, or nil if not configured.
 func (m *Manager) FamilyService() *FamilyService {
 	return m.familyService
+}
+
+// LoggerPort returns m.Logger wrapped in the kc/logger.Logger port.
+// New code that wants to depend on the abstract Logger contract (instead
+// of the concrete *slog.Logger) should call this accessor; the
+// underlying Logger field is preserved for the existing call-site set
+// so the migration can proceed file-by-file without a big-bang
+// rewrite. Returns a no-op when m.Logger is nil so the result is
+// always safe to use.
+func (m *Manager) LoggerPort() logport.Logger {
+	if m.Logger == nil {
+		return logport.NewNoop()
+	}
+	return logport.NewSlog(m.Logger)
 }
 
 // SetFamilyService sets the family billing service.

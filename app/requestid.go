@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // Request-ID propagation
@@ -88,6 +89,21 @@ func LoggerWithRequestID(logger *slog.Logger, ctx context.Context) *slog.Logger 
 		return logger.With("request_id", id)
 	}
 	return logger
+}
+
+// LoggerPortWithRequestID is the kc/logger.Logger port-typed sibling
+// of LoggerWithRequestID. New call sites that already depend on the
+// port should reach for this one rather than wrap-then-unwrap through
+// AsSlog. Behavior is identical — when no request ID is in the
+// context, the original logger is returned unchanged.
+func LoggerPortWithRequestID(l logport.Logger, ctx context.Context) logport.Logger {
+	if l == nil {
+		return nil
+	}
+	if id := RequestIDFromCtx(ctx); id != "" {
+		return l.With("request_id", id)
+	}
+	return l
 }
 
 // isValidRequestID gates the client-supplied X-Request-ID header.

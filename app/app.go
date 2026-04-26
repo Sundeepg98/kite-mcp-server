@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
@@ -488,6 +489,24 @@ func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
 // layer. See B77 for rationale.
 func (app *App) Registry() *mcp.Registry {
 	return app.registry
+}
+
+// Logger returns the App's logger wrapped in the kc/logger.Logger port.
+// New code that wants to depend on the port (instead of *slog.Logger)
+// should call this accessor; the underlying *slog.Logger field is
+// preserved for the existing call-site set so the migration can
+// proceed file-by-file without a big-bang rewrite. Wrapping is cheap
+// — slogAdapter is a single-pointer struct.
+//
+// Returns a no-op Logger when the underlying *slog.Logger is nil so
+// callers can blindly use the result without nil-checking. (Tests
+// that construct an App without a logger should still get a usable
+// port.)
+func (app *App) Logger() logport.Logger {
+	if app.logger == nil {
+		return logport.NewNoop()
+	}
+	return logport.NewSlog(app.logger)
 }
 
 // SetVersion sets the server version
