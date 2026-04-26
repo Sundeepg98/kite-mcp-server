@@ -52,6 +52,7 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "setup_telegram")
 
+		// TelegramNotifier() not on AlertStoreProvider port; consult manager directly.
 		if manager.TelegramNotifier() == nil {
 			return mcp.NewToolResultError("Telegram notifications are not configured on this server. Contact the server admin."), nil
 		}
@@ -75,7 +76,7 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Invalid chat ID"), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.SetupTelegramCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.SetupTelegramCommand{
 			Email:  email,
 			ChatID: chatID,
 		}); err != nil {
@@ -171,7 +172,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if alerts.IsPercentageDirection(direction) && referencePrice <= 0 {
 			sess := server.ClientSessionFromContext(ctx)
 			sessionID := sess.SessionID()
-			kiteSession, _, clientErr := manager.GetOrCreateSessionWithEmail(sessionID, email)
+			kiteSession, _, clientErr := handler.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
 			}
@@ -188,7 +189,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			referencePrice = ltpData.LastPrice
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateAlertCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CreateAlertCommand{
 			Email:          email,
 			Tradingsymbol:  tradingsymbol,
 			Exchange:       exchange,
@@ -208,7 +209,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
 			if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
 				if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
-					manager.Logger.Warn("Failed to auto-start ticker for alert", "email", email, "error", startErr)
+					handler.Logger().Warn("Failed to auto-start ticker for alert", "email", email, "error", startErr)
 				} else {
 					tickerMsg = "\nTicker auto-started."
 				}
@@ -216,7 +217,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		if tickerSvc.IsRunning(email) {
 			if subErr := tickerSvc.Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr != nil {
-				manager.Logger.Warn("Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
+				handler.Logger().Warn("Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
 			} else {
 				tickerMsg += fmt.Sprintf("\nSubscribed %s for real-time alerts.", instrumentID)
 			}
@@ -265,7 +266,7 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetAlertsQuery{Email: email})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetAlertsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -314,7 +315,7 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		alertID := NewArgParser(args).String("alert_id", "")
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteAlertCommand{
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteAlertCommand{
 			Email:   email,
 			AlertID: alertID,
 		}); err != nil {

@@ -53,7 +53,7 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("Watchlist name cannot be empty"), nil
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
 		if err != nil {
 			handler.trackToolError(ctx, "create_watchlist", "create_error")
 			return mcp.NewToolResultError(err.Error()), nil
@@ -108,7 +108,7 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil
@@ -185,7 +185,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("No valid instruments provided. Use exchange:symbol format (e.g. 'NSE:RELIANCE')."), nil
 		}
 
-		bus := manager.CommandBus()
+		bus := handler.CommandBus()
 
 		var added, failed []string
 		for _, instID := range instruments {
@@ -197,7 +197,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			exchange := parts[0]
 
 			// Resolve instrument to get token
-			inst, err := manager.Instruments.GetByID(instID)
+			inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instID)
 			if err != nil {
 				failed = append(failed, fmt.Sprintf("%s (not found)", instID))
 				continue
@@ -289,7 +289,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError("No items specified"), nil
 		}
 
-		bus := manager.CommandBus()
+		bus := handler.CommandBus()
 
 		var removed, failed []string
 		for _, ref := range refs {
@@ -379,7 +379,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Watchlist %q not found", watchlistRef)), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
 		if err != nil {
 			handler.trackToolError(ctx, "get_watchlist", "get_error")
 			return mcp.NewToolResultError(err.Error()), nil
@@ -402,7 +402,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Get Kite session for LTP call
 			sess := server.ClientSessionFromContext(ctx)
 			sessionID := sess.SessionID()
-			kiteSession, _, clientErr := manager.GetOrCreateSessionWithEmail(sessionID, email)
+			kiteSession, _, clientErr := handler.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr == nil {
 				ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
 					return kiteSession.Kite.Client.GetLTP(instrIDs...)
@@ -412,10 +412,10 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 						ltpMap[key] = data.LastPrice
 					}
 				} else {
-					manager.Logger.Warn("Failed to fetch LTP for watchlist", "error", ltpErr)
+					handler.Logger().Warn("Failed to fetch LTP for watchlist", "error", ltpErr)
 				}
 			} else {
-				manager.Logger.Warn("Failed to get Kite session for watchlist LTP", "error", clientErr)
+				handler.Logger().Warn("Failed to get Kite session for watchlist LTP", "error", clientErr)
 			}
 		}
 
@@ -515,7 +515,7 @@ func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ListWatchlistsQuery{Email: email})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.ListWatchlistsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

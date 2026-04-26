@@ -40,14 +40,14 @@ func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Resolve API key and access token from manager (client fields are private)
-			apiKey := manager.GetAPIKeyForEmail(email)
-			accessToken := manager.GetAccessTokenForEmail(email)
+			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
+			accessToken := handler.deps.Credentials.GetAccessTokenForEmail(email)
 
 			if accessToken == "" {
 				return mcp.NewToolResultError("No access token — please login first"), nil
 			}
 
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.StartTickerCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.StartTickerCommand{
 				Email:       email,
 				APIKey:      apiKey,
 				AccessToken: accessToken,
@@ -88,7 +88,7 @@ func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.StopTickerCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.StopTickerCommand{
 				Email: email,
 			}); err != nil {
 				handler.trackToolError(ctx, "stop_ticker", "stop_error")
@@ -127,7 +127,7 @@ func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.TickerStatusQuery{Email: email})
+			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.TickerStatusQuery{Email: email})
 			if err != nil {
 				handler.trackToolError(ctx, "ticker_status", "status_error")
 				return mcp.NewToolResultError(err.Error()), nil
@@ -194,7 +194,7 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.SubscribeInstrumentsCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.SubscribeInstrumentsCommand{
 				Email:  email,
 				Tokens: tokens,
 				Mode:   modeStr,
@@ -259,7 +259,7 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
 
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UnsubscribeInstrumentsCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.UnsubscribeInstrumentsCommand{
 				Email:  email,
 				Tokens: tokens,
 			}); err != nil {

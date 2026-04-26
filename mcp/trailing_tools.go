@@ -106,7 +106,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 		exchange := parts[0]
 
-		inst, err := manager.Instruments.GetByID(instrumentID)
+		inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instrumentID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Instrument not found: %s", instrumentID)), nil
 		}
@@ -117,7 +117,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				ctx := kc.WithBroker(ctx, session.Broker)
 
 				if currentStop <= 0 {
-					raw, histErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
+					raw, histErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
 						Email:   session.Email,
 						OrderID: orderID,
 					})
@@ -135,7 +135,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				}
 
 				if referencePrice <= 0 {
-					raw, ltpErr := manager.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{
+					raw, ltpErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{
 						Email:       session.Email,
 						Instruments: []string{instrumentID},
 					})
@@ -167,7 +167,7 @@ func doSetTrailingStop(handler *ToolHandler, manager *kc.Manager, email, exchang
 		return mcp.NewToolResultError("Trailing stop manager not available (requires database persistence)"), nil
 	}
 
-	raw, err := manager.CommandBus().DispatchWithResult(context.Background(), cqrs.SetTrailingStopCommand{
+	raw, err := handler.CommandBus().DispatchWithResult(context.Background(), cqrs.SetTrailingStopCommand{
 		Email:           email,
 		Exchange:        exchange,
 		Tradingsymbol:   tradingsymbol,
@@ -194,19 +194,20 @@ func doSetTrailingStop(handler *ToolHandler, manager *kc.Manager, email, exchang
 
 	// Auto-start ticker and subscribe instrument
 	tickerMsg := ""
-	if !manager.TickerService().IsRunning(email) {
-		apiKey := manager.GetAPIKeyForEmail(email)
-		if entry, ok := manager.TokenStore().Get(email); ok {
-			if startErr := manager.TickerService().Start(email, apiKey, entry.AccessToken); startErr != nil {
-				manager.Logger.Warn("Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
+	tickerSvc := handler.deps.Ticker.TickerService()
+	if !tickerSvc.IsRunning(email) {
+		apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
+		if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
+			if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
+				handler.Logger().Warn("Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
 			} else {
 				tickerMsg = "\nTicker auto-started."
 			}
 		}
 	}
-	if manager.TickerService().IsRunning(email) {
-		if subErr := manager.TickerService().Subscribe(email, []uint32{instrumentToken}, ticker.ModeLTP); subErr != nil {
-			manager.Logger.Warn("Failed to auto-subscribe instrument for trailing stop", "email", email, "error", subErr)
+	if tickerSvc.IsRunning(email) {
+		if subErr := tickerSvc.Subscribe(email, []uint32{instrumentToken}, ticker.ModeLTP); subErr != nil {
+			handler.Logger().Warn("Failed to auto-subscribe instrument for trailing stop", "email", email, "error", subErr)
 		} else {
 			tickerMsg += fmt.Sprintf("\nSubscribed %s:%s for real-time trailing.", exchange, tradingsymbol)
 		}
@@ -263,7 +264,7 @@ func (*ListTrailingStopsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
 
-		raw, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ListTrailingStopsQuery{Email: email})
+		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.ListTrailingStopsQuery{Email: email})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -314,7 +315,7 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
 
-		if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.CancelTrailingStopCommand{Email: email, TrailingStopID: tsID}); err != nil {
+		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CancelTrailingStopCommand{Email: email, TrailingStopID: tsID}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 

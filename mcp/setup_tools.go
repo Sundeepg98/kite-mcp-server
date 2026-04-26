@@ -260,7 +260,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Extract MCP session ID and OAuth email
 		mcpSessionID := mcpClientSession.SessionID()
 		email := oauth.EmailFromContext(ctx)
-		manager.Logger.Info("Login tool called", "session_id", mcpSessionID, "email", email)
+		handler.Logger().Info("Login tool called", "session_id", mcpSessionID, "email", email)
 
 		// If user provided their own credentials, store them for per-user isolation
 		args := request.GetArguments()
@@ -273,7 +273,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// check uniformly with the rest of the bus surface. The real
 		// URL-generation (LoginCommand on the CommandBus) happens below at
 		// the dispatch site, which is where LoginUseCase.Execute runs.
-		if _, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.ValidateLoginQuery{
+		if _, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.ValidateLoginQuery{
 			Email:     email,
 			APIKey:    apiKey,
 			APISecret: apiSecret,
@@ -288,7 +288,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Round-5 Phase B: credential persistence + token invalidation are
 			// the single UpdateMyCredentialsCommand. No direct .Set/.Delete on
 			// stores here — the bus is the single write entry point.
-			if _, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{
+			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.UpdateMyCredentialsCommand{
 				Email:     email,
 				APIKey:    apiKey,
 				APISecret: apiSecret,
@@ -302,26 +302,26 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// client with the newly-persisted API key. A failure here is
 			// non-fatal to the login flow (next GetOrCreateSession may still
 			// succeed), so we warn-and-continue rather than short-circuit.
-			if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
+			if _, dispErr := handler.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
 				SessionID: mcpSessionID,
 				Reason:    "post_credential_register",
 			}); dispErr != nil {
-				manager.Logger.Warn("Failed to clear session data after credential registration", "error", dispErr)
+				handler.Logger().Warn("Failed to clear session data after credential registration", "error", dispErr)
 			}
-			manager.Logger.Info("Stored per-user Kite credentials via login tool", "email", email)
+			handler.Logger().Info("Stored per-user Kite credentials via login tool", "email", email)
 		}
 
 		// Check if credentials are configured (global or per-user)
-		if !manager.HasGlobalCredentials() && !manager.HasUserCredentials(email) {
-			manager.Logger.Info("No credentials configured for login")
+		if !handler.deps.Credentials.HasGlobalCredentials() && !handler.deps.Credentials.HasUserCredentials(email) {
+			handler.Logger().Info("No credentials configured for login")
 			handler.trackToolError(ctx, "login", "no_credentials")
 			return mcp.NewToolResultError("No Kite API credentials configured. Either set KITE_API_KEY and KITE_API_SECRET environment variables, or provide api_key and api_secret parameters to register your own credentials."), nil
 		}
 
 		// Get or create a Kite session for this MCP session (email-aware)
-		kiteSession, isNew, err := manager.GetOrCreateSessionWithEmail(mcpSessionID, email)
+		kiteSession, isNew, err := handler.deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
 		if err != nil {
-			manager.Logger.Error("Failed to get or create Kite session", "session_id", mcpSessionID, "error", err)
+			handler.Logger().Error("Failed to get or create Kite session", "session_id", mcpSessionID, "error", err)
 			handler.trackToolError(ctx, "login", "session_error")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get or create Kite session: %s", err.Error())), nil
 		}
@@ -332,10 +332,10 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check cached token (per-email, Fly.io multi-user flow)
-		if isNew && email != "" && manager.HasCachedToken(email) {
+		if isNew && email != "" && handler.deps.Credentials.HasCachedToken(email) {
 			profile, err := kiteSession.Kite.Client.GetUserProfile()
 			if err == nil {
-				manager.Logger.Info("Cached token valid", "session_id", mcpSessionID, "email", email, "user", profile.UserName)
+				handler.Logger().Info("Cached token valid", "session_id", mcpSessionID, "email", email, "user", profile.UserName)
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -347,20 +347,20 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 			// Cached token expired, remove it via the CommandBus so this
 			// lifecycle event gets the bus's observability layer (Round-5 Phase B).
-			manager.Logger.Warn("Cached token expired, clearing", "email", email, "error", err)
-			if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
+			handler.Logger().Warn("Cached token expired, clearing", "email", email, "error", err)
+			if _, dispErr := handler.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
 				Email:  email,
 				Reason: "expired",
 			}); dispErr != nil {
-				manager.Logger.Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
+				handler.Logger().Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
 			}
 		}
 
-		if isNew && manager.HasPreAuth() {
+		if isNew && handler.deps.Credentials.HasPreAuth() {
 			// Pre-auth session — verify the token works
 			profile, err := kiteSession.Kite.Client.GetUserProfile()
 			if err == nil {
-				manager.Logger.Info("Pre-auth token valid", "session_id", mcpSessionID, "user", profile.UserName)
+				handler.Logger().Info("Pre-auth token valid", "session_id", mcpSessionID, "user", profile.UserName)
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -370,47 +370,47 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					},
 				}, nil
 			}
-			manager.Logger.Warn("Pre-auth token invalid, falling through to login", "session_id", mcpSessionID, "error", err)
+			handler.Logger().Warn("Pre-auth token invalid, falling through to login", "session_id", mcpSessionID, "error", err)
 		}
 
 		if !isNew {
 			// We have an existing session, verify it works by getting the profile
-			manager.Logger.Debug("Found existing Kite session, verifying with profile check", "session_id", mcpSessionID)
+			handler.Logger().Debug("Found existing Kite session, verifying with profile check", "session_id", mcpSessionID)
 			profile, err := kiteSession.Kite.Client.GetUserProfile()
 			if err != nil {
-				manager.Logger.Warn("Kite profile check failed, clearing session data", "session_id", mcpSessionID, "error", err)
+				handler.Logger().Warn("Kite profile check failed, clearing session data", "session_id", mcpSessionID, "error", err)
 				// If we are still getting an error, lets clear session data and
 				// recreate — via CommandBus for uniform observability
 				// (Round-5 Phase B Sessions). Here, unlike the post-credential
 				// path, a clear failure IS fatal: we cannot safely recreate
 				// the session if the stale data still occupies the slot.
-				if _, clearErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
+				if _, clearErr := handler.CommandBus().DispatchWithResult(ctx, cqrs.ClearSessionDataCommand{
 					SessionID: mcpSessionID,
 					Reason:    "profile_check_failed",
 				}); clearErr != nil {
-					manager.Logger.Error("Failed to clear session data", "session_id", mcpSessionID, "error", clearErr)
+					handler.Logger().Error("Failed to clear session data", "session_id", mcpSessionID, "error", clearErr)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to clear session data: %s", clearErr.Error())), nil
 				}
 
 				// Clear cached token too if it exists — via CommandBus for
 				// uniform observability (Round-5 Phase B).
 				if email != "" {
-					if _, dispErr := manager.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
+					if _, dispErr := handler.CommandBus().DispatchWithResult(ctx, cqrs.InvalidateTokenCommand{
 						Email:  email,
 						Reason: "session_profile_check_failed",
 					}); dispErr != nil {
-						manager.Logger.Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
+						handler.Logger().Error("InvalidateTokenCommand dispatch failed", "email", email, "error", dispErr)
 					}
 				}
 
 				// Create a new session
-				_, _, err = manager.GetOrCreateSessionWithEmail(mcpSessionID, email)
+				_, _, err = handler.deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
 				if err != nil {
-					manager.Logger.Error("Failed to create new Kite session", "session_id", mcpSessionID, "error", err)
+					handler.Logger().Error("Failed to create new Kite session", "session_id", mcpSessionID, "error", err)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to create new Kite session: %s", err.Error())), nil
 				}
 			} else {
-				manager.Logger.Info("Kite profile check successful", "session_id", mcpSessionID, "user", profile.UserName)
+				handler.Logger().Info("Kite profile check successful", "session_id", mcpSessionID, "user", profile.UserName)
 				return &mcp.CallToolResult{
 					Content: []mcp.Content{
 						mcp.TextContent{
@@ -426,14 +426,14 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// The LoginCommand handler re-runs validation and calls
 		// LoginUseCase.Execute, which generates the URL through the narrow
 		// SessionLoginURLProvider port (Manager satisfies it directly).
-		raw, err := manager.CommandBus().DispatchWithResult(ctx, cqrs.LoginCommand{
+		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.LoginCommand{
 			Email:        email,
 			MCPSessionID: mcpSessionID,
 			APIKey:       apiKey,
 			APISecret:    apiSecret,
 		})
 		if err != nil {
-			manager.Logger.Error("Error generating Kite login URL", "session_id", mcpSessionID, "error", err)
+			handler.Logger().Error("Error generating Kite login URL", "session_id", mcpSessionID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to generate Kite login URL: %s", err.Error())), nil
 		}
 		loginRes, ok := raw.(*usecases.LoginResult)
@@ -442,11 +442,11 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		url := loginRes.URL
 
-		manager.Logger.Info("Successfully generated Kite login URL", "session_id", mcpSessionID)
+		handler.Logger().Info("Successfully generated Kite login URL", "session_id", mcpSessionID)
 
 		// Auto-open browser in local/STDIO mode
 		if err := manager.OpenBrowser(url); err != nil {
-			manager.Logger.Warn("Failed to auto-open browser", "error", err)
+			handler.Logger().Warn("Failed to auto-open browser", "error", err)
 		}
 
 		return &mcp.CallToolResult{
@@ -497,7 +497,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		args := request.GetArguments()
 		page := NewArgParser(args).String("page", "portfolio")
 
-		if _, err := manager.QueryBus().DispatchWithResult(ctx, cqrs.OpenDashboardQuery{
+		if _, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.OpenDashboardQuery{
 			Email: oauth.EmailFromContext(ctx),
 			Page:  page,
 		}); err != nil {
@@ -506,10 +506,10 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Build base URL
 		var baseURL string
-		if manager.IsLocalMode() {
+		if handler.deps.Config.IsLocalMode() {
 			baseURL = "http://127.0.0.1:8080"
 		} else {
-			baseURL = manager.ExternalURL()
+			baseURL = handler.deps.Config.ExternalURL()
 			if baseURL == "" {
 				return mcp.NewToolResultError("External URL not configured"), nil
 			}
@@ -552,13 +552,13 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Auto-open browser in local mode
 		if err := manager.OpenBrowser(dashURL); err != nil {
-			manager.Logger.Warn("Failed to auto-open dashboard", "error", err)
+			handler.Logger().Warn("Failed to auto-open dashboard", "error", err)
 		}
 
 		// Page title for display
 		pageTitle := strings.ToUpper(page[:1]) + page[1:]
 
-		if manager.IsLocalMode() {
+		if handler.deps.Config.IsLocalMode() {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{Type: "text", Text: fmt.Sprintf("%s dashboard opened in your browser: %s", pageTitle, dashURL)},
