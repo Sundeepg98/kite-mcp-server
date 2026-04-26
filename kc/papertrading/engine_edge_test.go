@@ -1062,6 +1062,8 @@ func TestStore_ScanOrders_Error(t *testing.T) {
 
 	store := NewStore(db, gapLogger())
 	require.NoError(t, store.InitTables())
+	// Satisfy paper_orders.email FOREIGN KEY → paper_accounts(email).
+	require.NoError(t, store.EnableAccount(gapEmail, 1_000_000))
 
 	// Insert a row then change the table schema to cause scan errors
 	require.NoError(t, store.InsertOrder(&Order{

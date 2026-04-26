@@ -367,13 +367,18 @@ func TestMonitorFill_UpdateCashBalanceError(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "OPEN", res["status"])
 
-	// Drop accounts table (but keep orders) so UpdateCashBalance fails
+	// Drop accounts table (but keep orders) so UpdateCashBalance fails.
+	// Disable FK enforcement so paper_orders rows survive the DROP — without
+	// this, ON DELETE CASCADE would purge them and the test would not
+	// exercise the UpdateCashBalance failure path.
+	require.NoError(t, db.ExecInsert("PRAGMA foreign_keys=OFF"))
 	err = db.ExecInsert("DROP TABLE paper_accounts")
 	require.NoError(t, err)
 	// Create a minimal accounts table so GetAccount works but UpdateCashBalance fails
 	err = db.ExecInsert("CREATE TABLE paper_accounts (email TEXT PRIMARY KEY)")
 	require.NoError(t, err)
 	db.ExecInsert("INSERT INTO paper_accounts (email) VALUES (?)", gapEmail)
+	require.NoError(t, db.ExecInsert("PRAGMA foreign_keys=ON"))
 
 	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:SBIN": 300}})
 

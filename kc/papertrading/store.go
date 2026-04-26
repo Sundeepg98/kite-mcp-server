@@ -75,6 +75,23 @@ func NewStore(db *alerts.DB, logger *slog.Logger) *Store {
 }
 
 // InitTables creates the paper trading tables if they don't already exist.
+//
+// Foreign-key invariant (DDD aggregate boundary): paper_orders, paper_positions,
+// and paper_holdings are children of the paper_accounts aggregate root. Each
+// child row's email MUST reference an existing paper_accounts(email). The
+// constraint is enforced by SQLite when foreign_keys=ON (set per-connection
+// via the DSN _pragma=foreign_keys(1) — see kc/alerts/db.go:dsnWithFKPragma).
+//
+// ON DELETE CASCADE: deleting an account row purges all dependent orders /
+// positions / holdings atomically. In practice the application never hard-
+// deletes paper_accounts (DeleteMyAccountUseCase calls Reset+Disable, which
+// preserves the row with enabled=0); the cascade is a defence-in-depth
+// invariant against schema-bypassing DELETEs.
+//
+// CREATE TABLE IF NOT EXISTS is idempotent only on a fresh schema — existing
+// pre-FK databases (Fly.io prod) keep their old constraint-less tables.
+// New environments and all tests get the FK-enforced schema. Schema-as-truth
+// going forward.
 func (s *Store) InitTables() error {
 	ddl := `
 CREATE TABLE IF NOT EXISTS paper_accounts (
@@ -103,7 +120,8 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     average_price    REAL NOT NULL DEFAULT 0,
     placed_at        TEXT NOT NULL,
     filled_at        TEXT,
-    tag              TEXT NOT NULL DEFAULT ''
+    tag              TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (email) REFERENCES paper_accounts(email) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_paper_orders_email ON paper_orders(email);
 CREATE INDEX IF NOT EXISTS idx_paper_orders_status ON paper_orders(status);
@@ -117,7 +135,8 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     average_price REAL NOT NULL,
     last_price    REAL NOT NULL DEFAULT 0,
     pnl           REAL NOT NULL DEFAULT 0,
-    PRIMARY KEY (email, exchange, tradingsymbol, product)
+    PRIMARY KEY (email, exchange, tradingsymbol, product),
+    FOREIGN KEY (email) REFERENCES paper_accounts(email) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS paper_holdings (
@@ -128,7 +147,8 @@ CREATE TABLE IF NOT EXISTS paper_holdings (
     average_price REAL NOT NULL,
     last_price    REAL NOT NULL DEFAULT 0,
     pnl           REAL NOT NULL DEFAULT 0,
-    PRIMARY KEY (email, exchange, tradingsymbol)
+    PRIMARY KEY (email, exchange, tradingsymbol),
+    FOREIGN KEY (email) REFERENCES paper_accounts(email) ON DELETE CASCADE
 );`
 	return s.db.ExecDDL(ddl)
 }

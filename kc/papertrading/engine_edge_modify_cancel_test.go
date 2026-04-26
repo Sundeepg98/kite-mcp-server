@@ -182,9 +182,15 @@ func TestModifyOrder_GetAccountError(t *testing.T) {
 	require.NoError(t, err)
 	orderID := res["order_id"].(string)
 
-	// Drop accounts table entirely so GetAccount fails
+	// Drop accounts table entirely so GetAccount fails. Disable FK enforcement
+	// for the DROP because paper_orders.email REFERENCES paper_accounts(email)
+	// ON DELETE CASCADE — without this, the orphaned paper_orders row would be
+	// cascade-deleted (modernc.org/sqlite cascades on DROP), defeating the
+	// test's purpose of failing GetAccount specifically.
+	require.NoError(t, db.ExecInsert("PRAGMA foreign_keys=OFF"))
 	err = db.ExecInsert("DROP TABLE paper_accounts")
 	require.NoError(t, err)
+	require.NoError(t, db.ExecInsert("PRAGMA foreign_keys=ON"))
 
 	// Modify price to 600 (>= LTP 500 → marketable → triggers fillOrder → needs GetAccount)
 	_, err = engine.ModifyOrder(gapEmail, orderID, map[string]any{
