@@ -291,6 +291,9 @@ func (m *Manager) registerMFCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -304,6 +307,9 @@ func (m *Manager) registerMFCommands() error {
 		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc(), m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
@@ -319,6 +325,9 @@ func (m *Manager) registerMFCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -332,6 +341,9 @@ func (m *Manager) registerMFCommands() error {
 		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc(), m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {

@@ -4,11 +4,28 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
+
+// dispatchGTTRejection emits a typed GTTRejectedEvent for the three
+// GTT mutation surfaces (place, modify, delete). Centralised so the
+// payload shape stays consistent across call sites; nil-safe.
+func dispatchGTTRejection(events *domain.EventDispatcher, email string, triggerID int, source, reason string) {
+	if events == nil {
+		return
+	}
+	events.Dispatch(domain.GTTRejectedEvent{
+		Email:     email,
+		TriggerID: triggerID,
+		Source:    source,
+		Reason:    reason,
+		Timestamp: time.Now().UTC(),
+	})
+}
 
 // --- GTT query ---
 
@@ -52,6 +69,7 @@ func (uc *GetGTTsUseCase) Execute(ctx context.Context, query cqrs.GetGTTsQuery) 
 type PlaceGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -65,6 +83,10 @@ func NewPlaceGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceGTTU
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PlaceGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit GTTRejectedEvent. Nil-safe.
+func (uc *PlaceGTTUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute places a GTT order and returns the trigger ID.
 func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand) (broker.GTTResponse, error) {
@@ -117,6 +139,9 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 	resp, err := client.PlaceGTT(params)
 	if err != nil {
 		uc.logger.Error("Failed to place GTT order", "email", cmd.Email, "error", err)
+		// ES: typed rejection event. TriggerID=0 since broker never
+		// assigned one; aggregate ID falls back to synthetic key.
+		dispatchGTTRejection(uc.events, cmd.Email, 0, "place", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: place gtt: %w", err)
 	}
 
@@ -147,6 +172,7 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 type ModifyGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -160,6 +186,10 @@ func NewModifyGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *ModifyGT
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *ModifyGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit GTTRejectedEvent. Nil-safe.
+func (uc *ModifyGTTUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute modifies a GTT order and returns the trigger ID.
 func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTCommand) (broker.GTTResponse, error) {
@@ -212,6 +242,8 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 	resp, err := client.ModifyGTT(cmd.TriggerID, params)
 	if err != nil {
 		uc.logger.Error("Failed to modify GTT order", "email", cmd.Email, "trigger_id", cmd.TriggerID, "error", err)
+		// ES: rejection joins the existing GTT aggregate stream via TriggerID.
+		dispatchGTTRejection(uc.events, cmd.Email, cmd.TriggerID, "modify", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: modify gtt: %w", err)
 	}
 
@@ -240,6 +272,7 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 type DeleteGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -253,6 +286,10 @@ func NewDeleteGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *DeleteGT
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *DeleteGTTUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit GTTRejectedEvent. Nil-safe.
+func (uc *DeleteGTTUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute deletes a GTT order.
 func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTCommand) (broker.GTTResponse, error) {
@@ -271,6 +308,8 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 	resp, err := client.DeleteGTT(cmd.TriggerID)
 	if err != nil {
 		uc.logger.Error("Failed to delete GTT order", "email", cmd.Email, "trigger_id", cmd.TriggerID, "error", err)
+		// ES: rejection joins the existing GTT aggregate stream via TriggerID.
+		dispatchGTTRejection(uc.events, cmd.Email, cmd.TriggerID, "delete", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: delete gtt: %w", err)
 	}
 

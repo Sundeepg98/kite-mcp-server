@@ -4,10 +4,30 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
+
+// dispatchMFRejection emits a typed MFOrderRejectedEvent for the four
+// MF mutation surfaces (place_order, cancel_order, place_sip,
+// cancel_sip). Centralised so payload shape stays consistent across
+// call sites; nil-safe — bootstrap / tests without a wired dispatcher
+// skip silently.
+func dispatchMFRejection(events *domain.EventDispatcher, email, orderID, source, reason string) {
+	if events == nil {
+		return
+	}
+	events.Dispatch(domain.MFOrderRejectedEvent{
+		Email:     email,
+		OrderID:   orderID,
+		Source:    source,
+		Reason:    reason,
+		Timestamp: time.Now().UTC(),
+	})
+}
 
 // --- MF Query Use Cases ---
 
@@ -104,6 +124,7 @@ func (uc *GetMFHoldingsUseCase) Execute(ctx context.Context, query cqrs.GetMFHol
 type PlaceMFOrderUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -113,6 +134,10 @@ func NewPlaceMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *Place
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PlaceMFOrderUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit MFOrderRejectedEvent. Nil-safe.
+func (uc *PlaceMFOrderUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrderCommand) (broker.MFOrderResponse, error) {
 	if cmd.Email == "" {
@@ -136,6 +161,9 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 	})
 	if err != nil {
 		uc.logger.Error("Failed to place MF order", "email", cmd.Email, "error", err)
+		// ES: typed rejection event so the MF audit stream surfaces the
+		// failure path. OrderID is empty — broker never assigned one.
+		dispatchMFRejection(uc.events, cmd.Email, "", "place_order", err.Error())
 		return broker.MFOrderResponse{}, fmt.Errorf("usecases: place mf order: %w", err)
 	}
 
@@ -162,6 +190,7 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 type CancelMFOrderUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -171,6 +200,10 @@ func NewCancelMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *Canc
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *CancelMFOrderUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit MFOrderRejectedEvent. Nil-safe.
+func (uc *CancelMFOrderUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOrderCommand) (broker.MFOrderResponse, error) {
 	if cmd.Email == "" {
@@ -188,6 +221,8 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 	resp, err := client.CancelMFOrder(cmd.OrderID)
 	if err != nil {
 		uc.logger.Error("Failed to cancel MF order", "email", cmd.Email, "order_id", cmd.OrderID, "error", err)
+		// ES: rejection joins existing MF order aggregate stream via OrderID.
+		dispatchMFRejection(uc.events, cmd.Email, cmd.OrderID, "cancel_order", err.Error())
 		return broker.MFOrderResponse{}, fmt.Errorf("usecases: cancel mf order: %w", err)
 	}
 
@@ -205,6 +240,7 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 type PlaceMFSIPUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -214,6 +250,10 @@ func NewPlaceMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceMF
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PlaceMFSIPUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit MFOrderRejectedEvent. Nil-safe.
+func (uc *PlaceMFSIPUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCommand) (broker.MFSIPResponse, error) {
 	if cmd.Email == "" {
@@ -242,6 +282,8 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 	})
 	if err != nil {
 		uc.logger.Error("Failed to place MF SIP", "email", cmd.Email, "error", err)
+		// ES: SIP rejection — empty OrderID, broker never assigned one.
+		dispatchMFRejection(uc.events, cmd.Email, "", "place_sip", err.Error())
 		return broker.MFSIPResponse{}, fmt.Errorf("usecases: place mf sip: %w", err)
 	}
 
@@ -269,6 +311,7 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 type CancelMFSIPUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
+	events         *domain.EventDispatcher
 	logger         *slog.Logger
 }
 
@@ -278,6 +321,10 @@ func NewCancelMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *Cancel
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *CancelMFSIPUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so broker
+// failures emit MFOrderRejectedEvent. Nil-safe.
+func (uc *CancelMFSIPUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPCommand) (broker.MFSIPResponse, error) {
 	if cmd.Email == "" {
@@ -295,6 +342,8 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 	resp, err := client.CancelMFSIP(cmd.SIPID)
 	if err != nil {
 		uc.logger.Error("Failed to cancel MF SIP", "email", cmd.Email, "sip_id", cmd.SIPID, "error", err)
+		// ES: SIPID acts as OrderID for aggregate-stream join.
+		dispatchMFRejection(uc.events, cmd.Email, cmd.SIPID, "cancel_sip", err.Error())
 		return broker.MFSIPResponse{}, fmt.Errorf("usecases: cancel mf sip: %w", err)
 	}
 

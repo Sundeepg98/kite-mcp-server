@@ -468,6 +468,25 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// broker) so projector consumers can filter virtual vs real
 			// without parsing OrderID prefixes.
 			eventDispatcher.Subscribe("paper.order_rejected", makeEventPersister(eventStore, "PaperOrder", app.logger))
+			// mf.order_rejected dispatches from the four MF use cases
+			// (PlaceMFOrder, CancelMFOrder, PlaceMFSIP, CancelMFSIP) on
+			// broker round-trip failure. Distinct from order.rejected
+			// (equity) so projector consumers can filter MF surface
+			// without parsing OrderID prefixes — Kite assigns separate
+			// ID namespaces for MF orders, MF SIPs, and equity orders.
+			eventDispatcher.Subscribe("mf.order_rejected", makeEventPersister(eventStore, "MFOrder", app.logger))
+			// gtt.rejected dispatches from PlaceGTT, ModifyGTT, DeleteGTT
+			// use cases on broker round-trip failure. Source field
+			// ("place"/"modify"/"delete") distinguishes the three GTT
+			// mutation surfaces in projector consumers.
+			eventDispatcher.Subscribe("gtt.rejected", makeEventPersister(eventStore, "GTT", app.logger))
+			// trailing_stop.triggered dispatches from
+			// kc/alerts/trailing.go evaluateOne when the underlying SL
+			// order modify succeeds — captures the trailing transition
+			// (oldStop -> newStop, HWM, modify count) so a forensic walk
+			// of the SL order ID sees trailing-stop modifications inline
+			// with place/modify/cancel events.
+			eventDispatcher.Subscribe("trailing_stop.triggered", makeEventPersister(eventStore, "TrailingStop", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

@@ -557,6 +557,111 @@ func TestDeriveAggregateID_PaperOrderRejected(t *testing.T) {
 	assert.Equal(t, "PAPER_42", deriveAggregateID(ev))
 }
 
+// TestDeriveEmailHash_MFOrderRejected pins the PII path for MF
+// rejection events. Email hashes through audit.HashEmail consistent
+// with consent_log and per-user data export queries.
+func TestDeriveEmailHash_MFOrderRejected(t *testing.T) {
+	t.Parallel()
+	ev := domain.MFOrderRejectedEvent{
+		Email:   "Trader@Example.COM",
+		OrderID: "MFO-1",
+		Source:  "place_order",
+		Reason:  "MARKET_CLOSED",
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+}
+
+// TestDeriveAggregateID_MFOrderRejected_WithOrderID covers the cancel
+// path where OrderID is preserved and the rejection joins the existing
+// MF aggregate stream.
+func TestDeriveAggregateID_MFOrderRejected_WithOrderID(t *testing.T) {
+	t.Parallel()
+	ev := domain.MFOrderRejectedEvent{
+		Email:   "trader@example.com",
+		OrderID: "MFO-1",
+		Source:  "cancel_order",
+	}
+	assert.Equal(t, "MFO-1", deriveAggregateID(ev))
+}
+
+// TestDeriveAggregateID_MFOrderRejected_PlaceEmptyOrderID covers the
+// place path where OrderID is empty and the aggregate ID falls back
+// to the synthetic mf-rejected:<email>:<rfc3339-nanos> form.
+func TestDeriveAggregateID_MFOrderRejected_PlaceEmptyOrderID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 26, 10, 30, 0, 0, time.UTC)
+	ev := domain.MFOrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "",
+		Source:    "place_order",
+		Reason:    "MARKET_CLOSED",
+		Timestamp: now,
+	}
+	got := deriveAggregateID(ev)
+	want := "mf-rejected:trader@example.com:" + now.Format(time.RFC3339Nano)
+	assert.Equal(t, want, got)
+}
+
+// TestDeriveEmailHash_GTTRejected pins the PII path for GTT rejection.
+func TestDeriveEmailHash_GTTRejected(t *testing.T) {
+	t.Parallel()
+	ev := domain.GTTRejectedEvent{
+		Email:     "Trader@Example.COM",
+		TriggerID: 42,
+		Source:    "modify",
+		Reason:    "TRIGGER_INACTIVE",
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+}
+
+// TestDeriveAggregateID_GTTRejected_WithTriggerID covers the
+// modify/delete paths: TriggerID is fmt'd as decimal string to match
+// the success-path appendAuxEvent key shape.
+func TestDeriveAggregateID_GTTRejected_WithTriggerID(t *testing.T) {
+	t.Parallel()
+	ev := domain.GTTRejectedEvent{
+		Email:     "trader@example.com",
+		TriggerID: 42,
+		Source:    "delete",
+	}
+	assert.Equal(t, "42", deriveAggregateID(ev))
+}
+
+// TestDeriveEmailHash_TrailingStopTriggered pins the PII path for the
+// trailing-stop trigger event. Email hashes through audit.HashEmail.
+func TestDeriveEmailHash_TrailingStopTriggered(t *testing.T) {
+	t.Parallel()
+	ev := domain.TrailingStopTriggeredEvent{
+		Email:          "Trader@Example.COM",
+		TrailingStopID: "TS1",
+		OrderID:        "SL-1",
+		Direction:      "long",
+		OldStop:        100,
+		NewStop:        110,
+	}
+	got := deriveEmailHash(ev)
+	want := audit.HashEmail("trader@example.com")
+	assert.Equal(t, want, got)
+}
+
+// TestDeriveAggregateID_TrailingStopTriggered pins the TrailingStopID-
+// keyed routing: the trailing stop's full lifecycle (set -> N triggers
+// -> cancel) replays under one aggregate stream rooted on the uuid-
+// derived 8-char prefix.
+func TestDeriveAggregateID_TrailingStopTriggered(t *testing.T) {
+	t.Parallel()
+	ev := domain.TrailingStopTriggeredEvent{
+		Email:          "trader@example.com",
+		TrailingStopID: "TS1",
+		OrderID:        "SL-1",
+	}
+	assert.Equal(t, "TS1", deriveAggregateID(ev))
+}
+
 // ===========================================================================
 // briefingCredAdapter with per-user credentials
 // ===========================================================================

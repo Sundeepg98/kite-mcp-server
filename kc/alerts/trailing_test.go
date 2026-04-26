@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // mockModifier is a test double for KiteOrderModifier.
@@ -285,6 +286,139 @@ func TestTrailingStopDBPersistence(t *testing.T) {
 	stops = m3.List("test@example.com")
 	assert.Len(t, stops, 0)
 }
+
+// --- ES: TrailingStopTriggeredEvent dispatch ---
+
+// TestTrailingStopEvaluate_DispatchesTriggeredEvent verifies that on a
+// successful trailing-stop trigger (HWM rises, SL order modified
+// successfully via Kite API), the manager dispatches a typed
+// domain.TrailingStopTriggeredEvent capturing the full transition
+// (oldStop -> newStop, HWM, ModifyCount) and the underlying SL OrderID.
+func TestTrailingStopEvaluate_DispatchesTriggeredEvent(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager(t)
+
+	dispatcher := domain.NewEventDispatcher()
+	var captured []domain.TrailingStopTriggeredEvent
+	dispatcher.Subscribe("trailing_stop.triggered", func(e domain.Event) {
+		captured = append(captured, e.(domain.TrailingStopTriggeredEvent))
+	})
+	m.SetEventDispatcher(dispatcher)
+
+	ts := &TrailingStop{
+		Email: "trader@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "SL-TS1", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	id, err := m.Add(ts)
+	require.NoError(t, err)
+
+	// Tick raises HWM from 1500 -> 1540, stop 1480 -> 1520.
+	tick := models.Tick{InstrumentToken: 408065, LastPrice: 1540}
+	m.Evaluate("trader@example.com", tick)
+
+	require.Len(t, captured, 1, "TrailingStopTriggeredEvent must fire on successful trail")
+	got := captured[0]
+	assert.Equal(t, "trader@example.com", got.Email)
+	assert.Equal(t, id, got.TrailingStopID)
+	assert.Equal(t, "SL-TS1", got.OrderID)
+	assert.Equal(t, "NSE", got.Instrument.Exchange)
+	assert.Equal(t, "INFY", got.Instrument.Tradingsymbol)
+	assert.Equal(t, "long", got.Direction)
+	assert.InDelta(t, 1480, got.OldStop, 0.01)
+	assert.InDelta(t, 1520, got.NewStop, 0.01)
+	assert.InDelta(t, 1540, got.HighWaterMark, 0.01)
+	assert.Equal(t, 1, got.ModifyCount)
+	assert.False(t, got.Timestamp.IsZero())
+}
+
+// TestTrailingStopEvaluate_NoTriggerNoEvent verifies the silent path:
+// when a tick doesn't move the trailing stop (price drops on a long,
+// or price within HWM band), no event fires. The audit stream must
+// reflect actual state transitions, not no-op evaluations.
+func TestTrailingStopEvaluate_NoTriggerNoEvent(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager(t)
+
+	dispatcher := domain.NewEventDispatcher()
+	var captured []domain.TrailingStopTriggeredEvent
+	dispatcher.Subscribe("trailing_stop.triggered", func(e domain.Event) {
+		captured = append(captured, e.(domain.TrailingStopTriggeredEvent))
+	})
+	m.SetEventDispatcher(dispatcher)
+
+	ts := &TrailingStop{
+		Email: "trader@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "SL-TS2", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	_, err := m.Add(ts)
+	require.NoError(t, err)
+
+	// Tick price drops — long direction, no trigger.
+	m.Evaluate("trader@example.com", models.Tick{InstrumentToken: 408065, LastPrice: 1400})
+
+	assert.Len(t, captured, 0, "no event should fire when stop doesn't move")
+}
+
+// TestTrailingStopEvaluate_BrokerErrorNoEvent verifies that if the
+// underlying ModifyOrder Kite call fails, no TrailingStopTriggeredEvent
+// fires — the trailing stop's logical state was reverted (or the
+// modification was a logical no-op since broker rejected). Future
+// follow-up: a TrailingStopRejectedEvent could close that loop.
+func TestTrailingStopEvaluate_BrokerErrorNoEvent(t *testing.T) {
+	t.Parallel()
+	logger := slog.Default()
+	m := NewTrailingStopManager(logger)
+
+	mock := &mockModifier{returnErr: assertError("kite_api_fail")}
+	m.SetModifier(func(email string) (KiteOrderModifier, error) { return mock, nil })
+
+	dispatcher := domain.NewEventDispatcher()
+	var captured []domain.TrailingStopTriggeredEvent
+	dispatcher.Subscribe("trailing_stop.triggered", func(e domain.Event) {
+		captured = append(captured, e.(domain.TrailingStopTriggeredEvent))
+	})
+	m.SetEventDispatcher(dispatcher)
+
+	ts := &TrailingStop{
+		Email: "trader@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "SL-TS3", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	_, err := m.Add(ts)
+	require.NoError(t, err)
+
+	m.Evaluate("trader@example.com", models.Tick{InstrumentToken: 408065, LastPrice: 1540})
+
+	assert.Len(t, captured, 0, "no event should fire when broker rejects modify")
+}
+
+// TestTrailingStopEvaluate_NilDispatcherSafe verifies the nil-dispatcher
+// path: a successful trigger without a wired dispatcher must not panic
+// on a nil Dispatch call.
+func TestTrailingStopEvaluate_NilDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager(t)
+	// Deliberately no SetEventDispatcher.
+
+	ts := &TrailingStop{
+		Email: "trader@example.com", Exchange: "NSE", Tradingsymbol: "INFY",
+		InstrumentToken: 408065, OrderID: "SL-TS4", TrailAmount: 20,
+		Direction: "long", HighWaterMark: 1500, CurrentStop: 1480,
+	}
+	_, err := m.Add(ts)
+	require.NoError(t, err)
+
+	// Should not panic.
+	m.Evaluate("trader@example.com", models.Tick{InstrumentToken: 408065, LastPrice: 1540})
+}
+
+// assertError is a tiny error sentinel for the test mock — keeps the
+// test file self-contained without pulling in errors just for one line.
+type assertError string
+
+func (a assertError) Error() string { return string(a) }
 
 func TestTrailingStopMaxPerUser(t *testing.T) {
 	t.Parallel()

@@ -349,6 +349,39 @@ func TestDeriveAggregateID(t *testing.T) {
 			event:    domain.PaperOrderRejectedEvent{Email: "trader@example.com", OrderID: "PAPER_42", Reason: "insufficient cash", Source: "place_limit", Timestamp: now},
 			expected: "PAPER_42",
 		},
+		// ES: MFOrderRejectedEvent — same OrderID-vs-synthetic pattern
+		// as OrderRejectedEvent. Cancel paths join existing MF stream
+		// via OrderID; place paths synthesise per-rejection key.
+		{
+			name:     "MFOrderRejectedEvent (cancel) uses OrderID",
+			event:    domain.MFOrderRejectedEvent{Email: "trader@example.com", OrderID: "MFO-1", Source: "cancel_order", Reason: "ALREADY_PROCESSED", Timestamp: now},
+			expected: "MFO-1",
+		},
+		{
+			name:     "MFOrderRejectedEvent (place, empty OrderID) uses synthetic",
+			event:    domain.MFOrderRejectedEvent{Email: "trader@example.com", OrderID: "", Source: "place_order", Reason: "MARKET_CLOSED", Timestamp: now},
+			expected: "mf-rejected:trader@example.com:" + now.Format(time.RFC3339Nano),
+		},
+		// ES: GTTRejectedEvent — TriggerID stringified to match the
+		// existing success-path appendAuxEvent format ("<id>"); zero
+		// TriggerID falls back to synthetic per-rejection key.
+		{
+			name:     "GTTRejectedEvent (modify) uses fmt'd TriggerID",
+			event:    domain.GTTRejectedEvent{Email: "trader@example.com", TriggerID: 42, Source: "modify", Reason: "TRIGGER_INACTIVE", Timestamp: now},
+			expected: "42",
+		},
+		{
+			name:     "GTTRejectedEvent (place, zero TriggerID) uses synthetic",
+			event:    domain.GTTRejectedEvent{Email: "trader@example.com", TriggerID: 0, Source: "place", Reason: "INSUFFICIENT_MARGIN", Timestamp: now},
+			expected: "gtt-rejected:trader@example.com:" + now.Format(time.RFC3339Nano),
+		},
+		// ES: TrailingStopTriggeredEvent — keyed by TrailingStopID alone
+		// (uuid-derived 8-char prefix is globally unique across users).
+		{
+			name:     "TrailingStopTriggeredEvent uses TrailingStopID",
+			event:    domain.TrailingStopTriggeredEvent{Email: "trader@example.com", TrailingStopID: "TS1", OrderID: "SL-1", Direction: "long", OldStop: 100, NewStop: 110, Timestamp: now},
+			expected: "TS1",
+		},
 	}
 
 	for _, tt := range tests {

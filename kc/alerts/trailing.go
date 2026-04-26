@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TrailingStop represents a trailing stop-loss that modifies an existing SL order
@@ -59,6 +60,13 @@ type TrailingStopManager struct {
 	// onModify is called after a successful SL order modification.
 	// Parameters: the trailing stop, old stop price, new stop price.
 	onModify func(ts *TrailingStop, oldStop, newStop float64)
+
+	// events is the typed domain event dispatcher. When set, evaluateOne
+	// emits a TrailingStopTriggeredEvent after the underlying SL modify
+	// succeeds — closing the audit gap on trailing-stop transitions
+	// (previously only logged via slog Info, never persisted to the
+	// audit/projection stream). Nil-safe.
+	events *domain.EventDispatcher
 }
 
 // NewTrailingStopManager creates a new trailing stop manager.
@@ -84,6 +92,15 @@ func (m *TrailingStopManager) SetModifier(fn func(email string) (KiteOrderModifi
 // SetOnModify sets the callback invoked after a successful SL order modification.
 func (m *TrailingStopManager) SetOnModify(fn func(ts *TrailingStop, oldStop, newStop float64)) {
 	m.onModify = fn
+}
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful trailing-stop triggers emit TrailingStopTriggeredEvent.
+// Nil-safe: when unset, only the slog Info log + onModify callback
+// run (preserves the pre-ES behaviour for tests / bootstrap
+// configurations that don't wire the dispatcher).
+func (m *TrailingStopManager) SetEventDispatcher(d *domain.EventDispatcher) {
+	m.events = d
 }
 
 // LoadFromDB loads active trailing stops from the database.
@@ -355,6 +372,26 @@ func (m *TrailingStopManager) evaluateOne(id, email string, lastPrice float64) {
 		"old_stop", fmt.Sprintf("%.2f", oldStop),
 		"new_stop", fmt.Sprintf("%.2f", newStop),
 		"modify_count", ts.ModifyCount)
+
+	// ES: typed domain event for the audit/projection stream. Fires
+	// only on successful broker ModifyOrder (the path that actually
+	// moved the SL trigger price). Captures the full transition
+	// (oldStop -> newStop, HWM, modify count) so a forensic walk of
+	// the SL OrderID sees trailing-stop modifications inline.
+	if m.events != nil {
+		m.events.Dispatch(domain.TrailingStopTriggeredEvent{
+			Email:          email,
+			TrailingStopID: id,
+			OrderID:        orderID,
+			Instrument:     domain.NewInstrumentKey(ts.Exchange, ts.Tradingsymbol),
+			Direction:      ts.Direction,
+			OldStop:        oldStop,
+			NewStop:        newStop,
+			HighWaterMark:  newHWM,
+			ModifyCount:    ts.ModifyCount,
+			Timestamp:      time.Now().UTC(),
+		})
+	}
 
 	// Notify via callback (e.g. Telegram)
 	if m.onModify != nil {

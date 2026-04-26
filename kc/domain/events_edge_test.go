@@ -22,6 +22,9 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"OrderFilledEvent", OrderFilledEvent{Timestamp: now}, "order.filled"},
 		{"OrderRejectedEvent", OrderRejectedEvent{Timestamp: now}, "order.rejected"},
 		{"PaperOrderRejectedEvent", PaperOrderRejectedEvent{Timestamp: now}, "paper.order_rejected"},
+		{"MFOrderRejectedEvent", MFOrderRejectedEvent{Timestamp: now}, "mf.order_rejected"},
+		{"GTTRejectedEvent", GTTRejectedEvent{Timestamp: now}, "gtt.rejected"},
+		{"TrailingStopTriggeredEvent", TrailingStopTriggeredEvent{Timestamp: now}, "trailing_stop.triggered"},
 		{"PositionOpenedEvent", PositionOpenedEvent{Timestamp: now}, "position.opened"},
 		{"PositionClosedEvent", PositionClosedEvent{Timestamp: now}, "position.closed"},
 		{"PositionConvertedEvent", PositionConvertedEvent{Timestamp: now}, "position.converted"},
@@ -468,6 +471,187 @@ func TestPaperOrderAggregateID(t *testing.T) {
 			got := PaperOrderAggregateID(tc.orderID)
 			if got != tc.want {
 				t.Errorf("PaperOrderAggregateID(%q) = %q, want %q", tc.orderID, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMFOrderRejectedEvent_Fields pins the field surface of the MF
+// rejection event. Source distinguishes the four MF mutation paths
+// ("place_order", "cancel_order", "place_sip", "cancel_sip") so a
+// projector consumer can render rejection timelines per surface
+// without parsing OrderID prefixes.
+func TestMFOrderRejectedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := MFOrderRejectedEvent{
+		Email:     "trader@example.com",
+		OrderID:   "MF-123",
+		Source:    "place_order",
+		Reason:    "MARKET_CLOSED",
+		Timestamp: now,
+	}
+
+	if e.EventType() != "mf.order_rejected" {
+		t.Errorf("EventType() = %q, want mf.order_rejected", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.Source != "place_order" {
+		t.Errorf("Source = %q", e.Source)
+	}
+	if e.Reason == "" {
+		t.Error("Reason should be populated")
+	}
+}
+
+// TestMFOrderRejectedAggregateID covers the OrderID-vs-synthetic-key
+// branching: when OrderID is non-empty (cancel paths, where the caller
+// supplied an existing MF order/SIP ID), the rejection joins the MF
+// aggregate stream. When OrderID is empty (place_order failure, no
+// broker-assigned ID), it falls back to "mf-rejected:<email>:<ts>".
+func TestMFOrderRejectedAggregateID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 26, 10, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		orderID string
+		email   string
+		want    string
+	}{
+		{"OrderID present joins existing MF stream", "MF-123", "trader@example.com", "MF-123"},
+		{"Empty OrderID with email falls back to synthetic", "", "trader@example.com",
+			"mf-rejected:trader@example.com:" + now.Format(time.RFC3339Nano)},
+		{"Empty everything falls back to unknown", "", "", "mf-rejected:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MFOrderRejectedAggregateID(tc.orderID, tc.email, now)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGTTRejectedEvent_Fields pins the field surface of the GTT
+// rejection event. Source distinguishes the three GTT mutation paths
+// ("place", "modify", "delete") so projector consumers can render
+// rejection timelines per surface.
+func TestGTTRejectedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := GTTRejectedEvent{
+		Email:     "trader@example.com",
+		TriggerID: 42,
+		Source:    "modify",
+		Reason:    "GTT_NOT_FOUND",
+		Timestamp: now,
+	}
+
+	if e.EventType() != "gtt.rejected" {
+		t.Errorf("EventType() = %q, want gtt.rejected", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.TriggerID != 42 {
+		t.Errorf("TriggerID = %d", e.TriggerID)
+	}
+	if e.Source != "modify" {
+		t.Errorf("Source = %q", e.Source)
+	}
+}
+
+// TestGTTRejectedAggregateID covers the TriggerID-vs-synthetic-key
+// branching. TriggerID is a Kite-assigned int64; when present
+// (modify/delete paths) the rejection joins the existing GTT aggregate
+// stream stringified to "<id>". When TriggerID is 0 (place rejection,
+// no broker ID issued), falls back to "gtt-rejected:<email>:<ts>".
+func TestGTTRejectedAggregateID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 26, 10, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		triggerID int
+		email     string
+		want      string
+	}{
+		{"TriggerID present joins GTT stream", 42, "trader@example.com", "42"},
+		{"Zero TriggerID with email falls back to synthetic", 0, "trader@example.com",
+			"gtt-rejected:trader@example.com:" + now.Format(time.RFC3339Nano)},
+		{"Zero everything falls back to unknown", 0, "", "gtt-rejected:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := GTTRejectedAggregateID(tc.triggerID, tc.email, now)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTrailingStopTriggeredEvent_Fields pins the trailing-stop trigger
+// event surface. Fires when evaluateOne actually modifies an SL order
+// — captures the trailing transition (oldStop -> newStop) and the
+// underlying SL OrderID so a forensic walk of the SL order ID sees
+// the trailing-stop modification inline with place/modify/cancel
+// transitions.
+func TestTrailingStopTriggeredEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := TrailingStopTriggeredEvent{
+		Email:          "trader@example.com",
+		TrailingStopID: "TS1",
+		OrderID:        "ORD-555",
+		Instrument:     NewInstrumentKey("NSE", "RELIANCE"),
+		Direction:      "long",
+		OldStop:        100.0,
+		NewStop:        110.0,
+		HighWaterMark:  120.0,
+		ModifyCount:    3,
+		Timestamp:      now,
+	}
+
+	if e.EventType() != "trailing_stop.triggered" {
+		t.Errorf("EventType() = %q, want trailing_stop.triggered", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.TrailingStopID != "TS1" {
+		t.Errorf("TrailingStopID = %q", e.TrailingStopID)
+	}
+	if e.OldStop != 100.0 || e.NewStop != 110.0 {
+		t.Errorf("OldStop=%v NewStop=%v", e.OldStop, e.NewStop)
+	}
+	if e.Direction != "long" {
+		t.Errorf("Direction = %q", e.Direction)
+	}
+}
+
+// TestTrailingStopAggregateID pins the natural aggregate key for
+// trailing-stop trigger events: keyed by TrailingStopID alone since
+// trailing IDs are uuid-derived and globally unique. Empty falls back
+// to "trailing-stop:unknown".
+func TestTrailingStopAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name           string
+		trailingStopID string
+		want           string
+	}{
+		{"Standard ID", "TS1", "TS1"},
+		{"Empty falls back to unknown", "", "trailing-stop:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TrailingStopAggregateID(tc.trailingStopID)
+			if got != tc.want {
+				t.Errorf("TrailingStopAggregateID(%q) = %q, want %q",
+					tc.trailingStopID, got, tc.want)
 			}
 		})
 	}

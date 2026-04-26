@@ -1362,3 +1362,133 @@ func TestCancelOrder_BrokerFailure_NilEventsDispatcherSafe(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cancel order")
 }
+
+// --- ES: GTTRejectedEvent dispatch on broker failure ---
+
+// TestPlaceGTT_BrokerErrorDispatchesGTTRejected verifies that when the
+// broker rejects a GTT placement, the use case dispatches a typed
+// GTTRejectedEvent with empty TriggerID (broker never assigned one),
+// Source="place", and the broker error preserved in Reason.
+func TestPlaceGTT_BrokerErrorDispatchesGTTRejected(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeGTTErr: errors.New("insufficient margin")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:           "trader@example.com",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		LastPrice:       domain.NewINR(2500.0),
+		TransactionType: "BUY",
+		Type:            "single",
+		TriggerValue:    2400.0,
+		Quantity:        10,
+		LimitPrice:      domain.NewINR(2390.0),
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "GTTRejectedEvent must fire on broker placement failure")
+	rej, ok := captured.(domain.GTTRejectedEvent)
+	require.True(t, ok, "captured event should be GTTRejectedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", rej.Email)
+	assert.Equal(t, 0, rej.TriggerID, "place rejection has no broker-assigned TriggerID")
+	assert.Equal(t, "place", rej.Source)
+	assert.Contains(t, rej.Reason, "insufficient margin")
+}
+
+// TestModifyGTT_BrokerErrorDispatchesGTTRejected verifies that modify
+// failures dispatch GTTRejectedEvent with TriggerID preserved (joins
+// the existing GTT aggregate stream) and Source="modify".
+func TestModifyGTT_BrokerErrorDispatchesGTTRejected(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{modifyGTTErr: errors.New("trigger inactive")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewModifyGTTUseCase(resolver, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email:        "trader@example.com",
+		TriggerID:    42,
+		Instrument:   domain.NewInstrumentKey("NSE", "RELIANCE"),
+		Type:         "single",
+		TriggerValue: 2450.0,
+		Quantity:     15,
+		LimitPrice:   domain.NewINR(2440.0),
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "GTTRejectedEvent must fire on broker modify failure")
+	rej, ok := captured.(domain.GTTRejectedEvent)
+	require.True(t, ok)
+	assert.Equal(t, 42, rej.TriggerID, "modify rejection preserves TriggerID for stream-join")
+	assert.Equal(t, "modify", rej.Source)
+	assert.Contains(t, rej.Reason, "trigger inactive")
+}
+
+// TestDeleteGTT_BrokerErrorDispatchesGTTRejected verifies that delete
+// failures dispatch GTTRejectedEvent with Source="delete".
+func TestDeleteGTT_BrokerErrorDispatchesGTTRejected(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{deleteGTTErr: errors.New("already triggered")}
+	resolver := &mockBrokerResolver{client: client}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewDeleteGTTUseCase(resolver, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
+		Email:     "trader@example.com",
+		TriggerID: 42,
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured)
+	rej, ok := captured.(domain.GTTRejectedEvent)
+	require.True(t, ok)
+	assert.Equal(t, 42, rej.TriggerID)
+	assert.Equal(t, "delete", rej.Source)
+	assert.Contains(t, rej.Reason, "already triggered")
+}
+
+// TestPlaceGTT_NilDispatcherSafe verifies the nil-dispatcher path on
+// the GTT rejection branch is safe — broker rejection still returns
+// the wrapped error without panicking on a nil Dispatch call.
+func TestPlaceGTT_NilDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeGTTErr: errors.New("RATE_LIMIT")}
+	resolver := &mockBrokerResolver{client: client}
+
+	uc := NewPlaceGTTUseCase(resolver, testLogger())
+	// Deliberately no SetEventDispatcher.
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:           "trader@example.com",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		TransactionType: "BUY",
+		Type:            "single",
+		Quantity:        10,
+		LimitPrice:      domain.NewINR(100.0),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "place gtt")
+}

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -864,6 +865,142 @@ func PaperOrderAggregateID(orderID string) string {
 		return "paper:unknown"
 	}
 	return orderID
+}
+
+// MFOrderRejectedEvent is emitted when a mutual-fund mutation fails at
+// the broker round-trip — distinct from real OrderRejectedEvent
+// (equity/derivatives) so projector consumers can filter MF surface
+// without parsing OrderID prefixes (Kite assigns separate ID
+// namespaces for MF orders, MF SIPs, and equity orders).
+//
+// Source distinguishes the four MF mutation paths:
+//
+//   - "place_order"  — PlaceMFOrder broker call failed (insufficient
+//                      funds, fund not allowed, market closed for MF).
+//   - "cancel_order" — CancelMFOrder broker call failed (already
+//                      processed, not found).
+//   - "place_sip"    — PlaceMFSIP broker call failed.
+//   - "cancel_sip"   — CancelMFSIP broker call failed.
+//
+// Aggregate-ID rule: when OrderID is non-empty (cancel paths, where
+// the caller supplied an existing MF order/SIP ID), the rejection
+// joins the MF aggregate stream rooted on that ID. When OrderID is
+// empty (place rejection — broker never assigned one), falls back to
+// the synthetic "mf-rejected:<email>:<rfc3339-nanos>" key so each
+// rejection lands in its own slot. Mirrors OrderRejectedAggregateID's
+// empty-ID handling.
+type MFOrderRejectedEvent struct {
+	Email     string
+	OrderID   string // MF order ID or SIP ID; empty for place_* failures
+	Source    string // "place_order" / "cancel_order" / "place_sip" / "cancel_sip"
+	Reason    string // broker error message, best-effort
+	Timestamp time.Time
+}
+
+func (e MFOrderRejectedEvent) EventType() string    { return "mf.order_rejected" }
+func (e MFOrderRejectedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// MFOrderRejectedAggregateID returns the natural aggregate key for
+// MFOrderRejectedEvent. Format mirrors OrderRejectedAggregateID:
+// non-empty OrderID joins the aggregate stream; empty OrderID +
+// non-empty email falls back to "mf-rejected:<email>:<rfc3339-nanos>";
+// pathological "neither" lands in "mf-rejected:unknown".
+func MFOrderRejectedAggregateID(orderID, email string, occurredAt time.Time) string {
+	if orderID != "" {
+		return orderID
+	}
+	if email == "" {
+		return "mf-rejected:unknown"
+	}
+	return "mf-rejected:" + email + ":" + occurredAt.UTC().Format(time.RFC3339Nano)
+}
+
+// GTTRejectedEvent is emitted when a GTT mutation fails at the broker
+// round-trip. Source distinguishes the three GTT mutation paths:
+//
+//   - "place"  — PlaceGTT broker call failed.
+//   - "modify" — ModifyGTT broker call failed (e.g. trigger inactive).
+//   - "delete" — DeleteGTT broker call failed (e.g. already triggered).
+//
+// Aggregate-ID rule: when TriggerID is non-zero (modify/delete paths,
+// where Kite assigned an int64 ID at GTT placement), the rejection
+// joins the existing GTT aggregate stream stringified to "<id>" — same
+// shape the success-path appendAuxEvent uses (kc/usecases/gtt_usecases.go).
+// When TriggerID is 0 (place rejection — broker never assigned one),
+// falls back to the synthetic "gtt-rejected:<email>:<rfc3339-nanos>" key.
+type GTTRejectedEvent struct {
+	Email     string
+	TriggerID int    // Kite-assigned GTT trigger ID; 0 for place failures
+	Source    string // "place" / "modify" / "delete"
+	Reason    string // broker error message, best-effort
+	Timestamp time.Time
+}
+
+func (e GTTRejectedEvent) EventType() string    { return "gtt.rejected" }
+func (e GTTRejectedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// GTTRejectedAggregateID returns the natural aggregate key for
+// GTTRejectedEvent. TriggerID is fmt.Sprintf'd with "%d" to match the
+// existing success-path aggregate ID format in
+// kc/usecases/gtt_usecases.go (which emits gtt.placed/modified/deleted
+// keyed by fmt.Sprintf("%d", triggerID)). Empty TriggerID + email
+// falls back to "gtt-rejected:<email>:<rfc3339-nanos>"; both empty
+// lands in "gtt-rejected:unknown".
+func GTTRejectedAggregateID(triggerID int, email string, occurredAt time.Time) string {
+	if triggerID != 0 {
+		return fmt.Sprintf("%d", triggerID)
+	}
+	if email == "" {
+		return "gtt-rejected:unknown"
+	}
+	return "gtt-rejected:" + email + ":" + occurredAt.UTC().Format(time.RFC3339Nano)
+}
+
+// TrailingStopTriggeredEvent is emitted when a trailing-stop fires —
+// i.e. evaluateOne in kc/alerts/trailing.go decides the SL order's
+// trigger price needs to move (long: HWM rose enough; short: HWM fell
+// enough) AND the post-modify Kite call succeeded. Captures the full
+// state transition (oldStop -> newStop, ModifyCount) plus the
+// underlying SL OrderID so a forensic walk of the SL order ID sees
+// trailing-stop modifications inline with place/modify/cancel events.
+//
+// Failures of the underlying ModifyOrder broker call don't fire this
+// event (the trailing stop's CurrentStop wasn't actually moved on the
+// broker side). A future TrailingStopRejectedEvent could close that
+// loop — flagged as follow-up.
+//
+// Aggregate-ID rule: keyed by TrailingStopID via
+// TrailingStopAggregateID. The trailing-stop ID is uuid-derived (8-char
+// prefix from kc/alerts/trailing.go Add()), stable across the
+// trailing-stop's full lifecycle (set -> N triggers -> cancel), so
+// projector consumers see the trigger sequence under one aggregate.
+type TrailingStopTriggeredEvent struct {
+	Email          string
+	TrailingStopID string
+	OrderID        string // the SL order being modified
+	Instrument     InstrumentKey
+	Direction      string  // "long" or "short"
+	OldStop        float64
+	NewStop        float64
+	HighWaterMark  float64 // best price seen since activation (post-update)
+	ModifyCount    int     // total modifications fired so far (post-increment)
+	Timestamp      time.Time
+}
+
+func (e TrailingStopTriggeredEvent) EventType() string    { return "trailing_stop.triggered" }
+func (e TrailingStopTriggeredEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// TrailingStopAggregateID returns the natural aggregate key for
+// trailing-stop trigger events. Keyed by TrailingStopID (uuid-derived
+// 8-char prefix from kc/alerts/trailing.go) — globally unique across
+// users, so no email prefix is needed. Empty falls back to
+// "trailing-stop:unknown" so malformed dispatches don't collide with
+// real trailing-stop rows.
+func TrailingStopAggregateID(trailingStopID string) string {
+	if trailingStopID == "" {
+		return "trailing-stop:unknown"
+	}
+	return trailingStopID
 }
 
 // --- Event dispatcher ---

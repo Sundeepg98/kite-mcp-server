@@ -379,6 +379,145 @@ func TestCancelMFSIP_BrokerError(t *testing.T) {
 	assert.ErrorContains(t, err, "cancel mf sip")
 }
 
+// --- ES: MFOrderRejectedEvent dispatch on broker failure ---
+//
+// Symmetric to OrderRejectedEvent on the equity path. Pre-MFOrderRejected,
+// MF broker failures logged and returned but emitted nothing — projector
+// consumers had no way to surface MF rejection timelines. Each of the
+// four MF mutation sites now emits a typed event with a Source tag.
+
+// TestPlaceMFOrder_BrokerErrorDispatchesMFOrderRejected covers the
+// place_order path: empty OrderID (broker never assigned), Source
+// "place_order", broker error preserved in Reason.
+func TestPlaceMFOrder_BrokerErrorDispatchesMFOrderRejected(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeMFErr: errors.New("MARKET_CLOSED")}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFOrderCommand{
+		Email: "trader@example.com", Tradingsymbol: "INF123",
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured, "MFOrderRejectedEvent must fire on broker placement failure")
+	rej, ok := captured.(domain.MFOrderRejectedEvent)
+	require.True(t, ok, "captured event should be MFOrderRejectedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", rej.Email)
+	assert.Empty(t, rej.OrderID, "place_order rejection has no broker-assigned OrderID")
+	assert.Equal(t, "place_order", rej.Source)
+	assert.Contains(t, rej.Reason, "MARKET_CLOSED")
+}
+
+// TestCancelMFOrder_BrokerErrorDispatchesMFOrderRejected covers the
+// cancel_order path: OrderID preserved (joins existing MF stream),
+// Source "cancel_order".
+func TestCancelMFOrder_BrokerErrorDispatchesMFOrderRejected(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{cancelMFErr: errors.New("ALREADY_PROCESSED")}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelMFOrderCommand{
+		Email: "trader@example.com", OrderID: "MFO-1",
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured)
+	rej, ok := captured.(domain.MFOrderRejectedEvent)
+	require.True(t, ok)
+	assert.Equal(t, "MFO-1", rej.OrderID, "cancel rejection preserves OrderID")
+	assert.Equal(t, "cancel_order", rej.Source)
+	assert.Contains(t, rej.Reason, "ALREADY_PROCESSED")
+}
+
+// TestPlaceMFSIP_BrokerErrorDispatchesMFOrderRejected covers the
+// place_sip path. Source "place_sip" lets projector consumers
+// distinguish SIP rejections from individual order rejections without
+// parsing OrderID prefixes (Kite returns separate ID namespaces).
+func TestPlaceMFSIP_BrokerErrorDispatchesMFOrderRejected(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeSIPErr: errors.New("MIN_AMOUNT")}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceMFSIPUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFSIPCommand{
+		Email: "trader@example.com", Tradingsymbol: "INF123", Amount: 500,
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured)
+	rej, ok := captured.(domain.MFOrderRejectedEvent)
+	require.True(t, ok)
+	assert.Empty(t, rej.OrderID)
+	assert.Equal(t, "place_sip", rej.Source)
+	assert.Contains(t, rej.Reason, "MIN_AMOUNT")
+}
+
+// TestCancelMFSIP_BrokerErrorDispatchesMFOrderRejected covers the
+// cancel_sip path: SIPID preserved as OrderID, Source "cancel_sip".
+func TestCancelMFSIP_BrokerErrorDispatchesMFOrderRejected(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{cancelSIPErr: errors.New("SIP_NOT_FOUND")}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_rejected", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelMFSIPUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelMFSIPCommand{
+		Email: "trader@example.com", SIPID: "SIP-1",
+	})
+
+	require.Error(t, err)
+	require.NotNil(t, captured)
+	rej, ok := captured.(domain.MFOrderRejectedEvent)
+	require.True(t, ok)
+	assert.Equal(t, "SIP-1", rej.OrderID)
+	assert.Equal(t, "cancel_sip", rej.Source)
+}
+
+// TestPlaceMFOrder_NilDispatcherSafe pins the nil-dispatcher path:
+// broker rejection without a wired dispatcher still returns the
+// wrapped error without panicking.
+func TestPlaceMFOrder_NilDispatcherSafe(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeMFErr: errors.New("RATE_LIMIT")}
+	uc := NewPlaceMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	// Deliberately no SetEventDispatcher.
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFOrderCommand{
+		Email: "trader@example.com", Tradingsymbol: "INF123",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "place mf order")
+}
+
 // ===========================================================================
 // Order Margins Tests
 // ===========================================================================

@@ -615,6 +615,12 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.Email)
 	case domain.PaperOrderRejectedEvent:
 		return audit.HashEmail(ev.Email)
+	case domain.MFOrderRejectedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.GTTRejectedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.TrailingStopTriggeredEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -713,6 +719,21 @@ func deriveAggregateID(e domain.Event) string {
 		// no email prefix needed. Empty OrderID (defence in depth) lands
 		// in "paper:unknown" rather than colliding with real rows.
 		return domain.PaperOrderAggregateID(ev.OrderID)
+	case domain.MFOrderRejectedEvent:
+		// Mirrors OrderRejectedAggregateID: non-empty OrderID joins
+		// the existing MF aggregate stream; empty falls back to
+		// synthetic "mf-rejected:<email>:<rfc3339-nanos>" key.
+		return domain.MFOrderRejectedAggregateID(ev.OrderID, ev.Email, ev.Timestamp)
+	case domain.GTTRejectedEvent:
+		// Non-zero TriggerID joins the existing GTT aggregate stream
+		// (matches the appendAuxEvent success path's "<id>" key shape);
+		// zero falls back to synthetic "gtt-rejected:<email>:<ts>".
+		return domain.GTTRejectedAggregateID(ev.TriggerID, ev.Email, ev.Timestamp)
+	case domain.TrailingStopTriggeredEvent:
+		// Keyed by TrailingStopID — uuid-derived 8-char prefix, globally
+		// unique across users. The trailing stop's full lifecycle (set
+		// -> N triggers -> cancel) replays under one aggregate stream.
+		return domain.TrailingStopAggregateID(ev.TrailingStopID)
 	default:
 		return "unknown"
 	}

@@ -23,7 +23,8 @@ func (e *EventingService) Dispatcher() *domain.EventDispatcher { return e.m.even
 // SetDispatcher sets the domain event dispatcher and subscribes the read-side
 // projector so order/alert/position events flow into the live aggregate maps.
 // Also wires the dispatcher into the session service so new MCP sessions
-// emit SessionCreatedEvent.
+// emit SessionCreatedEvent, and into the trailing-stop manager so
+// successful triggers emit TrailingStopTriggeredEvent.
 func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	e.m.eventDispatcher = d
 	if d != nil && e.m.projector != nil {
@@ -31,6 +32,13 @@ func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	}
 	if e.m.sessionSvc != nil {
 		e.m.sessionSvc.SetEventDispatcher(d)
+	}
+	// Trailing-stop trigger events flow through the same dispatcher so a
+	// forensic walk of the SL OrderID sees trailing modifications inline
+	// with place/modify/cancel transitions. Nil-safe: trailingStopMgr may
+	// be unset in DEV_MODE / no-SQLite configurations.
+	if e.m.trailingStopMgr != nil {
+		e.m.trailingStopMgr.SetEventDispatcher(d)
 	}
 }
 
