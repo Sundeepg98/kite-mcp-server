@@ -373,14 +373,14 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// In DEV_MODE (no real sessions), the resolver is still usable; the
 	// mock broker satisfies broker.Client the same way a real one does.
 	if resolver := kc.FillWatcherResolverFromSessionSvc(kcManager.SessionSvc()); resolver != nil {
-		fillWatcher := kc.NewFillWatcher(kc.FillWatcherConfig{
+		app.fillWatcher = kc.NewFillWatcher(kc.FillWatcherConfig{
 			Resolver:   resolver,
 			Dispatcher: eventDispatcher,
 			Logger:     app.logger,
 			// Clock defaults to testutil.RealClock{}; poll/budget use
 			// production defaults (5s / 60s).
 		})
-		fillWatcher.Start()
+		app.fillWatcher.Start()
 		app.logger.Info("OrderFilledEvent fill-watcher wired (stopgap pre-websocket)")
 	}
 
@@ -648,6 +648,16 @@ func (app *App) registerLifecycle(kcManager *kc.Manager) {
 	app.lifecycle.Append("paper_monitor", func() error {
 		if app.paperMonitor != nil {
 			app.paperMonitor.Stop()
+		}
+		return nil
+	})
+	// T3.B85: fill_watcher poll goroutines exit promptly via Stop signal
+	// instead of orphaning for up to MaxDuration (60s default). Phase C
+	// runs after HTTP drain so no new OrderPlacedEvents will spawn new
+	// pollers while we're stopping.
+	app.lifecycle.Append("fill_watcher", func() error {
+		if app.fillWatcher != nil {
+			app.fillWatcher.Stop()
 		}
 		return nil
 	})

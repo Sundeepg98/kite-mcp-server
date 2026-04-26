@@ -328,3 +328,64 @@ func TestFillWatcher_SubscribesToOrderPlacedEvent(t *testing.T) {
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&filledCount))
 }
+
+// TestFillWatcher_Stop_TerminatesInFlightPolls verifies that Stop() signals
+// every in-flight pollLoop to exit promptly, even when the broker is
+// returning non-terminal statuses (so the loop would otherwise wait the
+// full MaxDuration). This unblocks lifecycle.Append("fill_watcher", ...)
+// in app/wire.go: graceful shutdown can now wind down the watcher
+// instead of orphaning pollers for up to 60s.
+func TestFillWatcher_Stop_TerminatesInFlightPolls(t *testing.T) {
+	t.Parallel()
+	dispatcher := domain.NewEventDispatcher()
+	fbc := &fakeOrderHistoryClient{
+		// Snapshot returns a non-terminal OPEN status forever, so without
+		// Stop() the pollLoop would run until MaxDuration expires.
+		snapshots: [][]broker.Order{{{OrderID: "ORD1", Status: "OPEN", FilledQuantity: 0}}},
+	}
+	clock := testutil.NewFakeClock(time.Date(2026, 4, 26, 9, 0, 0, 0, time.UTC))
+
+	w := NewFillWatcher(FillWatcherConfig{
+		Broker:       fbc,
+		Dispatcher:   dispatcher,
+		Logger:       newFillWatcherTestLogger(),
+		Clock:        clock,
+		PollInterval: 5 * time.Second,
+		MaxDuration:  60 * time.Second,
+	})
+	w.Watch(domain.OrderPlacedEvent{Email: "u@t.com", OrderID: "ORD1", Timestamp: clock.Now()})
+
+	// Stop should signal the pollLoop to exit before the budget runs out.
+	w.Stop()
+
+	// Wait must return promptly because Stop signalled exit. Use a short
+	// timeout — if Stop didn't wire through, this hangs and test fails.
+	done := make(chan struct{})
+	go func() {
+		w.Wait(5 * time.Second)
+		close(done)
+	}()
+	select {
+	case <-done:
+		// ok — pollLoop exited cleanly
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop() did not terminate in-flight pollLoop within 3s")
+	}
+}
+
+// TestFillWatcher_Stop_Idempotent verifies repeated Stop() calls do not
+// panic on close-of-closed-channel. Defensive idempotency convention.
+func TestFillWatcher_Stop_Idempotent(t *testing.T) {
+	t.Parallel()
+	dispatcher := domain.NewEventDispatcher()
+	w := NewFillWatcher(FillWatcherConfig{
+		Broker:     &fakeOrderHistoryClient{snapshots: [][]broker.Order{{}}},
+		Dispatcher: dispatcher,
+		Logger:     newFillWatcherTestLogger(),
+		Clock:      testutil.NewFakeClock(time.Now()),
+	})
+	// Three Stop() calls in quick succession must not panic.
+	w.Stop()
+	w.Stop()
+	w.Stop()
+}

@@ -137,6 +137,13 @@ type FillWatcher struct {
 	// wg tracks goroutines so Wait() can synchronise in tests without
 	// resorting to blanket time.Sleeps.
 	wg sync.WaitGroup
+
+	// stop is closed by Stop() to signal every in-flight pollLoop to
+	// exit promptly. Without this signal, a poll on a non-terminal
+	// order would block until MaxDuration (60s default) — too slow for
+	// graceful shutdown. stopOnce guards close-of-closed-channel.
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // NewFillWatcher constructs a FillWatcher from config. Callers must
@@ -170,7 +177,22 @@ func NewFillWatcher(cfg FillWatcherConfig) *FillWatcher {
 		clock:        clock,
 		pollInterval: pollInterval,
 		maxDuration:  maxDuration,
+		stop:         make(chan struct{}),
 	}
+}
+
+// Stop signals every in-flight pollLoop goroutine to exit promptly.
+// Idempotent — safe to call from both lifecycle.Shutdown and direct
+// test cleanup. After Stop returns, callers should Wait() to confirm
+// goroutines have actually exited (channel close is async).
+//
+// Stop does NOT unsubscribe from the dispatcher; callers wanting full
+// teardown should drop the dispatcher reference (or use a fresh
+// dispatcher per server instance).
+func (w *FillWatcher) Stop() {
+	w.stopOnce.Do(func() {
+		close(w.stop)
+	})
 }
 
 // Start subscribes the watcher to domain.OrderPlacedEvent so every
@@ -257,6 +279,16 @@ func (w *FillWatcher) pollLoop(placed domain.OrderPlacedEvent, ticker testutil.T
 
 	for {
 		select {
+		case <-w.stop:
+			// Graceful shutdown signalled — exit before the next poll
+			// rather than waiting for the full MaxDuration budget to
+			// expire. setupGracefulShutdown's 10s drain timeout is
+			// shorter than the watcher's 60s default budget.
+			w.logger.Debug("FillWatcher: stop signalled, exiting poll loop",
+				"order_id", placed.OrderID,
+				"email", placed.Email,
+			)
+			return
 		case <-ticker.C():
 			// Budget check runs before each poll — we refuse to issue a
 			// new HTTP call once the wall-clock (fake or real) exceeds

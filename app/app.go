@@ -106,6 +106,12 @@ type App struct {
 	// nil when the eventStore wasn't wired (DevMode without DB) or
 	// InitOutboxTable failed. Stopped during graceful shutdown.
 	outboxPump *eventsourcing.OutboxPump
+	// fillWatcher polls broker.GetOrderHistory for OrderPlacedEvents
+	// and dispatches OrderFilledEvent on terminal completion. nil when
+	// no SessionSvc resolver could be wired (DEV_MODE w/o credentials).
+	// Stopped via fillWatcher.Stop() during graceful shutdown to avoid
+	// orphaning poll goroutines for up to MaxDuration (60s default).
+	fillWatcher *kc.FillWatcher
 }
 
 // TriggerShutdown initiates a graceful shutdown without requiring an
