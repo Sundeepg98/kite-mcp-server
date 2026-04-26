@@ -26,12 +26,17 @@ func isAlphanumeric(s string) bool {
 }
 
 // dashboardBaseURL returns the validated base URL for the dashboard, or empty string.
-func dashboardBaseURL(manager *kc.Manager) string {
+//
+// Phase 3a Batch 6: cfg is the narrow port surface this function actually
+// needs (IsLocalMode + ExternalURL). *kc.Manager satisfies
+// kc.AppConfigProvider, so existing callers (production + tests) compile
+// unchanged — narrowing is signature-only, no semantic change.
+func dashboardBaseURL(cfg kc.AppConfigProvider) string {
 	var base string
-	if manager.IsLocalMode() {
+	if cfg.IsLocalMode() {
 		base = "http://127.0.0.1:8080"
 	} else {
-		base = manager.ExternalURL()
+		base = cfg.ExternalURL()
 	}
 	if base == "" {
 		return ""
@@ -49,8 +54,10 @@ func dashboardBaseURL(manager *kc.Manager) string {
 }
 
 // dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
-func dashboardLink(manager *kc.Manager) string {
-	base := dashboardBaseURL(manager)
+// Phase 3a Batch 6: cfg narrowed to AppConfigProvider — same shape as
+// dashboardBaseURL above.
+func dashboardLink(cfg kc.AppConfigProvider) string {
+	base := dashboardBaseURL(cfg)
 	if base == "" {
 		return ""
 	}
@@ -58,8 +65,9 @@ func dashboardLink(manager *kc.Manager) string {
 }
 
 // dashboardPageURL returns the full dashboard URL for a specific page path (e.g. "/dashboard", "/dashboard/activity").
-func dashboardPageURL(manager *kc.Manager, pagePath string) string {
-	base := dashboardBaseURL(manager)
+// Phase 3a Batch 6: cfg narrowed to AppConfigProvider.
+func dashboardPageURL(cfg kc.AppConfigProvider, pagePath string) string {
+	base := dashboardBaseURL(cfg)
 	if base == "" {
 		return ""
 	}

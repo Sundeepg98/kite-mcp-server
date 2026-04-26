@@ -147,7 +147,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Goroutines:     goroutines,
 			GCPauseMs:      gcPauseMs,
 			DBSizeMB:       dbSizeMB,
-			ActiveSessions: manager.GetActiveSessionCount(),
+			ActiveSessions: handler.deps.Sessions.GetActiveSessionCount(),
 			Period:         ucResult.Period,
 			TotalCalls:     stats.TotalCalls,
 			ErrorCount:     stats.ErrorCount,

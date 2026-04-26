@@ -117,7 +117,12 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 // buildTradingContext processes the raw API responses into a structured TradingContext.
 // Consumes the typed *usecases.TradingContextResult directly so broker types flow
 // end-to-end without map[string]any reboxing at the tool layer.
-func buildTradingContext(data *usecases.TradingContextResult, manager *kc.Manager, email string) *TradingContext {
+//
+// Phase 3a Batch 6: alertProvider is the narrow port surface this function
+// actually needs (single AlertStore() accessor). *kc.Manager satisfies
+// kc.AlertStoreProvider, so existing callers compile unchanged — narrowing
+// is signature-only, no semantic change.
+func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.AlertStoreProvider, email string) *TradingContext {
 	tc := &TradingContext{
 		Warnings: make([]string, 0),
 	}
@@ -265,8 +270,8 @@ func buildTradingContext(data *usecases.TradingContextResult, manager *kc.Manage
 	}
 
 	// Process alerts from alert store
-	if email != "" && manager.AlertStore() != nil {
-		alertList := manager.AlertStore().List(email)
+	if email != "" && alertProvider.AlertStore() != nil {
+		alertList := alertProvider.AlertStore().List(email)
 		var activeCount int
 		details := make([]alertSummary, 0)
 

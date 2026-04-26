@@ -96,7 +96,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				DailyLimit:  fmt.Sprintf("%d orders/day", riskguard.SystemDefaults.MaxOrdersPerDay),
 			}
 
-			if guard := manager.RiskGuard(); guard != nil {
+			if guard := handler.RiskGuard(); guard != nil {
 				limits := guard.GetEffectiveLimits(email)
 				rgSection.OrderValueCap = formatINR(limits.MaxSingleOrderINR)
 				rgSection.DailyLimit = fmt.Sprintf("%d orders/day", limits.MaxOrdersPerDay)

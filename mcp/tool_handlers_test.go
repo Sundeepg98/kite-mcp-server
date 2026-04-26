@@ -1529,6 +1529,63 @@ func TestToolHandler_TrackCallsNoMetrics(t *testing.T) {
 	handler.trackToolError(context.Background(), "test_tool", "test_error")
 }
 
+// ── Phase 3a Batch 6: narrow accessors on *ToolHandler ──────────────────
+//
+// These accessors thread the corresponding ToolHandlerDeps provider through
+// to the per-handler scope, replacing direct h.manager.X() reaches.
+// Behaviour-preserving: each accessor is a 1-line passthrough to the
+// already-wired deps field; all tests below assert the returned pointer
+// matches the manager's accessor.
+
+func TestToolHandler_RiskGuardAccessor_ReturnsManagerRiskGuard(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	handler := NewToolHandler(mgr)
+	assert.Same(t, mgr.RiskGuard(), handler.RiskGuard(),
+		"handler.RiskGuard() must return the same pointer as manager.RiskGuard()")
+}
+
+func TestToolHandler_AlertStoreAccessor_ReturnsManagerAlertStore(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	handler := NewToolHandler(mgr)
+	// Allow nil — the accessor MUST NOT panic when the underlying store is nil
+	// (DevMode without ALERT_DB_PATH leaves it unset).
+	got := handler.AlertStore()
+	want := mgr.AlertStore()
+	if got == nil && want == nil {
+		return
+	}
+	assert.Same(t, want, got,
+		"handler.AlertStore() must return the same pointer as manager.AlertStore()")
+}
+
+func TestToolHandler_AlertDBAccessor_ReturnsManagerAlertDB(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	handler := NewToolHandler(mgr)
+	got := handler.AlertDB()
+	want := mgr.AlertDB()
+	if got == nil && want == nil {
+		return
+	}
+	assert.Same(t, want, got,
+		"handler.AlertDB() must return the same pointer as manager.AlertDB()")
+}
+
+func TestToolHandler_WatchlistStoreAccessor_ReturnsManagerWatchlistStore(t *testing.T) {
+	t.Parallel()
+	mgr := newDevModeManager(t)
+	handler := NewToolHandler(mgr)
+	got := handler.WatchlistStore()
+	want := mgr.WatchlistStore()
+	if got == nil && want == nil {
+		return
+	}
+	assert.Same(t, want, got,
+		"handler.WatchlistStore() must return the same pointer as manager.WatchlistStore()")
+}
+
 
 // ── Scheduler.MarketStatus ───────────────────────────────────────────────
 func TestSchedulerMarketStatus(t *testing.T) {

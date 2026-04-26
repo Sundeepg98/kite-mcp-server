@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ports"
+	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
 // ToolHandlerDeps holds the injected services for ToolHandler, replacing
@@ -126,4 +128,45 @@ func (h *ToolHandler) QueryBus() *cqrs.InMemoryBus {
 // can log without reaching through h.manager.Logger.
 func (h *ToolHandler) Logger() *slog.Logger {
 	return h.deps.Logger
+}
+
+// RiskGuard returns the configured risk guard, or nil if disabled. Phase
+// 3a Batch 6: prefer over h.manager.RiskGuard() so handlers depend on the
+// narrow RiskGuardProvider port through ToolHandlerDeps.
+func (h *ToolHandler) RiskGuard() *riskguard.Guard {
+	if h.deps.RiskGuard == nil {
+		return nil
+	}
+	return h.deps.RiskGuard.RiskGuard()
+}
+
+// AlertStore returns the per-user alert store, or nil if not configured.
+// Phase 3a Batch 6: prefer over h.manager.AlertStore() so handlers depend
+// on the narrow AlertStoreProvider port through ToolHandlerDeps.
+func (h *ToolHandler) AlertStore() kc.AlertStoreInterface {
+	if h.deps.Alerts == nil {
+		return nil
+	}
+	return h.deps.Alerts.AlertStore()
+}
+
+// AlertDB returns the optional SQLite database used by the alerts subsystem.
+// Phase 3a Batch 6: prefer over h.manager.AlertDB() so handlers depend on
+// the narrow AlertDBProvider port through ToolHandlerDeps.
+func (h *ToolHandler) AlertDB() *alerts.DB {
+	if h.deps.AlertDB == nil {
+		return nil
+	}
+	return h.deps.AlertDB.AlertDB()
+}
+
+// WatchlistStore returns the per-user watchlist store, or nil if not
+// configured. Phase 3a Batch 6: prefer over h.manager.WatchlistStore() so
+// handlers depend on the narrow WatchlistStoreProvider port through
+// ToolHandlerDeps.
+func (h *ToolHandler) WatchlistStore() kc.WatchlistStoreInterface {
+	if h.deps.Watchlist == nil {
+		return nil
+	}
+	return h.deps.Watchlist.WatchlistStore()
 }

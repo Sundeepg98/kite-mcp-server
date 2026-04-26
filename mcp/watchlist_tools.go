@@ -532,8 +532,12 @@ func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 // --- Helper functions ---
 
 // resolveWatchlist finds a watchlist by ID or name for the given user.
-func resolveWatchlist(manager *kc.Manager, email, ref string) *watchlist.Watchlist {
-	store := manager.WatchlistStore()
+//
+// Phase 3a Batch 6: provider is the narrow port surface this function
+// actually needs (single WatchlistStore() accessor). *kc.Manager satisfies
+// kc.WatchlistStoreProvider, so existing callers compile unchanged.
+func resolveWatchlist(provider kc.WatchlistStoreProvider, email, ref string) *watchlist.Watchlist {
+	store := provider.WatchlistStore()
 	// Try by name first (more user-friendly)
 	if wl := store.FindWatchlistByName(email, ref); wl != nil {
 		return wl
