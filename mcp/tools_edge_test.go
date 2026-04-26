@@ -298,6 +298,7 @@ func TestGetWatchlist_Empty_FullManager(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWatchlist_AddRemove_FullManager(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	email := "wlcycle@example.com"
 
@@ -440,6 +441,7 @@ func TestRegisterAppResources_FullManager(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDeleteMyAccount_FullManager(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	email := "deleteme@example.com"
 
@@ -710,6 +712,7 @@ func TestGetWatchlist_WithLTP_FullManager(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPaperTrading_EnableStatusReset_FullManager(t *testing.T) {
+	t.Parallel()
 	mgr, _ := newFullDevModeManager(t)
 	email := "paper-ops@example.com"
 
