@@ -71,38 +71,55 @@ type ToolHandler struct {
 // NewToolHandler creates a new tool handler, extracting focused interfaces
 // from the given manager. Individual tool files can still access h.manager
 // until they are migrated.
+//
+// Investment K (per .research/agent-concurrency-decoupling-plan.md §K):
+// the ToolHandlerDeps struct is populated by composing five per-context
+// builders (session_deps.go / alert_deps.go / order_deps.go / admin_deps.go
+// / read_deps.go). Adding a new field for a single bounded context now
+// only touches that context's file; this constructor's body is stable.
+// The unified struct itself remains so existing tool code reading
+// h.deps.X keeps compiling unchanged.
 func NewToolHandler(manager *kc.Manager) *ToolHandler {
+	sd := newSessionDeps(manager)
+	ad := newAlertDeps(manager)
+	od := newOrderDeps(manager)
+	mn := newAdminDeps(manager)
+	rd := newReadDeps(manager)
 	return &ToolHandler{
 		manager: manager,
 		deps: ToolHandlerDeps{
-			Logger:      manager.Logger,
-			TokenStore:  manager.TokenStore(),
-			UserStore:   manager.UserStore(),
-			Sessions:    manager,
-			Credentials: manager,
-			Metrics:     manager,
-			Config:      manager,
-			// Narrow providers — *kc.Manager satisfies every one.
-			Tokens:         manager,
-			CredStore:      manager,
-			Alerts:         manager,
-			Telegram:       manager,
-			Watchlist:      manager,
-			Users:          manager,
-			Registry:       manager,
-			Audit:          manager,
-			Billing:        manager,
-			Ticker:         manager,
-			Paper:          manager,
-			Instruments:    manager,
-			AlertDB:        manager,
-			RiskGuard:      manager,
-			MCPServer:      manager,
-			BrokerResolver: manager,
-			TrailingStop:   manager,
-			Events:         manager,
-			CommandBusP:    manager,
-			QueryBusP:      manager,
+			// SessionDepsFields
+			Sessions:    sd.Sessions,
+			Credentials: sd.Credentials,
+			UserStore:   sd.UserStore,
+			TokenStore:  sd.TokenStore,
+			Tokens:      sd.Tokens,
+			CredStore:   sd.CredStore,
+			Users:       sd.Users,
+			// AlertDepsFields
+			Alerts:       ad.Alerts,
+			Telegram:     ad.Telegram,
+			AlertDB:      ad.AlertDB,
+			TrailingStop: ad.TrailingStop,
+			// OrderDepsFields
+			RiskGuard:      od.RiskGuard,
+			BrokerResolver: od.BrokerResolver,
+			Paper:          od.Paper,
+			Events:         od.Events,
+			// AdminDepsFields
+			Registry:  mn.Registry,
+			Audit:     mn.Audit,
+			Billing:   mn.Billing,
+			MCPServer: mn.MCPServer,
+			// ReadDepsFields
+			Logger:      rd.Logger,
+			Metrics:     rd.Metrics,
+			Config:      rd.Config,
+			CommandBusP: rd.CommandBusP,
+			QueryBusP:   rd.QueryBusP,
+			Watchlist:   rd.Watchlist,
+			Ticker:      rd.Ticker,
+			Instruments: rd.Instruments,
 		},
 	}
 }
