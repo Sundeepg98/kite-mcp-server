@@ -70,39 +70,41 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
 	}
 
+	// Store reference for template data
+	app.kcManager = kcManager
+
+	// Register lifecycle stops up front. Each closure nil-checks its target
+	// field at Shutdown time, so registering before the workers are wired
+	// is safe — and registering early lets the success-defer below collapse
+	// to a single lifecycle.Shutdown() call. T2.3: closes 5 leak holes
+	// (telegram_bot, oauth_handler, invitation_cleanup, rate_limiters,
+	// metrics) that the prior 7-line manual unwind missed because they
+	// hadn't been added to the defer when those workers were introduced.
+	app.registerLifecycle(kcManager)
+
 	// Track whether initializeServices returns a live manager or one of its
 	// error paths. Without this, a failure AFTER kcManager construction
 	// (e.g., the "audit trail required in production" guard below) leaks
 	// the Kite manager's background goroutines AND any app-level workers
 	// (scheduler, audit, paperMonitor, hashPublisher) that were wired
 	// before the failure. Callers cannot reach Shutdown on a nil return.
+	//
+	// Phase A scheduler+hashPublisher run inline (block new work before
+	// any in-flight drain — same posture as setupGracefulShutdown). Phase
+	// C is owned by the lifecycle manager — sync.Once-guarded, idempotent
+	// vs setupGracefulShutdown which calls lifecycle.Shutdown() too.
 	success := false
 	defer func() {
 		if !success {
-			// Tear down app-level workers first (mirror setupGracefulShutdown
-			// order), then the manager last. Every Stop/Shutdown is nil-safe.
 			if app.scheduler != nil {
 				app.scheduler.Stop()
 			}
 			if app.hashPublisherCancel != nil {
 				app.hashPublisherCancel()
 			}
-			if app.outboxPump != nil {
-				app.outboxPump.Stop()
-			}
-			if app.auditStore != nil {
-				app.auditStore.Stop()
-			}
-			if app.paperMonitor != nil {
-				app.paperMonitor.Stop()
-			}
-			app.stopRateLimitReload()
-			kcManager.Shutdown()
+			app.lifecycle.Shutdown()
 		}
 	}()
-
-	// Store reference for template data
-	app.kcManager = kcManager
 
 	// Initialize the status template early for the status page
 	if err := app.initStatusPageTemplate(); err != nil {
@@ -567,18 +569,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Initialize scheduled Telegram briefings (morning + daily P&L).
 	app.initScheduler(kcManager)
 
-	// Register graceful-shutdown order with the lifecycle manager. Order
-	// here mirrors the historical setupGracefulShutdown sequence in
-	// app/http.go:75-141: scheduler first, hash-publisher next, then
-	// in-flight drains (outbox + audit), then per-component teardowns.
-	// LifecycleManager.Shutdown() runs these in append order via the
-	// success-defer below AND from setupGracefulShutdown after the HTTP
-	// server has drained — sync.Once-guarded, safe to call from both.
-	//
-	// New workers added in future commits should register here, NOT in
-	// the (4 historical) hand-maintained shutdown blocks. See
-	// app/lifecycle.go for the full rationale.
-	app.registerLifecycle(kcManager)
+	// T2.3: registerLifecycle is now called UP FRONT (right after the
+	// kcManager allocation) so the success-defer can collapse to a single
+	// lifecycle.Shutdown() call. This closes 5 leak holes (telegram_bot,
+	// oauth_handler, invitation_cleanup, rate_limiters, metrics) that the
+	// prior 7-line manual unwind missed because workers added after the
+	// initial defer were never backfilled into it.
 
 	success = true
 	return kcManager, mcpServer, nil
