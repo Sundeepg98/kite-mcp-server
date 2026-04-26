@@ -113,8 +113,8 @@ func TestToolCache_GetExpired(t *testing.T) {
 }
 
 func TestHookMiddleware_AllowsExecution(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 
 	hookCalled := false
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
@@ -136,8 +136,8 @@ func TestHookMiddleware_AllowsExecution(t *testing.T) {
 }
 
 func TestHookMiddleware_BlocksExecution(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		return errors.New("blocked by policy")
@@ -160,8 +160,8 @@ func TestHookMiddleware_BlocksExecution(t *testing.T) {
 }
 
 func TestHookMiddleware_RunsAfterHooks(t *testing.T) {
-	ClearHooks()
-	defer ClearHooks()
+	t.Parallel()
+	LockDefaultRegistryForTest(t)
 
 	afterCalled := false
 	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
@@ -686,8 +686,7 @@ func TestSessionType_DefaultUnknown(t *testing.T) {
 
 func TestHookMiddleware_BlocksOnError(t *testing.T) {
 	t.Parallel()
-	// Save and restore hooks
-	defer ClearHooks()
+	LockDefaultRegistryForTest(t)
 
 	OnBeforeToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
 		if toolName == "blocked_tool" {
@@ -706,7 +705,7 @@ func TestHookMiddleware_BlocksOnError(t *testing.T) {
 
 func TestHookMiddleware_AfterHooks(t *testing.T) {
 	t.Parallel()
-	defer ClearHooks()
+	LockDefaultRegistryForTest(t)
 
 	called := false
 	OnAfterToolExecution(func(ctx context.Context, toolName string, args map[string]interface{}) error {
