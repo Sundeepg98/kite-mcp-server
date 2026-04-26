@@ -1,0 +1,47 @@
+name: DR Drill (R2 Restore Validation)
+# Monthly cron exercising scripts/dr-drill.sh against the live Litestream
+# replica on Cloudflare R2. Validates that the backup chain (SQLite WAL →
+# Litestream → R2 → restore) is healthy without waiting for an outage.
+#
+# Satisfies NIST CSF 2.0 "Recover" function (PR.IP-9 / RC.RP) — periodic
+# evidence that backups are recoverable, not just present. See
+# docs/nist-csf-mapping.md for the control mapping.
+#
+# Failure → workflow fails → branch protection / notification fires.
+# A clean monthly run is the audit-evidence trail.
+
+on:
+  schedule:
+    # 1st of each month at 03:30 UTC (09:00 IST). Outside Indian market
+    # hours so a transient R2 issue doesn't coincide with order-flow.
+    - cron: '30 3 1 * *'
+  workflow_dispatch: # manual trigger for ad-hoc verification
+
+jobs:
+  dr-drill:
+    name: dr-drill
+    runs-on: ubuntu-latest
+    # Requires R2 secrets configured at repo level. Skipped on forks
+    # because secrets do not propagate.
+    if: ${{ github.repository == 'Sundeepg98/kite-mcp-server' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Litestream
+        run: |
+          curl -sSL https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin
+          litestream version
+
+      - name: Install sqlite3
+        run: sudo apt-get install -y sqlite3
+
+      - name: Run DR drill
+        env:
+          LITESTREAM_R2_ACCOUNT_ID: ${{ secrets.LITESTREAM_R2_ACCOUNT_ID }}
+          LITESTREAM_BUCKET: ${{ secrets.LITESTREAM_BUCKET }}
+          LITESTREAM_ACCESS_KEY_ID: ${{ secrets.LITESTREAM_ACCESS_KEY_ID }}
+          LITESTREAM_SECRET_ACCESS_KEY: ${{ secrets.LITESTREAM_SECRET_ACCESS_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DR_CHAT_ID: ${{ secrets.TELEGRAM_DR_CHAT_ID }}
+        run: bash scripts/dr-drill.sh
