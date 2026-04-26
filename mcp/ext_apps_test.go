@@ -36,6 +36,7 @@ func (s *mockUIClientSession) SetClientCapabilities(c gomcp.ClientCapabilities) 
 }
 
 func TestWithAppUI(t *testing.T) {
+	t.Parallel()
 	t.Run("sets flat _meta ui/resourceUri key", func(t *testing.T) {
 		tool := gomcp.NewTool("test_tool", gomcp.WithDescription("test"))
 		result := withAppUI(tool, "ui://kite-mcp/portfolio")
@@ -100,6 +101,7 @@ func TestWithAppUI(t *testing.T) {
 }
 
 func TestResourceURIForTool(t *testing.T) {
+	t.Parallel()
 	t.Run("portfolio tools return portfolio URI", func(t *testing.T) {
 		portfolioTools := []string{
 			"get_holdings", "get_positions", "get_margins", "get_profile",
@@ -160,6 +162,7 @@ func TestResourceURIForTool(t *testing.T) {
 }
 
 func TestPagePathToResourceURI(t *testing.T) {
+	t.Parallel()
 	t.Run("all toolDashboardPage paths have a resource URI", func(t *testing.T) {
 		// /admin/ops is admin-only and intentionally has no MCP App widget
 		skipPaths := map[string]bool{"/admin/ops": true}
@@ -183,6 +186,7 @@ func TestPagePathToResourceURI(t *testing.T) {
 }
 
 func TestAppResources(t *testing.T) {
+	t.Parallel()
 	t.Run("all app resources have valid template files", func(t *testing.T) {
 		for _, res := range appResources {
 			data, err := templates.FS.ReadFile(res.TemplateFile)
@@ -220,6 +224,7 @@ func TestAppResources(t *testing.T) {
 }
 
 func TestInjectData(t *testing.T) {
+	t.Parallel()
 	t.Run("replaces placeholder with JSON data", func(t *testing.T) {
 		html := `<script>window.__DATA__ = "__INJECTED_DATA__";</script>`
 		data := map[string]any{"holdings": []string{"RELIANCE"}}
@@ -275,12 +280,14 @@ func TestInjectData(t *testing.T) {
 }
 
 func TestResourceMIMEType(t *testing.T) {
+	t.Parallel()
 	t.Run("MIME type matches MCP Apps spec", func(t *testing.T) {
 		assert.Equal(t, "text/html;profile=mcp-app", ResourceMIMEType)
 	})
 }
 
 func TestCSSInjection(t *testing.T) {
+	t.Parallel()
 	t.Run("replaces placeholder with CSS content", func(t *testing.T) {
 		html := `<style>/*__INJECTED_CSS__*/
 .custom { color: red; }</style>`
@@ -319,6 +326,7 @@ func TestCSSInjection(t *testing.T) {
 // -------------------------------------------------------------------------
 
 func TestUICapabilityExtensionKey(t *testing.T) {
+	t.Parallel()
 	t.Run("matches MCP Apps spec extension key", func(t *testing.T) {
 		assert.Equal(t, "io.modelcontextprotocol/ui", UICapabilityExtensionKey)
 	})
@@ -384,6 +392,7 @@ func TestClientSupportsUI(t *testing.T) {
 }
 
 func TestStripUIResourceURIFromTools(t *testing.T) {
+	t.Parallel()
 	t.Run("removes ui/resourceUri from _meta and preserves siblings", func(t *testing.T) {
 		tool1 := gomcp.NewTool("t1", gomcp.WithDescription("x"))
 		tool1.Meta = &gomcp.Meta{AdditionalFields: map[string]any{
@@ -449,6 +458,7 @@ func TestStripUIResourceURIFromTools(t *testing.T) {
 }
 
 func TestUIMetadataGating_JSONOutput(t *testing.T) {
+	t.Parallel()
 	// End-to-end: a tool tagged via withAppUI, then run through the gating
 	// strip, must serialize without the ui/resourceUri key in _meta.
 	t.Run("ungated tool retains ui/resourceUri in serialized _meta", func(t *testing.T) {
