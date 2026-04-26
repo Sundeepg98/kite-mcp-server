@@ -257,3 +257,61 @@ The hover proof is decisive: gopls returns a populated `result.contents.value` o
 - [claude-contrib/claude-languages](https://github.com/claude-contrib/claude-languages) — marketplace LSP plugin org, MIT, golang/rust/terraform plugins, last push 2026-04-23
 - LSP 3.17 spec: [textDocument/didOpen](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen), [workspace/symbol](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_symbol)
 - Empirical evidence from this session: bridge wire-log captured at `C:/Users/Dell/AppData/Local/Temp/wsl-lsp-bridge.log` showing gopls "Error loading workspace folders" + cclsp's silent fallback to `[]` for diagnostics
+
+## Diagnostic publishing asymmetry — root cause + fix (2026-04-26)
+
+**User-observed asymmetry**: pyright auto-pushed `<new-diagnostics>` system-reminders to the orchestrator on `bad.py`; gopls did not on `bad.go`. `mcp__cclsp__get_hover` worked for both, proving gopls was indexed; only diagnostic-surfacing was broken.
+
+**Root cause**: drive-letter casing + colon-encoding bug in the bridge's Linux→Windows URI rewrite. Decisive wire-log evidence captured by hooking `process.stdout.write` post-transform:
+
+| Hop | URI emitted |
+|---|---|
+| cclsp → bridge (initialize, didOpen, etc.) | `file:///D:/Sundeep/projects/lsp-test/bad.go` (uppercase, literal colon — Node `pathToFileURL` form) |
+| gopls → bridge (publishDiagnostics) | `file:///mnt/d/Sundeep/projects/lsp-test/bad.go` (Linux form) |
+| bridge → cclsp (post-transform) before fix | `file:///d%3A/Sundeep/projects/lsp-test/bad.go` (LOWERCASE drive + percent-encoded colon) |
+
+cclsp keys its diagnostic cache by URI string at `dist/index.js:29379` — `serverState.diagnostics.set(params.uri, params.diagnostics)`. Lookups at `dist/index.js:30132` use `pathToUri(filePath)` which emits the uppercase/literal-colon form. The bridge stored under lowercase/encoded form → permanent cache miss → orchestrator never sees the diagnostics.
+
+**Why pyright didn't hit this**: pyright runs as a marketplace LSP plugin with no bridge in front of it (it's a Windows-native binary, not a WSL2 process). Its `publishDiagnostics` URIs flow through Claude Code's IDE bridge directly with no URI rewriting — the bug is bridge-specific.
+
+**Why hover/definition still worked**: those are request/response pairs where cclsp DID send the URI initially, so cclsp uses its OWN copy (via `pathToUri`) for any later operations on the same file. Diagnostics are server-pushed, so the URI form comes from the bridge alone — the casing mismatch only shows up in the push direction.
+
+### Vscode-uri's drive-letter mangling (the actual cause)
+
+`URI.parse('file:///mnt/d/...').with({ path: '/D:/...' }).toString()` returns `file:///d%3A/...`. Verified directly:
+
+```
+> URI.parse('file:///D:/Sundeep/...', true).fsPath
+'d:\Sundeep\...'
+> uri.with({path: '/D:/...'}).toString()
+'file:///d%3A/Sundeep/...'
+> uri.with({path: '/D:/...'}).toString(true)  // skipEncoding
+'file:///d:/Sundeep/...'
+```
+
+Vscode-uri normalizes the drive letter to lowercase and percent-encodes the colon as `%3A` in `.toString()`. `skipEncoding=true` removes the percent-encoding but still lowercases the drive. **Both forms differ from Node's `pathToFileURL` (uppercase + literal colon), and cclsp uses Node's form.**
+
+### Fix: bypass vscode-uri's serialization for this direction
+
+`src/rpc-message-transformer.ts` Linux→Windows path now constructs the URI string manually instead of round-tripping through `URI.with().toString()`:
+
+```ts
+const winPath = convertWslToWindowsPath(uri.path); // "/D:/Sundeep/..."
+return `file://${winPath}`;
+```
+
+The regex in `wsl-path.ts` already preserves uppercase (`m[1].toUpperCase()`); the literal colon comes for free. **6 net lines of change** including the comment explaining the bug.
+
+### Verification
+
+- `mcp__cclsp__get_diagnostics` on `D:\Sundeep\projects\lsp-test\bad.go` → **4 errors returned** (UnusedImport `fmt`, IncompatibleAssign return, UndeclaredName `undefinedFunction`, IncompatibleAssign var) — exactly what gopls publishes.
+- `mcp__cclsp__get_hover` on the same file → still returns full type signature (regression check passed).
+- `mcp__ide__getDiagnostics` returns `[]` for the file — the IDE bridge is a separate consumer with its own URI normalization (lowercase) and is unaffected by this fix; out of scope.
+
+### Updated verdict
+
+The asymmetry was real but **fully fixable in our bridge** — not a deficiency of marketplace LSP plugins or of cclsp itself. After the fix, gopls diagnostics flow through the same path as pyright diagnostics for any caller that uses Node-form URIs. Bridge fix took ~30 LOC including verification scaffolding.
+
+**This was a true bug** — discovery driven by the user's empirical observation that pyright "worked" while gopls didn't. Without that comparison, the asymmetry was invisible (cclsp silently swallows the cache miss as `[]`). Crediting empirical-observation-driven debugging.
+
+
