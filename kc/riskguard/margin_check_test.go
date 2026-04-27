@@ -41,7 +41,7 @@ func TestMarginCheck_AllowsSufficientMargin(t *testing.T) {
 	}), true)
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	assert.True(t, res.Allowed)
 }
@@ -66,7 +66,7 @@ func TestMarginCheck_RejectsInsufficientMargin(t *testing.T) {
 	g.mu.Unlock()
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 1000, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(1000), Confirmed: true,
 	})
 	assert.False(t, res.Allowed)
 	assert.Equal(t, ReasonInsufficientMargin, res.Reason)
@@ -89,7 +89,7 @@ func TestMarginCheck_DisabledByDefault(t *testing.T) {
 	// NO SetMarginCheckEnabled call.
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonInsufficientMargin, res.Reason,
@@ -106,7 +106,7 @@ func TestMarginCheck_AllowsAtBoundary(t *testing.T) {
 	}), true)
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	assert.True(t, res.Allowed, "required ₹50k against available ₹50k must pass")
 }
@@ -121,7 +121,7 @@ func TestMarginCheck_AllowsMarketOrder(t *testing.T) {
 	}), true)
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "MARKET", Price: 0, Confirmed: true,
+		Quantity: 100, OrderType: "MARKET", Price: domain.Money{}, Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonInsufficientMargin, res.Reason,
@@ -139,7 +139,7 @@ func TestMarginCheck_NoLookupConfigured(t *testing.T) {
 	// NO SetMarginLookup.
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonInsufficientMargin, res.Reason)
@@ -153,7 +153,7 @@ func TestMarginCheck_LookupMissBypasses(t *testing.T) {
 	g := newGuardWithMargin(newStubMargin(map[string]float64{}), true)
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "unknown@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 100, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonInsufficientMargin, res.Reason)

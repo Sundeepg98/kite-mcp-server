@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestPerSecondRate_Allows9InOneSecond verifies that exactly 9 orders
@@ -26,7 +27,7 @@ func TestPerSecondRate_Allows9InOneSecond(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
 		// Use LIMIT with a tiny value so the per-order cap doesn't trip.
-		Quantity: 1, Price: 10, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(10), OrderType: "LIMIT",
 		Confirmed: true,
 	}
 
@@ -202,7 +203,7 @@ func TestPerSecondRate_IntegratedInCheckOrder_Denies10th(t *testing.T) {
 	req := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", TransactionType: "BUY",
-		Quantity: 1, Price: 10, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(10), OrderType: "LIMIT",
 		Confirmed: true,
 	}
 

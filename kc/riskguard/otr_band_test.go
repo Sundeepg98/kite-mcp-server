@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // stubLTPLookup is a minimal in-memory LTPLookup for tests. Maps a key
@@ -40,7 +41,7 @@ func TestOTRBand_AllowsMarketOrder(t *testing.T) {
 		TransactionType: "BUY",
 		Quantity:        1,
 		OrderType:       "MARKET",
-		Price:           0, // MARKET — no price set
+		Price: domain.Money{}, // MARKET — no price set
 		Confirmed:       true,
 	})
 	assert.True(t, res.Allowed, "MARKET orders bypass band check")
@@ -57,7 +58,7 @@ func TestOTRBand_AllowsCashOrderWithinBand(t *testing.T) {
 		TransactionType: "BUY",
 		Quantity:        1,
 		OrderType:       "LIMIT",
-		Price:           1005.0,
+		Price: domain.NewINR(1005.0),
 		Confirmed:       true,
 	})
 	assert.True(t, res.Allowed)
@@ -75,7 +76,7 @@ func TestOTRBand_RejectsCashOrderAboveBand(t *testing.T) {
 		TransactionType: "BUY",
 		Quantity:        1,
 		OrderType:       "LIMIT",
-		Price:           1010.0,
+		Price: domain.NewINR(1010.0),
 		Confirmed:       true,
 	})
 	assert.False(t, res.Allowed)
@@ -93,7 +94,7 @@ func TestOTRBand_RejectsCashOrderBelowBand(t *testing.T) {
 		TransactionType: "SELL",
 		Quantity:        1,
 		OrderType:       "LIMIT",
-		Price:           980.0, // -2% — below the 0.75% band but inside order_value cap
+		Price: domain.NewINR(980.0), // -2% — below the 0.75% band but inside order_value cap
 		Confirmed:       true,
 	})
 	assert.False(t, res.Allowed)
@@ -111,7 +112,7 @@ func TestOTRBand_OptionsBandIs40Percent(t *testing.T) {
 		Tradingsymbol: "NIFTY24DEC25000CE",
 		Quantity:      50,
 		OrderType:     "LIMIT",
-		Price:         130,
+		Price: domain.NewINR(130),
 		Confirmed:     true,
 	})
 	assert.True(t, pass.Allowed, "130 is within the 40%% options band around LTP 100")
@@ -122,7 +123,7 @@ func TestOTRBand_OptionsBandIs40Percent(t *testing.T) {
 		Tradingsymbol: "NIFTY24DEC25000CE",
 		Quantity:      50,
 		OrderType:     "LIMIT",
-		Price:         200,
+		Price: domain.NewINR(200),
 		Confirmed:     true,
 	})
 	assert.False(t, fail.Allowed, "200 is outside the 40%% options band around LTP 100")
@@ -138,7 +139,7 @@ func TestOTRBand_NoLookupConfigured_AllowsAll(t *testing.T) {
 		Tradingsymbol: "RELIANCE",
 		Quantity:      1,
 		OrderType:     "LIMIT",
-		Price:         5000, // wildly off — but no lookup means no rejection
+		Price: domain.NewINR(5000), // wildly off — but no lookup means no rejection
 		Confirmed:     true,
 	})
 	// May or may not be Allowed (other checks could fire) — the assert is
@@ -160,7 +161,7 @@ func TestOTRBand_LookupMissBypasses(t *testing.T) {
 		Tradingsymbol: "UNKNOWN",
 		Quantity:      1,
 		OrderType:     "LIMIT",
-		Price:         500,
+		Price: domain.NewINR(500),
 		Confirmed:     true,
 	})
 	if !res.Allowed {

@@ -66,21 +66,25 @@ func (c *circuitLimitCheck) Evaluate(req OrderCheckRequest) CheckResult {
 	c.g.mu.RLock()
 	lookup := c.g.circuitLookup
 	c.g.mu.RUnlock()
-	if lookup == nil || req.Price <= 0 {
+	if lookup == nil || !req.Price.IsPositive() {
 		return CheckResult{Allowed: true}
 	}
 	lower, upper, found := lookup.GetCircuitLimits(req.Exchange, req.Tradingsymbol)
 	if !found || upper <= 0 {
 		return CheckResult{Allowed: true}
 	}
-	if req.Price < lower || req.Price > upper {
+	// Drop Money to float at this boundary — circuit-limit lookup returns
+	// raw float64 from the exchange data feed, so the comparison happens
+	// in primitive space. No currency mismatch possible (lookup is INR).
+	price := req.Price.Float64()
+	if price < lower || price > upper {
 		return CheckResult{
 			Allowed: false,
 			Reason:  ReasonCircuitBreached,
 			Message: fmt.Sprintf(
 				"Order price Rs %.2f is outside the exchange circuit band [Rs %.2f, Rs %.2f]. "+
 					"Kite would reject this order at the gateway.",
-				req.Price, lower, upper,
+				price, lower, upper,
 			),
 		}
 	}

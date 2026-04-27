@@ -165,7 +165,7 @@ func TestCheckMarketHours_TableDriven(t *testing.T) {
 				ToolName:  "place_order",
 				Variety:   tc.variety,
 				Quantity:  1,
-				Price:     100,
+				Price: domain.NewINR(100),
 				OrderType: "LIMIT",
 				Confirmed: true,
 			})

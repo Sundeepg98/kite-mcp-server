@@ -67,14 +67,15 @@ func (c *marginCheck) Evaluate(req OrderCheckRequest) CheckResult {
 	enabled := c.g.marginCheckEnabled
 	lookup := c.g.marginLookup
 	c.g.mu.RUnlock()
-	if !enabled || lookup == nil || req.Price <= 0 || req.Quantity <= 0 {
+	if !enabled || lookup == nil || !req.Price.IsPositive() || req.Quantity <= 0 {
 		return CheckResult{Allowed: true}
 	}
 	available, found := lookup.GetAvailableMargin(req.Email)
 	if !found {
 		return CheckResult{Allowed: true}
 	}
-	required := float64(req.Quantity) * req.Price
+	// Drop Money to float at this boundary — margin lookup returns float64.
+	required := req.Price.Multiply(float64(req.Quantity)).Float64()
 	if required > available {
 		return CheckResult{
 			Allowed: false,

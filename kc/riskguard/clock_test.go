@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestMaybeResetDay_BeforeMarketOpen verifies that daily counters are NOT
@@ -120,7 +121,7 @@ func TestMaybeResetDay_SameDayNoDoubleReset(t *testing.T) {
 	g.RecordOrder(email, OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-		Quantity: 10, Price: 1000, OrderType: "LIMIT",
+		Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 	})
 	g.RecordOrder(email)
 

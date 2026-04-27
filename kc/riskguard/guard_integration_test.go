@@ -41,7 +41,7 @@ func validSmallOrder(email string) OrderCheckRequest {
 		Tradingsymbol:   "INFY",
 		TransactionType: "BUY",
 		Quantity:        5,
-		Price:           1500,
+		Price: domain.NewINR(1500),
 		OrderType:       "LIMIT",
 		Confirmed:       true,
 	}
@@ -136,7 +136,7 @@ func TestFullChain_OrderValueLimit(t *testing.T) {
 				Email: email, ToolName: "place_order",
 				Exchange: "NSE", Tradingsymbol: "TEST",
 				TransactionType: "BUY",
-				Quantity: tc.qty, Price: tc.price,
+				Quantity: tc.qty, Price: domain.NewINR(tc.price),
 				OrderType: "LIMIT",
 				Confirmed: true,
 			}
@@ -201,7 +201,7 @@ func TestFullChain_QuantityLimit(t *testing.T) {
 				Email: email, ToolName: "place_order",
 				Exchange: tc.exchange, Tradingsymbol: tc.symbol,
 				TransactionType: "BUY", Quantity: tc.qty,
-				Price: tc.price, OrderType: orderType,
+				Price: domain.NewINR(tc.price), OrderType: orderType,
 			}
 			r := g.CheckOrder(req)
 			assert.Equal(t, tc.allowed, r.Allowed, tc.name)
@@ -263,7 +263,7 @@ func TestFullChain_DailyOrderLimit_CustomPerUser(t *testing.T) {
 			Email: email, ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: symbols[i],
 			TransactionType: "BUY", Quantity: 1,
-			Price: 100, OrderType: "LIMIT",
+			Price: domain.NewINR(100), OrderType: "LIMIT",
 		}
 		r := g.CheckOrder(req)
 		require.True(t, r.Allowed, "order %d should pass", i+1)
@@ -333,7 +333,7 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "SBIN",
 		TransactionType: "BUY", Quantity: 50,
-		Price: 800, OrderType: "LIMIT",
+		Price: domain.NewINR(800), OrderType: "LIMIT",
 		Confirmed: true,
 	}
 
@@ -393,7 +393,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", Quantity: 4, Price: 3000,
+		TransactionType: "BUY", Quantity: 4, Price: domain.NewINR(3000),
 		OrderType: "LIMIT",
 		Confirmed: true,
 	})
@@ -405,7 +405,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 	r = g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		TransactionType: "BUY", Quantity: 4, Price: 2000,
+		TransactionType: "BUY", Quantity: 4, Price: domain.NewINR(2000),
 		OrderType: "LIMIT",
 		Confirmed: true,
 	})
@@ -427,7 +427,7 @@ func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "TCS",
-		TransactionType: "BUY", Quantity: 1000, Price: 0,
+		TransactionType: "BUY", Quantity: 1000, Price: domain.Money{},
 		OrderType: "MARKET",
 		Confirmed: true,
 	})
@@ -453,7 +453,7 @@ func TestFullChain_AutoFreezeCircuitBreaker(t *testing.T) {
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "TEST",
-		TransactionType: "BUY", Quantity: 10, Price: 200,
+		TransactionType: "BUY", Quantity: 10, Price: domain.NewINR(200),
 		OrderType: "LIMIT", // 10*200 = 2000 > 1000
 	}
 
@@ -505,7 +505,7 @@ func TestFullChain_AutoFreezeDisabled(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT",
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT",
 	}
 
 	// 5 rejections — none should freeze.
@@ -530,7 +530,7 @@ func TestFullChain_AutoFreeze_OldRejectionsExpire(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT",
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT",
 	}
 
 	// Two rejections, then move them outside the 5-minute window.
@@ -563,7 +563,7 @@ func TestFullChain_FreezeBlocksBeforeOtherChecks(t *testing.T) {
 	// Even a massive illegal order should return "frozen", not "order value".
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 1000000, Price: 100000, OrderType: "LIMIT",
+		Quantity: 1000000, Price: domain.NewINR(100000), OrderType: "LIMIT",
 	})
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonTradingFrozen, r.Reason, "kill switch should block before value check")
@@ -580,7 +580,7 @@ func TestFullChain_RecordOrder_UpdatesAllTrackers(t *testing.T) {
 	req := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "TCS",
-		TransactionType: "BUY", Quantity: 10, Price: 3500,
+		TransactionType: "BUY", Quantity: 10, Price: domain.NewINR(3500),
 		OrderType: "LIMIT",
 	}
 
@@ -618,7 +618,7 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 				Email: email, ToolName: "place_order",
 				Exchange: "NSE", Tradingsymbol: "INFY",
 				TransactionType: "BUY", Quantity: 1,
-				Price: 1500, OrderType: "LIMIT",
+				Price: domain.NewINR(1500), OrderType: "LIMIT",
 				Confirmed: true,
 			}
 			r := g.CheckOrder(req)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // stubCircuitLookup is the test double for CircuitLookup. Maps a key
@@ -42,7 +43,7 @@ func TestCircuitLimit_AllowsWithinBand(t *testing.T) {
 	}))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 1, OrderType: "LIMIT", Price: 100, Confirmed: true,
+		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(100), Confirmed: true,
 	})
 	assert.True(t, res.Allowed)
 }
@@ -56,7 +57,7 @@ func TestCircuitLimit_RejectsAboveUpper(t *testing.T) {
 	}))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 1, OrderType: "LIMIT", Price: 120, Confirmed: true,
+		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(120), Confirmed: true,
 	})
 	assert.False(t, res.Allowed)
 	assert.Equal(t, ReasonCircuitBreached, res.Reason)
@@ -72,7 +73,7 @@ func TestCircuitLimit_RejectsBelowLower(t *testing.T) {
 	}))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 1, OrderType: "LIMIT", Price: 80, Confirmed: true,
+		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(80), Confirmed: true,
 	})
 	assert.False(t, res.Allowed)
 	assert.Equal(t, ReasonCircuitBreached, res.Reason)
@@ -88,7 +89,7 @@ func TestCircuitLimit_AllowsAtBoundary(t *testing.T) {
 	for _, p := range []float64{95, 105} {
 		res := g.CheckOrder(OrderCheckRequest{
 			Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-			Quantity: 1, OrderType: "LIMIT", Price: p, Confirmed: true,
+			Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(p), Confirmed: true,
 		})
 		assert.True(t, res.Allowed, "boundary price %.2f must be permitted", p)
 	}
@@ -104,7 +105,7 @@ func TestCircuitLimit_AllowsMarket(t *testing.T) {
 	}))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 1, OrderType: "MARKET", Price: 0, Confirmed: true,
+		Quantity: 1, OrderType: "MARKET", Price: domain.Money{}, Confirmed: true,
 	})
 	assert.True(t, res.Allowed)
 }
@@ -116,7 +117,7 @@ func TestCircuitLimit_NoLookupConfigured(t *testing.T) {
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 1, OrderType: "LIMIT", Price: 99999, Confirmed: true,
+		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(99999), Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonCircuitBreached, res.Reason,
@@ -132,7 +133,7 @@ func TestCircuitLimit_LookupMissBypasses(t *testing.T) {
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{}))
 	res := g.CheckOrder(OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "UNKNOWN",
-		Quantity: 1, OrderType: "LIMIT", Price: 500, Confirmed: true,
+		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
 	if !res.Allowed {
 		assert.NotEqual(t, ReasonCircuitBreached, res.Reason,

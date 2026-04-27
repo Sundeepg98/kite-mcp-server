@@ -139,7 +139,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Tradingsymbol:   symbol,
 			TransactionType: cmd.TransactionType,
 			Quantity:        qty,
-			Price:           price,
+			Price:           domain.NewINR(price),
 			OrderType:       cmd.OrderType,
 			Confirmed:       cmd.Confirmed,
 			// Variety threads through so the market-hours check can see

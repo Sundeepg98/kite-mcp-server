@@ -56,7 +56,7 @@ func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "attacker@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 60_000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(60_000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.False(t, r.Allowed, "12x mean AND >3σ should trigger anomaly block")
@@ -79,7 +79,7 @@ func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
 	// 2× mean = Rs 10,000. > μ+3σ (= 6500) but NOT > 10×μ (= 50000).
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "steady@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 10000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(10000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "2x mean is within the 10x anomaly ceiling")
@@ -108,7 +108,7 @@ func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "volatile@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 60000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(60000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "wide-stdev user: 10x mean but within 3σ should not be flagged")
@@ -133,7 +133,7 @@ func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 	// Big order, no history → anomaly check must not block it.
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "newbie@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 500_000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(500_000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "no baseline yet should fail open on anomaly check")
@@ -152,7 +152,7 @@ func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "mo@test.com", ToolName: "place_order",
-		Quantity: 1_000_000, Price: 0, OrderType: "MARKET",
+		Quantity: 1_000_000, Price: domain.Money{}, OrderType: "MARKET",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "MARKET orders have no known value — anomaly check skips")
@@ -175,7 +175,7 @@ func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "np@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 500_000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(500_000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed, "no baseline provider configured → anomaly check is a no-op")
@@ -197,7 +197,7 @@ func TestCheckOffHours_BlocksAt3AM(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "night@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.False(t, r.Allowed, "3 AM IST is hard-blocked")
@@ -217,7 +217,7 @@ func TestCheckOffHours_BlocksAtBoundary0200(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "boundary@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.False(t, r.Allowed)
@@ -239,7 +239,7 @@ func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "b2@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Variety:   "amo", // bypass market_hours; we only test off_hours here
 		Confirmed: true,
 	})
@@ -258,7 +258,7 @@ func TestCheckOffHours_AllowsAtMarketHours(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "day@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
@@ -283,7 +283,7 @@ func TestCheckOffHours_AllowOptIn(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "owl@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Variety:   "amo", // bypass market_hours; we only test off_hours opt-in here
 		Confirmed: true,
 	})
@@ -305,7 +305,7 @@ func TestCheckOffHours_TimezoneCorrectness(t *testing.T) {
 
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "tz@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.False(t, r.Allowed, "21:00 UTC = 02:30 IST — off-hours block must engage in IST not UTC")

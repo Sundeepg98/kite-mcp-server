@@ -48,7 +48,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	// not the reason; global freeze must take precedence).
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.False(t, r.Allowed)
@@ -68,7 +68,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	// Orders should pass again
 	r = g.CheckOrder(OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
@@ -117,7 +117,7 @@ func TestSetAutoFreezeNotifier(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: "notifier@test.com", ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT",
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT",
 	}
 
 	// Trigger 3 rejections to auto-freeze
@@ -535,7 +535,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	// CheckOrder will call maybeResetDay internally
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed)
@@ -604,7 +604,7 @@ func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		TransactionType: "BUY", Quantity: 10,
-		Price: 100, OrderType: "LIMIT",
+		Price: domain.NewINR(100), OrderType: "LIMIT",
 	}
 
 	// Place and record
@@ -651,7 +651,7 @@ func TestGetUserStatus_FrozenUser(t *testing.T) {
 
 	// Record some orders
 	g.RecordOrder(email, OrderCheckRequest{
-		Email: email, Quantity: 10, Price: 1000,
+		Email: email, Quantity: 10, Price: domain.NewINR(1000),
 	})
 
 	status := g.GetUserStatus(email)
@@ -677,7 +677,7 @@ func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "nolookup@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
-		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // fail open
@@ -699,7 +699,7 @@ func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "zerofq@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "ZEROFQ",
-		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // freeze qty 0 => fail open
@@ -721,7 +721,7 @@ func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
 	r := g.CheckOrder(OrderCheckRequest{
 		Email: "empty@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "",
-		Quantity: 999999, Price: 0, OrderType: "MARKET",
+		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
 		Confirmed: true,
 	})
 	assert.True(t, r.Allowed) // fail open
@@ -763,7 +763,7 @@ func TestGlobalFreeze_ConcurrentAccess(t *testing.T) {
 		wg.Go(func() {
 			g.CheckOrder(OrderCheckRequest{
 				Email: "concurrent@test.com", ToolName: "place_order",
-				Quantity: 1, Price: 100, OrderType: "LIMIT",
+				Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			})
 		})
 	}
@@ -791,7 +791,7 @@ func TestAutoFreezeWithLogger(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT",
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT",
 	}
 
 	// 3 rejections => auto-freeze (logger.Warn should be called)
@@ -907,7 +907,7 @@ func TestCheckOrder_AutoFreezeOnQuantityLimit(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		TransactionType: "BUY", Quantity: 200,
-		Price: 0, OrderType: "MARKET", // price=0 to skip value check
+		Price: domain.Money{}, OrderType: "MARKET", // price=0 to skip value check
 	}
 
 	// 3 rejections should trigger auto-freeze
@@ -940,7 +940,7 @@ func TestCheckOrder_AutoFreezeOnDailyOrderCount(t *testing.T) {
 
 	req := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 	}
 
 	// 3 rejections should trigger auto-freeze
@@ -973,7 +973,7 @@ func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
 
 	req := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 	}
 
 	// 3 rejections should trigger auto-freeze
@@ -1003,7 +1003,7 @@ func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		TransactionType: "BUY", Quantity: 10,
-		Price: 100, OrderType: "LIMIT",
+		Price: domain.NewINR(100), OrderType: "LIMIT",
 	}
 
 	// First order passes and gets recorded
@@ -1042,7 +1042,7 @@ func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		TransactionType: "BUY", Quantity: 1,
-		Price: 100, OrderType: "LIMIT", // value=100, total=1099 > 1000
+		Price: domain.NewINR(100), OrderType: "LIMIT", // value=100, total=1099 > 1000
 	}
 
 	// 3 rejections should trigger auto-freeze

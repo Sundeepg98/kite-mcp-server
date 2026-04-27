@@ -166,10 +166,14 @@ func (s *SubprocessCheck) Evaluate(req OrderCheckRequest) CheckResult {
 		Tradingsymbol:   req.Tradingsymbol,
 		TransactionType: req.TransactionType,
 		Quantity:        req.Quantity,
-		Price:           req.Price,
-		OrderType:       req.OrderType,
-		Confirmed:       req.Confirmed,
-		ClientOrderID:   req.ClientOrderID,
+		// Drop Money to float64 at the subprocess wire boundary. Plugin
+		// binaries import the OrderCheckRequestWire type from checkrpc
+		// (kept primitive on purpose so plugins don't need the full
+		// domain package). Slice 2 keeps wire-compat unchanged.
+		Price:         req.Price.Float64(),
+		OrderType:     req.OrderType,
+		Confirmed:     req.Confirmed,
+		ClientOrderID: req.ClientOrderID,
 	}
 	resp, err := proxy.Evaluate(wire)
 	if err != nil {

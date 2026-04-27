@@ -224,7 +224,7 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 			Tradingsymbol:   order.Tradingsymbol,
 			TransactionType: order.TransactionType,
 			Quantity:        order.Quantity,
-			Price:           order.Price,
+			Price:           domain.NewINR(order.Price),
 			OrderType:       order.OrderType,
 		})
 		if !result.Allowed {
@@ -298,7 +298,7 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 					Tradingsymbol:   order.Tradingsymbol,
 					TransactionType: order.TransactionType,
 					Quantity:        order.Quantity,
-					Price:           order.Price,
+					Price:           domain.NewINR(order.Price),
 					OrderType:       order.OrderType,
 				})
 			}

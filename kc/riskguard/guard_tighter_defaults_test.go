@@ -65,7 +65,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		// 1 x Rs 49,999 — under the 50k cap
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "valtest@t.com", ToolName: "place_order",
-			Quantity: 1, Price: 49999, OrderType: "LIMIT",
+			Quantity: 1, Price: domain.NewINR(49999), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.True(t, r.Allowed, "Rs 49,999 should pass the new Rs 50k cap")
@@ -73,7 +73,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		// 1 x Rs 50,001 — over the cap
 		r = g.CheckOrder(OrderCheckRequest{
 			Email: "valtest@t.com", ToolName: "place_order",
-			Quantity: 1, Price: 50001, OrderType: "LIMIT",
+			Quantity: 1, Price: domain.NewINR(50001), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.False(t, r.Allowed, "Rs 50,001 should be blocked by the new Rs 50k cap")
@@ -101,7 +101,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 1, Price: 100, OrderType: "LIMIT",
+			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.False(t, r.Allowed, "21st order in a day should be blocked at count 20 default")
@@ -130,7 +130,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 			Email: email, ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "X",
 			TransactionType: "BUY",
-			Quantity:        2, Price: 1000, OrderType: "LIMIT",
+			Quantity:        2, Price: domain.NewINR(1000), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.False(t, r.Allowed)
@@ -151,7 +151,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 			Email: "fresh@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
-			Quantity:        1, Price: 100, OrderType: "LIMIT",
+			Quantity:        1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			// Confirmed: false (default)
 		})
 		assert.False(t, r.Allowed, "unconfirmed order should be blocked by default")
@@ -166,7 +166,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 			Email: "ack@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
-			Quantity:        1, Price: 100, OrderType: "LIMIT",
+			Quantity:        1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			Confirmed:       true,
 		})
 		assert.True(t, r.Allowed, "explicitly confirmed under-cap order should pass")
@@ -186,7 +186,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 			Email: "power@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
-			Quantity:        1, Price: 100, OrderType: "LIMIT",
+			Quantity:        1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			// Confirmed: false — should still pass because user opted out
 		})
 		assert.True(t, r.Allowed, "user-level opt-out should bypass confirmation check")
@@ -201,7 +201,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 		// state by checking which error they get.
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "frozen@t.com", ToolName: "place_order",
-			Quantity: 1, Price: 100, OrderType: "LIMIT",
+			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		})
 		assert.False(t, r.Allowed)
 		assert.Equal(t, ReasonTradingFrozen, r.Reason, "kill-switch should block before confirmation check")
@@ -216,7 +216,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 				Email: email, ToolName: "place_order",
 				Exchange: "NSE", Tradingsymbol: "TARGET",
 				TransactionType: "BUY",
-				Quantity:        1, Price: 49999, OrderType: "LIMIT",
+				Quantity:        1, Price: domain.NewINR(49999), OrderType: "LIMIT",
 				// Confirmed: false — this is the prompt-injection case
 			})
 			assert.False(t, r.Allowed, "layering order %d should be blocked", i+1)

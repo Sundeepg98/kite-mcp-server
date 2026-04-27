@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestDedup_SeenOrAdd_FirstCallAllowed verifies that the first submission of
@@ -136,7 +137,7 @@ func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
 	req := OrderCheckRequest{
 		Email: "u@t.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
 	}
 	r1 := g.CheckOrder(req)
@@ -156,7 +157,7 @@ func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 	req := OrderCheckRequest{
 		Email: "u@t.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed:     true,
 		ClientOrderID: "req-abc-123",
 	}
@@ -178,7 +179,7 @@ func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
 	base := OrderCheckRequest{
 		ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-		Quantity: 1, Price: 100, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed:     true,
 		ClientOrderID: "shared-id",
 	}

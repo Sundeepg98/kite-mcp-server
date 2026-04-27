@@ -246,7 +246,7 @@ func TestSetEventDispatcher_NilSafety(t *testing.T) {
 		g.RecordOrder("user@test.com", OrderCheckRequest{
 			Email: "user@test.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-			Quantity: 1, Price: 1000, OrderType: "LIMIT",
+			Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		})
 	})
 }
@@ -277,7 +277,7 @@ func TestSetEventDispatcher_RecordOrder_DispatchesResetEvent(t *testing.T) {
 	g.RecordOrder(email, OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY",
-		Quantity: 1, Price: 1000, OrderType: "LIMIT",
+		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 	})
 
 	mu.Lock()

@@ -102,7 +102,7 @@ func TestCheckOrderValue(t *testing.T) {
 	t.Run("under limit passes", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
-			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.True(t, r.Allowed) // 10*1000=10000 < 50000
@@ -111,7 +111,7 @@ func TestCheckOrderValue(t *testing.T) {
 	t.Run("over limit blocked", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
-			Quantity: 10, Price: 10000, OrderType: "LIMIT",
+			Quantity: 10, Price: domain.NewINR(10000), OrderType: "LIMIT",
 			Confirmed: true,
 		})
 		assert.False(t, r.Allowed) // 10*10000=100000 > 50000
@@ -121,7 +121,7 @@ func TestCheckOrderValue(t *testing.T) {
 	t.Run("MARKET order skipped (price 0)", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
-			Quantity: 100000, Price: 0, OrderType: "MARKET",
+			Quantity: 100000, Price: domain.Money{}, OrderType: "MARKET",
 			Confirmed: true,
 		})
 		assert.True(t, r.Allowed, "TestCheckOrderValue: r.Allowed")
@@ -309,7 +309,7 @@ func TestCheckDuplicate(t *testing.T) {
 	baseReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE", TransactionType: "BUY", Quantity: 10,
-		Price: 2500, OrderType: "LIMIT", Confirmed: true,
+		Price: domain.NewINR(2500), OrderType: "LIMIT", Confirmed: true,
 	}
 
 	t.Run("first order passes", func(t *testing.T) {
@@ -368,7 +368,7 @@ func TestCheckDailyValue(t *testing.T) {
 	t.Run("under limit passes", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		})
 		assert.True(t, r.Allowed) // 10*1000 = 10000 < 100000
 	})
@@ -383,7 +383,7 @@ func TestCheckDailyValue(t *testing.T) {
 
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 10, Price: 1500, OrderType: "LIMIT", // 15000, total would be 105000
+			Quantity: 10, Price: domain.NewINR(1500), OrderType: "LIMIT", // 15000, total would be 105000
 		})
 		assert.False(t, r.Allowed, "TestCheckDailyValue: r.Allowed")
 		assert.Equal(t, ReasonDailyValueLimit, r.Reason, "TestCheckDailyValue: want=%v got=%v", ReasonDailyValueLimit, r.Reason)
@@ -393,7 +393,7 @@ func TestCheckDailyValue(t *testing.T) {
 	t.Run("MARKET order skipped (price 0)", func(t *testing.T) {
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 10000, Price: 0, OrderType: "MARKET",
+			Quantity: 10000, Price: domain.Money{}, OrderType: "MARKET",
 		})
 		assert.True(t, r.Allowed, "TestCheckDailyValue: r.Allowed")
 	})
@@ -410,7 +410,7 @@ func TestCheckDailyValue(t *testing.T) {
 
 		r := g.CheckOrder(OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 10, Price: 1000, OrderType: "LIMIT",
+			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		})
 		assert.True(t, r.Allowed) // daily value was reset
 	})
@@ -445,7 +445,7 @@ func TestAutoFreeze(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT", // 10*200=2000 > 1000
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT", // 10*200=2000 > 1000
 	}
 
 	t.Run("first two rejections do not freeze", func(t *testing.T) {
@@ -484,7 +484,7 @@ func TestAutoFreeze(t *testing.T) {
 		// An under-limit order should pass now
 		underLimitReq := OrderCheckRequest{
 			Email: email, ToolName: "place_order",
-			Quantity: 1, Price: 100, OrderType: "LIMIT", // 100 < 1000
+			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT", // 100 < 1000
 		}
 		r := g.CheckOrder(underLimitReq)
 		assert.True(t, r.Allowed, "TestAutoFreeze: r.Allowed")
@@ -523,7 +523,7 @@ func TestAutoFreezeDisabled(t *testing.T) {
 
 	overLimitReq := OrderCheckRequest{
 		Email: email, ToolName: "place_order",
-		Quantity: 10, Price: 200, OrderType: "LIMIT", // 2000 > 1000
+		Quantity: 10, Price: domain.NewINR(200), OrderType: "LIMIT", // 2000 > 1000
 	}
 
 	// Trigger 5 rejections — none should cause auto-freeze

@@ -60,14 +60,15 @@ func (g *Guard) checkConfirmationRequired(req OrderCheckRequest) CheckResult {
 
 func (g *Guard) checkOrderValue(req OrderCheckRequest) CheckResult {
 	// Skip for MARKET orders (price unknown at submission time)
-	if req.Price <= 0 {
+	if !req.Price.IsPositive() {
 		return CheckResult{Allowed: true}
 	}
 	limits := g.GetEffectiveLimits(req.Email)
-	value := domain.NewINR(float64(req.Quantity) * req.Price)
-	// Currency-aware comparison; cross-currency would error and we treat
-	// that as "unable to verify, allow" — but in this code path both sides
-	// are constructed in INR, so the error path is unreachable in practice.
+	// Currency-aware comparison: scale Money by Quantity, then compare to
+	// the user's MaxSingleOrderINR cap. Cross-currency would error and we
+	// treat that as "unable to verify, allow" — but in this code path both
+	// sides are INR-denominated, so the error path is unreachable in practice.
+	value := req.Price.Multiply(float64(req.Quantity))
 	exceeds, err := value.GreaterThan(limits.MaxSingleOrderINR)
 	if err == nil && exceeds {
 		return CheckResult{
@@ -197,11 +198,14 @@ func (g *Guard) checkDuplicateOrder(email string, req OrderCheckRequest) CheckRe
 }
 
 func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult {
-	if req.Price <= 0 {
+	if !req.Price.IsPositive() {
 		return CheckResult{Allowed: true} // MARKET orders — price unknown
 	}
 	limits := g.GetEffectiveLimits(email)
-	orderValue := float64(req.Quantity) * req.Price
+	// Scale Money price by qty for the order's notional. DailyPlacedValue
+	// is still float (Slice 3 will Money-ify it), so we drop to float
+	// only on the cumulative + comparison path.
+	orderValue := req.Price.Multiply(float64(req.Quantity)).Float64()
 
 	g.mu.Lock()
 	t := g.getOrCreateTracker(email)
@@ -242,10 +246,10 @@ func (g *Guard) checkAnomalyMultiplier(req OrderCheckRequest) CheckResult {
 	if g.baseline == nil {
 		return CheckResult{Allowed: true} // no provider → silent no-op
 	}
-	if req.Price <= 0 {
+	if !req.Price.IsPositive() {
 		return CheckResult{Allowed: true} // MARKET — skip
 	}
-	orderValue := float64(req.Quantity) * req.Price
+	orderValue := req.Price.Multiply(float64(req.Quantity)).Float64()
 	mean, stdev, _ := g.baseline.UserOrderStats(strings.ToLower(req.Email), anomalyBaselineDays)
 	if mean <= 0 {
 		// Insufficient history (or unknown user). Fail open — the static

@@ -5,6 +5,8 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -32,8 +34,10 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 				Tradingsymbol:   safeString(args["tradingsymbol"]),
 				TransactionType: safeString(args["transaction_type"]),
 				Quantity:        safeInt(args["quantity"]),
-				Price:           safeFloat(args["price"]),
-				OrderType:       safeString(args["order_type"]),
+				// Wire-format boundary: tool args carry float prices over JSON.
+				// Reconstruct an INR Money on entry to the riskguard pipeline.
+				Price:     domain.NewINR(safeFloat(args["price"])),
+				OrderType: safeString(args["order_type"]),
 				// Confirmed=true is the user-facing ACK that satisfies the
 				// RequireConfirmAllOrders gate. Populated from the tool's
 				// `confirm` boolean arg (same convention as elicitation).
@@ -48,8 +52,8 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 			}
 
 			// For SL/SL-M, use trigger_price if price is 0
-			if req.Price == 0 {
-				req.Price = safeFloat(args["trigger_price"])
+			if req.Price.IsZero() {
+				req.Price = domain.NewINR(safeFloat(args["trigger_price"]))
 			}
 
 			result := guard.CheckOrder(req)

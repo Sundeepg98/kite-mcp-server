@@ -319,6 +319,12 @@ func (g *Guard) snapshotChecks() []Check {
 // breaker (recordRejection, checkAutoFreeze) all live in lifecycle.go.
 
 // OrderCheckRequest contains the data needed to evaluate an order.
+//
+// Price is typed domain.Money (Slice 2 of the Money sweep). The zero value
+// (Money{}) is the "MARKET order / no price set" sentinel — every priced
+// check (order_value, daily_value, OTR-band, circuit limit, margin) skips
+// when Price.IsZero() returns true. Construct via domain.NewINR(price) at
+// every call site.
 type OrderCheckRequest struct {
 	Email           string
 	ToolName        string
@@ -326,8 +332,8 @@ type OrderCheckRequest struct {
 	Tradingsymbol   string
 	TransactionType string // BUY or SELL
 	Quantity        int
-	Price           float64 // 0 for MARKET orders
-	OrderType       string  // MARKET, LIMIT, SL, SL-M
+	Price           domain.Money // zero Money for MARKET orders
+	OrderType       string       // MARKET, LIMIT, SL, SL-M
 	// Confirmed indicates the user explicitly acknowledged this order (e.g.
 	// replied `confirm: true` to an elicitation). When
 	// UserLimits.RequireConfirmAllOrders is true, orders without Confirmed=true
@@ -474,8 +480,10 @@ func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 			Quantity:        r.Quantity,
 			PlacedAt:        now,
 		})
-		if r.Price > 0 {
-			t.DailyPlacedValue += float64(r.Quantity) * r.Price
+		if r.Price.IsPositive() {
+			// DailyPlacedValue is still float64 (Slice 3 will Money-ify it);
+			// drop to the primitive at this boundary.
+			t.DailyPlacedValue += float64(r.Quantity) * r.Price.Float64()
 		}
 	}
 	dispatcher := g.events

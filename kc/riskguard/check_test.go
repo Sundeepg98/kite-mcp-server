@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestRegisterCustomCheck verifies that a plugin-registered Check:
@@ -41,7 +42,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 			ToolName:  "place_order",
 			Confirmed: true,
 			Quantity:  1,
-			Price:     100,
+			Price: domain.NewINR(100),
 		})
 		if r.Allowed {
 			t.Fatalf("expected custom check to reject; got Allowed=true")
@@ -133,7 +134,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 			ToolName:  "place_order",
 			Confirmed: true,
 			Quantity:  1,
-			Price:     10,
+			Price: domain.NewINR(10),
 		})
 		if !stubFired {
 			t.Fatalf("expected stub sentinel to fire after prior built-ins passed")
@@ -269,7 +270,7 @@ func TestPanickingCheckFailsClosed(t *testing.T) {
 		ToolName:  "place_order",
 		Confirmed: true,
 		Quantity:  1,
-		Price:     100,
+		Price: domain.NewINR(100),
 	})
 
 	if r.Allowed {

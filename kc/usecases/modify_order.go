@@ -82,7 +82,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 			ToolName:  "modify_order",
 			OrderType: cmd.OrderType,
 			Quantity:  cmd.Quantity,
-			Price:     price,
+			Price:     domain.NewINR(price),
 			Confirmed: cmd.Confirmed,
 		})
 		if !result.Allowed {

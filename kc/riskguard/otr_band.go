@@ -82,7 +82,7 @@ func (c *otrBandCheck) Evaluate(req OrderCheckRequest) CheckResult {
 	c.g.mu.RLock()
 	lookup := c.g.ltpLookup
 	c.g.mu.RUnlock()
-	if lookup == nil || req.Price <= 0 {
+	if lookup == nil || !req.Price.IsPositive() {
 		return CheckResult{Allowed: true}
 	}
 	ltp, found := lookup.GetLTP(req.Exchange, req.Tradingsymbol)
@@ -94,11 +94,13 @@ func (c *otrBandCheck) Evaluate(req OrderCheckRequest) CheckResult {
 	bandPct := bandForExchange(req.Exchange, req.Tradingsymbol)
 	low := ltp * (1.0 - bandPct)
 	high := ltp * (1.0 + bandPct)
-	if req.Price < low || req.Price > high {
+	// Drop Money to float at this boundary — LTP feed returns float64.
+	price := req.Price.Float64()
+	if price < low || price > high {
 		return CheckResult{
 			Allowed: false,
 			Reason:  ReasonOTRBand,
-			Message: formatBandRejection(req.Price, ltp, bandPct),
+			Message: formatBandRejection(price, ltp, bandPct),
 		}
 	}
 	return CheckResult{Allowed: true}
