@@ -9,6 +9,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // Subscription status constants.
@@ -47,7 +48,14 @@ type Store struct {
 	mu     sync.RWMutex
 	subs   map[string]*Subscription // keyed by lowercase email
 	db     *alerts.DB
-	logger *slog.Logger
+	// Wave D Phase 3 Package 7c-3 (Logger sweep): logger is the
+	// deprecated slog-typed field kept populated for the existing
+	// store.go consumer sites; loggerPort wraps the same source via
+	// logport.NewSlog so new code paths can consume the typed port
+	// with ctx threading. Both are wired by NewStore from the same
+	// caller-supplied *slog.Logger.
+	logger     *slog.Logger // Deprecated: use loggerPort
+	loggerPort logport.Logger
 	// dispatcher is the optional domain event dispatcher. When set,
 	// SetSubscription emits a domain.TierChangedEvent on every
 	// effective tier transition. Nil-safe — older wirings or in-memory
@@ -87,11 +95,17 @@ func (s *Store) SetChangeReason(reason string) {
 }
 
 // NewStore creates a new billing store with SQLite persistence.
+//
+// Public signature retains *slog.Logger for backward-compat with
+// app/wire.go's call site; the value is also wrapped via
+// logport.NewSlog so the typed-port loggerPort field is populated
+// for new code paths.
 func NewStore(db *alerts.DB, logger *slog.Logger) *Store {
 	return &Store{
-		subs:   make(map[string]*Subscription),
-		db:     db,
-		logger: logger,
+		subs:       make(map[string]*Subscription),
+		db:         db,
+		logger:     logger,
+		loggerPort: logport.NewSlog(logger),
 	}
 }
 
