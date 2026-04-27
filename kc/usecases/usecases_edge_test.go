@@ -1547,6 +1547,81 @@ func TestCloseAllPositions_UC_Success(t *testing.T) {
 	assert.Equal(t, 2, result.Total)
 }
 
+// TestClosePosition_ExecuteCommand_Adapter covers the CQRS-bus adapter
+// in close_position.go:20 — unpacks the typed command and delegates to
+// Execute. Trivial 2-line method, but coverage gap was 0% because all
+// existing tests call Execute directly. Verifies the adapter preserves
+// arg semantics end-to-end.
+func TestClosePosition_ExecuteCommand_Adapter(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{
+		positions: broker.Positions{Net: []broker.Position{
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "CNC", PnL: 100},
+		}},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewClosePositionUseCase(resolver, nil, nil, testLogger())
+
+	result, err := uc.ExecuteCommand(context.Background(), cqrs.ClosePositionCommand{
+		Email:         "u@t.com",
+		Exchange:      "NSE",
+		Symbol:        "INFY",
+		ProductFilter: "",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "SELL", result.Direction)
+	assert.Equal(t, 10, result.Quantity)
+}
+
+// TestClosePosition_ExecuteCommand_PropagatesError verifies that
+// errors from the underlying Execute path bubble unchanged through
+// the CQRS adapter.
+func TestClosePosition_ExecuteCommand_PropagatesError(t *testing.T) {
+	t.Parallel()
+	uc := NewClosePositionUseCase(&mockBrokerResolver{}, nil, nil, testLogger())
+	_, err := uc.ExecuteCommand(context.Background(), cqrs.ClosePositionCommand{
+		Email:    "", // empty — Execute will reject
+		Exchange: "NSE",
+		Symbol:   "INFY",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
+// TestCloseAllPositions_ExecuteCommand_Adapter covers the CQRS-bus
+// adapter in close_all_positions.go:20.
+func TestCloseAllPositions_ExecuteCommand_Adapter(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{
+		positions: broker.Positions{Net: []broker.Position{
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "MIS"},
+		}},
+	}
+	resolver := &mockBrokerResolver{client: client}
+	uc := NewCloseAllPositionsUseCase(resolver, nil, nil, testLogger())
+
+	result, err := uc.ExecuteCommand(context.Background(), cqrs.CloseAllPositionsCommand{
+		Email:         "u@t.com",
+		ProductFilter: "MIS",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, result.Total)
+}
+
+// TestCloseAllPositions_ExecuteCommand_PropagatesError verifies that
+// errors from the underlying Execute path bubble unchanged.
+func TestCloseAllPositions_ExecuteCommand_PropagatesError(t *testing.T) {
+	t.Parallel()
+	uc := NewCloseAllPositionsUseCase(&mockBrokerResolver{}, nil, nil, testLogger())
+	_, err := uc.ExecuteCommand(context.Background(), cqrs.CloseAllPositionsCommand{
+		Email: "", // empty — Execute will reject
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "email is required")
+}
+
 // ---------------------------------------------------------------------------
 // queries.go — GetProfile error, GetMargins
 // ---------------------------------------------------------------------------

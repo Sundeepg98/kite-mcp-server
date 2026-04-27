@@ -348,6 +348,123 @@ func TestProjector_ListActiveOrders(t *testing.T) {
 	}
 }
 
+// TestProjector_ListOrdersForEmail covers the email-scoped order
+// listing — distinct from ListActiveOrders in that CANCELLED and
+// FILLED orders ARE returned (it's a current-day-lifecycle dump for
+// optimistic-fallback when Kite is rate-limited). The result is sorted
+// by PlacedAt ascending.
+func TestProjector_ListOrdersForEmail(t *testing.T) {
+	t.Parallel()
+	dispatcher := domain.NewEventDispatcher()
+	proj := NewProjector()
+	proj.Subscribe(dispatcher)
+
+	now := time.Now().UTC()
+	qty, _ := domain.NewQuantity(1)
+	place := func(email, id string, offset time.Duration) {
+		dispatcher.Dispatch(domain.OrderPlacedEvent{
+			Email:           email,
+			OrderID:         id,
+			Instrument:      domain.NewInstrumentKey("NSE", "X"),
+			Qty:             qty,
+			Price:           domain.NewINR(100),
+			TransactionType: "BUY",
+			Timestamp:       now.Add(offset),
+		})
+	}
+	// Three orders for alice; one for bob.
+	place("alice@t.com", "A1", 0)
+	place("alice@t.com", "A2", time.Second)
+	place("alice@t.com", "A3", 2*time.Second)
+	place("bob@t.com", "B1", time.Millisecond)
+
+	// Cancel one of alice's orders — should still be returned by
+	// ListOrdersForEmail (unlike ListActiveOrders which would filter it).
+	dispatcher.Dispatch(domain.OrderCancelledEvent{
+		Email:     "alice@t.com",
+		OrderID:   "A1",
+		Timestamp: now.Add(3 * time.Second),
+	})
+
+	got := proj.ListOrdersForEmail("alice@t.com")
+	if len(got) != 3 {
+		t.Fatalf("alice's orders = %d, want 3 (place + cancel still in stream)", len(got))
+	}
+	// Sorted oldest-first by PlacedAt — A1 was placed at offset 0.
+	if got[0].AggregateID() != "A1" {
+		t.Errorf("got[0] = %s, want A1 (oldest)", got[0].AggregateID())
+	}
+	if got[2].AggregateID() != "A3" {
+		t.Errorf("got[2] = %s, want A3 (newest)", got[2].AggregateID())
+	}
+
+	// Bob's email returns only his single order.
+	bobOnly := proj.ListOrdersForEmail("bob@t.com")
+	if len(bobOnly) != 1 {
+		t.Fatalf("bob's orders = %d, want 1", len(bobOnly))
+	}
+
+	// Unknown email returns empty slice (not nil — defensive contract).
+	unknown := proj.ListOrdersForEmail("nobody@t.com")
+	if unknown == nil {
+		t.Error("unknown email should return non-nil empty slice for caller convenience")
+	}
+	if len(unknown) != 0 {
+		t.Errorf("unknown email orders = %d, want 0", len(unknown))
+	}
+}
+
+// TestProjector_AlertCount covers the alert-count getter — pairs with
+// the existing TestProjector_AlertFlow which verifies the lifecycle
+// transitions but doesn't assert count specifically.
+func TestProjector_AlertCount(t *testing.T) {
+	t.Parallel()
+	dispatcher := domain.NewEventDispatcher()
+	proj := NewProjector()
+	proj.Subscribe(dispatcher)
+
+	if got := proj.AlertCount(); got != 0 {
+		t.Errorf("empty projector AlertCount() = %d, want 0", got)
+	}
+
+	now := time.Now().UTC()
+	dispatcher.Dispatch(domain.AlertCreatedEvent{
+		Email:       "u@t.com",
+		AlertID:     "AL-1",
+		Instrument:  domain.NewInstrumentKey("NSE", "RELIANCE"),
+		TargetPrice: domain.NewINR(2500),
+		Direction:   "above",
+		Timestamp:   now,
+	})
+	if got := proj.AlertCount(); got != 1 {
+		t.Errorf("after 1 alert: AlertCount() = %d, want 1", got)
+	}
+
+	dispatcher.Dispatch(domain.AlertCreatedEvent{
+		Email:       "u@t.com",
+		AlertID:     "AL-2",
+		Instrument:  domain.NewInstrumentKey("NSE", "INFY"),
+		TargetPrice: domain.NewINR(1500),
+		Direction:   "below",
+		Timestamp:   now.Add(time.Second),
+	})
+	if got := proj.AlertCount(); got != 2 {
+		t.Errorf("after 2 alerts: AlertCount() = %d, want 2", got)
+	}
+}
+
+// TestSessionAggregate_AggregateType pins the AggregateType()
+// declaration. Pure constant getter; uncovered because the existing
+// session_aggregate_test.go exercises Apply paths but not this single
+// method. Required for 100% coverage on this pure type.
+func TestSessionAggregate_AggregateType(t *testing.T) {
+	t.Parallel()
+	a := NewSessionAggregate("sess-1")
+	if got := a.AggregateType(); got != "Session" {
+		t.Errorf("AggregateType() = %q, want %q", got, "Session")
+	}
+}
+
 // TestProjector_SubscribeNilDispatcher is a no-op and must not panic.
 func TestProjector_SubscribeNilDispatcher(t *testing.T) {
 	t.Parallel()

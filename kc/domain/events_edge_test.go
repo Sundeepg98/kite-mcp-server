@@ -52,6 +52,35 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"UserSuspendedEvent", UserSuspendedEvent{Timestamp: now}, "user.suspended"},
 		{"GlobalFreezeEvent", GlobalFreezeEvent{Timestamp: now}, "global.freeze"},
 		{"FamilyInvitedEvent", FamilyInvitedEvent{Timestamp: now}, "family.invited"},
+		// Coverage-fill: events whose EventType() / OccurredAt() were
+		// previously uncovered in this package (the dispatch sites lived
+		// in kc/alerts, kc/audit, etc., which gave the methods runtime
+		// exercise but not in-package coverage credit).
+		{"SessionClearedEvent", SessionClearedEvent{Timestamp: now}, "session.cleared"},
+		{"SessionInvalidatedEvent", SessionInvalidatedEvent{Timestamp: now}, "session.invalidated"},
+		{"FamilyMemberRemovedEvent", FamilyMemberRemovedEvent{Timestamp: now}, "family.member_removed"},
+		{"WatchlistCreatedEvent", WatchlistCreatedEvent{Timestamp: now}, "watchlist.created"},
+		{"WatchlistDeletedEvent", WatchlistDeletedEvent{Timestamp: now}, "watchlist.deleted"},
+		{"WatchlistItemAddedEvent", WatchlistItemAddedEvent{Timestamp: now}, "watchlist.item_added"},
+		{"WatchlistItemRemovedEvent", WatchlistItemRemovedEvent{Timestamp: now}, "watchlist.item_removed"},
+		{"CredentialRegisteredEvent", CredentialRegisteredEvent{Timestamp: now}, "credential.registered"},
+		{"CredentialRotatedEvent", CredentialRotatedEvent{Timestamp: now}, "credential.rotated"},
+		{"CredentialRevokedEvent", CredentialRevokedEvent{Timestamp: now}, "credential.revoked"},
+		{"TierChangedEvent", TierChangedEvent{Timestamp: now}, "billing.tier_changed"},
+		{"ConsentWithdrawnEvent", ConsentWithdrawnEvent{Timestamp: now}, "consent.withdrawn"},
+		{"RiskguardKillSwitchTrippedEvent", RiskguardKillSwitchTrippedEvent{Timestamp: now}, "riskguard.kill_switch_tripped"},
+		{"RiskguardDailyCounterResetEvent", RiskguardDailyCounterResetEvent{Timestamp: now}, "riskguard.daily_counter_reset"},
+		{"RiskguardRejectionEvent", RiskguardRejectionEvent{Timestamp: now}, "riskguard.rejection_recorded"},
+		{"AnomalyBaselineSnapshottedEvent", AnomalyBaselineSnapshottedEvent{Timestamp: now}, "anomaly.baseline_snapshotted"},
+		{"AnomalyCacheInvalidatedEvent", AnomalyCacheInvalidatedEvent{Timestamp: now}, "anomaly.cache_invalidated"},
+		{"AnomalyCacheEvictedEvent", AnomalyCacheEvictedEvent{Timestamp: now}, "anomaly.cache_evicted"},
+		{"PluginRegisteredEvent", PluginRegisteredEvent{Timestamp: now}, "plugin.registered"},
+		{"PluginUnregisteredEvent", PluginUnregisteredEvent{Timestamp: now}, "plugin.unregistered"},
+		{"PluginReloadTriggeredEvent", PluginReloadTriggeredEvent{Timestamp: now}, "plugin.reload_triggered"},
+		{"PluginWatcherStartedEvent", PluginWatcherStartedEvent{Timestamp: now}, "plugin.watcher_started"},
+		{"PluginWatcherStoppedEvent", PluginWatcherStoppedEvent{Timestamp: now}, "plugin.watcher_stopped"},
+		{"TelegramSubscribedEvent", TelegramSubscribedEvent{Timestamp: now}, "telegram.subscribed"},
+		{"TelegramChatBoundEvent", TelegramChatBoundEvent{Timestamp: now}, "telegram.chat_bound"},
 	}
 
 	for _, tc := range tests {
@@ -63,6 +92,88 @@ func TestAllEventTypes_Interface(t *testing.T) {
 				t.Errorf("OccurredAt() = %v, want %v", got, now)
 			}
 		})
+	}
+}
+
+// TestPositionAggregateID pins the natural aggregate-key derivation for
+// position events: the (email, exchange, tradingsymbol, product) tuple
+// gives Open + Close events for the same logical position a stable
+// stream key. This is a pure function — every coverage gap closed here
+// matches a real production replay path.
+func TestPositionAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		email      string
+		exchange   string
+		symbol     string
+		product    string
+		want       string
+	}{
+		{"Standard CNC long", "u@t.com", "NSE", "RELIANCE", "CNC", "u@t.com:NSE:RELIANCE:CNC"},
+		{"MIS intraday", "trader@x.in", "NFO", "NIFTY24DEC", "MIS", "trader@x.in:NFO:NIFTY24DEC:MIS"},
+		{"NRML overnight", "u@t.com", "BSE", "TCS", "NRML", "u@t.com:BSE:TCS:NRML"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ik := NewInstrumentKey(tc.exchange, tc.symbol)
+			if got := PositionAggregateID(tc.email, ik, tc.product); got != tc.want {
+				t.Errorf("PositionAggregateID = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRiskguardCountersAggregateID pins the riskguard-counters key
+// shape: per-user "riskguard:<email>" plus the "riskguard:global"
+// sentinel for kill-switch (system-scope) events.
+func TestRiskguardCountersAggregateID(t *testing.T) {
+	t.Parallel()
+	if got := RiskguardCountersAggregateID("trader@example.com"); got != "riskguard:trader@example.com" {
+		t.Errorf("per-user = %q, want riskguard:trader@example.com", got)
+	}
+	if got := RiskguardCountersAggregateID(""); got != "riskguard:global" {
+		t.Errorf("empty (kill-switch) = %q, want riskguard:global", got)
+	}
+}
+
+// TestAnomalyCacheAggregateID pins the anomaly-cache aggregate-key
+// shape: per-user "anomaly:<email>" plus the "anomaly:unknown" guard
+// for malformed dispatches with empty UserEmail.
+func TestAnomalyCacheAggregateID(t *testing.T) {
+	t.Parallel()
+	if got := AnomalyCacheAggregateID("trader@example.com"); got != "anomaly:trader@example.com" {
+		t.Errorf("per-user = %q, want anomaly:trader@example.com", got)
+	}
+	if got := AnomalyCacheAggregateID(""); got != "anomaly:unknown" {
+		t.Errorf("empty = %q, want anomaly:unknown", got)
+	}
+}
+
+// TestPluginWatcherAggregateID pins the plugin-watcher key shape:
+// per-path mutations key by absolute path; the watcher lifecycle
+// events (started/stopped) have no path and route through the
+// "plugin-watcher:global" singleton string.
+func TestPluginWatcherAggregateID(t *testing.T) {
+	t.Parallel()
+	if got := PluginWatcherAggregateID("/abs/foo"); got != "plugin-watcher:/abs/foo" {
+		t.Errorf("per-path = %q, want plugin-watcher:/abs/foo", got)
+	}
+	if got := PluginWatcherAggregateID(""); got != "plugin-watcher:global" {
+		t.Errorf("empty (lifecycle) = %q, want plugin-watcher:global", got)
+	}
+}
+
+// TestTelegramSubscriptionAggregateID pins the telegram-subscription
+// per-user key shape and the "telegram:unknown" malformed-dispatch
+// guard.
+func TestTelegramSubscriptionAggregateID(t *testing.T) {
+	t.Parallel()
+	if got := TelegramSubscriptionAggregateID("trader@example.com"); got != "telegram:trader@example.com" {
+		t.Errorf("per-user = %q, want telegram:trader@example.com", got)
+	}
+	if got := TelegramSubscriptionAggregateID(""); got != "telegram:unknown" {
+		t.Errorf("empty = %q, want telegram:unknown", got)
 	}
 }
 

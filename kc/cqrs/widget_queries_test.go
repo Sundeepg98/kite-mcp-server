@@ -52,3 +52,15 @@ func TestWithWidgetAuditStore_NilInputs(t *testing.T) {
 		t.Fatalf("nil ctx should round-trip as nil, got %T", got)
 	}
 }
+
+// TestWidgetAuditStoreFromContext_NilCtx covers the nil-ctx guard on
+// the read-side helper. Pairs with TestWithWidgetAuditStore_NilInputs
+// (nil-ctx on the write helper) — both halves of the carrier must be
+// panic-safe so QueryBus dispatch can fail soft when context plumbing
+// glitches.
+func TestWidgetAuditStoreFromContext_NilCtx(t *testing.T) {
+	t.Parallel()
+	if got := WidgetAuditStoreFromContext(nil); got != nil { //nolint:staticcheck // intentionally nil
+		t.Fatalf("nil ctx should return nil store, got %T", got)
+	}
+}
