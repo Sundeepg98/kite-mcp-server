@@ -45,7 +45,9 @@ The user authorized Phase 2 with two-of-three positive (agent-concurrency + port
 
 ## Decision
 
-**Adopt `go.uber.org/fx` v1.24.0** for graph-resolved composition of `app/wire.go`'s subsystems. Migrate incrementally via per-domain provider files in `app/providers/`. Skip the inner `kc.Manager` migration (P2.5) because its 16 functional options + 16 named init helpers already give a structured surface; Mode-2 conflict on `manager_init.go` is low.
+**Adopt `go.uber.org/fx` v1.24.0** for graph-resolved composition of `app/wire.go`'s subsystems. Migrate incrementally via per-domain provider files in `app/providers/`.
+
+**Inner Manager migration (P2.5) — initially skipped, then re-authorized as a wrap-not-replace seam (2026-04-27 amendment).** The first version of this ADR skipped P2.5 because the projected ~1200 LOC restructure of `kc/manager_init.go`'s 16 init helpers offered marginal benefit at empirically low Mode-2 conflict rates (~3 commits/month vs `wire.go`'s 48/month). User override re-authorized the slice on the basis "not external, do it anyway." The shipped form (commits `4972d13` P2.5a + `5f08481` P2.5b) is a wrapping migration: `app/providers/manager.go` adds a `BuildManager` Fx provider that composes the existing `kc.NewWithOptions` orchestrator without restructuring its 16 init helpers. Net cost: ~422 LOC of new provider + tests + 67 LOC churn at the wire.go cutover. Net benefit: the inner Manager construction is now part of the typed Fx graph alongside the leaf providers, exposing a per-component swap seam (Axis C) at low risk. The ~1200 LOC restructure of the 16 helpers themselves remains rejected; the wrap-not-replace approach captures the architectural credit without the churn.
 
 ### Wire vs Fx
 
@@ -115,13 +117,13 @@ Three classes of work intentionally remain in `app/wire.go`:
 
 - **Side-effect closures that capture `*App` state**: rate-limit reload goroutine (`app.rateLimitReloadStop`), hash-publisher cancel (`app.hashPublisherCancel`), invitation cleanup (`app.invitationCleanupCancel`). These keep their inline construction because moving them would require either passing `*App` into providers (broad coupling) or introducing the `FxLifecycleAdapter` more aggressively than current scale justifies.
 
-- **Backward writes into `*kc.Manager`**: `kcManager.SetEventDispatcher`, `kcManager.SetEventStore`, `kcManager.SetMCPServer`, `kcManager.SetPaperEngine`, `kcManager.SetPnLService`, `kcManager.SetFamilyService`. These are calls into existing setter API; making them part of the Fx graph would require migrating the inner Manager (P2.5, intentionally skipped per `.research/wave-d-phase-2-recompute.md` §2).
+- **Backward writes into `*kc.Manager`**: `kcManager.SetEventDispatcher`, `kcManager.SetEventStore`, `kcManager.SetMCPServer`, `kcManager.SetPaperEngine`, `kcManager.SetPnLService`, `kcManager.SetFamilyService`. These are calls into existing setter API. P2.5b (commit `5f08481`) migrated the Manager construction call itself into the Fx graph via `providers.BuildManager`, but these post-construction setter calls remain at the wire.go composition site. Hoisting them into the graph would require either (a) restructuring the 16 init helpers in `kc/manager_init.go` (the explicitly-rejected ~1200 LOC churn) or (b) introducing post-init Fx invokes that take both `*kc.Manager` and the constructed dependencies — feasible but out of P2.5 scope.
 
 - **Package-global side effects**: `stripe.Key = stripeKey` — touching a third-party package global from a provider is an anti-pattern.
 
 ### What was rejected
 
-**P2.5 (inner Manager Fx migration)** was explicitly skipped. Recompute analysis (`.research/wave-d-phase-2-recompute.md` §2.2) projected ~1200 LOC for marginal benefit. The inner Manager already has a structured init surface (16 functional options + 16 named init helpers); Mode-2 conflict on `manager_init.go` is empirically low. Future work can revisit if conditions change.
+**Full restructure of `kc/manager_init.go`'s 16 init helpers** into 16 separate Fx providers remains rejected. Recompute analysis (`.research/wave-d-phase-2-recompute.md` §2.2) projected ~1200 LOC for marginal benefit. The 16 helpers share `*Manager` mutations and run linearly; converting them to Fx providers would just sequence them via wrapper-type chains with no parallelism gain. The user-overridden P2.5 slice (see Decision section) shipped the lighter wrap-not-replace form instead.
 
 **Logger Provider wrap (Investment B from `agent-concurrency-decoupling-plan.md`)** was rejected for both Wire-vs-Fx adoption decision: it's frequency-weighted to ~0 (config changes ~1/year) and does not eliminate any Mode-2 conflict file.
 
@@ -149,8 +151,11 @@ LOC actuals across Phase 2 slices (P2.1 through P2.4f, plus P2.6 cleanup):
 | P2.4d+e (mcpserver + middleware) | +423 | Fan-in struct pattern introduced |
 | P2.4f (eventDispatcher) | +465 | Subscription list as data; -78 wire.go |
 | P2.6 (this ADR + cleanup) | ~+150 | Doc + sentinel delete |
+| P2.5a (manager provider seam) | +422 | `BuildManager` + `InitializedManager` wrapper + 4 tests |
+| P2.5b (wire.go cutover to BuildManager) | +17 | +42 / -25 mechanical replace |
+| P2.5d (this amendment) | ~+30 | ADR re-authorization narrative + scorecard credit |
 
-Total Phase 2: ~3,330 LOC across `app/providers/` package + ADR/docs. Wire.go net delta: +985 → ~920 = -65 LOC. The asymmetry (3,330 LOC added vs 65 LOC removed) reflects two tax categories: heavy doc-comments preserving design intent at the call site (~50% of new files), and TDD-first test files (~85% of impl LOC). Both pay forward.
+Total Phase 2: ~3,800 LOC across `app/providers/` package + ADR/docs. Wire.go net delta: +985 → ~937 = -48 LOC (P2.5b added +17 to the prior ~920; P2.5c was skipped because the wrap-not-replace P2.5a/b shape produced no dead code to remove). The asymmetry reflects two tax categories: heavy doc-comments preserving design intent at the call site (~50% of new files), and TDD-first test files (~85% of impl LOC). Both pay forward.
 
 ### Migration discipline applied
 

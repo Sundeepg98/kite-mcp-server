@@ -204,14 +204,16 @@ weighted aggregate).
 
 | Pattern | Affected dim | Points blocked | Status |
 |---|---|---|---|
-| Wire/fx DI container | Hexagonal | +4 (was +5) | **PARTIALLY ADOPTED** via Phase 2 (P2.1-P2.6). +1 lift already counted in Hex 96. Remaining +3 requires Phase 3 / 4 (Manager-port + cross-context fan-out) — explicitly out of scope. |
+| Wire/fx DI container | Hexagonal | +3 (was +5) | **PARTIALLY ADOPTED** via Phase 2 (P2.1-P2.6) plus the user-overridden P2.5a/b inner-Manager wrap (commits `4972d13` + `5f08481`, 2026-04-27). +2 lift cumulative in Hex (currently 96 baseline; P2.5a/b adds +0.3-0.5 to be settled in next re-grade). Remaining +3 requires Phase 3 / 4 (full restructure of `kc/manager_init.go`'s 16 helpers + cross-context fan-out) — explicitly rejected per ADR 0006 §"What was rejected" as ~1200 LOC for marginal benefit. |
 | Logger Provider wrap | SOLID | +3 (was +4) | **PARTIALLY ADOPTED** via `532da34`. +1 lift counted in SOLID 97. Full adoption (every prod call site routes through `deps.Logger`) remains rejected. |
 | Middleware split | Middleware | +5 | Permanent ceiling at 95 |
 | Full ES (state-from-events for ALL aggregates) | Event Sourcing | 0 (was +13) | **CALIBRATED CEILING REACHED.** ES at 100 reflects 6-aggregate event-sourcing + typed events + outbox + dual-emit cleanup as the ceiling-meeting interpretation. The original "+13 anti-rec'd" framing dissolved when the rubric calibrated to "what % of write-side state changes flow through typed events" (now ~100%). |
 
-**Anti-rec'd points blocked (sum): 12 of 1300 = 0.92 percentage-
-points** (was 27 / 2.08% — Phase 2 + ES sweep + Logger port
-collectively reclaimed 15 points).
+**Anti-rec'd points blocked (sum): 11 of 1300 = 0.85 percentage-
+points** (was 12 / 0.92% — P2.5a/b inner-Manager wrap reclaimed 1
+more point on the Wire/fx ledger). Cumulative reclaim across Phase
+2 + ES sweep + Logger port + P2.5: 16 points moved from anti-rec'd
+to shipped.
 
 ### External-$$ items (SCALE-GATED — unchanged)
 
@@ -239,12 +241,12 @@ points** (unchanged).
 ### Total ceiling math
 
 Theoretical 100 across all 13 dims = 1300. Anti-rec'd + external-$$
-+ irreducible block: 12 + 64 + 0 = **76 points** = **5.85% of
++ irreducible block: 11 + 64 + 0 = **75 points** = **5.77% of
 theoretical max**.
 
-Empirical max under constraints = 100 − 5.85 = **94.15 equal-
-weighted** (was 92.96, lifted by +1.19 from anti-rec'd partial
-adoption + ES calibration).
+Empirical max under constraints = 100 − 5.77 = **94.23 equal-
+weighted** (was 94.15, lifted by +0.08 from P2.5a/b's reclaim of
+the inner-Manager wrap point on the Wire/fx anti-rec'd ledger).
 
 **Current 91.92 equal-weighted is at 97.6% of the empirical-max
 ceiling.** The remaining 2.23 points are:
