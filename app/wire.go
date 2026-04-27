@@ -92,33 +92,50 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		}
 	}
 
-	// Migrated to kc.NewWithOptions — the functional-options pattern
-	// aligns with the rest of the codebase (testutil/kcfixture,
-	// kc/ticker/config.go, kc/scheduler/provider.go). Each With* helper
-	// documents the one field it sets; granular setters compose cleanly
-	// at the composition-root boundary.
-	kcManager, err := kc.NewWithOptions(context.Background(),
-		kc.WithLogger(app.logger),
-		kc.WithKiteCredentials(app.Config.KiteAPIKey, app.Config.KiteAPISecret),
-		kc.WithAccessToken(app.Config.KiteAccessToken),
-		kc.WithMetrics(app.metrics),
-		kc.WithTelegramBotToken(app.Config.TelegramBotToken),
-		kc.WithAlertDB(alertDB),
-		kc.WithAlertDBPath(app.Config.AlertDBPath),
-		kc.WithAppMode(app.Config.AppMode),
-		kc.WithExternalURL(app.Config.ExternalURL),
-		kc.WithAdminSecretPath(app.Config.AdminSecretPath),
-		kc.WithEncryptionSecret(app.Config.OAuthJWTSecret),
-		kc.WithDevMode(app.DevMode),
-		kc.WithInstrumentsSkipFetch(skipInstrumentsFetch),
-		kc.WithAuditStore(preAuditStore),
-		kc.WithRiskGuard(preRiskGuard),
-		kc.WithBillingStore(preBillingStore),
-		kc.WithInvitationStore(preInvStore),
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Kite Connect manager: %w", err)
+	// Wave D Phase 2 Slice P2.5b: Manager construction routes through
+	// the providers.BuildManager Fx provider seam (shipped in P2.5a /
+	// commit 4972d13). The migration is behaviour-preserving — the
+	// field-by-field projection of app.Config + pre-constructed
+	// sub-stores into ManagerConfig matches the prior 17-setter With*
+	// chain exactly (see app/providers/manager.go). Error message
+	// preserved verbatim ("failed to create Kite Connect manager: ...")
+	// so log-search rules and alert assertions continue to match.
+	mgrCfg := providers.ManagerConfig{
+		Logger:               app.logger,
+		Metrics:              app.metrics,
+		KiteAPIKey:           app.Config.KiteAPIKey,
+		KiteAPISecret:        app.Config.KiteAPISecret,
+		KiteAccessToken:      app.Config.KiteAccessToken,
+		AppMode:              app.Config.AppMode,
+		ExternalURL:          app.Config.ExternalURL,
+		AdminSecretPath:      app.Config.AdminSecretPath,
+		TelegramBotToken:     app.Config.TelegramBotToken,
+		DevMode:              app.DevMode,
+		InstrumentsSkipFetch: skipInstrumentsFetch,
+		AlertDB:              alertDB,
+		AlertDBPath:          app.Config.AlertDBPath,
+		EncryptionSecret:     app.Config.OAuthJWTSecret,
+		AuditStore:           preAuditStore,
+		RiskGuard:            preRiskGuard,
+		BillingStore:         preBillingStore,
+		InvitationStore:      preInvStore,
 	}
+	var mgrInit *providers.InitializedManager
+	mgrFxApp := fx.New(
+		fx.NopLogger,
+		fx.Supply(mgrCfg),
+		fx.Supply(fx.Annotate(context.Background(), fx.As(new(context.Context)))),
+		fx.Provide(providers.BuildManager),
+		fx.Populate(&mgrInit),
+	)
+	if err := mgrFxApp.Err(); err != nil {
+		// fx.New surfaces the error from BuildManager. The provider
+		// already wraps with the legacy "failed to create Kite
+		// Connect manager:" prefix so this return is identical to
+		// the prior direct-call return path.
+		return nil, nil, err
+	}
+	kcManager := mgrInit.Manager
 
 	// Store reference for template data
 	app.kcManager = kcManager
