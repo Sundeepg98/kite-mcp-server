@@ -481,9 +481,19 @@ func (g *Guard) RecordOrder(email string, req ...OrderCheckRequest) {
 			PlacedAt:        now,
 		})
 		if r.Price.IsPositive() {
-			// DailyPlacedValue is still float64 (Slice 3 will Money-ify it);
-			// drop to the primitive at this boundary.
-			t.DailyPlacedValue += float64(r.Quantity) * r.Price.Float64()
+			// Cumulative Money tracker grows by qty * price. Cross-currency
+			// would error and we silently drop the increment — in this code
+			// path both sides are INR-denominated so the error path is
+			// unreachable in practice.
+			notional := r.Price.Multiply(float64(r.Quantity))
+			if t.DailyPlacedValue.IsZero() {
+				// First priced increment of the day: assign rather than
+				// Add so the currency is set without going through the
+				// "INR vs zero-currency" mismatch path.
+				t.DailyPlacedValue = notional
+			} else if sum, err := t.DailyPlacedValue.Add(notional); err == nil {
+				t.DailyPlacedValue = sum
+			}
 		}
 	}
 	dispatcher := g.events

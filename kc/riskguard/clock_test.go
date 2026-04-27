@@ -32,7 +32,7 @@ func TestMaybeResetDay_BeforeMarketOpen(t *testing.T) {
 	// reset but still after yesterday's 9:15.
 	tracker.DayResetAt = time.Date(2026, 4, 7, 10, 0, 0, 0, ist) // yesterday 10 AM
 	tracker.DailyOrderCount = 42
-	tracker.DailyPlacedValue = 99999
+	tracker.DailyPlacedValue = domain.NewINR(99999)
 	g.mu.Unlock()
 
 	// GetUserStatus calls maybeResetDay under the hood.
@@ -42,7 +42,7 @@ func TestMaybeResetDay_BeforeMarketOpen(t *testing.T) {
 	// Our tracker's DayResetAt (yesterday 10:00 AM) is AFTER yesterday's 9:15,
 	// so no reset should occur.
 	assert.Equal(t, 42, status.DailyOrderCount, "daily count should NOT be reset before 9:15 AM IST when last reset was after yesterday's 9:15")
-	assert.Equal(t, float64(99999), status.DailyPlacedValue, "daily value should NOT be reset before 9:15 AM IST")
+	assert.Equal(t, float64(99999), status.DailyPlacedValue.Float64(), "daily value should NOT be reset before 9:15 AM IST")
 }
 
 // TestMaybeResetDay_AfterMarketOpen verifies that daily counters ARE reset
@@ -59,7 +59,7 @@ func TestMaybeResetDay_AfterMarketOpen(t *testing.T) {
 	tracker := g.getOrCreateTracker(email)
 	tracker.DayResetAt = time.Date(2026, 4, 7, 10, 0, 0, 0, ist) // yesterday 10 AM
 	tracker.DailyOrderCount = 42
-	tracker.DailyPlacedValue = 99999
+	tracker.DailyPlacedValue = domain.NewINR(99999)
 	g.mu.Unlock()
 
 	// Now set clock to 9:30 AM IST today (after market open).
@@ -71,7 +71,7 @@ func TestMaybeResetDay_AfterMarketOpen(t *testing.T) {
 	// Today's 9:15 is the boundary. DayResetAt (yesterday 10 AM) is before
 	// today's 9:15, so counters should reset.
 	assert.Equal(t, 0, status.DailyOrderCount, "daily count should be reset after 9:15 AM IST")
-	assert.Equal(t, float64(0), status.DailyPlacedValue, "daily value should be reset after 9:15 AM IST")
+	assert.Equal(t, float64(0), status.DailyPlacedValue.Float64(), "daily value should be reset after 9:15 AM IST")
 }
 
 // TestMaybeResetDay_ExactlyAt915 verifies boundary behavior at exactly 9:15 AM IST.
@@ -87,7 +87,7 @@ func TestMaybeResetDay_ExactlyAt915(t *testing.T) {
 	tracker := g.getOrCreateTracker(email)
 	tracker.DayResetAt = time.Date(2026, 4, 7, 10, 0, 0, 0, ist)
 	tracker.DailyOrderCount = 50
-	tracker.DailyPlacedValue = 200000
+	tracker.DailyPlacedValue = domain.NewINR(200000)
 	g.mu.Unlock()
 
 	// At exactly 9:15 AM IST.
@@ -100,7 +100,7 @@ func TestMaybeResetDay_ExactlyAt915(t *testing.T) {
 	// stays at today's 9:15. DayResetAt (yesterday 10 AM) is before today's
 	// 9:15, so counters should reset.
 	assert.Equal(t, 0, status.DailyOrderCount, "daily count should be reset at exactly 9:15 AM IST")
-	assert.Equal(t, float64(0), status.DailyPlacedValue, "daily value should be reset at exactly 9:15 AM IST")
+	assert.Equal(t, float64(0), status.DailyPlacedValue.Float64(), "daily value should be reset at exactly 9:15 AM IST")
 }
 
 // TestMaybeResetDay_SameDayNoDoubleReset verifies that once reset, a second

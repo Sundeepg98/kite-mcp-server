@@ -181,10 +181,19 @@ func (uc *AdminGetRiskStatusUseCase) Execute(ctx context.Context, query cqrs.Adm
 
 	status := uc.riskguard.GetUserStatus(query.TargetEmail)
 	limits := uc.riskguard.GetEffectiveLimits(query.TargetEmail)
-	// MaxDailyValueINR is now a Money VO; convert to float at the boundary
-	// because OrderHeadroom is a JSON wire field consumed by external dashboards.
-	// Slice 3 of the Money sweep will Money-ify DailyPlacedValue too.
-	headroom := limits.MaxDailyValueINR.Float64() - status.DailyPlacedValue
+	// Both MaxDailyValueINR and DailyPlacedValue are now Money VOs (Slices
+	// 1 + 3). Compute headroom Money-side via Sub, then drop to float at
+	// the JSON boundary because OrderHeadroom is consumed by external
+	// dashboards as a primitive number.
+	var headroom float64
+	if remaining, err := limits.MaxDailyValueINR.Sub(status.DailyPlacedValue); err == nil {
+		headroom = remaining.Float64()
+	} else {
+		// Currency mismatch — should be unreachable in practice (both
+		// sides INR). Fall back to primitive subtraction so the
+		// dashboard still gets a number.
+		headroom = limits.MaxDailyValueINR.Float64() - status.DailyPlacedValue.Float64()
+	}
 	headroom = max(headroom, 0)
 
 	return &AdminGetRiskStatusResult{

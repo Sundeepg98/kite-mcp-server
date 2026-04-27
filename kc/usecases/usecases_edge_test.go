@@ -212,7 +212,7 @@ func TestAdminGetUser_NotFound(t *testing.T) {
 func TestAdminGetRiskStatus_Success(t *testing.T) {
 	t.Parallel()
 	rg := &mockRiskGuard{
-		userStatus: riskguard.UserStatus{DailyPlacedValue: 50000},
+		userStatus: riskguard.UserStatus{DailyPlacedValue: domain.NewINR(50000)},
 		userLimits: riskguard.UserLimits{MaxDailyValueINR: domain.NewINR(1000000)},
 	}
 	uc := NewAdminGetRiskStatusUseCase(rg, testLogger())
@@ -224,7 +224,7 @@ func TestAdminGetRiskStatus_Success(t *testing.T) {
 func TestAdminGetRiskStatus_NegativeHeadroom(t *testing.T) {
 	t.Parallel()
 	rg := &mockRiskGuard{
-		userStatus: riskguard.UserStatus{DailyPlacedValue: 2000000},
+		userStatus: riskguard.UserStatus{DailyPlacedValue: domain.NewINR(2000000)},
 		userLimits: riskguard.UserLimits{MaxDailyValueINR: domain.NewINR(1000000)},
 	}
 	uc := NewAdminGetRiskStatusUseCase(rg, testLogger())

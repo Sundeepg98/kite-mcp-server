@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 func TestEvaluator_MarkTriggeredRace(t *testing.T) {
@@ -730,8 +732,8 @@ func TestFormatMISWarning_RealisticPositions(t *testing.T) {
 	t.Parallel()
 
 	open := []misPosition{
-		{Symbol: "SBIN", Quantity: 100, PnL: 1500},
-		{Symbol: "BHARTIARTL", Quantity: -50, PnL: -300},
+		{Symbol: "SBIN", Quantity: 100, PnL: domain.NewINR(1500)},
+		{Symbol: "BHARTIARTL", Quantity: -50, PnL: domain.NewINR(-300)},
 	}
 
 	result := formatMISWarning(open)

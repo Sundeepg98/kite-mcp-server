@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 
@@ -413,7 +415,7 @@ func TestFormatMorningBriefing_NoAlerts_ValidToken_BeforeMarket(t *testing.T) {
 		TokenStatus:     "valid",
 		Now:             now,
 		HasHoldings:     true,
-		HoldingsDayPnL:  1500,
+		HoldingsDayPnL:  domain.NewINR(1500),
 		HoldingsCount:   5,
 		HasMargin:       true,
 		MarginAvailable: 50000,
@@ -520,7 +522,7 @@ func TestFormatMorningBriefing_NegativePnL(t *testing.T) {
 		TokenStatus:    "valid",
 		Now:            now,
 		HasHoldings:    true,
-		HoldingsDayPnL: -3500,
+		HoldingsDayPnL: domain.NewINR(-3500),
 		HoldingsCount:  10,
 	}
 
@@ -536,7 +538,7 @@ func TestFormatDailySummary_FullData(t *testing.T) {
 	t.Parallel()
 	data := dailySummaryData{
 		DateStr:        "April 7, 2026",
-		HoldingsDayPnL: 5000,
+		HoldingsDayPnL: domain.NewINR(5000),
 		HoldingsCount:  10,
 		Changes: []stockChange{
 			{Symbol: "RELIANCE", Percent: 3.5},
@@ -544,7 +546,7 @@ func TestFormatDailySummary_FullData(t *testing.T) {
 			{Symbol: "TCS", Percent: -1.5},
 			{Symbol: "HDFC", Percent: -3.0},
 		},
-		PositionsPnL:   -2000,
+		PositionsPnL:   domain.NewINR(-2000),
 		PositionsCount: 3,
 	}
 
@@ -566,7 +568,7 @@ func TestFormatDailySummary_HoldingsError(t *testing.T) {
 	data := dailySummaryData{
 		DateStr:        "April 7, 2026",
 		HoldingsErr:    true,
-		PositionsPnL:   1000,
+		PositionsPnL:   domain.NewINR(1000),
 		PositionsCount: 2,
 	}
 
@@ -580,7 +582,7 @@ func TestFormatDailySummary_PositionsError(t *testing.T) {
 	t.Parallel()
 	data := dailySummaryData{
 		DateStr:        "April 7, 2026",
-		HoldingsDayPnL: 2000,
+		HoldingsDayPnL: domain.NewINR(2000),
 		HoldingsCount:  5,
 		PositionsErr:   true,
 	}
@@ -595,7 +597,7 @@ func TestFormatDailySummary_NoChanges(t *testing.T) {
 	t.Parallel()
 	data := dailySummaryData{
 		DateStr:        "April 7, 2026",
-		HoldingsDayPnL: 0,
+		HoldingsDayPnL: domain.Money{},
 		HoldingsCount:  0,
 	}
 
@@ -644,7 +646,7 @@ func TestFormatDailySummary_OnlyLosers(t *testing.T) {
 func TestFormatMISWarning_SingleLong(t *testing.T) {
 	t.Parallel()
 	open := []misPosition{
-		{Symbol: "RELIANCE", Quantity: 10, PnL: 500},
+		{Symbol: "RELIANCE", Quantity: 10, PnL: domain.NewINR(500)},
 	}
 
 	result := formatMISWarning(open)
@@ -659,8 +661,8 @@ func TestFormatMISWarning_SingleLong(t *testing.T) {
 func TestFormatMISWarning_MixedPositions(t *testing.T) {
 	t.Parallel()
 	open := []misPosition{
-		{Symbol: "RELIANCE", Quantity: 10, PnL: 500},
-		{Symbol: "INFY", Quantity: -5, PnL: -200},
+		{Symbol: "RELIANCE", Quantity: 10, PnL: domain.NewINR(500)},
+		{Symbol: "INFY", Quantity: -5, PnL: domain.NewINR(-200)},
 	}
 
 	result := formatMISWarning(open)
@@ -674,7 +676,7 @@ func TestFormatMISWarning_MixedPositions(t *testing.T) {
 func TestFormatMISWarning_NegativePnL(t *testing.T) {
 	t.Parallel()
 	open := []misPosition{
-		{Symbol: "TCS", Quantity: 15, PnL: -3000},
+		{Symbol: "TCS", Quantity: 15, PnL: domain.NewINR(-3000)},
 	}
 
 	result := formatMISWarning(open)

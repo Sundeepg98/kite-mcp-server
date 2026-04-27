@@ -529,7 +529,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	// g.clock() on weekend CI runs (where the pin rolls back to Friday).
 	tracker.DayResetAt = markerTimeOnPinnedDay(10, 30).AddDate(0, 0, -2)
 	tracker.DailyOrderCount = 150
-	tracker.DailyPlacedValue = 500000
+	tracker.DailyPlacedValue = domain.NewINR(500000)
 	g.mu.Unlock()
 
 	// CheckOrder will call maybeResetDay internally
@@ -543,7 +543,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	// Verify counters were reset
 	status := g.GetUserStatus(email)
 	assert.Equal(t, 0, status.DailyOrderCount)
-	assert.Equal(t, 0.0, status.DailyPlacedValue)
+	assert.Equal(t, 0.0, status.DailyPlacedValue.Float64())
 }
 
 func TestMaybeResetDay_SameDay_NoReset(t *testing.T) {
@@ -634,7 +634,7 @@ func TestRecordOrder_WithoutParams(t *testing.T) {
 	assert.Equal(t, 2, tracker.DailyOrderCount)
 	assert.Equal(t, 2, len(tracker.RecentOrders))
 	assert.Equal(t, 0, len(tracker.RecentParams)) // no params recorded
-	assert.Equal(t, 0.0, tracker.DailyPlacedValue) // no value tracked
+	assert.Equal(t, 0.0, tracker.DailyPlacedValue.Float64()) // no value tracked
 	g.mu.RUnlock()
 }
 
@@ -660,7 +660,7 @@ func TestGetUserStatus_FrozenUser(t *testing.T) {
 	assert.Equal(t, "status test", status.FrozenReason)
 	assert.False(t, status.FrozenAt.IsZero())
 	assert.Equal(t, 1, status.DailyOrderCount)
-	assert.InDelta(t, 10000.0, status.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 10000.0, status.DailyPlacedValue.Float64(), 0.01)
 }
 
 // =============================================================================
@@ -1034,7 +1034,7 @@ func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
 	}
 	g.trackers[email] = &UserTracker{
 		DayResetAt:       time.Now(),
-		DailyPlacedValue: 999, // just under limit
+		DailyPlacedValue: domain.NewINR(999), // just under limit
 	}
 	g.mu.Unlock()
 
@@ -1068,12 +1068,12 @@ func TestMaybeResetDay_RecentResetNoChange(t *testing.T) {
 	tracker := g.getOrCreateTracker(email)
 	tracker.DayResetAt = time.Now()
 	tracker.DailyOrderCount = 42
-	tracker.DailyPlacedValue = 50000
+	tracker.DailyPlacedValue = domain.NewINR(50000)
 	g.mu.Unlock()
 
 	status := g.GetUserStatus(email)
 	assert.Equal(t, 42, status.DailyOrderCount)
-	assert.InDelta(t, 50000.0, status.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 50000.0, status.DailyPlacedValue.Float64(), 0.01)
 }
 
 func TestMaybeResetDay_OldResetTriggersReset(t *testing.T) {
@@ -1087,12 +1087,12 @@ func TestMaybeResetDay_OldResetTriggersReset(t *testing.T) {
 	tracker := g.getOrCreateTracker(email)
 	tracker.DayResetAt = time.Now().In(ist).AddDate(0, 0, -3)
 	tracker.DailyOrderCount = 150
-	tracker.DailyPlacedValue = 999999
+	tracker.DailyPlacedValue = domain.NewINR(999999)
 	g.mu.Unlock()
 
 	status := g.GetUserStatus(email)
 	assert.Equal(t, 0, status.DailyOrderCount)
-	assert.InDelta(t, 0.0, status.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 0.0, status.DailyPlacedValue.Float64(), 0.01)
 }
 
 // =============================================================================

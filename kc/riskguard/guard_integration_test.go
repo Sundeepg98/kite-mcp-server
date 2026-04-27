@@ -71,7 +71,7 @@ func TestFullChain_AllChecksPass(t *testing.T) {
 
 	status := g.GetUserStatus(email)
 	assert.Equal(t, 1, status.DailyOrderCount)
-	assert.InDelta(t, 5*1500.0, status.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 5*1500.0, status.DailyPlacedValue.Float64(), 0.01)
 	assert.False(t, status.IsFrozen)
 }
 
@@ -384,7 +384,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 	// Simulate Rs 1,90,000 already placed.
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	tracker.DailyPlacedValue = 190000
+	tracker.DailyPlacedValue = domain.NewINR(190000)
 	tracker.DayResetAt = g.clock()
 	g.mu.Unlock()
 
@@ -419,7 +419,7 @@ func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
 	// Simulate Rs 1,99,999 already placed (just under new Rs 2L cap).
 	g.mu.Lock()
 	tracker := g.getOrCreateTracker(email)
-	tracker.DailyPlacedValue = 199999
+	tracker.DailyPlacedValue = domain.NewINR(199999)
 	tracker.DayResetAt = time.Now()
 	g.mu.Unlock()
 
@@ -593,7 +593,7 @@ func TestFullChain_RecordOrder_UpdatesAllTrackers(t *testing.T) {
 	assert.Equal(t, 3, tracker.DailyOrderCount)
 	assert.Equal(t, 3, len(tracker.RecentOrders))
 	assert.Equal(t, 3, len(tracker.RecentParams))
-	assert.InDelta(t, 3*10*3500.0, tracker.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 3*10*3500.0, tracker.DailyPlacedValue.Float64(), 0.01)
 	g.mu.RUnlock()
 }
 

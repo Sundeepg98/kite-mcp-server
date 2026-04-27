@@ -202,10 +202,8 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 		return CheckResult{Allowed: true} // MARKET orders — price unknown
 	}
 	limits := g.GetEffectiveLimits(email)
-	// Scale Money price by qty for the order's notional. DailyPlacedValue
-	// is still float (Slice 3 will Money-ify it), so we drop to float
-	// only on the cumulative + comparison path.
-	orderValue := req.Price.Multiply(float64(req.Quantity)).Float64()
+	// Scale Money price by qty for the order's notional.
+	orderValue := req.Price.Multiply(float64(req.Quantity))
 
 	g.mu.Lock()
 	t := g.getOrCreateTracker(email)
@@ -215,13 +213,26 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 	g.mu.Unlock()
 	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
 
-	cumulative := domain.NewINR(placed + orderValue)
+	// Cumulative = placed + this order. If placed is the zero-Money
+	// sentinel (no priced orders yet today), use orderValue directly so
+	// the currency mismatch path is avoided.
+	var cumulative domain.Money
+	if placed.IsZero() {
+		cumulative = orderValue
+	} else if sum, err := placed.Add(orderValue); err == nil {
+		cumulative = sum
+	} else {
+		// Currency mismatch — fail open (allow). Both sides are INR
+		// denominated in this code path so this is unreachable in
+		// practice; the conservative choice avoids false rejections.
+		return CheckResult{Allowed: true}
+	}
 	exceeds, err := cumulative.GreaterThan(limits.MaxDailyValueINR)
 	if err == nil && exceeds {
 		return CheckResult{
 			Allowed: false, Reason: ReasonDailyValueLimit,
 			Message: fmt.Sprintf("Cumulative placed value Rs %.0f + this order Rs %.0f exceeds daily limit Rs %.0f",
-				placed, orderValue, limits.MaxDailyValueINR.Float64()),
+				placed.Float64(), orderValue.Float64(), limits.MaxDailyValueINR.Float64()),
 		}
 	}
 	return CheckResult{Allowed: true}

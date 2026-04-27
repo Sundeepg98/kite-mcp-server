@@ -105,7 +105,7 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				if email != "" {
 					userStatus := guard.GetUserStatus(email)
 					rgSection.DailyOrderCount = userStatus.DailyOrderCount
-					rgSection.DailyValueINR = userStatus.DailyPlacedValue
+					rgSection.DailyValueINR = userStatus.DailyPlacedValue.Float64()
 					rgSection.Frozen = userStatus.IsFrozen
 					if userStatus.IsFrozen {
 						rgSection.Status = "FROZEN"

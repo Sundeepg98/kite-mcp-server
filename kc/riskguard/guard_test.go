@@ -377,7 +377,7 @@ func TestCheckDailyValue(t *testing.T) {
 		// Record orders worth Rs 90,000
 		g.mu.Lock()
 		tracker := g.getOrCreateTracker(email)
-		tracker.DailyPlacedValue = 90000
+		tracker.DailyPlacedValue = domain.NewINR(90000)
 		tracker.DayResetAt = g.clock()
 		g.mu.Unlock()
 
@@ -405,7 +405,7 @@ func TestCheckDailyValue(t *testing.T) {
 		// markerTimeOnPinnedDay so the date-component matches g.clock()
 		// on weekend CI runs (where the pin rolls back to Friday).
 		tracker.DayResetAt = markerTimeOnPinnedDay(10, 30).AddDate(0, 0, -1)
-		tracker.DailyPlacedValue = 99999
+		tracker.DailyPlacedValue = domain.NewINR(99999)
 		g.mu.Unlock()
 
 		r := g.CheckOrder(OrderCheckRequest{

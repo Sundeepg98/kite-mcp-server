@@ -135,7 +135,7 @@ func TestSetEventDispatcher_DailyCounterReset_DispatchesOnRollover(t *testing.T)
 	tracker := g.getOrCreateTracker(email)
 	tracker.DayResetAt = time.Date(2026, 4, 7, 10, 0, 0, 0, ist) // yesterday 10 AM
 	tracker.DailyOrderCount = 15
-	tracker.DailyPlacedValue = 50000
+	tracker.DailyPlacedValue = domain.NewINR(50000)
 	g.mu.Unlock()
 
 	// Clock cross to today 9:30 AM IST → reset should fire.

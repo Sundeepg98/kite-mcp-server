@@ -10,7 +10,9 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 
@@ -216,11 +218,14 @@ func (b *BriefingService) buildMorningBriefing(email, dateStr string, now time.T
 			// Portfolio day P&L from holdings
 			holdings, err := bp.GetHoldings(apiKey, accessToken)
 			if err == nil && len(holdings) > 0 {
+				// Aggregate broker DayChange (float64) into Money. Wrap
+				// once at the assignment seam — broker types stay primitive
+				// (out-of-scope for Slice 3); Money entry happens here.
 				var dayPnL float64
 				for _, h := range holdings {
 					dayPnL += h.DayChange
 				}
-				data.HoldingsDayPnL = dayPnL
+				data.HoldingsDayPnL = domain.NewINR(dayPnL)
 				data.HoldingsCount = len(holdings)
 				data.HasHoldings = true
 			}
@@ -251,13 +256,17 @@ func (b *BriefingService) buildMorningBriefing(email, dateStr string, now time.T
 }
 
 // morningBriefingData holds pre-fetched data for morning briefing formatting.
+//
+// HoldingsDayPnL is typed Money (Slice 3 of the Money sweep). Internal
+// aggregation uses primitive sum (broker DayChange is float64) and wraps
+// once at the assignment seam; format helper drops to float at boundary.
 type morningBriefingData struct {
 	DateStr        string
 	Triggered      []*Alert
 	TokenStatus    string // "valid", "expired", "not_found"
 	Now            time.Time
 	HasHoldings    bool
-	HoldingsDayPnL float64
+	HoldingsDayPnL domain.Money
 	HoldingsCount  int
 	HasMargin      bool
 	MarginAvailable float64
@@ -299,7 +308,7 @@ func formatMorningBriefing(data morningBriefingData) string {
 
 	// Portfolio data
 	if data.HasHoldings {
-		sb.WriteString(fmt.Sprintf("\nPortfolio: %s day P&amp;L (%d stocks)\n", formatRupee(data.HoldingsDayPnL), data.HoldingsCount))
+		sb.WriteString(fmt.Sprintf("\nPortfolio: %s day P&amp;L (%d stocks)\n", formatRupee(data.HoldingsDayPnL.Float64()), data.HoldingsCount))
 	}
 	if data.HasMargin {
 		sb.WriteString(fmt.Sprintf("Margin available: \u20B9%.0f\n", data.MarginAvailable))
@@ -384,12 +393,17 @@ func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr 
 		data.HoldingsErr = true
 	} else {
 		data.HoldingsCount = len(holdings)
+		// Aggregate broker DayChange (float64) into Money. Sum primitive
+		// then wrap once — avoids Money.Add roundtrip per holding (typical
+		// 10-100 holdings per user).
+		var dayPnL float64
 		for _, h := range holdings {
-			data.HoldingsDayPnL += h.DayChange
+			dayPnL += h.DayChange
 			if h.DayChangePercentage != 0 {
 				data.Changes = append(data.Changes, stockChange{Symbol: h.Tradingsymbol, Percent: h.DayChangePercentage})
 			}
 		}
+		data.HoldingsDayPnL = domain.NewINR(dayPnL)
 	}
 
 	positions, err := bp.GetPositions(apiKey, accessToken)
@@ -398,23 +412,31 @@ func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr 
 		data.PositionsErr = true
 	} else {
 		data.PositionsCount = len(positions.Day)
+		// Aggregate broker PnL (signed float64) into Money. Sign is
+		// preserved through Money — losses are negative, profits positive.
+		var positionsPnL float64
 		for _, p := range positions.Day {
-			data.PositionsPnL += p.PnL
+			positionsPnL += p.PnL
 		}
+		data.PositionsPnL = domain.NewINR(positionsPnL)
 	}
 
 	return formatDailySummary(data)
 }
 
 // dailySummaryData holds pre-fetched data for daily summary formatting.
+//
+// HoldingsDayPnL + PositionsPnL are typed Money (Slice 3 of the Money
+// sweep). The format helper boundary drops to float64 via .Float64();
+// internal aggregation uses primitive sum + Money wrap at assignment.
 type dailySummaryData struct {
 	DateStr        string
 	HoldingsErr    bool
-	HoldingsDayPnL float64
+	HoldingsDayPnL domain.Money
 	HoldingsCount  int
 	Changes        []stockChange
 	PositionsErr   bool
-	PositionsPnL   float64
+	PositionsPnL   domain.Money
 	PositionsCount int
 }
 
@@ -427,18 +449,25 @@ func formatDailySummary(data dailySummaryData) string {
 		sb.WriteString("Holdings P&amp;L: <i>unavailable</i>\n")
 	} else {
 		sb.WriteString(fmt.Sprintf("Holdings P&amp;L: %s (%d stocks)\n",
-			formatRupee(data.HoldingsDayPnL), data.HoldingsCount))
+			formatRupee(data.HoldingsDayPnL.Float64()), data.HoldingsCount))
 	}
 
 	if data.PositionsErr {
 		sb.WriteString("Positions P&amp;L: <i>unavailable</i>\n")
 	} else {
 		sb.WriteString(fmt.Sprintf("Positions P&amp;L: %s (%d positions)\n",
-			formatRupee(data.PositionsPnL), data.PositionsCount))
+			formatRupee(data.PositionsPnL.Float64()), data.PositionsCount))
 	}
 
-	netPnL := data.HoldingsDayPnL + data.PositionsPnL
-	sb.WriteString(fmt.Sprintf("<b>Net Day P&amp;L: %s</b>\n", formatRupee(netPnL)))
+	// Net = Holdings + Positions. Money.Add is currency-aware; on
+	// mismatch (impossible here, both INR) fall back to primitive sum.
+	var netPnL domain.Money
+	if sum, err := data.HoldingsDayPnL.Add(data.PositionsPnL); err == nil {
+		netPnL = sum
+	} else {
+		netPnL = domain.NewINR(data.HoldingsDayPnL.Float64() + data.PositionsPnL.Float64())
+	}
+	sb.WriteString(fmt.Sprintf("<b>Net Day P&amp;L: %s</b>\n", formatRupee(netPnL.Float64())))
 
 	// Top gainers and losers from holdings.
 	if len(data.Changes) > 0 {
@@ -544,10 +573,13 @@ func filterNegativeChanges(changes []stockChange, n int) []stockChange {
 }
 
 // misPosition holds a single MIS position for formatting.
+//
+// PnL is typed Money (Slice 3); sign-preserving — domain.NewINR accepts
+// any sign so losses (negative) are preserved through the wrap.
 type misPosition struct {
 	Symbol   string
 	Quantity int
-	PnL      float64
+	PnL      domain.Money
 }
 
 // filterMISPositions extracts open MIS positions from a Kite Positions response.
@@ -555,7 +587,7 @@ func filterMISPositions(positions kiteconnect.Positions) []misPosition {
 	var open []misPosition
 	for _, p := range positions.Net {
 		if p.Quantity != 0 && strings.ToUpper(p.Product) == "MIS" {
-			open = append(open, misPosition{Symbol: p.Tradingsymbol, Quantity: p.Quantity, PnL: p.PnL})
+			open = append(open, misPosition{Symbol: p.Tradingsymbol, Quantity: p.Quantity, PnL: domain.NewINR(p.PnL)})
 		}
 	}
 	return open
@@ -567,6 +599,8 @@ func formatMISWarning(open []misPosition) string {
 	sb.WriteString(fmt.Sprintf("\u26A0\uFE0F <b>MIS Square-Off Warning</b>\n\n"))
 	sb.WriteString(fmt.Sprintf("You have <b>%d open MIS position(s)</b> that will be auto-squared off around 3:15-3:20 PM IST.\n\n", len(open)))
 
+	// totalPnL accumulates Money via primitive sum then formats once at the
+	// end. Same pattern as buildDailySummary aggregation seam.
 	var totalPnL float64
 	for _, p := range open {
 		direction := "LONG"
@@ -574,8 +608,8 @@ func formatMISWarning(open []misPosition) string {
 			direction = "SHORT"
 		}
 		sb.WriteString(fmt.Sprintf("  \u2022 %s: %s %d @ %s\n",
-			html.EscapeString(p.Symbol), direction, abs(p.Quantity), formatRupee(p.PnL)))
-		totalPnL += p.PnL
+			html.EscapeString(p.Symbol), direction, abs(p.Quantity), formatRupee(p.PnL.Float64())))
+		totalPnL += p.PnL.Float64()
 	}
 	sb.WriteString(fmt.Sprintf("\nMIS P&amp;L: <b>%s</b>\n", formatRupee(totalPnL)))
 	sb.WriteString("\nAction: Close manually or convert to CNC/NRML to carry overnight.")

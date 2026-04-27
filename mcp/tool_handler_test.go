@@ -396,7 +396,7 @@ func TestRiskguardMiddleware_RecordsSuccessfulOrder(t *testing.T) {
 	// Verify the order was recorded by the guard.
 	status := guard.GetUserStatus("track@example.com")
 	assert.Equal(t, 1, status.DailyOrderCount, "successful order should be recorded")
-	assert.InDelta(t, 5*1500.0, status.DailyPlacedValue, 0.01)
+	assert.InDelta(t, 5*1500.0, status.DailyPlacedValue.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------

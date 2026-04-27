@@ -116,7 +116,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		email := "notional@t.com"
 		g.mu.Lock()
 		tr := g.getOrCreateTracker(email)
-		tr.DailyPlacedValue = 199000 // Rs 1,99,000 already placed
+		tr.DailyPlacedValue = domain.NewINR(199000) // Rs 1,99,000 already placed
 		tr.DayResetAt = g.clock()    // align with pinned clock
 		g.limits[email] = &UserLimits{
 			RequireConfirmAllOrders: false,
