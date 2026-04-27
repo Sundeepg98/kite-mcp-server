@@ -89,7 +89,9 @@ func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ctx := kc.WithBroker(ctx, session.Broker)
+			// Wave D Slice D7: margin queries hoisted to startup-once
+			// use cases (initOrderUseCases) backed by m.sessionSvc;
+			// per-request kc.WithBroker dropped.
 			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderMarginsQuery{
 				Email: session.Email,
 				Orders: []cqrs.OrderMarginQueryParam{{
@@ -170,7 +172,9 @@ func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		considerPositions := p.Bool("consider_positions", false)
 
 		return handler.WithSession(ctx, "get_basket_margins", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ctx := kc.WithBroker(ctx, session.Broker)
+			// Wave D Slice D7: margin queries hoisted to startup-once
+			// use cases (initOrderUseCases) backed by m.sessionSvc;
+			// per-request kc.WithBroker dropped.
 			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetBasketMarginsQuery{
 				Email:             session.Email,
 				Orders:            orderParams,
@@ -229,7 +233,9 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "get_order_charges", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			ctx := kc.WithBroker(ctx, session.Broker)
+			// Wave D Slice D7: margin queries hoisted to startup-once
+			// use cases (initOrderUseCases) backed by m.sessionSvc;
+			// per-request kc.WithBroker dropped.
 			resp, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderChargesQuery{
 				Email:  session.Email,
 				Orders: orderParams,

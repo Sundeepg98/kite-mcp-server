@@ -101,8 +101,8 @@ func TestBrokerResolver_EmptyEmailIsResolverConcern(t *testing.T) {
 	// Contract: BrokerResolver does NOT itself validate the email
 	// argument — empty-string handling is left to the implementation
 	// (production *kc.SessionService returns an error via the
-	// downstream credential lookup; *kc.pinnedBrokerResolver ignores
-	// the email entirely because it's a pre-resolved client).
+	// downstream credential lookup; *mcp.sessionBrokerResolver
+	// ignores the email entirely because it's a pre-resolved client).
 	//
 	// This test pins the "no shared empty-email policy at the port
 	// level" expectation: callers must not assume the port short-
@@ -123,7 +123,7 @@ func TestBrokerResolver_EmptyEmailIsResolverConcern(t *testing.T) {
 // --- table-driven multi-implementation contract ---
 
 // brokerResolverTestImpl is a minimal implementation used to exercise
-// the contract. Mirrors *kc.pinnedBrokerResolver's
+// the contract. Mirrors mcp.sessionBrokerResolver's
 // "ignore-email-return-pinned-client" flavor.
 type brokerResolverTestImpl struct {
 	client broker.Client

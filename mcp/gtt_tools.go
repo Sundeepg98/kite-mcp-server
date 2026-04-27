@@ -129,8 +129,9 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "place_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceGTTCommand{
+			// Wave D Slice D7: GTT use cases are startup-constructed
+			// with m.sessionSvc; per-request kc.WithBroker dropped.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PlaceGTTCommand{
 				Email:             session.Email,
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),
 				LastPrice:         domain.NewINR(p.Float("last_price", 0.0)),
@@ -192,8 +193,9 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		triggerID := p.Int("trigger_id", 0)
 
 		return handler.WithSession(ctx, "delete_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.DeleteGTTCommand{
+			// Wave D Slice D7: GTT use cases are startup-constructed
+			// with m.sessionSvc; per-request kc.WithBroker dropped.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteGTTCommand{
 				Email:     session.Email,
 				TriggerID: triggerID,
 			})
@@ -325,8 +327,9 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_gtt_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyGTTCommand{
+			// Wave D Slice D7: GTT use cases are startup-constructed
+			// with m.sessionSvc; per-request kc.WithBroker dropped.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.ModifyGTTCommand{
 				Email:             session.Email,
 				TriggerID:         p.Int("trigger_id", 0),
 				Instrument:        domain.NewInstrumentKey(p.String("exchange", "NSE"), p.String("tradingsymbol", "")),

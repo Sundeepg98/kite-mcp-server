@@ -308,9 +308,11 @@ type Manager struct {
 	// init helper for the full preconditions list. Wire/fx-compatible by
 	// design: each field is a startup-once value with stable dependencies.
 	//
-	// Naming convention: <domain>UC for the use-case fields. The 14
-	// resolverFromContext-bound use cases will all migrate here over
-	// Slices D2-D6 per .research/wave-d-resolver-refactor-plan.md.
+	// Naming convention: <domain>UC for the use-case fields. By the
+	// end of Wave D Phase 1 (Slice D7), all 13 previously per-request
+	// use cases either live on Manager (12 fields below) or stay
+	// per-dispatch for principled reasons (Activity widget +
+	// ctx-bound audit-store override, Orders widget same).
 	placeOrderUC  *usecases.PlaceOrderUseCase
 	modifyOrderUC *usecases.ModifyOrderUseCase
 	cancelOrderUC *usecases.CancelOrderUseCase
@@ -354,11 +356,10 @@ type Manager struct {
 	// override (test-isolation contract via cqrs.WithWidgetAuditStore)
 	// OR from the Manager's audit store. Hoisting at startup would
 	// lock the audit store choice and break the test fixture. The
-	// handler keeps per-dispatch use case construction but swaps
-	// m.resolverFromContext(ctx) → m.sessionSvc, which is the actual
-	// Wave D goal (kill the resolverFromContext fork). Same reasoning
-	// applies to GetActivityForWidget, except that one has no broker
-	// resolver dimension at all so it's not a Wave D site.
+	// handler keeps per-dispatch use case construction but uses
+	// m.sessionSvc as the BrokerResolver (post-Wave-D pattern).
+	// GetActivityForWidget has no broker resolver dimension at all so
+	// it's not a Wave D site; it stays per-dispatch construction.
 	getPortfolioForWidgetUC *usecases.GetPortfolioForWidgetUseCase
 	getAlertsForWidgetUC    *usecases.GetAlertsForWidgetUseCase
 }

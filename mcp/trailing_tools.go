@@ -114,8 +114,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		// If current_stop not provided, try to fetch from order history
 		if currentStop <= 0 || referencePrice <= 0 {
 			return handler.WithSession(ctx, "set_trailing_stop", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-				ctx := kc.WithBroker(ctx, session.Broker)
-
+				// Wave D Slice D7: per-request kc.WithBroker dropped.
 				if currentStop <= 0 {
 					raw, histErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetOrderHistoryQuery{
 						Email:   session.Email,

@@ -45,13 +45,13 @@ func (a *instrumentLookupAdapter) Get(exchange, tradingsymbol string) (int, floa
 // registerOrderCommands wires CommandBus handlers for write-side order,
 // GTT, position, and trailing-stop commands (CommandBus batch B).
 //
-// Handlers build the use case lazily from the Manager's stores. Where the
-// use case needs a broker.Client, the handler resolves it via
-// resolverFromContext(ctx): the MCP tool layer attaches the session-pinned
-// client via WithBroker before DispatchWithResult, so we re-use that
-// already-resolved client instead of paying for another credential lookup.
-// Handlers dispatched from tests without an attached broker transparently
-// fall back to the Manager's SessionService.
+// Wave D Slices D2-D7: order/GTT/exit handlers dispatch into startup-
+// constructed use cases held on the Manager (initOrderUseCases). Broker
+// resolution always flows through m.sessionSvc; the per-request
+// WithBroker / resolverFromContext optimization that this file used to
+// describe was removed in Slice D7. Trailing-stop handlers (further
+// down) still construct per-request because their dependency
+// (trailingStopMgr) is nil-checked at dispatch time.
 func (m *Manager) registerOrderCommands() error {
 	// --- Order: PlaceOrderCommand ---
 	//
@@ -59,11 +59,8 @@ func (m *Manager) registerOrderCommands() error {
 	// initOrderUseCases (kc/manager_use_cases.go) and held on the
 	// Manager. The handler is a thin dispatcher — type-asserts the
 	// message and forwards to the pre-built use case. EventStore +
-	// InstrumentLookup wiring moved to construction time. The
-	// resolverFromContext / WithBroker hot-path optimization is no
-	// longer applied for this command; broker resolution flows
-	// through m.sessionSvc on every dispatch (one extra in-memory
-	// session-cache lookup, ~100ns; see scoping doc §5).
+	// InstrumentLookup wiring moved to construction time. Broker
+	// resolution flows through m.sessionSvc on every dispatch.
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)
 		if !ok {

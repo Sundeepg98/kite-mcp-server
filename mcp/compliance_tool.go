@@ -75,10 +75,12 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 			// Check session validity by dispatching a lightweight profile query
 			// through the bus — exercises the full observability + middleware
-			// stack instead of hot-pathing the use case directly.
+			// stack instead of hot-pathing the use case directly. Wave D
+			// Slice D7: GetProfileUseCase still per-request constructed at
+			// the bus handler with m.sessionSvc; ctx no longer carries a
+			// per-request broker.
 			tokenStatus := "VALID"
-			probeCtx := kc.WithBroker(ctx, session.Broker)
-			if _, err := handler.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email}); err != nil {
+			if _, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
 				tokenStatus = "EXPIRED"
 			}
 

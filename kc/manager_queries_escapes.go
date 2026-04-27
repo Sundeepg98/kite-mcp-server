@@ -96,9 +96,11 @@ func (m *Manager) registerEscapeQueries() error {
 		return err
 	}
 
-	// Orders keeps per-dispatch construction (audit store ctx fork)
-	// but swaps m.resolverFromContext(ctx) → m.sessionSvc — that's the
-	// Wave D goal for this site. The audit-store ctx override stays.
+	// Orders keeps per-dispatch construction because the audit store
+	// dependency can be ctx-overridden (test-isolation contract via
+	// cqrs.WithWidgetAuditStore). The broker resolver is m.sessionSvc
+	// — the per-request optimization that previously rode on ctx was
+	// removed in Slice D7.
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrdersForWidgetQuery)
 		store := m.widgetAuditStoreFromCtxOrManager(ctx)

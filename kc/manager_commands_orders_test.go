@@ -63,19 +63,17 @@ func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
 	}
 
 	// fake broker is retained as a sentinel — riskguard MUST fire before
-	// the use case reaches the broker-resolution step. After D2 the
-	// WithBroker(ctx, fake) ctx-binding is no longer honored by the
-	// PlaceOrder handler (use case has m.sessionSvc baked in), but the
-	// test's invariant is still meaningful: if riskguard fires, broker
-	// is never reached and we don't need to inspect the sentinel — but
-	// we keep the assertion because a buggy use case that skipped
-	// riskguard would proceed to broker.GetBrokerForEmail (returning
-	// the "no token" error rather than calling fake.PlaceOrder).
+	// the use case reaches the broker-resolution step. After Wave D the
+	// PlaceOrder use case has m.sessionSvc baked in (no per-request
+	// broker via ctx), but the invariant remains meaningful: if
+	// riskguard fires for the frozen user, broker is never reached
+	// and fake.placeOrderCalled stays false. A regression that
+	// skipped riskguard would either hit broker (true) or return the
+	// SessionService "no token" error — both observably different.
 	fake := &fakeBrokerForOrders{}
-	ctx := WithBroker(context.Background(), fake)
 
 	qty, _ := domain.NewQuantity(1)
-	_, err = mgr.CommandBus().DispatchWithResult(ctx, cqrs.PlaceOrderCommand{
+	_, err = mgr.CommandBus().DispatchWithResult(context.Background(), cqrs.PlaceOrderCommand{
 		Email:           "user@example.com",
 		Instrument:      domain.NewInstrumentKey("NSE", "SBIN"),
 		TransactionType: "BUY",

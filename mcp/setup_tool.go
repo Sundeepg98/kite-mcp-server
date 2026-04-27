@@ -64,9 +64,9 @@ func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			// whole auth + network path: credentials, IP whitelist, and token.
 			// Routed through QueryBus to keep this tool inside the CQRS read
 			// path (same pattern as get_profile and sebi_compliance_status).
+			// Wave D Slice D7: per-request kc.WithBroker dropped.
 			email := oauth.EmailFromContext(ctx)
-			probeCtx := kc.WithBroker(ctx, session.Broker)
-			_, err := handler.QueryBus().DispatchWithResult(probeCtx, cqrs.GetProfileQuery{Email: email})
+			_, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetProfileQuery{Email: email})
 			if err == nil {
 				resp.Status = setupStatusPass
 				resp.Message = "Kite API reachable. Credentials valid, IP whitelist OK."

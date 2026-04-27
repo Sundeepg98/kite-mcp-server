@@ -63,11 +63,11 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "close_position", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Dispatch through CommandBus so ClosePositionUseCase runs under the
-			// shared pipeline. The session-pinned broker client rides on ctx so
-			// the handler-side resolver reuses it without another lookup.
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ClosePositionCommand{
+			// Dispatch through CommandBus so ClosePositionUseCase runs
+			// under the shared pipeline. Wave D Slice D7: the use case
+			// is startup-constructed with m.sessionSvc; no per-request
+			// kc.WithBroker attachment needed.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.ClosePositionCommand{
 				Email:         session.Email,
 				Exchange:      exchange,
 				Symbol:        symbol,
@@ -144,10 +144,10 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		productFilter := p.String("product", "ALL")
 
 		return handler.WithSession(ctx, "close_all_positions", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Dispatch through CommandBus so CloseAllPositionsUseCase runs under
-			// the shared pipeline. Session-pinned broker client rides on ctx.
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.CloseAllPositionsCommand{
+			// Dispatch through CommandBus so CloseAllPositionsUseCase
+			// runs under the shared pipeline. Wave D Slice D7: see
+			// close_position above for the dropped kc.WithBroker.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CloseAllPositionsCommand{
 				Email:         session.Email,
 				ProductFilter: productFilter,
 			})

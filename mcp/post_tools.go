@@ -164,12 +164,13 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		return handler.WithSession(ctx, "place_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			// Dispatch through the CommandBus so PlaceOrderUseCase runs under
-			// the shared pipeline. The session-pinned broker.Client rides on
-			// ctx so the handler-side resolver reuses it without a second
-			// credential lookup.
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
+			// the shared pipeline. Wave D Slice D7: PlaceOrderUseCase is now
+			// startup-constructed with m.sessionSvc as its BrokerResolver,
+			// so per-request kc.WithBroker(ctx, session.Broker) attachment
+			// has been dropped — the use case resolves the broker via
+			// SessionService's in-memory active-session lookup.
 			qty, _ := domain.NewQuantity(orderParams.Quantity)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.PlaceOrderCommand{
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PlaceOrderCommand{
 				Email:           session.Email,
 				Instrument:      domain.NewInstrumentKey(orderParams.Exchange, orderParams.Tradingsymbol),
 				TransactionType: orderParams.TransactionType,
@@ -310,8 +311,9 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		return handler.WithSession(ctx, "modify_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.ModifyOrderCommand{
+			// Wave D Slice D7: see place_order for the dropped
+			// kc.WithBroker rationale.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.ModifyOrderCommand{
 				Email:            session.Email,
 				OrderID:          orderID,
 				Variety:          variety,
@@ -378,8 +380,9 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		orderID := p.String("order_id", "")
 
 		return handler.WithSession(ctx, "cancel_order", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			cmdCtx := kc.WithBroker(ctx, session.Broker)
-			raw, err := handler.CommandBus().DispatchWithResult(cmdCtx, cqrs.CancelOrderCommand{
+			// Wave D Slice D7: see place_order for the dropped
+			// kc.WithBroker rationale.
+			raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CancelOrderCommand{
 				Email:   session.Email,
 				OrderID: orderID,
 				Variety: variety,
