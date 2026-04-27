@@ -54,29 +54,22 @@ func (a *instrumentLookupAdapter) Get(exchange, tradingsymbol string) (int, floa
 // fall back to the Manager's SessionService.
 func (m *Manager) registerOrderCommands() error {
 	// --- Order: PlaceOrderCommand ---
+	//
+	// Wave D Slice D2: the use case is now startup-constructed by
+	// initOrderUseCases (kc/manager_use_cases.go) and held on the
+	// Manager. The handler is a thin dispatcher — type-asserts the
+	// message and forwards to the pre-built use case. EventStore +
+	// InstrumentLookup wiring moved to construction time. The
+	// resolverFromContext / WithBroker hot-path optimization is no
+	// longer applied for this command; broker resolution flows
+	// through m.sessionSvc on every dispatch (one extra in-memory
+	// session-cache lookup, ~100ns; see scoping doc §5).
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceOrderUseCase(
-			m.resolverFromContext(ctx),
-			m.riskGuard,
-			m.eventing.Dispatcher(),
-			m.Logger,
-		)
-		// Phase C ES: direct audit-log append on order.placed.
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		// Task #36: wire the instruments manager as InstrumentLookup so
-		// the use case enforces lot-size + tick-size invariants via
-		// domain.InstrumentRules. Nil-safe on both sides — missing
-		// metadata skips the check rather than erroring.
-		if im := m.InstrumentsManagerConcrete(); im != nil {
-			uc.SetInstrumentLookup(&instrumentLookupAdapter{mgr: im})
-		}
-		return uc.Execute(ctx, cmd)
+		return m.placeOrderUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
@@ -87,17 +80,7 @@ func (m *Manager) registerOrderCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewModifyOrderUseCase(
-			m.resolverFromContext(ctx),
-			m.riskGuard,
-			m.eventing.Dispatcher(),
-			m.Logger,
-		)
-		// Phase C ES: direct audit-log append on order.modified.
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		return uc.Execute(ctx, cmd)
+		return m.modifyOrderUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
@@ -108,16 +91,7 @@ func (m *Manager) registerOrderCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCancelOrderUseCase(
-			m.resolverFromContext(ctx),
-			m.eventing.Dispatcher(),
-			m.Logger,
-		)
-		// Phase C ES: direct audit-log append on order.cancelled.
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		return uc.Execute(ctx, cmd)
+		return m.cancelOrderUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}

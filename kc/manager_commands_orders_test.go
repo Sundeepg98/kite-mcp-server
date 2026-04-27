@@ -39,18 +39,38 @@ func (f *fakeBrokerForOrders) PlaceOrder(_ broker.OrderParams) (broker.OrderResp
 // without a riskguard, the broker would be hit and the test would fail.
 func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
 	t.Parallel()
-	mgr, err := newTestManager("test_key", "test_secret")
-	if err != nil {
-		t.Fatalf("newTestManager: %v", err)
-	}
 
-	// Attach a real Guard and freeze the user (kill switch path).
+	// Wave D Slice D2: the PlaceOrder use case is now constructed once at
+	// startup with the riskGuard supplied via Config — post-construction
+	// `mgr.riskGuard = guard` mutation no longer reaches the use case.
+	// Wire the guard through WithRiskGuard so initOrderUseCases picks it
+	// up. This matches the eventual Wire/fx end-state where DI resolves
+	// the dependency graph once at startup.
 	guard := riskguard.NewGuard(testLogger())
 	guard.Freeze("user@example.com", "test", "testing CommandBus riskguard wiring")
-	mgr.riskGuard = guard
 
-	// Attach a fake broker via ctx so resolverFromContext hands it to the
-	// use case instead of falling back to SessionService.
+	mgr, err := NewWithOptions(context.Background(),
+		WithConfig(Config{
+			APIKey:             "test_key",
+			APISecret:          "test_secret",
+			InstrumentsManager: newTestInstrumentsManager(),
+			Logger:             testLogger(),
+		}),
+		WithRiskGuard(guard),
+	)
+	if err != nil {
+		t.Fatalf("NewWithOptions: %v", err)
+	}
+
+	// fake broker is retained as a sentinel — riskguard MUST fire before
+	// the use case reaches the broker-resolution step. After D2 the
+	// WithBroker(ctx, fake) ctx-binding is no longer honored by the
+	// PlaceOrder handler (use case has m.sessionSvc baked in), but the
+	// test's invariant is still meaningful: if riskguard fires, broker
+	// is never reached and we don't need to inspect the sentinel — but
+	// we keep the assertion because a buggy use case that skipped
+	// riskguard would proceed to broker.GetBrokerForEmail (returning
+	// the "no token" error rather than calling fake.PlaceOrder).
 	fake := &fakeBrokerForOrders{}
 	ctx := WithBroker(context.Background(), fake)
 

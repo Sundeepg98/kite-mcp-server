@@ -21,6 +21,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
@@ -170,6 +171,12 @@ func NewWithOptions(ctx context.Context, opts ...Option) (*Manager, error) {
 	m.initTokenRotation()
 	m.initProjector()
 
+	// Wave D Slice D2: hoist order-write use cases from per-request
+	// construction in registerOrderCommands to startup-once Manager fields.
+	// Must run AFTER initFocusedServices (provides sessionSvc) and BEFORE
+	// registerCQRSHandlers (consumes the fields).
+	m.initOrderUseCases()
+
 	// Register CQRS handlers on the bus. Tool handlers dispatch queries through
 	// manager.QueryBus() rather than constructing use cases inline.
 	if err := m.registerCQRSHandlers(); err != nil {
@@ -291,6 +298,22 @@ type Manager struct {
 	externalURL       string
 	adminSecretPath   string
 	devMode           bool
+
+	// Wave D Phase 1 Slice D2: order-write use cases hoisted from
+	// per-request construction inside CommandBus handlers to startup-once
+	// fields. The handlers in kc/manager_commands_orders.go reach through
+	// these instead of calling usecases.NewXxx() per dispatch. Constructed
+	// in initOrderUseCases (kc/manager_use_cases.go) after the Manager has
+	// sessionSvc / riskGuard / eventing.Dispatcher available — see the
+	// init helper for the full preconditions list. Wire/fx-compatible by
+	// design: each field is a startup-once value with stable dependencies.
+	//
+	// Naming convention: <domain>UC for the use-case fields. The 14
+	// resolverFromContext-bound use cases will all migrate here over
+	// Slices D2-D6 per .research/wave-d-resolver-refactor-plan.md.
+	placeOrderUC  *usecases.PlaceOrderUseCase
+	modifyOrderUC *usecases.ModifyOrderUseCase
+	cancelOrderUC *usecases.CancelOrderUseCase
 }
 
 // NewManager creates a new manager with default configuration.
