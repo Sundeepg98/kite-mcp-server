@@ -617,9 +617,27 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.Email)
 	case domain.MFOrderRejectedEvent:
 		return audit.HashEmail(ev.Email)
+	case domain.MFOrderPlacedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.MFOrderCancelledEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.MFSIPPlacedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.MFSIPCancelledEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.GTTRejectedEvent:
 		return audit.HashEmail(ev.Email)
+	case domain.GTTPlacedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.GTTModifiedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.GTTDeletedEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.TrailingStopTriggeredEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.TrailingStopSetEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.TrailingStopCancelledEvent:
 		return audit.HashEmail(ev.Email)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
@@ -733,6 +751,33 @@ func deriveAggregateID(e domain.Event) string {
 		// Keyed by TrailingStopID — uuid-derived 8-char prefix, globally
 		// unique across users. The trailing stop's full lifecycle (set
 		// -> N triggers -> cancel) replays under one aggregate stream.
+		return domain.TrailingStopAggregateID(ev.TrailingStopID)
+	case domain.MFOrderPlacedEvent:
+		// Keyed by OrderID; pairs with MFOrderRejectedEvent (cancel
+		// source) under the same aggregate when both fire.
+		return domain.MFAggregateID(ev.OrderID)
+	case domain.MFOrderCancelledEvent:
+		return domain.MFAggregateID(ev.OrderID)
+	case domain.MFSIPPlacedEvent:
+		// Distinct ID namespace from MFOrder; same MFAggregateID helper
+		// since SIPID is a Kite-assigned string just like OrderID.
+		return domain.MFAggregateID(ev.SIPID)
+	case domain.MFSIPCancelledEvent:
+		return domain.MFAggregateID(ev.SIPID)
+	case domain.GTTPlacedEvent:
+		// fmt.Sprintf("%d", triggerID) matches the existing aux-event
+		// aggregate-ID shape so existing rows and new typed events sort
+		// under the same stream.
+		return domain.GTTAggregateID(ev.TriggerID)
+	case domain.GTTModifiedEvent:
+		return domain.GTTAggregateID(ev.TriggerID)
+	case domain.GTTDeletedEvent:
+		return domain.GTTAggregateID(ev.TriggerID)
+	case domain.TrailingStopSetEvent:
+		// Same TrailingStopID-keyed routing as TrailingStopTriggeredEvent
+		// so set->triggers->cancel replays under one aggregate stream.
+		return domain.TrailingStopAggregateID(ev.TrailingStopID)
+	case domain.TrailingStopCancelledEvent:
 		return domain.TrailingStopAggregateID(ev.TrailingStopID)
 	default:
 		return "unknown"

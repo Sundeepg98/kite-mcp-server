@@ -152,6 +152,29 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 		"type", cmd.Type,
 	)
 
+	// ES success-path migration: dual-emit. Typed event for projector
+	// consumers, legacy aux-event row for existing audit consumers.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.GTTPlacedEvent{
+			Email:             cmd.Email,
+			TriggerID:         resp.TriggerID,
+			Instrument:        cmd.Instrument,
+			TransactionType:   cmd.TransactionType,
+			Product:           cmd.Product,
+			Type:              cmd.Type,
+			TriggerValue:      cmd.TriggerValue,
+			Quantity:          cmd.Quantity,
+			LimitPrice:        cmd.LimitPrice.Amount,
+			UpperTriggerValue: cmd.UpperTriggerValue,
+			UpperQuantity:     cmd.UpperQuantity,
+			UpperLimitPrice:   cmd.UpperLimitPrice.Amount,
+			LowerTriggerValue: cmd.LowerTriggerValue,
+			LowerQuantity:     cmd.LowerQuantity,
+			LowerLimitPrice:   cmd.LowerLimitPrice.Amount,
+			Timestamp:         time.Now().UTC(),
+		})
+	}
+
 	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", resp.TriggerID), "gtt.placed", map[string]any{
 		"email":            cmd.Email,
 		"trigger_id":       resp.TriggerID,
@@ -253,6 +276,28 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 		"tradingsymbol", cmd.Instrument.Tradingsymbol,
 	)
 
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.GTTModifiedEvent{
+			Email:             cmd.Email,
+			TriggerID:         cmd.TriggerID,
+			Instrument:        cmd.Instrument,
+			TransactionType:   cmd.TransactionType,
+			Product:           cmd.Product,
+			Type:              cmd.Type,
+			TriggerValue:      cmd.TriggerValue,
+			Quantity:          cmd.Quantity,
+			LimitPrice:        cmd.LimitPrice.Amount,
+			UpperTriggerValue: cmd.UpperTriggerValue,
+			UpperQuantity:     cmd.UpperQuantity,
+			UpperLimitPrice:   cmd.UpperLimitPrice.Amount,
+			LowerTriggerValue: cmd.LowerTriggerValue,
+			LowerQuantity:     cmd.LowerQuantity,
+			LowerLimitPrice:   cmd.LowerLimitPrice.Amount,
+			Timestamp:         time.Now().UTC(),
+		})
+	}
+
 	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.modified", map[string]any{
 		"email":            cmd.Email,
 		"trigger_id":       cmd.TriggerID,
@@ -317,6 +362,15 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 		"email", cmd.Email,
 		"trigger_id", cmd.TriggerID,
 	)
+
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.GTTDeletedEvent{
+			Email:     cmd.Email,
+			TriggerID: cmd.TriggerID,
+			Timestamp: time.Now().UTC(),
+		})
+	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.deleted", map[string]any{
 		"email":      cmd.Email,

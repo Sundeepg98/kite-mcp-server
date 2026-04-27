@@ -214,6 +214,9 @@ func (m *Manager) registerOrderCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -231,6 +234,9 @@ func (m *Manager) registerOrderCommands() error {
 		uc := usecases.NewCancelTrailingStopUseCase(m.trailingStopMgr, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {

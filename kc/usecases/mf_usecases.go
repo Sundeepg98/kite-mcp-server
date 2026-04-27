@@ -174,6 +174,23 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 		"order_id", resp.OrderID,
 	)
 
+	// ES success-path migration: dual-emit. Typed domain event for
+	// projector consumers (stable schema), legacy aux-event row for
+	// existing audit consumers depending on the historical
+	// map[string]any payload.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.MFOrderPlacedEvent{
+			Email:           cmd.Email,
+			OrderID:         resp.OrderID,
+			Tradingsymbol:   cmd.Tradingsymbol,
+			TransactionType: cmd.TransactionType,
+			Amount:          cmd.Amount,
+			Quantity:        cmd.Quantity,
+			Tag:             cmd.Tag,
+			Timestamp:       time.Now().UTC(),
+		})
+	}
+
 	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", resp.OrderID, "mf.order_placed", map[string]any{
 		"email":            cmd.Email,
 		"tradingsymbol":    cmd.Tradingsymbol,
@@ -227,6 +244,15 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 	}
 
 	uc.logger.Info("MF order cancelled", "email", cmd.Email, "order_id", cmd.OrderID)
+
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.MFOrderCancelledEvent{
+			Email:     cmd.Email,
+			OrderID:   cmd.OrderID,
+			Timestamp: time.Now().UTC(),
+		})
+	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", cmd.OrderID, "mf.order_cancelled", map[string]any{
 		"email":    cmd.Email,
@@ -293,6 +319,22 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 		"sip_id", resp.SIPID,
 	)
 
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.MFSIPPlacedEvent{
+			Email:         cmd.Email,
+			SIPID:         resp.SIPID,
+			Tradingsymbol: cmd.Tradingsymbol,
+			Amount:        cmd.Amount,
+			Frequency:     cmd.Frequency,
+			Instalments:   cmd.Instalments,
+			InitialAmount: cmd.InitialAmount,
+			InstalmentDay: cmd.InstalmentDay,
+			Tag:           cmd.Tag,
+			Timestamp:     time.Now().UTC(),
+		})
+	}
+
 	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", resp.SIPID, "mf.sip_placed", map[string]any{
 		"email":          cmd.Email,
 		"tradingsymbol":  cmd.Tradingsymbol,
@@ -348,6 +390,15 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 	}
 
 	uc.logger.Info("MF SIP cancelled", "email", cmd.Email, "sip_id", cmd.SIPID)
+
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.MFSIPCancelledEvent{
+			Email:     cmd.Email,
+			SIPID:     cmd.SIPID,
+			Timestamp: time.Now().UTC(),
+		})
+	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", cmd.SIPID, "mf.sip_cancelled", map[string]any{
 		"email":  cmd.Email,

@@ -1492,3 +1492,174 @@ func TestPlaceGTT_NilDispatcherSafe(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "place gtt")
 }
+
+// --- ES success-path migration: typed events for GTT mutations ---
+
+// TestPlaceGTT_SuccessDispatchesGTTPlaced verifies the typed event
+// fires alongside the legacy aux-event row when the broker accepts
+// the GTT placement. Captures the full trigger params so a forensic
+// walk reconstructs the placement context without re-querying.
+func TestPlaceGTT_SuccessDispatchesGTTPlaced(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 42}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.placed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:           "trader@example.com",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		LastPrice:       domain.NewINR(2500.0),
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    2400.0,
+		Quantity:        10,
+		LimitPrice:      domain.NewINR(2390.0),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.GTTPlacedEvent)
+	require.True(t, ok, "captured event should be GTTPlacedEvent, got %T", captured)
+	assert.Equal(t, 42, ev.TriggerID)
+	assert.Equal(t, "single", ev.Type)
+	assert.Equal(t, "BUY", ev.TransactionType)
+	assert.Equal(t, "CNC", ev.Product)
+	assert.InDelta(t, 2400.0, ev.TriggerValue, 0.01)
+	assert.InDelta(t, 10.0, ev.Quantity, 0.001)
+	assert.InDelta(t, 2390.0, ev.LimitPrice, 0.01)
+}
+
+// TestPlaceGTT_TwoLeg_SuccessDispatchesGTTPlaced verifies that two-leg
+// GTTs preserve the upper/lower trigger pairs in the typed event.
+func TestPlaceGTT_TwoLeg_SuccessDispatchesGTTPlaced(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 43}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.placed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:             "trader@example.com",
+		Instrument:        domain.NewInstrumentKey("NSE", "INFY"),
+		LastPrice:         domain.NewINR(1500.0),
+		TransactionType:   "SELL",
+		Product:           "CNC",
+		Type:              "two-leg",
+		UpperTriggerValue: 1600.0,
+		UpperQuantity:     5,
+		UpperLimitPrice:   domain.NewINR(1595.0),
+		LowerTriggerValue: 1400.0,
+		LowerQuantity:     5,
+		LowerLimitPrice:   domain.NewINR(1405.0),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.GTTPlacedEvent)
+	require.True(t, ok)
+	assert.Equal(t, "two-leg", ev.Type)
+	assert.InDelta(t, 1600.0, ev.UpperTriggerValue, 0.01)
+	assert.InDelta(t, 1400.0, ev.LowerTriggerValue, 0.01)
+}
+
+// TestModifyGTT_SuccessDispatchesGTTModified verifies the typed
+// modify event fires with the post-modify params.
+func TestModifyGTT_SuccessDispatchesGTTModified(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{modifyGTTResp: broker.GTTResponse{TriggerID: 42}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.modified", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewModifyGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.ModifyGTTCommand{
+		Email:        "trader@example.com",
+		TriggerID:    42,
+		Instrument:   domain.NewInstrumentKey("NSE", "RELIANCE"),
+		Type:         "single",
+		TriggerValue: 2450.0,
+		Quantity:     15,
+		LimitPrice:   domain.NewINR(2440.0),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.GTTModifiedEvent)
+	require.True(t, ok)
+	assert.Equal(t, 42, ev.TriggerID)
+	assert.InDelta(t, 2450.0, ev.TriggerValue, 0.01)
+	assert.InDelta(t, 15.0, ev.Quantity, 0.001)
+}
+
+// TestDeleteGTT_SuccessDispatchesGTTDeleted verifies the typed
+// delete event fires.
+func TestDeleteGTT_SuccessDispatchesGTTDeleted(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{deleteGTTResp: broker.GTTResponse{TriggerID: 42}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("gtt.deleted", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewDeleteGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.DeleteGTTCommand{
+		Email:     "trader@example.com",
+		TriggerID: 42,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.GTTDeletedEvent)
+	require.True(t, ok)
+	assert.Equal(t, 42, ev.TriggerID)
+}
+
+// TestPlaceGTT_SuccessKeepsLegacyAuxEvent verifies the dual-emit
+// contract: typed event PLUS legacy aux-event row.
+func TestPlaceGTT_SuccessKeepsLegacyAuxEvent(t *testing.T) {
+	t.Parallel()
+	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 99}}
+	store := &mockEventAppender{}
+	uc := NewPlaceGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventStore(store)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
+		Email:           "trader@example.com",
+		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
+		LastPrice:       domain.NewINR(2500.0),
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    2400.0,
+		Quantity:        10,
+		LimitPrice:      domain.NewINR(2390.0),
+	})
+	require.NoError(t, err)
+	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
+	assert.Equal(t, "99", store.appended[0].AggregateID)
+	assert.Equal(t, "GTT", store.appended[0].AggregateType)
+	assert.Equal(t, "gtt.placed", store.appended[0].EventType)
+}

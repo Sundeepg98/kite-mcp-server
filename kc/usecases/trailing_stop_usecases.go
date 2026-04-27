@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TrailingStopManager abstracts trailing stop persistence for use cases.
@@ -23,6 +25,7 @@ type TrailingStopManager interface {
 type SetTrailingStopUseCase struct {
 	manager    TrailingStopManager
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -33,6 +36,11 @@ func NewSetTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logger)
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *SetTrailingStopUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful creation emits TrailingStopSetEvent. Nil-safe — when
+// unset, only the legacy aux-event path runs.
+func (uc *SetTrailingStopUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute creates a trailing stop and returns the ID.
 func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrailingStopCommand) (string, error) {
@@ -67,6 +75,26 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 	if err != nil {
 		uc.logger.Error("Failed to set trailing stop", "email", cmd.Email, "error", err)
 		return "", fmt.Errorf("usecases: set trailing stop: %w", err)
+	}
+
+	// ES success-path migration: dual-emit. Typed domain event for
+	// projector consumers (stable schema), legacy aux-event row for
+	// audit consumers depending on the historical map[string]any
+	// payload during the migration window.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.TrailingStopSetEvent{
+			Email:          cmd.Email,
+			TrailingStopID: id,
+			Instrument:     domain.NewInstrumentKey(cmd.Exchange, cmd.Tradingsymbol),
+			OrderID:        cmd.OrderID,
+			Variety:        cmd.Variety,
+			Direction:      cmd.Direction,
+			TrailAmount:    cmd.TrailAmount,
+			TrailPct:       cmd.TrailPct,
+			CurrentStop:    cmd.CurrentStop,
+			ReferencePrice: cmd.ReferencePrice,
+			Timestamp:      time.Now().UTC(),
+		})
 	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", id, "trailing_stop.set", map[string]any{
@@ -114,6 +142,7 @@ func (uc *ListTrailingStopsUseCase) Execute(ctx context.Context, query cqrs.List
 type CancelTrailingStopUseCase struct {
 	manager    TrailingStopManager
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -124,6 +153,10 @@ func NewCancelTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logg
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *CancelTrailingStopUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful cancellation emits TrailingStopCancelledEvent. Nil-safe.
+func (uc *CancelTrailingStopUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute cancels a trailing stop.
 func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.CancelTrailingStopCommand) error {
@@ -137,6 +170,16 @@ func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.Cance
 	if err := uc.manager.Cancel(cmd.Email, cmd.TrailingStopID); err != nil {
 		uc.logger.Error("Failed to cancel trailing stop", "email", cmd.Email, "id", cmd.TrailingStopID, "error", err)
 		return fmt.Errorf("usecases: cancel trailing stop: %w", err)
+	}
+
+	// ES dual-emit: typed event for projector consumers + legacy
+	// aux-event row for audit-row consumers.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.TrailingStopCancelledEvent{
+			Email:          cmd.Email,
+			TrailingStopID: cmd.TrailingStopID,
+			Timestamp:      time.Now().UTC(),
+		})
 	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", cmd.TrailingStopID, "trailing_stop.cancelled", map[string]any{

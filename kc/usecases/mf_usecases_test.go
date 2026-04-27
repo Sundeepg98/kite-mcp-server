@@ -518,6 +518,160 @@ func TestPlaceMFOrder_NilDispatcherSafe(t *testing.T) {
 	assert.Contains(t, err.Error(), "place mf order")
 }
 
+// --- ES success-path migration: typed events for MF mutations ---
+//
+// These tests pin the contract that successful MF mutations emit
+// typed domain events alongside the legacy untyped appendAuxEvent
+// audit row. Dual-emit during the migration window keeps existing
+// audit consumers working while projector consumers can opt into
+// the typed schema.
+
+// TestPlaceMFOrder_SuccessDispatchesMFOrderPlaced verifies the typed
+// success event fires alongside the legacy aux-event row when the
+// broker accepts the MF order placement.
+func TestPlaceMFOrder_SuccessDispatchesMFOrderPlaced(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeMFResp: broker.MFOrderResponse{OrderID: "MFO-1"}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_placed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFOrderCommand{
+		Email:           "trader@example.com",
+		Tradingsymbol:   "INF123",
+		TransactionType: "BUY",
+		Amount:          5000,
+		Tag:             "monthly",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured, "MFOrderPlacedEvent must dispatch on success")
+	ev, ok := captured.(domain.MFOrderPlacedEvent)
+	require.True(t, ok, "captured event should be MFOrderPlacedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", ev.Email)
+	assert.Equal(t, "MFO-1", ev.OrderID)
+	assert.Equal(t, "INF123", ev.Tradingsymbol)
+	assert.Equal(t, "BUY", ev.TransactionType)
+	assert.InDelta(t, 5000.0, ev.Amount, 0.001)
+	assert.Equal(t, "monthly", ev.Tag)
+	assert.False(t, ev.Timestamp.IsZero())
+}
+
+// TestPlaceMFOrder_SuccessKeepsLegacyAuxEvent verifies the dual-emit
+// contract: the typed event fires AND the legacy untyped audit-store
+// row is still appended. Existing audit consumers depending on the
+// SQL row shape aren't broken by the migration.
+func TestPlaceMFOrder_SuccessKeepsLegacyAuxEvent(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeMFResp: broker.MFOrderResponse{OrderID: "MFO-1"}}
+	store := &mockEventAppender{}
+	uc := NewPlaceMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventStore(store)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFOrderCommand{
+		Email: "trader@example.com", Tradingsymbol: "INF123",
+		TransactionType: "BUY", Amount: 5000,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
+	got := store.appended[0]
+	assert.Equal(t, "MFO-1", got.AggregateID)
+	assert.Equal(t, "MFOrder", got.AggregateType)
+	assert.Equal(t, "mf.order_placed", got.EventType)
+}
+
+// TestCancelMFOrder_SuccessDispatchesMFOrderCancelled verifies the
+// typed event fires on successful broker cancellation.
+func TestCancelMFOrder_SuccessDispatchesMFOrderCancelled(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{cancelMFResp: broker.MFOrderResponse{OrderID: "MFO-1"}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.order_cancelled", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelMFOrderCommand{
+		Email: "trader@example.com", OrderID: "MFO-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.MFOrderCancelledEvent)
+	require.True(t, ok)
+	assert.Equal(t, "MFO-1", ev.OrderID)
+}
+
+// TestPlaceMFSIP_SuccessDispatchesMFSIPPlaced verifies the typed
+// SIP-placed event fires with the full SIPParams preserved.
+func TestPlaceMFSIP_SuccessDispatchesMFSIPPlaced(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{placeSIPResp: broker.MFSIPResponse{SIPID: "SIP-1"}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.sip_placed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceMFSIPUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PlaceMFSIPCommand{
+		Email:         "trader@example.com",
+		Tradingsymbol: "INF123",
+		Amount:        5000,
+		Frequency:     "monthly",
+		Instalments:   12,
+		InstalmentDay: 1,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.MFSIPPlacedEvent)
+	require.True(t, ok)
+	assert.Equal(t, "SIP-1", ev.SIPID)
+	assert.Equal(t, "monthly", ev.Frequency)
+	assert.Equal(t, 12, ev.Instalments)
+}
+
+// TestCancelMFSIP_SuccessDispatchesMFSIPCancelled verifies the typed
+// SIP-cancelled event fires on successful broker cancellation.
+func TestCancelMFSIP_SuccessDispatchesMFSIPCancelled(t *testing.T) {
+	t.Parallel()
+	client := &mfMockBrokerClient{cancelSIPResp: broker.MFSIPResponse{SIPID: "SIP-1"}}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("mf.sip_cancelled", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelMFSIPUseCase(&mockBrokerResolver{client: client}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.CancelMFSIPCommand{
+		Email: "trader@example.com", SIPID: "SIP-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.MFSIPCancelledEvent)
+	require.True(t, ok)
+	assert.Equal(t, "SIP-1", ev.SIPID)
+}
+
 // ===========================================================================
 // Order Margins Tests
 // ===========================================================================
@@ -1283,6 +1437,102 @@ func TestCancelTrailingStop_Error(t *testing.T) {
 		Email: "u@test.com", TrailingStopID: "TS1",
 	})
 	assert.ErrorContains(t, err, "cancel trailing stop")
+}
+
+// --- ES success-path migration: typed events for trailing-stop set/cancel ---
+
+// TestSetTrailingStop_SuccessDispatchesTrailingStopSet verifies the
+// typed creation event fires alongside the legacy aux-event row.
+// Captures the full activation params (direction, trail amount/pct,
+// reference price, current stop) so a forensic walk can reconstruct
+// the trail window without re-querying the manager.
+func TestSetTrailingStop_SuccessDispatchesTrailingStopSet(t *testing.T) {
+	t.Parallel()
+	mgr := &mockTrailingStopManager{addID: "TS1"}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("trailing_stop.set", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewSetTrailingStopUseCase(mgr, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.SetTrailingStopCommand{
+		Email:          "trader@example.com",
+		Exchange:       "NSE",
+		Tradingsymbol:  "RELIANCE",
+		OrderID:        "SL-1",
+		Variety:        "regular",
+		Direction:      "long",
+		TrailAmount:    20,
+		CurrentStop:    1480,
+		ReferencePrice: 1500,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.TrailingStopSetEvent)
+	require.True(t, ok, "captured event should be TrailingStopSetEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", ev.Email)
+	assert.Equal(t, "TS1", ev.TrailingStopID)
+	assert.Equal(t, "SL-1", ev.OrderID)
+	assert.Equal(t, "long", ev.Direction)
+	assert.InDelta(t, 20.0, ev.TrailAmount, 0.001)
+	assert.InDelta(t, 1480.0, ev.CurrentStop, 0.001)
+	assert.InDelta(t, 1500.0, ev.ReferencePrice, 0.001)
+}
+
+// TestCancelTrailingStop_SuccessDispatchesTrailingStopCancelled verifies
+// the typed cancellation event fires on successful cancel.
+func TestCancelTrailingStop_SuccessDispatchesTrailingStopCancelled(t *testing.T) {
+	t.Parallel()
+	mgr := &mockTrailingStopManager{}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("trailing_stop.cancelled", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewCancelTrailingStopUseCase(mgr, testLogger())
+	uc.SetEventDispatcher(events)
+
+	err := uc.Execute(context.Background(), cqrs.CancelTrailingStopCommand{
+		Email: "trader@example.com", TrailingStopID: "TS1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.TrailingStopCancelledEvent)
+	require.True(t, ok)
+	assert.Equal(t, "TS1", ev.TrailingStopID)
+}
+
+// TestSetTrailingStop_SuccessKeepsLegacyAuxEvent verifies dual-emit:
+// typed event PLUS legacy aux-event row both fire.
+func TestSetTrailingStop_SuccessKeepsLegacyAuxEvent(t *testing.T) {
+	t.Parallel()
+	mgr := &mockTrailingStopManager{addID: "TS-DUAL-1"}
+	store := &mockEventAppender{}
+	uc := NewSetTrailingStopUseCase(mgr, testLogger())
+	uc.SetEventStore(store)
+
+	_, err := uc.Execute(context.Background(), cqrs.SetTrailingStopCommand{
+		Email:          "trader@example.com",
+		OrderID:        "SL-1",
+		Direction:      "long",
+		TrailAmount:    20,
+		CurrentStop:    1480,
+		ReferencePrice: 1500,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
+	assert.Equal(t, "TS-DUAL-1", store.appended[0].AggregateID)
+	assert.Equal(t, "TrailingStop", store.appended[0].AggregateType)
+	assert.Equal(t, "trailing_stop.set", store.appended[0].EventType)
 }
 
 // ===========================================================================

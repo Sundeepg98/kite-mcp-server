@@ -487,6 +487,18 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// of the SL order ID sees trailing-stop modifications inline
 			// with place/modify/cancel events.
 			eventDispatcher.Subscribe("trailing_stop.triggered", makeEventPersister(eventStore, "TrailingStop", app.logger))
+			// Success-path typed events (mf.order_placed, mf.order_cancelled,
+			// mf.sip_placed, mf.sip_cancelled, gtt.placed, gtt.modified,
+			// gtt.deleted, trailing_stop.set, trailing_stop.cancelled) are
+			// dispatched by their use cases for in-process projector /
+			// read-side consumers. We deliberately do NOT subscribe the
+			// persister here — the legacy appendAuxEvent path inside each
+			// use case writes the audit row already, and double-write would
+			// duplicate the SQL row for every successful mutation. Same
+			// rationale as the order.placed / .modified / .cancelled
+			// commentary above. When the legacy aux-event emit is removed
+			// (post-migration window), persister Subscribe lines will land
+			// here for those event types.
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

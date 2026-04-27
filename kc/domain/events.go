@@ -1003,6 +1003,226 @@ func TrailingStopAggregateID(trailingStopID string) string {
 	return trailingStopID
 }
 
+// --- Success-path migration: typed events for surfaces previously
+// using untyped appendAuxEvent (mf.*, gtt.*, trailing_stop.*) ---
+//
+// Replaces the prior map[string]any payloads with stable typed schemas
+// so projector consumers can render activity timelines without parsing
+// opaque JSON blobs. The legacy untyped audit path is preserved on the
+// emit side (dual-emit) during the migration window so existing audit
+// consumers depending on the historical SQL row shape aren't broken.
+
+// MFOrderPlacedEvent is emitted on successful broker placement of a
+// one-off mutual-fund buy/sell order. Replaces the prior untyped
+// appendAuxEvent("mf.order_placed", ...) payload. Carries the broker-
+// assigned OrderID + the user-supplied params verbatim so a forensic
+// walk can reconstruct the placement context without re-querying the
+// broker.
+//
+// Aggregate-ID rule: keyed by OrderID via MFAggregateID — pairs with
+// MFOrderRejectedEvent (cancel-source) under the same key when both
+// fire on the same broker order. Same shape as appendAuxEvent's
+// existing aggregate ID for "mf.order_placed" so existing audit rows
+// and new typed events sort under one stream.
+type MFOrderPlacedEvent struct {
+	Email           string
+	OrderID         string
+	Tradingsymbol   string
+	TransactionType string
+	Amount          float64 // ISIN buy: rupees; sell-by-quantity: 0
+	Quantity        float64 // sell-by-quantity: units; buy-by-amount: 0
+	Tag             string
+	Timestamp       time.Time
+}
+
+func (e MFOrderPlacedEvent) EventType() string    { return "mf.order_placed" }
+func (e MFOrderPlacedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// MFOrderCancelledEvent is emitted on successful broker cancellation
+// of an MF order. Aggregate-ID is OrderID — pairs with
+// MFOrderPlacedEvent under the same key for full lifecycle replay.
+type MFOrderCancelledEvent struct {
+	Email     string
+	OrderID   string
+	Timestamp time.Time
+}
+
+func (e MFOrderCancelledEvent) EventType() string    { return "mf.order_cancelled" }
+func (e MFOrderCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// MFSIPPlacedEvent is emitted on successful broker creation of a new
+// systematic investment plan. SIPs are recurring MF orders with their
+// own ID namespace (SIPID, distinct from MFOrder OrderID), so they
+// key under the SIPID via MFAggregateID — disjoint stream from
+// one-off MF orders.
+type MFSIPPlacedEvent struct {
+	Email         string
+	SIPID         string
+	Tradingsymbol string
+	Amount        float64
+	Frequency     string  // "monthly", "weekly", etc.
+	Instalments   int     // -1 = perpetual; positive = fixed count
+	InitialAmount float64 // optional one-time first instalment
+	InstalmentDay int     // day-of-month for monthly SIPs
+	Tag           string
+	Timestamp     time.Time
+}
+
+func (e MFSIPPlacedEvent) EventType() string    { return "mf.sip_placed" }
+func (e MFSIPPlacedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// MFSIPCancelledEvent is emitted on successful broker cancellation
+// of an MF SIP. Aggregate-ID is SIPID — pairs with MFSIPPlacedEvent.
+type MFSIPCancelledEvent struct {
+	Email     string
+	SIPID     string
+	Timestamp time.Time
+}
+
+func (e MFSIPCancelledEvent) EventType() string    { return "mf.sip_cancelled" }
+func (e MFSIPCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// MFAggregateID returns the natural aggregate key for MF success
+// events. The id parameter is OrderID (for MFOrder*) or SIPID (for
+// MFSIP*). Both ID namespaces are Kite-assigned strings, distinct
+// across the surface, so a single helper handles both. Empty falls
+// back to "mf:unknown" so malformed dispatches don't collide with
+// real rows.
+func MFAggregateID(id string) string {
+	if id == "" {
+		return "mf:unknown"
+	}
+	return id
+}
+
+// GTTPlacedEvent is emitted on successful broker placement of a GTT
+// (Good-Till-Triggered) order. Captures the trigger params verbatim
+// from the Kite GTTParams so a forensic walk can reconstruct the
+// trigger window without re-querying the broker.
+//
+// For "single" type, only TriggerValue / Quantity / LimitPrice are
+// meaningful. For "two-leg" type, Upper* and Lower* fields carry the
+// upper / lower trigger pairs and the single-leg fields are unused.
+//
+// Aggregate-ID rule: keyed by TriggerID via GTTAggregateID. Pairs
+// with GTTRejectedEvent / GTTModifiedEvent / GTTDeletedEvent under
+// the same TriggerID so the full GTT lifecycle replays as a coherent
+// stream.
+type GTTPlacedEvent struct {
+	Email             string
+	TriggerID         int
+	Instrument        InstrumentKey
+	TransactionType   string // "BUY" / "SELL"
+	Product           string // CNC / MIS / NRML
+	Type              string // "single" or "two-leg"
+	TriggerValue      float64 // single-leg trigger
+	// Quantity is float64 to match the GTT cqrs commands (Kite GTT API
+	// allows fractional quantities for some derivative products).
+	Quantity          float64 // single-leg quantity
+	LimitPrice        float64 // single-leg limit price
+	UpperTriggerValue float64 // two-leg upper trigger
+	UpperQuantity     float64 // two-leg upper quantity
+	UpperLimitPrice   float64 // two-leg upper limit
+	LowerTriggerValue float64 // two-leg lower trigger
+	LowerQuantity     float64 // two-leg lower quantity
+	LowerLimitPrice   float64 // two-leg lower limit
+	Timestamp         time.Time
+}
+
+func (e GTTPlacedEvent) EventType() string    { return "gtt.placed" }
+func (e GTTPlacedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// GTTModifiedEvent is emitted on successful broker modification of a
+// GTT. Carries the post-modify params; pre-modify state can be
+// reconstructed by walking the GTT aggregate stream backward to the
+// most recent GTTPlacedEvent / GTTModifiedEvent.
+type GTTModifiedEvent struct {
+	Email             string
+	TriggerID         int
+	Instrument        InstrumentKey
+	TransactionType   string
+	Product           string
+	Type              string
+	TriggerValue      float64
+	Quantity          float64 // see GTTPlacedEvent.Quantity comment
+	LimitPrice        float64
+	UpperTriggerValue float64
+	UpperQuantity     float64
+	UpperLimitPrice   float64
+	LowerTriggerValue float64
+	LowerQuantity     float64
+	LowerLimitPrice   float64
+	Timestamp         time.Time
+}
+
+func (e GTTModifiedEvent) EventType() string    { return "gtt.modified" }
+func (e GTTModifiedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// GTTDeletedEvent is emitted on successful broker deletion of a GTT.
+// Pairs with GTTPlacedEvent under the same TriggerID — the place /
+// modify / delete lifecycle replays from the aggregate stream.
+type GTTDeletedEvent struct {
+	Email     string
+	TriggerID int
+	Timestamp time.Time
+}
+
+func (e GTTDeletedEvent) EventType() string    { return "gtt.deleted" }
+func (e GTTDeletedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// GTTAggregateID returns the natural aggregate key for GTT success
+// events. Format: fmt.Sprintf("%d", triggerID) — matches the existing
+// appendAuxEvent aggregate IDs and the GTTRejectedAggregateID format
+// so all GTT lifecycle events sort under one stream.
+func GTTAggregateID(triggerID int) string {
+	if triggerID == 0 {
+		return "gtt:unknown"
+	}
+	return fmt.Sprintf("%d", triggerID)
+}
+
+// TrailingStopSetEvent is emitted on successful creation of a new
+// trailing stop. Replaces the prior untyped appendAuxEvent payload
+// with a stable typed schema. ReferencePrice is the HighWaterMark
+// at activation (the price the trailing window anchors on); both
+// TrailAmount and TrailPct are preserved verbatim because the user
+// may set either form (the manager picks the one it sees as positive
+// in evaluateOne).
+//
+// Aggregate-ID rule: keyed by TrailingStopID via
+// TrailingStopAggregateID — pairs with TrailingStopTriggeredEvent
+// (per-trigger event) and TrailingStopCancelledEvent under the same
+// key, giving the trailing stop's full set->triggers->cancel lifecycle
+// a coherent aggregate stream.
+type TrailingStopSetEvent struct {
+	Email          string
+	TrailingStopID string
+	Instrument     InstrumentKey
+	OrderID        string  // the SL order being trailed
+	Variety        string  // "regular" / "co" / etc.
+	Direction      string  // "long" or "short"
+	TrailAmount    float64 // absolute trail in rupees
+	TrailPct       float64 // percentage trail
+	CurrentStop    float64 // initial SL trigger price
+	ReferencePrice float64 // HWM at activation
+	Timestamp      time.Time
+}
+
+func (e TrailingStopSetEvent) EventType() string    { return "trailing_stop.set" }
+func (e TrailingStopSetEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// TrailingStopCancelledEvent is emitted on successful deactivation
+// of a trailing stop. Pairs with TrailingStopSetEvent under the same
+// TrailingStopID for full lifecycle replay.
+type TrailingStopCancelledEvent struct {
+	Email          string
+	TrailingStopID string
+	Timestamp      time.Time
+}
+
+func (e TrailingStopCancelledEvent) EventType() string    { return "trailing_stop.cancelled" }
+func (e TrailingStopCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

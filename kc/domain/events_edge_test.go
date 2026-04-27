@@ -23,8 +23,17 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"OrderRejectedEvent", OrderRejectedEvent{Timestamp: now}, "order.rejected"},
 		{"PaperOrderRejectedEvent", PaperOrderRejectedEvent{Timestamp: now}, "paper.order_rejected"},
 		{"MFOrderRejectedEvent", MFOrderRejectedEvent{Timestamp: now}, "mf.order_rejected"},
+		{"MFOrderPlacedEvent", MFOrderPlacedEvent{Timestamp: now}, "mf.order_placed"},
+		{"MFOrderCancelledEvent", MFOrderCancelledEvent{Timestamp: now}, "mf.order_cancelled"},
+		{"MFSIPPlacedEvent", MFSIPPlacedEvent{Timestamp: now}, "mf.sip_placed"},
+		{"MFSIPCancelledEvent", MFSIPCancelledEvent{Timestamp: now}, "mf.sip_cancelled"},
 		{"GTTRejectedEvent", GTTRejectedEvent{Timestamp: now}, "gtt.rejected"},
+		{"GTTPlacedEvent", GTTPlacedEvent{Timestamp: now}, "gtt.placed"},
+		{"GTTModifiedEvent", GTTModifiedEvent{Timestamp: now}, "gtt.modified"},
+		{"GTTDeletedEvent", GTTDeletedEvent{Timestamp: now}, "gtt.deleted"},
 		{"TrailingStopTriggeredEvent", TrailingStopTriggeredEvent{Timestamp: now}, "trailing_stop.triggered"},
+		{"TrailingStopSetEvent", TrailingStopSetEvent{Timestamp: now}, "trailing_stop.set"},
+		{"TrailingStopCancelledEvent", TrailingStopCancelledEvent{Timestamp: now}, "trailing_stop.cancelled"},
 		{"PositionOpenedEvent", PositionOpenedEvent{Timestamp: now}, "position.opened"},
 		{"PositionClosedEvent", PositionClosedEvent{Timestamp: now}, "position.closed"},
 		{"PositionConvertedEvent", PositionConvertedEvent{Timestamp: now}, "position.converted"},
@@ -654,6 +663,256 @@ func TestTrailingStopAggregateID(t *testing.T) {
 					tc.trailingStopID, got, tc.want)
 			}
 		})
+	}
+}
+
+// --- Success-path migration: typed events for surfaces previously
+// using untyped appendAuxEvent (mf.*, gtt.*, trailing_stop.set/cancel) ---
+
+// TestMFOrderPlacedEvent_Fields pins the typed-event surface for the
+// MF order placement success path. Replaces the prior untyped
+// appendAuxEvent("mf.order_placed", map[string]any{...}) emit so
+// projector consumers receive a stable schema with named fields.
+func TestMFOrderPlacedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := MFOrderPlacedEvent{
+		Email:           "trader@example.com",
+		OrderID:         "MFO-1",
+		Tradingsymbol:   "INF123",
+		TransactionType: "BUY",
+		Amount:          5000,
+		Quantity:        0,
+		Tag:             "monthly_topup",
+		Timestamp:       now,
+	}
+	if e.EventType() != "mf.order_placed" {
+		t.Errorf("EventType() = %q, want mf.order_placed", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.OrderID != "MFO-1" {
+		t.Errorf("OrderID = %q", e.OrderID)
+	}
+}
+
+// TestMFOrderCancelledEvent_Fields pins the cancelled-MF-order surface.
+func TestMFOrderCancelledEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := MFOrderCancelledEvent{
+		Email:     "trader@example.com",
+		OrderID:   "MFO-2",
+		Timestamp: now,
+	}
+	if e.EventType() != "mf.order_cancelled" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+}
+
+// TestMFSIPPlacedEvent_Fields pins the SIP-placed surface. Frequency
+// + Instalments + InitialAmount + InstalmentDay are all preserved
+// verbatim from the Kite MFSIPParams so a forensic walk can reconstruct
+// the SIP creation parameters without re-querying the broker.
+func TestMFSIPPlacedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := MFSIPPlacedEvent{
+		Email:         "trader@example.com",
+		SIPID:         "SIP-1",
+		Tradingsymbol: "INF123",
+		Amount:        5000,
+		Frequency:     "monthly",
+		Instalments:   12,
+		InitialAmount: 0,
+		InstalmentDay: 1,
+		Tag:           "auto",
+		Timestamp:     now,
+	}
+	if e.EventType() != "mf.sip_placed" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if e.SIPID != "SIP-1" {
+		t.Errorf("SIPID = %q", e.SIPID)
+	}
+	if e.Frequency != "monthly" {
+		t.Errorf("Frequency = %q", e.Frequency)
+	}
+}
+
+// TestMFSIPCancelledEvent_Fields pins the SIP-cancelled surface.
+func TestMFSIPCancelledEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := MFSIPCancelledEvent{
+		Email:     "trader@example.com",
+		SIPID:     "SIP-1",
+		Timestamp: now,
+	}
+	if e.EventType() != "mf.sip_cancelled" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestMFAggregateID pins the aggregate-key derivation for the MF
+// success events. Format mirrors the existing appendAuxEvent
+// aggregate IDs (OrderID for MFOrder, SIPID for MFSIP) so existing
+// audit rows and the new typed events sort under the same key.
+func TestMFAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, id, want string
+	}{
+		{"present joins existing stream", "MFO-1", "MFO-1"},
+		{"empty falls back to unknown", "", "mf:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MFAggregateID(tc.id); got != tc.want {
+				t.Errorf("MFAggregateID(%q) = %q, want %q", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGTTPlacedEvent_Fields pins the typed-event surface for GTT
+// placement. Replaces the prior untyped appendAuxEvent("gtt.placed",
+// ...) with a stable schema. Type field ("single" / "two-leg") matters
+// because two-leg GTTs carry Upper/Lower trigger params that aren't
+// meaningful on single-leg.
+func TestGTTPlacedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := GTTPlacedEvent{
+		Email:           "trader@example.com",
+		TriggerID:       42,
+		Instrument:      NewInstrumentKey("NSE", "RELIANCE"),
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    2400,
+		Quantity:        10.0,
+		LimitPrice:      2390,
+		Timestamp:       now,
+	}
+	if e.EventType() != "gtt.placed" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if e.TriggerID != 42 {
+		t.Errorf("TriggerID = %d", e.TriggerID)
+	}
+	if e.Type != "single" {
+		t.Errorf("Type = %q", e.Type)
+	}
+}
+
+// TestGTTModifiedEvent_Fields pins the modified-GTT surface.
+func TestGTTModifiedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := GTTModifiedEvent{
+		Email:           "trader@example.com",
+		TriggerID:       42,
+		Instrument:      NewInstrumentKey("NSE", "RELIANCE"),
+		TransactionType: "BUY",
+		Product:         "CNC",
+		Type:            "single",
+		TriggerValue:    2450,
+		Quantity:        15.0,
+		LimitPrice:      2440,
+		Timestamp:       now,
+	}
+	if e.EventType() != "gtt.modified" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestGTTDeletedEvent_Fields pins the deleted-GTT surface.
+func TestGTTDeletedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := GTTDeletedEvent{
+		Email:     "trader@example.com",
+		TriggerID: 42,
+		Timestamp: now,
+	}
+	if e.EventType() != "gtt.deleted" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestGTTAggregateID pins the aggregate-key derivation for GTT events.
+// Format matches the existing appendAuxEvent aggregate IDs:
+// fmt.Sprintf("%d", triggerID) so the rejection events from prior
+// commits and the new typed success events sort under the same key.
+func TestGTTAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		triggerID int
+		want      string
+	}{
+		{"non-zero stringified", 42, "42"},
+		{"zero falls back to unknown", 0, "gtt:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := GTTAggregateID(tc.triggerID); got != tc.want {
+				t.Errorf("GTTAggregateID(%d) = %q, want %q", tc.triggerID, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTrailingStopSetEvent_Fields pins the typed-event surface for
+// trailing-stop creation. ReferencePrice = HighWaterMark at activation
+// time (the price the trailing window is anchored on); CurrentStop is
+// the initial SL trigger.
+func TestTrailingStopSetEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := TrailingStopSetEvent{
+		Email:           "trader@example.com",
+		TrailingStopID:  "TS1",
+		Instrument:      NewInstrumentKey("NSE", "RELIANCE"),
+		OrderID:         "SL-1",
+		Variety:         "regular",
+		Direction:       "long",
+		TrailAmount:     20,
+		TrailPct:        0,
+		CurrentStop:     1480,
+		ReferencePrice:  1500,
+		Timestamp:       now,
+	}
+	if e.EventType() != "trailing_stop.set" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if e.TrailingStopID != "TS1" {
+		t.Errorf("TrailingStopID = %q", e.TrailingStopID)
+	}
+	if e.Direction != "long" {
+		t.Errorf("Direction = %q", e.Direction)
+	}
+}
+
+// TestTrailingStopCancelledEvent_Fields pins the cancelled-trailing-stop
+// surface. Pairs with TrailingStopSetEvent under the same aggregate ID
+// (uuid-derived TrailingStopID) so a full set->triggers->cancel
+// lifecycle replays as a coherent stream.
+func TestTrailingStopCancelledEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := TrailingStopCancelledEvent{
+		Email:          "trader@example.com",
+		TrailingStopID: "TS1",
+		Timestamp:      now,
+	}
+	if e.EventType() != "trailing_stop.cancelled" {
+		t.Errorf("EventType() = %q", e.EventType())
 	}
 }
 
