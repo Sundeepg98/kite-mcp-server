@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -47,14 +48,13 @@ type Subscription struct {
 type Store struct {
 	mu     sync.RWMutex
 	subs   map[string]*Subscription // keyed by lowercase email
-	db     *alerts.DB
-	// Wave D Phase 3 Package 7c-3 (Logger sweep): logger is the
-	// deprecated slog-typed field kept populated for the existing
-	// store.go consumer sites; loggerPort wraps the same source via
-	// logport.NewSlog so new code paths can consume the typed port
-	// with ctx threading. Both are wired by NewStore from the same
-	// caller-supplied *slog.Logger.
-	logger     *slog.Logger // Deprecated: use loggerPort
+	db *alerts.DB
+	// SOLID 99→100 cleanup: the deprecated *slog.Logger field is
+	// retired (zero in-package consumers; the only call site at
+	// store.go:317 now uses loggerPort.Error with ctx threading).
+	// NewStore still accepts a *slog.Logger parameter for back-compat
+	// with app/wire.go and tests — the value is wrapped via
+	// logport.NewSlog and stored on loggerPort.
 	loggerPort logport.Logger
 	// dispatcher is the optional domain event dispatcher. When set,
 	// SetSubscription emits a domain.TierChangedEvent on every
@@ -97,14 +97,13 @@ func (s *Store) SetChangeReason(reason string) {
 // NewStore creates a new billing store with SQLite persistence.
 //
 // Public signature retains *slog.Logger for backward-compat with
-// app/wire.go's call site; the value is also wrapped via
-// logport.NewSlog so the typed-port loggerPort field is populated
-// for new code paths.
+// app/wire.go's call site; the value is wrapped via logport.NewSlog
+// onto loggerPort. The duplicate *slog.Logger field was retired
+// during the SOLID 99→100 deprecation-shim sweep (see commit body).
 func NewStore(db *alerts.DB, logger *slog.Logger) *Store {
 	return &Store{
 		subs:       make(map[string]*Subscription),
 		db:         db,
-		logger:     logger,
 		loggerPort: logport.NewSlog(logger),
 	}
 }
@@ -314,8 +313,10 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			stored.MonthlyAmount.Float64(),
 		)
 		if err != nil {
-			if s.logger != nil {
-				s.logger.Error("Failed to persist billing subscription", "email", key, "error", err)
+			if s.loggerPort != nil {
+				// SetSubscription is sync; no request ctx in scope.
+				// Background() is the appropriate seam.
+				s.loggerPort.Error(context.Background(), "Failed to persist billing subscription", err, "email", key)
 			}
 			return fmt.Errorf("persist subscription: %w", err)
 		}
