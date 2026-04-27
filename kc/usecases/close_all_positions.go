@@ -45,6 +45,12 @@ func NewCloseAllPositionsUseCase(
 	}
 }
 
+// SetEventDispatcher updates the domain event dispatcher post-construction.
+// See PlaceOrderUseCase.SetEventDispatcher for the rationale.
+func (uc *CloseAllPositionsUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
+
 // CloseAllResult contains the outcome of closing all positions.
 type CloseAllResult struct {
 	SuccessCount  int                `json:"success_count"`

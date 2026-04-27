@@ -122,4 +122,23 @@ func (m *Manager) initOrderUseCases() {
 		deleteGTT.SetEventDispatcher(d)
 	}
 	m.deleteGTTUC = deleteGTT
+
+	// ClosePosition / CloseAllPositions — Slice D4. Both take
+	// (resolver, guard, events, logger); event dispatcher comes via
+	// the constructor (nil at init, propagated by SetDispatcher).
+	closePos := usecases.NewClosePositionUseCase(
+		m.sessionSvc,
+		m.riskGuard,
+		m.eventing.Dispatcher(),
+		m.Logger,
+	)
+	m.closePositionUC = closePos
+
+	closeAll := usecases.NewCloseAllPositionsUseCase(
+		m.sessionSvc,
+		m.riskGuard,
+		m.eventing.Dispatcher(),
+		m.Logger,
+	)
+	m.closeAllPositionsUC = closeAll
 }

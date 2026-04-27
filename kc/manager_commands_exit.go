@@ -6,17 +6,17 @@ import (
 	"reflect"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
 // registerExitCommands wires CommandBus handlers for the position-exit
 // commands (CommandBus batch E): close_position and close_all_positions.
 //
-// Both handlers use resolverFromContext(ctx): the MCP tool layer attaches
-// the session-pinned broker client via WithBroker before DispatchWithResult,
-// so we re-use it instead of paying for another credential lookup. Tests that
-// dispatch without an attached broker fall back to the Manager's
-// SessionService transparently.
+// Wave D Slice D4: use cases are now startup-constructed by
+// initOrderUseCases (kc/manager_use_cases.go) and held on the Manager.
+// The handler is a thin dispatcher — no per-request resolver lookup,
+// no per-request use case construction. Broker resolution flows through
+// m.sessionSvc on every dispatch (one in-memory session-cache lookup,
+// ~100ns; see .research/wave-d-resolver-refactor-plan.md §5).
 func (m *Manager) registerExitCommands() error {
 	// --- Exit: ClosePositionCommand ---
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.ClosePositionCommand](), func(ctx context.Context, msg any) (any, error) {
@@ -24,13 +24,7 @@ func (m *Manager) registerExitCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewClosePositionUseCase(
-			m.resolverFromContext(ctx),
-			m.riskGuard,
-			m.eventing.Dispatcher(),
-			m.Logger,
-		)
-		return uc.ExecuteCommand(ctx, cmd)
+		return m.closePositionUC.ExecuteCommand(ctx, cmd)
 	}); err != nil {
 		return err
 	}
@@ -41,13 +35,7 @@ func (m *Manager) registerExitCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCloseAllPositionsUseCase(
-			m.resolverFromContext(ctx),
-			m.riskGuard,
-			m.eventing.Dispatcher(),
-			m.Logger,
-		)
-		return uc.ExecuteCommand(ctx, cmd)
+		return m.closeAllPositionsUC.ExecuteCommand(ctx, cmd)
 	}); err != nil {
 		return err
 	}

@@ -323,6 +323,14 @@ type Manager struct {
 	placeGTTUC  *usecases.PlaceGTTUseCase
 	modifyGTTUC *usecases.ModifyGTTUseCase
 	deleteGTTUC *usecases.DeleteGTTUseCase
+
+	// Wave D Phase 1 Slice D4: position-exit write use cases hoisted
+	// from per-request construction. ClosePosition closes one position
+	// by placing an opposite MARKET order; CloseAllPositions iterates
+	// through filtered positions placing one opposite per slot. Both
+	// run riskguard before the broker call.
+	closePositionUC     *usecases.ClosePositionUseCase
+	closeAllPositionsUC *usecases.CloseAllPositionsUseCase
 }
 
 // NewManager creates a new manager with default configuration.

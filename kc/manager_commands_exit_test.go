@@ -53,19 +53,43 @@ func (f *fakeBrokerForExit) PlaceOrder(_ broker.OrderParams) (broker.OrderRespon
 // a riskguard, the broker would be hit and the test would fail.
 func TestCommandBus_ClosePosition_RiskguardFires(t *testing.T) {
 	t.Parallel()
-	mgr, err := newTestManager("test_key", "test_secret")
-	if err != nil {
-		t.Fatalf("newTestManager: %v", err)
-	}
 
+	// Wave D Slice D4: exit use cases are constructed once at startup
+	// with the riskGuard supplied via Config. Wire the guard via
+	// WithRiskGuard so initOrderUseCases picks it up.
 	guard := riskguard.NewGuard(testLogger())
 	guard.Freeze("user@example.com", "test", "testing exit CommandBus riskguard wiring")
-	mgr.riskGuard = guard
 
+	mgr, err := NewWithOptions(context.Background(),
+		WithConfig(Config{
+			APIKey:             "test_key",
+			APISecret:          "test_secret",
+			InstrumentsManager: newTestInstrumentsManager(),
+			Logger:             testLogger(),
+		}),
+		WithRiskGuard(guard),
+	)
+	if err != nil {
+		t.Fatalf("NewWithOptions: %v", err)
+	}
+
+	// Wave D Slice D4: ClosePositionUseCase resolves the broker BEFORE
+	// running riskguard (it needs to fetch positions to derive the
+	// opposite-direction order). Pre-D4 the test injected a fake via
+	// WithBroker(ctx, ...) which the resolverFromContext fork honored;
+	// after D4 the use case has m.sessionSvc baked in. To keep this
+	// test exercising the riskguard wiring (not broker plumbing) we
+	// pre-populate a session with the fake Broker, so SessionService.
+	// GetBrokerForEmail finds it via its ListActiveSessions hot-path.
 	fake := &fakeBrokerForExit{}
-	ctx := WithBroker(context.Background(), fake)
+	sid := mgr.GenerateSession()
+	kd, _, sErr := mgr.GetOrCreateSessionWithEmail(sid, "user@example.com")
+	if sErr != nil {
+		t.Fatalf("GetOrCreateSessionWithEmail: %v", sErr)
+	}
+	kd.Broker = fake
 
-	_, err = mgr.CommandBus().DispatchWithResult(ctx, cqrs.ClosePositionCommand{
+	_, err = mgr.CommandBus().DispatchWithResult(context.Background(), cqrs.ClosePositionCommand{
 		Email:    "user@example.com",
 		Exchange: "NSE",
 		Symbol:   "SBIN",
@@ -86,19 +110,34 @@ func TestCommandBus_ClosePosition_RiskguardFires(t *testing.T) {
 // position blocked by riskguard and no orders should reach the broker.
 func TestCommandBus_CloseAllPositions_RiskguardFires(t *testing.T) {
 	t.Parallel()
-	mgr, err := newTestManager("test_key", "test_secret")
-	if err != nil {
-		t.Fatalf("newTestManager: %v", err)
-	}
 
+	// Wave D Slice D4: see ClosePosition test above for the
+	// post-construction riskGuard + session-attached-broker rationale.
 	guard := riskguard.NewGuard(testLogger())
 	guard.Freeze("user@example.com", "test", "testing exit CommandBus riskguard wiring")
-	mgr.riskGuard = guard
+
+	mgr, err := NewWithOptions(context.Background(),
+		WithConfig(Config{
+			APIKey:             "test_key",
+			APISecret:          "test_secret",
+			InstrumentsManager: newTestInstrumentsManager(),
+			Logger:             testLogger(),
+		}),
+		WithRiskGuard(guard),
+	)
+	if err != nil {
+		t.Fatalf("NewWithOptions: %v", err)
+	}
 
 	fake := &fakeBrokerForExit{}
-	ctx := WithBroker(context.Background(), fake)
+	sid := mgr.GenerateSession()
+	kd, _, sErr := mgr.GetOrCreateSessionWithEmail(sid, "user@example.com")
+	if sErr != nil {
+		t.Fatalf("GetOrCreateSessionWithEmail: %v", sErr)
+	}
+	kd.Broker = fake
 
-	raw, err := mgr.CommandBus().DispatchWithResult(ctx, cqrs.CloseAllPositionsCommand{
+	raw, err := mgr.CommandBus().DispatchWithResult(context.Background(), cqrs.CloseAllPositionsCommand{
 		Email:         "user@example.com",
 		ProductFilter: "ALL",
 	})

@@ -73,6 +73,13 @@ func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	if e.m.deleteGTTUC != nil {
 		e.m.deleteGTTUC.SetEventDispatcher(d)
 	}
+	// Wave D propagation: position-exit use cases.
+	if e.m.closePositionUC != nil {
+		e.m.closePositionUC.SetEventDispatcher(d)
+	}
+	if e.m.closeAllPositionsUC != nil {
+		e.m.closeAllPositionsUC.SetEventDispatcher(d)
+	}
 }
 
 // Store returns the domain audit log (append-only event store), or nil.

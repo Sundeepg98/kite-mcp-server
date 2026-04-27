@@ -45,6 +45,14 @@ func NewClosePositionUseCase(
 	}
 }
 
+// SetEventDispatcher updates the domain event dispatcher post-construction.
+// See PlaceOrderUseCase.SetEventDispatcher for the rationale (production
+// wiring sets the dispatcher after the use case has already been built;
+// without this setter the PositionClosedEvent emission silently drops).
+func (uc *ClosePositionUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
+
 // ClosePositionResult contains the outcome of closing a position.
 type ClosePositionResult struct {
 	OrderID     string  `json:"order_id"`
