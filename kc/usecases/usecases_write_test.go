@@ -1637,29 +1637,3 @@ func TestDeleteGTT_SuccessDispatchesGTTDeleted(t *testing.T) {
 	assert.Equal(t, 42, ev.TriggerID)
 }
 
-// TestPlaceGTT_SuccessKeepsLegacyAuxEvent verifies the dual-emit
-// contract: typed event PLUS legacy aux-event row.
-func TestPlaceGTT_SuccessKeepsLegacyAuxEvent(t *testing.T) {
-	t.Parallel()
-	client := &mockBrokerClient{placeGTTResp: broker.GTTResponse{TriggerID: 99}}
-	store := &mockEventAppender{}
-	uc := NewPlaceGTTUseCase(&mockBrokerResolver{client: client}, testLogger())
-	uc.SetEventStore(store)
-
-	_, err := uc.Execute(context.Background(), cqrs.PlaceGTTCommand{
-		Email:           "trader@example.com",
-		Instrument:      domain.NewInstrumentKey("NSE", "RELIANCE"),
-		LastPrice:       domain.NewINR(2500.0),
-		TransactionType: "BUY",
-		Product:         "CNC",
-		Type:            "single",
-		TriggerValue:    2400.0,
-		Quantity:        10,
-		LimitPrice:      domain.NewINR(2390.0),
-	})
-	require.NoError(t, err)
-	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
-	assert.Equal(t, "99", store.appended[0].AggregateID)
-	assert.Equal(t, "GTT", store.appended[0].AggregateType)
-	assert.Equal(t, "gtt.placed", store.appended[0].EventType)
-}

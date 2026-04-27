@@ -563,30 +563,6 @@ func TestPlaceMFOrder_SuccessDispatchesMFOrderPlaced(t *testing.T) {
 	assert.False(t, ev.Timestamp.IsZero())
 }
 
-// TestPlaceMFOrder_SuccessKeepsLegacyAuxEvent verifies the dual-emit
-// contract: the typed event fires AND the legacy untyped audit-store
-// row is still appended. Existing audit consumers depending on the
-// SQL row shape aren't broken by the migration.
-func TestPlaceMFOrder_SuccessKeepsLegacyAuxEvent(t *testing.T) {
-	t.Parallel()
-	client := &mfMockBrokerClient{placeMFResp: broker.MFOrderResponse{OrderID: "MFO-1"}}
-	store := &mockEventAppender{}
-	uc := NewPlaceMFOrderUseCase(&mockBrokerResolver{client: client}, testLogger())
-	uc.SetEventStore(store)
-
-	_, err := uc.Execute(context.Background(), cqrs.PlaceMFOrderCommand{
-		Email: "trader@example.com", Tradingsymbol: "INF123",
-		TransactionType: "BUY", Amount: 5000,
-	})
-
-	require.NoError(t, err)
-	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
-	got := store.appended[0]
-	assert.Equal(t, "MFO-1", got.AggregateID)
-	assert.Equal(t, "MFOrder", got.AggregateType)
-	assert.Equal(t, "mf.order_placed", got.EventType)
-}
-
 // TestCancelMFOrder_SuccessDispatchesMFOrderCancelled verifies the
 // typed event fires on successful broker cancellation.
 func TestCancelMFOrder_SuccessDispatchesMFOrderCancelled(t *testing.T) {
@@ -1508,31 +1484,6 @@ func TestCancelTrailingStop_SuccessDispatchesTrailingStopCancelled(t *testing.T)
 	ev, ok := captured.(domain.TrailingStopCancelledEvent)
 	require.True(t, ok)
 	assert.Equal(t, "TS1", ev.TrailingStopID)
-}
-
-// TestSetTrailingStop_SuccessKeepsLegacyAuxEvent verifies dual-emit:
-// typed event PLUS legacy aux-event row both fire.
-func TestSetTrailingStop_SuccessKeepsLegacyAuxEvent(t *testing.T) {
-	t.Parallel()
-	mgr := &mockTrailingStopManager{addID: "TS-DUAL-1"}
-	store := &mockEventAppender{}
-	uc := NewSetTrailingStopUseCase(mgr, testLogger())
-	uc.SetEventStore(store)
-
-	_, err := uc.Execute(context.Background(), cqrs.SetTrailingStopCommand{
-		Email:          "trader@example.com",
-		OrderID:        "SL-1",
-		Direction:      "long",
-		TrailAmount:    20,
-		CurrentStop:    1480,
-		ReferencePrice: 1500,
-	})
-
-	require.NoError(t, err)
-	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
-	assert.Equal(t, "TS-DUAL-1", store.appended[0].AggregateID)
-	assert.Equal(t, "TrailingStop", store.appended[0].AggregateType)
-	assert.Equal(t, "trailing_stop.set", store.appended[0].EventType)
 }
 
 // ===========================================================================

@@ -152,8 +152,8 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 		"type", cmd.Type,
 	)
 
-	// ES success-path migration: dual-emit. Typed event for projector
-	// consumers, legacy aux-event row for existing audit consumers.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write (with EmailHash for PII correlation).
 	if uc.events != nil {
 		uc.events.Dispatch(domain.GTTPlacedEvent{
 			Email:             cmd.Email,
@@ -174,19 +174,6 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 			Timestamp:         time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", resp.TriggerID), "gtt.placed", map[string]any{
-		"email":            cmd.Email,
-		"trigger_id":       resp.TriggerID,
-		"exchange":         cmd.Instrument.Exchange,
-		"tradingsymbol":    cmd.Instrument.Tradingsymbol,
-		"transaction_type": cmd.TransactionType,
-		"product":          cmd.Product,
-		"type":             cmd.Type,
-		"trigger_value":    cmd.TriggerValue,
-		"quantity":         cmd.Quantity,
-		"limit_price":      cmd.LimitPrice.Amount,
-	})
 
 	return resp, nil
 }
@@ -276,7 +263,8 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 		"tradingsymbol", cmd.Instrument.Tradingsymbol,
 	)
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.GTTModifiedEvent{
 			Email:             cmd.Email,
@@ -297,18 +285,6 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 			Timestamp:         time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.modified", map[string]any{
-		"email":            cmd.Email,
-		"trigger_id":       cmd.TriggerID,
-		"tradingsymbol":    cmd.Instrument.Tradingsymbol,
-		"transaction_type": cmd.TransactionType,
-		"product":          cmd.Product,
-		"type":             cmd.Type,
-		"trigger_value":    cmd.TriggerValue,
-		"quantity":         cmd.Quantity,
-		"limit_price":      cmd.LimitPrice.Amount,
-	})
 
 	return resp, nil
 }
@@ -363,7 +339,8 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 		"trigger_id", cmd.TriggerID,
 	)
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.GTTDeletedEvent{
 			Email:     cmd.Email,
@@ -371,11 +348,6 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 			Timestamp: time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "GTT", fmt.Sprintf("%d", cmd.TriggerID), "gtt.deleted", map[string]any{
-		"email":      cmd.Email,
-		"trigger_id": cmd.TriggerID,
-	})
 
 	return resp, nil
 }

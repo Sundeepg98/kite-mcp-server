@@ -174,10 +174,11 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 		"order_id", resp.OrderID,
 	)
 
-	// ES success-path migration: dual-emit. Typed domain event for
-	// projector consumers (stable schema), legacy aux-event row for
-	// existing audit consumers depending on the historical
-	// map[string]any payload.
+	// ES post-migration: typed event only. The legacy
+	// appendAuxEvent dual-emit was removed in the post-migration
+	// cleanup — the persister Subscribe in app/wire.go writes the
+	// audit row from this dispatch (with EmailHash for PII
+	// correlation, an improvement over the prior aux-event row).
 	if uc.events != nil {
 		uc.events.Dispatch(domain.MFOrderPlacedEvent{
 			Email:           cmd.Email,
@@ -190,15 +191,6 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 			Timestamp:       time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", resp.OrderID, "mf.order_placed", map[string]any{
-		"email":            cmd.Email,
-		"tradingsymbol":    cmd.Tradingsymbol,
-		"transaction_type": cmd.TransactionType,
-		"amount":           cmd.Amount,
-		"quantity":         cmd.Quantity,
-		"order_id":         resp.OrderID,
-	})
 
 	return resp, nil
 }
@@ -245,7 +237,8 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 
 	uc.logger.Info("MF order cancelled", "email", cmd.Email, "order_id", cmd.OrderID)
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.MFOrderCancelledEvent{
 			Email:     cmd.Email,
@@ -253,11 +246,6 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 			Timestamp: time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "MFOrder", cmd.OrderID, "mf.order_cancelled", map[string]any{
-		"email":    cmd.Email,
-		"order_id": cmd.OrderID,
-	})
 
 	return resp, nil
 }
@@ -319,7 +307,8 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 		"sip_id", resp.SIPID,
 	)
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.MFSIPPlacedEvent{
 			Email:         cmd.Email,
@@ -334,17 +323,6 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 			Timestamp:     time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", resp.SIPID, "mf.sip_placed", map[string]any{
-		"email":          cmd.Email,
-		"tradingsymbol":  cmd.Tradingsymbol,
-		"amount":         cmd.Amount,
-		"frequency":      cmd.Frequency,
-		"instalments":    cmd.Instalments,
-		"initial_amount": cmd.InitialAmount,
-		"instalment_day": cmd.InstalmentDay,
-		"sip_id":         resp.SIPID,
-	})
 
 	return resp, nil
 }
@@ -391,7 +369,8 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 
 	uc.logger.Info("MF SIP cancelled", "email", cmd.Email, "sip_id", cmd.SIPID)
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.MFSIPCancelledEvent{
 			Email:     cmd.Email,
@@ -399,11 +378,6 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 			Timestamp: time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "MFSIP", cmd.SIPID, "mf.sip_cancelled", map[string]any{
-		"email":  cmd.Email,
-		"sip_id": cmd.SIPID,
-	})
 
 	return resp, nil
 }

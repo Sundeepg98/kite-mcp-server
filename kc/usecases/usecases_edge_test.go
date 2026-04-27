@@ -1983,25 +1983,6 @@ func TestDeleteNativeAlert_SuccessDispatchesNativeAlertDeletedPerUUID(t *testing
 	assert.Equal(t, "u3", captured[2].UUID)
 }
 
-// TestPlaceNativeAlert_SuccessKeepsLegacyAuxEvent verifies dual-emit:
-// typed event PLUS legacy aux-event row both fire.
-func TestPlaceNativeAlert_SuccessKeepsLegacyAuxEvent(t *testing.T) {
-	t.Parallel()
-	client := &mockNativeAlertClient{createResult: "ok"}
-	store := &mockEventAppender{}
-	uc := NewPlaceNativeAlertUseCase(testLogger())
-	uc.SetEventStore(store)
-
-	_, err := uc.Execute(context.Background(), client, cqrs.PlaceNativeAlertCommand{
-		Email: "trader@example.com",
-	})
-	require.NoError(t, err)
-	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
-	assert.Equal(t, "trader@example.com", store.appended[0].AggregateID)
-	assert.Equal(t, "NativeAlert", store.appended[0].AggregateType)
-	assert.Equal(t, "native_alert.placed", store.appended[0].EventType)
-}
-
 // --- ES success-path migration: typed events for paper trading lifecycle ---
 
 // TestPaperTradingToggle_EnableDispatchesPaperEnabled verifies the
@@ -2081,20 +2062,3 @@ func TestPaperTradingReset_DispatchesPaperReset(t *testing.T) {
 	assert.Equal(t, "trader@example.com", ev.Email)
 }
 
-// TestPaperTradingToggle_EnableKeepsLegacyAuxEvent verifies dual-emit
-// preserves the legacy audit row alongside the new typed dispatch.
-func TestPaperTradingToggle_EnableKeepsLegacyAuxEvent(t *testing.T) {
-	t.Parallel()
-	store := &mockEventAppender{}
-	uc := NewPaperTradingToggleUseCase(&mockPaperEngine{}, testLogger())
-	uc.SetEventStore(store)
-
-	_, err := uc.Execute(context.Background(), cqrs.PaperTradingToggleCommand{
-		Email: "trader@example.com", Enable: true, InitialCash: 100000,
-	})
-	require.NoError(t, err)
-	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
-	assert.Equal(t, "trader@example.com", store.appended[0].AggregateID)
-	assert.Equal(t, "PaperTrading", store.appended[0].AggregateType)
-	assert.Equal(t, "paper.enabled", store.appended[0].EventType)
-}

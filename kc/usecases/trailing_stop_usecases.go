@@ -77,10 +77,8 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 		return "", fmt.Errorf("usecases: set trailing stop: %w", err)
 	}
 
-	// ES success-path migration: dual-emit. Typed domain event for
-	// projector consumers (stable schema), legacy aux-event row for
-	// audit consumers depending on the historical map[string]any
-	// payload during the migration window.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write (with EmailHash for PII correlation).
 	if uc.events != nil {
 		uc.events.Dispatch(domain.TrailingStopSetEvent{
 			Email:          cmd.Email,
@@ -96,20 +94,6 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 			Timestamp:      time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", id, "trailing_stop.set", map[string]any{
-		"email":            cmd.Email,
-		"trailing_stop_id": id,
-		"exchange":         cmd.Exchange,
-		"tradingsymbol":    cmd.Tradingsymbol,
-		"order_id":         cmd.OrderID,
-		"variety":          cmd.Variety,
-		"direction":        cmd.Direction,
-		"trail_amount":     cmd.TrailAmount,
-		"trail_pct":        cmd.TrailPct,
-		"current_stop":     cmd.CurrentStop,
-		"reference_price":  cmd.ReferencePrice,
-	})
 
 	return id, nil
 }
@@ -172,8 +156,8 @@ func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.Cance
 		return fmt.Errorf("usecases: cancel trailing stop: %w", err)
 	}
 
-	// ES dual-emit: typed event for projector consumers + legacy
-	// aux-event row for audit-row consumers.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.TrailingStopCancelledEvent{
 			Email:          cmd.Email,
@@ -181,11 +165,6 @@ func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.Cance
 			Timestamp:      time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "TrailingStop", cmd.TrailingStopID, "trailing_stop.cancelled", map[string]any{
-		"email":            cmd.Email,
-		"trailing_stop_id": cmd.TrailingStopID,
-	})
 
 	return nil
 }

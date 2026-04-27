@@ -487,18 +487,44 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// of the SL order ID sees trailing-stop modifications inline
 			// with place/modify/cancel events.
 			eventDispatcher.Subscribe("trailing_stop.triggered", makeEventPersister(eventStore, "TrailingStop", app.logger))
-			// Success-path typed events (mf.order_placed, mf.order_cancelled,
-			// mf.sip_placed, mf.sip_cancelled, gtt.placed, gtt.modified,
-			// gtt.deleted, trailing_stop.set, trailing_stop.cancelled) are
-			// dispatched by their use cases for in-process projector /
-			// read-side consumers. We deliberately do NOT subscribe the
-			// persister here — the legacy appendAuxEvent path inside each
-			// use case writes the audit row already, and double-write would
-			// duplicate the SQL row for every successful mutation. Same
-			// rationale as the order.placed / .modified / .cancelled
-			// commentary above. When the legacy aux-event emit is removed
-			// (post-migration window), persister Subscribe lines will land
-			// here for those event types.
+			// Success-path typed events for the mutation surfaces that
+			// previously dual-emitted via appendAuxEvent. Post-migration
+			// cleanup removed the legacy aux-event path from each use
+			// case; the persister now writes the audit row from these
+			// dispatches (with EmailHash for PII correlation, an
+			// improvement over the prior aux-event row which lacked it).
+			//
+			// MF: order placement / cancellation / SIP placement /
+			// SIP cancellation. Aggregate types are split between
+			// "MFOrder" (single MF buy/sell orders) and "MFSIP"
+			// (recurring systematic investment plans) to match the
+			// pre-cleanup aggregate IDs.
+			eventDispatcher.Subscribe("mf.order_placed", makeEventPersister(eventStore, "MFOrder", app.logger))
+			eventDispatcher.Subscribe("mf.order_cancelled", makeEventPersister(eventStore, "MFOrder", app.logger))
+			eventDispatcher.Subscribe("mf.sip_placed", makeEventPersister(eventStore, "MFSIP", app.logger))
+			eventDispatcher.Subscribe("mf.sip_cancelled", makeEventPersister(eventStore, "MFSIP", app.logger))
+			// GTT: place / modify / delete success events.
+			eventDispatcher.Subscribe("gtt.placed", makeEventPersister(eventStore, "GTT", app.logger))
+			eventDispatcher.Subscribe("gtt.modified", makeEventPersister(eventStore, "GTT", app.logger))
+			eventDispatcher.Subscribe("gtt.deleted", makeEventPersister(eventStore, "GTT", app.logger))
+			// Trailing stop set/cancelled. Pairs with
+			// trailing_stop.triggered above so a forensic walk of a
+			// single TrailingStopID sees the full set -> N triggers
+			// -> cancel lifecycle in one aggregate stream.
+			eventDispatcher.Subscribe("trailing_stop.set", makeEventPersister(eventStore, "TrailingStop", app.logger))
+			eventDispatcher.Subscribe("trailing_stop.cancelled", makeEventPersister(eventStore, "TrailingStop", app.logger))
+			// Native (Kite-side) alerts: placed / modified / deleted.
+			eventDispatcher.Subscribe("native_alert.placed", makeEventPersister(eventStore, "NativeAlert", app.logger))
+			eventDispatcher.Subscribe("native_alert.modified", makeEventPersister(eventStore, "NativeAlert", app.logger))
+			eventDispatcher.Subscribe("native_alert.deleted", makeEventPersister(eventStore, "NativeAlert", app.logger))
+			// Paper trading lifecycle: enabled / disabled / reset.
+			// Disjoint aggregate from PaperOrder (per-order rejections):
+			// "PaperTrading" keys per-user account; "PaperOrder" keys
+			// per virtual order. Both streams persisted via the
+			// per-aggregate-type Subscribe.
+			eventDispatcher.Subscribe("paper.enabled", makeEventPersister(eventStore, "PaperTrading", app.logger))
+			eventDispatcher.Subscribe("paper.disabled", makeEventPersister(eventStore, "PaperTrading", app.logger))
+			eventDispatcher.Subscribe("paper.reset", makeEventPersister(eventStore, "PaperTrading", app.logger))
 			app.logger.Info("Domain event store initialized and subscribed")
 		}
 	}

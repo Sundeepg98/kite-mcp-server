@@ -52,23 +52,18 @@ func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAle
 		return nil, fmt.Errorf("usecases: create native alert: %w", err)
 	}
 
-	// ES success-path migration: dual-emit. Typed event for projector
-	// consumers, legacy aux-event row for existing audit consumers.
-	// UUID is empty here — the broker assigns it lazily and the use
-	// case doesn't always see it in the immediate response.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write. UUID is empty here — the broker
+	// assigns it lazily and the use case doesn't always see it in
+	// the immediate response. Multiple native_alert.placed events
+	// for one user is normal — aggregate ID falls back to email
+	// when UUID is empty (NativeAlertAggregateID).
 	if uc.events != nil {
 		uc.events.Dispatch(domain.NativeAlertPlacedEvent{
 			Email:     cmd.Email,
 			Timestamp: time.Now().UTC(),
 		})
 	}
-
-	// Aggregate ID is the email (the broker assigns the alert UUID lazily;
-	// we don't always see it in the immediate response). Multiple
-	// native_alert.placed events for one user is normal.
-	appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", cmd.Email, "native_alert.placed", map[string]any{
-		"email": cmd.Email,
-	})
 
 	return result, nil
 }
@@ -136,7 +131,8 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 		return nil, fmt.Errorf("usecases: modify native alert: %w", err)
 	}
 
-	// ES dual-emit on success.
+	// ES post-migration: typed event only. Persister in wire.go
+	// handles audit-row write.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.NativeAlertModifiedEvent{
 			Email:     cmd.Email,
@@ -144,11 +140,6 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 			Timestamp: time.Now().UTC(),
 		})
 	}
-
-	appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", cmd.UUID, "native_alert.modified", map[string]any{
-		"email": cmd.Email,
-		"uuid":  cmd.UUID,
-	})
 
 	return result, nil
 }
@@ -189,10 +180,11 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 		return fmt.Errorf("usecases: delete native alert: %w", err)
 	}
 
-	// One event per UUID so the per-aggregate replay stream stays clean.
+	// One event per UUID so the per-aggregate replay stream stays
+	// clean. ES post-migration: typed event only. Persister in
+	// wire.go handles audit-row write.
 	now := time.Now().UTC()
 	for _, uuid := range cmd.UUIDs {
-		// ES dual-emit on success — one typed event per UUID.
 		if uc.events != nil {
 			uc.events.Dispatch(domain.NativeAlertDeletedEvent{
 				Email:     cmd.Email,
@@ -200,10 +192,6 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 				Timestamp: now,
 			})
 		}
-		appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", uuid, "native_alert.deleted", map[string]any{
-			"email": cmd.Email,
-			"uuid":  uuid,
-		})
 	}
 
 	return nil
