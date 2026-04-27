@@ -17,7 +17,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/mcp"
@@ -926,89 +925,80 @@ func (app *App) registerLifecycle(kcManager *kc.Manager) {
 
 // initScheduler wires the Telegram morning briefing, daily P&L summary, and
 // audit trail retention cleanup tasks.
+//
+// Wave D Phase 2 Slice P2.4b: task wiring delegated to
+// providers.BuildScheduler via an Fx graph. The composition site
+// (this function) still constructs the BriefingService and
+// PnLSnapshotService inline because they require the unexported
+// briefingTokenAdapter / briefingCredAdapter shims that can't move
+// into app/providers/ without an import cycle. After construction,
+// the services + audit store are fx.Supply'd to the graph and
+// BuildScheduler conditionally adds tasks. The kcManager.SetPnLService
+// side effect stays at the composition site.
 func (app *App) initScheduler(kcManager *kc.Manager) {
-	sched := scheduler.New(app.logger)
-	var taskNames []string
+	// --- Construct services that need unexported adapters ---
 
-	// --- Telegram briefings (opt-in: requires TELEGRAM_BOT_TOKEN) ---
+	var briefingSvc *alerts.BriefingService
+	var taskNames []string
 	notifier := kcManager.TelegramNotifier()
 	if notifier != nil {
 		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
-		briefingSvc := alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
+		briefingSvc = alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
 		if briefingSvc != nil {
 			briefingSvc.SetKiteClientFactory(kcManager.KiteClientFactory())
-			sched.Add(scheduler.Task{
-				Name:   "morning_briefing",
-				Hour:   9,
-				Minute: 0,
-				Fn:     briefingSvc.SendMorningBriefings,
-			})
-			sched.Add(scheduler.Task{
-				Name:   "mis_warning",
-				Hour:   14,
-				Minute: 30,
-				Fn:     briefingSvc.SendMISWarnings,
-			})
-			sched.Add(scheduler.Task{
-				Name:   "daily_summary",
-				Hour:   15,
-				Minute: 35,
-				Fn:     briefingSvc.SendDailySummaries,
-			})
 			taskNames = append(taskNames, "morning_briefing(09:00)", "mis_warning(14:30)", "daily_summary(15:35)")
 		}
 	} else {
 		app.logger.Info("Telegram not configured, skipping briefing tasks")
 	}
 
-	// --- Audit trail retention cleanup — daily at 3:00 AM IST ---
-	if app.auditStore != nil {
-		const retentionDays = 1825 // 5 years — SEBI algo trading audit trail requirement
-		sched.Add(scheduler.Task{
-			Name:   "audit_cleanup",
-			Hour:   3,
-			Minute: 0,
-			Fn: func() {
-				cutoff := time.Now().AddDate(0, 0, -retentionDays)
-				deleted, err := app.auditStore.DeleteOlderThan(cutoff)
-				if err != nil {
-					app.logger.Error("Audit cleanup failed", "error", err)
-				} else if deleted > 0 {
-					app.logger.Info("Audit cleanup completed", "deleted", deleted, "retention_days", retentionDays)
-				}
-			},
-		})
-		taskNames = append(taskNames, "audit_cleanup(03:00)")
-	}
-
-	// --- Daily P&L snapshot — 3:40 PM IST (after market close, after Telegram summary) ---
+	var pnlService *alerts.PnLSnapshotService
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
-		pnlService := alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
+		pnlService = alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
 		if pnlService != nil {
 			pnlService.SetKiteClientFactory(kcManager.KiteClientFactory())
+			// Side effect kept at composition site: pnlService is exposed
+			// via kcManager for the get_pnl_journal MCP tool. Provider
+			// stays pure.
 			kcManager.SetPnLService(pnlService)
-			sched.Add(scheduler.Task{
-				Name:   "pnl_snapshot",
-				Hour:   15,
-				Minute: 40,
-				Fn:     pnlService.TakeSnapshots,
-			})
 			taskNames = append(taskNames, "pnl_snapshot(15:40)")
 			app.logger.Info("P&L journal snapshot service enabled")
 		}
 	}
 
-	// Only start the scheduler if there are tasks to run.
-	if len(taskNames) == 0 {
+	if app.auditStore != nil {
+		taskNames = append(taskNames, "audit_cleanup(03:00)")
+	}
+
+	// --- Build the scheduler via Fx graph ---
+
+	var initialized *providers.InitializedScheduler
+	fxApp := fx.New(
+		fx.NopLogger,
+		// Use fx.Provide(func returning T) instead of fx.Supply(T) for
+		// nullable pointers — fx.Supply rejects typed-nil values
+		// because reflect can't determine the type from a nil interface.
+		fx.Provide(func() *alerts.BriefingService { return briefingSvc }),
+		fx.Provide(func() *alerts.PnLSnapshotService { return pnlService }),
+		fx.Provide(func() *audit.Store { return app.auditStore }),
+		fx.Supply(providers.AuditCleanupConfig{}), // RetentionDays==0 → defaults to 1825 days (SEBI 5y)
+		fx.Supply(app.logger),
+		fx.Provide(providers.BuildScheduler),
+		fx.Populate(&initialized),
+	)
+	if err := fxApp.Err(); err != nil {
+		app.logger.Error("Failed to wire scheduler graph", "error", err)
+		return
+	}
+	if initialized == nil || initialized.Scheduler == nil {
 		app.logger.Info("No scheduled tasks configured")
 		return
 	}
 
-	sched.Start()
-	app.scheduler = sched
+	app.scheduler = initialized.Scheduler
 	app.logger.Info("Scheduler started", "tasks", taskNames)
 }
 
