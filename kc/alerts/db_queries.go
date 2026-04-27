@@ -300,8 +300,17 @@ func (d *DB) LoadTrailingStops() ([]*TrailingStop, error) {
 
 // LoadDailyPnL reads daily P&L entries for a user within a date range (inclusive).
 // Dates are in "2006-01-02" format.
+//
+// Currency-aware (Slice 6d): scans the holdings/positions/net pnl
+// currency labels alongside the float magnitudes. Existing rows
+// pre-migration backfill to 'INR' via the ALTER TABLE DEFAULT (see
+// db_migrations.go), so callers always observe a non-empty Currency
+// string on a successful Load.
 func (d *DB) LoadDailyPnL(email, fromDate, toDate string) ([]*DailyPnLEntry, error) {
-	rows, err := d.db.Query(`SELECT date, email, holdings_pnl, positions_pnl, net_pnl,
+	rows, err := d.db.Query(`SELECT date, email,
+		holdings_pnl, holdings_pnl_currency,
+		positions_pnl, positions_pnl_currency,
+		net_pnl, net_pnl_currency,
 		holdings_count, trades_count
 		FROM daily_pnl WHERE email = ? AND date >= ? AND date <= ?
 		ORDER BY date ASC`, email, fromDate, toDate)
@@ -313,8 +322,11 @@ func (d *DB) LoadDailyPnL(email, fromDate, toDate string) ([]*DailyPnLEntry, err
 	var out []*DailyPnLEntry
 	for rows.Next() {
 		var e DailyPnLEntry
-		if err := rows.Scan(&e.Date, &e.Email, &e.HoldingsPnL, &e.PositionsPnL,
-			&e.NetPnL, &e.HoldingsCount, &e.TradesCount); err != nil {
+		if err := rows.Scan(&e.Date, &e.Email,
+			&e.HoldingsPnL, &e.HoldingsPnLCurrency,
+			&e.PositionsPnL, &e.PositionsPnLCurrency,
+			&e.NetPnL, &e.NetPnLCurrency,
+			&e.HoldingsCount, &e.TradesCount); err != nil {
 			return nil, fmt.Errorf("scan daily pnl: %w", err)
 		}
 		out = append(out, &e)

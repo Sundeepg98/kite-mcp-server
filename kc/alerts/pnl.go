@@ -6,6 +6,7 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // PnLJournalResult holds the result of a P&L journal query.
@@ -72,11 +73,21 @@ func (s *PnLSnapshotService) broker() BrokerDataProvider {
 }
 
 // buildPnLEntry builds a DailyPnLEntry from broker data. Pure logic, testable.
+//
+// Currency labelling (Slice 6d): gokiteconnect emits INR-priced floats
+// by contract, so the entry's *PnLCurrency fields are stamped with
+// "INR" at construction time. This keeps the cross-currency rejection
+// in GetJournal meaningful — a future multi-currency emitter would
+// supply a non-INR value here, and the aggregation would surface the
+// mismatch rather than silently coercing.
 func buildPnLEntry(date, email string, holdings []kiteconnect.Holding, holdingsErr error,
 	positions kiteconnect.Positions, positionsErr error) *DailyPnLEntry {
 	entry := &DailyPnLEntry{
-		Date:  date,
-		Email: email,
+		Date:                 date,
+		Email:                email,
+		HoldingsPnLCurrency:  "INR",
+		PositionsPnLCurrency: "INR",
+		NetPnLCurrency:       "INR",
 	}
 	if holdingsErr == nil {
 		entry.HoldingsCount = len(holdings)
@@ -161,6 +172,16 @@ func (s *PnLSnapshotService) TakeSnapshots() {
 }
 
 // GetJournal retrieves P&L journal data for a user within a date range.
+//
+// Currency-aware aggregation (Slice 6d): NetPnL summation routes through
+// domain.Money.Add so cross-currency entries surface as a typed error
+// rather than silently coercing INR + USD as a bare float. Production
+// is INR-only by gokiteconnect contract — this is forward-compat
+// guardrail for multi-currency Kite accounts.
+//
+// Cumulative + AvgDailyPnL still surface as float64 on the result
+// (JSON wire compat); the Money pipeline is the validation oracle, the
+// scalar values come from .Float64() at the boundary.
 func (s *PnLSnapshotService) GetJournal(email, fromDate, toDate string) (*PnLJournalResult, error) {
 	entries, err := s.db.LoadDailyPnL(email, fromDate, toDate)
 	if err != nil {
@@ -176,15 +197,26 @@ func (s *PnLSnapshotService) GetJournal(email, fromDate, toDate string) (*PnLJou
 		return result, nil
 	}
 
-	// Compute stats
-	var cumulative float64
+	// Compute stats. Anchor cumulative on the first entry's currency so
+	// subsequent .Add calls validate against it; mismatch returns a
+	// typed error naming "currency".
+	cumMoney := entries[0].NetPnLMoney()
+	// First entry contributes 0 to delta-from-itself; subsequent entries
+	// add to cumMoney via Money.Add. Reset cumMoney to zero in that
+	// currency for the proper sum semantics.
+	cumMoney = domain.Money{Amount: 0, Currency: cumMoney.Currency}
+
 	var bestDay, worstDay *DailyPnLEntry
 	bestStreak := 0
 	worstStreak := 0
 	runStreak := 0
 
 	for _, e := range entries {
-		cumulative += e.NetPnL
+		next, addErr := cumMoney.Add(e.NetPnLMoney())
+		if addErr != nil {
+			return nil, fmt.Errorf("aggregate daily pnl: currency mismatch: %w", addErr)
+		}
+		cumMoney = next
 
 		if e.NetPnL >= 0 {
 			result.WinDays++
@@ -220,6 +252,7 @@ func (s *PnLSnapshotService) GetJournal(email, fromDate, toDate string) (*PnLJou
 		worstStreak = min(worstStreak, runStreak)
 	}
 
+	cumulative := cumMoney.Float64()
 	result.CumulativePnL = cumulative
 	result.BestDay = bestDay
 	result.WorstDay = worstDay

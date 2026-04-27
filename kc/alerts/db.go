@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -206,13 +207,16 @@ CREATE INDEX IF NOT EXISTS idx_trailing_stops_email ON trailing_stops(email);
 CREATE INDEX IF NOT EXISTS idx_trailing_stops_active ON trailing_stops(active);
 
 CREATE TABLE IF NOT EXISTS daily_pnl (
-    date           TEXT NOT NULL,
-    email          TEXT NOT NULL,
-    holdings_pnl   REAL NOT NULL DEFAULT 0,
-    positions_pnl  REAL NOT NULL DEFAULT 0,
-    net_pnl        REAL NOT NULL DEFAULT 0,
-    holdings_count INTEGER NOT NULL DEFAULT 0,
-    trades_count   INTEGER NOT NULL DEFAULT 0,
+    date                    TEXT NOT NULL,
+    email                   TEXT NOT NULL,
+    holdings_pnl            REAL NOT NULL DEFAULT 0,
+    holdings_pnl_currency   TEXT NOT NULL DEFAULT 'INR',
+    positions_pnl           REAL NOT NULL DEFAULT 0,
+    positions_pnl_currency  TEXT NOT NULL DEFAULT 'INR',
+    net_pnl                 REAL NOT NULL DEFAULT 0,
+    net_pnl_currency        TEXT NOT NULL DEFAULT 'INR',
+    holdings_count          INTEGER NOT NULL DEFAULT 0,
+    trades_count            INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (date, email)
 );
 CREATE INDEX IF NOT EXISTS idx_daily_pnl_email ON daily_pnl(email);
@@ -305,14 +309,61 @@ type SessionDBEntry struct {
 }
 
 // DailyPnLEntry represents a single day's P&L snapshot.
+//
+// Currency-aware (sibling-column design): the float64 PnL fields carry
+// the magnitude; the matching *Currency string fields carry the unit
+// label. The two are joined into a domain.Money via the *Money()
+// accessors below so the in-memory pipeline (GetJournal aggregations,
+// briefing.go consumers) gets currency-mismatch detection while the
+// JSON wire format stays unchanged for kc/ops/api_alerts.go chart
+// consumers and SQLite SUM()/AVG() aggregation continues to work
+// natively.
+//
+// Empty Currency string is the "INR default" sentinel — both the SQL
+// boundary (DEFAULT 'INR' on the column) and the *Money() accessors
+// normalize empty → "INR". gokiteconnect emits INR-priced floats by
+// contract, so production rows always carry "INR".
+//
+// json:"-" on the Currency fields keeps the wire shape identical to
+// the pre-migration JSON ({"holdings_pnl": 1234.56, ...}).
 type DailyPnLEntry struct {
-	Date          string  `json:"date"`
-	Email         string  `json:"email"`
-	HoldingsPnL   float64 `json:"holdings_pnl"`
-	PositionsPnL  float64 `json:"positions_pnl"`
-	NetPnL        float64 `json:"net_pnl"`
-	HoldingsCount int     `json:"holdings_count"`
-	TradesCount   int     `json:"trades_count"`
+	Date                 string  `json:"date"`
+	Email                string  `json:"email"`
+	HoldingsPnL          float64 `json:"holdings_pnl"`
+	HoldingsPnLCurrency  string  `json:"-"`
+	PositionsPnL         float64 `json:"positions_pnl"`
+	PositionsPnLCurrency string  `json:"-"`
+	NetPnL               float64 `json:"net_pnl"`
+	NetPnLCurrency       string  `json:"-"`
+	HoldingsCount        int     `json:"holdings_count"`
+	TradesCount          int     `json:"trades_count"`
+}
+
+// pnlCurrencyOrINR normalizes the empty-string sentinel to "INR" so
+// the *Money() accessors and SaveDailyPnL agree on the default.
+func pnlCurrencyOrINR(c string) string {
+	if c == "" {
+		return "INR"
+	}
+	return c
+}
+
+// HoldingsPnLMoney returns the holdings P&L as a domain.Money value.
+// Empty currency defaults to INR.
+func (e *DailyPnLEntry) HoldingsPnLMoney() domain.Money {
+	return domain.Money{Amount: e.HoldingsPnL, Currency: pnlCurrencyOrINR(e.HoldingsPnLCurrency)}
+}
+
+// PositionsPnLMoney returns the positions P&L as a domain.Money value.
+// Empty currency defaults to INR.
+func (e *DailyPnLEntry) PositionsPnLMoney() domain.Money {
+	return domain.Money{Amount: e.PositionsPnL, Currency: pnlCurrencyOrINR(e.PositionsPnLCurrency)}
+}
+
+// NetPnLMoney returns the net P&L as a domain.Money value.
+// Empty currency defaults to INR.
+func (e *DailyPnLEntry) NetPnLMoney() domain.Money {
+	return domain.Money{Amount: e.NetPnL, Currency: pnlCurrencyOrINR(e.NetPnLCurrency)}
 }
 
 // RegistryDBEntry represents an app registration stored in the database.

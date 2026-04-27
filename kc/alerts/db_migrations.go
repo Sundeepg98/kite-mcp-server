@@ -93,5 +93,16 @@ func migrateAlerts(db *sql.DB) error {
 	db.Exec(`ALTER TABLE alerts ADD COLUMN composite_name TEXT`)               // #nosec G104 -- idempotent migration
 	db.Exec(`ALTER TABLE alerts ADD COLUMN conditions_json TEXT`)              // #nosec G104 -- idempotent migration
 
+	// Daily P&L currency columns (Slice 6d): sibling currency labels
+	// for the holdings_pnl / positions_pnl / net_pnl REAL columns. The
+	// 3 floats stay REAL so SQLite SUM()/AVG() continues to work; the
+	// new TEXT columns let cross-currency aggregation be detected
+	// in-process via the DailyPnLEntry.*Money() accessors. Existing
+	// rows backfill to 'INR' via DEFAULT — gokiteconnect emits INR
+	// prices by contract, so the backfill matches reality.
+	db.Exec(`ALTER TABLE daily_pnl ADD COLUMN holdings_pnl_currency TEXT NOT NULL DEFAULT 'INR'`)  // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE daily_pnl ADD COLUMN positions_pnl_currency TEXT NOT NULL DEFAULT 'INR'`) // #nosec G104 -- idempotent migration
+	db.Exec(`ALTER TABLE daily_pnl ADD COLUMN net_pnl_currency TEXT NOT NULL DEFAULT 'INR'`)        // #nosec G104 -- idempotent migration
+
 	return nil
 }

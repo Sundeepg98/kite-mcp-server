@@ -311,12 +311,25 @@ func (d *DB) UpdateTrailingStop(id string, hwm, currentStop float64, modifyCount
 }
 
 // SaveDailyPnL inserts or replaces a daily P&L entry.
+//
+// Currency-aware (Slice 6d): writes the holdings/positions/net pnl
+// currency labels alongside the float magnitudes. Empty Currency
+// fields on the struct normalize to 'INR' via pnlCurrencyOrINR — the
+// DB CHECK is NOT NULL so we must always supply a value, and INR is
+// the production default (gokiteconnect emits INR prices by contract).
 func (d *DB) SaveDailyPnL(entry *DailyPnLEntry) error {
 	_, err := d.db.Exec(`INSERT OR REPLACE INTO daily_pnl
-		(date, email, holdings_pnl, positions_pnl, net_pnl, holdings_count, trades_count)
-		VALUES (?,?,?,?,?,?,?)`,
-		entry.Date, entry.Email, entry.HoldingsPnL, entry.PositionsPnL,
-		entry.NetPnL, entry.HoldingsCount, entry.TradesCount)
+		(date, email,
+		 holdings_pnl, holdings_pnl_currency,
+		 positions_pnl, positions_pnl_currency,
+		 net_pnl, net_pnl_currency,
+		 holdings_count, trades_count)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		entry.Date, entry.Email,
+		entry.HoldingsPnL, pnlCurrencyOrINR(entry.HoldingsPnLCurrency),
+		entry.PositionsPnL, pnlCurrencyOrINR(entry.PositionsPnLCurrency),
+		entry.NetPnL, pnlCurrencyOrINR(entry.NetPnLCurrency),
+		entry.HoldingsCount, entry.TradesCount)
 	if err != nil {
 		return fmt.Errorf("save daily pnl: %w", err)
 	}
