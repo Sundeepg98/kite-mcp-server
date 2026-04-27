@@ -447,6 +447,7 @@ func (r *Registry) SubscribePluginEvent(eventType string, handler func(domain.Ev
 		// the handler still fires for THIS dispatcher; the recorded
 		// entry above means a future Install also picks it up.
 		watcherLogger().Warn(
+			context.Background(),
 			"plugin event subscription registered post-Install; subscribing directly",
 			"event_type", eventType,
 		)

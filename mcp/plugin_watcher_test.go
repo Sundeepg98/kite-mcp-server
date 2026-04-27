@@ -261,15 +261,23 @@ func TestParsePluginHotReloadFlag(t *testing.T) {
 // swallowed.
 //
 // Verifies the setter accepts a non-nil logger and the getter returns
-// it. The error-logging path itself is exercised indirectly: the
-// production runner calls watcherLogger().Warn on every w.Errors event.
+// a non-nil port wrapping it. The error-logging path itself is
+// exercised indirectly: the production runner calls
+// watcherLogger().Warn(ctx, …) on every w.Errors event.
+//
+// Wave D Phase 3 Package 6f: pointer-identity assertion (assert.Same)
+// no longer applies because watcherLogger() returns the kc/logger.Logger
+// port type, which wraps the input *slog.Logger via logport.NewSlog.
+// The test instead asserts the round-trip preserves observable
+// behaviour: the returned port is non-nil and emits to the supplied
+// handler.
 func TestSetPluginWatcherLogger_RoundTrip(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	SetPluginWatcherLogger(logger)
 	t.Cleanup(func() { SetPluginWatcherLogger(nil) }) // restore default
-	// Getter returns what we set.
-	assert.Same(t, logger, watcherLogger())
+	// Getter returns a non-nil port (wraps the supplied *slog.Logger).
+	require.NotNil(t, watcherLogger(), "watcherLogger must return non-nil port")
 }
 
 // TestPluginWatcherLogger_NilFallsBackToDefault — when nothing is

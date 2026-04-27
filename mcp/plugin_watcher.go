@@ -13,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // BinaryReloadable is the narrow interface the binary watcher
@@ -54,12 +55,25 @@ var watcherState = struct {
 	started bool
 }{}
 
-// pluginWatcherLogger holds the slog.Logger the watcher goroutine logs
-// fsnotify errors to. atomic.Pointer (not a plain *slog.Logger field)
-// lets ops swap loggers at runtime without coordinating with a mutex
-// the watcher goroutine doesn't otherwise hold. nil → fall back to
-// slog.Default() so the error path can never nil-deref.
-var pluginWatcherLogger atomic.Pointer[slog.Logger]
+// pluginWatcherLogger holds the kc/logger.Logger port the watcher
+// goroutine logs fsnotify errors to. atomic.Pointer (not a plain
+// field) lets ops swap loggers at runtime without coordinating with
+// a mutex the watcher goroutine doesn't otherwise hold. nil → fall
+// back to logport.NewSlog(nil) which wraps slog.Default(), so the
+// error path can never nil-deref.
+//
+// Wave D Phase 3 Package 6f (Logger sweep): migrated from
+// atomic.Pointer[slog.Logger] to atomic.Pointer[logport.Logger].
+// SetPluginWatcherLogger preserves the *slog.Logger public API
+// (wraps via logport.NewSlog at the boundary) so app/wire.go's
+// existing call site keeps compiling unchanged.
+//
+// atomic.Pointer requires a struct/pointer payload; we wrap the
+// interface in a small holder so the atomic semantics work
+// (atomic.Pointer cannot directly hold an interface value).
+type pluginLoggerHolder struct{ l logport.Logger }
+
+var pluginWatcherLogger atomic.Pointer[pluginLoggerHolder]
 
 // pluginWatcherDispatcher holds the domain.EventDispatcher the watcher
 // emits its lifecycle / mutation events through. atomic.Pointer (vs. a
@@ -96,17 +110,39 @@ func pluginEventBus() *domain.EventDispatcher {
 // uses for fsnotify error reporting (Plugin#4). Pre-fix, errors were
 // silently swallowed; this exposes them to ops dashboards. Pass nil to
 // clear (fall back to slog.Default()).
+//
+// Public API preserves the *slog.Logger parameter for backward compat
+// with app/wire.go's call site; the value is wrapped via
+// logport.NewSlog at the storage boundary so the atomic carries the
+// port type. SetPluginWatcherLoggerPort below offers the typed-port
+// alternative for new code.
 func SetPluginWatcherLogger(logger *slog.Logger) {
-	pluginWatcherLogger.Store(logger)
+	if logger == nil {
+		pluginWatcherLogger.Store(nil)
+		return
+	}
+	pluginWatcherLogger.Store(&pluginLoggerHolder{l: logport.NewSlog(logger)})
 }
 
-// watcherLogger returns the current logger, falling back to
-// slog.Default() when none is set. Never returns nil.
-func watcherLogger() *slog.Logger {
-	if l := pluginWatcherLogger.Load(); l != nil {
-		return l
+// SetPluginWatcherLoggerPort installs a kc/logger.Logger directly,
+// bypassing the slog wrapping done by SetPluginWatcherLogger. New
+// code that already holds a port-typed logger should prefer this.
+// Pass nil to clear.
+func SetPluginWatcherLoggerPort(logger logport.Logger) {
+	if logger == nil {
+		pluginWatcherLogger.Store(nil)
+		return
 	}
-	return slog.Default()
+	pluginWatcherLogger.Store(&pluginLoggerHolder{l: logger})
+}
+
+// watcherLogger returns the current Logger port, falling back to a
+// fresh wrap over slog.Default() when none is set. Never returns nil.
+func watcherLogger() logport.Logger {
+	if h := pluginWatcherLogger.Load(); h != nil {
+		return h.l
+	}
+	return logport.NewSlog(slog.Default())
 }
 
 // WatchPluginBinary registers a (path, reloadable) pair for the
@@ -393,7 +429,7 @@ func runPluginBinaryWatcher(ctx context.Context, w *fsnotify.Watcher) {
 			// memory pressure). Plugin#4: log via the configured
 			// logger so ops see them — silently swallowing was the
 			// pre-fix behaviour and obscured production diagnostics.
-			watcherLogger().Warn("plugin watcher: fsnotify error",
+			watcherLogger().Warn(ctx, "plugin watcher: fsnotify error",
 				"error", err.Error(),
 			)
 		}
