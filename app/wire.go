@@ -22,7 +22,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/zerodha/kite-mcp-server/plugins/rolegate"
 	"github.com/zerodha/kite-mcp-server/plugins/telegramnotify"
-	gomcp "github.com/mark3labs/mcp-go/mcp"
 	stripe "github.com/stripe/stripe-go/v82"
 	"go.uber.org/fx"
 
@@ -589,14 +588,23 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	// Create MCP server
 	app.logger.Info("Creating MCP server...")
-	var serverOpts []server.ServerOption
-	// Correlation ID middleware injects a unique ID per tool call for tracing.
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.CorrelationMiddleware()))
-	// Timeout middleware kills tool handlers that exceed 30 seconds.
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.TimeoutMiddleware(30*time.Second)))
-	if auditMiddleware != nil {
-		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(auditMiddleware))
+
+	// Wave D Phase 2 Slice P2.4d+e: middleware-chain assembly +
+	// server construction delegated to providers.BuildMiddlewareChain
+	// + providers.BuildMCPServer. The composition site builds the
+	// middleware "raw materials" (CircuitBreaker, RateLimiter, Billing
+	// middleware) and registers plugin hooks on app.registry as
+	// side-effects, then fans the constructed middlewares into a
+	// MiddlewareDeps struct that the provider consumes. Per-feature
+	// gates (Stripe billing, paper trading, audit DevMode) preserve
+	// the legacy nil-skip semantics via the provider's nil-skip
+	// contract.
+	mwDeps := providers.MiddlewareDeps{
+		Correlation: mcp.CorrelationMiddleware(),
+		Timeout:     mcp.TimeoutMiddleware(30 * time.Second),
+		Audit:       auditMiddleware, // may be nil — provider skips
 	}
+
 	// Plugin hooks middleware runs registered before/after hooks around tool calls.
 	// Register the rolegate plugin before wiring the middleware so its hook is
 	// active from the first tool call. First production consumer of the plugin
@@ -619,12 +627,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		Sender:  kcManager.TelegramNotifier(),
 		Logger:  app.logger,
 	}))
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.HookMiddlewareFor(app.registry)))
+	mwDeps.Hooks = mcp.HookMiddlewareFor(app.registry)
 	// Circuit breaker protects against cascading failures from Kite API outages.
 	circuitBreaker := mcp.NewCircuitBreaker(5, 30*time.Second)
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(circuitBreaker.Middleware()))
+	mwDeps.CircuitBreaker = circuitBreaker.Middleware()
 	// Riskguard middleware blocks orders exceeding safety limits.
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(riskguard.Middleware(riskGuard)))
+	mwDeps.RiskGuard = riskguard.Middleware(riskGuard)
 	// Per-tool rate limiter prevents abuse of order-related tools.
 	toolRateLimiter := mcp.NewToolRateLimiter(map[string]int{
 		"place_order":     10,
@@ -633,7 +641,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		"place_gtt_order": 5,
 		"set_alert":       10,
 	})
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(toolRateLimiter.Middleware()))
+	mwDeps.RateLimiter = toolRateLimiter.Middleware()
 
 	// SIGHUP hot-reload for per-tool rate-limit caps. Operators can
 	// retune throttles mid-incident without redeploying: edit
@@ -678,11 +686,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			}
 			return u.AdminEmail
 		}
-		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(billing.Middleware(billingStore, adminEmailFn)))
+		mwDeps.Billing = billing.Middleware(billingStore, adminEmailFn)
 		// Wire tier-aware throttling into the already-registered rate limiter.
-		// Late-binding via WithTierMultiplier keeps the middleware layer count
-		// unchanged (still 10) — the resolver is consulted per-request, so the
-		// order in which middleware was appended to serverOpts is preserved.
+		// Late-binding via WithTierMultiplier — toolRateLimiter.Middleware()
+		// reads tierMult on every request via mutex, so this mutation
+		// takes effect on the next dispatch even after Middleware() was
+		// called (verified at mcp/ratelimit_middleware.go).
 		toolRateLimiter.WithTierMultiplier(func(email string) int {
 			return tierRateMultiplier(billingStore.GetTierForUser(email, adminEmailFn))
 		})
@@ -738,35 +747,35 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	// Paper trading middleware intercepts order tools when the user has paper mode enabled.
 	if paperEngine != nil {
-		serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(papertrading.Middleware(paperEngine)))
+		mwDeps.PaperTrading = papertrading.Middleware(paperEngine)
 	}
 	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
 	// responses that have a relevant dashboard page.
-	serverOpts = append(serverOpts, server.WithToolHandlerMiddleware(mcp.DashboardURLMiddleware(kcManager)))
+	mwDeps.DashboardURL = mcp.DashboardURLMiddleware(kcManager)
 
-	// Enable elicitation so tool handlers can request user confirmation before
-	// placing orders. Clients that don't support elicitation will gracefully
-	// degrade (fail open — orders proceed without confirmation).
-	serverOpts = append(serverOpts, server.WithElicitation())
-
-	// Declare the MCP Apps UI extension so that MCP App hosts (Cowork,
-	// claude.ai) know this server supports inline rendering of ui:// resources.
-	// mcp-go doesn't have a WithExtensions option yet, so we inject it via an
-	// OnAfterInitialize hook that modifies the InitializeResult.
-	uiHooks := &server.Hooks{}
-	uiHooks.AddAfterInitialize(func(_ context.Context, _ any, _ *gomcp.InitializeRequest, result *gomcp.InitializeResult) {
-		if result.Capabilities.Extensions == nil {
-			result.Capabilities.Extensions = make(map[string]any)
+	// Wave D Phase 2 Slice P2.4d+e: build the chain + server via Fx.
+	// The provider appends Elicitation + MCP Apps UI extension hooks
+	// internally (production-required), so the composition site only
+	// supplies the canonical 10-layer middleware chain via mwDeps.
+	var mcpServer *server.MCPServer
+	{
+		fxApp := fx.New(
+			fx.NopLogger,
+			fx.Supply(mwDeps),
+			fx.Provide(providers.BuildMiddlewareChain),
+			fx.Provide(func(opts []server.ServerOption) *server.MCPServer {
+				return providers.BuildMCPServer(providers.MCPServerInput{
+					Name:    "Kite MCP Server",
+					Version: app.Version,
+					Options: opts,
+				})
+			}),
+			fx.Populate(&mcpServer),
+		)
+		if err := fxApp.Err(); err != nil {
+			return nil, nil, fmt.Errorf("mcp server fx graph: %w", err)
 		}
-		result.Capabilities.Extensions["io.modelcontextprotocol/ui"] = map[string]any{}
-	})
-	serverOpts = append(serverOpts, server.WithHooks(uiHooks))
-
-	mcpServer := server.NewMCPServer(
-		"Kite MCP Server",
-		app.Version,
-		serverOpts...,
-	)
+	}
 	app.logger.Debug("MCP server created successfully")
 
 	// Wire MCPServer into Manager so tool handlers can call RequestElicitation.
