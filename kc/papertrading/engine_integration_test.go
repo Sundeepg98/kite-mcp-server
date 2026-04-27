@@ -112,7 +112,7 @@ func TestIntegration_MarketOrderFillsAtMockLTP(t *testing.T) {
 	require.Len(t, positions, 1)
 	assert.Equal(t, "RELIANCE", positions[0].Tradingsymbol)
 	assert.Equal(t, 10, positions[0].Quantity)
-	assert.InDelta(t, 2500.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 2500.0, positions[0].AveragePrice.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ func TestIntegration_LimitOrderImmediatelyMarketable(t *testing.T) {
 	positions, err := engine.store.GetPositions(integrationEmail)
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
-	assert.InDelta(t, 800.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 800.0, positions[0].AveragePrice.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ func TestIntegration_CNCCreatesHoldings(t *testing.T) {
 	require.Len(t, holdings, 1)
 	assert.Equal(t, "HDFC", holdings[0].Tradingsymbol)
 	assert.Equal(t, 25, holdings[0].Quantity)
-	assert.InDelta(t, 1600.0, holdings[0].AveragePrice, 0.01)
+	assert.InDelta(t, 1600.0, holdings[0].AveragePrice.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +378,7 @@ func TestIntegration_WeightedAverageOnMultipleBuys(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
 	assert.Equal(t, 20, positions[0].Quantity)
-	assert.InDelta(t, 3100.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 3100.0, positions[0].AveragePrice.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +566,7 @@ func TestIntegration_PriceChangesBetweenOrders(t *testing.T) {
 	positions, err := engine.store.GetPositions(integrationEmail)
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
-	assert.InDelta(t, 1450.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 1450.0, positions[0].AveragePrice.Float64(), 0.01)
 
 	// Cash: 1Cr - 10*1500 - 10*1400 = 1Cr - 29000.
 	acct, err := engine.store.GetAccount(integrationEmail)

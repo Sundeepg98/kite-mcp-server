@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 import (
 	"context"
@@ -87,7 +87,7 @@ func TestUpdateHolding_BuyNewHolding(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, holdings, 1)
 	assert.Equal(t, 10, holdings[0].Quantity)
-	assert.InDelta(t, 2500.0, holdings[0].AveragePrice, 0.01)
+	assert.InDelta(t, 2500.0, holdings[0].AveragePrice.Float64(), 0.01)
 }
 
 
@@ -266,7 +266,7 @@ func TestPosition_SellFlipToShort(t *testing.T) {
 	require.Len(t, positions, 1)
 	assert.Equal(t, -5, positions[0].Quantity)
 	// New average should be the fill price (2500).
-	assert.InDelta(t, 2500.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 2500.0, positions[0].AveragePrice.Float64(), 0.01)
 }
 
 
@@ -672,7 +672,7 @@ func TestHandleClosePosition_ZeroQuantity(t *testing.T) {
 		Tradingsymbol: "SBIN",
 		Product:       "MIS",
 		Quantity:      0,
-		AveragePrice:  500,
+		AveragePrice:  domain.NewINR(500),
 		LastPrice:     domain.NewINR(500),
 		PnL:           0,
 	})
@@ -723,7 +723,7 @@ func TestHandleCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 		Tradingsymbol: "SBIN",
 		Product:       "MIS",
 		Quantity:      0,
-		AveragePrice:  500,
+		AveragePrice:  domain.NewINR(500),
 		LastPrice:     domain.NewINR(500),
 		PnL:           0,
 	})

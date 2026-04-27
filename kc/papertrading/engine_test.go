@@ -102,7 +102,7 @@ func TestPlaceMarketOrder(t *testing.T) {
 	require.Len(t, positions, 1)
 	assert.Equal(t, "RELIANCE", positions[0].Tradingsymbol)
 	assert.Equal(t, 10, positions[0].Quantity)
-	assert.InDelta(t, 2500.0, positions[0].AveragePrice, 0.01)
+	assert.InDelta(t, 2500.0, positions[0].AveragePrice.Float64(), 0.01)
 }
 
 func TestPlaceLimitOrder(t *testing.T) {

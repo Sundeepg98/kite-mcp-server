@@ -442,55 +442,79 @@ func (e *PaperEngine) updatePosition(email string, order *Order, fillPrice float
 			Tradingsymbol: order.Tradingsymbol,
 			Product:       order.Product,
 			Quantity:      qty,
-			AveragePrice:  fillPrice,
+			AveragePrice:  domain.NewINR(fillPrice),
 			LastPrice:     domain.NewINR(fillPrice),
 			PnL:           0,
 		})
 	}
 
-	// Update existing position.
+	// Update existing position. Weighted-average math runs through the
+	// Money pipeline: oldAvg.Multiply(oldQty).Add(fillMoney.Multiply(newQty)),
+	// then divide by total quantity via Multiply(1/n). Cross-currency
+	// errors on Add are unreachable in practice (LTPProvider returns
+	// raw INR floats; existing.AveragePrice was stored INR after the
+	// new-position-create branch), but the typed Add returns an error
+	// rather than silently coercing if the assumption ever breaks.
+	fillMoney := domain.NewINR(fillPrice)
 	if order.TransactionType == "BUY" {
 		if existing.Quantity >= 0 {
 			// Adding to long: weighted average.
-			totalCost := existing.AveragePrice*float64(existing.Quantity) + fillPrice*float64(order.Quantity)
+			oldLeg := existing.AveragePrice.Multiply(float64(existing.Quantity))
+			newLeg := fillMoney.Multiply(float64(order.Quantity))
+			totalCost, err := oldLeg.Add(newLeg)
+			if err != nil {
+				return fmt.Errorf("weighted average BUY-to-long: %w", err)
+			}
 			existing.Quantity += order.Quantity
 			if existing.Quantity != 0 {
-				existing.AveragePrice = totalCost / float64(existing.Quantity)
+				existing.AveragePrice = totalCost.Multiply(1.0 / float64(existing.Quantity))
 			}
 		} else {
 			// Covering short position.
 			existing.Quantity += order.Quantity
 			if existing.Quantity > 0 {
 				// Flipped to long — new average is the fill price for the remaining.
-				existing.AveragePrice = fillPrice
+				existing.AveragePrice = fillMoney
 			}
 			// If exactly zero, will be deleted below.
 		}
 	} else { // SELL
 		if existing.Quantity <= 0 {
-			// Adding to short: weighted average.
-			totalCost := existing.AveragePrice*float64(-existing.Quantity) + fillPrice*float64(order.Quantity)
+			// Adding to short: weighted average. Negate Quantity so the
+			// magnitude (proceeds basis) is positive in the Money pipeline.
+			oldLeg := existing.AveragePrice.Multiply(float64(-existing.Quantity))
+			newLeg := fillMoney.Multiply(float64(order.Quantity))
+			totalCost, err := oldLeg.Add(newLeg)
+			if err != nil {
+				return fmt.Errorf("weighted average SELL-to-short: %w", err)
+			}
 			existing.Quantity -= order.Quantity
 			if existing.Quantity != 0 {
-				existing.AveragePrice = totalCost / float64(-existing.Quantity)
+				existing.AveragePrice = totalCost.Multiply(1.0 / float64(-existing.Quantity))
 			}
 		} else {
 			// Reducing long position.
 			existing.Quantity -= order.Quantity
 			if existing.Quantity < 0 {
 				// Flipped to short — new average is the fill price for the remaining.
-				existing.AveragePrice = fillPrice
+				existing.AveragePrice = fillMoney
 			}
 			// If exactly zero, will be deleted below.
 		}
 	}
 
-	existing.LastPrice = domain.NewINR(fillPrice)
+	existing.LastPrice = fillMoney
 	if existing.Quantity != 0 {
-		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
+		// PnL stays float64 in this slice (commit 3 elevates it).
+		// Bridge via .Float64() — both sides INR by construction so no
+		// cross-currency loss.
+		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
 	}
 
-	// Remove the position if quantity is zero.
+	// Remove the position if quantity is zero. This MUST short-circuit
+	// before any divide-by-zero attempt above; the qty != 0 guards on
+	// the AveragePrice = totalCost.Multiply(1/qty) lines preserve the
+	// invariant.
 	if existing.Quantity == 0 {
 		return e.store.DeletePosition(email, existing.Exchange, existing.Tradingsymbol, existing.Product)
 	}
@@ -513,6 +537,7 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 		}
 	}
 
+	fillMoney := domain.NewINR(fillPrice)
 	if order.TransactionType == "BUY" {
 		if existing == nil {
 			return e.store.UpsertHolding(&Holding{
@@ -520,17 +545,23 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 				Exchange:      order.Exchange,
 				Tradingsymbol: order.Tradingsymbol,
 				Quantity:      order.Quantity,
-				AveragePrice:  fillPrice,
-				LastPrice:     domain.NewINR(fillPrice),
+				AveragePrice:  fillMoney,
+				LastPrice:     fillMoney,
 				PnL:           0,
 			})
 		}
-		// Weighted average for additional buys.
-		totalCost := existing.AveragePrice*float64(existing.Quantity) + fillPrice*float64(order.Quantity)
+		// Weighted average for additional buys via Money pipeline.
+		oldLeg := existing.AveragePrice.Multiply(float64(existing.Quantity))
+		newLeg := fillMoney.Multiply(float64(order.Quantity))
+		totalCost, err := oldLeg.Add(newLeg)
+		if err != nil {
+			return fmt.Errorf("weighted average holding BUY: %w", err)
+		}
 		existing.Quantity += order.Quantity
-		existing.AveragePrice = totalCost / float64(existing.Quantity)
-		existing.LastPrice = domain.NewINR(fillPrice)
-		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
+		existing.AveragePrice = totalCost.Multiply(1.0 / float64(existing.Quantity))
+		existing.LastPrice = fillMoney
+		// PnL bridge via .Float64() — commit 3 will elevate it.
+		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
 		return e.store.UpsertHolding(existing)
 	}
 
@@ -549,8 +580,8 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 			`DELETE FROM paper_holdings WHERE email = ? AND exchange = ? AND tradingsymbol = ?`,
 			email, order.Exchange, order.Tradingsymbol)
 	}
-	existing.LastPrice = domain.NewINR(fillPrice)
-	existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
+	existing.LastPrice = fillMoney
+	existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
 	return e.store.UpsertHolding(existing)
 }
 
@@ -658,9 +689,9 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 
 	// Refresh LTP for each position. LTPProvider returns float64 (raw
 	// exchange data); wrap with domain.NewINR at this boundary so the
-	// in-domain LastPrice field stays Money. PnL math uses .Float64()
-	// because PnL itself is still float64 in this slice (commit 3 will
-	// elevate it).
+	// in-domain LastPrice field stays Money. PnL math bridges via
+	// .Float64() because PnL itself is still float64 in this slice
+	// (commit 3 will elevate it).
 	if e.ltpProvider != nil && len(positions) > 0 {
 		instruments := make([]string, len(positions))
 		for i, p := range positions {
@@ -671,7 +702,7 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 				key := p.Exchange + ":" + p.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
 					p.LastPrice = domain.NewINR(ltp)
-					p.PnL = float64(p.Quantity) * (ltp - p.AveragePrice)
+					p.PnL = float64(p.Quantity) * (ltp - p.AveragePrice.Float64())
 				}
 			}
 		}
@@ -684,10 +715,10 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 			"exchange":      p.Exchange,
 			"product":       p.Product,
 			"quantity":      p.Quantity,
-			"average_price": p.AveragePrice,
 			// JSON boundary: Money → float64 so the Kite-API-shaped
-			// response keeps last_price as a number (matches GetMargins
-			// pattern from Slice 5).
+			// response keeps average_price + last_price as numbers
+			// (matches GetMargins pattern from Slice 5).
+			"average_price":    p.AveragePrice.Float64(),
 			"last_price":       p.LastPrice.Float64(),
 			"pnl":              p.PnL,
 			"m2m":              p.PnL,
@@ -709,8 +740,7 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 		return nil, err
 	}
 
-	// Refresh LTP for each holding. Same Money boundary as GetPositions:
-	// LTPProvider gives float64; wrap with domain.NewINR for storage.
+	// Refresh LTP for each holding. Same Money boundary as GetPositions.
 	if e.ltpProvider != nil && len(holdings) > 0 {
 		instruments := make([]string, len(holdings))
 		for i, h := range holdings {
@@ -721,7 +751,7 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 				key := h.Exchange + ":" + h.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
 					h.LastPrice = domain.NewINR(ltp)
-					h.PnL = float64(h.Quantity) * (ltp - h.AveragePrice)
+					h.PnL = float64(h.Quantity) * (ltp - h.AveragePrice.Float64())
 				}
 			}
 		}
@@ -733,8 +763,8 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 			"tradingsymbol": h.Tradingsymbol,
 			"exchange":      h.Exchange,
 			"quantity":      h.Quantity,
-			"average_price": h.AveragePrice,
 			// JSON boundary: Money → float64.
+			"average_price":    h.AveragePrice.Float64(),
 			"last_price":       h.LastPrice.Float64(),
 			"pnl":              h.PnL,
 			"t1_quantity":      0,

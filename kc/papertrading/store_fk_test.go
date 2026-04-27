@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestPaperOrders_FK_RejectsOrphan pins the DDD aggregate-boundary invariant:
@@ -49,7 +50,7 @@ func TestPaperPositions_FK_RejectsOrphan(t *testing.T) {
 
 	err = store.UpsertPosition(&Position{
 		Email: "ghost@nowhere.com", Exchange: "NSE", Tradingsymbol: "SBIN",
-		Product: "CNC", Quantity: 1, AveragePrice: 500,
+		Product: "CNC", Quantity: 1, AveragePrice: domain.NewINR(500),
 	})
 	require.Error(t, err, "orphan paper_positions row must be rejected by FOREIGN KEY constraint")
 	assert.Contains(t, err.Error(), "FOREIGN KEY")
@@ -67,7 +68,7 @@ func TestPaperHoldings_FK_RejectsOrphan(t *testing.T) {
 
 	err = store.UpsertHolding(&Holding{
 		Email: "ghost@nowhere.com", Exchange: "NSE", Tradingsymbol: "SBIN",
-		Quantity: 1, AveragePrice: 500,
+		Quantity: 1, AveragePrice: domain.NewINR(500),
 	})
 	require.Error(t, err, "orphan paper_holdings row must be rejected by FOREIGN KEY constraint")
 	assert.Contains(t, err.Error(), "FOREIGN KEY")
@@ -99,11 +100,11 @@ func TestPaperOrders_FK_AcceptsAfterParent(t *testing.T) {
 
 	require.NoError(t, store.UpsertPosition(&Position{
 		Email: email, Exchange: "NSE", Tradingsymbol: "SBIN",
-		Product: "CNC", Quantity: 1, AveragePrice: 500,
+		Product: "CNC", Quantity: 1, AveragePrice: domain.NewINR(500),
 	}))
 
 	require.NoError(t, store.UpsertHolding(&Holding{
 		Email: email, Exchange: "NSE", Tradingsymbol: "SBIN",
-		Quantity: 1, AveragePrice: 500,
+		Quantity: 1, AveragePrice: domain.NewINR(500),
 	}))
 }

@@ -290,6 +290,276 @@ func TestHoldingsJSONLastPriceStaysFloat(t *testing.T) {
 	assert.InDelta(t, 1700.0, lp, 0.01)
 }
 
+// TestPositionAveragePrice_IsMoney is the type-level assertion for
+// Slice 6a, commit 2 of 3 (papertrading P&L sweep): Position.AveragePrice
+// MUST be domain.Money. AveragePrice carries weighted-average semantics
+// (totalCost / Quantity at fill time) plus a "set to fillPrice on side
+// flip" branch — both expressed via Money.Multiply / Money.Add chains.
+func TestPositionAveragePrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	p := Position{}
+	got := reflect.TypeOf(p.AveragePrice)
+	if got != moneyType {
+		t.Fatalf("Position.AveragePrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestHoldingAveragePrice_IsMoney mirrors TestPositionAveragePrice_IsMoney
+// for the Holding aggregate (CNC product flow).
+func TestHoldingAveragePrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	h := Holding{}
+	got := reflect.TypeOf(h.AveragePrice)
+	if got != moneyType {
+		t.Fatalf("Holding.AveragePrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestWeightedAverageBuyAddingToLong covers the most common path: BUY
+// onto an existing long position. The weighted average is
+//
+//   newAvg = (oldAvg * oldQty + fillPrice * newQty) / (oldQty + newQty)
+//
+// Verify the Money pipeline produces the same numeric result as the
+// pre-Slice-6a float math for a non-trivial case (avoid 1*N = N
+// degenerate tests).
+//
+// Setup: BUY 10 @ 100, then BUY 30 @ 200. Avg should be (100*10 +
+// 200*30) / 40 = 7000/40 = 175. Use Equal-with-InDelta because float
+// rounding through Money.Multiply is bit-identical to the prior path.
+func TestWeightedAverageBuyAddingToLong(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 100.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	// First BUY at 100 (LTP = 100, MARKET).
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	// Second BUY at 200 (bump LTP).
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 200.0}})
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         30,
+	})
+	require.NoError(t, err)
+
+	positions, err := engine.store.GetPositions(testEmail)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, 40, positions[0].Quantity)
+	assert.InDelta(t, 175.0, positions[0].AveragePrice.Float64(), 0.01)
+	assert.Equal(t, "INR", positions[0].AveragePrice.Currency)
+}
+
+// TestSideFlipBuyCoveringShortToLong verifies the trickiest math path:
+// short position covered with enough quantity to flip to long. The
+// AveragePrice resets to fillPrice for the remaining long quantity
+// (the prior short cost basis is realized and discarded).
+//
+// Setup: SELL 10 @ 100 (open short), then BUY 25 @ 200 (cover 10 +
+// long 15). Final position: long 15 @ 200 average. The 10-share short
+// realized P&L isn't tracked on the Position struct itself (paper
+// engine doesn't accumulate realized P&L per Position — that's a
+// known limitation, out of scope for the Money sweep).
+func TestSideFlipBuyCoveringShortToLong(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 100.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	// SELL 10 @ 100 — open short.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "SELL",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	// BUY 25 @ 200 — covers 10 shorts + opens 15 longs.
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 200.0}})
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         25,
+	})
+	require.NoError(t, err)
+
+	positions, err := engine.store.GetPositions(testEmail)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, 15, positions[0].Quantity)
+	// Side-flip resets AveragePrice to fillPrice (200).
+	assert.InDelta(t, 200.0, positions[0].AveragePrice.Float64(), 0.01)
+	assert.Equal(t, "INR", positions[0].AveragePrice.Currency)
+}
+
+// TestSideFlipSellReducingLongToShort mirrors TestSideFlipBuyCovering —
+// SELL onto long with enough quantity to flip to short, AveragePrice
+// resets to fillPrice.
+//
+// Setup: BUY 10 @ 100 (open long), then SELL 25 @ 200 (close 10 + short 15).
+func TestSideFlipSellReducingLongToShort(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 100.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 200.0}})
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "SELL",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         25,
+	})
+	require.NoError(t, err)
+
+	positions, err := engine.store.GetPositions(testEmail)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, -15, positions[0].Quantity) // short
+	assert.InDelta(t, 200.0, positions[0].AveragePrice.Float64(), 0.01)
+	assert.Equal(t, "INR", positions[0].AveragePrice.Currency)
+}
+
+// TestSideFlipExactClose verifies the boundary case where the closing
+// trade exactly zeros out the position (SELL N onto BUY N). The
+// position is deleted before AveragePrice is mutated, so the post-state
+// has no position row. This is the divide-by-zero guard for the Money
+// pipeline: existing.Quantity == 0 must short-circuit BEFORE any
+// Money.Multiply(1.0/0) attempt.
+func TestSideFlipExactClose(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 100.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	// BUY 10.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	// SELL 10 — exact close.
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "SELL",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	positions, err := engine.store.GetPositions(testEmail)
+	require.NoError(t, err)
+	assert.Len(t, positions, 0, "exact close must delete the position row")
+}
+
+// TestPositionsJSONAveragePriceStaysFloat verifies the Kite-API-shaped
+// GetPositions output keeps average_price as float64 at the JSON
+// boundary — same Slice 5 / 6a-c1 pattern.
+func TestPositionsJSONAveragePriceStaysFloat(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+	resp := raw.(map[string]any)
+	day := resp["day"].([]map[string]any)
+	require.Len(t, day, 1)
+
+	avg, ok := day[0]["average_price"].(float64)
+	if !ok {
+		t.Fatalf("day[0][average_price] must be float64 at JSON boundary, got %T", day[0]["average_price"])
+	}
+	assert.InDelta(t, 2500.0, avg, 0.01)
+}
+
+// TestHoldingsWeightedAverageBuy verifies the CNC weighted-average
+// path through updateHolding. Same math as Position long-add.
+//
+// Setup: BUY 10 @ 100 CNC, then BUY 30 @ 200 CNC. Avg should be 175.
+func TestHoldingsWeightedAverageBuy(t *testing.T) {
+	t.Parallel()
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 100.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "CNC",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 200.0}})
+	_, err = engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "CNC",
+		"quantity":         30,
+	})
+	require.NoError(t, err)
+
+	holdings, err := engine.store.GetHoldings(testEmail)
+	require.NoError(t, err)
+	require.Len(t, holdings, 1)
+	assert.Equal(t, 40, holdings[0].Quantity)
+	assert.InDelta(t, 175.0, holdings[0].AveragePrice.Float64(), 0.01)
+	assert.Equal(t, "INR", holdings[0].AveragePrice.Currency)
+}
+
 // TestGetMargins_BoundaryStaysFloat verifies GetMargins (consumed by the
 // Kite-API-shaped paper response) preserves float64 at the JSON wire so
 // existing dashboards / chat clients that read margin data as numbers
