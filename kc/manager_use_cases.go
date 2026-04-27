@@ -141,4 +141,10 @@ func (m *Manager) initOrderUseCases() {
 		m.Logger,
 	)
 	m.closeAllPositionsUC = closeAll
+
+	// Margin queries — Slice D5. All three are read-only (compute margin /
+	// charges); no event dispatch, no riskguard, no event store.
+	m.getOrderMarginsUC = usecases.NewGetOrderMarginsUseCase(m.sessionSvc, m.Logger)
+	m.getBasketMarginsUC = usecases.NewGetBasketMarginsUseCase(m.sessionSvc, m.Logger)
+	m.getOrderChargesUC = usecases.NewGetOrderChargesUseCase(m.sessionSvc, m.Logger)
 }

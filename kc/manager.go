@@ -331,6 +331,14 @@ type Manager struct {
 	// run riskguard before the broker call.
 	closePositionUC     *usecases.ClosePositionUseCase
 	closeAllPositionsUC *usecases.CloseAllPositionsUseCase
+
+	// Wave D Phase 1 Slice D5: margin-query use cases hoisted from
+	// per-request construction. All three are read-side queries
+	// (estimate margin / charges before placing an order); broker
+	// resolution flows through m.sessionSvc on dispatch.
+	getOrderMarginsUC  *usecases.GetOrderMarginsUseCase
+	getBasketMarginsUC *usecases.GetBasketMarginsUseCase
+	getOrderChargesUC  *usecases.GetOrderChargesUseCase
 }
 
 // NewManager creates a new manager with default configuration.
