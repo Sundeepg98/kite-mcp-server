@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/mcp"
 )
 
@@ -97,7 +98,7 @@ func TestStartRateLimitReloadLoop_SIGHUPUpdatesLimits(t *testing.T) {
 		return ""
 	}
 
-	sigCh, _ := startRateLimitReloadLoopWithGetenv(rl, logger, stopCh, getenv)
+	sigCh, _ := startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, getenv)
 	// Send the signal directly into the channel — equivalent to kill -HUP
 	// from the operator's perspective and keeps the test independent of
 	// the OS signal-delivery timing window.
@@ -131,7 +132,7 @@ func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
 	stopCh := make(chan struct{})
 
 	baseline := countLoopGoroutines()
-	_, _ = startRateLimitReloadLoop(rl, logger, stopCh)
+	_, _ = startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, os.Getenv)
 	require.Eventually(t, func() bool {
 		return countLoopGoroutines() > baseline
 	}, 2*time.Second, 5*time.Millisecond, "loop goroutine should be visible after start")

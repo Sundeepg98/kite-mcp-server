@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TestRecoverPanic_NoPanicPassThrough: a handler that returns normally must
@@ -17,7 +18,7 @@ import (
 // handler unchanged.
 func TestRecoverPanic_NoPanicPassThrough(t *testing.T) {
 	t.Parallel()
-	h := recoverPanic(testLogger(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := recoverPanicWithPort(logport.NewSlog(testLogger()), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 		_, _ = w.Write([]byte("all good"))
 	}))
@@ -43,7 +44,7 @@ func TestRecoverPanic_PanicReturns500WithRequestID(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("database connection lost")
 	})
-	h := recoverPanic(logger, withRequestID(inner))
+	h := recoverPanicWithPort(logport.NewSlog(logger), withRequestID(inner))
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/trade", nil)
@@ -76,7 +77,7 @@ func TestRecoverPanic_PanicReturns500WithRequestID(t *testing.T) {
 // into a 500.
 func TestRecoverPanic_AbortHandlerRePanics(t *testing.T) {
 	t.Parallel()
-	h := recoverPanic(testLogger(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := recoverPanicWithPort(logport.NewSlog(testLogger()), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic(http.ErrAbortHandler)
 	}))
 
@@ -93,7 +94,7 @@ func TestRecoverPanic_AbortHandlerRePanics(t *testing.T) {
 // being populated with random bytes.
 func TestRecoverPanic_NoRequestIDWhenMiddlewareSkipped(t *testing.T) {
 	t.Parallel()
-	h := recoverPanic(testLogger(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := recoverPanicWithPort(logport.NewSlog(testLogger()), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("no request ID set up")
 	}))
 
@@ -111,7 +112,7 @@ func TestRecoverPanic_NoRequestIDWhenMiddlewareSkipped(t *testing.T) {
 // during early bootstrap; recovery must not itself panic in that case.
 func TestRecoverPanic_NilLoggerTolerated(t *testing.T) {
 	t.Parallel()
-	h := recoverPanic(nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := recoverPanicWithPort(nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("boom")
 	}))
 
@@ -169,7 +170,7 @@ func TestRecoverPanic_Integration(t *testing.T) {
 		panic("inner handler exploded")
 	})
 	// Reproduce the exact chain used by configureAndStartServer.
-	srvHandler := recoverPanic(logger, withRequestID(securityHeaders(mux)))
+	srvHandler := recoverPanicWithPort(logport.NewSlog(logger), withRequestID(securityHeaders(mux)))
 
 	rec := httptest.NewRecorder()
 	srvHandler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panic", nil))

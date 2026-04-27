@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strconv"
@@ -62,27 +61,6 @@ import (
 // demonstrate the goroutine has actually terminated — otherwise
 // goleak-style sentinels race the exit.
 //
-// Production wrapper around startRateLimitReloadLoopWithGetenv: the latter
-// accepts a getenv injection so tests can drive the SIGHUP-handler logic
-// with a literal env source — no t.Setenv, parallel-safe.
-//
-// Deprecated: use startRateLimitReloadLoopWithPort. This shim wraps the
-// supplied *slog.Logger via logport.NewSlog and exists for the Wave D
-// Phase 3 Logger sweep migration window only. Will be removed in
-// Package 8 cleanup.
-func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}) (chan os.Signal, <-chan struct{}) {
-	return startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, os.Getenv)
-}
-
-// startRateLimitReloadLoopWithGetenv is the legacy parameterised
-// variant. Same migration shim as startRateLimitReloadLoop —
-// wraps the supplied *slog.Logger via logport.NewSlog.
-//
-// Deprecated: use startRateLimitReloadLoopWithPort.
-func startRateLimitReloadLoopWithGetenv(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}, getenv func(string) string) (chan os.Signal, <-chan struct{}) {
-	return startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, getenv)
-}
-
 // startRateLimitReloadLoopWithPort is the canonical Wave D Phase 3
 // implementation. Takes a logport.Logger directly; the getenv callback
 // is the same as startRateLimitReloadLoopWithGetenv (production wires

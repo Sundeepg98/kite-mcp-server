@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -135,7 +136,7 @@ func TestStartRetentionWorker_Disabled(t *testing.T) {
 	s := openTestStore(t)
 
 	// Start with retention disabled.
-	s.StartRetentionWorker(0)
+	s.StartRetentionWorkerCtx(context.Background(), 0)
 
 	// Stop should not hang — the worker was never launched.
 	done := make(chan struct{})
@@ -157,7 +158,7 @@ func TestStartRetentionWorker_StartsAndStops(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
 
-	s.StartRetentionWorker(90)
+	s.StartRetentionWorkerCtx(context.Background(), 90)
 
 	// The goroutine has a 24h ticker — we won't wait that long. Instead we
 	// verify that Stop drains the goroutine quickly.

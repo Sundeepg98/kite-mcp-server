@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TestLifecycleManager_AppendOrderRespected proves the FIFO-on-append
@@ -15,7 +16,7 @@ import (
 func TestLifecycleManager_AppendOrderRespected(t *testing.T) {
 	t.Parallel()
 	var seq []string
-	lm := NewLifecycleManager(testLogger())
+	lm := NewLifecycleManagerWithPort(logport.NewSlog(testLogger()))
 	lm.Append("first", func() error { seq = append(seq, "first"); return nil })
 	lm.Append("second", func() error { seq = append(seq, "second"); return nil })
 	lm.Append("third", func() error { seq = append(seq, "third"); return nil })
@@ -31,7 +32,7 @@ func TestLifecycleManager_AppendOrderRespected(t *testing.T) {
 func TestLifecycleManager_ShutdownIsIdempotent(t *testing.T) {
 	t.Parallel()
 	var calls int32
-	lm := NewLifecycleManager(testLogger())
+	lm := NewLifecycleManagerWithPort(logport.NewSlog(testLogger()))
 	lm.Append("one", func() error { atomic.AddInt32(&calls, 1); return nil })
 	lm.Shutdown()
 	lm.Shutdown()
@@ -46,7 +47,7 @@ func TestLifecycleManager_ShutdownIsIdempotent(t *testing.T) {
 func TestLifecycleManager_PanicInOneStopDoesNotAbortChain(t *testing.T) {
 	t.Parallel()
 	var ranAfterPanic bool
-	lm := NewLifecycleManager(testLogger())
+	lm := NewLifecycleManagerWithPort(logport.NewSlog(testLogger()))
 	lm.Append("panicker", func() error { panic("boom") })
 	lm.Append("after", func() error { ranAfterPanic = true; return nil })
 	lm.Shutdown()
@@ -59,7 +60,7 @@ func TestLifecycleManager_PanicInOneStopDoesNotAbortChain(t *testing.T) {
 func TestLifecycleManager_ErrorInStopLogsButContinues(t *testing.T) {
 	t.Parallel()
 	var ranAfterError bool
-	lm := NewLifecycleManager(testLogger())
+	lm := NewLifecycleManagerWithPort(logport.NewSlog(testLogger()))
 	lm.Append("errored", func() error { return errors.New("db busy") })
 	lm.Append("after", func() error { ranAfterError = true; return nil })
 	lm.Shutdown()
@@ -71,7 +72,7 @@ func TestLifecycleManager_ErrorInStopLogsButContinues(t *testing.T) {
 // pass the cancel func unconditionally; nil cleanly no-ops.
 func TestLifecycleManager_NilStopIgnored(t *testing.T) {
 	t.Parallel()
-	lm := NewLifecycleManager(testLogger())
+	lm := NewLifecycleManagerWithPort(logport.NewSlog(testLogger()))
 	lm.Append("nil-stop", nil)
 	lm.Shutdown() // must not panic
 }

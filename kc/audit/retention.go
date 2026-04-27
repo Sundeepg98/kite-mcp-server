@@ -139,19 +139,6 @@ func (s *Store) StartRetentionWorkerCtx(ctx context.Context, days int) {
 	}()
 }
 
-// StartRetentionWorker is the legacy non-ctx variant, retained as a
-// thin shim that calls StartRetentionWorkerCtx with
-// context.Background(). Existing test fixtures continue to work
-// unchanged; new callers should reach for StartRetentionWorkerCtx
-// and pass the parent service context.
-//
-// Deprecated: use StartRetentionWorkerCtx. This shim exists for the
-// migration window only and will be removed once Wave D Phase 3
-// Package 8 (cleanup) lands.
-func (s *Store) StartRetentionWorker(days int) {
-	s.StartRetentionWorkerCtx(context.Background(), days)
-}
-
 // StopRetentionWorker signals the retention goroutine to exit and blocks
 // until it has finished. Safe to call when the worker was never started
 // (no-op) and idempotent if called repeatedly.

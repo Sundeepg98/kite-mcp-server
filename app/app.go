@@ -473,7 +473,7 @@ func NewAppWithConfig(cfg *Config, logger *slog.Logger) *App {
 			AdminSecretPath: cfg.AdminSecretPath,
 			AutoCleanup:     true,
 		}),
-		lifecycle: NewLifecycleManager(logger),
+		lifecycle: NewLifecycleManagerWithPort(logport.NewSlog(logger)),
 		// B77: per-App *mcp.Registry isolates plugin/hook/widget state
 		// from other Apps in the same process. Production wiring
 		// installs hooks here (wire.go); the legacy package-level

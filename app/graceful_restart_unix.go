@@ -89,23 +89,6 @@ func startGracefulRestartListenerWithPort(
 	}()
 }
 
-// buildForkExecHandler returns the GracefulRestartHandler closure
-// that implements the full protocol: socketpair, fork-exec,
-// handshake, drain. Extracted so the signal-listener loop stays
-// small and the handler can be tested with injected doubles.
-//
-// Deprecated: use buildForkExecHandlerWithPort. This shim wraps
-// the supplied *slog.Logger via logport.NewSlog. Wave D Phase 3
-// Package 7b migration window only.
-func buildForkExecHandler(
-	cfg GracefulRestartConfig,
-	active *atomic.Int32,
-	logger *slog.Logger,
-	triggerDrain func(),
-) GracefulRestartHandler {
-	return buildForkExecHandlerWithPort(cfg, active, logport.NewSlog(logger), triggerDrain)
-}
-
 // buildForkExecHandlerWithPort is the canonical Wave D Phase 3
 // implementation. The handler closure receives the cancellation ctx
 // from the SIGUSR2 listener, threading it through every log call so

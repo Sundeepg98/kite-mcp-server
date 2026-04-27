@@ -994,7 +994,7 @@ func securityHeaders(next http.Handler) http.Handler {
 //     them through context for the MCP audit middleware (SEBI Annexure-I).
 //  5. mux — application routes.
 func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
-	srv.Handler = recoverPanic(app.logger, withRequestID(securityHeaders(withClientMetadata(mux))))
+	srv.Handler = recoverPanicWithPort(app.Logger(), withRequestID(securityHeaders(withClientMetadata(mux))))
 	app.serveHTTPServer(srv)
 }
 

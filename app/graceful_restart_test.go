@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TestGracefulRestartProtocol_ReadyExchange — the parent-child
@@ -225,10 +226,10 @@ func TestSignalReady_ClosesAfterWrite(t *testing.T) {
 // must be a safe no-op, not a crash. This is the "SIGUSR2 received
 // on Windows or before Start" path.
 func TestHandleGracefulRestartSignal_NoopWithoutHandler(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := logport.NewSlog(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	// Nil function must not panic.
 	assert.NotPanics(t, func() {
-		handleGracefulRestartSignal(context.Background(), logger, nil)
+		handleGracefulRestartSignalWithPort(context.Background(), logger, nil)
 	})
 }
 

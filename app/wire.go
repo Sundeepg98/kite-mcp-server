@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -595,7 +596,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// app/ratelimit_reload.go for the env format and design rationale.
 	// No-op on Windows where signal.Notify(SIGHUP) is a platform no-op.
 	app.rateLimitReloadStop = make(chan struct{})
-	_, rateLimitReloadDone := startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
+	_, rateLimitReloadDone := startRateLimitReloadLoopWithPort(toolRateLimiter, app.Logger(), app.rateLimitReloadStop, os.Getenv)
 	app.rateLimitReloadDone = rateLimitReloadDone
 	app.Logger().Info(context.Background(), "SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
 	// Billing tier middleware gates tools by subscription level (opt-in via

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"log/slog"
 	"net/http"
 	"runtime/debug"
 
@@ -37,14 +36,6 @@ import (
 //     code (e.g. a WebSocket upgrade that detects a bad handshake and
 //     calls panic(http.ErrAbortHandler)) would silently turn into an
 //     HTTP 500 and break clients that rely on the RST semantics.
-// Deprecated: use recoverPanicWithPort. This shim wraps the supplied
-// *slog.Logger via logport.NewSlog and exists for the Wave D Phase 3
-// Logger sweep migration window (Package 7) only. Will be removed in
-// Package 8 cleanup. Existing callers (app/http.go) compile unchanged.
-func recoverPanic(logger *slog.Logger, next http.Handler) http.Handler {
-	return recoverPanicWithPort(logport.NewSlog(logger), next)
-}
-
 // recoverPanicWithPort is the canonical Wave D Phase 3 implementation.
 // Takes a logport.Logger directly; the request ctx (r.Context()) is
 // already available as the natural ctx for the recovered-panic log

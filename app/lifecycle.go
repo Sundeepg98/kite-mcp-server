@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 
 	logport "github.com/zerodha/kite-mcp-server/kc/logger"
@@ -56,11 +55,10 @@ import (
 // to the logger so the trace-correlation seam is explicit even though
 // no upstream ctx exists at this seam.
 //
-// Backward compatibility: NewLifecycleManager retains its
-// `*slog.Logger` parameter as a thin shim that wraps via
-// logport.NewSlog so existing callers (app/app.go, helpers_test.go)
-// compile unchanged. NewLifecycleManagerWithPort is the preferred
-// constructor for new callers wiring a logport.Logger directly.
+// Construction: NewLifecycleManagerWithPort is the canonical
+// constructor; it accepts a logport.Logger directly. The legacy
+// *slog.Logger shim was retired in Wave D Phase 3 Package 8 cleanup
+// after the call-site migration sweep.
 type LifecycleManager struct {
 	mu     sync.Mutex
 	stops  []namedStop
@@ -73,21 +71,10 @@ type namedStop struct {
 	fn   func() error
 }
 
-// NewLifecycleManager constructs an empty manager. Logger is used only to
-// surface stop-func failures during Shutdown — pass app.logger.
-//
-// Deprecated: use NewLifecycleManagerWithPort. This shim wraps the
-// supplied *slog.Logger via logport.NewSlog and exists only for the
-// Wave D Phase 3 migration window. It will be removed once the sweep
-// completes (Package 8 cleanup).
-func NewLifecycleManager(logger *slog.Logger) *LifecycleManager {
-	return &LifecycleManager{logger: logport.NewSlog(logger)}
-}
-
-// NewLifecycleManagerWithPort is the preferred constructor for new
-// callers that already hold a logport.Logger. Behaviour is identical
-// to NewLifecycleManager — this variant just skips the slog adapter
-// wrap.
+// NewLifecycleManagerWithPort constructs an empty manager. Logger is
+// used only to surface stop-func failures during Shutdown — pass
+// app.Logger() (or logport.NewSlog(slogLogger) at the seam between
+// legacy slog and the port).
 func NewLifecycleManagerWithPort(logger logport.Logger) *LifecycleManager {
 	return &LifecycleManager{logger: logger}
 }

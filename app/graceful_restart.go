@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"sync/atomic"
@@ -240,21 +239,6 @@ func waitForDrain(active *atomic.Int32, deadline time.Duration, pollInterval tim
 // process continues listening, the child process may or may not
 // have come up, and traffic routing is undefined.
 type GracefulRestartHandler func(ctx context.Context) error
-
-// handleGracefulRestartSignal invokes handler inside a panic-
-// recovered scope so a buggy handler cannot kill the SIGUSR2
-// listener goroutine. nil handler is a no-op (Windows stub path
-// or tests that don't wire a real handler).
-//
-// Deprecated: use handleGracefulRestartSignalWithPort. This shim
-// wraps the supplied *slog.Logger via logport.NewSlog and exists
-// for the Wave D Phase 3 Logger sweep migration window only
-// (Package 7b). Call sites in graceful_restart_unix.go are migrated
-// alongside this commit; this shim retains the legacy signature for
-// any external caller (none known at HEAD; safety net).
-func handleGracefulRestartSignal(ctx context.Context, logger *slog.Logger, handler GracefulRestartHandler) {
-	handleGracefulRestartSignalWithPort(ctx, logport.NewSlog(logger), handler)
-}
 
 // handleGracefulRestartSignalWithPort is the canonical Wave D Phase 3
 // implementation. The signal-handler path has the request-cancellation
