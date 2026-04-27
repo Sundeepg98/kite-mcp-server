@@ -7,6 +7,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/ports"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
@@ -18,8 +19,26 @@ import (
 // *kc.Manager satisfies every Provider, so call sites can continue passing
 // a Manager, but individual tool Handler functions must reach through these
 // typed Provider fields rather than invoking accessors on *kc.Manager.
+//
+// Wave D Phase 3 Package 6a (Logger sweep): LoggerPort field carries
+// the kc/logger.Logger port for ctx-aware structured logging.
+// Consumer-side migration of the 58 `deps.Logger.X(...)` and
+// `handler.Logger().X(...)` call sites is staged across sub-commits
+// 6b-6e per `.research/wave-d-phase-3-package-6-mcp-scoping.md`.
+//
+// During staging, BOTH fields are populated from the same source
+// logger (newReadDeps wires both): the slog-typed Logger keeps
+// unmigrated call sites compiling unchanged, while LoggerPort
+// exposes the typed port for migrated call sites. After all 58
+// sites migrate, the slog Logger field is removed in a final
+// cleanup commit.
+//
+// Deprecated: the slog Logger field is staged for removal. New
+// code must depend on LoggerPort. This naming intentionally mirrors
+// the deprecation-shim pattern used in Packages 1-5g.
 type ToolHandlerDeps struct {
-	Logger      *slog.Logger
+	Logger      *slog.Logger // Deprecated: use LoggerPort
+	LoggerPort  logport.Logger
 	TokenStore  kc.TokenStoreInterface
 	UserStore   kc.UserStoreInterface // may be nil
 	Sessions    ports.SessionPort
@@ -113,6 +132,7 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			MCPServer: mn.MCPServer,
 			// ReadDepsFields
 			Logger:      rd.Logger,
+			LoggerPort:  rd.LoggerPort,
 			Metrics:     rd.Metrics,
 			Config:      rd.Config,
 			CommandBusP: rd.CommandBusP,
@@ -141,10 +161,24 @@ func (h *ToolHandler) QueryBus() *cqrs.InMemoryBus {
 	return h.deps.QueryBusP.QueryBus()
 }
 
-// Logger returns the structured logger. Preferred accessor so handlers
-// can log without reaching through h.manager.Logger.
+// Logger returns the structured logger as *slog.Logger for backward
+// compatibility with the 58 unmigrated call sites that consume slog's
+// variadic-args idiom (Wave D Phase 3 Package 6a staging).
+//
+// Deprecated: prefer LoggerPort() for new code. This accessor will be
+// removed in Phase 3 cleanup once all consumer sites are migrated to
+// the ctx-aware port surface (sub-commits 6b-6e per
+// `.research/wave-d-phase-3-package-6-mcp-scoping.md`).
 func (h *ToolHandler) Logger() *slog.Logger {
 	return h.deps.Logger
+}
+
+// LoggerPort returns the kc/logger.Logger port for ctx-aware structured
+// logging. New tool-handler code should depend on this rather than the
+// slog-typed Logger() accessor. Sub-commits 6b-6e migrate the 58
+// existing slog-shape call sites to consume this port.
+func (h *ToolHandler) LoggerPort() logport.Logger {
+	return h.deps.LoggerPort
 }
 
 // RiskGuard returns the configured risk guard, or nil if disabled. Phase
