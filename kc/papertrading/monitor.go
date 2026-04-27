@@ -135,18 +135,21 @@ func shouldFill(o *Order, ltp float64) bool {
 		}
 	case "SL":
 		// Stop-loss: trigger when LTP crosses the trigger price.
-		if o.TransactionType == "BUY" && ltp >= o.TriggerPrice {
+		// Money boundary: drop to .Float64() at the comparison seam —
+		// LTP is raw float, TriggerPrice is INR Money by construction;
+		// cross-currency mismatch is structurally impossible.
+		if o.TransactionType == "BUY" && ltp >= o.TriggerPrice.Float64() {
 			return true
 		}
-		if o.TransactionType == "SELL" && ltp <= o.TriggerPrice {
+		if o.TransactionType == "SELL" && ltp <= o.TriggerPrice.Float64() {
 			return true
 		}
 	case "SL-M":
 		// Stop-loss market: same trigger logic, fill at LTP.
-		if o.TransactionType == "BUY" && ltp >= o.TriggerPrice {
+		if o.TransactionType == "BUY" && ltp >= o.TriggerPrice.Float64() {
 			return true
 		}
-		if o.TransactionType == "SELL" && ltp <= o.TriggerPrice {
+		if o.TransactionType == "SELL" && ltp <= o.TriggerPrice.Float64() {
 			return true
 		}
 	}

@@ -203,10 +203,10 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 	orderID := nextOrderID()
 	now := time.Now().UTC()
 
-	// Money boundary: user-supplied price (float64 from MCP arg) becomes
-	// INR Money on the Order aggregate. MARKET orders pass price=0 from
-	// getFloat which produces a zero Money — the "no user-supplied
-	// price" sentinel matching Slice 2's OrderCheckRequest pattern.
+	// Money boundary: user-supplied price + trigger_price (float64 from
+	// MCP args) become INR Money on the Order aggregate. MARKET / LIMIT
+	// orders pass triggerPrice=0 producing a zero Money — the "no
+	// trigger set" sentinel.
 	order := &Order{
 		OrderID:         orderID,
 		Email:           email,
@@ -218,7 +218,7 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 		Variety:         variety,
 		Quantity:        quantity,
 		Price:           domain.NewINR(price),
-		TriggerPrice:    triggerPrice,
+		TriggerPrice:    domain.NewINR(triggerPrice),
 		Tag:             tag,
 		PlacedAt:        now,
 	}
@@ -640,7 +640,7 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 		order.OrderType = strings.ToUpper(fmt.Sprint(v))
 	}
 	if v, ok := params["trigger_price"]; ok {
-		order.TriggerPrice = toFloat(v)
+		order.TriggerPrice = domain.NewINR(toFloat(v))
 	}
 
 	// Check if the modified LIMIT order is now marketable.
@@ -684,7 +684,7 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 	if err := e.store.db.ExecInsert(
 		`UPDATE paper_orders SET price = ?, quantity = ?, order_type = ?, trigger_price = ?
 		 WHERE order_id = ?`,
-		order.Price.Float64(), order.Quantity, order.OrderType, order.TriggerPrice, orderID); err != nil {
+		order.Price.Float64(), order.Quantity, order.OrderType, order.TriggerPrice.Float64(), orderID); err != nil {
 		return nil, fmt.Errorf("modify order: %w", err)
 	}
 
@@ -884,7 +884,7 @@ func orderToMap(o *Order) map[string]any {
 		"variety":          o.Variety,
 		"quantity":         o.Quantity,
 		"price":            o.Price.Float64(),
-		"trigger_price":    o.TriggerPrice,
+		"trigger_price":    o.TriggerPrice.Float64(),
 		"status":           o.Status,
 		"filled_quantity":  o.FilledQuantity,
 		"average_price":    o.AveragePrice.Float64(),

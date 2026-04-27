@@ -30,18 +30,15 @@ type Account struct {
 
 // Order represents a paper trading order.
 //
-// Price + AveragePrice use domain.Money (Slice 6b) to align the Order
-// aggregate with the rest of the papertrading Money sweep:
+// All monetary fields use domain.Money (Slice 6b complete):
 //   - Price: user-supplied LIMIT/SL limit price; zero Money is the
 //     "MARKET / no price set" sentinel (Slice 2 OrderCheckRequest.Price
 //     pattern).
+//   - TriggerPrice: SL / SL-M trigger threshold; zero Money is the "no
+//     trigger set" sentinel (LIMIT / MARKET orders never set it).
 //   - AveragePrice: broker-reported fill price; zero Money is the
 //     "unfilled" sentinel matching the Slice 6a Position.LastPrice
 //     pre-refresh shape.
-//
-// TriggerPrice stays float64 for now — it's a comparison-only field
-// (shouldFill / determineFillPrice predicates in monitor.go) and a
-// separate slice can elevate it without coupling to this commit.
 //
 // SQLite REAL columns unchanged; bind via .Float64(), scan via
 // domain.NewINR. JSON wire format unchanged at the orderToMap +
@@ -57,7 +54,7 @@ type Order struct {
 	Variety         string
 	Quantity        int
 	Price           domain.Money
-	TriggerPrice    float64
+	TriggerPrice    domain.Money
 	Status          string // OPEN/COMPLETE/CANCELLED/REJECTED
 	FilledQuantity  int
 	AveragePrice    domain.Money
@@ -261,7 +258,7 @@ func (s *Store) InsertOrder(o *Order) error {
 		 filled_quantity, average_price, placed_at, filled_at, tag)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		o.OrderID, o.Email, o.Exchange, o.Tradingsymbol, o.TransactionType,
-		o.OrderType, o.Product, o.Variety, o.Quantity, o.Price.Float64(), o.TriggerPrice, o.Status,
+		o.OrderType, o.Product, o.Variety, o.Quantity, o.Price.Float64(), o.TriggerPrice.Float64(), o.Status,
 		o.FilledQuantity, o.AveragePrice.Float64(),
 		o.PlacedAt.UTC().Format(time.RFC3339), filledAt, o.Tag)
 }
@@ -331,22 +328,23 @@ func (s *Store) GetOrder(orderID string) (*Order, error) {
 // scanOrders scans rows into a slice of Order pointers.
 //
 // SQLite REAL → domain.Money rehydration: scan into local floats and
-// wrap with domain.NewINR. Mirrors the Slice 6a Position / Holding
-// scan pattern.
+// wrap with domain.NewINR for Price + TriggerPrice + AveragePrice.
+// Mirrors the Slice 6a Position / Holding scan pattern.
 func scanOrders(rows *sql.Rows) ([]*Order, error) {
 	var orders []*Order
 	for rows.Next() {
 		var o Order
 		var placedAt, filledAt, tag string
-		var price, avgPrice float64
+		var price, triggerPrice, avgPrice float64
 		if err := rows.Scan(
 			&o.OrderID, &o.Email, &o.Exchange, &o.Tradingsymbol, &o.TransactionType,
-			&o.OrderType, &o.Product, &o.Variety, &o.Quantity, &price, &o.TriggerPrice,
+			&o.OrderType, &o.Product, &o.Variety, &o.Quantity, &price, &triggerPrice,
 			&o.Status, &o.FilledQuantity, &avgPrice, &placedAt, &filledAt, &tag,
 		); err != nil {
 			return nil, fmt.Errorf("scan order: %w", err)
 		}
 		o.Price = domain.NewINR(price)
+		o.TriggerPrice = domain.NewINR(triggerPrice)
 		o.AveragePrice = domain.NewINR(avgPrice)
 		o.PlacedAt, _ = time.Parse(time.RFC3339, placedAt)
 		if filledAt != "" {

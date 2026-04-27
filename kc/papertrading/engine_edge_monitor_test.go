@@ -61,7 +61,7 @@ func TestMonitor_Tick_SLOrder(t *testing.T) {
 		OrderID: "PAPER_SL_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "SL",
-		Product: "MIS", Quantity: 5, Price: domain.NewINR(2600.0), TriggerPrice: 2550.0,
+		Product: "MIS", Quantity: 5, Price: domain.NewINR(2600.0), TriggerPrice: domain.NewINR(2550.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
@@ -88,7 +88,7 @@ func TestMonitor_Tick_SLMOrder(t *testing.T) {
 		OrderID: "PAPER_SLM_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "SELL", OrderType: "SL-M",
-		Product: "MIS", Quantity: 5, TriggerPrice: 2550.0,
+		Product: "MIS", Quantity: 5, TriggerPrice: domain.NewINR(2550.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))

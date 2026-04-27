@@ -95,19 +95,19 @@ func TestShouldFill_Limit(t *testing.T) {
 
 func TestShouldFill_SL(t *testing.T) {
 	t.Parallel()
-	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: 2500}, 2500))
-	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: 2500}, 2600))
-	assert.False(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: 2500}, 2400))
-	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: 2500}, 2500))
-	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: 2500}, 2400))
-	assert.False(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: 2500}, 2600))
+	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: domain.NewINR(2500)}, 2500))
+	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: domain.NewINR(2500)}, 2600))
+	assert.False(t, shouldFill(&Order{OrderType: "SL", TransactionType: "BUY", TriggerPrice: domain.NewINR(2500)}, 2400))
+	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: domain.NewINR(2500)}, 2500))
+	assert.True(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: domain.NewINR(2500)}, 2400))
+	assert.False(t, shouldFill(&Order{OrderType: "SL", TransactionType: "SELL", TriggerPrice: domain.NewINR(2500)}, 2600))
 }
 
 func TestShouldFill_SLM(t *testing.T) {
 	t.Parallel()
-	assert.True(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "BUY", TriggerPrice: 2500}, 2500))
-	assert.True(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "SELL", TriggerPrice: 2500}, 2400))
-	assert.False(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "BUY", TriggerPrice: 2500}, 2400))
+	assert.True(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "BUY", TriggerPrice: domain.NewINR(2500)}, 2500))
+	assert.True(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "SELL", TriggerPrice: domain.NewINR(2500)}, 2400))
+	assert.False(t, shouldFill(&Order{OrderType: "SL-M", TransactionType: "BUY", TriggerPrice: domain.NewINR(2500)}, 2400))
 }
 
 func TestShouldFill_UnknownType(t *testing.T) {

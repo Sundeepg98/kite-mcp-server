@@ -928,6 +928,86 @@ func TestModifyOrderMarketabilityViaMoney(t *testing.T) {
 	assert.Equal(t, "COMPLETE", modified["status"])
 }
 
+// TestOrderTriggerPrice_IsMoney is the type-level assertion for the
+// Slice 6c follow-on: Order.TriggerPrice MUST be domain.Money. Trigger
+// price drives the SL / SL-M shouldFill predicate in monitor.go and is
+// monetary by nature (a price level). Conversion completes the Order
+// aggregate's Money sweep alongside Price + AveragePrice.
+func TestOrderTriggerPrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	o := Order{}
+	got := reflect.TypeOf(o.TriggerPrice)
+	if got != moneyType {
+		t.Fatalf("Order.TriggerPrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestSLOrderTriggerPriceRoundTripsAsMoney verifies the SQLite REAL ↔
+// Money round-trip for Order.TriggerPrice: an SL BUY @ trigger 2550
+// (LTP 2500) stays OPEN until LTP rises to 2550. Verify the persisted
+// TriggerPrice rehydrates as INR Money.
+func TestSLOrderTriggerPriceRoundTripsAsMoney(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "SL",
+		"product":          "MIS",
+		"quantity":         5,
+		"price":            2600.0,
+		"trigger_price":    2550.0,
+	})
+	require.NoError(t, err)
+
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+
+	assert.Equal(t, "OPEN", orders[0].Status)
+	assert.Equal(t, "INR", orders[0].TriggerPrice.Currency)
+	assert.InDelta(t, 2550.0, orders[0].TriggerPrice.Float64(), 0.01)
+}
+
+// TestOrderJSONWireTriggerPriceStaysFloat verifies orderToMap keeps
+// trigger_price as float64 at the JSON wire boundary so external
+// Kite-API-shaped consumers see the original number shape.
+func TestOrderJSONWireTriggerPriceStaysFloat(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "SL",
+		"product":          "MIS",
+		"quantity":         5,
+		"price":            2600.0,
+		"trigger_price":    2550.0,
+	})
+	require.NoError(t, err)
+
+	raw, err := engine.GetOrders(testEmail)
+	require.NoError(t, err)
+	mapped := raw.([]map[string]any)
+	require.Len(t, mapped, 1)
+
+	tp, ok := mapped[0]["trigger_price"].(float64)
+	if !ok {
+		t.Fatalf("orders[0][trigger_price] must be float64 at JSON boundary, got %T", mapped[0]["trigger_price"])
+	}
+	assert.InDelta(t, 2550.0, tp, 0.01)
+}
+
 // TestGetMargins_BoundaryStaysFloat verifies GetMargins (consumed by the
 // Kite-API-shaped paper response) preserves float64 at the JSON wire so
 // existing dashboards / chat clients that read margin data as numbers
