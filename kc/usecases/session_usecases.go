@@ -8,6 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // SessionDataClearer abstracts the session-data clearing operation. Narrow
@@ -46,7 +47,7 @@ type EventAppender interface {
 type ClearSessionDataUseCase struct {
 	sessions   SessionDataClearer
 	eventStore EventAppender
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewClearSessionDataUseCase creates a ClearSessionDataUseCase with the
@@ -54,7 +55,7 @@ type ClearSessionDataUseCase struct {
 // may be nil during partial bootstrap; Execute returns an error in that case
 // so a missing dependency surfaces rather than silently succeeding.
 func NewClearSessionDataUseCase(sessions SessionDataClearer, logger *slog.Logger) *ClearSessionDataUseCase {
-	return &ClearSessionDataUseCase{sessions: sessions, logger: logger}
+	return &ClearSessionDataUseCase{sessions: sessions, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. Optional — a nil
@@ -85,7 +86,7 @@ func (uc *ClearSessionDataUseCase) Execute(ctx context.Context, cmd cqrs.ClearSe
 		reason = "unspecified"
 	}
 	if uc.logger != nil {
-		uc.logger.Info("Session data cleared via command bus", "session_id", cmd.SessionID, "reason", reason)
+		uc.logger.Info(ctx, "Session data cleared via command bus", "session_id", cmd.SessionID, "reason", reason)
 	}
 	uc.appendClearedEvent(cmd.SessionID, reason)
 	return nil
@@ -101,7 +102,7 @@ func (uc *ClearSessionDataUseCase) appendClearedEvent(sessionID, reason string) 
 	seq, err := uc.eventStore.NextSequence(sessionID)
 	if err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store NextSequence failed on session.cleared", "session_id", sessionID, "error", err)
+			uc.logger.Warn(context.Background(), "event store NextSequence failed on session.cleared", "session_id", sessionID, "error", err)
 		}
 		return
 	}
@@ -122,7 +123,7 @@ func (uc *ClearSessionDataUseCase) appendClearedEvent(sessionID, reason string) 
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store Append failed on session.cleared", "session_id", sessionID, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on session.cleared", "session_id", sessionID, "error", err)
 		}
 	}
 }

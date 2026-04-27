@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // DataExportRetention is the lookback window applied to time-bounded
@@ -140,7 +141,7 @@ type DataExport struct {
 // (validation, missing hasher) return up the stack.
 type ExportMyDataUseCase struct {
 	ports  DataExportPorts
-	logger *slog.Logger
+	logger logport.Logger
 	now    func() time.Time
 }
 
@@ -148,7 +149,7 @@ type ExportMyDataUseCase struct {
 func NewExportMyDataUseCase(ports DataExportPorts, logger *slog.Logger) *ExportMyDataUseCase {
 	return &ExportMyDataUseCase{
 		ports:  ports,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 		now:    func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -163,7 +164,7 @@ func (uc *ExportMyDataUseCase) SetClock(now func() time.Time) {
 // in turn. A single nil port produces a section with Note="not wired"
 // and proceeds. A port that errors produces a section with the error
 // recorded in Note (keeping the schema stable for downstream tooling).
-func (uc *ExportMyDataUseCase) Execute(_ context.Context, cmd cqrs.ExportMyDataCommand) (*DataExport, error) {
+func (uc *ExportMyDataUseCase) Execute(ctx context.Context, cmd cqrs.ExportMyDataCommand) (*DataExport, error) {
 	email := strings.TrimSpace(cmd.Email)
 	if email == "" {
 		return nil, fmt.Errorf("usecases: export my data: email is required")
@@ -212,7 +213,7 @@ func (uc *ExportMyDataUseCase) Execute(_ context.Context, cmd cqrs.ExportMyDataC
 	})
 
 	if uc.logger != nil {
-		uc.logger.Info("data export generated",
+		uc.logger.Info(ctx, "data export generated",
 			"email_hash", emailHash,
 			"tool_calls", out.ToolCalls.Count,
 			"alerts", out.Alerts.Count,

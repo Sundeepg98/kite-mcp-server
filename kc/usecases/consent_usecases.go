@@ -22,6 +22,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // ConsentWithdrawer is the narrow port the use case needs from the
@@ -52,7 +53,7 @@ type WithdrawConsentUseCase struct {
 	withdrawer ConsentWithdrawer
 	hasher     EmailHasher
 	dispatcher EventDispatcherPort
-	logger     *slog.Logger
+	logger     logport.Logger
 	now        func() time.Time // injectable clock for deterministic tests
 }
 
@@ -67,7 +68,7 @@ func NewWithdrawConsentUseCase(
 		withdrawer: w,
 		hasher:     h,
 		dispatcher: d,
-		logger:     logger,
+		logger:     logport.NewSlog(logger),
 		now:        func() time.Time { return time.Now().UTC() },
 	}
 }
@@ -96,7 +97,7 @@ type WithdrawConsentResult struct {
 //
 // Returns the count of grants that were marked withdrawn so callers can
 // distinguish "first-time withdrawal" from "no-op repeat".
-func (uc *WithdrawConsentUseCase) Execute(_ context.Context, cmd cqrs.WithdrawConsentCommand) (*WithdrawConsentResult, error) {
+func (uc *WithdrawConsentUseCase) Execute(ctx context.Context, cmd cqrs.WithdrawConsentCommand) (*WithdrawConsentResult, error) {
 	email := strings.TrimSpace(cmd.Email)
 	if email == "" {
 		return nil, fmt.Errorf("usecases: withdraw consent: email is required")
@@ -132,7 +133,7 @@ func (uc *WithdrawConsentUseCase) Execute(_ context.Context, cmd cqrs.WithdrawCo
 	}
 
 	if uc.logger != nil {
-		uc.logger.Info("consent withdrawn",
+		uc.logger.Info(ctx, "consent withdrawn",
 			"email_hash", emailHash,
 			"grants_marked", updated,
 			"notice_version", cmd.NoticeVersion,

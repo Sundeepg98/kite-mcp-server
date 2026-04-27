@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // ErrUserSuspended is returned by ProvisionUserOnLoginUseCase when the
@@ -102,14 +103,14 @@ type OAuthClientStore interface {
 // an error so the caller can fail the login.
 type ProvisionUserOnLoginUseCase struct {
 	users  UserProvisioner
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewProvisionUserOnLoginUseCase builds the use case. Passing a nil
 // UserProvisioner is allowed — the use case becomes a no-op
 // (mirrors the dev-mode adapter behaviour).
 func NewProvisionUserOnLoginUseCase(p UserProvisioner, logger *slog.Logger) *ProvisionUserOnLoginUseCase {
-	return &ProvisionUserOnLoginUseCase{users: p, logger: logger}
+	return &ProvisionUserOnLoginUseCase{users: p, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -142,12 +143,12 @@ func (uc *ProvisionUserOnLoginUseCase) Execute(_ context.Context, cmd cqrs.Provi
 // token cache. Always lowercases the email.
 type CacheKiteAccessTokenUseCase struct {
 	tokens KiteTokenWriter
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewCacheKiteAccessTokenUseCase builds the use case.
 func NewCacheKiteAccessTokenUseCase(t KiteTokenWriter, logger *slog.Logger) *CacheKiteAccessTokenUseCase {
-	return &CacheKiteAccessTokenUseCase{tokens: t, logger: logger}
+	return &CacheKiteAccessTokenUseCase{tokens: t, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case. A nil tokens writer is a no-op (defensive —
@@ -166,12 +167,12 @@ func (uc *CacheKiteAccessTokenUseCase) Execute(_ context.Context, cmd cqrs.Cache
 // credential store after a successful bring-your-own-keys login.
 type StoreUserKiteCredentialsUseCase struct {
 	creds  KiteCredentialWriter
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewStoreUserKiteCredentialsUseCase builds the use case.
 func NewStoreUserKiteCredentialsUseCase(c KiteCredentialWriter, logger *slog.Logger) *StoreUserKiteCredentialsUseCase {
-	return &StoreUserKiteCredentialsUseCase{creds: c, logger: logger}
+	return &StoreUserKiteCredentialsUseCase{creds: c, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -208,16 +209,16 @@ const (
 // marked Replaced so audit trails show the rotation.
 type SyncRegistryAfterLoginUseCase struct {
 	registry RegistrySync
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewSyncRegistryAfterLoginUseCase builds the use case.
 func NewSyncRegistryAfterLoginUseCase(r RegistrySync, logger *slog.Logger) *SyncRegistryAfterLoginUseCase {
-	return &SyncRegistryAfterLoginUseCase{registry: r, logger: logger}
+	return &SyncRegistryAfterLoginUseCase{registry: r, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
-func (uc *SyncRegistryAfterLoginUseCase) Execute(_ context.Context, cmd cqrs.SyncRegistryAfterLoginCommand) error {
+func (uc *SyncRegistryAfterLoginUseCase) Execute(ctx context.Context, cmd cqrs.SyncRegistryAfterLoginCommand) error {
 	if uc.registry == nil || cmd.APIKey == "" {
 		return nil
 	}
@@ -228,7 +229,7 @@ func (uc *SyncRegistryAfterLoginUseCase) Execute(_ context.Context, cmd cqrs.Syn
 		if oldKey, found := uc.registry.GetByEmail(email); found && oldKey != cmd.APIKey {
 			uc.registry.MarkStatus(oldKey, RegistryStatusReplaced)
 			if uc.logger != nil {
-				uc.logger.Info("Marked old registry key as replaced",
+				uc.logger.Info(ctx, "Marked old registry key as replaced",
 					"email", email, "old_key", truncForLog(oldKey, 8), "new_key", truncForLog(cmd.APIKey, 8))
 			}
 		}
@@ -239,11 +240,11 @@ func (uc *SyncRegistryAfterLoginUseCase) Execute(_ context.Context, cmd cqrs.Syn
 			regID := "self-" + email + "-" + truncForLog(cmd.APIKey, 8)
 			if err := uc.registry.Register(regID, cmd.APIKey, cmd.APISecret, email, cmd.Label, RegistryStatusActive, RegistrySourceSelfProvisioned, email); err != nil {
 				if uc.logger != nil {
-					uc.logger.Warn("Failed to auto-register self-provisioned key",
+					uc.logger.Warn(ctx, "Failed to auto-register self-provisioned key",
 						"email", email, "error", err)
 				}
 			} else if uc.logger != nil {
-				uc.logger.Info("Auto-registered self-provisioned key",
+				uc.logger.Info(ctx, "Auto-registered self-provisioned key",
 					"email", email, "api_key", truncForLog(cmd.APIKey, 8))
 			}
 		case assignedTo != email:
@@ -270,12 +271,12 @@ func truncForLog(s string, n int) string {
 // SaveOAuthClientUseCase persists an OAuth dynamic-client registration.
 type SaveOAuthClientUseCase struct {
 	store  OAuthClientStore
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewSaveOAuthClientUseCase builds the use case.
 func NewSaveOAuthClientUseCase(s OAuthClientStore, logger *slog.Logger) *SaveOAuthClientUseCase {
-	return &SaveOAuthClientUseCase{store: s, logger: logger}
+	return &SaveOAuthClientUseCase{store: s, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -290,12 +291,12 @@ func (uc *SaveOAuthClientUseCase) Execute(_ context.Context, cmd cqrs.SaveOAuthC
 // DeleteOAuthClientUseCase deletes an OAuth dynamic-client registration.
 type DeleteOAuthClientUseCase struct {
 	store  OAuthClientStore
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewDeleteOAuthClientUseCase builds the use case.
 func NewDeleteOAuthClientUseCase(s OAuthClientStore, logger *slog.Logger) *DeleteOAuthClientUseCase {
-	return &DeleteOAuthClientUseCase{store: s, logger: logger}
+	return &DeleteOAuthClientUseCase{store: s, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -330,12 +331,12 @@ const RegistrySourceAdmin = "admin"
 // the admin dashboard.
 type AdminRegisterAppUseCase struct {
 	registry RegistryAdminWriter
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewAdminRegisterAppUseCase builds the use case.
 func NewAdminRegisterAppUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminRegisterAppUseCase {
-	return &AdminRegisterAppUseCase{registry: r, logger: logger}
+	return &AdminRegisterAppUseCase{registry: r, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -350,12 +351,12 @@ func (uc *AdminRegisterAppUseCase) Execute(_ context.Context, cmd cqrs.AdminRegi
 // assignment, label, or status.
 type AdminUpdateRegistryUseCase struct {
 	registry RegistryAdminWriter
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewAdminUpdateRegistryUseCase builds the use case.
 func NewAdminUpdateRegistryUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminUpdateRegistryUseCase {
-	return &AdminUpdateRegistryUseCase{registry: r, logger: logger}
+	return &AdminUpdateRegistryUseCase{registry: r, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.
@@ -369,12 +370,12 @@ func (uc *AdminUpdateRegistryUseCase) Execute(_ context.Context, cmd cqrs.AdminU
 // AdminDeleteRegistryUseCase removes a registry entry.
 type AdminDeleteRegistryUseCase struct {
 	registry RegistryAdminWriter
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewAdminDeleteRegistryUseCase builds the use case.
 func NewAdminDeleteRegistryUseCase(r RegistryAdminWriter, logger *slog.Logger) *AdminDeleteRegistryUseCase {
-	return &AdminDeleteRegistryUseCase{registry: r, logger: logger}
+	return &AdminDeleteRegistryUseCase{registry: r, logger: logport.NewSlog(logger)}
 }
 
 // Execute runs the use case.

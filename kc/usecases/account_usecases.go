@@ -8,7 +8,13 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5e (Logger sweep): account/session/OAuth/
+// consent/dataexport use cases type their logger field as the
+// kc/logger.Logger port; constructors retain *slog.Logger and
+// convert via logport.NewSlog.
 
 // CredentialUpdater abstracts credential persistence for account use cases.
 // Delete removes a user's credentials (used by DeleteMyAccount).
@@ -53,12 +59,12 @@ type AccountDependencies struct {
 type DeleteMyAccountUseCase struct {
 	deps       AccountDependencies
 	eventStore EventAppender
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewDeleteMyAccountUseCase creates a DeleteMyAccountUseCase with dependencies injected.
 func NewDeleteMyAccountUseCase(deps AccountDependencies, logger *slog.Logger) *DeleteMyAccountUseCase {
-	return &DeleteMyAccountUseCase{deps: deps, logger: logger}
+	return &DeleteMyAccountUseCase{deps: deps, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. When set, Execute
@@ -99,19 +105,19 @@ func (uc *DeleteMyAccountUseCase) Execute(ctx context.Context, cmd cqrs.DeleteMy
 	}
 	if uc.deps.PaperEngine != nil {
 		if err := uc.deps.PaperEngine.Reset(cmd.Email); err != nil {
-			uc.logger.Error("Failed to reset paper trading during account delete", "email", cmd.Email, "error", err)
+			uc.logger.Error(ctx, "Failed to reset paper trading during account delete", err, "email", cmd.Email)
 		}
 		if err := uc.deps.PaperEngine.Disable(cmd.Email); err != nil {
-			uc.logger.Error("Failed to disable paper trading during account delete", "email", cmd.Email, "error", err)
+			uc.logger.Error(ctx, "Failed to disable paper trading during account delete", err, "email", cmd.Email)
 		}
 	}
 	if uc.deps.UserStore != nil {
 		if err := uc.deps.UserStore.UpdateStatus(cmd.Email, "offboarded"); err != nil {
-			uc.logger.Error("Failed to update user status during account delete", "email", cmd.Email, "error", err)
+			uc.logger.Error(ctx, "Failed to update user status during account delete", err, "email", cmd.Email)
 		}
 	}
 
-	uc.logger.Info("User self-deleted account via use case", "email", cmd.Email)
+	uc.logger.Info(ctx, "User self-deleted account via use case", "email", cmd.Email)
 	return nil
 }
 
@@ -127,7 +133,7 @@ func (uc *DeleteMyAccountUseCase) appendRevokedEvent(email string) {
 	seq, err := uc.eventStore.NextSequence(email)
 	if err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store NextSequence failed on credential.revoked (account_deletion)", "email", email, "error", err)
+			uc.logger.Warn(context.Background(), "event store NextSequence failed on credential.revoked (account_deletion)", "email", email, "error", err)
 		}
 		return
 	}
@@ -148,7 +154,7 @@ func (uc *DeleteMyAccountUseCase) appendRevokedEvent(email string) {
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store Append failed on credential.revoked (account_deletion)", "email", email, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on credential.revoked (account_deletion)", "email", email, "error", err)
 		}
 	}
 }
@@ -169,7 +175,7 @@ type CredentialSetter interface {
 // for credential lifecycle events.
 type InvalidateTokenUseCase struct {
 	tokenStore TokenStore
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewInvalidateTokenUseCase creates an InvalidateTokenUseCase with the token
@@ -177,7 +183,7 @@ type InvalidateTokenUseCase struct {
 // that construct the use case for behaviour-only coverage); Execute handles
 // that case as a no-op.
 func NewInvalidateTokenUseCase(tokenStore TokenStore, logger *slog.Logger) *InvalidateTokenUseCase {
-	return &InvalidateTokenUseCase{tokenStore: tokenStore, logger: logger}
+	return &InvalidateTokenUseCase{tokenStore: tokenStore, logger: logport.NewSlog(logger)}
 }
 
 // Execute clears the cached token for the command's email. Reason is logged
@@ -195,7 +201,7 @@ func (uc *InvalidateTokenUseCase) Execute(ctx context.Context, cmd cqrs.Invalida
 		if reason == "" {
 			reason = "unspecified"
 		}
-		uc.logger.Info("Cached Kite token invalidated via command bus", "email", cmd.Email, "reason", reason)
+		uc.logger.Info(ctx, "Cached Kite token invalidated via command bus", "email", cmd.Email, "reason", reason)
 	}
 	return nil
 }
@@ -215,7 +221,7 @@ type RevokeCredentialsUseCase struct {
 	credentialStore CredentialUpdater
 	tokenStore      TokenStore
 	eventStore      EventAppender
-	logger          *slog.Logger
+	logger          logport.Logger
 }
 
 // NewRevokeCredentialsUseCase creates a RevokeCredentialsUseCase with
@@ -223,7 +229,7 @@ type RevokeCredentialsUseCase struct {
 // partial bootstrap; Execute tolerates nil as a no-op for that store so
 // a half-initialized Manager does not panic.
 func NewRevokeCredentialsUseCase(credentialStore CredentialUpdater, tokenStore TokenStore, logger *slog.Logger) *RevokeCredentialsUseCase {
-	return &RevokeCredentialsUseCase{credentialStore: credentialStore, tokenStore: tokenStore, logger: logger}
+	return &RevokeCredentialsUseCase{credentialStore: credentialStore, tokenStore: tokenStore, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. When set, Execute
@@ -249,7 +255,7 @@ func (uc *RevokeCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.Revoke
 		reason = "unspecified"
 	}
 	if uc.logger != nil {
-		uc.logger.Info("Kite credentials revoked via command bus", "email", cmd.Email, "reason", reason)
+		uc.logger.Info(ctx, "Kite credentials revoked via command bus", "email", cmd.Email, "reason", reason)
 	}
 	uc.appendRevokedEvent(cmd.Email, reason)
 	return nil
@@ -265,7 +271,7 @@ func (uc *RevokeCredentialsUseCase) appendRevokedEvent(email, reason string) {
 	seq, err := uc.eventStore.NextSequence(email)
 	if err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store NextSequence failed on credential.revoked", "email", email, "error", err)
+			uc.logger.Warn(context.Background(), "event store NextSequence failed on credential.revoked", "email", email, "error", err)
 		}
 		return
 	}
@@ -286,7 +292,7 @@ func (uc *RevokeCredentialsUseCase) appendRevokedEvent(email, reason string) {
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store Append failed on credential.revoked", "email", email, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on credential.revoked", "email", email, "error", err)
 		}
 	}
 }
@@ -304,12 +310,12 @@ type UpdateMyCredentialsUseCase struct {
 	credentialStore CredentialUpdater
 	tokenStore      TokenStore
 	eventStore      EventAppender
-	logger          *slog.Logger
+	logger          logport.Logger
 }
 
 // NewUpdateMyCredentialsUseCase creates an UpdateMyCredentialsUseCase with dependencies injected.
 func NewUpdateMyCredentialsUseCase(credStore CredentialUpdater, tokenStore TokenStore, logger *slog.Logger) *UpdateMyCredentialsUseCase {
-	return &UpdateMyCredentialsUseCase{credentialStore: credStore, tokenStore: tokenStore, logger: logger}
+	return &UpdateMyCredentialsUseCase{credentialStore: credStore, tokenStore: tokenStore, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. When set, Execute
@@ -347,7 +353,7 @@ func (uc *UpdateMyCredentialsUseCase) Execute(ctx context.Context, cmd cqrs.Upda
 		uc.tokenStore.Delete(cmd.Email)
 	}
 
-	uc.logger.Info("User updated credentials via use case", "email", cmd.Email, "prior_entry", hadPriorEntry)
+	uc.logger.Info(ctx, "User updated credentials via use case", "email", cmd.Email, "prior_entry", hadPriorEntry)
 	uc.appendUpdatedEvent(cmd.Email, hadPriorEntry)
 	return nil
 }
@@ -363,7 +369,7 @@ func (uc *UpdateMyCredentialsUseCase) appendUpdatedEvent(email string, hadPriorE
 	seq, err := uc.eventStore.NextSequence(email)
 	if err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store NextSequence failed on credential update", "email", email, "error", err)
+			uc.logger.Warn(context.Background(), "event store NextSequence failed on credential update", "email", email, "error", err)
 		}
 		return
 	}
@@ -387,7 +393,7 @@ func (uc *UpdateMyCredentialsUseCase) appendUpdatedEvent(email string, hadPriorE
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
 		if uc.logger != nil {
-			uc.logger.Warn("event store Append failed on credential update", "email", email, "event_type", eventType, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on credential update", "email", email, "event_type", eventType, "error", err)
 		}
 	}
 }
