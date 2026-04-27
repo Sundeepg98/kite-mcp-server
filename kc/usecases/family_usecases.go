@@ -9,8 +9,14 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
+
+// Wave D Phase 3 Package 5g (Logger sweep): admin/family/setup/
+// native-alert use cases type their logger field as the
+// kc/logger.Logger port; constructors retain *slog.Logger and
+// convert via logport.NewSlog.
 
 // FamilyProvider is the narrow interface the family use cases need from
 // the kc.FamilyService. Defined here so usecases remain decoupled from
@@ -38,7 +44,7 @@ type FamilyInvitationReader interface {
 type AdminListFamilyUseCase struct {
 	family      FamilyProvider
 	invitations FamilyInvitationReader
-	logger      *slog.Logger
+	logger      logport.Logger
 }
 
 // NewAdminListFamilyUseCase creates an AdminListFamilyUseCase.
@@ -47,7 +53,7 @@ func NewAdminListFamilyUseCase(
 	invitations FamilyInvitationReader,
 	logger *slog.Logger,
 ) *AdminListFamilyUseCase {
-	return &AdminListFamilyUseCase{family: family, invitations: invitations, logger: logger}
+	return &AdminListFamilyUseCase{family: family, invitations: invitations, logger: logport.NewSlog(logger)}
 }
 
 // FamilyMemberEntry is one member row in the listing.
@@ -151,7 +157,7 @@ type AdminInviteFamilyMemberUseCase struct {
 	events         *domain.EventDispatcher
 	invitationTTL  time.Duration
 	idGenerator    func() string
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewAdminInviteFamilyMemberUseCase creates an AdminInviteFamilyMemberUseCase.
@@ -167,7 +173,7 @@ func NewAdminInviteFamilyMemberUseCase(
 		events:        events,
 		invitationTTL: 7 * 24 * time.Hour,
 		idGenerator:   defaultInvitationID,
-		logger:        logger,
+		logger:        logport.NewSlog(logger),
 	}
 }
 
@@ -249,7 +255,7 @@ func (uc *AdminInviteFamilyMemberUseCase) Execute(ctx context.Context, cmd cqrs.
 type AdminRemoveFamilyMemberUseCase struct {
 	family FamilyProvider
 	events *domain.EventDispatcher
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewAdminRemoveFamilyMemberUseCase creates an AdminRemoveFamilyMemberUseCase.
@@ -258,7 +264,7 @@ func NewAdminRemoveFamilyMemberUseCase(
 	events *domain.EventDispatcher,
 	logger *slog.Logger,
 ) *AdminRemoveFamilyMemberUseCase {
-	return &AdminRemoveFamilyMemberUseCase{family: family, events: events, logger: logger}
+	return &AdminRemoveFamilyMemberUseCase{family: family, events: events, logger: logport.NewSlog(logger)}
 }
 
 // AdminRemoveFamilyMemberResult holds the outcome of a remove call.

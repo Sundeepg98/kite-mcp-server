@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // --- Login ---
@@ -31,14 +32,14 @@ type LoginResult struct {
 // SessionLoginURLProvider, generates the Kite login URL.
 type LoginUseCase struct {
 	urls   SessionLoginURLProvider
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewLoginUseCase creates a LoginUseCase with dependencies injected. The
 // SessionLoginURLProvider may be nil for call-sites that only use Validate
 // (e.g. legacy tests); Execute will return an error in that case.
 func NewLoginUseCase(urls SessionLoginURLProvider, logger *slog.Logger) *LoginUseCase {
-	return &LoginUseCase{urls: urls, logger: logger}
+	return &LoginUseCase{urls: urls, logger: logport.NewSlog(logger)}
 }
 
 // Validate checks login command parameters for correctness.
@@ -94,12 +95,12 @@ func isAlphanumeric(s string) bool {
 
 // OpenDashboardUseCase validates dashboard page requests.
 type OpenDashboardUseCase struct {
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewOpenDashboardUseCase creates an OpenDashboardUseCase with dependencies injected.
 func NewOpenDashboardUseCase(logger *slog.Logger) *OpenDashboardUseCase {
-	return &OpenDashboardUseCase{logger: logger}
+	return &OpenDashboardUseCase{logger: logport.NewSlog(logger)}
 }
 
 // Validate checks that the dashboard query is valid.

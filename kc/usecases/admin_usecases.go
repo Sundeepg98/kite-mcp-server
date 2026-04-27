@@ -8,6 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
@@ -61,12 +62,12 @@ type SessionTerminator interface {
 // AdminListUsersUseCase retrieves a paginated list of users.
 type AdminListUsersUseCase struct {
 	userStore UserReader
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminListUsersUseCase creates an AdminListUsersUseCase with dependencies injected.
 func NewAdminListUsersUseCase(store UserReader, logger *slog.Logger) *AdminListUsersUseCase {
-	return &AdminListUsersUseCase{userStore: store, logger: logger}
+	return &AdminListUsersUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
 // AdminListUsersResult holds the paginated user list.
@@ -110,12 +111,12 @@ func (uc *AdminListUsersUseCase) Execute(ctx context.Context, query cqrs.AdminLi
 type AdminGetUserUseCase struct {
 	userStore UserReader
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminGetUserUseCase creates an AdminGetUserUseCase with dependencies injected.
 func NewAdminGetUserUseCase(store UserReader, rg RiskGuardService, logger *slog.Logger) *AdminGetUserUseCase {
-	return &AdminGetUserUseCase{userStore: store, riskguard: rg, logger: logger}
+	return &AdminGetUserUseCase{userStore: store, riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // AdminGetUserResult holds detailed user information.
@@ -153,12 +154,12 @@ func (uc *AdminGetUserUseCase) Execute(ctx context.Context, query cqrs.AdminGetU
 // AdminGetRiskStatusUseCase retrieves a user's risk status.
 type AdminGetRiskStatusUseCase struct {
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminGetRiskStatusUseCase creates an AdminGetRiskStatusUseCase with dependencies injected.
 func NewAdminGetRiskStatusUseCase(rg RiskGuardService, logger *slog.Logger) *AdminGetRiskStatusUseCase {
-	return &AdminGetRiskStatusUseCase{riskguard: rg, logger: logger}
+	return &AdminGetRiskStatusUseCase{riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // AdminGetRiskStatusResult holds a user's risk status.
@@ -213,7 +214,7 @@ type AdminSuspendUserUseCase struct {
 	riskguard  RiskGuardService
 	sessions   SessionTerminator
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewAdminSuspendUserUseCase creates an AdminSuspendUserUseCase with dependencies injected.
@@ -229,7 +230,7 @@ func NewAdminSuspendUserUseCase(
 		riskguard: rg,
 		sessions:  sessions,
 		events:    events,
-		logger:    logger,
+		logger:    logport.NewSlog(logger),
 	}
 }
 
@@ -297,12 +298,12 @@ func (uc *AdminSuspendUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminSu
 // AdminActivateUserUseCase reactivates a user account.
 type AdminActivateUserUseCase struct {
 	userStore UserWriter
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminActivateUserUseCase creates an AdminActivateUserUseCase with dependencies injected.
 func NewAdminActivateUserUseCase(store UserWriter, logger *slog.Logger) *AdminActivateUserUseCase {
-	return &AdminActivateUserUseCase{userStore: store, logger: logger}
+	return &AdminActivateUserUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
 // Execute activates a user.
@@ -323,12 +324,12 @@ func (uc *AdminActivateUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminA
 // AdminChangeRoleUseCase changes a user's role.
 type AdminChangeRoleUseCase struct {
 	userStore UserStore
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminChangeRoleUseCase creates an AdminChangeRoleUseCase with dependencies injected.
 func NewAdminChangeRoleUseCase(store UserStore, logger *slog.Logger) *AdminChangeRoleUseCase {
-	return &AdminChangeRoleUseCase{userStore: store, logger: logger}
+	return &AdminChangeRoleUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
 // AdminChangeRoleResult holds the role change result.
@@ -382,12 +383,12 @@ func (uc *AdminChangeRoleUseCase) Execute(ctx context.Context, cmd cqrs.AdminCha
 // AdminFreezeUserUseCase freezes a user's trading.
 type AdminFreezeUserUseCase struct {
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminFreezeUserUseCase creates an AdminFreezeUserUseCase with dependencies injected.
 func NewAdminFreezeUserUseCase(rg RiskGuardService, logger *slog.Logger) *AdminFreezeUserUseCase {
-	return &AdminFreezeUserUseCase{riskguard: rg, logger: logger}
+	return &AdminFreezeUserUseCase{riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // Execute freezes a user's trading.
@@ -408,12 +409,12 @@ func (uc *AdminFreezeUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminFre
 // AdminUnfreezeUserUseCase unfreezes a user's trading.
 type AdminUnfreezeUserUseCase struct {
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminUnfreezeUserUseCase creates an AdminUnfreezeUserUseCase with dependencies injected.
 func NewAdminUnfreezeUserUseCase(rg RiskGuardService, logger *slog.Logger) *AdminUnfreezeUserUseCase {
-	return &AdminUnfreezeUserUseCase{riskguard: rg, logger: logger}
+	return &AdminUnfreezeUserUseCase{riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // Execute unfreezes a user's trading.
@@ -434,12 +435,12 @@ func (uc *AdminUnfreezeUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminU
 // AdminFreezeGlobalUseCase freezes all trading globally.
 type AdminFreezeGlobalUseCase struct {
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminFreezeGlobalUseCase creates an AdminFreezeGlobalUseCase with dependencies injected.
 func NewAdminFreezeGlobalUseCase(rg RiskGuardService, logger *slog.Logger) *AdminFreezeGlobalUseCase {
-	return &AdminFreezeGlobalUseCase{riskguard: rg, logger: logger}
+	return &AdminFreezeGlobalUseCase{riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // Execute freezes all trading globally.
@@ -457,12 +458,12 @@ func (uc *AdminFreezeGlobalUseCase) Execute(ctx context.Context, cmd cqrs.AdminF
 // AdminUnfreezeGlobalUseCase unfreezes global trading.
 type AdminUnfreezeGlobalUseCase struct {
 	riskguard RiskGuardService
-	logger    *slog.Logger
+	logger    logport.Logger
 }
 
 // NewAdminUnfreezeGlobalUseCase creates an AdminUnfreezeGlobalUseCase with dependencies injected.
 func NewAdminUnfreezeGlobalUseCase(rg RiskGuardService, logger *slog.Logger) *AdminUnfreezeGlobalUseCase {
-	return &AdminUnfreezeGlobalUseCase{riskguard: rg, logger: logger}
+	return &AdminUnfreezeGlobalUseCase{riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
 // Execute unfreezes global trading.
