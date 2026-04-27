@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 )
+
+// envCheckCtx is the context used by envCheck's logger calls.
+// Wave D Phase 3 Package 7c-4a: envCheck runs at startup so request
+// ctx is unavailable; using context.Background() at the log boundary
+// matches the helper-function convention from
+// kc/usecases/account_usecases.appendRevokedEvent.
 
 // flyRegionPattern matches Fly.io region codes: 3-4 lowercase letters.
 // Fly.io uses codes like "bom" (Mumbai), "sin" (Singapore), "ord" (Chicago),
@@ -52,7 +59,13 @@ func (app *App) envCheck() error {
 // NOT plumbed through Config (LOG_LEVEL, ENABLE_TRADING, FLY_REGION,
 // AUDIT_HASH_PUBLISH_*) flow through getenv.
 func (app *App) envCheckWithGetenv(getenv func(string) string) error {
-	logger := app.logger
+	// Wave D Phase 3 Package 7c-4a (Logger sweep): use the typed
+	// kc/logger.Logger port accessor (app.Logger() returns
+	// logport.Logger). All .Error/.Warn/.Info calls below thread
+	// context.Background() since envCheck runs at startup before
+	// any request scope exists.
+	logger := app.Logger()
+	ctx := context.Background()
 	var firstErr error
 	recordErr := func(err error) {
 		if firstErr == nil {
@@ -72,18 +85,18 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 		switch {
 		case len(jwt) < 32:
 			recordErr(fmt.Errorf("OAUTH_JWT_SECRET is %d bytes; need at least 32 for HMAC-SHA256 security", len(jwt)))
-			logger.Error("env var OAUTH_JWT_SECRET too short", "length", len(jwt), "min", 32)
+			logger.Error(ctx, "env var OAUTH_JWT_SECRET too short", nil, "length", len(jwt), "min", 32)
 		case strings.Contains(strings.ToLower(jwt), "your-secret") ||
 			strings.Contains(strings.ToLower(jwt), "changeme") ||
 			strings.Contains(strings.ToLower(jwt), "placeholder"):
 			recordErr(fmt.Errorf("OAUTH_JWT_SECRET looks like a placeholder value — replace with a high-entropy secret"))
-			logger.Error("env var OAUTH_JWT_SECRET looks like placeholder")
+			logger.Error(ctx, "env var OAUTH_JWT_SECRET looks like placeholder", nil)
 		default:
-			logger.Info("env var OAUTH_JWT_SECRET set", "value", maskSecret(jwt))
+			logger.Info(ctx, "env var OAUTH_JWT_SECRET set", "value", maskSecret(jwt))
 		}
 	} else if !app.DevMode {
 		// Only a soft note — app.LoadConfig() is the authoritative gate.
-		logger.Warn("env var OAUTH_JWT_SECRET not set; multi-user OAuth disabled")
+		logger.Warn(ctx, "env var OAUTH_JWT_SECRET not set; multi-user OAuth disabled")
 	}
 
 	// --- EXTERNAL_URL ---
@@ -97,18 +110,18 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 		switch {
 		case err != nil:
 			recordErr(fmt.Errorf("EXTERNAL_URL is not a valid URL: %w", err))
-			logger.Error("env var EXTERNAL_URL unparseable", "value", ext, "error", err)
+			logger.Error(ctx, "env var EXTERNAL_URL unparseable", err, "value", ext)
 		case u.Scheme != "http" && u.Scheme != "https":
 			recordErr(fmt.Errorf("EXTERNAL_URL must use http:// or https:// scheme, got %q", u.Scheme))
-			logger.Error("env var EXTERNAL_URL bad scheme", "value", ext, "scheme", u.Scheme)
+			logger.Error(ctx, "env var EXTERNAL_URL bad scheme", nil, "value", ext, "scheme", u.Scheme)
 		case u.Host == "":
 			recordErr(fmt.Errorf("EXTERNAL_URL has no host: %q", ext))
-			logger.Error("env var EXTERNAL_URL no host", "value", ext)
+			logger.Error(ctx, "env var EXTERNAL_URL no host", nil, "value", ext)
 		case strings.HasSuffix(ext, "/"):
 			// Trailing slash is a footgun — warn but don't fail.
-			logger.Warn("env var EXTERNAL_URL has a trailing slash; OAuth callbacks will contain double slashes", "value", ext)
+			logger.Warn(ctx, "env var EXTERNAL_URL has a trailing slash; OAuth callbacks will contain double slashes", "value", ext)
 		default:
-			logger.Info("env var EXTERNAL_URL set", "value", ext)
+			logger.Info(ctx, "env var EXTERNAL_URL set", "value", ext)
 		}
 	}
 
@@ -120,18 +133,18 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	if dbPath := app.Config.AlertDBPath; dbPath != "" {
 		dir := filepath.Dir(dbPath)
 		if dir == "." || dir == "" {
-			logger.Info("env var ALERT_DB_PATH set", "value", dbPath, "dir", "(cwd)")
+			logger.Info(ctx, "env var ALERT_DB_PATH set", "value", dbPath, "dir", "(cwd)")
 		} else if info, err := os.Stat(dir); err != nil {
 			recordErr(fmt.Errorf("ALERT_DB_PATH parent directory %q does not exist: %w", dir, err))
-			logger.Error("env var ALERT_DB_PATH parent missing", "path", dbPath, "dir", dir, "error", err)
+			logger.Error(ctx, "env var ALERT_DB_PATH parent missing", err, "path", dbPath, "dir", dir)
 		} else if !info.IsDir() {
 			recordErr(fmt.Errorf("ALERT_DB_PATH parent %q is not a directory", dir))
-			logger.Error("env var ALERT_DB_PATH parent not a dir", "path", dbPath, "dir", dir)
+			logger.Error(ctx, "env var ALERT_DB_PATH parent not a dir", nil, "path", dbPath, "dir", dir)
 		} else {
-			logger.Info("env var ALERT_DB_PATH set", "value", dbPath)
+			logger.Info(ctx, "env var ALERT_DB_PATH set", "value", dbPath)
 		}
 	} else if !app.DevMode {
-		logger.Warn("env var ALERT_DB_PATH not set; audit, riskguard, and user store will fail to initialize in production")
+		logger.Warn(ctx, "env var ALERT_DB_PATH not set; audit, riskguard, and user store will fail to initialize in production")
 	}
 
 	// --- LOG_LEVEL ---
@@ -142,9 +155,9 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	if lvl := getenv("LOG_LEVEL"); lvl != "" {
 		switch strings.ToLower(lvl) {
 		case "debug", "info", "warn", "error":
-			logger.Info("env var LOG_LEVEL set", "value", lvl)
+			logger.Info(ctx, "env var LOG_LEVEL set", "value", lvl)
 		default:
-			logger.Warn("env var LOG_LEVEL unrecognized; falling back to info", "value", lvl, "valid", "debug|info|warn|error")
+			logger.Warn(ctx, "env var LOG_LEVEL unrecognized; falling back to info", "value", lvl, "valid", "debug|info|warn|error")
 		}
 	}
 
@@ -155,10 +168,10 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	if mode := app.Config.AppMode; mode != "" {
 		switch mode {
 		case ModeHTTP, ModeSSE, ModeStdIO, ModeHybrid:
-			logger.Info("env var APP_MODE set", "value", mode)
+			logger.Info(ctx, "env var APP_MODE set", "value", mode)
 		default:
 			recordErr(fmt.Errorf("APP_MODE %q unknown; valid: %s, %s, %s, %s", mode, ModeHTTP, ModeSSE, ModeStdIO, ModeHybrid))
-			logger.Error("env var APP_MODE unknown", "value", mode)
+			logger.Error(ctx, "env var APP_MODE unknown", nil, "value", mode)
 		}
 	}
 
@@ -177,15 +190,15 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	if raw := getenv("ENABLE_TRADING"); raw != "" {
 		switch strings.ToLower(raw) {
 		case "true":
-			logger.Warn("env var ENABLE_TRADING=true — order-placement tools ENABLED (intended for local single-user only)")
+			logger.Warn(ctx, "env var ENABLE_TRADING=true — order-placement tools ENABLED (intended for local single-user only)")
 		case "false":
-			logger.Info("env var ENABLE_TRADING=false — order-placement tools gated (hosted safe mode)")
+			logger.Info(ctx, "env var ENABLE_TRADING=false — order-placement tools gated (hosted safe mode)")
 		default:
 			recordErr(fmt.Errorf("ENABLE_TRADING %q is invalid; must be \"true\" or \"false\" (case-insensitive)", raw))
-			logger.Error("env var ENABLE_TRADING invalid value", "value", raw, "valid", "true|false")
+			logger.Error(ctx, "env var ENABLE_TRADING invalid value", nil, "value", raw, "valid", "true|false")
 		}
 	} else {
-		logger.Info("env var ENABLE_TRADING not set — defaulting to false (order-placement gated)")
+		logger.Info(ctx, "env var ENABLE_TRADING not set — defaulting to false (order-placement gated)")
 	}
 
 	// --- FLY_REGION ---
@@ -200,9 +213,9 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	if raw := getenv("FLY_REGION"); raw != "" {
 		if !flyRegionPattern.MatchString(raw) {
 			recordErr(fmt.Errorf("FLY_REGION %q is invalid; expected 3-4 lowercase letters (e.g. \"bom\", \"sin\", \"ord\")", raw))
-			logger.Error("env var FLY_REGION invalid format", "value", raw, "pattern", "^[a-z]{3,4}$")
+			logger.Error(ctx, "env var FLY_REGION invalid format", nil, "value", raw, "pattern", "^[a-z]{3,4}$")
 		} else {
-			logger.Info("env var FLY_REGION set", "value", raw)
+			logger.Info(ctx, "env var FLY_REGION set", "value", raw)
 		}
 	}
 
@@ -265,7 +278,7 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 			}, ", "),
 			strings.Join(sortedMissing, ", "),
 		))
-		logger.Error("env var AUDIT_HASH_PUBLISH_* partial configuration",
+		logger.Error(ctx, "env var AUDIT_HASH_PUBLISH_* partial configuration", nil,
 			"set", hashSet, "missing", sortedMissing)
 	default:
 		// All four set — validate endpoint against SSRF guard now, so
@@ -273,10 +286,10 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 		// from StartHashPublisher's one-line error log.
 		if err := audit.ValidateS3Endpoint(hashEndpoint); err != nil {
 			recordErr(fmt.Errorf("AUDIT_HASH_PUBLISH_S3_ENDPOINT blocked by SSRF guard: %w", err))
-			logger.Error("env var AUDIT_HASH_PUBLISH_S3_ENDPOINT rejected",
-				"value", hashEndpoint, "error", err)
+			logger.Error(ctx, "env var AUDIT_HASH_PUBLISH_S3_ENDPOINT rejected", err,
+				"value", hashEndpoint)
 		} else {
-			logger.Info("env var AUDIT_HASH_PUBLISH_* fully configured",
+			logger.Info(ctx, "env var AUDIT_HASH_PUBLISH_* fully configured",
 				"endpoint", hashEndpoint,
 				"bucket", hashBucket,
 				"access_key", maskSecret(hashAccessKey))
@@ -290,11 +303,11 @@ func (app *App) envCheckWithGetenv(getenv func(string) string) error {
 	// changes. Validate syntax here so the mistake is visible.
 	if raw := getenv("AUDIT_HASH_PUBLISH_INTERVAL"); raw != "" {
 		if d, err := time.ParseDuration(raw); err != nil {
-			logger.Warn("env var AUDIT_HASH_PUBLISH_INTERVAL not a valid duration; keeping default 1h", "value", raw, "error", err)
+			logger.Warn(ctx, "env var AUDIT_HASH_PUBLISH_INTERVAL not a valid duration; keeping default 1h", "value", raw, "error", err)
 		} else if d <= 0 {
-			logger.Warn("env var AUDIT_HASH_PUBLISH_INTERVAL must be positive; keeping default 1h", "value", raw)
+			logger.Warn(ctx, "env var AUDIT_HASH_PUBLISH_INTERVAL must be positive; keeping default 1h", "value", raw)
 		} else {
-			logger.Info("env var AUDIT_HASH_PUBLISH_INTERVAL set", "value", d.String())
+			logger.Info(ctx, "env var AUDIT_HASH_PUBLISH_INTERVAL set", "value", d.String())
 		}
 	}
 
