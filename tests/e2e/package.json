@@ -1,0 +1,19 @@
+{
+  "name": "kite-mcp-server-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin-smoke Playwright E2E suite for kite-mcp-server. Runs against a locally-booted server (default http://127.0.0.1:8080) and asserts critical surface contracts: health, landing page, OAuth redirect, MCP tool surface lock, and well-known endpoints. NOT a layout/visual regression suite — see tests/e2e/README.md for the design philosophy.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

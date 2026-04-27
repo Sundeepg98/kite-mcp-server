@@ -112,3 +112,12 @@ tmp/
 /mcp_schema.json
 /test_err.txt
 /test_out.txt
+
+# Playwright e2e suite (tests/e2e/)
+tests/e2e/node_modules/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+tests/e2e/blob-report/
+tests/e2e/playwright/.cache/
+# Lockfile is intentionally NOT ignored once committed; pre-bake leave room
+# for the first `npm install` to produce one without churning history.
