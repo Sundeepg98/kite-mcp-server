@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TrailingStopManager abstracts trailing stop persistence for use cases.
@@ -26,12 +27,12 @@ type SetTrailingStopUseCase struct {
 	manager    TrailingStopManager
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewSetTrailingStopUseCase creates a SetTrailingStopUseCase with dependencies injected.
 func NewSetTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logger) *SetTrailingStopUseCase {
-	return &SetTrailingStopUseCase{manager: manager, logger: logger}
+	return &SetTrailingStopUseCase{manager: manager, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -73,7 +74,7 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 
 	id, err := uc.manager.Add(ts)
 	if err != nil {
-		uc.logger.Error("Failed to set trailing stop", "email", cmd.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to set trailing stop", err, "email", cmd.Email)
 		return "", fmt.Errorf("usecases: set trailing stop: %w", err)
 	}
 
@@ -103,12 +104,12 @@ func (uc *SetTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.SetTrail
 // ListTrailingStopsUseCase retrieves all trailing stops for a user.
 type ListTrailingStopsUseCase struct {
 	manager TrailingStopManager
-	logger  *slog.Logger
+	logger  logport.Logger
 }
 
 // NewListTrailingStopsUseCase creates a ListTrailingStopsUseCase with dependencies injected.
 func NewListTrailingStopsUseCase(manager TrailingStopManager, logger *slog.Logger) *ListTrailingStopsUseCase {
-	return &ListTrailingStopsUseCase{manager: manager, logger: logger}
+	return &ListTrailingStopsUseCase{manager: manager, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves all trailing stops for the user.
@@ -127,12 +128,12 @@ type CancelTrailingStopUseCase struct {
 	manager    TrailingStopManager
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewCancelTrailingStopUseCase creates a CancelTrailingStopUseCase with dependencies injected.
 func NewCancelTrailingStopUseCase(manager TrailingStopManager, logger *slog.Logger) *CancelTrailingStopUseCase {
-	return &CancelTrailingStopUseCase{manager: manager, logger: logger}
+	return &CancelTrailingStopUseCase{manager: manager, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -152,7 +153,7 @@ func (uc *CancelTrailingStopUseCase) Execute(ctx context.Context, cmd cqrs.Cance
 	}
 
 	if err := uc.manager.Cancel(cmd.Email, cmd.TrailingStopID); err != nil {
-		uc.logger.Error("Failed to cancel trailing stop", "email", cmd.Email, "id", cmd.TrailingStopID, "error", err)
+		uc.logger.Error(ctx, "Failed to cancel trailing stop", err, "email", cmd.Email, "id", cmd.TrailingStopID)
 		return fmt.Errorf("usecases: cancel trailing stop: %w", err)
 	}
 
