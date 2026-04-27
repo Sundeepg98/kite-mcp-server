@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
@@ -53,6 +54,15 @@ func returnsMatrixWidgetData(ctx context.Context, manager extAppManagerPort, ema
 	var winnerCount, loserCount int
 	var totalPnL float64
 	for _, h := range portfolio.Holdings {
+		// Slice 6b: lift the broker.Holding to domain.Holding so
+		// the row's PnL JSON-emit is currency-aware at the
+		// boundary; .Float64() drops back to wire-compatible float.
+		// The sign-test branches (h.PnL > 0 / < 0) and the
+		// aggregation accumulator (totalPnL) deliberately stay
+		// bare-float — control-flow branches are local logic with
+		// no JSON wire flow, and the accumulator follows Slice 3's
+		// "sum primitive then wrap once" hot-path discipline.
+		hd := domain.NewHoldingFromBroker(h)
 		lifetimePct := 0.0
 		if h.AveragePrice > 0 {
 			lifetimePct = ((h.LastPrice - h.AveragePrice) / h.AveragePrice) * 100.0
@@ -66,7 +76,7 @@ func returnsMatrixWidgetData(ctx context.Context, manager extAppManagerPort, ema
 			DayChangePct: h.DayChangePct,
 			LifetimePct:  lifetimePct,
 			Value:        value,
-			PnL:          h.PnL,
+			PnL:          hd.PnL().Float64(),
 		}
 		rows = append(rows, r)
 		if h.PnL > 0 {

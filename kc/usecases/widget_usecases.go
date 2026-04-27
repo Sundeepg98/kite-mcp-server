@@ -163,9 +163,18 @@ func (uc *GetPortfolioForWidgetUseCase) Execute(ctx context.Context, query cqrs.
 	hItems := make([]WidgetHoldingItem, 0, len(holdings))
 	var totalInvested, totalCurrent, totalPnL float64
 	for _, h := range holdings {
+		// Slice 6b: lift the broker.Holding to domain.Holding so
+		// the per-row PnL JSON-emit on WidgetHoldingItem is
+		// currency-aware at the boundary; .Float64() drops back
+		// to the wire-compatible float. The aggregation
+		// accumulators (totalInvested, totalCurrent, totalPnL)
+		// deliberately stay bare-float — Slice 3's "sum primitive
+		// then wrap once" hot-path discipline keeps inner-loop
+		// math allocation-free.
+		hd := domain.NewHoldingFromBroker(h)
 		hItems = append(hItems, WidgetHoldingItem{
 			Symbol: h.Tradingsymbol, Exchange: h.Exchange, Quantity: h.Quantity,
-			AvgPrice: h.AveragePrice, LastPrice: h.LastPrice, PnL: h.PnL,
+			AvgPrice: h.AveragePrice, LastPrice: h.LastPrice, PnL: hd.PnL().Float64(),
 			DayChgPct: h.DayChangePct,
 		})
 		totalInvested += h.AveragePrice * float64(h.Quantity)
