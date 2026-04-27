@@ -25,6 +25,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/plugins/telegramnotify"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	stripe "github.com/stripe/stripe-go/v82"
+	"go.uber.org/fx"
+
+	"github.com/zerodha/kite-mcp-server/app/providers"
 )
 
 // emailHasherAdapter bridges kc/audit.HashEmail to the usecases.EmailHasher
@@ -174,50 +177,77 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// mode, fail fast if the audit table cannot be created — silently running
 	// without audit middleware hides every tool call from the regulator. In
 	// DevMode, log and continue so local dev without a DB still works.
+	//
+	// Wave D Phase 2 Slice P2.3b: the imperative chain that used to
+	// live here (InitTable + EnsureEncryptionSalt + SetEncryptionKey +
+	// SeedChain + SetLogger + StartWorker + audit.Middleware + hash-
+	// publisher) is now an Fx-resolved provider graph. Two providers:
+	//
+	//   providers.InitializeAuditStore — runs the init chain and
+	//     returns the SAME *audit.Store pointer iff init fully
+	//     succeeded; nil if DevMode swallowed an error. Production
+	//     failures bubble through as fx.New(...).Err().
+	//
+	//   providers.ProvideAuditMiddleware — pure function; given the
+	//     post-init store (possibly nil), returns the middleware
+	//     (possibly nil). Wired by the type graph to consume only
+	//     the post-init store, so middleware is dropped iff init
+	//     skipped (DevMode-init-failed path).
+	//
+	// app.auditStore / auditMiddleware / app.hashPublisherCancel keep
+	// the same shape downstream — only the construction style
+	// changed. Lifecycle hooks for store.Stop and alert_db.Close
+	// already live in app.registerLifecycle (lines 825-855); not
+	// duplicated here. hash-publisher cancel stays on
+	// app.hashPublisherCancel for the existing wire.go:151-153
+	// success-defer path; not lifecycled.
 	var auditMiddleware server.ToolHandlerMiddleware
-	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		app.auditStore = preAuditStore
-		if err := app.auditStore.InitTable(); err != nil {
-			if !app.DevMode {
-				return nil, nil, fmt.Errorf("audit trail required in production: init table: %w", err)
-			}
-			app.logger.Error("Failed to initialize audit table (DevMode: continuing without audit)", "error", err)
-		} else {
-			// Wire encryption key for HMAC email hashing, AES-GCM email encryption,
-			// and HMAC-SHA256 hash chaining.
-			if app.Config.OAuthJWTSecret != "" {
-				encKey, err := alerts.EnsureEncryptionSalt(alertDB, app.Config.OAuthJWTSecret)
-				if err != nil {
-					if !app.DevMode {
-						return nil, nil, fmt.Errorf("audit trail required in production: derive encryption key: %w", err)
-					}
-					app.logger.Error("Failed to derive audit encryption key (DevMode: continuing)", "error", err)
-				} else {
-					app.auditStore.SetEncryptionKey(encKey)
-					app.auditStore.SeedChain()
-					app.logger.Info("Audit trail encryption and hash chaining enabled")
-				}
-			}
-			app.auditStore.SetLogger(app.logger)
-			app.auditStore.StartWorker()
-			app.logger.Info("Audit trail enabled")
-			auditMiddleware = audit.Middleware(app.auditStore)
-			// Note: kcManager.SetAuditStore(app.auditStore) is no longer
-			// needed — the manager's auditStore field was populated by
-			// initInjectedStores via WithAuditStore at construction time.
-
-			// Start audit hash-chain external publisher. Opt-in via
-			// AUDIT_HASH_PUBLISH_* env vars — disabled (no-op) otherwise.
-			// SEBI CSCRF: publishing the chain tip to external storage
-			// prevents an attacker with DB write access from rewriting the
-			// audit log history undetected.
-			hpCfg := audit.LoadHashPublishConfig([]byte(app.Config.OAuthJWTSecret))
-			hpCtx, hpCancel := context.WithCancel(context.Background())
-			app.hashPublisherCancel = hpCancel
-			audit.StartHashPublisher(hpCtx, app.auditStore, hpCfg, app.logger)
-		}
-	} else if !app.DevMode {
+	var initialized *providers.InitializedAuditStore
+	app.auditStore = preAuditStore
+	alertDBForAudit := kcManager.AlertDB()
+	if alertDBForAudit == nil && !app.DevMode {
 		return nil, nil, fmt.Errorf("audit trail required in production: no alert DB configured (set ALERT_DB_PATH)")
+	}
+
+	auditCfg := providers.AuditConfig{
+		OAuthJWTSecret: app.Config.OAuthJWTSecret,
+		DevMode:        app.DevMode,
+	}
+	auditFxApp := fx.New(
+		fx.NopLogger,
+		fx.Supply(app.auditStore),
+		fx.Supply(alertDBForAudit),
+		fx.Supply(auditCfg),
+		fx.Supply(app.logger),
+		fx.Provide(providers.InitializeAuditStore),
+		fx.Provide(providers.ProvideAuditMiddleware),
+		fx.Populate(&initialized, &auditMiddleware),
+	)
+	if err := auditFxApp.Err(); err != nil {
+		// fx.New surfaces the production-mode startup-error class
+		// from InitializeAuditStore. The error message preserves the
+		// "audit trail required in production:" prefix from the
+		// legacy code so log/alerting rules continue to match.
+		return nil, nil, err
+	}
+
+	// In the DevMode-init-failed path, initialized.Store is nil and
+	// auditMiddleware is nil — drop app.auditStore so downstream
+	// readers (riskGuard baseline, anomaly cache, register-tools, etc.)
+	// see a nil store and skip audit-dependent wiring. Matches the
+	// legacy "audit trail disabled" behavior at wire.go:184 + 220.
+	if initialized != nil {
+		app.auditStore = initialized.Store
+	} else {
+		app.auditStore = nil
+	}
+
+	// Hash-publisher: kept at composition site per HASH-PUBLISHER NOTE
+	// in providers/audit_init.go. SEBI CSCRF: publishing the chain tip
+	// to external storage prevents an attacker with DB write access
+	// from rewriting the audit log history undetected.
+	if app.auditStore != nil {
+		app.hashPublisherCancel = providers.StartAuditHashPublisher(app.auditStore, auditCfg, app.logger)
 	}
 
 	// Initialize DPDP Act 2023 consent log (separate table from tool-call audit).
