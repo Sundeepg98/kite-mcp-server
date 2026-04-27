@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/mcp"
 )
 
@@ -63,16 +65,34 @@ import (
 // Production wrapper around startRateLimitReloadLoopWithGetenv: the latter
 // accepts a getenv injection so tests can drive the SIGHUP-handler logic
 // with a literal env source — no t.Setenv, parallel-safe.
+//
+// Deprecated: use startRateLimitReloadLoopWithPort. This shim wraps the
+// supplied *slog.Logger via logport.NewSlog and exists for the Wave D
+// Phase 3 Logger sweep migration window only. Will be removed in
+// Package 8 cleanup.
 func startRateLimitReloadLoop(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}) (chan os.Signal, <-chan struct{}) {
-	return startRateLimitReloadLoopWithGetenv(rl, logger, stopCh, os.Getenv)
+	return startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, os.Getenv)
 }
 
-// startRateLimitReloadLoopWithGetenv is the parameterised variant. The
-// getenv callback is invoked once per SIGHUP — production code wires this
-// to os.Getenv; tests pass a closure backed by a map literal so the test
-// can both express "what env should the SIGHUP handler see" and run with
-// t.Parallel().
+// startRateLimitReloadLoopWithGetenv is the legacy parameterised
+// variant. Same migration shim as startRateLimitReloadLoop —
+// wraps the supplied *slog.Logger via logport.NewSlog.
+//
+// Deprecated: use startRateLimitReloadLoopWithPort.
 func startRateLimitReloadLoopWithGetenv(rl *mcp.ToolRateLimiter, logger *slog.Logger, stopCh <-chan struct{}, getenv func(string) string) (chan os.Signal, <-chan struct{}) {
+	return startRateLimitReloadLoopWithPort(rl, logport.NewSlog(logger), stopCh, getenv)
+}
+
+// startRateLimitReloadLoopWithPort is the canonical Wave D Phase 3
+// implementation. Takes a logport.Logger directly; the getenv callback
+// is the same as startRateLimitReloadLoopWithGetenv (production wires
+// os.Getenv; tests pass a map-backed closure).
+//
+// Service-ctx pattern: the SIGHUP-driven loop has no inbound request
+// ctx, so log calls use context.Background(). When Wave D Phase 4
+// adds a ServiceContext that propagates app-level cancellation/
+// correlation, the Background() can be replaced with that.
+func startRateLimitReloadLoopWithPort(rl *mcp.ToolRateLimiter, logger logport.Logger, stopCh <-chan struct{}, getenv func(string) string) (chan os.Signal, <-chan struct{}) {
 	sigCh := make(chan os.Signal, 1)
 	doneCh := make(chan struct{})
 	// Notify for SIGHUP. On platforms without SIGHUP (Windows),
@@ -88,19 +108,19 @@ func startRateLimitReloadLoopWithGetenv(rl *mcp.ToolRateLimiter, logger *slog.Lo
 				raw := getenv("KITE_RATELIMIT")
 				limits, err := parseRateLimitEnv(raw)
 				if err != nil {
-					logger.Error("SIGHUP rate-limit reload: parse failed",
-						"error", err, "raw", raw)
+					logger.Error(context.Background(), "SIGHUP rate-limit reload: parse failed",
+						err, "raw", raw)
 					continue
 				}
 				if len(limits) == 0 {
-					logger.Warn("SIGHUP rate-limit reload: KITE_RATELIMIT is empty; skipping swap")
+					logger.Warn(context.Background(), "SIGHUP rate-limit reload: KITE_RATELIMIT is empty; skipping swap")
 					continue
 				}
 				rl.SetLimits(limits)
 				// Small structured snapshot so ops can confirm the
 				// intended caps landed.
 				asJSON, _ := json.Marshal(limits)
-				logger.Info("SIGHUP rate-limit reload: limits swapped", "limits", string(asJSON))
+				logger.Info(context.Background(), "SIGHUP rate-limit reload: limits swapped", "limits", string(asJSON))
 			case <-stopCh:
 				signal.Stop(sigCh)
 				return

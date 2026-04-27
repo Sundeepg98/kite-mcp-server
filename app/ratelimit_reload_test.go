@@ -149,17 +149,18 @@ func TestStartRateLimitReloadLoop_StopChanExits(t *testing.T) {
 // because other parallel tests create their own reload loops via
 // RunServer.
 //
-// Note: production startRateLimitReloadLoop now delegates to
-// startRateLimitReloadLoopWithGetenv where the actual goroutine lives,
-// so we look for that frame name.
+// Note: production startRateLimitReloadLoop now delegates through
+// startRateLimitReloadLoopWithGetenv → startRateLimitReloadLoopWithPort
+// where the actual goroutine lives (Wave D Phase 3 Logger sweep
+// Package 7), so we look for that frame name.
 func countLoopGoroutines() int {
 	buf := make([]byte, 1<<16)
 	n := runtime.Stack(buf, true)
 	stacks := string(buf[:n])
 	// The goroutine runs an anonymous closure inside
-	// startRateLimitReloadLoopWithGetenv — its frame always contains
+	// startRateLimitReloadLoopWithPort — its frame always contains
 	// that function name.
-	return strings.Count(stacks, "app.startRateLimitReloadLoopWithGetenv.func1")
+	return strings.Count(stacks, "app.startRateLimitReloadLoopWithPort.func1")
 }
 
 // TestApp_StopRateLimitReload_Idempotent verifies the App helper that

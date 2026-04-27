@@ -81,6 +81,12 @@ func RequestIDFromCtx(ctx context.Context) string {
 // LoggerWithRequestID enriches an slog.Logger with the request ID from
 // the context (if any). Callers who pre-build a request-scoped logger
 // should prefer this over re-extracting the ID at each log site.
+//
+// Deprecated: use LoggerPortWithRequestID. The Wave D Phase 3 Logger
+// sweep (Package 7) prefers the port-typed sibling for new call sites
+// because it composes with the rest of the migrated codebase without
+// an adapter wrap. This *slog.Logger variant remains for back-compat
+// with unmigrated consumers (Package 8 cleanup will audit + retire).
 func LoggerWithRequestID(logger *slog.Logger, ctx context.Context) *slog.Logger {
 	if logger == nil {
 		return nil

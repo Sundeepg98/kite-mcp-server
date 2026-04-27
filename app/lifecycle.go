@@ -1,8 +1,11 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"sync"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // LifecycleManager owns the ordered teardown of background workers wired
@@ -45,11 +48,24 @@ import (
 //     enqueue audit entries after the writer has stopped).
 //   - Error aggregation: stop funcs return error but Shutdown logs and
 //     continues. A stop failure does not abort the rest of the chain.
+// LOGGER MIGRATION (Wave D Phase 3 Logger sweep — app/ Package 7)
+//
+// `logger` is typed as the kc/logger.Logger port (logport.Logger). The
+// LifecycleManager runs the Shutdown chain on a one-shot path with no
+// inbound request ctx; each runOne() call passes context.Background()
+// to the logger so the trace-correlation seam is explicit even though
+// no upstream ctx exists at this seam.
+//
+// Backward compatibility: NewLifecycleManager retains its
+// `*slog.Logger` parameter as a thin shim that wraps via
+// logport.NewSlog so existing callers (app/app.go, helpers_test.go)
+// compile unchanged. NewLifecycleManagerWithPort is the preferred
+// constructor for new callers wiring a logport.Logger directly.
 type LifecycleManager struct {
 	mu     sync.Mutex
 	stops  []namedStop
 	once   sync.Once
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 type namedStop struct {
@@ -59,7 +75,20 @@ type namedStop struct {
 
 // NewLifecycleManager constructs an empty manager. Logger is used only to
 // surface stop-func failures during Shutdown — pass app.logger.
+//
+// Deprecated: use NewLifecycleManagerWithPort. This shim wraps the
+// supplied *slog.Logger via logport.NewSlog and exists only for the
+// Wave D Phase 3 migration window. It will be removed once the sweep
+// completes (Package 8 cleanup).
 func NewLifecycleManager(logger *slog.Logger) *LifecycleManager {
+	return &LifecycleManager{logger: logport.NewSlog(logger)}
+}
+
+// NewLifecycleManagerWithPort is the preferred constructor for new
+// callers that already hold a logport.Logger. Behaviour is identical
+// to NewLifecycleManager — this variant just skips the slog adapter
+// wrap.
+func NewLifecycleManagerWithPort(logger logport.Logger) *LifecycleManager {
 	return &LifecycleManager{logger: logger}
 }
 
@@ -105,12 +134,18 @@ func (lm *LifecycleManager) Shutdown() {
 }
 
 func (lm *LifecycleManager) runOne(s namedStop) {
+	// Shutdown is a one-shot teardown path with no upstream request ctx
+	// — context.Background() is the appropriate seam. logport.Logger's
+	// Error signature is (ctx, msg, err, args...): the panic / failure
+	// surface uses err==nil because the recovered panic value isn't a
+	// typed error (it's any), and "lifecycle stop failed" already
+	// carries the wrapped error in the args.
 	defer func() {
 		if r := recover(); r != nil && lm.logger != nil {
-			lm.logger.Error("lifecycle stop panicked", "name", s.name, "panic", r)
+			lm.logger.Error(context.Background(), "lifecycle stop panicked", nil, "name", s.name, "panic", r)
 		}
 	}()
 	if err := s.fn(); err != nil && lm.logger != nil {
-		lm.logger.Error("lifecycle stop failed", "name", s.name, "error", err)
+		lm.logger.Error(context.Background(), "lifecycle stop failed", err, "name", s.name)
 	}
 }
