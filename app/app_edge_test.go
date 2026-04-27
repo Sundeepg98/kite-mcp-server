@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -135,7 +136,7 @@ func TestSetupGracefulShutdown_ComponentsWired_Push100(t *testing.T) {
 		apiKey: "tk", apiSecret: "ts",
 		tokenStore:      mgr.TokenStoreConcrete(),
 		credentialStore: mgr.CredentialStoreConcrete(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 
 	app := newTestAppWithConfig(t, &Config{InstrumentsSkipFetch: true})
@@ -316,7 +317,7 @@ func TestExchangeWithCredentials_RegistryKeyReplace_Push100(t *testing.T) {
 		credentialStore: credStore,
 		registryStore:   regStore,
 		userStore:       userStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 
 	// Verify old key exists and is active
@@ -447,7 +448,7 @@ func TestSetupMux_AdminPasswordBcrypt_Push100(t *testing.T) {
 		apiKey: "tk", apiSecret: "ts",
 		tokenStore:      mgr.TokenStoreConcrete(),
 		credentialStore: mgr.CredentialStoreConcrete(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -744,7 +745,7 @@ func TestGetCredentials_NeitherPerUserNorGlobal_Push100(t *testing.T) {
 		apiKey:          "",
 		apiSecret:       "",
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	key, secret, ok := adapter.GetCredentials("nobody@test.com")
 	assert.False(t, ok)
@@ -764,7 +765,7 @@ func TestGetSecretByAPIKey_Push100(t *testing.T) {
 	})
 	adapter := &kiteExchangerAdapter{
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	secret, ok := adapter.GetSecretByAPIKey("mykey")
 	assert.True(t, ok)
@@ -897,7 +898,7 @@ func TestSetupMux_GoogleSSO_Push100(t *testing.T) {
 		apiKey: "tk", apiSecret: "ts",
 		tokenStore:      mgr.TokenStoreConcrete(),
 		credentialStore: mgr.CredentialStoreConcrete(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
@@ -55,7 +56,7 @@ func TestExchangeWithCredentials_ExistingKeyDifferentUser(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
@@ -88,7 +89,7 @@ func TestExchangeWithCredentials_OldKeyReplacement(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
@@ -110,7 +111,7 @@ func TestExchangeRequestToken_WithRegistryStore(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("Invalid checksum"),
 	}
 
@@ -128,7 +129,7 @@ func TestExchangeWithCredentials_NoRegistryStore(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("Invalid checksum"),
 		// registryStore is nil
 	}

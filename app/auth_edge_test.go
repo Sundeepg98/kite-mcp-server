@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
@@ -32,7 +33,7 @@ func TestExchangeRequestToken_WithUserStore_Success(t *testing.T) {
 		credentialStore: credStore,
 		registryStore: regStore,
 		userStore:     userStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("alice@example.com", "AL1234", "Alice Trader", "tok-alice"),
 	}
 
@@ -70,7 +71,7 @@ func TestExchangeWithCredentials_WithUserStore_Success(t *testing.T) {
 		credentialStore: credStore,
 		registryStore: regStore,
 		userStore:     userStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("bob@example.com", "BO5678", "Bob Investor", "tok-bob"),
 	}
 
@@ -108,7 +109,7 @@ func TestExchangeWithCredentials_RegistryNewKey(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore: regStore,
 		userStore:     users.NewStore(),
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("carol@example.com", "CA9012", "Carol", "tok-carol"),
 	}
 
@@ -151,7 +152,7 @@ func TestExchangeWithCredentials_RegistryOldKeyReplaced(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore: regStore,
 		userStore:     users.NewStore(),
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("dave@example.com", "DV3456", "Dave", "tok-dave"),
 	}
 
@@ -191,7 +192,7 @@ func TestExchangeRequestToken_RegistryLastUsedAt(t *testing.T) {
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore: regStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("eve@example.com", "EV7890", "Eve", "tok-eve"),
 	}
 
@@ -216,7 +217,7 @@ func TestExchangeRequestToken_NoRegistryStore_Factory(t *testing.T) {
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore: nil,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("frank@example.com", "FR1111", "Frank", "tok-frank"),
 	}
 
@@ -239,7 +240,7 @@ func TestExchangeWithCredentials_NoRegistryStore_Factory(t *testing.T) {
 		tokenStore:    tokenStore,
 		credentialStore: credStore,
 		registryStore: nil,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("grace@example.com", "GR2222", "Grace", "tok-grace"),
 	}
 
@@ -263,7 +264,7 @@ func TestExchangeRequestToken_FallbackToUserID_Factory(t *testing.T) {
 		apiSecret:     "secret",
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("", "ZK4444", "No Email User", "tok-noemail"),
 	}
 
@@ -282,7 +283,7 @@ func TestExchangeRequestToken_KiteAPIError_Factory(t *testing.T) {
 		apiSecret:     "secret",
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuthError("Invalid checksum"),
 	}
 
@@ -397,7 +398,7 @@ func TestExchangeWithCredentials_KeyExistsDiffUser_Push100Extra(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -437,7 +438,7 @@ func TestExchangeWithCredentials_RegisterError_Push100Extra(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -461,7 +462,7 @@ func TestExchangeWithCredentials_SuspendedUser_Push100Extra(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		userStore:       uStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -483,7 +484,7 @@ func TestExchangeWithCredentials_OffboardedUser_Push100Extra(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		userStore:       uStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -505,7 +506,7 @@ func TestExchangeRequestToken_SuspendedUser_Push100Extra(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		userStore:       uStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 

@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -201,7 +202,7 @@ func TestProvisionUser_ActiveUser_UpdateKiteUID(t *testing.T) {
 
 	adapter := &kiteExchangerAdapter{
 		userStore: store,
-		logger:    testLogger(),
+		logger:    logport.NewSlog(testLogger()),
 	}
 	err := adapter.provisionUser("active@example.com", "NEW-UID", "Active User")
 	assert.NoError(t, err)
@@ -300,7 +301,7 @@ func TestGetCredentials_EmptyCredentialAPIKey(t *testing.T) {
 		apiKey:          "global-key",
 		apiSecret:       "global-secret",
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	key, secret, ok := adapter.GetCredentials("user@example.com")
 	assert.True(t, ok)
@@ -420,7 +421,7 @@ func TestProvisionUser_CaseInsensitive(t *testing.T) {
 	store := users.NewStore()
 	adapter := &kiteExchangerAdapter{
 		userStore: store,
-		logger:    testLogger(),
+		logger:    logport.NewSlog(testLogger()),
 	}
 	err := adapter.provisionUser("MixedCase@Example.COM", "UID1", "User1")
 	assert.NoError(t, err)
@@ -1982,7 +1983,7 @@ func TestSetupMux_PricingPage_PremiumTier_Push100Extra(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	oauthHandler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(oauthHandler.Close)

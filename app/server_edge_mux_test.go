@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -171,7 +172,7 @@ func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -213,7 +214,7 @@ func TestSetupMux_GoogleSSO_NoCredentials(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -552,7 +553,7 @@ func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -651,7 +652,7 @@ func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -711,7 +712,7 @@ func TestSetupMux_AdminAuth_EmptyPath_DefaultRedirect(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -937,7 +938,7 @@ func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -992,7 +993,7 @@ func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -1036,7 +1037,7 @@ func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)
@@ -1076,7 +1077,7 @@ func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)

@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -70,7 +71,7 @@ func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(app.oauthHandler.Close)
@@ -884,7 +885,7 @@ func TestGetCredentials_GlobalFallback_Cov(t *testing.T) {
 		apiSecret:       "global_secret",
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 
 	key, secret, ok := exchanger.GetCredentials("unknown@test.com")
@@ -898,7 +899,7 @@ func TestGetCredentials_NoCreds_Cov(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 
 	_, _, ok := exchanger.GetCredentials("unknown@test.com")
@@ -912,7 +913,7 @@ func TestGetCredentials_PerUserCredentials_Cov(t *testing.T) {
 		apiSecret:       "global_secret",
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	exchanger.credentialStore.Set("user@test.com", &kc.KiteCredentialEntry{
 		APIKey: "user_key", APISecret: "user_secret",
@@ -932,7 +933,7 @@ func TestKiteExchangerAdapter_GetSecretByAPIKey(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 
 	// Store a credential

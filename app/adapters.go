@@ -17,6 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
@@ -168,7 +169,10 @@ type kiteExchangerAdapter struct {
 	credentialStore *kc.KiteCredentialStore // read paths AND test-local-bus handler backing
 	registryStore   *registry.Store         // test-local-bus handler backing
 	userStore       *users.Store            // test-local-bus handler backing
-	logger          *slog.Logger
+	// Wave D Phase 3 Package 7c-4b: logger field carries the
+	// kc/logger.Logger port. Constructor sites (adapters_local_bus.go)
+	// take *slog.Logger params and wrap via logport.NewSlog.
+	logger          logport.Logger
 	authenticator   broker.Authenticator
 	commandBus      cqrs.CommandBus // never nil at use time — see ensureBus
 	busOnce         sync.Once
@@ -189,7 +193,10 @@ func (a *kiteExchangerAdapter) ensureBus() {
 		if a.commandBus != nil {
 			return
 		}
-		a.commandBus = newLocalOAuthBridgeBus(a.logger, oauthBridgeStores{
+		// newLocalOAuthBridgeBus takes *slog.Logger (Package 7c keeps
+		// signature stable for its other callers). AsSlog unwraps the
+		// port back to slog at this single boundary.
+		a.commandBus = newLocalOAuthBridgeBus(logport.AsSlog(a.logger), oauthBridgeStores{
 			Users:       a.userStore,
 			Tokens:      a.tokenStore,
 			Credentials: a.credentialStore,
@@ -250,7 +257,7 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 		return "", err
 	}
 
-	a.logger.Debug("Kite token exchange successful", "email", email, "user_id", result.UserID)
+	a.logger.Debug(context.Background(), "Kite token exchange successful", "email", email, "user_id", result.UserID)
 
 	// Token cache + registry-stamp writes — single dispatch path via the
 	// bus. ensureBus() above already guaranteed non-nil; provisionUser
@@ -261,7 +268,7 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 		UserID:      result.UserID,
 		UserName:    result.UserName,
 	}); dispErr != nil {
-		a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", email, "error", dispErr)
+		a.logger.Error(context.Background(), "Failed to dispatch CacheKiteAccessTokenCommand", dispErr, "email", email)
 	}
 	if a.apiKey != "" {
 		if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
@@ -269,7 +276,7 @@ func (a *kiteExchangerAdapter) ExchangeRequestToken(requestToken string) (string
 			APIKey:       a.apiKey,
 			AutoRegister: false,
 		}); dispErr != nil {
-			a.logger.Debug("SyncRegistryAfterLoginCommand global-stamp dispatch failed", "error", dispErr)
+			a.logger.Debug(context.Background(), "SyncRegistryAfterLoginCommand global-stamp dispatch failed", "error", dispErr)
 		}
 	}
 
@@ -292,7 +299,7 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 		return "", err
 	}
 
-	a.logger.Debug("Kite token exchange (per-user credentials) successful", "email", email, "user_id", result.UserID)
+	a.logger.Debug(context.Background(), "Kite token exchange (per-user credentials) successful", "email", email, "user_id", result.UserID)
 	lowerEmail := strings.ToLower(email)
 
 	// Three writes in sequence: token cache, credential store, registry sync.
@@ -304,14 +311,14 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 		UserID:      result.UserID,
 		UserName:    result.UserName,
 	}); dispErr != nil {
-		a.logger.Error("Failed to dispatch CacheKiteAccessTokenCommand", "email", lowerEmail, "error", dispErr)
+		a.logger.Error(context.Background(), "Failed to dispatch CacheKiteAccessTokenCommand", dispErr, "email", lowerEmail)
 	}
 	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.StoreUserKiteCredentialsCommand{
 		Email:     lowerEmail,
 		APIKey:    apiKey,
 		APISecret: apiSecret,
 	}); dispErr != nil {
-		a.logger.Error("Failed to dispatch StoreUserKiteCredentialsCommand", "email", lowerEmail, "error", dispErr)
+		a.logger.Error(context.Background(), "Failed to dispatch StoreUserKiteCredentialsCommand", dispErr, "email", lowerEmail)
 	}
 	if dispErr := a.commandBus.Dispatch(context.Background(), cqrs.SyncRegistryAfterLoginCommand{
 		Email:        lowerEmail,
@@ -320,7 +327,7 @@ func (a *kiteExchangerAdapter) ExchangeWithCredentials(requestToken, apiKey, api
 		Label:        "Self-provisioned",
 		AutoRegister: true,
 	}); dispErr != nil {
-		a.logger.Error("Failed to dispatch SyncRegistryAfterLoginCommand", "email", lowerEmail, "error", dispErr)
+		a.logger.Error(context.Background(), "Failed to dispatch SyncRegistryAfterLoginCommand", dispErr, "email", lowerEmail)
 	}
 
 	return email, nil
@@ -357,7 +364,9 @@ func (a *kiteExchangerAdapter) GetSecretByAPIKey(apiKey string) (string, bool) {
 type clientPersisterAdapter struct {
 	db         *alerts.DB
 	commandBus cqrs.CommandBus
-	logger     *slog.Logger
+	// Wave D Phase 3 Package 7c-4b: see kiteExchangerAdapter for the
+	// logport.Logger port migration rationale.
+	logger     logport.Logger
 	busOnce    sync.Once
 }
 
@@ -366,7 +375,8 @@ func (a *clientPersisterAdapter) ensureBus() {
 		if a.commandBus != nil {
 			return
 		}
-		a.commandBus = newLocalOAuthClientBus(a.logger, a.db)
+		// AsSlog: see kiteExchangerAdapter.ensureBus rationale.
+		a.commandBus = newLocalOAuthClientBus(logport.AsSlog(a.logger), a.db)
 	})
 }
 
@@ -494,17 +504,27 @@ func (a *telegramManagerAdapter) TickerServiceConcrete() *ticker.Service {
 // the plaintext — the original event payload is JSON-marshalled as-is
 // for in-process consumers, but the indexable email_hash column gives
 // auditors and the data-portability export a PII-free correlation key.
+// Wave D Phase 3 Package 7c-4b: signature retains *slog.Logger for
+// backward-compat with existing callers (app/wire.go, tests). The
+// internal log path uses kc/logger.Logger via logport.NewSlog so
+// the typed-port + ctx threading benefits propagate without breaking
+// the public surface. Constructor-shim pattern matches the
+// established deprecation approach in cqrs/billing/ops Package 7c.
 func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, logger *slog.Logger) func(domain.Event) {
+	port := logport.NewSlog(logger)
 	return func(e domain.Event) {
+		// Event persister has no request ctx in scope; use
+		// context.Background() per the helper-function convention.
+		ctx := context.Background()
 		aggregateID := deriveAggregateID(e)
 		payload, err := eventsourcing.MarshalPayload(e)
 		if err != nil {
-			logger.Error("Failed to marshal domain event payload", "event_type", e.EventType(), "error", err)
+			port.Error(ctx, "Failed to marshal domain event payload", err, "event_type", e.EventType())
 			return
 		}
 		seq, err := store.NextSequence(aggregateID)
 		if err != nil {
-			logger.Error("Failed to get next sequence", "event_type", e.EventType(), "aggregate", aggregateID, "error", err)
+			port.Error(ctx, "Failed to get next sequence", err, "event_type", e.EventType(), "aggregate", aggregateID)
 			return
 		}
 		if err := store.Append(eventsourcing.StoredEvent{
@@ -516,7 +536,7 @@ func makeEventPersister(store *eventsourcing.EventStore, aggregateType string, l
 			Sequence:      seq,
 			EmailHash:     deriveEmailHash(e),
 		}); err != nil {
-			logger.Error("Failed to persist domain event", "event_type", e.EventType(), "error", err)
+			port.Error(ctx, "Failed to persist domain event", err, "event_type", e.EventType())
 		}
 	}
 }

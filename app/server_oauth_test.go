@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -170,7 +171,7 @@ func TestExchangeRequestToken_Error(t *testing.T) {
 		tokenStore:      tokenStore,
 		credentialStore: credStore,
 		registryStore:   regStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session: fake token rejected"),
 	}
 	_, err := adapter.ExchangeRequestToken("fake-request-token")
@@ -193,7 +194,7 @@ func TestExchangeWithCredentials_Error(t *testing.T) {
 		tokenStore:      tokenStore,
 		credentialStore: credStore,
 		registryStore:   regStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session: fake token rejected"),
 	}
 	_, err := adapter.ExchangeWithCredentials("fake-request-token", "per-user-key", "per-user-secret")
@@ -425,7 +426,7 @@ func TestExchangeRequestToken_EmptyKey(t *testing.T) {
 		apiKey: "", apiSecret: "",
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session: empty key"),
 	}
 	_, err := adapter.ExchangeRequestToken("token")
@@ -441,7 +442,7 @@ func TestExchangeWithCredentials_BadToken(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   registry.New(),
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	_, err := adapter.ExchangeWithCredentials("bad", "pk", "ps")
@@ -605,7 +606,7 @@ func TestExchangeRequestToken_WithUserStore_OffboardedUser(t *testing.T) {
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		userStore:       store,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session: bad token"),
 	}
 	// Kite API call fails first, but the adapter construction is exercised
@@ -622,7 +623,7 @@ func TestExchangeRequestToken_AllFieldsPopulated(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   registry.New(),
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session: bad token"),
 	}
 	_, err := adapter.ExchangeRequestToken("token-with-all-stores")
@@ -653,7 +654,7 @@ func TestExchangeWithCredentials_AllFieldsPopulated(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   regStore,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	// Will fail at Kite API, but exercises the full adapter setup
@@ -670,7 +671,7 @@ func TestExchangeWithCredentials_NilRegistryStore(t *testing.T) {
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore:   nil,
 		userStore:       users.NewStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 		authenticator:   newMockAuthError("kite generate session with per-user credentials: bad token"),
 	}
 	_, err := adapter.ExchangeWithCredentials("token", "key", "sec")
@@ -1490,7 +1491,7 @@ func TestExchangeRequestToken_Success(t *testing.T) {
 		tokenStore:    tokenStore,
 		credentialStore: credStore,
 		registryStore: regStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -1515,7 +1516,7 @@ func TestExchangeRequestToken_Success_FallbackToUserID(t *testing.T) {
 		apiSecret:     "test-secret",
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("", "AB5678", "No Email User", "tok-no-email"),
 	}
 
@@ -1540,7 +1541,7 @@ func TestExchangeWithCredentials_Success(t *testing.T) {
 		tokenStore:    tokenStore,
 		credentialStore: credStore,
 		registryStore: regStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -1584,7 +1585,7 @@ func TestExchangeWithCredentials_Success_WithRegistry(t *testing.T) {
 		tokenStore:    tokenStore,
 		credentialStore: credStore,
 		registryStore: regStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -1619,7 +1620,7 @@ func TestExchangeRequestToken_Success_RegistryUpdate(t *testing.T) {
 		tokenStore:    kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
 		registryStore: regStore,
-		logger:        testLogger(),
+		logger:        logport.NewSlog(testLogger()),
 		authenticator: newMockAuth("test@example.com", "XY1234", "Test User", "mock-access-token"),
 	}
 
@@ -1682,7 +1683,7 @@ func TestSetupMux_AdminAuth_DoubleSlashPrefix_Push100Extra(t *testing.T) {
 	exchanger := &kiteExchangerAdapter{
 		tokenStore:      kc.NewKiteTokenStore(),
 		credentialStore: kc.NewKiteCredentialStore(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	handler := oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(handler.Close)

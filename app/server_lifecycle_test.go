@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -1426,7 +1427,7 @@ func TestRunServer_OAuthWiring_TokenChecker(t *testing.T) {
 		credentialStore: kcManager.CredentialStoreConcrete(),
 		registryStore:   kcManager.RegistryStoreConcrete(),
 		userStore:       kcManager.UserStoreConcrete(),
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	app.oauthHandler = oauth.NewHandler(oauthCfg, signer, exchanger)
 	t.Cleanup(app.oauthHandler.Close)

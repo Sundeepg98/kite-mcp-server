@@ -535,11 +535,11 @@ func (app *App) LoadConfig() error {
 
 	if app.Config.KiteAPIKey == "" || app.Config.KiteAPISecret == "" {
 		if app.DevMode {
-			app.logger.Info("DEV_MODE: Kite credentials not required — mock broker will be used")
+			app.Logger().Info(context.Background(), "DEV_MODE: Kite credentials not required — mock broker will be used")
 		} else if app.Config.OAuthJWTSecret == "" {
 			return fmt.Errorf("KITE_API_KEY and KITE_API_SECRET are required (or enable OAuth with OAUTH_JWT_SECRET for per-user credentials)")
 		} else {
-			app.logger.Info("No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
+			app.Logger().Info(context.Background(), "No global Kite credentials — per-user credentials required via MCP client config (oauth_client_id/oauth_client_secret)")
 		}
 	}
 
@@ -554,7 +554,7 @@ func (app *App) LoadConfig() error {
 // RunServer initializes and starts the server based on the configured mode
 func (app *App) RunServer() error {
 	if app.DevMode {
-		app.logger.Warn("DEV MODE ENABLED — billing disabled, all tools free, pprof endpoints active")
+		app.Logger().Warn(context.Background(), "DEV MODE ENABLED — billing disabled, all tools free, pprof endpoints active")
 	}
 
 	url := app.buildServerURL()
@@ -611,7 +611,7 @@ func (app *App) RunServer() error {
 			credentialStore: kcManager.CredentialStoreConcrete(),
 			registryStore:   kcManager.RegistryStoreConcrete(),
 			userStore:       kcManager.UserStoreConcrete(),
-			logger:          app.logger,
+			logger:          app.Logger(),
 			authenticator:   zerodha.NewAuth(),
 			commandBus:      kcManager.CommandBus(), // CQRS: every write dispatches via bus
 		}
@@ -624,7 +624,7 @@ func (app *App) RunServer() error {
 		// = no rotation in progress.
 		if app.Config.OAuthJWTSecretPrevious != "" {
 			app.oauthHandler.JWTManager().SetPreviousSecret(app.Config.OAuthJWTSecretPrevious)
-			app.logger.Info("OAUTH_JWT_SECRET_PREVIOUS installed — graceful rotation active")
+			app.Logger().Info(context.Background(), "OAUTH_JWT_SECRET_PREVIOUS installed — graceful rotation active")
 		}
 
 		// Wire Kite token expiry check into OAuth middleware.
@@ -670,19 +670,19 @@ func (app *App) RunServer() error {
 			app.oauthHandler.SetClientPersister(&clientPersisterAdapter{
 				db:         alertDB,
 				commandBus: kcManager.CommandBus(), // CQRS: writes dispatch via bus
-				logger:     app.logger,
+				logger:     app.Logger(),
 			}, app.logger)
 			if err := app.oauthHandler.LoadClientsFromDB(); err != nil {
-				app.logger.Error("Failed to load OAuth clients from DB", "error", err)
+				app.Logger().Error(context.Background(), "Failed to load OAuth clients from DB", err)
 			} else {
-				app.logger.Info("OAuth clients loaded from database")
+				app.Logger().Info(context.Background(), "OAuth clients loaded from database")
 			}
 		}
 
 		// Wire key registry for zero-config onboarding
 		if regStore := kcManager.RegistryStoreConcrete(); regStore != nil {
 			app.oauthHandler.SetRegistry(&registryAdapter{store: regStore})
-			app.logger.Info("Key registry wired into OAuth handler", "entries", regStore.Count())
+			app.Logger().Info(context.Background(), "Key registry wired into OAuth handler", "entries", regStore.Count())
 		}
 
 		// DPDP Act 2023 consent log: persist a grant event on every successful
@@ -726,10 +726,10 @@ func (app *App) RunServer() error {
 				}
 				logger.Debug("DPDP consent grant recorded", "email_hash", entry.UserEmailHash, "notice_version", noticeVersion)
 			})
-			app.logger.Info("DPDP consent recorder wired into OAuth handler")
+			app.Logger().Info(context.Background(), "DPDP consent recorder wired into OAuth handler")
 		}
 
-		app.logger.Info("OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
+		app.Logger().Info(context.Background(), "OAuth 2.1 enabled (Kite identity provider)", "external_url", app.Config.ExternalURL)
 	}
 
 	srv := app.createHTTPServer(url)
@@ -770,6 +770,6 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // configureHTTPClient logs that the package-level HTTP client is ready.
 func (app *App) configureHTTPClient() {
-	app.logger.Debug("HTTP client timeout set to 30 seconds")
+	app.Logger().Debug(context.Background(), "HTTP client timeout set to 30 seconds")
 }
 

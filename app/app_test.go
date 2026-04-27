@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -512,7 +513,7 @@ func TestProvisionUser_NilUserStore(t *testing.T) {
 	// deployment behaviour exactly.
 	adapter := &kiteExchangerAdapter{
 		userStore: nil,
-		logger:    testLogger(),
+		logger:    logport.NewSlog(testLogger()),
 	}
 	err := adapter.provisionUser("test@example.com", "UID123", "Test User")
 	assert.NoError(t, err)
@@ -523,7 +524,7 @@ func TestProvisionUser_SuspendedUser(t *testing.T) {
 	store.EnsureUser("suspended@example.com", "", "", "self")
 	_ = store.UpdateStatus("suspended@example.com", users.StatusSuspended)
 
-	adapter := &kiteExchangerAdapter{userStore: store, logger: testLogger()}
+	adapter := &kiteExchangerAdapter{userStore: store, logger: logport.NewSlog(testLogger())}
 	err := adapter.provisionUser("suspended@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "suspended")
@@ -545,7 +546,7 @@ func TestProvisionUser_OffboardedUser(t *testing.T) {
 	store.EnsureUser("offboarded@example.com", "", "", "self")
 	_ = store.UpdateStatus("offboarded@example.com", users.StatusOffboarded)
 
-	adapter := &kiteExchangerAdapter{userStore: store, logger: testLogger()}
+	adapter := &kiteExchangerAdapter{userStore: store, logger: logport.NewSlog(testLogger())}
 	err := adapter.provisionUser("offboarded@example.com", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "offboarded")
@@ -560,7 +561,7 @@ func TestProvisionUser_OffboardedUser(t *testing.T) {
 
 func TestProvisionUser_NewUser(t *testing.T) {
 	store := users.NewStore()
-	adapter := &kiteExchangerAdapter{userStore: store, logger: testLogger()}
+	adapter := &kiteExchangerAdapter{userStore: store, logger: logport.NewSlog(testLogger())}
 	err := adapter.provisionUser("new@example.com", "UID789", "New User")
 	assert.NoError(t, err)
 
@@ -584,7 +585,7 @@ func TestGetCredentials_FromCredentialStore(t *testing.T) {
 		apiKey:          "global-key",
 		apiSecret:       "global-secret",
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	key, secret, ok := adapter.GetCredentials("user@example.com")
 	assert.True(t, ok)
@@ -598,7 +599,7 @@ func TestGetCredentials_FallbackToGlobal(t *testing.T) {
 		apiKey:          "global-key",
 		apiSecret:       "global-secret",
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	key, secret, ok := adapter.GetCredentials("unknown@example.com")
 	assert.True(t, ok)
@@ -612,7 +613,7 @@ func TestGetCredentials_NoCredentials(t *testing.T) {
 		apiKey:          "",
 		apiSecret:       "",
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	_, _, ok := adapter.GetCredentials("unknown@example.com")
 	assert.False(t, ok)
@@ -630,7 +631,7 @@ func TestGetSecretByAPIKey_Found(t *testing.T) {
 	})
 	adapter := &kiteExchangerAdapter{
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	secret, ok := adapter.GetSecretByAPIKey("mykey")
 	assert.True(t, ok)
@@ -641,7 +642,7 @@ func TestGetSecretByAPIKey_NotFound(t *testing.T) {
 	credStore := kc.NewKiteCredentialStore()
 	adapter := &kiteExchangerAdapter{
 		credentialStore: credStore,
-		logger:          testLogger(),
+		logger:          logport.NewSlog(testLogger()),
 	}
 	_, ok := adapter.GetSecretByAPIKey("nonexistent")
 	assert.False(t, ok)
