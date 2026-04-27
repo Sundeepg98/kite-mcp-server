@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
@@ -269,11 +270,16 @@ func buildPreTradeResponse(
 			if strings.EqualFold(p.Tradingsymbol, tradingsymbol) &&
 				strings.EqualFold(p.Exchange, exchange) &&
 				p.Quantity != 0 {
+				// Slice 6: lift the matched broker.Position to
+				// domain.Position so the PnL JSON-emit goes through
+				// the currency-aware Money accessor; .Float64() at
+				// the wire boundary preserves byte-identical output.
+				pos := domain.NewPositionFromBroker(p)
 				resp.ExistingPos = &preTradeExistingPos{
 					Quantity:     p.Quantity,
 					Product:      p.Product,
 					AveragePrice: roundTo2(p.AveragePrice),
-					PnL:          roundTo2(p.PnL),
+					PnL:          roundTo2(pos.PnL().Float64()),
 				}
 				break
 			}

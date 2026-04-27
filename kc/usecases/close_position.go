@@ -182,12 +182,18 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 		"quantity", qty,
 	)
 
+	// Slice 6: lift the matched broker.Position to domain.Position
+	// so the closed position's PnL JSON-emit goes through the
+	// currency-aware Money accessor; .Float64() at the wire
+	// boundary preserves byte-identical output for Telegram
+	// confirmations and dashboard consumers.
+	matchedPos := domain.NewPositionFromBroker(*matched)
 	return &ClosePositionResult{
 		OrderID:     resp.OrderID,
 		Instrument:  fmt.Sprintf("%s:%s", matched.Exchange, matched.Tradingsymbol),
 		Quantity:    qty,
 		Direction:   txnType,
 		Product:     matched.Product,
-		PositionPnL: matched.PnL,
+		PositionPnL: matchedPos.PnL().Float64(),
 	}, nil
 }

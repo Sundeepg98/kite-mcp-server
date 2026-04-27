@@ -198,8 +198,13 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.A
 					Quantity:     p.Quantity,
 					AveragePrice: roundTo2(p.AveragePrice),
 					LTP:          roundTo2(p.LastPrice),
-					PnL:          roundTo2(p.PnL),
-					PnLPct:       roundTo2(pnlPct),
+					// Slice 6: route the per-position PnL JSON-emit
+					// through the domain.Position accessor so the
+					// figure is type-tagged INR (currency-aware) at
+					// the boundary; .Float64() drops back to the
+					// wire-compatible float64.
+					PnL:    roundTo2(pos.PnL().Float64()),
+					PnLPct: roundTo2(pnlPct),
 				})
 			}
 		}

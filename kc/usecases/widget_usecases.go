@@ -176,9 +176,17 @@ func (uc *GetPortfolioForWidgetUseCase) Execute(ctx context.Context, query cqrs.
 	pItems := make([]WidgetPositionItem, 0, len(positions.Net))
 	var posPnL float64
 	for _, p := range positions.Net {
+		// Slice 6: lift the broker.Position to domain.Position so
+		// the per-position PnL JSON-emit on WidgetPositionItem is
+		// currency-aware at the boundary; .Float64() drops back
+		// to the wire-compatible float. The aggregation accumulator
+		// (posPnL) deliberately stays bare-float — Slice 3's "sum
+		// primitive then wrap once" pattern keeps inner-loop math
+		// allocation-free.
+		pos := domain.NewPositionFromBroker(p)
 		pItems = append(pItems, WidgetPositionItem{
 			Symbol: p.Tradingsymbol, Exchange: p.Exchange, Quantity: p.Quantity,
-			AvgPrice: p.AveragePrice, LastPrice: p.LastPrice, PnL: p.PnL,
+			AvgPrice: p.AveragePrice, LastPrice: p.LastPrice, PnL: pos.PnL().Float64(),
 			Product: p.Product,
 		})
 		posPnL += p.PnL
