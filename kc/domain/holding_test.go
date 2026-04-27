@@ -1,4 +1,4 @@
-package domain
+﻿package domain
 
 // holding_test.go — unit tests for the rich Holding domain entity
 // (Slice 6b of the Money VO sweep). Mirrors position_test.go in
@@ -18,7 +18,7 @@ import (
 func TestHolding_PnL(t *testing.T) {
 	t.Parallel()
 
-	h := NewHoldingFromBroker(broker.Holding{PnL: 1234.5})
+	h := NewHoldingFromBroker(broker.Holding{PnL: NewINR(1234.5)})
 	got := h.PnL()
 	assert.InDelta(t, 1234.5, got.Amount, 0.001,
 		"TestHolding_PnL: want=%v got=%v", 1234.5, got.Amount, 0.001)
@@ -34,7 +34,7 @@ func TestHolding_PnL(t *testing.T) {
 func TestHolding_PnL_NegativeIsLoss(t *testing.T) {
 	t.Parallel()
 
-	h := NewHoldingFromBroker(broker.Holding{PnL: -250.5})
+	h := NewHoldingFromBroker(broker.Holding{PnL: NewINR(-250.5)})
 	got := h.PnL()
 	assert.Equal(t, -250.5, got.Float64())
 	assert.True(t, got.IsNegative())
@@ -50,7 +50,7 @@ func TestHolding_PnL_NegativeIsLoss(t *testing.T) {
 func TestHolding_PnL_ZeroIsSentinel(t *testing.T) {
 	t.Parallel()
 
-	h := NewHoldingFromBroker(broker.Holding{PnL: 0})
+	h := NewHoldingFromBroker(broker.Holding{PnL: NewINR(0)})
 	got := h.PnL()
 	assert.True(t, got.IsZero(),
 		"zero PnL surfaces as zero Money (sentinel)")
@@ -68,7 +68,7 @@ func TestHolding_PnL_ZeroIsSentinel(t *testing.T) {
 func TestHolding_PnL_RejectsCrossCurrencyAdd(t *testing.T) {
 	t.Parallel()
 
-	h := NewHoldingFromBroker(broker.Holding{PnL: 1000})
+	h := NewHoldingFromBroker(broker.Holding{PnL: NewINR(1000)})
 	pnl := h.PnL()
 
 	usd := Money{Amount: 12, Currency: "USD"}
@@ -96,7 +96,7 @@ func TestHolding_DTO(t *testing.T) {
 		Quantity:      10,
 		AveragePrice:  2500.0,
 		LastPrice:     2600.0,
-		PnL:           1000.0,
+		PnL: NewINR(1000.0),
 		DayChangePct:  2.5,
 		Product:       "CNC",
 	}
@@ -210,7 +210,7 @@ func TestToDomainHolding(t *testing.T) {
 		Quantity:      5,
 		AveragePrice:  1500,
 		LastPrice:     1520,
-		PnL:           100,
+		PnL: NewINR(100),
 	}
 	d := ToDomainHolding(bh)
 	assert.True(t, d.IsHeld())

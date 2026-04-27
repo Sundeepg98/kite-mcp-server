@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 import (
 	"context"
@@ -435,7 +435,7 @@ func TestClosePosition_Success(t *testing.T) {
 					Tradingsymbol: "RELIANCE",
 					Quantity:      10,
 					Product:       "MIS",
-					PnL:           250.0,
+					PnL: domain.NewINR(250.0),
 				},
 			},
 		},
@@ -472,7 +472,7 @@ func TestClosePosition_ShortPosition(t *testing.T) {
 					Tradingsymbol: "INFY",
 					Quantity:      -5, // Short position
 					Product:       "MIS",
-					PnL:           -100.0,
+					PnL: domain.NewINR(-100.0),
 				},
 			},
 		},

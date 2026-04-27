@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func TestGetPortfolio_Success(t *testing.T) {
 		},
 		positions: broker.Positions{
 			Day: []broker.Position{
-				{Tradingsymbol: "HDFCBANK", Quantity: 5, PnL: 150},
+				{Tradingsymbol: "HDFCBANK", Quantity: 5, PnL: domain.NewINR(150)},
 			},
 		},
 	}

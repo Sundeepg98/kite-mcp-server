@@ -1,4 +1,4 @@
-package mock
+﻿package mock
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 func TestNew(t *testing.T) {
@@ -82,7 +83,7 @@ func TestSetAndGetHoldings(t *testing.T) {
 			Quantity:      10,
 			AveragePrice:  2400,
 			LastPrice:     2500,
-			PnL:           1000,
+			PnL: money.NewINR(1000),
 		},
 		{
 			Tradingsymbol: "INFY",
@@ -90,7 +91,7 @@ func TestSetAndGetHoldings(t *testing.T) {
 			Quantity:      20,
 			AveragePrice:  1500,
 			LastPrice:     1600,
-			PnL:           2000,
+			PnL: money.NewINR(2000),
 		},
 	}
 	c.SetHoldings(want)

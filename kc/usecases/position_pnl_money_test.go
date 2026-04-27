@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func TestSlice6_PositionPnLAccessor_PositiveINR(t *testing.T) {
 		Quantity:      10,
 		AveragePrice:  2500.0,
 		LastPrice:     2600.0,
-		PnL:           1000.0,
+		PnL: domain.NewINR(1000.0),
 	}
 	pos := domain.NewPositionFromBroker(dto)
 
@@ -78,7 +78,7 @@ func TestSlice6_PositionPnLAccessor_NegativeINR(t *testing.T) {
 		Quantity:      -5,
 		AveragePrice:  1500.0,
 		LastPrice:     1520.0, // adverse for short
-		PnL:           -100.0,
+		PnL: domain.NewINR(-100.0),
 	}
 	pos := domain.NewPositionFromBroker(dto)
 
@@ -105,7 +105,7 @@ func TestSlice6_PositionPnLAccessor_ZeroIsSentinel(t *testing.T) {
 		Exchange:      "NSE",
 		Product:       "CNC",
 		Quantity:      0, // flat
-		PnL:           0,
+		PnL: domain.NewINR(0),
 	}
 	pos := domain.NewPositionFromBroker(dto)
 
@@ -127,7 +127,7 @@ func TestSlice6_PositionPnLAccessor_ZeroIsSentinel(t *testing.T) {
 // trips the type guard.
 func TestSlice6_PositionPnLAccessor_RejectsCrossCurrencyAdd(t *testing.T) {
 	t.Parallel()
-	pos := domain.NewPositionFromBroker(broker.Position{PnL: 1000})
+	pos := domain.NewPositionFromBroker(broker.Position{PnL: domain.NewINR(1000)})
 	pnl := pos.PnL()
 
 	usd := domain.Money{Amount: 12, Currency: "USD"}
@@ -160,7 +160,7 @@ func TestSlice6_ClosePositionResult_PreservesWireValue(t *testing.T) {
 			"positive PnL on long position",
 			broker.Position{
 				Exchange: "NSE", Tradingsymbol: "RELIANCE",
-				Quantity: 10, Product: "MIS", PnL: 250.0,
+				Quantity: 10, Product: "MIS", PnL: domain.NewINR(250.0),
 			},
 			250.0,
 		},
@@ -168,7 +168,7 @@ func TestSlice6_ClosePositionResult_PreservesWireValue(t *testing.T) {
 			"negative PnL on short position",
 			broker.Position{
 				Exchange: "NSE", Tradingsymbol: "INFY",
-				Quantity: -5, Product: "MIS", PnL: -100.0,
+				Quantity: -5, Product: "MIS", PnL: domain.NewINR(-100.0),
 			},
 			-100.0,
 		},
@@ -176,7 +176,7 @@ func TestSlice6_ClosePositionResult_PreservesWireValue(t *testing.T) {
 			"fractional PnL (rupees+paise)",
 			broker.Position{
 				Exchange: "NSE", Tradingsymbol: "TCS",
-				Quantity: 3, Product: "CNC", PnL: 1234.56,
+				Quantity: 3, Product: "CNC", PnL: domain.NewINR(1234.56),
 			},
 			1234.56,
 		},
@@ -184,7 +184,7 @@ func TestSlice6_ClosePositionResult_PreservesWireValue(t *testing.T) {
 			"zero PnL (flat position carried for residual reporting)",
 			broker.Position{
 				Exchange: "NSE", Tradingsymbol: "HDFC",
-				Quantity: 1, Product: "CNC", PnL: 0,
+				Quantity: 1, Product: "CNC", PnL: domain.NewINR(0),
 			},
 			0,
 		},
@@ -221,10 +221,10 @@ func TestSlice6_WidgetPositionItem_PreservesWireValue(t *testing.T) {
 			Net: []broker.Position{
 				{Tradingsymbol: "RELIANCE", Exchange: "NSE",
 					Quantity: 2, AveragePrice: 2500, LastPrice: 2600,
-					PnL: 200.0, Product: "CNC"},
+					PnL: domain.NewINR(200.0), Product: "CNC"},
 				{Tradingsymbol: "INFY", Exchange: "NSE",
 					Quantity: -5, AveragePrice: 1500, LastPrice: 1520,
-					PnL: -100.0, Product: "MIS"},
+					PnL: domain.NewINR(-100.0), Product: "MIS"},
 			},
 		},
 	}

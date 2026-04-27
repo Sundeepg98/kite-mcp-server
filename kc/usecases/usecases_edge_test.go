@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 import (
 	"context"
@@ -1501,7 +1501,7 @@ func TestClosePosition_UC_Success(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{Net: []broker.Position{
-			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "CNC", PnL: 100},
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "CNC", PnL: domain.NewINR(100)},
 		}},
 	}
 	resolver := &mockBrokerResolver{client: client}
@@ -1556,7 +1556,7 @@ func TestClosePosition_ExecuteCommand_Adapter(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
 		positions: broker.Positions{Net: []broker.Position{
-			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "CNC", PnL: 100},
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, Product: "CNC", PnL: domain.NewINR(100)},
 		}},
 	}
 	resolver := &mockBrokerResolver{client: client}

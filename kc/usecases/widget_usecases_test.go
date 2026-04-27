@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // --- Mock implementations for widget tests ---
@@ -96,7 +97,7 @@ func TestGetPortfolioForWidget_PositionsError(t *testing.T) {
 	t.Parallel()
 	resolver := &mockBrokerResolver{client: &positionsErrClient{
 		mockBrokerClient: mockBrokerClient{
-			holdings: []broker.Holding{{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000}},
+			holdings: []broker.Holding{{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(1000)}},
 		},
 	}}
 	uc := NewGetPortfolioForWidgetUseCase(resolver, testLogger())
@@ -109,12 +110,12 @@ func TestGetPortfolioForWidget_Success(t *testing.T) {
 	t.Parallel()
 	client := &mockBrokerClient{
 		holdings: []broker.Holding{
-			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000, DayChangePct: 2.5},
-			{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 5, AveragePrice: 3000, LastPrice: 3200, PnL: 1000, DayChangePct: 1.0},
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(1000), DayChangePct: 2.5},
+			{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 5, AveragePrice: 3000, LastPrice: 3200, PnL: money.NewINR(1000), DayChangePct: 1.0},
 		},
 		positions: broker.Positions{
 			Net: []broker.Position{
-				{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 2, AveragePrice: 2500, LastPrice: 2600, PnL: 200, Product: "CNC"},
+				{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 2, AveragePrice: 2500, LastPrice: 2600, PnL: money.NewINR(200), Product: "CNC"},
 			},
 		},
 	}

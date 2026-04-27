@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -28,7 +29,7 @@ func (f *fakeBrokerForExit) GetPositions() (broker.Positions, error) {
 			Quantity:      10, // long position -> close = SELL
 			AveragePrice:  500,
 			LastPrice:     510,
-			PnL:           100,
+			PnL:           money.NewINR(100),
 		}},
 	}, nil
 }

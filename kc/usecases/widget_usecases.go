@@ -179,7 +179,10 @@ func (uc *GetPortfolioForWidgetUseCase) Execute(ctx context.Context, query cqrs.
 		})
 		totalInvested += h.AveragePrice * float64(h.Quantity)
 		totalCurrent += h.LastPrice * float64(h.Quantity)
-		totalPnL += h.PnL
+		// Slice 6e c2: h.PnL is now Money; drop to float64 at the
+		// aggregation boundary (Slice 3 "sum primitive then wrap once"
+		// pattern preserves inner-loop allocation-free math).
+		totalPnL += h.PnL.Float64()
 	}
 
 	pItems := make([]WidgetPositionItem, 0, len(positions.Net))
@@ -198,7 +201,9 @@ func (uc *GetPortfolioForWidgetUseCase) Execute(ctx context.Context, query cqrs.
 			AvgPrice: p.AveragePrice, LastPrice: p.LastPrice, PnL: pos.PnL().Float64(),
 			Product: p.Product,
 		})
-		posPnL += p.PnL
+		// Slice 6e c2: p.PnL is now Money; drop to float64 at the
+		// aggregation boundary.
+		posPnL += p.PnL.Float64()
 	}
 
 	return &WidgetPortfolioResult{

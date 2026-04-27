@@ -1,10 +1,11 @@
-package mcp
+﻿package mcp
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 func TestComputeTaxHarvest(t *testing.T) {
@@ -25,7 +26,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      10,
 				AveragePrice:  2000,
 				LastPrice:     2500,
-				PnL:           5000,
+				PnL: money.NewINR(5000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 0)
@@ -54,7 +55,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      100,
 				AveragePrice:  500,
 				LastPrice:     300,
-				PnL:           -20000,
+				PnL: money.NewINR(-20000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 0)
@@ -77,7 +78,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      50,
 				AveragePrice:  1000,
 				LastPrice:     1800,
-				PnL:           40000,
+				PnL: money.NewINR(40000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 400) // assume 400 days (> 365 = LTCG)
@@ -100,7 +101,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      100,
 				AveragePrice:  3000,
 				LastPrice:     5000,
-				PnL:           200000,
+				PnL: money.NewINR(200000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 500) // assume 500 days (LTCG)
@@ -118,7 +119,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      20,
 				AveragePrice:  1500,
 				LastPrice:     1700,
-				PnL:           4000,
+				PnL: money.NewINR(4000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 400) // assume 400 days
@@ -138,7 +139,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      30,
 				AveragePrice:  600,
 				LastPrice:     550,
-				PnL:           -1500,
+				PnL: money.NewINR(-1500),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 345) // 20 days from LTCG threshold
@@ -158,7 +159,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      100,
 				AveragePrice:  1000,
 				LastPrice:     500,
-				PnL:           -50000,
+				PnL: money.NewINR(-50000),
 			},
 			{
 				Tradingsymbol: "LOSER_SMALL",
@@ -166,7 +167,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      10,
 				AveragePrice:  200,
 				LastPrice:     150,
-				PnL:           -500,
+				PnL: money.NewINR(-500),
 			},
 			{
 				Tradingsymbol: "GAINER",
@@ -174,7 +175,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      50,
 				AveragePrice:  100,
 				LastPrice:     200,
-				PnL:           5000,
+				PnL: money.NewINR(5000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 0)
@@ -196,7 +197,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      10,
 				AveragePrice:  100,
 				LastPrice:     200,
-				PnL:           1000,
+				PnL: money.NewINR(1000),
 			},
 			{
 				Tradingsymbol: "LOSER",
@@ -204,7 +205,7 @@ func TestComputeTaxHarvest(t *testing.T) {
 				Quantity:      10,
 				AveragePrice:  200,
 				LastPrice:     100,
-				PnL:           -1000,
+				PnL: money.NewINR(-1000),
 			},
 		}
 		resp := computeTaxHarvest(holdings, 0)

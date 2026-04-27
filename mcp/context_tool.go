@@ -179,7 +179,9 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.A
 			pos := domain.NewPositionFromBroker(p)
 			if pos.IsOpen() {
 				openCount++
-				totalPnL += p.PnL
+				// Slice 6e c2: p.PnL is now Money; drop to float64 at
+				// the aggregation seam.
+				totalPnL += p.PnL.Float64()
 
 				if pos.IsIntraday() {
 					misCount++
@@ -189,7 +191,7 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.A
 
 				pnlPct := 0.0
 				if p.AveragePrice > 0 && p.Quantity != 0 {
-					pnlPct = (p.PnL / (p.AveragePrice * math.Abs(float64(p.Quantity)))) * 100
+					pnlPct = (p.PnL.Float64() / (p.AveragePrice * math.Abs(float64(p.Quantity)))) * 100
 				}
 				details = append(details, positionDetail{
 					Symbol:       p.Tradingsymbol,
@@ -269,7 +271,9 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.A
 
 		var dayPnL float64
 		for _, h := range data.Holdings {
-			dayPnL += h.PnL
+			// Slice 6e c2: h.PnL is now Money; drop to float64 at the
+			// aggregation seam.
+			dayPnL += h.PnL.Float64()
 		}
 		tc.HoldingsDayPnL = roundTo2(dayPnL)
 	}

@@ -6,6 +6,7 @@ import (
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // --- Profile ---
@@ -57,9 +58,11 @@ func convertHoldings(holdings kiteconnect.Holdings) []broker.Holding {
 			Quantity:      h.Quantity,
 			AveragePrice:  h.AveragePrice,
 			LastPrice:     h.LastPrice,
-			PnL:           h.PnL,
-			DayChangePct:  h.DayChangePercentage,
-			Product:       h.Product,
+			// Slice 6e c2: gokiteconnect emits INR-priced floats; wrap
+			// at the adapter boundary so the broker DTO carries Money.
+			PnL:          money.NewINR(h.PnL),
+			DayChangePct: h.DayChangePercentage,
+			Product:      h.Product,
 		}
 	}
 	return out
@@ -84,7 +87,8 @@ func convertPositionSlice(positions []kiteconnect.Position) []broker.Position {
 			Quantity:      p.Quantity,
 			AveragePrice:  p.AveragePrice,
 			LastPrice:     p.LastPrice,
-			PnL:           p.PnL,
+			// Slice 6e c2: same Money wrap pattern as convertHoldings.
+			PnL: money.NewINR(p.PnL),
 		}
 	}
 	return out

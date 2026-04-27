@@ -1,4 +1,4 @@
-package mcp
+﻿package mcp
 
 import (
 	"math"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/mock"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ func TestMockBroker_GetHoldings(t *testing.T) {
 				Quantity:      10,
 				AveragePrice:  2400,
 				LastPrice:     2500,
-				PnL:           1000,
+				PnL: money.NewINR(1000),
 			},
 			{
 				Tradingsymbol: "INFY",
@@ -36,7 +37,7 @@ func TestMockBroker_GetHoldings(t *testing.T) {
 				Quantity:      50,
 				AveragePrice:  1500,
 				LastPrice:     1800,
-				PnL:           15000,
+				PnL: money.NewINR(15000),
 			},
 		}
 		client.SetHoldings(holdings)
@@ -81,7 +82,7 @@ func TestMockBroker_GetPositions(t *testing.T) {
 					Quantity:      10,
 					AveragePrice:  2400,
 					LastPrice:     2450,
-					PnL:           500,
+					PnL: money.NewINR(500),
 				},
 			},
 			Net: []broker.Position{
@@ -92,7 +93,7 @@ func TestMockBroker_GetPositions(t *testing.T) {
 					Quantity:      -20,
 					AveragePrice:  1500,
 					LastPrice:     1480,
-					PnL:           400,
+					PnL: money.NewINR(400),
 				},
 			},
 		}

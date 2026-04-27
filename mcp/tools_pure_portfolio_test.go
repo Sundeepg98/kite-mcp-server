@@ -1,10 +1,11 @@
-package mcp
+﻿package mcp
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -110,9 +111,9 @@ func TestComputePositionAnalysis_Empty(t *testing.T) {
 
 func TestComputePositionAnalysis_WithPositions(t *testing.T) {
 	positions := []broker.Position{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Product: "MIS", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000},
-		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Product: "CNC", Quantity: -5, AveragePrice: 2500, LastPrice: 2400, PnL: -500},
-		{Tradingsymbol: "TCS", Exchange: "NSE", Product: "MIS", Quantity: 20, AveragePrice: 3500, LastPrice: 3600, PnL: 2000},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Product: "MIS", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(1000)},
+		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Product: "CNC", Quantity: -5, AveragePrice: 2500, LastPrice: 2400, PnL: money.NewINR(-500)},
+		{Tradingsymbol: "TCS", Exchange: "NSE", Product: "MIS", Quantity: 20, AveragePrice: 3500, LastPrice: 3600, PnL: money.NewINR(2000)},
 	}
 	result := computePositionAnalysis(positions)
 	assert.Equal(t, 3, result.NetPositionsCount)
@@ -125,9 +126,9 @@ func TestComputePositionAnalysis_WithPositions(t *testing.T) {
 
 func TestComputePositionAnalysis_ProductGrouping(t *testing.T) {
 	positions := []broker.Position{
-		{Tradingsymbol: "INFY", Product: "MIS", PnL: 100},
-		{Tradingsymbol: "TCS", Product: "MIS", PnL: 200},
-		{Tradingsymbol: "RELIANCE", Product: "CNC", PnL: -50},
+		{Tradingsymbol: "INFY", Product: "MIS", PnL: money.NewINR(100)},
+		{Tradingsymbol: "TCS", Product: "MIS", PnL: money.NewINR(200)},
+		{Tradingsymbol: "RELIANCE", Product: "CNC", PnL: money.NewINR(-50)},
 	}
 	result := computePositionAnalysis(positions)
 	assert.Equal(t, 2, len(result.ByProduct))
@@ -157,8 +158,8 @@ func TestStockSectors_KnownStocks(t *testing.T) {
 func TestComputePortfolioConcentration_WithHoldings(t *testing.T) {
 	t.Parallel()
 	holdings := []broker.Holding{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1500, PnL: 10000},
-		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2500, PnL: 5000},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1500, PnL: money.NewINR(10000)},
+		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2500, PnL: money.NewINR(5000)},
 	}
 	result := computePortfolioConcentration(holdings)
 	assert.NotNil(t, result)

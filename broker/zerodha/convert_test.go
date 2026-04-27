@@ -94,8 +94,8 @@ func TestConvertHoldings(t *testing.T) {
 	if h.LastPrice != 1600.75 {
 		t.Errorf("LastPrice = %f, want 1600.75", h.LastPrice)
 	}
-	if h.PnL != 1002.50 {
-		t.Errorf("PnL = %f, want 1002.50", h.PnL)
+	if h.PnL.Float64() != 1002.50 {
+		t.Errorf("PnL = %f, want 1002.50", h.PnL.Float64())
 	}
 	if h.DayChangePct != 1.25 {
 		t.Errorf("DayChangePct = %f, want 1.25", h.DayChangePct)

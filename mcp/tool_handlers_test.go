@@ -1,4 +1,4 @@
-package mcp
+﻿package mcp
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -909,9 +910,9 @@ func TestBuildTradingContext_WithFullData(t *testing.T) {
 		},
 		"positions": broker.Positions{
 			Net: []broker.Position{
-				{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 5, AveragePrice: 1500, LastPrice: 1600, PnL: 500, Product: "MIS"},
-				{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: -3, AveragePrice: 2500, LastPrice: 2400, PnL: 300, Product: "NRML"},
-				{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 0, AveragePrice: 3000, LastPrice: 3100, PnL: 0, Product: "CNC"},
+				{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 5, AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(500), Product: "MIS"},
+				{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: -3, AveragePrice: 2500, LastPrice: 2400, PnL: money.NewINR(300), Product: "NRML"},
+				{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 0, AveragePrice: 3000, LastPrice: 3100, PnL: money.NewINR(0), Product: "CNC"},
 			},
 		},
 		"orders": []broker.Order{
@@ -925,8 +926,8 @@ func TestBuildTradingContext_WithFullData(t *testing.T) {
 			{OrderID: "O8", Status: "AMO REQ RECEIVED", Tradingsymbol: "ITC"},
 		},
 		"holdings": []broker.Holding{
-			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: 1000},
-			{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 5, AveragePrice: 2500, LastPrice: 2600, PnL: 500},
+			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(1000)},
+			{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 5, AveragePrice: 2500, LastPrice: 2600, PnL: money.NewINR(500)},
 		},
 	}
 

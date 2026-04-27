@@ -1,10 +1,11 @@
-package mcp
+﻿package mcp
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -142,10 +143,10 @@ func TestComputeDividendCalendar_EmptyHoldings(t *testing.T) {
 func TestComputeDividendCalendar_WithHoldings_P7(t *testing.T) {
 	t.Parallel()
 	holdings := []broker.Holding{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1500, PnL: 10000},
-		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2500, PnL: 5000},
-		{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 20, AveragePrice: 3400, LastPrice: 3500, PnL: 2000},
-		{Tradingsymbol: "HDFCBANK", Exchange: "NSE", Quantity: 30, AveragePrice: 1600, LastPrice: 1700, PnL: 3000},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1500, PnL: money.NewINR(10000)},
+		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2500, PnL: money.NewINR(5000)},
+		{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 20, AveragePrice: 3400, LastPrice: 3500, PnL: money.NewINR(2000)},
+		{Tradingsymbol: "HDFCBANK", Exchange: "NSE", Quantity: 30, AveragePrice: 1600, LastPrice: 1700, PnL: money.NewINR(3000)},
 	}
 	result := computeDividendCalendar(holdings, 90)
 	assert.NotNil(t, result)
@@ -157,7 +158,7 @@ func TestComputeDividendCalendar_WithHoldings_P7(t *testing.T) {
 func TestComputeDividendCalendar_SingleHolding(t *testing.T) {
 	t.Parallel()
 	holdings := []broker.Holding{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1000, LastPrice: 0, PnL: 0},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10, AveragePrice: 1000, LastPrice: 0, PnL: money.NewINR(0)},
 	}
 	result := computeDividendCalendar(holdings, 365)
 	assert.NotNil(t, result)

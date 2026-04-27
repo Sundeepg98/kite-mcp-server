@@ -79,12 +79,15 @@ func (p Position) IsOpen() bool {
 	return p.dto.Quantity != 0
 }
 
-// PnL returns the broker-reported net P&L as a Money value in INR.
-// This is the pre-computed figure that brokers typically populate; prefer
-// UnrealizedPnL when you want to compute P&L at a specific LTP that may
-// differ from the broker's last-seen LTP.
+// PnL returns the broker-reported net P&L as a Money value.
+// As of Slice 6e c2, broker.Position.PnL is already Money — the
+// adapter wraps gokiteconnect's INR float at the boundary. This
+// accessor passes through.
+//
+// Prefer UnrealizedPnL when you want to compute P&L at a specific LTP
+// that may differ from the broker's last-seen LTP.
 func (p Position) PnL() Money {
-	return NewINR(p.dto.PnL)
+	return p.dto.PnL
 }
 
 // UnrealizedPnL computes the mark-to-market P&L at the given LTP as

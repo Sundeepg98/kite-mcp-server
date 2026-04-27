@@ -1,4 +1,4 @@
-package mcp
+﻿package mcp
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -712,7 +713,7 @@ func TestBuildPreTradeResponse_AllDataPresent(t *testing.T) {
 					Quantity:      50,
 					Product:       "CNC",
 					AveragePrice:  1400,
-					PnL:           5000,
+					PnL: money.NewINR(5000),
 				},
 			},
 		},
@@ -906,7 +907,7 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 					Quantity:      50,
 					AveragePrice:  1400,
 					LastPrice:     1500,
-					PnL:           5000,
+					PnL: money.NewINR(5000),
 				},
 				{
 					Tradingsymbol: "TCS",
@@ -915,7 +916,7 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 					Quantity:      20,
 					AveragePrice:  3500,
 					LastPrice:     3600,
-					PnL:           2000,
+					PnL: money.NewINR(2000),
 				},
 			},
 		},
@@ -926,8 +927,8 @@ func TestBuildTradingContext_AllDataPresent(t *testing.T) {
 			{Status: "OPEN"},
 		},
 		"holdings": []broker.Holding{
-			{Tradingsymbol: "RELIANCE", Quantity: 100, PnL: 500},
-			{Tradingsymbol: "HDFC", Quantity: 50, PnL: -200},
+			{Tradingsymbol: "RELIANCE", Quantity: 100, PnL: money.NewINR(500)},
+			{Tradingsymbol: "HDFC", Quantity: 50, PnL: money.NewINR(-200)},
 		},
 	}
 
@@ -1044,7 +1045,7 @@ func TestBuildTradingContext_PositionPnLPct(t *testing.T) {
 					Quantity:      10,
 					AveragePrice:  1000,
 					LastPrice:     1100,
-					PnL:           1000,
+					PnL: money.NewINR(1000),
 				},
 			},
 		},
@@ -1064,8 +1065,8 @@ func TestBuildTradingContext_ClosedPositionsExcluded(t *testing.T) {
 	data := map[string]any{
 		"positions": broker.Positions{
 			Net: []broker.Position{
-				{Tradingsymbol: "INFY", Quantity: 0, PnL: 500},  // closed
-				{Tradingsymbol: "TCS", Quantity: 10, PnL: 1000}, // open
+				{Tradingsymbol: "INFY", Quantity: 0, PnL: money.NewINR(500)},  // closed
+				{Tradingsymbol: "TCS", Quantity: 10, PnL: money.NewINR(1000)}, // open
 			},
 		},
 	}
@@ -1134,7 +1135,7 @@ func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
 	data := map[string]any{
 		"positions": broker.Positions{
 			Net: []broker.Position{
-				{Tradingsymbol: "INFY", Quantity: 10, AveragePrice: 0, PnL: 100},
+				{Tradingsymbol: "INFY", Quantity: 10, AveragePrice: 0, PnL: money.NewINR(100)},
 			},
 		},
 	}
@@ -1177,7 +1178,7 @@ func TestBuildTradingContext_MultipleMISPositions(t *testing.T) {
 			Tradingsymbol: "STOCK" + string(rune('A'+i)),
 			Product:       "MIS",
 			Quantity:      10,
-			PnL:           float64(i * 100),
+			PnL:           money.NewINR(float64(i * 100)),
 		}
 	}
 	data := map[string]any{
@@ -1598,9 +1599,9 @@ func TestResourceURIForTool_KnownTools(t *testing.T) {
 func TestComputeTaxHarvest_WithHoldings(t *testing.T) {
 	t.Parallel()
 	holdings := []broker.Holding{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1600, LastPrice: 1400, PnL: -20000},
-		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2600, PnL: 10000},
-		{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 20, AveragePrice: 3600, LastPrice: 3400, PnL: -4000},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1600, LastPrice: 1400, PnL: money.NewINR(-20000)},
+		{Tradingsymbol: "RELIANCE", Exchange: "NSE", Quantity: 50, AveragePrice: 2400, LastPrice: 2600, PnL: money.NewINR(10000)},
+		{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 20, AveragePrice: 3600, LastPrice: 3400, PnL: money.NewINR(-4000)},
 	}
 	result := computeTaxHarvest(holdings, 5.0)
 	assert.NotNil(t, result)
@@ -1610,7 +1611,7 @@ func TestComputeTaxHarvest_WithHoldings(t *testing.T) {
 func TestComputeTaxHarvest_NoLosses(t *testing.T) {
 	t.Parallel()
 	holdings := []broker.Holding{
-		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1600, PnL: 20000},
+		{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 100, AveragePrice: 1400, LastPrice: 1600, PnL: money.NewINR(20000)},
 	}
 	result := computeTaxHarvest(holdings, 5.0)
 	assert.NotNil(t, result)

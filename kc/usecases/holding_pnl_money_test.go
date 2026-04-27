@@ -1,4 +1,4 @@
-package usecases
+﻿package usecases
 
 // Slice 6b of the Money VO sweep — accessor migration on
 // Holding.PnL consumers (commit lineage: 5ce3eb0 -> 0e516e7 ->
@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/money"
 )
 
 // TestSlice6b_WidgetHoldingItem_PreservesWireValue is the
@@ -46,7 +47,7 @@ func TestSlice6b_WidgetHoldingItem_PreservesWireValue(t *testing.T) {
 			broker.Holding{
 				Tradingsymbol: "INFY", Exchange: "NSE",
 				Quantity: 10, AveragePrice: 1500, LastPrice: 1600,
-				PnL: 1000, DayChangePct: 2.5,
+				PnL: money.NewINR(1000), DayChangePct: 2.5,
 			},
 			1000.0,
 		},
@@ -55,7 +56,7 @@ func TestSlice6b_WidgetHoldingItem_PreservesWireValue(t *testing.T) {
 			broker.Holding{
 				Tradingsymbol: "TCS", Exchange: "NSE",
 				Quantity: 5, AveragePrice: 3500, LastPrice: 3300,
-				PnL: -1000, DayChangePct: -3.5,
+				PnL: money.NewINR(-1000), DayChangePct: -3.5,
 			},
 			-1000.0,
 		},
@@ -64,7 +65,7 @@ func TestSlice6b_WidgetHoldingItem_PreservesWireValue(t *testing.T) {
 			broker.Holding{
 				Tradingsymbol: "RELIANCE", Exchange: "NSE",
 				Quantity: 3, AveragePrice: 2500.50, LastPrice: 2510.75,
-				PnL: 30.75,
+				PnL: money.NewINR(30.75),
 			},
 			30.75,
 		},
@@ -73,7 +74,7 @@ func TestSlice6b_WidgetHoldingItem_PreservesWireValue(t *testing.T) {
 			broker.Holding{
 				Tradingsymbol: "HDFC", Exchange: "NSE",
 				Quantity: 1, AveragePrice: 1500, LastPrice: 1500,
-				PnL: 0,
+				PnL: money.NewINR(0),
 			},
 			0,
 		},
@@ -120,11 +121,11 @@ func TestSlice6b_WidgetHoldingItem_MultipleHoldings_AggregateMatches(t *testing.
 	client := &mockBrokerClient{
 		holdings: []broker.Holding{
 			{Tradingsymbol: "INFY", Exchange: "NSE", Quantity: 10,
-				AveragePrice: 1500, LastPrice: 1600, PnL: 1000, DayChangePct: 2.5},
+				AveragePrice: 1500, LastPrice: 1600, PnL: money.NewINR(1000), DayChangePct: 2.5},
 			{Tradingsymbol: "TCS", Exchange: "NSE", Quantity: 5,
-				AveragePrice: 3500, LastPrice: 3300, PnL: -1000, DayChangePct: -3.5},
+				AveragePrice: 3500, LastPrice: 3300, PnL: money.NewINR(-1000), DayChangePct: -3.5},
 			{Tradingsymbol: "HDFC", Exchange: "NSE", Quantity: 1,
-				AveragePrice: 1500, LastPrice: 1500, PnL: 0},
+				AveragePrice: 1500, LastPrice: 1500, PnL: money.NewINR(0)},
 		},
 		positions: broker.Positions{Net: []broker.Position{}},
 	}

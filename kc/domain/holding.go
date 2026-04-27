@@ -43,9 +43,10 @@ func (h Holding) DTO() broker.Holding {
 	return h.dto
 }
 
-// PnL returns the broker-reported holding P&L as a Money value in
-// INR. This is the pre-computed figure that brokers populate based
-// on (LastPrice - AveragePrice) * Quantity at snapshot time.
+// PnL returns the broker-reported holding P&L as a Money value.
+// As of Slice 6e c2, broker.Holding.PnL is already Money — the
+// adapter (broker/zerodha/convert.go) wraps gokiteconnect's INR
+// float at the boundary. This wrapper accessor passes through.
 //
 // Sign is preserved: a winning position returns positive Money, a
 // losing position returns negative Money. The zero Money is the
@@ -53,7 +54,7 @@ func (h Holding) DTO() broker.Holding {
 // on win-vs-loss should use IsPositive / IsNegative / IsZero
 // rather than comparing the raw Float64() against zero.
 func (h Holding) PnL() Money {
-	return NewINR(h.dto.PnL)
+	return h.dto.PnL
 }
 
 // IsHeld reports whether the holding has non-zero quantity. A

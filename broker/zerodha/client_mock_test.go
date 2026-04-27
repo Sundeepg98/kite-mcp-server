@@ -100,8 +100,8 @@ func TestClientMock_GetHoldings_MapsFields(t *testing.T) {
 	if holdings[0].Tradingsymbol != "RELIANCE" || holdings[0].Quantity != 10 {
 		t.Errorf("holdings[0] = %+v", holdings[0])
 	}
-	if holdings[0].PnL != 1500.0 {
-		t.Errorf("holdings[0].PnL = %v, want 1500", holdings[0].PnL)
+	if holdings[0].PnL.Float64() != 1500.0 {
+		t.Errorf("holdings[0].PnL = %v, want 1500", holdings[0].PnL.Float64())
 	}
 	if holdings[1].Tradingsymbol != "TCS" {
 		t.Errorf("holdings[1].Tradingsymbol = %q, want TCS", holdings[1].Tradingsymbol)

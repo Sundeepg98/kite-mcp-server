@@ -1,4 +1,4 @@
-package domain
+﻿package domain
 
 // position_test.go — unit tests for the rich Position domain entity.
 
@@ -96,7 +96,7 @@ func TestPosition_UnrealizedPnL(t *testing.T) {
 func TestPosition_PnL(t *testing.T) {
 	t.Parallel()
 
-	p := NewPositionFromBroker(broker.Position{PnL: 1234.5})
+	p := NewPositionFromBroker(broker.Position{PnL: NewINR(1234.5)})
 	got := p.PnL()
 	assert.InDelta(t, 1234.5, got.Amount, 0.001, "TestPosition_PnL: want=%v got=%v", 1234.5, got.Amount, 0.001)
 	assert.Equal(t, "INR", got.Currency)
@@ -112,7 +112,7 @@ func TestPosition_DTO(t *testing.T) {
 		Quantity:      10,
 		AveragePrice:  2500.0,
 		LastPrice:     2600.0,
-		PnL:           1000.0,
+		PnL: NewINR(1000.0),
 	}
 	p := NewPositionFromBroker(dto)
 	assert.Equal(t, dto, p.DTO())
@@ -154,7 +154,7 @@ func TestToDomainPosition(t *testing.T) {
 		Quantity:      5,
 		AveragePrice:  1500,
 		LastPrice:     1520,
-		PnL:           100,
+		PnL: NewINR(100),
 	}
 	d := ToDomainPosition(bp)
 	assert.True(t, d.IsIntraday())

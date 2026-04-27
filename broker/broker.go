@@ -1,6 +1,10 @@
 package broker
 
-import "time"
+import (
+	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/money"
+)
 
 // Name identifies a broker implementation.
 type Name string
@@ -40,27 +44,36 @@ type SegmentMargin struct {
 }
 
 // Holding represents a single holding in the portfolio.
+//
+// PnL is typed money.Money (Slice 6e c2): the currency-aware Money
+// VO covering the broker DTO so cross-currency mismatch surfaces at
+// the type system rather than as a silent float coercion. Wire-format
+// stays bare-float for INR (the production case) via Money's custom
+// MarshalJSON; non-INR cases serialize as {"amount", "currency"}.
 type Holding struct {
-	Tradingsymbol string  `json:"tradingsymbol"`
-	Exchange      string  `json:"exchange"`
-	ISIN          string  `json:"isin,omitempty"`
-	Quantity      int     `json:"quantity"`
-	AveragePrice  float64 `json:"average_price"`
-	LastPrice     float64 `json:"last_price"`
-	PnL           float64 `json:"pnl"`
-	DayChangePct  float64 `json:"day_change_percentage"`
-	Product       string  `json:"product,omitempty"`
+	Tradingsymbol string      `json:"tradingsymbol"`
+	Exchange      string      `json:"exchange"`
+	ISIN          string      `json:"isin,omitempty"`
+	Quantity      int         `json:"quantity"`
+	AveragePrice  float64     `json:"average_price"`
+	LastPrice     float64     `json:"last_price"`
+	PnL           money.Money `json:"pnl"`
+	DayChangePct  float64     `json:"day_change_percentage"`
+	Product       string      `json:"product,omitempty"`
 }
 
 // Position represents a single trading position.
+//
+// PnL is typed money.Money (Slice 6e c2). Same wire-format invariant
+// as Holding.PnL — bare-float for INR via Money.MarshalJSON.
 type Position struct {
-	Tradingsymbol string  `json:"tradingsymbol"`
-	Exchange      string  `json:"exchange"`
-	Product       string  `json:"product"`
-	Quantity      int     `json:"quantity"`
-	AveragePrice  float64 `json:"average_price"`
-	LastPrice     float64 `json:"last_price"`
-	PnL           float64 `json:"pnl"`
+	Tradingsymbol string      `json:"tradingsymbol"`
+	Exchange      string      `json:"exchange"`
+	Product       string      `json:"product"`
+	Quantity      int         `json:"quantity"`
+	AveragePrice  float64     `json:"average_price"`
+	LastPrice     float64     `json:"last_price"`
+	PnL           money.Money `json:"pnl"`
 }
 
 // Positions contains day and net position lists.

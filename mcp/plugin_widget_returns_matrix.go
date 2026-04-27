@@ -79,12 +79,16 @@ func returnsMatrixWidgetData(ctx context.Context, manager extAppManagerPort, ema
 			PnL:          hd.PnL().Float64(),
 		}
 		rows = append(rows, r)
-		if h.PnL > 0 {
+		// Slice 6e c2: h.PnL is now Money; use sentinel predicates for
+		// sign tests instead of bare > 0 / < 0 comparisons. Aggregator
+		// stays bare-float per Slice 3's "sum primitive then wrap once"
+		// pattern.
+		if h.PnL.IsPositive() {
 			winnerCount++
-		} else if h.PnL < 0 {
+		} else if h.PnL.IsNegative() {
 			loserCount++
 		}
-		totalPnL += h.PnL
+		totalPnL += h.PnL.Float64()
 	}
 	// Sort by lifetime_pct desc — most interesting at top (biggest
 	// winners / biggest losers both surface immediately).
