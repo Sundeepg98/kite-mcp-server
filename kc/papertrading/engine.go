@@ -444,7 +444,12 @@ func (e *PaperEngine) updatePosition(email string, order *Order, fillPrice float
 			Quantity:      qty,
 			AveragePrice:  domain.NewINR(fillPrice),
 			LastPrice:     domain.NewINR(fillPrice),
-			PnL:           0,
+			// PnL is zero on a fresh position — LastPrice == AveragePrice
+			// at the moment of fill so the delta is zero. Use INR currency
+			// explicitly via NewINR(0) rather than the bare zero Money so
+			// downstream Money.Add against this field can't fail with a
+			// currency-mismatch error.
+			PnL: domain.NewINR(0),
 		})
 	}
 
@@ -505,10 +510,17 @@ func (e *PaperEngine) updatePosition(email string, order *Order, fillPrice float
 
 	existing.LastPrice = fillMoney
 	if existing.Quantity != 0 {
-		// PnL stays float64 in this slice (commit 3 elevates it).
-		// Bridge via .Float64() — both sides INR by construction so no
-		// cross-currency loss.
-		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
+		// PnL = Quantity * (LastPrice - AveragePrice). Both Money sides
+		// are INR by construction; Sub returns currency-mismatch error
+		// only if a malformed value lands here — preserve the prior
+		// permissive behaviour by treating the error as zero PnL (don't
+		// crash a fill flow on a downstream display field).
+		delta, err := fillMoney.Sub(existing.AveragePrice)
+		if err == nil {
+			existing.PnL = delta.Multiply(float64(existing.Quantity))
+		} else {
+			existing.PnL = domain.NewINR(0)
+		}
 	}
 
 	// Remove the position if quantity is zero. This MUST short-circuit
@@ -547,7 +559,7 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 				Quantity:      order.Quantity,
 				AveragePrice:  fillMoney,
 				LastPrice:     fillMoney,
-				PnL:           0,
+				PnL:           domain.NewINR(0),
 			})
 		}
 		// Weighted average for additional buys via Money pipeline.
@@ -560,8 +572,12 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 		existing.Quantity += order.Quantity
 		existing.AveragePrice = totalCost.Multiply(1.0 / float64(existing.Quantity))
 		existing.LastPrice = fillMoney
-		// PnL bridge via .Float64() — commit 3 will elevate it.
-		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
+		// PnL via Money pipeline; same fail-soft pattern as updatePosition.
+		if delta, derr := fillMoney.Sub(existing.AveragePrice); derr == nil {
+			existing.PnL = delta.Multiply(float64(existing.Quantity))
+		} else {
+			existing.PnL = domain.NewINR(0)
+		}
 		return e.store.UpsertHolding(existing)
 	}
 
@@ -581,7 +597,11 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 			email, order.Exchange, order.Tradingsymbol)
 	}
 	existing.LastPrice = fillMoney
-	existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice.Float64())
+	if delta, derr := fillMoney.Sub(existing.AveragePrice); derr == nil {
+		existing.PnL = delta.Multiply(float64(existing.Quantity))
+	} else {
+		existing.PnL = domain.NewINR(0)
+	}
 	return e.store.UpsertHolding(existing)
 }
 
@@ -688,10 +708,9 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 	}
 
 	// Refresh LTP for each position. LTPProvider returns float64 (raw
-	// exchange data); wrap with domain.NewINR at this boundary so the
-	// in-domain LastPrice field stays Money. PnL math bridges via
-	// .Float64() because PnL itself is still float64 in this slice
-	// (commit 3 will elevate it).
+	// exchange data); wrap with domain.NewINR for storage and run PnL
+	// through the Money pipeline (Sub + Multiply). Cross-currency error
+	// path zeros PnL fail-soft — same pattern as updatePosition.
 	if e.ltpProvider != nil && len(positions) > 0 {
 		instruments := make([]string, len(positions))
 		for i, p := range positions {
@@ -701,8 +720,11 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 			for _, p := range positions {
 				key := p.Exchange + ":" + p.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
-					p.LastPrice = domain.NewINR(ltp)
-					p.PnL = float64(p.Quantity) * (ltp - p.AveragePrice.Float64())
+					ltpMoney := domain.NewINR(ltp)
+					p.LastPrice = ltpMoney
+					if delta, derr := ltpMoney.Sub(p.AveragePrice); derr == nil {
+						p.PnL = delta.Multiply(float64(p.Quantity))
+					}
 				}
 			}
 		}
@@ -710,18 +732,19 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 
 	day := make([]map[string]any, 0, len(positions))
 	for _, p := range positions {
+		// JSON boundary: Money → float64 so the Kite-API-shaped
+		// response keeps average_price + last_price + pnl + m2m as
+		// numbers (matches GetMargins pattern from Slice 5).
+		pnlF := p.PnL.Float64()
 		day = append(day, map[string]any{
-			"tradingsymbol": p.Tradingsymbol,
-			"exchange":      p.Exchange,
-			"product":       p.Product,
-			"quantity":      p.Quantity,
-			// JSON boundary: Money → float64 so the Kite-API-shaped
-			// response keeps average_price + last_price as numbers
-			// (matches GetMargins pattern from Slice 5).
+			"tradingsymbol":    p.Tradingsymbol,
+			"exchange":         p.Exchange,
+			"product":          p.Product,
+			"quantity":         p.Quantity,
 			"average_price":    p.AveragePrice.Float64(),
 			"last_price":       p.LastPrice.Float64(),
-			"pnl":              p.PnL,
-			"m2m":              p.PnL,
+			"pnl":              pnlF,
+			"m2m":              pnlF,
 			"buy_quantity":     0,
 			"sell_quantity":    0,
 			"instrument_token": 0,
@@ -750,8 +773,11 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 			for _, h := range holdings {
 				key := h.Exchange + ":" + h.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
-					h.LastPrice = domain.NewINR(ltp)
-					h.PnL = float64(h.Quantity) * (ltp - h.AveragePrice.Float64())
+					ltpMoney := domain.NewINR(ltp)
+					h.LastPrice = ltpMoney
+					if delta, derr := ltpMoney.Sub(h.AveragePrice); derr == nil {
+						h.PnL = delta.Multiply(float64(h.Quantity))
+					}
 				}
 			}
 		}
@@ -766,7 +792,7 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 			// JSON boundary: Money → float64.
 			"average_price":    h.AveragePrice.Float64(),
 			"last_price":       h.LastPrice.Float64(),
-			"pnl":              h.PnL,
+			"pnl":              h.PnL.Float64(),
 			"t1_quantity":      0,
 			"instrument_token": 0,
 			"product":          "CNC",

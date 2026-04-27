@@ -51,13 +51,15 @@ type Order struct {
 
 // Position represents an open paper trading position.
 //
-// LastPrice + AveragePrice use domain.Money. LastPrice (Slice 6a, commit
-// 1) is the LTP refreshed from the LTPProvider. AveragePrice (Slice 6a,
-// commit 2) carries weighted-average semantics — totalCost / Quantity at
-// fill time, expressed via Money.Multiply / Money.Add chains; resets to
-// fillPrice on side-flip. PnL stays float64 in this slice (commit 3
-// elevates it). SQLite REAL columns unchanged; bind via .Float64(),
-// scan via domain.NewINR.
+// All monetary fields are domain.Money (Slice 6a complete):
+//   - AveragePrice (commit 2): weighted-average via Money.Multiply / Add chains;
+//     resets to fillPrice on side-flip.
+//   - LastPrice (commit 1): LTP refreshed from the LTPProvider.
+//   - PnL (commit 3): derived value = Quantity * (LastPrice - AveragePrice).
+//     Negative for losing trades; sign preserved through Money.Sub +
+//     Money.Multiply.
+//
+// SQLite REAL columns unchanged; bind via .Float64(), scan via domain.NewINR.
 type Position struct {
 	Email         string
 	Exchange      string
@@ -66,13 +68,13 @@ type Position struct {
 	Quantity      int // positive=long, negative=short
 	AveragePrice  domain.Money
 	LastPrice     domain.Money
-	PnL           float64
+	PnL           domain.Money
 }
 
 // Holding represents a paper trading CNC holding.
 //
-// LastPrice + AveragePrice use domain.Money (Slice 6a). Same semantic as
-// Position fields; weighted-average on additional buys via Money pipeline.
+// All monetary fields are domain.Money (Slice 6a). Same semantic as
+// Position; weighted-average on additional buys via the Money pipeline.
 type Holding struct {
 	Email         string
 	Exchange      string
@@ -80,7 +82,7 @@ type Holding struct {
 	Quantity      int
 	AveragePrice  domain.Money
 	LastPrice     domain.Money
-	PnL           float64
+	PnL           domain.Money
 }
 
 // Store provides SQLite persistence for paper trading data.
@@ -331,7 +333,7 @@ func scanOrders(rows *sql.Rows) ([]*Order, error) {
 
 // UpsertPosition inserts or updates a paper position.
 //
-// SQLite REAL boundary: Position.AveragePrice + LastPrice are domain.Money;
+// SQLite REAL boundary: AveragePrice, LastPrice, PnL are all domain.Money;
 // bind via .Float64() at the SQL parameter sites so column types stay REAL.
 func (s *Store) UpsertPosition(p *Position) error {
 	return s.db.ExecInsert(
@@ -339,13 +341,13 @@ func (s *Store) UpsertPosition(p *Position) error {
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(email, exchange, tradingsymbol, product)
 		 DO UPDATE SET quantity = ?, average_price = ?, last_price = ?, pnl = ?`,
-		p.Email, p.Exchange, p.Tradingsymbol, p.Product, p.Quantity, p.AveragePrice.Float64(), p.LastPrice.Float64(), p.PnL,
-		p.Quantity, p.AveragePrice.Float64(), p.LastPrice.Float64(), p.PnL)
+		p.Email, p.Exchange, p.Tradingsymbol, p.Product, p.Quantity, p.AveragePrice.Float64(), p.LastPrice.Float64(), p.PnL.Float64(),
+		p.Quantity, p.AveragePrice.Float64(), p.LastPrice.Float64(), p.PnL.Float64())
 }
 
 // GetPositions returns all paper positions for the given email.
 //
-// SQLite REAL → domain.Money rehydration for AveragePrice + LastPrice.
+// SQLite REAL → domain.Money rehydration for AveragePrice, LastPrice, PnL.
 // Mirrors the GetAccount pattern from Slice 5.
 func (s *Store) GetPositions(email string) ([]*Position, error) {
 	rows, err := s.db.RawQuery(
@@ -359,13 +361,14 @@ func (s *Store) GetPositions(email string) ([]*Position, error) {
 	var positions []*Position
 	for rows.Next() {
 		var p Position
-		var avgPrice, lastPrice float64
+		var avgPrice, lastPrice, pnl float64
 		if err := rows.Scan(&p.Email, &p.Exchange, &p.Tradingsymbol, &p.Product,
-			&p.Quantity, &avgPrice, &lastPrice, &p.PnL); err != nil {
+			&p.Quantity, &avgPrice, &lastPrice, &pnl); err != nil {
 			return nil, fmt.Errorf("scan position: %w", err)
 		}
 		p.AveragePrice = domain.NewINR(avgPrice)
 		p.LastPrice = domain.NewINR(lastPrice)
+		p.PnL = domain.NewINR(pnl)
 		positions = append(positions, &p)
 	}
 	return positions, rows.Err()
@@ -380,7 +383,7 @@ func (s *Store) DeletePosition(email, exchange, symbol, product string) error {
 
 // UpsertHolding inserts or updates a paper holding.
 //
-// SQLite REAL boundary: Holding.AveragePrice + LastPrice are domain.Money;
+// SQLite REAL boundary: AveragePrice, LastPrice, PnL are all domain.Money;
 // bind via .Float64() at the SQL parameter sites.
 func (s *Store) UpsertHolding(h *Holding) error {
 	return s.db.ExecInsert(
@@ -388,8 +391,8 @@ func (s *Store) UpsertHolding(h *Holding) error {
 		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(email, exchange, tradingsymbol)
 		 DO UPDATE SET quantity = ?, average_price = ?, last_price = ?, pnl = ?`,
-		h.Email, h.Exchange, h.Tradingsymbol, h.Quantity, h.AveragePrice.Float64(), h.LastPrice.Float64(), h.PnL,
-		h.Quantity, h.AveragePrice.Float64(), h.LastPrice.Float64(), h.PnL)
+		h.Email, h.Exchange, h.Tradingsymbol, h.Quantity, h.AveragePrice.Float64(), h.LastPrice.Float64(), h.PnL.Float64(),
+		h.Quantity, h.AveragePrice.Float64(), h.LastPrice.Float64(), h.PnL.Float64())
 }
 
 // GetHoldings returns all paper holdings for the given email.
@@ -407,13 +410,14 @@ func (s *Store) GetHoldings(email string) ([]*Holding, error) {
 	var holdings []*Holding
 	for rows.Next() {
 		var h Holding
-		var avgPrice, lastPrice float64
+		var avgPrice, lastPrice, pnl float64
 		if err := rows.Scan(&h.Email, &h.Exchange, &h.Tradingsymbol,
-			&h.Quantity, &avgPrice, &lastPrice, &h.PnL); err != nil {
+			&h.Quantity, &avgPrice, &lastPrice, &pnl); err != nil {
 			return nil, fmt.Errorf("scan holding: %w", err)
 		}
 		h.AveragePrice = domain.NewINR(avgPrice)
 		h.LastPrice = domain.NewINR(lastPrice)
+		h.PnL = domain.NewINR(pnl)
 		holdings = append(holdings, &h)
 	}
 	return holdings, rows.Err()

@@ -560,6 +560,182 @@ func TestHoldingsWeightedAverageBuy(t *testing.T) {
 	assert.Equal(t, "INR", holdings[0].AveragePrice.Currency)
 }
 
+// TestPositionPnL_IsMoney is the type-level assertion for Slice 6a,
+// commit 3 of 3 (papertrading P&L sweep): Position.PnL MUST be
+// domain.Money. PnL is the derived value PnL = Quantity * (LastPrice -
+// AveragePrice), expressed via Money.Sub + Money.Multiply now that
+// both LastPrice (commit 1) and AveragePrice (commit 2) are Money.
+func TestPositionPnL_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	p := Position{}
+	got := reflect.TypeOf(p.PnL)
+	if got != moneyType {
+		t.Fatalf("Position.PnL must be domain.Money, got %s", got)
+	}
+}
+
+// TestHoldingPnL_IsMoney mirrors TestPositionPnL_IsMoney for the Holding
+// aggregate.
+func TestHoldingPnL_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	h := Holding{}
+	got := reflect.TypeOf(h.PnL)
+	if got != moneyType {
+		t.Fatalf("Holding.PnL must be domain.Money, got %s", got)
+	}
+}
+
+// TestPnLNegativeRoundTrip verifies that a position with LastPrice <
+// AveragePrice produces a negative PnL Money value — losing trades
+// must round-trip cleanly through Money.Sub (which doesn't validate
+// for positive amounts) and Money.Multiply (which preserves sign).
+//
+// Setup: BUY 10 @ 200, refresh LTP to 150 → PnL = 10 * (150 - 200) = -500.
+func TestPnLNegativeRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	prices := map[string]float64{"NSE:RELIANCE": 200.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	// Refresh LTP downward.
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 150.0}})
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+	resp := raw.(map[string]any)
+	day := resp["day"].([]map[string]any)
+	require.Len(t, day, 1)
+
+	// JSON wire stays float64 — same boundary pattern as average_price.
+	pnl, ok := day[0]["pnl"].(float64)
+	if !ok {
+		t.Fatalf("day[0][pnl] must be float64 at JSON boundary, got %T", day[0]["pnl"])
+	}
+	assert.InDelta(t, -500.0, pnl, 0.01)
+}
+
+// TestPnLShortPositionRoundTrip verifies the sign convention for short
+// positions: SELL 10 @ 200 stores Quantity=-10, AveragePrice=200. If
+// LTP rises to 250, the unrealized P&L is negative for the short
+// holder: -10 * (250 - 200) = -500. The Money pipeline must produce
+// the same sign as the prior float math.
+func TestPnLShortPositionRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	prices := map[string]float64{"NSE:RELIANCE": 200.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "SELL",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 250.0}})
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+	resp := raw.(map[string]any)
+	day := resp["day"].([]map[string]any)
+	require.Len(t, day, 1)
+
+	pnl, ok := day[0]["pnl"].(float64)
+	if !ok {
+		t.Fatalf("day[0][pnl] must be float64, got %T", day[0]["pnl"])
+	}
+	assert.InDelta(t, -500.0, pnl, 0.01)
+}
+
+// TestPnLPositiveRoundTrip verifies the standard winning trade:
+// BUY 10 @ 100, refresh LTP to 150 → PnL = +500.
+func TestPnLPositiveRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	prices := map[string]float64{"NSE:RELIANCE": 100.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 150.0}})
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+	resp := raw.(map[string]any)
+	day := resp["day"].([]map[string]any)
+	require.Len(t, day, 1)
+
+	pnl, ok := day[0]["pnl"].(float64)
+	if !ok {
+		t.Fatalf("day[0][pnl] must be float64, got %T", day[0]["pnl"])
+	}
+	assert.InDelta(t, 500.0, pnl, 0.01)
+}
+
+// TestPnLM2MMatchesPnL verifies the GetPositions JSON map renders both
+// "pnl" and "m2m" with the same float64 value — m2m is a synonym in the
+// Kite-API-shaped response. Slice 6a must preserve this invariant.
+func TestPnLM2MMatchesPnL(t *testing.T) {
+	t.Parallel()
+
+	prices := map[string]float64{"NSE:RELIANCE": 100.0}
+	engine := testEngine(t, prices)
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         5,
+	})
+	require.NoError(t, err)
+
+	engine.SetLTPProvider(&mockLTP{prices: map[string]float64{"NSE:RELIANCE": 110.0}})
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+	resp := raw.(map[string]any)
+	day := resp["day"].([]map[string]any)
+	require.Len(t, day, 1)
+
+	pnl, ok := day[0]["pnl"].(float64)
+	require.True(t, ok)
+	m2m, ok := day[0]["m2m"].(float64)
+	require.True(t, ok, "m2m must be float64 alongside pnl")
+	assert.InDelta(t, pnl, m2m, 0.01)
+	assert.InDelta(t, 50.0, pnl, 0.01)
+}
+
 // TestGetMargins_BoundaryStaysFloat verifies GetMargins (consumed by the
 // Kite-API-shaped paper response) preserves float64 at the JSON wire so
 // existing dashboards / chat clients that read margin data as numbers

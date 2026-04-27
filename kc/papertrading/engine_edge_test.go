@@ -674,7 +674,7 @@ func TestHandleClosePosition_ZeroQuantity(t *testing.T) {
 		Quantity:      0,
 		AveragePrice:  domain.NewINR(500),
 		LastPrice:     domain.NewINR(500),
-		PnL:           0,
+		PnL:           domain.NewINR(0),
 	})
 	require.NoError(t, err)
 
@@ -725,7 +725,7 @@ func TestHandleCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 		Quantity:      0,
 		AveragePrice:  domain.NewINR(500),
 		LastPrice:     domain.NewINR(500),
-		PnL:           0,
+		PnL:           domain.NewINR(0),
 	})
 	require.NoError(t, err)
 
