@@ -16,6 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -37,13 +38,19 @@ type InstrumentLookup interface {
 
 // PlaceOrderUseCase orchestrates the full order placement pipeline:
 // riskguard check -> broker API call -> domain event dispatch.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewPlaceOrderUseCase takes *slog.Logger for
+// caller compatibility (kc/manager_init.go) and converts at the
+// boundary via logport.NewSlog. Internal log calls in Execute use the
+// passed ctx; helpers without ctx use context.Background().
 type PlaceOrderUseCase struct {
 	brokerResolver BrokerResolver
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
 	eventStore     EventAppender
 	instruments    InstrumentLookup
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewPlaceOrderUseCase creates a PlaceOrderUseCase with all dependencies injected.
@@ -57,7 +64,7 @@ func NewPlaceOrderUseCase(
 		brokerResolver: resolver,
 		riskguard:      guard,
 		events:         events,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -157,7 +164,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 			Variety: cmd.Variety,
 		})
 		if !result.Allowed {
-			uc.logger.Warn("Order blocked by riskguard",
+			uc.logger.Warn(ctx, "Order blocked by riskguard",
 				"email", cmd.Email,
 				"reason", result.Reason,
 				"message", result.Message,
@@ -198,10 +205,9 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 
 	resp, err := client.PlaceOrder(params)
 	if err != nil {
-		uc.logger.Error("Order placement failed",
+		uc.logger.Error(ctx, "Order placement failed", err,
 			"email", cmd.Email,
 			"tradingsymbol", symbol,
-			"error", err,
 		)
 		// Emit OrderRejectedEvent so the order audit stream surfaces
 		// post-riskguard broker failures (rate limit, margin, invalid
@@ -256,7 +262,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	// wire.go when this landed).
 	uc.appendPlacedEvent(resp.OrderID, cmd, symbol, exchange, qty, price, now)
 
-	uc.logger.Info("Order placed",
+	uc.logger.Info(ctx, "Order placed",
 		"email", cmd.Email,
 		"order_id", resp.OrderID,
 		"tradingsymbol", symbol,
@@ -284,7 +290,7 @@ func (uc *PlaceOrderUseCase) appendPlacedEvent(orderID string, cmd cqrs.PlaceOrd
 	}
 	seq, err := uc.eventStore.NextSequence(orderID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on order.placed", "order_id", orderID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on order.placed", "order_id", orderID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(eventsourcing.OrderPlacedPayload{
@@ -309,11 +315,11 @@ func (uc *PlaceOrderUseCase) appendPlacedEvent(orderID string, cmd cqrs.PlaceOrd
 		Sequence:      seq,
 	}
 	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
-		uc.logger.Warn("outbox append failed on order.placed; trying direct path", "order_id", orderID, "error", err)
+		uc.logger.Warn(context.Background(), "outbox append failed on order.placed; trying direct path", "order_id", orderID, "error", err)
 		// Fallback to direct append so a transient outbox-table issue
 		// (rare) doesn't lose the audit entry on a single attempt.
 		if err := uc.eventStore.Append(evt); err != nil {
-			uc.logger.Warn("event store Append failed on order.placed", "order_id", orderID, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on order.placed", "order_id", orderID, "error", err)
 		}
 	}
 }

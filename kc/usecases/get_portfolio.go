@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // PortfolioResult contains the combined holdings and positions for a user.
@@ -16,16 +17,19 @@ type PortfolioResult struct {
 }
 
 // GetPortfolioUseCase retrieves a user's full portfolio (holdings + positions).
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type GetPortfolioUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetPortfolioUseCase creates a GetPortfolioUseCase with all dependencies injected.
 func NewGetPortfolioUseCase(resolver BrokerResolver, logger *slog.Logger) *GetPortfolioUseCase {
 	return &GetPortfolioUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -42,13 +46,13 @@ func (uc *GetPortfolioUseCase) Execute(ctx context.Context, query cqrs.GetPortfo
 
 	holdings, err := client.GetHoldings()
 	if err != nil {
-		uc.logger.Error("Failed to get holdings", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get holdings", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get holdings: %w", err)
 	}
 
 	positions, err := client.GetPositions()
 	if err != nil {
-		uc.logger.Error("Failed to get positions", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get positions", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get positions: %w", err)
 	}
 

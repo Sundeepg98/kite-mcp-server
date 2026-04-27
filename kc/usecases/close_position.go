@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -23,11 +24,14 @@ func (uc *ClosePositionUseCase) ExecuteCommand(ctx context.Context, cmd cqrs.Clo
 
 // ClosePositionUseCase closes a single position by placing an opposite MARKET order.
 // Pipeline: find position -> riskguard check -> place opposite order -> domain event.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type ClosePositionUseCase struct {
 	brokerResolver BrokerResolver
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewClosePositionUseCase creates a ClosePositionUseCase with all dependencies injected.
@@ -41,7 +45,7 @@ func NewClosePositionUseCase(
 		brokerResolver: resolver,
 		riskguard:      guard,
 		events:         events,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -126,7 +130,7 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 			Confirmed:       true,
 		})
 		if !result.Allowed {
-			uc.logger.Warn("Close position blocked by riskguard",
+			uc.logger.Warn(ctx, "Close position blocked by riskguard",
 				"email", email,
 				"symbol", symbol,
 				"reason", result.Reason,
@@ -160,10 +164,9 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 
 	resp, err := client.PlaceOrder(orderParams)
 	if err != nil {
-		uc.logger.Error("Failed to close position",
+		uc.logger.Error(ctx, "Failed to close position", err,
 			"email", email,
 			"symbol", symbol,
-			"error", err,
 		)
 		return nil, fmt.Errorf("usecases: close position: %w", err)
 	}
@@ -182,7 +185,7 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 		})
 	}
 
-	uc.logger.Info("Position closed",
+	uc.logger.Info(ctx, "Position closed",
 		"email", email,
 		"order_id", resp.OrderID,
 		"symbol", symbol,

@@ -10,16 +10,20 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // CancelOrderUseCase orchestrates order cancellation:
 // broker API call -> domain event dispatch.
 // Riskguard is not applied to cancels (cancelling reduces risk, not increases it).
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type CancelOrderUseCase struct {
 	brokerResolver BrokerResolver
 	events         *domain.EventDispatcher
 	eventStore     EventAppender
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewCancelOrderUseCase creates a CancelOrderUseCase with all dependencies injected.
@@ -31,7 +35,7 @@ func NewCancelOrderUseCase(
 	return &CancelOrderUseCase{
 		brokerResolver: resolver,
 		events:         events,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -72,10 +76,9 @@ func (uc *CancelOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelOrderC
 	// 3. Cancel order via broker API.
 	resp, err := client.CancelOrder(cmd.OrderID, variety)
 	if err != nil {
-		uc.logger.Error("Order cancellation failed",
+		uc.logger.Error(ctx, "Order cancellation failed", err,
 			"email", cmd.Email,
 			"order_id", cmd.OrderID,
-			"error", err,
 		)
 		// Emit OrderRejectedEvent so the order aggregate stream (keyed
 		// by OrderID) surfaces the cancel rejection in chronological
@@ -104,7 +107,7 @@ func (uc *CancelOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelOrderC
 	}
 	uc.appendCancelledEvent(cmd.OrderID, now)
 
-	uc.logger.Info("Order cancelled",
+	uc.logger.Info(ctx, "Order cancelled",
 		"email", cmd.Email,
 		"order_id", cmd.OrderID,
 	)
@@ -120,7 +123,7 @@ func (uc *CancelOrderUseCase) appendCancelledEvent(orderID string, occurredAt ti
 	}
 	seq, err := uc.eventStore.NextSequence(orderID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on order.cancelled", "order_id", orderID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on order.cancelled", "order_id", orderID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(eventsourcing.OrderCancelledPayload{})
@@ -137,9 +140,9 @@ func (uc *CancelOrderUseCase) appendCancelledEvent(orderID string, occurredAt ti
 	}
 	// Hot mutation path — route through outbox. See kc/eventsourcing/outbox.go.
 	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
-		uc.logger.Warn("outbox append failed on order.cancelled; trying direct path", "order_id", orderID, "error", err)
+		uc.logger.Warn(context.Background(), "outbox append failed on order.cancelled; trying direct path", "order_id", orderID, "error", err)
 		if err := uc.eventStore.Append(evt); err != nil {
-			uc.logger.Warn("event store Append failed on order.cancelled", "order_id", orderID, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on order.cancelled", "order_id", orderID, "error", err)
 		}
 	}
 }

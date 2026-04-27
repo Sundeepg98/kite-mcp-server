@@ -7,21 +7,28 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5 (Logger sweep): all use cases in this file
+// type their logger field as the kc/logger.Logger port. Constructors
+// retain *slog.Logger parameters for caller compatibility and convert
+// at the boundary via logport.NewSlog. Execute methods use the passed
+// ctx for logger calls.
 
 // --- Account queries ---
 
 // GetProfileUseCase retrieves the user's broker profile.
 type GetProfileUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetProfileUseCase creates a GetProfileUseCase with all dependencies injected.
 func NewGetProfileUseCase(resolver BrokerResolver, logger *slog.Logger) *GetProfileUseCase {
 	return &GetProfileUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -38,7 +45,7 @@ func (uc *GetProfileUseCase) Execute(ctx context.Context, query cqrs.GetProfileQ
 
 	profile, err := client.GetProfile()
 	if err != nil {
-		uc.logger.Error("Failed to get profile", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get profile", err, "email", query.Email)
 		return broker.Profile{}, fmt.Errorf("usecases: get profile: %w", err)
 	}
 
@@ -48,14 +55,14 @@ func (uc *GetProfileUseCase) Execute(ctx context.Context, query cqrs.GetProfileQ
 // GetMarginsUseCase retrieves the user's account margins.
 type GetMarginsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetMarginsUseCase creates a GetMarginsUseCase with all dependencies injected.
 func NewGetMarginsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetMarginsUseCase {
 	return &GetMarginsUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -72,7 +79,7 @@ func (uc *GetMarginsUseCase) Execute(ctx context.Context, query cqrs.GetMarginsQ
 
 	margins, err := client.GetMargins()
 	if err != nil {
-		uc.logger.Error("Failed to get margins", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get margins", err, "email", query.Email)
 		return broker.Margins{}, fmt.Errorf("usecases: get margins: %w", err)
 	}
 
@@ -84,14 +91,14 @@ func (uc *GetMarginsUseCase) Execute(ctx context.Context, query cqrs.GetMarginsQ
 // GetTradesUseCase retrieves all executed trades for the current trading day.
 type GetTradesUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetTradesUseCase creates a GetTradesUseCase with all dependencies injected.
 func NewGetTradesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetTradesUseCase {
 	return &GetTradesUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -108,7 +115,7 @@ func (uc *GetTradesUseCase) Execute(ctx context.Context, query cqrs.GetTradesQue
 
 	trades, err := client.GetTrades()
 	if err != nil {
-		uc.logger.Error("Failed to get trades", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get trades", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get trades: %w", err)
 	}
 
@@ -120,14 +127,14 @@ func (uc *GetTradesUseCase) Execute(ctx context.Context, query cqrs.GetTradesQue
 // GetOrderHistoryUseCase retrieves the state history of a specific order.
 type GetOrderHistoryUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetOrderHistoryUseCase creates a GetOrderHistoryUseCase with all dependencies injected.
 func NewGetOrderHistoryUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOrderHistoryUseCase {
 	return &GetOrderHistoryUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -147,7 +154,7 @@ func (uc *GetOrderHistoryUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 
 	history, err := client.GetOrderHistory(query.OrderID)
 	if err != nil {
-		uc.logger.Error("Failed to get order history", "email", query.Email, "order_id", query.OrderID, "error", err)
+		uc.logger.Error(ctx, "Failed to get order history", err, "email", query.Email, "order_id", query.OrderID)
 		return nil, fmt.Errorf("usecases: get order history: %w", err)
 	}
 
@@ -159,14 +166,14 @@ func (uc *GetOrderHistoryUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 // GetLTPUseCase retrieves the last traded price for instruments.
 type GetLTPUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetLTPUseCase creates a GetLTPUseCase with all dependencies injected.
 func NewGetLTPUseCase(resolver BrokerResolver, logger *slog.Logger) *GetLTPUseCase {
 	return &GetLTPUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -183,7 +190,7 @@ func (uc *GetLTPUseCase) Execute(ctx context.Context, email string, query cqrs.G
 
 	ltp, err := client.GetLTP(query.Instruments...)
 	if err != nil {
-		uc.logger.Error("Failed to get LTP", "error", err)
+		uc.logger.Error(ctx, "Failed to get LTP", err)
 		return nil, fmt.Errorf("usecases: get ltp: %w", err)
 	}
 
@@ -193,14 +200,14 @@ func (uc *GetLTPUseCase) Execute(ctx context.Context, email string, query cqrs.G
 // GetOHLCUseCase retrieves OHLC data for instruments.
 type GetOHLCUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetOHLCUseCase creates a GetOHLCUseCase with all dependencies injected.
 func NewGetOHLCUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOHLCUseCase {
 	return &GetOHLCUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -217,7 +224,7 @@ func (uc *GetOHLCUseCase) Execute(ctx context.Context, email string, query cqrs.
 
 	ohlc, err := client.GetOHLC(query.Instruments...)
 	if err != nil {
-		uc.logger.Error("Failed to get OHLC", "error", err)
+		uc.logger.Error(ctx, "Failed to get OHLC", err)
 		return nil, fmt.Errorf("usecases: get ohlc: %w", err)
 	}
 
@@ -229,14 +236,14 @@ func (uc *GetOHLCUseCase) Execute(ctx context.Context, email string, query cqrs.
 // GetQuotesUseCase retrieves full market quotes for instruments.
 type GetQuotesUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetQuotesUseCase creates a GetQuotesUseCase with all dependencies injected.
 func NewGetQuotesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetQuotesUseCase {
 	return &GetQuotesUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -253,7 +260,7 @@ func (uc *GetQuotesUseCase) Execute(ctx context.Context, email string, query cqr
 
 	quotes, err := client.GetQuotes(query.Instruments...)
 	if err != nil {
-		uc.logger.Error("Failed to get quotes", "error", err)
+		uc.logger.Error(ctx, "Failed to get quotes", err)
 		return nil, fmt.Errorf("usecases: get quotes: %w", err)
 	}
 
@@ -265,14 +272,14 @@ func (uc *GetQuotesUseCase) Execute(ctx context.Context, email string, query cqr
 // GetOrderTradesUseCase retrieves executed trades for a specific order.
 type GetOrderTradesUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetOrderTradesUseCase creates a GetOrderTradesUseCase with all dependencies injected.
 func NewGetOrderTradesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOrderTradesUseCase {
 	return &GetOrderTradesUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -292,7 +299,7 @@ func (uc *GetOrderTradesUseCase) Execute(ctx context.Context, query cqrs.GetOrde
 
 	trades, err := client.GetOrderTrades(query.OrderID)
 	if err != nil {
-		uc.logger.Error("Failed to get order trades", "email", query.Email, "order_id", query.OrderID, "error", err)
+		uc.logger.Error(ctx, "Failed to get order trades", err, "email", query.Email, "order_id", query.OrderID)
 		return nil, fmt.Errorf("usecases: get order trades: %w", err)
 	}
 
@@ -302,14 +309,14 @@ func (uc *GetOrderTradesUseCase) Execute(ctx context.Context, query cqrs.GetOrde
 // GetHistoricalDataUseCase retrieves historical candle data for an instrument.
 type GetHistoricalDataUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetHistoricalDataUseCase creates a GetHistoricalDataUseCase with all dependencies injected.
 func NewGetHistoricalDataUseCase(resolver BrokerResolver, logger *slog.Logger) *GetHistoricalDataUseCase {
 	return &GetHistoricalDataUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -335,7 +342,7 @@ func (uc *GetHistoricalDataUseCase) Execute(ctx context.Context, email string, q
 
 	candles, err := client.GetHistoricalData(query.InstrumentToken, query.Interval, query.From, query.To)
 	if err != nil {
-		uc.logger.Error("Failed to get historical data", "instrument_token", query.InstrumentToken, "error", err)
+		uc.logger.Error(ctx, "Failed to get historical data", err, "instrument_token", query.InstrumentToken)
 		return nil, fmt.Errorf("usecases: get historical data: %w", err)
 	}
 

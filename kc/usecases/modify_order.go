@@ -10,17 +10,23 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
 // ModifyOrderUseCase orchestrates the order modification pipeline:
 // riskguard check -> broker API call -> domain event dispatch.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewModifyOrderUseCase takes *slog.Logger for
+// caller compatibility and converts via logport.NewSlog. Execute uses
+// ctx; helpers use context.Background().
 type ModifyOrderUseCase struct {
 	brokerResolver BrokerResolver
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
 	eventStore     EventAppender
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewModifyOrderUseCase creates a ModifyOrderUseCase with all dependencies injected.
@@ -34,7 +40,7 @@ func NewModifyOrderUseCase(
 		brokerResolver: resolver,
 		riskguard:      guard,
 		events:         events,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -94,7 +100,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 			Confirmed: cmd.Confirmed,
 		})
 		if !result.Allowed {
-			uc.logger.Warn("Modify order blocked by riskguard",
+			uc.logger.Warn(ctx, "Modify order blocked by riskguard",
 				"email", cmd.Email,
 				"order_id", cmd.OrderID,
 				"reason", result.Reason,
@@ -133,10 +139,9 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 
 	resp, err := client.ModifyOrder(cmd.OrderID, params)
 	if err != nil {
-		uc.logger.Error("Order modification failed",
+		uc.logger.Error(ctx, "Order modification failed", err,
 			"email", cmd.Email,
 			"order_id", cmd.OrderID,
-			"error", err,
 		)
 		// Emit OrderRejectedEvent so the existing order aggregate stream
 		// (keyed by OrderID) shows broker rejections inline with place /
@@ -167,7 +172,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 	}
 	uc.appendModifiedEvent(cmd, now)
 
-	uc.logger.Info("Order modified",
+	uc.logger.Info(ctx, "Order modified",
 		"email", cmd.Email,
 		"order_id", cmd.OrderID,
 	)
@@ -184,7 +189,7 @@ func (uc *ModifyOrderUseCase) appendModifiedEvent(cmd cqrs.ModifyOrderCommand, o
 	}
 	seq, err := uc.eventStore.NextSequence(cmd.OrderID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on order.modified", "order_id", cmd.OrderID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on order.modified", "order_id", cmd.OrderID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(eventsourcing.OrderModifiedPayload{
@@ -206,9 +211,9 @@ func (uc *ModifyOrderUseCase) appendModifiedEvent(cmd cqrs.ModifyOrderCommand, o
 	// Hot mutation path — route through outbox to shrink audit-loss
 	// window after the broker side-effect. See kc/eventsourcing/outbox.go.
 	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
-		uc.logger.Warn("outbox append failed on order.modified; trying direct path", "order_id", cmd.OrderID, "error", err)
+		uc.logger.Warn(context.Background(), "outbox append failed on order.modified; trying direct path", "order_id", cmd.OrderID, "error", err)
 		if err := uc.eventStore.Append(evt); err != nil {
-			uc.logger.Warn("event store Append failed on order.modified", "order_id", cmd.OrderID, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on order.modified", "order_id", cmd.OrderID, "error", err)
 		}
 	}
 }

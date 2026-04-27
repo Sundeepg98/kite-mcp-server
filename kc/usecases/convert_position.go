@@ -9,21 +9,25 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // ConvertPositionUseCase converts a position from one product type to another.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type ConvertPositionUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewConvertPositionUseCase creates a ConvertPositionUseCase with all dependencies injected.
 func NewConvertPositionUseCase(resolver BrokerResolver, logger *slog.Logger) *ConvertPositionUseCase {
 	return &ConvertPositionUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -69,15 +73,14 @@ func (uc *ConvertPositionUseCase) Execute(ctx context.Context, cmd cqrs.ConvertP
 		PositionType:    cmd.PositionType,
 	})
 	if err != nil {
-		uc.logger.Error("Failed to convert position",
+		uc.logger.Error(ctx, "Failed to convert position", err,
 			"email", cmd.Email,
 			"tradingsymbol", cmd.Tradingsymbol,
-			"error", err,
 		)
 		return false, fmt.Errorf("usecases: convert position: %w", err)
 	}
 
-	uc.logger.Info("Position converted",
+	uc.logger.Info(ctx, "Position converted",
 		"email", cmd.Email,
 		"tradingsymbol", cmd.Tradingsymbol,
 		"old_product", cmd.OldProduct,

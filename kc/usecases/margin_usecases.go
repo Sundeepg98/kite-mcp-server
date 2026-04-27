@@ -8,16 +8,21 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5 (Logger sweep): use cases in this file
+// type their logger field as the kc/logger.Logger port; constructors
+// retain *slog.Logger and convert via logport.NewSlog.
 
 // GetOrderMarginsUseCase calculates margin required for orders.
 type GetOrderMarginsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetOrderMarginsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOrderMarginsUseCase {
-	return &GetOrderMarginsUseCase{brokerResolver: resolver, logger: logger}
+	return &GetOrderMarginsUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetOrderMarginsUseCase) Execute(ctx context.Context, query cqrs.GetOrderMarginsQuery) (any, error) {
@@ -53,7 +58,7 @@ func (uc *GetOrderMarginsUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 
 	result, err := client.GetOrderMargins(params)
 	if err != nil {
-		uc.logger.Error("Failed to get order margins", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get order margins", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get order margins: %w", err)
 	}
 
@@ -63,11 +68,11 @@ func (uc *GetOrderMarginsUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 // GetBasketMarginsUseCase calculates combined margin for a basket of orders.
 type GetBasketMarginsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetBasketMarginsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetBasketMarginsUseCase {
-	return &GetBasketMarginsUseCase{brokerResolver: resolver, logger: logger}
+	return &GetBasketMarginsUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetBasketMarginsUseCase) Execute(ctx context.Context, query cqrs.GetBasketMarginsQuery) (any, error) {
@@ -103,7 +108,7 @@ func (uc *GetBasketMarginsUseCase) Execute(ctx context.Context, query cqrs.GetBa
 
 	result, err := client.GetBasketMargins(params, query.ConsiderPositions)
 	if err != nil {
-		uc.logger.Error("Failed to get basket margins", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get basket margins", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get basket margins: %w", err)
 	}
 
@@ -113,11 +118,11 @@ func (uc *GetBasketMarginsUseCase) Execute(ctx context.Context, query cqrs.GetBa
 // GetOrderChargesUseCase calculates brokerage, taxes, and charges for orders.
 type GetOrderChargesUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetOrderChargesUseCase(resolver BrokerResolver, logger *slog.Logger) *GetOrderChargesUseCase {
-	return &GetOrderChargesUseCase{brokerResolver: resolver, logger: logger}
+	return &GetOrderChargesUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetOrderChargesUseCase) Execute(ctx context.Context, query cqrs.GetOrderChargesQuery) (any, error) {
@@ -156,7 +161,7 @@ func (uc *GetOrderChargesUseCase) Execute(ctx context.Context, query cqrs.GetOrd
 
 	result, err := client.GetOrderCharges(params)
 	if err != nil {
-		uc.logger.Error("Failed to get order charges", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get order charges", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get order charges: %w", err)
 	}
 

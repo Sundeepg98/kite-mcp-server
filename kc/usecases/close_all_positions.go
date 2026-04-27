@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -23,11 +24,14 @@ func (uc *CloseAllPositionsUseCase) ExecuteCommand(ctx context.Context, cmd cqrs
 
 // CloseAllPositionsUseCase exits all open positions by placing opposite MARKET orders.
 // Pipeline: fetch positions -> filter -> riskguard per-order -> place orders -> events.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type CloseAllPositionsUseCase struct {
 	brokerResolver BrokerResolver
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewCloseAllPositionsUseCase creates a CloseAllPositionsUseCase with all dependencies injected.
@@ -41,7 +45,7 @@ func NewCloseAllPositionsUseCase(
 		brokerResolver: resolver,
 		riskguard:      guard,
 		events:         events,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -149,7 +153,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 			if !result.Allowed {
 				entry.Error = fmt.Sprintf("blocked by riskguard: %s", result.Message)
 				errorCount++
-				uc.logger.Warn("Close all: position blocked by riskguard",
+				uc.logger.Warn(ctx, "Close all: position blocked by riskguard",
 					"email", email,
 					"symbol", p.Tradingsymbol,
 					"reason", result.Reason,
@@ -175,10 +179,9 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 		if placeErr != nil {
 			entry.Error = placeErr.Error()
 			errorCount++
-			uc.logger.Error("Failed to close position",
+			uc.logger.Error(ctx, "Failed to close position", placeErr,
 				"email", email,
 				"symbol", p.Tradingsymbol,
-				"error", placeErr,
 			)
 		} else {
 			entry.OrderID = resp.OrderID
@@ -202,7 +205,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 		results = append(results, entry)
 	}
 
-	uc.logger.Info("Close all positions completed",
+	uc.logger.Info(ctx, "Close all positions completed",
 		"email", email,
 		"success", successCount,
 		"errors", errorCount,
