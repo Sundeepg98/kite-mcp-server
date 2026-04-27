@@ -70,7 +70,7 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		defer close(app.gracefulShutdownDone)
 		defer stop()
 		<-ctx.Done()
-		app.logger.Info("Shutting down server...")
+		app.Logger().Info(context.Background(), "Shutting down server...")
 
 		// Phase A — block new work. These two run BEFORE the HTTP drain
 		// so no new tool calls hit the in-flight drain and no new audit
@@ -90,7 +90,7 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			app.logger.Error("Server shutdown error", "error", err)
+			app.Logger().Error(context.Background(), "Server shutdown error", err)
 		}
 
 		// Phase C — drain in-flight events + tear down every worker that
@@ -103,7 +103,7 @@ func (app *App) setupGracefulShutdown(srv *http.Server, kcManager *kc.Manager) {
 			app.lifecycle.Shutdown()
 		}
 
-		app.logger.Info("Server shutdown complete")
+		app.Logger().Info(context.Background(), "Server shutdown complete")
 	}()
 }
 
@@ -188,11 +188,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 					continue
 				}
 				userStore.EnsureAdmin(email)
-				app.logger.Info("Admin role seeded from ADMIN_EMAILS env var", "email", email)
+				app.Logger().Info(context.Background(), "Admin role seeded from ADMIN_EMAILS env var", "email", email)
 			}
-			app.logger.Info("Admin users seeded on fresh database", "count", len(adminEmails))
+			app.Logger().Info(context.Background(), "Admin users seeded on fresh database", "count", len(adminEmails))
 		} else {
-			app.logger.Info("Skipping admin seeding — users table already populated", "user_count", userStore.Count())
+			app.Logger().Info(context.Background(), "Skipping admin seeding — users table already populated", "user_count", userStore.Count())
 		}
 	}
 
@@ -201,7 +201,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	if adminPassword := app.Config.AdminPassword; adminPassword != "" && userStore != nil && app.Config.AdminEmails != "" {
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
 		if len(adminEmails) > 1 {
-			app.logger.Warn("ADMIN_PASSWORD is shared across all admin emails. Consider setting individual passwords via the admin console after first login.")
+			app.Logger().Warn(context.Background(), "ADMIN_PASSWORD is shared across all admin emails. Consider setting individual passwords via the admin console after first login.")
 		}
 		for _, email := range adminEmails {
 			email = strings.TrimSpace(email)
@@ -211,17 +211,17 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			if !userStore.HasPassword(email) {
 				hash, err := bcrypt.GenerateFromPassword([]byte(adminPassword), 12)
 				if err != nil {
-					app.logger.Error("Failed to hash admin password", "email", email, "error", err)
+					app.Logger().Error(context.Background(), "Failed to hash admin password", err, "email", email)
 					continue
 				}
 				if err := userStore.SetPasswordHash(email, string(hash)); err != nil {
-					app.logger.Error("Failed to set admin password hash", "email", email, "error", err)
+					app.Logger().Error(context.Background(), "Failed to set admin password hash", err, "email", email)
 				} else {
-					app.logger.Info("Admin password set", "email", email)
+					app.Logger().Info(context.Background(), "Admin password set", "email", email)
 				}
 			}
 		}
-		app.logger.Warn("ADMIN_PASSWORD env var is set. Consider unsetting it after first boot for security.")
+		app.Logger().Warn(context.Background(), "ADMIN_PASSWORD env var is set. Consider unsetting it after first boot for security.")
 	}
 
 	// Wire user store into OAuth handler for admin login
@@ -236,7 +236,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			ClientSecret: app.Config.GoogleClientSecret,
 			RedirectURL:  app.Config.ExternalURL + "/auth/google/callback",
 		})
-		app.logger.Info("Google SSO enabled for admin login")
+		app.Logger().Info(context.Background(), "Google SSO enabled for admin login")
 	}
 
 	opsHandler := ops.New(kcManager, app.metrics, app.logBuffer, app.logger, app.Version, app.startTime, userStore, app.auditStore)
@@ -383,11 +383,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			if uStore != nil {
 				uStore.EnsureUser(inv.InvitedEmail, "", "", "family_invite")
 				if err := uStore.SetAdminEmail(inv.InvitedEmail, inv.AdminEmail); err != nil {
-					app.logger.Error("Failed to link family member", "invited", inv.InvitedEmail, "admin", inv.AdminEmail, "error", err)
+					app.Logger().Error(context.Background(), "Failed to link family member", err, "invited", inv.InvitedEmail, "admin", inv.AdminEmail)
 				}
 			}
 			if err := invStore.Accept(token); err != nil {
-				app.logger.Error("Failed to accept invitation", "token", token, "error", err)
+				app.Logger().Error(context.Background(), "Failed to accept invitation", err, "token", token)
 			}
 			// Redirect to login.
 			http.Redirect(w, r, "/auth/login?msg=welcome", http.StatusFound)
@@ -398,19 +398,19 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	if webhookSecret := app.Config.StripeWebhookSecret; webhookSecret != "" {
 		if bs := kcManager.BillingStoreConcrete(); bs != nil {
 			if err := bs.InitEventLogTable(); err != nil {
-				app.logger.Error("Failed to initialize webhook_events table", "error", err)
+				app.Logger().Error(context.Background(), "Failed to initialize webhook_events table", err)
 			}
 			adminUpgrade := func(email string) {
 				if uStore := kcManager.UserStoreConcrete(); uStore != nil {
 					if err := uStore.UpdateRole(email, "admin"); err != nil {
-						app.logger.Error("Failed to upgrade payer to admin", "email", email, "error", err)
+						app.Logger().Error(context.Background(), "Failed to upgrade payer to admin", err, "email", email)
 					}
 				}
 			}
 			mux.Handle("/webhooks/stripe", billing.WebhookHandler(bs, webhookSecret, app.logger, adminUpgrade))
-			app.logger.Info("Stripe webhook endpoint registered at /webhooks/stripe")
+			app.Logger().Info(context.Background(), "Stripe webhook endpoint registered at /webhooks/stripe")
 		} else {
-			app.logger.Warn("STRIPE_WEBHOOK_SECRET set but billing store not initialized (need STRIPE_SECRET_KEY)")
+			app.Logger().Warn(context.Background(), "STRIPE_WEBHOOK_SECRET set but billing store not initialized (need STRIPE_SECRET_KEY)")
 		}
 	}
 
@@ -505,7 +505,7 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
 		mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 		mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
-		app.logger.Info("pprof endpoints registered at /debug/pprof/")
+		app.Logger().Info(context.Background(), "pprof endpoints registered at /debug/pprof/")
 	}
 
 	app.serveLegalPages(mux)
@@ -843,7 +843,7 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 		return
 	}
 	if app.Config.OAuthJWTSecret == "" || app.Config.ExternalURL == "" {
-		app.logger.Info("Telegram webhook: skipping (no OAUTH_JWT_SECRET or EXTERNAL_URL)")
+		app.Logger().Info(context.Background(), "Telegram webhook: skipping (no OAUTH_JWT_SECRET or EXTERNAL_URL)")
 		return
 	}
 
@@ -868,13 +868,13 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 	webhookURL := app.Config.ExternalURL + webhookPath
 	wh, err := tgbotapi.NewWebhook(webhookURL)
 	if err != nil {
-		app.logger.Error("Telegram webhook: failed to create webhook config", "error", err)
+		app.Logger().Error(context.Background(), "Telegram webhook: failed to create webhook config", err)
 		return
 	}
 	wh.MaxConnections = 10
 	wh.AllowedUpdates = []string{"message", "callback_query"}
 	if _, err := notifier.Bot().Request(wh); err != nil {
-		app.logger.Error("Telegram webhook: failed to register with Telegram", "error", err)
+		app.Logger().Error(context.Background(), "Telegram webhook: failed to register with Telegram", err)
 		return
 	}
 
@@ -891,10 +891,10 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 		tgbotapi.BotCommand{Command: "help", Description: "Command list"},
 	)
 	if _, err := notifier.Bot().Request(commands); err != nil {
-		app.logger.Error("Telegram webhook: failed to register bot commands", "error", err)
+		app.Logger().Error(context.Background(), "Telegram webhook: failed to register bot commands", err)
 	}
 
-	app.logger.Info("Telegram bot webhook registered", "url", webhookURL)
+	app.Logger().Info(context.Background(), "Telegram bot webhook registered", "url", webhookURL)
 }
 
 // serveHTTPServer starts the HTTP server with error handling.
@@ -916,7 +916,7 @@ func (app *App) serveHTTPServer(srv *http.Server) {
 		err = srv.ListenAndServe()
 	}
 	if err != nil && err != http.ErrServerClosed {
-		app.logger.Error("HTTP server error", "error", err)
+		app.Logger().Error(context.Background(), "HTTP server error", err)
 	}
 }
 
@@ -1001,7 +1001,7 @@ func (app *App) configureAndStartServer(srv *http.Server, mux *http.ServeMux) {
 
 // startHybridServer starts a server with both SSE and MCP endpoints
 func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, url string) {
-	app.logger.Info("Starting Hybrid MCP server with both SSE and MCP endpoints", "url", "http://"+url)
+	app.Logger().Info(context.Background(), "Starting Hybrid MCP server with both SSE and MCP endpoints", "url", "http://"+url)
 
 	// Initialize both server types
 	sse := app.createSSEServer(mcpServer, url)
@@ -1020,9 +1020,9 @@ func (app *App) startHybridServer(srv *http.Server, kcManager *kc.Manager, mcpSe
 		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
 
-	app.logger.Info("Hybrid mode enabled with both SSE and MCP endpoints on the same server")
-	app.logger.Info("SSE endpoints available", "url", fmt.Sprintf("http://%s/sse and http://%s/message", url, url))
-	app.logger.Info("MCP endpoint available", "url", fmt.Sprintf("http://%s/mcp", url))
+	app.Logger().Info(context.Background(), "Hybrid mode enabled with both SSE and MCP endpoints on the same server")
+	app.Logger().Info(context.Background(), "SSE endpoints available", "url", fmt.Sprintf("http://%s/sse and http://%s/message", url, url))
+	app.Logger().Info(context.Background(), "MCP endpoint available", "url", fmt.Sprintf("http://%s/mcp", url))
 
 	// Wire graceful shutdown AFTER setupMux has populated app.rateLimiters;
 	// the `go` statement inside setupGracefulShutdown establishes the
@@ -1050,7 +1050,7 @@ func (app *App) startStdIOServer(srv *http.Server, kcManager *kc.Manager, mcpSer
 // stdio.Listen takes io.Reader, io.Writer interfaces). The production
 // path passes the file descriptors backing os.Stdin/os.Stdout directly.
 func (app *App) startStdIOServerIO(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, stdin io.Reader, stdout io.Writer) {
-	app.logger.Info("Starting STDIO MCP server...")
+	app.Logger().Info(context.Background(), "Starting STDIO MCP server...")
 	stdio := server.NewStdioServer(mcpServer)
 
 	// Setup mux with common handlers
@@ -1077,13 +1077,13 @@ func (app *App) startStdIOServerIO(srv *http.Server, kcManager *kc.Manager, mcpS
 		}()
 	}
 	if err := stdio.Listen(ctx, stdin, stdout); err != nil {
-		app.logger.Error("STDIO server error", "error", err)
+		app.Logger().Error(context.Background(), "STDIO server error", err)
 	}
 }
 
 // startSSEServer starts a server in SSE mode
 func (app *App) startSSEServer(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, url string) {
-	app.logger.Info("Starting SSE MCP server", "url", "http://"+url)
+	app.Logger().Info(context.Background(), "Starting SSE MCP server", "url", "http://"+url)
 	sse := app.createSSEServer(mcpServer, url)
 
 	// Setup mux with common handlers
@@ -1093,13 +1093,13 @@ func (app *App) startSSEServer(srv *http.Server, kcManager *kc.Manager, mcpServe
 	// Wire graceful shutdown AFTER setupMux (see startHybridServer).
 	app.setupGracefulShutdown(srv, kcManager)
 
-	app.logger.Info("Active MCP and Kite sessions will be monitored and cleaned up automatically")
+	app.Logger().Info(context.Background(), "Active MCP and Kite sessions will be monitored and cleaned up automatically")
 	app.configureAndStartServer(srv, mux)
 }
 
 // startHTTPServer starts a server in HTTP mode
 func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServer *server.MCPServer, url string) {
-	app.logger.Info("Starting Streamable HTTP MCP server", "url", "http://"+url)
+	app.Logger().Info(context.Background(), "Starting Streamable HTTP MCP server", "url", "http://"+url)
 	streamable := app.createStreamableHTTPServer(mcpServer, kcManager)
 
 	// Setup mux with common handlers
@@ -1110,7 +1110,7 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	if app.oauthHandler != nil {
 		// IP rate limit → RequireAuth → per-user rate limit → handler.
 		mux.Handle("/mcp", rateLimit(app.rateLimiters.mcp)(app.oauthHandler.RequireAuth(rateLimitUser(app.rateLimiters.mcpUser)(http.HandlerFunc(mcpHandler)))))
-		app.logger.Info("OAuth middleware enabled for /mcp endpoint")
+		app.Logger().Info(context.Background(), "OAuth middleware enabled for /mcp endpoint")
 	} else {
 		mux.Handle("/mcp", rateLimitFunc(app.rateLimiters.mcp, mcpHandler))
 	}
@@ -1118,9 +1118,9 @@ func (app *App) startHTTPServer(srv *http.Server, kcManager *kc.Manager, mcpServ
 	// Wire graceful shutdown AFTER setupMux (see startHybridServer).
 	app.setupGracefulShutdown(srv, kcManager)
 
-	app.logger.Info("MCP session manager configured with automatic cleanup for both MCP and Kite sessions")
-	app.logger.Info("MCP Session manager configured", "session_expiry", kc.DefaultSessionDuration)
-	app.logger.Info("Serving documentation at root URL")
+	app.Logger().Info(context.Background(), "MCP session manager configured with automatic cleanup for both MCP and Kite sessions")
+	app.Logger().Info(context.Background(), "MCP Session manager configured", "session_expiry", kc.DefaultSessionDuration)
+	app.Logger().Info(context.Background(), "Serving documentation at root URL")
 
 	app.configureAndStartServer(srv, mux)
 }
@@ -1144,7 +1144,7 @@ func (app *App) initStatusPageTemplate() error {
 		return fmt.Errorf("failed to parse legal template: %w", err)
 	}
 	app.legalTemplate = legal
-	app.logger.Info("Status, landing, and legal templates initialized successfully")
+	app.Logger().Info(context.Background(), "Status, landing, and legal templates initialized successfully")
 	return nil
 }
 
@@ -1207,7 +1207,7 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 				Title:   title,
 				Content: htmlContent,
 			}); err != nil {
-				app.logger.Error("Failed to execute legal template", "page", title, "error", err)
+				app.Logger().Error(context.Background(), "Failed to execute legal template", err, "page", title)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -1218,7 +1218,7 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 
 	mux.HandleFunc("/terms", serve("Terms of Service", termsHTML, termsMarkdown))
 	mux.HandleFunc("/privacy", serve("Privacy Policy", privacyHTML, privacyMarkdown))
-	app.logger.Info("Legal pages registered at /terms and /privacy")
+	app.Logger().Info(context.Background(), "Legal pages registered at /terms and /privacy")
 }
 
 // serveErrorPage renders a styled HTML error page with the given status code, title, and message.
@@ -1271,18 +1271,18 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 
 		var buf bytes.Buffer
 		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
-			app.logger.Error("Failed to execute landing template", "error", err)
+			app.Logger().Error(context.Background(), "Failed to execute landing template", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if _, err := buf.WriteTo(w); err != nil {
-			app.logger.Error("Failed to write status page", "error", err)
+			app.Logger().Error(context.Background(), "Failed to write status page", err)
 		}
 	})
 
-	app.logger.Info("Template-based status page configured to be served at root URL")
+	app.Logger().Info(context.Background(), "Template-based status page configured to be served at root URL")
 }
 
 // --- OAuth adapter types ---
