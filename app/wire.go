@@ -39,7 +39,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if err := app.envCheck(); err != nil {
 		return nil, nil, fmt.Errorf("environment validation failed: %w", err)
 	}
-	app.logger.Info("Creating Kite Connect manager...")
+	app.Logger().Info(context.Background(), "Creating Kite Connect manager...")
 	// InstrumentsSkipFetch is a test-only seam that causes the instruments
 	// manager to load an empty map instead of fetching
 	// api.kite.trade/instruments.json at startup. Populated from the
@@ -62,7 +62,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	var alertDB *alerts.DB
 	if app.Config.AlertDBPath != "" {
 		if opened, dbErr := alerts.OpenDB(app.Config.AlertDBPath); dbErr != nil {
-			app.logger.Error("Failed to open alert DB, using in-memory only", "error", dbErr)
+			app.Logger().Error(context.Background(), "Failed to open alert DB, using in-memory only", dbErr)
 		} else {
 			alertDB = opened
 			app.alertDB = opened // lifecycle "alert_db" closes this on shutdown
@@ -175,10 +175,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 
 	// Initialize the status template early for the status page
 	if err := app.initStatusPageTemplate(); err != nil {
-		app.logger.Warn("Failed to initialize status template", "error", err)
+		app.Logger().Warn(context.Background(), "Failed to initialize status template", "error", err)
 	}
 
-	app.logger.Debug("Kite Connect manager created successfully")
+	app.Logger().Debug(context.Background(), "Kite Connect manager created successfully")
 
 	// Audit store: the pointer was constructed pre-NewWithOptions and
 	// already threaded into the manager via WithAuditStore (cycle inversion
@@ -276,10 +276,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			if !app.DevMode {
 				return nil, nil, fmt.Errorf("consent log required in production: init table: %w", err)
 			}
-			app.logger.Error("Failed to initialize consent log table (DevMode: continuing)", "error", err)
+			app.Logger().Error(context.Background(), "Failed to initialize consent log table (DevMode: continuing)", err)
 			app.consentStore = nil
 		} else {
-			app.logger.Info("DPDP consent log enabled")
+			app.Logger().Info(context.Background(), "DPDP consent log enabled")
 		}
 	}
 
@@ -305,7 +305,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				return uc.Execute(ctx, cmd)
 			})
 			if err != nil {
-				app.logger.Error("Failed to register WithdrawConsentCommand handler", "error", err)
+				app.Logger().Error(context.Background(), "Failed to register WithdrawConsentCommand handler", err)
 			}
 		}
 	}
@@ -394,12 +394,12 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				}
 				msg := fmt.Sprintf("<b>RiskGuard Alert</b>\nAuto-froze trading for <b>%s</b>\nReason: %s", email, reason)
 				if err := notifier.SendHTMLMessage(chatID, msg); err != nil {
-					app.logger.Error("Failed to send auto-freeze Telegram alert to admin", "admin", adminEmail, "error", err)
+					app.Logger().Error(context.Background(), "Failed to send auto-freeze Telegram alert to admin", err, "admin", adminEmail)
 				}
 			}
 		})
 		if notifier != nil {
-			app.logger.Info("RiskGuard auto-freeze Telegram notifications wired")
+			app.Logger().Info(context.Background(), "RiskGuard auto-freeze Telegram notifications wired")
 		}
 	}
 	// Note: kcManager.SetRiskGuard(riskGuard) is no longer needed — the
@@ -431,7 +431,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		eventStore := eventsourcing.NewEventStore(alertDB)
 		if err := eventStore.InitTable(); err != nil {
-			app.logger.Error("Failed to initialize domain_events table", "error", err)
+			app.Logger().Error(context.Background(), "Failed to initialize domain_events table", err)
 		} else {
 			// PR-B: outbox staging table + async pump for hot mutation
 			// paths. Drains event_outbox → domain_events every 100ms,
@@ -439,10 +439,10 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// at startup. Hot use cases (place/modify/cancel/create_alert)
 			// write to the outbox first; the pump consumes asynchronously.
 			if err := eventStore.InitOutboxTable(); err != nil {
-				app.logger.Error("Failed to initialize event_outbox table", "error", err)
+				app.Logger().Error(context.Background(), "Failed to initialize event_outbox table", err)
 			} else {
 				app.outboxPump = eventsourcing.NewOutboxPump(eventStore, app.logger)
-				app.logger.Info("Event outbox pump started")
+				app.Logger().Info(context.Background(), "Event outbox pump started")
 			}
 			kcManager.SetEventStore(eventStore)
 
@@ -472,9 +472,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				fx.Populate(&edInit),
 			)
 			if err := edFxApp.Err(); err != nil {
-				app.logger.Error("Failed to wire event dispatcher subscriptions", "error", err)
+				app.Logger().Error(context.Background(), "Failed to wire event dispatcher subscriptions", err)
 			} else {
-				app.logger.Info("Domain event store initialized and subscribed",
+				app.Logger().Info(context.Background(), "Domain event store initialized and subscribed",
 					"subscription_count", edInit.SubscriptionCount)
 			}
 		}
@@ -494,7 +494,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		paperStore := papertrading.NewStore(alertDB, app.logger)
 		if err := paperStore.InitTables(); err != nil {
-			app.logger.Error("Failed to initialize paper trading tables", "error", err)
+			app.Logger().Error(context.Background(), "Failed to initialize paper trading tables", err)
 		}
 		paperEngine = papertrading.NewEngine(paperStore, app.logger)
 		// Thread the shared domain event dispatcher so paper fills emit
@@ -522,11 +522,11 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			// production defaults (5s / 60s).
 		})
 		app.fillWatcher.Start()
-		app.logger.Info("OrderFilledEvent fill-watcher wired (stopgap pre-websocket)")
+		app.Logger().Info(context.Background(), "OrderFilledEvent fill-watcher wired (stopgap pre-websocket)")
 	}
 
 	// Create MCP server
-	app.logger.Info("Creating MCP server...")
+	app.Logger().Info(context.Background(), "Creating MCP server...")
 
 	// Wave D Phase 2 Slice P2.4d+e: middleware-chain assembly +
 	// server construction delegated to providers.BuildMiddlewareChain
@@ -597,7 +597,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	app.rateLimitReloadStop = make(chan struct{})
 	_, rateLimitReloadDone := startRateLimitReloadLoop(toolRateLimiter, app.logger, app.rateLimitReloadStop)
 	app.rateLimitReloadDone = rateLimitReloadDone
-	app.logger.Info("SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
+	app.Logger().Info(context.Background(), "SIGHUP rate-limit hot-reload wired", "env_var", "KITE_RATELIMIT")
 	// Billing tier middleware gates tools by subscription level (opt-in via
 	// app.Config.StripeSecretKey, populated from STRIPE_SECRET_KEY env by
 	// ConfigFromEnv). Skipped entirely in DEV_MODE — all tools are free tier.
@@ -613,9 +613,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		stripe.Key = stripeKey
 		billingStore := preBillingStore
 		if err := billingStore.InitTable(); err != nil {
-			app.logger.Error("Failed to initialize billing table", "error", err)
+			app.Logger().Error(context.Background(), "Failed to initialize billing table", err)
 		} else if err := billingStore.LoadFromDB(); err != nil {
-			app.logger.Error("Failed to load billing data from DB", "error", err)
+			app.Logger().Error(context.Background(), "Failed to load billing data from DB", err)
 		}
 		// Create adminEmailFn closure for family tier resolution.
 		adminEmailFn := func(email string) string {
@@ -634,9 +634,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		toolRateLimiter.WithTierMultiplier(func(email string) int {
 			return tierRateMultiplier(billingStore.GetTierForUser(email, adminEmailFn))
 		})
-		app.logger.Info("Billing tier enforcement enabled")
+		app.Logger().Info(context.Background(), "Billing tier enforcement enabled")
 		if app.Config.StripePricePro == "" || app.Config.StripePricePremium == "" {
-			app.logger.Warn("STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
+			app.Logger().Warn(context.Background(), "STRIPE_SECRET_KEY is set but STRIPE_PRICE_PRO and/or STRIPE_PRICE_PREMIUM are missing. Webhook tier mapping will default to Pro.")
 		}
 	}
 
@@ -650,9 +650,9 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
 		invStore := preInvStore
 		if err := invStore.InitTable(); err != nil {
-			app.logger.Error("Failed to initialize invitations table", "error", err)
+			app.Logger().Error(context.Background(), "Failed to initialize invitations table", err)
 		} else if err := invStore.LoadFromDB(); err != nil {
-			app.logger.Error("Failed to load invitations from DB", "error", err)
+			app.Logger().Error(context.Background(), "Failed to load invitations from DB", err)
 		}
 
 		// Wire family service (extracts family billing logic from manager).
@@ -676,7 +676,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				case <-ticker.C:
 					if is := kcManager.InvitationStore(); is != nil {
 						if n := is.CleanupExpired(); n > 0 {
-							app.logger.Info("Cleaned up expired invitations", "count", n)
+							app.Logger().Info(context.Background(), "Cleaned up expired invitations", "count", n)
 						}
 					}
 				}
@@ -715,7 +715,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 			return nil, nil, fmt.Errorf("mcp server fx graph: %w", err)
 		}
 	}
-	app.logger.Debug("MCP server created successfully")
+	app.Logger().Debug(context.Background(), "MCP server created successfully")
 
 	// Wire MCPServer into Manager so tool handlers can call RequestElicitation.
 	kcManager.SetMCPServer(mcpServer)
@@ -728,16 +728,16 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		paperEngine.SetLTPProvider(&paperLTPAdapter{manager: kcManager})
 		app.paperMonitor = papertrading.NewMonitor(paperEngine, 5*time.Second, app.logger)
 		app.paperMonitor.Start()
-		app.logger.Info("Paper trading engine and monitor initialized")
+		app.Logger().Info(context.Background(), "Paper trading engine and monitor initialized")
 	}
 
 	// Register tools that will interact with MCP sessions and Kite API.
 	// B77 Phase 2: pass app.registry so App-scoped plugins (registered
 	// via app.Registry().RegisterPlugin) surface in the live MCP server.
 	// Strictly isolated — DefaultRegistry plugins do NOT leak in.
-	app.logger.Info("Registering MCP tools...")
+	app.Logger().Info(context.Background(), "Registering MCP tools...")
 	mcp.RegisterToolsForRegistry(mcpServer, kcManager, app.Config.ExcludedTools, app.auditStore, app.logger, app.Config.EnableTrading, app.registry)
-	app.logger.Debug("MCP tools registered successfully")
+	app.Logger().Debug(context.Background(), "MCP tools registered successfully")
 
 	// Initialize scheduled Telegram briefings (morning + daily P&L).
 	app.initScheduler(kcManager)
@@ -807,7 +807,7 @@ func (app *App) registerLifecycle(kcManager *kc.Manager) {
 	app.lifecycle.Append("alert_db", func() error {
 		if app.alertDB != nil {
 			if err := app.alertDB.Close(); err != nil {
-				app.logger.Error("Failed to close alert DB", "error", err)
+				app.Logger().Error(context.Background(), "Failed to close alert DB", err)
 			}
 		}
 		return nil
@@ -882,7 +882,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 			taskNames = append(taskNames, "morning_briefing(09:00)", "mis_warning(14:30)", "daily_summary(15:35)")
 		}
 	} else {
-		app.logger.Info("Telegram not configured, skipping briefing tasks")
+		app.Logger().Info(context.Background(), "Telegram not configured, skipping briefing tasks")
 	}
 
 	var pnlService *alerts.PnLSnapshotService
@@ -897,7 +897,7 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 			// stays pure.
 			kcManager.SetPnLService(pnlService)
 			taskNames = append(taskNames, "pnl_snapshot(15:40)")
-			app.logger.Info("P&L journal snapshot service enabled")
+			app.Logger().Info(context.Background(), "P&L journal snapshot service enabled")
 		}
 	}
 
@@ -922,16 +922,16 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 		fx.Populate(&initialized),
 	)
 	if err := fxApp.Err(); err != nil {
-		app.logger.Error("Failed to wire scheduler graph", "error", err)
+		app.Logger().Error(context.Background(), "Failed to wire scheduler graph", err)
 		return
 	}
 	if initialized == nil || initialized.Scheduler == nil {
-		app.logger.Info("No scheduled tasks configured")
+		app.Logger().Info(context.Background(), "No scheduled tasks configured")
 		return
 	}
 
 	app.scheduler = initialized.Scheduler
-	app.logger.Info("Scheduler started", "tasks", taskNames)
+	app.Logger().Info(context.Background(), "Scheduler started", "tasks", taskNames)
 }
 
 // briefingTokenAdapter bridges kc.KiteTokenStore to alerts.TokenChecker.
