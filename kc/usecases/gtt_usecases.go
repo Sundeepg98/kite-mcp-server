@@ -9,7 +9,12 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5c (Logger sweep): GTT use cases in this
+// file type their logger field as the kc/logger.Logger port;
+// constructors retain *slog.Logger and convert via logport.NewSlog.
 
 // dispatchGTTRejection emits a typed GTTRejectedEvent for the three
 // GTT mutation surfaces (place, modify, delete). Centralised so the
@@ -32,14 +37,14 @@ func dispatchGTTRejection(events *domain.EventDispatcher, email string, triggerI
 // GetGTTsUseCase retrieves all GTT orders for a user.
 type GetGTTsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewGetGTTsUseCase creates a GetGTTsUseCase with all dependencies injected.
 func NewGetGTTsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetGTTsUseCase {
 	return &GetGTTsUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -56,7 +61,7 @@ func (uc *GetGTTsUseCase) Execute(ctx context.Context, query cqrs.GetGTTsQuery) 
 
 	gtts, err := client.GetGTTs()
 	if err != nil {
-		uc.logger.Error("Failed to get GTTs", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get GTTs", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get gtts: %w", err)
 	}
 
@@ -70,14 +75,14 @@ type PlaceGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewPlaceGTTUseCase creates a PlaceGTTUseCase with all dependencies injected.
 func NewPlaceGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceGTTUseCase {
 	return &PlaceGTTUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -138,14 +143,14 @@ func (uc *PlaceGTTUseCase) Execute(ctx context.Context, cmd cqrs.PlaceGTTCommand
 
 	resp, err := client.PlaceGTT(params)
 	if err != nil {
-		uc.logger.Error("Failed to place GTT order", "email", cmd.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to place GTT order", err, "email", cmd.Email)
 		// ES: typed rejection event. TriggerID=0 since broker never
 		// assigned one; aggregate ID falls back to synthetic key.
 		dispatchGTTRejection(uc.events, cmd.Email, 0, "place", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: place gtt: %w", err)
 	}
 
-	uc.logger.Info("GTT order placed",
+	uc.logger.Info(ctx, "GTT order placed",
 		"email", cmd.Email,
 		"trigger_id", resp.TriggerID,
 		"tradingsymbol", cmd.Instrument.Tradingsymbol,
@@ -183,14 +188,14 @@ type ModifyGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewModifyGTTUseCase creates a ModifyGTTUseCase with all dependencies injected.
 func NewModifyGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *ModifyGTTUseCase {
 	return &ModifyGTTUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -251,13 +256,13 @@ func (uc *ModifyGTTUseCase) Execute(ctx context.Context, cmd cqrs.ModifyGTTComma
 
 	resp, err := client.ModifyGTT(cmd.TriggerID, params)
 	if err != nil {
-		uc.logger.Error("Failed to modify GTT order", "email", cmd.Email, "trigger_id", cmd.TriggerID, "error", err)
+		uc.logger.Error(ctx, "Failed to modify GTT order", err, "email", cmd.Email, "trigger_id", cmd.TriggerID)
 		// ES: rejection joins the existing GTT aggregate stream via TriggerID.
 		dispatchGTTRejection(uc.events, cmd.Email, cmd.TriggerID, "modify", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: modify gtt: %w", err)
 	}
 
-	uc.logger.Info("GTT order modified",
+	uc.logger.Info(ctx, "GTT order modified",
 		"email", cmd.Email,
 		"trigger_id", cmd.TriggerID,
 		"tradingsymbol", cmd.Instrument.Tradingsymbol,
@@ -294,14 +299,14 @@ type DeleteGTTUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewDeleteGTTUseCase creates a DeleteGTTUseCase with all dependencies injected.
 func NewDeleteGTTUseCase(resolver BrokerResolver, logger *slog.Logger) *DeleteGTTUseCase {
 	return &DeleteGTTUseCase{
 		brokerResolver: resolver,
-		logger:         logger,
+		logger:         logport.NewSlog(logger),
 	}
 }
 
@@ -328,13 +333,13 @@ func (uc *DeleteGTTUseCase) Execute(ctx context.Context, cmd cqrs.DeleteGTTComma
 
 	resp, err := client.DeleteGTT(cmd.TriggerID)
 	if err != nil {
-		uc.logger.Error("Failed to delete GTT order", "email", cmd.Email, "trigger_id", cmd.TriggerID, "error", err)
+		uc.logger.Error(ctx, "Failed to delete GTT order", err, "email", cmd.Email, "trigger_id", cmd.TriggerID)
 		// ES: rejection joins the existing GTT aggregate stream via TriggerID.
 		dispatchGTTRejection(uc.events, cmd.Email, cmd.TriggerID, "delete", err.Error())
 		return broker.GTTResponse{}, fmt.Errorf("usecases: delete gtt: %w", err)
 	}
 
-	uc.logger.Info("GTT order deleted",
+	uc.logger.Info(ctx, "GTT order deleted",
 		"email", cmd.Email,
 		"trigger_id", cmd.TriggerID,
 	)

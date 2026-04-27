@@ -9,7 +9,12 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5c (Logger sweep): MF use cases in this
+// file type their logger field as the kc/logger.Logger port;
+// constructors retain *slog.Logger and convert via logport.NewSlog.
 
 // dispatchMFRejection emits a typed MFOrderRejectedEvent for the four
 // MF mutation surfaces (place_order, cancel_order, place_sip,
@@ -34,11 +39,11 @@ func dispatchMFRejection(events *domain.EventDispatcher, email, orderID, source,
 // GetMFOrdersUseCase retrieves all mutual fund orders.
 type GetMFOrdersUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetMFOrdersUseCase(resolver BrokerResolver, logger *slog.Logger) *GetMFOrdersUseCase {
-	return &GetMFOrdersUseCase{brokerResolver: resolver, logger: logger}
+	return &GetMFOrdersUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetMFOrdersUseCase) Execute(ctx context.Context, query cqrs.GetMFOrdersQuery) ([]broker.MFOrder, error) {
@@ -53,7 +58,7 @@ func (uc *GetMFOrdersUseCase) Execute(ctx context.Context, query cqrs.GetMFOrder
 
 	orders, err := client.GetMFOrders()
 	if err != nil {
-		uc.logger.Error("Failed to get MF orders", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get MF orders", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get mf orders: %w", err)
 	}
 
@@ -63,11 +68,11 @@ func (uc *GetMFOrdersUseCase) Execute(ctx context.Context, query cqrs.GetMFOrder
 // GetMFSIPsUseCase retrieves all mutual fund SIPs.
 type GetMFSIPsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetMFSIPsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetMFSIPsUseCase {
-	return &GetMFSIPsUseCase{brokerResolver: resolver, logger: logger}
+	return &GetMFSIPsUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetMFSIPsUseCase) Execute(ctx context.Context, query cqrs.GetMFSIPsQuery) ([]broker.MFSIP, error) {
@@ -82,7 +87,7 @@ func (uc *GetMFSIPsUseCase) Execute(ctx context.Context, query cqrs.GetMFSIPsQue
 
 	sips, err := client.GetMFSIPs()
 	if err != nil {
-		uc.logger.Error("Failed to get MF SIPs", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get MF SIPs", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get mf sips: %w", err)
 	}
 
@@ -92,11 +97,11 @@ func (uc *GetMFSIPsUseCase) Execute(ctx context.Context, query cqrs.GetMFSIPsQue
 // GetMFHoldingsUseCase retrieves all mutual fund holdings.
 type GetMFHoldingsUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewGetMFHoldingsUseCase(resolver BrokerResolver, logger *slog.Logger) *GetMFHoldingsUseCase {
-	return &GetMFHoldingsUseCase{brokerResolver: resolver, logger: logger}
+	return &GetMFHoldingsUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 func (uc *GetMFHoldingsUseCase) Execute(ctx context.Context, query cqrs.GetMFHoldingsQuery) ([]broker.MFHolding, error) {
@@ -111,7 +116,7 @@ func (uc *GetMFHoldingsUseCase) Execute(ctx context.Context, query cqrs.GetMFHol
 
 	holdings, err := client.GetMFHoldings()
 	if err != nil {
-		uc.logger.Error("Failed to get MF holdings", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get MF holdings", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get mf holdings: %w", err)
 	}
 
@@ -125,11 +130,11 @@ type PlaceMFOrderUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewPlaceMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceMFOrderUseCase {
-	return &PlaceMFOrderUseCase{brokerResolver: resolver, logger: logger}
+	return &PlaceMFOrderUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -160,14 +165,14 @@ func (uc *PlaceMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFOrde
 		Tag:             cmd.Tag,
 	})
 	if err != nil {
-		uc.logger.Error("Failed to place MF order", "email", cmd.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to place MF order", err, "email", cmd.Email)
 		// ES: typed rejection event so the MF audit stream surfaces the
 		// failure path. OrderID is empty — broker never assigned one.
 		dispatchMFRejection(uc.events, cmd.Email, "", "place_order", err.Error())
 		return broker.MFOrderResponse{}, fmt.Errorf("usecases: place mf order: %w", err)
 	}
 
-	uc.logger.Info("MF order placed",
+	uc.logger.Info(ctx, "MF order placed",
 		"email", cmd.Email,
 		"tradingsymbol", cmd.Tradingsymbol,
 		"transaction_type", cmd.TransactionType,
@@ -200,11 +205,11 @@ type CancelMFOrderUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewCancelMFOrderUseCase(resolver BrokerResolver, logger *slog.Logger) *CancelMFOrderUseCase {
-	return &CancelMFOrderUseCase{brokerResolver: resolver, logger: logger}
+	return &CancelMFOrderUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -229,13 +234,13 @@ func (uc *CancelMFOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFOr
 
 	resp, err := client.CancelMFOrder(cmd.OrderID)
 	if err != nil {
-		uc.logger.Error("Failed to cancel MF order", "email", cmd.Email, "order_id", cmd.OrderID, "error", err)
+		uc.logger.Error(ctx, "Failed to cancel MF order", err, "email", cmd.Email, "order_id", cmd.OrderID)
 		// ES: rejection joins existing MF order aggregate stream via OrderID.
 		dispatchMFRejection(uc.events, cmd.Email, cmd.OrderID, "cancel_order", err.Error())
 		return broker.MFOrderResponse{}, fmt.Errorf("usecases: cancel mf order: %w", err)
 	}
 
-	uc.logger.Info("MF order cancelled", "email", cmd.Email, "order_id", cmd.OrderID)
+	uc.logger.Info(ctx, "MF order cancelled", "email", cmd.Email, "order_id", cmd.OrderID)
 
 	// ES post-migration: typed event only. Persister in wire.go
 	// handles audit-row write.
@@ -255,11 +260,11 @@ type PlaceMFSIPUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewPlaceMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *PlaceMFSIPUseCase {
-	return &PlaceMFSIPUseCase{brokerResolver: resolver, logger: logger}
+	return &PlaceMFSIPUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -295,13 +300,13 @@ func (uc *PlaceMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.PlaceMFSIPCom
 		Tag:           cmd.Tag,
 	})
 	if err != nil {
-		uc.logger.Error("Failed to place MF SIP", "email", cmd.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to place MF SIP", err, "email", cmd.Email)
 		// ES: SIP rejection — empty OrderID, broker never assigned one.
 		dispatchMFRejection(uc.events, cmd.Email, "", "place_sip", err.Error())
 		return broker.MFSIPResponse{}, fmt.Errorf("usecases: place mf sip: %w", err)
 	}
 
-	uc.logger.Info("MF SIP placed",
+	uc.logger.Info(ctx, "MF SIP placed",
 		"email", cmd.Email,
 		"tradingsymbol", cmd.Tradingsymbol,
 		"sip_id", resp.SIPID,
@@ -332,11 +337,11 @@ type CancelMFSIPUseCase struct {
 	brokerResolver BrokerResolver
 	eventStore     EventAppender
 	events         *domain.EventDispatcher
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 func NewCancelMFSIPUseCase(resolver BrokerResolver, logger *slog.Logger) *CancelMFSIPUseCase {
-	return &CancelMFSIPUseCase{brokerResolver: resolver, logger: logger}
+	return &CancelMFSIPUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -361,13 +366,13 @@ func (uc *CancelMFSIPUseCase) Execute(ctx context.Context, cmd cqrs.CancelMFSIPC
 
 	resp, err := client.CancelMFSIP(cmd.SIPID)
 	if err != nil {
-		uc.logger.Error("Failed to cancel MF SIP", "email", cmd.Email, "sip_id", cmd.SIPID, "error", err)
+		uc.logger.Error(ctx, "Failed to cancel MF SIP", err, "email", cmd.Email, "sip_id", cmd.SIPID)
 		// ES: SIPID acts as OrderID for aggregate-stream join.
 		dispatchMFRejection(uc.events, cmd.Email, cmd.SIPID, "cancel_sip", err.Error())
 		return broker.MFSIPResponse{}, fmt.Errorf("usecases: cancel mf sip: %w", err)
 	}
 
-	uc.logger.Info("MF SIP cancelled", "email", cmd.Email, "sip_id", cmd.SIPID)
+	uc.logger.Info(ctx, "MF SIP cancelled", "email", cmd.Email, "sip_id", cmd.SIPID)
 
 	// ES post-migration: typed event only. Persister in wire.go
 	// handles audit-row write.
