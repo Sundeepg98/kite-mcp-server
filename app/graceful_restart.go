@@ -29,6 +29,8 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // readyMessage is the canonical payload the child writes to the
@@ -243,20 +245,37 @@ type GracefulRestartHandler func(ctx context.Context) error
 // recovered scope so a buggy handler cannot kill the SIGUSR2
 // listener goroutine. nil handler is a no-op (Windows stub path
 // or tests that don't wire a real handler).
+//
+// Deprecated: use handleGracefulRestartSignalWithPort. This shim
+// wraps the supplied *slog.Logger via logport.NewSlog and exists
+// for the Wave D Phase 3 Logger sweep migration window only
+// (Package 7b). Call sites in graceful_restart_unix.go are migrated
+// alongside this commit; this shim retains the legacy signature for
+// any external caller (none known at HEAD; safety net).
 func handleGracefulRestartSignal(ctx context.Context, logger *slog.Logger, handler GracefulRestartHandler) {
+	handleGracefulRestartSignalWithPort(ctx, logport.NewSlog(logger), handler)
+}
+
+// handleGracefulRestartSignalWithPort is the canonical Wave D Phase 3
+// implementation. The signal-handler path has the request-cancellation
+// ctx in scope (passed by the SIGUSR2 listener loop), so log calls
+// thread that ctx — preserving any upstream X-Request-ID / trace
+// correlation captured at app startup.
+func handleGracefulRestartSignalWithPort(ctx context.Context, logger logport.Logger, handler GracefulRestartHandler) {
 	if handler == nil {
 		return
 	}
 	defer func() {
 		if r := recover(); r != nil {
 			if logger != nil {
-				logger.Error("graceful restart handler panicked", "panic", r)
+				// Recovered panic value isn't a typed error (any).
+				logger.Error(ctx, "graceful restart handler panicked", nil, "panic", r)
 			}
 		}
 	}()
 	if err := handler(ctx); err != nil {
 		if logger != nil {
-			logger.Error("graceful restart failed", "error", err)
+			logger.Error(ctx, "graceful restart failed", err)
 		}
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // StartGracefulRestartListener wires a SIGUSR2 handler that
@@ -35,11 +37,32 @@ import (
 // Unix-only: this file is behind `//go:build !windows`. The
 // Windows build of this package provides a logging-stub variant
 // that returns nil without starting a listener.
+//
+// Wave D Phase 3 Package 7b (Logger sweep): the public *slog.Logger
+// parameter is preserved as a back-compat shim so main.go and tests
+// compile unchanged. Internally the listener and fork-exec handler
+// route through logport.Logger via logport.NewSlog at the entry seam.
+// When app.go's app.logger field migrates (Package 7c) the call site
+// can flip to a port-typed accessor and this shim drops in Package 8.
 func StartGracefulRestartListener(
 	ctx context.Context,
 	cfg GracefulRestartConfig,
 	active *atomic.Int32,
 	logger *slog.Logger,
+	triggerDrain func(),
+) {
+	startGracefulRestartListenerWithPort(ctx, cfg, active, logport.NewSlog(logger), triggerDrain)
+}
+
+// startGracefulRestartListenerWithPort is the canonical Wave D Phase 3
+// implementation. Unexported because the public StartGracefulRestartListener
+// is the one main.go calls; this internal variant is the migration
+// landing zone (Package 7c may export it once app.logger is port-typed).
+func startGracefulRestartListenerWithPort(
+	ctx context.Context,
+	cfg GracefulRestartConfig,
+	active *atomic.Int32,
+	logger logport.Logger,
 	triggerDrain func(),
 ) {
 	cfg = cfg.WithDefaults()
@@ -54,8 +77,8 @@ func StartGracefulRestartListener(
 			case <-ctx.Done():
 				return
 			case <-sigCh:
-				handler := buildForkExecHandler(cfg, active, logger, triggerDrain)
-				handleGracefulRestartSignal(ctx, logger, handler)
+				handler := buildForkExecHandlerWithPort(cfg, active, logger, triggerDrain)
+				handleGracefulRestartSignalWithPort(ctx, logger, handler)
 				// After a successful graceful restart the parent
 				// process exits via triggerDrain's normal path.
 				// If we get here, the restart FAILED and we want
@@ -70,15 +93,32 @@ func StartGracefulRestartListener(
 // that implements the full protocol: socketpair, fork-exec,
 // handshake, drain. Extracted so the signal-listener loop stays
 // small and the handler can be tested with injected doubles.
+//
+// Deprecated: use buildForkExecHandlerWithPort. This shim wraps
+// the supplied *slog.Logger via logport.NewSlog. Wave D Phase 3
+// Package 7b migration window only.
 func buildForkExecHandler(
 	cfg GracefulRestartConfig,
 	active *atomic.Int32,
 	logger *slog.Logger,
 	triggerDrain func(),
 ) GracefulRestartHandler {
+	return buildForkExecHandlerWithPort(cfg, active, logport.NewSlog(logger), triggerDrain)
+}
+
+// buildForkExecHandlerWithPort is the canonical Wave D Phase 3
+// implementation. The handler closure receives the cancellation ctx
+// from the SIGUSR2 listener, threading it through every log call so
+// the restart event chain has consistent trace correlation.
+func buildForkExecHandlerWithPort(
+	cfg GracefulRestartConfig,
+	active *atomic.Int32,
+	logger logport.Logger,
+	triggerDrain func(),
+) GracefulRestartHandler {
 	return func(ctx context.Context) error {
 		if logger != nil {
-			logger.Info("graceful restart: SIGUSR2 received, forking child")
+			logger.Info(ctx, "graceful restart: SIGUSR2 received, forking child")
 		}
 
 		parentConn, childFile, err := makeSocketpair()
@@ -103,15 +143,14 @@ func buildForkExecHandler(
 			return fmt.Errorf("fork child: %w", err)
 		}
 		if logger != nil {
-			logger.Info("graceful restart: child launched", "pid", cmd.Process.Pid)
+			logger.Info(ctx, "graceful restart: child launched", "pid", cmd.Process.Pid)
 		}
 
 		// Wait for the child to write readyMessage.
 		if err := askReady(parentConn, cfg.ChildReadyTimeout); err != nil {
 			if logger != nil {
-				logger.Error("graceful restart: child failed to signal ready; parent stays up",
-					"error", err,
-					"child_pid", cmd.Process.Pid)
+				logger.Error(ctx, "graceful restart: child failed to signal ready; parent stays up",
+					err, "child_pid", cmd.Process.Pid)
 			}
 			// Don't kill the child — it might be a slow-boot that
 			// just missed the deadline. The operator will notice
@@ -119,7 +158,7 @@ func buildForkExecHandler(
 			return fmt.Errorf("child not ready: %w", err)
 		}
 		if logger != nil {
-			logger.Info("graceful restart: child ready, starting parent drain",
+			logger.Info(ctx, "graceful restart: child ready, starting parent drain",
 				"child_pid", cmd.Process.Pid,
 				"drain_deadline", cfg.DrainDeadline)
 		}
@@ -140,10 +179,10 @@ func buildForkExecHandler(
 		if active != nil {
 			if err := waitForDrain(active, cfg.DrainDeadline, 50*time.Millisecond); err != nil {
 				if logger != nil {
-					logger.Warn("graceful restart: drain deadline exceeded", "error", err)
+					logger.Warn(ctx, "graceful restart: drain deadline exceeded", "error", err)
 				}
 			} else if logger != nil {
-				logger.Info("graceful restart: drain complete, parent exiting")
+				logger.Info(ctx, "graceful restart: drain complete, parent exiting")
 			}
 		}
 		return nil
