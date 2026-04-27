@@ -443,7 +443,7 @@ func (e *PaperEngine) updatePosition(email string, order *Order, fillPrice float
 			Product:       order.Product,
 			Quantity:      qty,
 			AveragePrice:  fillPrice,
-			LastPrice:     fillPrice,
+			LastPrice:     domain.NewINR(fillPrice),
 			PnL:           0,
 		})
 	}
@@ -485,7 +485,7 @@ func (e *PaperEngine) updatePosition(email string, order *Order, fillPrice float
 		}
 	}
 
-	existing.LastPrice = fillPrice
+	existing.LastPrice = domain.NewINR(fillPrice)
 	if existing.Quantity != 0 {
 		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
 	}
@@ -521,7 +521,7 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 				Tradingsymbol: order.Tradingsymbol,
 				Quantity:      order.Quantity,
 				AveragePrice:  fillPrice,
-				LastPrice:     fillPrice,
+				LastPrice:     domain.NewINR(fillPrice),
 				PnL:           0,
 			})
 		}
@@ -529,7 +529,7 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 		totalCost := existing.AveragePrice*float64(existing.Quantity) + fillPrice*float64(order.Quantity)
 		existing.Quantity += order.Quantity
 		existing.AveragePrice = totalCost / float64(existing.Quantity)
-		existing.LastPrice = fillPrice
+		existing.LastPrice = domain.NewINR(fillPrice)
 		existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
 		return e.store.UpsertHolding(existing)
 	}
@@ -549,7 +549,7 @@ func (e *PaperEngine) updateHolding(email string, order *Order, fillPrice float6
 			`DELETE FROM paper_holdings WHERE email = ? AND exchange = ? AND tradingsymbol = ?`,
 			email, order.Exchange, order.Tradingsymbol)
 	}
-	existing.LastPrice = fillPrice
+	existing.LastPrice = domain.NewINR(fillPrice)
 	existing.PnL = float64(existing.Quantity) * (fillPrice - existing.AveragePrice)
 	return e.store.UpsertHolding(existing)
 }
@@ -656,7 +656,11 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 		return nil, err
 	}
 
-	// Refresh LTP for each position.
+	// Refresh LTP for each position. LTPProvider returns float64 (raw
+	// exchange data); wrap with domain.NewINR at this boundary so the
+	// in-domain LastPrice field stays Money. PnL math uses .Float64()
+	// because PnL itself is still float64 in this slice (commit 3 will
+	// elevate it).
 	if e.ltpProvider != nil && len(positions) > 0 {
 		instruments := make([]string, len(positions))
 		for i, p := range positions {
@@ -666,7 +670,7 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 			for _, p := range positions {
 				key := p.Exchange + ":" + p.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
-					p.LastPrice = ltp
+					p.LastPrice = domain.NewINR(ltp)
 					p.PnL = float64(p.Quantity) * (ltp - p.AveragePrice)
 				}
 			}
@@ -676,12 +680,15 @@ func (e *PaperEngine) GetPositions(email string) (any, error) {
 	day := make([]map[string]any, 0, len(positions))
 	for _, p := range positions {
 		day = append(day, map[string]any{
-			"tradingsymbol":    p.Tradingsymbol,
-			"exchange":         p.Exchange,
-			"product":          p.Product,
-			"quantity":         p.Quantity,
-			"average_price":    p.AveragePrice,
-			"last_price":       p.LastPrice,
+			"tradingsymbol": p.Tradingsymbol,
+			"exchange":      p.Exchange,
+			"product":       p.Product,
+			"quantity":      p.Quantity,
+			"average_price": p.AveragePrice,
+			// JSON boundary: Money → float64 so the Kite-API-shaped
+			// response keeps last_price as a number (matches GetMargins
+			// pattern from Slice 5).
+			"last_price":       p.LastPrice.Float64(),
 			"pnl":              p.PnL,
 			"m2m":              p.PnL,
 			"buy_quantity":     0,
@@ -702,7 +709,8 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 		return nil, err
 	}
 
-	// Refresh LTP for each holding.
+	// Refresh LTP for each holding. Same Money boundary as GetPositions:
+	// LTPProvider gives float64; wrap with domain.NewINR for storage.
 	if e.ltpProvider != nil && len(holdings) > 0 {
 		instruments := make([]string, len(holdings))
 		for i, h := range holdings {
@@ -712,7 +720,7 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 			for _, h := range holdings {
 				key := h.Exchange + ":" + h.Tradingsymbol
 				if ltp, ok := ltps[key]; ok {
-					h.LastPrice = ltp
+					h.LastPrice = domain.NewINR(ltp)
 					h.PnL = float64(h.Quantity) * (ltp - h.AveragePrice)
 				}
 			}
@@ -722,11 +730,12 @@ func (e *PaperEngine) GetHoldings(email string) (any, error) {
 	result := make([]map[string]any, 0, len(holdings))
 	for _, h := range holdings {
 		result = append(result, map[string]any{
-			"tradingsymbol":    h.Tradingsymbol,
-			"exchange":         h.Exchange,
-			"quantity":         h.Quantity,
-			"average_price":    h.AveragePrice,
-			"last_price":       h.LastPrice,
+			"tradingsymbol": h.Tradingsymbol,
+			"exchange":      h.Exchange,
+			"quantity":      h.Quantity,
+			"average_price": h.AveragePrice,
+			// JSON boundary: Money → float64.
+			"last_price":       h.LastPrice.Float64(),
 			"pnl":              h.PnL,
 			"t1_quantity":      0,
 			"instrument_token": 0,

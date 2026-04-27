@@ -170,6 +170,126 @@ func TestStatusJSONBoundaryStaysFloat(t *testing.T) {
 	assert.InDelta(t, 1_000_000.0, cashBalance, 0.01)
 }
 
+// TestPositionLastPrice_IsMoney is the type-level assertion for Slice 6a
+// (papertrading P&L sweep, commit 1 of 3): Position.LastPrice MUST be
+// domain.Money. LastPrice is a leaf "what the LTP refresh wrote" field
+// — read-only at the engine layer (set during refresh, consumed by the
+// JSON map output). Slice 1 pattern: zero Money is the "no LTP yet"
+// sentinel (set on the bare struct before refresh runs).
+func TestPositionLastPrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	p := Position{}
+	got := reflect.TypeOf(p.LastPrice)
+	if got != moneyType {
+		t.Fatalf("Position.LastPrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestHoldingLastPrice_IsMoney mirrors TestPositionLastPrice_IsMoney for
+// the Holding aggregate. Same semantic: leaf field set during LTP refresh.
+func TestHoldingLastPrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	h := Holding{}
+	got := reflect.TypeOf(h.LastPrice)
+	if got != moneyType {
+		t.Fatalf("Holding.LastPrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestPositionLastPriceZeroSentinel verifies the "no LTP yet" semantic:
+// a Position fresh from UpsertPosition (before any LTP refresh) has
+// IsZero LastPrice, distinguishable from "LTP=0" (which would be an
+// invalid LTP for any tradable instrument anyway, but the sentinel
+// makes the intent explicit).
+func TestPositionLastPriceZeroSentinel(t *testing.T) {
+	t.Parallel()
+
+	p := Position{}
+	if !p.LastPrice.IsZero() {
+		t.Errorf("zero Position should have zero LastPrice, got %v", p.LastPrice)
+	}
+	// After LTP refresh — IsPositive flips true.
+	p.LastPrice = domain.NewINR(2500)
+	if !p.LastPrice.IsPositive() {
+		t.Errorf("after LTP refresh, LastPrice should be positive")
+	}
+}
+
+// TestPositionsJSONLastPriceStaysFloat verifies the Kite-API-shaped
+// GetPositions output keeps last_price as float64 at the JSON boundary
+// — same Slice 5 pattern (Status / GetMargins). External clients that
+// JSON-decode the response read last_price as a number, not as a
+// {"amount", "currency"} object.
+func TestPositionsJSONLastPriceStaysFloat(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2600.0})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	// Place a MARKET BUY so a position exists with a known LastPrice
+	// after the LTP refresh inside GetPositions.
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         10,
+	})
+	require.NoError(t, err)
+
+	raw, err := engine.GetPositions(testEmail)
+	require.NoError(t, err)
+
+	resp, ok := raw.(map[string]any)
+	require.True(t, ok)
+	day, ok := resp["day"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, day, 1)
+
+	lp, ok := day[0]["last_price"].(float64)
+	if !ok {
+		t.Fatalf("day[0][last_price] must be float64 at JSON boundary, got %T", day[0]["last_price"])
+	}
+	assert.InDelta(t, 2600.0, lp, 0.01)
+}
+
+// TestHoldingsJSONLastPriceStaysFloat mirrors TestPositionsJSONLastPriceStaysFloat
+// for the Holdings JSON output (CNC product places a row in paper_holdings).
+func TestHoldingsJSONLastPriceStaysFloat(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:INFY": 1700.0})
+	require.NoError(t, engine.Enable(testEmail, 1_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "INFY",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "CNC",
+		"quantity":         5,
+	})
+	require.NoError(t, err)
+
+	raw, err := engine.GetHoldings(testEmail)
+	require.NoError(t, err)
+
+	holdings, ok := raw.([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, holdings, 1)
+
+	lp, ok := holdings[0]["last_price"].(float64)
+	if !ok {
+		t.Fatalf("holdings[0][last_price] must be float64 at JSON boundary, got %T", holdings[0]["last_price"])
+	}
+	assert.InDelta(t, 1700.0, lp, 0.01)
+}
+
 // TestGetMargins_BoundaryStaysFloat verifies GetMargins (consumed by the
 // Kite-API-shaped paper response) preserves float64 at the JSON wire so
 // existing dashboards / chat clients that read margin data as numbers

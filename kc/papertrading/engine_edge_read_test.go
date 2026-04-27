@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // --- toInt / toFloat coverage ---
@@ -71,7 +72,7 @@ func TestGetPositions_LTPError(t *testing.T) {
 	// Insert a position directly.
 	require.NoError(t, store.UpsertPosition(&Position{
 		Email: testEmail, Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Product: "MIS", Quantity: 10, AveragePrice: 2500, LastPrice: 2500,
+		Product: "MIS", Quantity: 10, AveragePrice: 2500, LastPrice: domain.NewINR(2500),
 	}))
 
 	// Should still return positions even if LTP fails.
@@ -99,7 +100,7 @@ func TestGetHoldings_LTPError(t *testing.T) {
 	// Insert a holding directly.
 	require.NoError(t, store.UpsertHolding(&Holding{
 		Email: testEmail, Exchange: "NSE", Tradingsymbol: "RELIANCE",
-		Quantity: 10, AveragePrice: 2500, LastPrice: 2500,
+		Quantity: 10, AveragePrice: 2500, LastPrice: domain.NewINR(2500),
 	}))
 
 	holdingsResp, err := engine.GetHoldings(testEmail)

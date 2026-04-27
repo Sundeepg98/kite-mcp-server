@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -672,7 +673,7 @@ func TestHandleClosePosition_ZeroQuantity(t *testing.T) {
 		Product:       "MIS",
 		Quantity:      0,
 		AveragePrice:  500,
-		LastPrice:     500,
+		LastPrice:     domain.NewINR(500),
 		PnL:           0,
 	})
 	require.NoError(t, err)
@@ -723,7 +724,7 @@ func TestHandleCloseAllPositions_SkipsZeroQuantity(t *testing.T) {
 		Product:       "MIS",
 		Quantity:      0,
 		AveragePrice:  500,
-		LastPrice:     500,
+		LastPrice:     domain.NewINR(500),
 		PnL:           0,
 	})
 	require.NoError(t, err)
