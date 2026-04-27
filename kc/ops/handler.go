@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/kc/users"
@@ -32,7 +33,8 @@ type Handler struct {
 	manager       *kc.Manager
 	metrics       *metrics.Manager
 	logBuffer     *LogBuffer
-	logger        *slog.Logger
+	logger        *slog.Logger // Deprecated: use loggerPort
+	loggerPort    logport.Logger
 	startTime     time.Time
 	version       string
 	userStore     *users.Store
@@ -63,12 +65,18 @@ func (h *Handler) SetAlertDBPath(path string) {
 }
 
 // New creates a new ops Handler.
+//
+// Wave D Phase 3 Package 7c-2 (Logger sweep): public signature
+// retains *slog.Logger for backward-compat with app/wire.go's call
+// site; internally also wires loggerPort via logport.NewSlog so
+// new code paths can consume the typed port with ctx threading.
 func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, userStore *users.Store, auditStore *audit.Store) *Handler {
 	h := &Handler{
 		manager:       manager,
 		metrics:       metrics,
 		logBuffer:     logBuffer,
 		logger:        logger,
+		loggerPort:    logport.NewSlog(logger),
 		startTime:     startTime,
 		version:       version,
 		userStore:     userStore,

@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 )
 
@@ -21,9 +22,18 @@ import (
 // cover one concern (activity, portfolio, orders, alerts, paper, safety).
 // Sub-handlers hold a `core *DashboardHandler` back-reference so they can
 // reach the shared state and helpers (writeJSON, userContext, ...).
+//
+// Wave D Phase 3 Package 7c-2 (Logger sweep): loggerPort field carries
+// the kc/logger.Logger port. The deprecated slog-typed logger field
+// stays populated from the same source so the ~80 consumer sites
+// across api_*.go, handler_*.go, and dashboard_*.go keep compiling
+// against the legacy slog-shape `d.logger.X(...)` idiom. After
+// consumer sites migrate to ctx-aware port surface (future cleanup
+// commit), the slog logger field is removed.
 type DashboardHandler struct {
 	manager      *kc.Manager
-	logger       *slog.Logger
+	logger       *slog.Logger // Deprecated: use loggerPort
+	loggerPort   logport.Logger
 	auditStore   *audit.Store
 	adminCheck   func(string) bool // returns true if email is admin
 	billingStore billingStoreIface // optional: billing tier lookup
@@ -55,10 +65,17 @@ type billingStoreIface interface {
 
 // NewDashboardHandler creates a new DashboardHandler. The auditStore parameter
 // can be nil if the audit trail feature is not enabled.
+//
+// Public signature retains *slog.Logger for backward-compat with
+// app/wire.go's call site; the value is wrapped via logport.NewSlog
+// so the typed-port loggerPort field is also populated. New code
+// paths should consume d.loggerPort with ctx threading; existing
+// d.logger.X(slog-shape) call sites stay green.
 func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *audit.Store) *DashboardHandler {
 	d := &DashboardHandler{
 		manager:    manager,
 		logger:     logger,
+		loggerPort: logport.NewSlog(logger),
 		auditStore: auditStore,
 	}
 	d.InitTemplates()
