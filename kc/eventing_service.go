@@ -25,6 +25,19 @@ func (e *EventingService) Dispatcher() *domain.EventDispatcher { return e.m.even
 // Also wires the dispatcher into the session service so new MCP sessions
 // emit SessionCreatedEvent, and into the trailing-stop manager so
 // successful triggers emit TrailingStopTriggeredEvent.
+//
+// Wave D Slice D2/D3: also propagates the new dispatcher into the
+// startup-once order/GTT use cases the Manager holds. Without this
+// propagation, the use cases would have captured a nil dispatcher at
+// initOrderUseCases time (because production wires the dispatcher AFTER
+// kc.NewWithOptions returns) and silently drop OrderPlaced /
+// OrderModified / OrderCancelled / GTTPlaced / GTTModified / GTTDeleted
+// events — breaking the audit-log persister + read-side projector.
+//
+// All Set* propagation calls are nil-safe: the use case's setter accepts
+// nil to disable event dispatch, and the Manager-side fields are nil
+// until initOrderUseCases runs (so the early-init path before
+// registerCQRSHandlers is also safe).
 func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	e.m.eventDispatcher = d
 	if d != nil && e.m.projector != nil {
@@ -39,6 +52,26 @@ func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	// be unset in DEV_MODE / no-SQLite configurations.
 	if e.m.trailingStopMgr != nil {
 		e.m.trailingStopMgr.SetEventDispatcher(d)
+	}
+	// Wave D propagation: order use cases.
+	if e.m.placeOrderUC != nil {
+		e.m.placeOrderUC.SetEventDispatcher(d)
+	}
+	if e.m.modifyOrderUC != nil {
+		e.m.modifyOrderUC.SetEventDispatcher(d)
+	}
+	if e.m.cancelOrderUC != nil {
+		e.m.cancelOrderUC.SetEventDispatcher(d)
+	}
+	// Wave D propagation: GTT use cases.
+	if e.m.placeGTTUC != nil {
+		e.m.placeGTTUC.SetEventDispatcher(d)
+	}
+	if e.m.modifyGTTUC != nil {
+		e.m.modifyGTTUC.SetEventDispatcher(d)
+	}
+	if e.m.deleteGTTUC != nil {
+		e.m.deleteGTTUC.SetEventDispatcher(d)
 	}
 }
 

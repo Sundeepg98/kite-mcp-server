@@ -43,6 +43,14 @@ func (uc *ModifyOrderUseCase) SetEventStore(s EventAppender) {
 	uc.eventStore = s
 }
 
+// SetEventDispatcher updates the domain event dispatcher post-construction.
+// See PlaceOrderUseCase.SetEventDispatcher for the rationale (production
+// wiring sets the dispatcher after the use case has already been built;
+// without this setter the OrderModifiedEvent emission silently drops).
+func (uc *ModifyOrderUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
+
 // Execute runs the ModifyOrder pipeline and returns the broker response.
 func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderCommand) (broker.OrderResponse, error) {
 	// 1. Validate basic inputs.

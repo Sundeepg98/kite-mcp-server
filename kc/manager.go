@@ -314,6 +314,15 @@ type Manager struct {
 	placeOrderUC  *usecases.PlaceOrderUseCase
 	modifyOrderUC *usecases.ModifyOrderUseCase
 	cancelOrderUC *usecases.CancelOrderUseCase
+
+	// Wave D Phase 1 Slice D3: GTT (Good Till Triggered) write use cases
+	// hoisted from per-request construction. Same pattern as the order
+	// triple above. GTT use cases additionally consume the
+	// eventDispatcher for typed GTTPlaced/Modified/Cancelled events
+	// (wired at construction in initOrderUseCases).
+	placeGTTUC  *usecases.PlaceGTTUseCase
+	modifyGTTUC *usecases.ModifyGTTUseCase
+	deleteGTTUC *usecases.DeleteGTTUseCase
 }
 
 // NewManager creates a new manager with default configuration.

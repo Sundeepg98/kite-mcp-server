@@ -97,19 +97,17 @@ func (m *Manager) registerOrderCommands() error {
 	}
 
 	// --- GTT: PlaceGTTCommand ---
+	//
+	// Wave D Slice D3: GTT use cases hoisted to startup-once Manager
+	// fields, same pattern as the order triple above. The event
+	// dispatcher is wired post-construction via EventingService.SetDispatcher
+	// when app/wire.go finishes its own setup.
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceGTTCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceGTTCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceGTTUseCase(m.resolverFromContext(ctx), m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
-		}
-		return uc.Execute(ctx, cmd)
+		return m.placeGTTUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
@@ -120,14 +118,7 @@ func (m *Manager) registerOrderCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewModifyGTTUseCase(m.resolverFromContext(ctx), m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
-		}
-		return uc.Execute(ctx, cmd)
+		return m.modifyGTTUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
@@ -138,14 +129,7 @@ func (m *Manager) registerOrderCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewDeleteGTTUseCase(m.resolverFromContext(ctx), m.Logger)
-		if m.eventStore != nil {
-			uc.SetEventStore(m.eventStore)
-		}
-		if m.eventDispatcher != nil {
-			uc.SetEventDispatcher(m.eventDispatcher)
-		}
-		return uc.Execute(ctx, cmd)
+		return m.deleteGTTUC.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}

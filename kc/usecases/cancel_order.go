@@ -40,6 +40,14 @@ func (uc *CancelOrderUseCase) SetEventStore(s EventAppender) {
 	uc.eventStore = s
 }
 
+// SetEventDispatcher updates the domain event dispatcher post-construction.
+// See PlaceOrderUseCase.SetEventDispatcher for the rationale (production
+// wiring sets the dispatcher after the use case has already been built;
+// without this setter the OrderCancelledEvent emission silently drops).
+func (uc *CancelOrderUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
+
 // Execute cancels the specified order and returns the broker response.
 func (uc *CancelOrderUseCase) Execute(ctx context.Context, cmd cqrs.CancelOrderCommand) (broker.OrderResponse, error) {
 	// 1. Validate basic inputs.

@@ -79,6 +79,17 @@ func (uc *PlaceOrderUseCase) SetInstrumentLookup(l InstrumentLookup) {
 	uc.instruments = l
 }
 
+// SetEventDispatcher updates the domain event dispatcher post-construction.
+// Required because production wiring (app/wire.go) constructs the dispatcher
+// AFTER kc.NewWithOptions returns and pushes it through
+// kcManager.SetEventDispatcher → EventingService.SetDispatcher. Without this
+// propagation, a startup-once-constructed PlaceOrderUseCase would capture a
+// nil dispatcher and silently drop OrderPlacedEvent / OrderFailedEvent
+// emissions. Nil-safe — passing nil disables event dispatch.
+func (uc *PlaceOrderUseCase) SetEventDispatcher(d *domain.EventDispatcher) {
+	uc.events = d
+}
+
 // Execute runs the PlaceOrder pipeline and returns the broker-assigned order ID.
 func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCommand) (string, error) {
 	// 1. Validate basic inputs.
