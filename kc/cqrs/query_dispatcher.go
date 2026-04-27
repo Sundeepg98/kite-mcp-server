@@ -1,8 +1,11 @@
 package cqrs
 
 import (
+	"context"
 	"log/slog"
 	"sync"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // QueryAuditHook is called after every query use case execution for observability.
@@ -15,16 +18,28 @@ type QueryAuditHook func(queryType string, email string, durationMs int64, err e
 // enabling logging, metrics collection, and alerting on slow or failed reads.
 //
 // Thread-safe: hooks can be added concurrently with Dispatch calls.
+//
+// Wave D Phase 3 Package 7c-1 (Logger sweep): logger field carries the
+// kc/logger.Logger port. Constructor keeps *slog.Logger for backward-
+// compat with existing callers (app/wire.go, tests) and wraps via
+// logport.NewSlog at the boundary.
 type QueryDispatcher struct {
 	mu     sync.RWMutex
 	hooks  []QueryAuditHook
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewQueryDispatcher creates a QueryDispatcher with the given logger.
 // If logger is nil, error logging is skipped (hooks still fire).
+//
+// Public signature preserves the *slog.Logger parameter for backward-
+// compat; the value is wrapped via logport.NewSlog so the internal
+// log path uses the typed port.
 func NewQueryDispatcher(logger *slog.Logger) *QueryDispatcher {
-	return &QueryDispatcher{logger: logger}
+	if logger == nil {
+		return &QueryDispatcher{}
+	}
+	return &QueryDispatcher{logger: logport.NewSlog(logger)}
 }
 
 // AddHook registers an audit hook that will be called on every Dispatch.
@@ -48,15 +63,18 @@ func (d *QueryDispatcher) Dispatch(queryType string, email string, durationMs in
 	}
 
 	if d.logger != nil {
+		// QueryDispatcher.Dispatch has no ctx parameter (signature stable
+		// for ~20 callers). Use context.Background() at the log boundary
+		// per the helper-function convention used elsewhere
+		// (kc/usecases/account_usecases.appendRevokedEvent precedent).
 		if err != nil {
-			d.logger.Error("Query failed",
+			d.logger.Error(context.Background(), "Query failed", err,
 				"type", queryType,
 				"email", email,
 				"duration_ms", durationMs,
-				"error", err,
 			)
 		} else {
-			d.logger.Debug("Query executed",
+			d.logger.Debug(context.Background(), "Query executed",
 				"type", queryType,
 				"email", email,
 				"duration_ms", durationMs,

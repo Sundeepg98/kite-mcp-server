@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // CommandBus dispatches commands to their registered handlers.
@@ -90,7 +92,14 @@ func (b *InMemoryBus) DispatchWithResult(ctx context.Context, msg any) (any, err
 }
 
 // LoggingMiddleware logs every dispatch with duration and error status.
+//
+// Wave D Phase 3 Package 7c-1 (Logger sweep): public signature retains
+// *slog.Logger for backward-compat with all existing callers
+// (app/wire.go, kc/manager.go, tests). Internally wraps via
+// logport.NewSlog so the actual log emission flows through the
+// kc/logger.Logger port with ctx threading.
 func LoggingMiddleware(logger *slog.Logger) Middleware {
+	port := logport.NewSlog(logger)
 	return func(next HandlerFunc) HandlerFunc {
 		return func(ctx context.Context, msg any) (any, error) {
 			msgType := reflect.TypeOf(msg).Name()
@@ -98,13 +107,12 @@ func LoggingMiddleware(logger *slog.Logger) Middleware {
 			result, err := next(ctx, msg)
 			duration := time.Since(start)
 			if err != nil {
-				logger.Error("Bus dispatch failed",
+				port.Error(ctx, "Bus dispatch failed", err,
 					"type", msgType,
 					"duration_ms", duration.Milliseconds(),
-					"error", err,
 				)
 			} else {
-				logger.Debug("Bus dispatch OK",
+				port.Debug(ctx, "Bus dispatch OK",
 					"type", msgType,
 					"duration_ms", duration.Milliseconds(),
 				)
