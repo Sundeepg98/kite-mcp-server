@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 import (
 	"log/slog"
@@ -104,7 +104,7 @@ func TestIntegration_MarketOrderFillsAtMockLTP(t *testing.T) {
 	// Cash deducted: 1Cr - 10*2500 = 99,75,000.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0-25_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0-25_000.0, acct.CashBalance.Float64(), 0.01)
 
 	// Position exists at correct price.
 	positions, err := engine.store.GetPositions(integrationEmail)
@@ -148,7 +148,7 @@ func TestIntegration_LimitOrderStaysOpen(t *testing.T) {
 	// Cash should be unchanged (LIMIT buy reservations don't deduct until fill).
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ func TestIntegration_PnLCalculation(t *testing.T) {
 	require.NoError(t, err)
 
 	cashAfterBuy, _ := engine.store.GetAccount(integrationEmail)
-	assert.InDelta(t, 1_00_00_000.0-50_000.0, cashAfterBuy.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0-50_000.0, cashAfterBuy.CashBalance.Float64(), 0.01)
 
 	// Price goes up to 550.
 	mc.SetPrices(map[string]float64{"NSE:WIPRO": 550.00})
@@ -287,7 +287,7 @@ func TestIntegration_PnLCalculation(t *testing.T) {
 	// Cash should be: initial - buy + sell = 1Cr - 50000 + 55000 = 1,00,05,000.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0+5_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0+5_000.0, acct.CashBalance.Float64(), 0.01)
 
 	// Position should be flat (deleted when quantity=0).
 	positions, err := engine.store.GetPositions(integrationEmail)
@@ -409,7 +409,7 @@ func TestIntegration_InsufficientCash(t *testing.T) {
 	// Cash unchanged.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 10_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 10_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +457,7 @@ func TestIntegration_ResetClearsState(t *testing.T) {
 	// Cash restored.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -571,7 +571,7 @@ func TestIntegration_PriceChangesBetweenOrders(t *testing.T) {
 	// Cash: 1Cr - 10*1500 - 10*1400 = 1Cr - 29000.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0-29_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0-29_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------
@@ -678,7 +678,7 @@ func TestIntegration_MultipleInstruments(t *testing.T) {
 	// Total cost: 10*2500 + 10*3500 + 10*1500 = 25000+35000+15000 = 75000.
 	acct, err := engine.store.GetAccount(integrationEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_00_00_000.0-75_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_00_00_000.0-75_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------

@@ -152,9 +152,11 @@ func (e *PaperEngine) Status(email string) (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"enabled":       acct.Enabled,
-		"initial_cash":  acct.InitialCash,
-		"cash_balance":  acct.CashBalance,
+		"enabled": acct.Enabled,
+		// JSON boundary: Money → float64 so the dashboard SSR + JSON
+		// marshal path see the same wire shape as before Slice 5.
+		"initial_cash":  acct.InitialCash.Float64(),
+		"cash_balance":  acct.CashBalance.Float64(),
 		"positions":     len(positions),
 		"holdings":      len(holdings),
 		"open_orders":   len(openOrders),
@@ -252,10 +254,16 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 		}
 		// Store as OPEN for later fill.
 		if txnType == "BUY" {
-			cost := float64(quantity) * price
-			if cost > acct.CashBalance {
+			cost := domain.NewINR(float64(quantity) * price)
+			// Currency-aware cash check: GreaterThan refuses cross-currency
+			// comparisons (Money.Currency mismatch returns an error rather
+			// than silent coercion). Treat the error as "unable to verify"
+			// → fail-closed for BUY (reject) since cost cannot be confirmed
+			// against cash balance.
+			over, cmpErr := cost.GreaterThan(acct.CashBalance)
+			if cmpErr != nil || over {
 				order.Status = "REJECTED"
-				order.Tag = fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost, acct.CashBalance)
+				order.Tag = fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost.Float64(), acct.CashBalance.Float64())
 				if err := e.store.InsertOrder(order); err != nil {
 					return nil, fmt.Errorf("insert rejected order: %w", err)
 				}
@@ -285,13 +293,18 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 
 // fillOrder executes an immediate fill at the given price.
 func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) (map[string]any, error) {
-	cost := float64(order.Quantity) * fillPrice
+	cost := domain.NewINR(float64(order.Quantity) * fillPrice)
 
 	// Cash check for BUY orders.
 	if order.TransactionType == "BUY" {
-		if cost > acct.CashBalance {
+		// Currency-aware cash check via Money.GreaterThan — silent
+		// INR↔USD coercion impossible. Fail-closed on currency mismatch
+		// (treat as "cannot verify" → reject), same pattern as
+		// kc/riskguard/internal_checks.go checkOrderValue.
+		over, cmpErr := cost.GreaterThan(acct.CashBalance)
+		if cmpErr != nil || over {
 			order.Status = "REJECTED"
-			order.Tag = fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost, acct.CashBalance)
+			order.Tag = fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost.Float64(), acct.CashBalance.Float64())
 			if err := e.store.InsertOrder(order); err != nil {
 				return nil, fmt.Errorf("insert rejected order: %w", err)
 			}
@@ -314,13 +327,24 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 		return nil, fmt.Errorf("insert filled order: %w", err)
 	}
 
-	// Update cash balance.
+	// Update cash balance via Money arithmetic. Both Cash and cost are
+	// INR by construction (cost was just built with NewINR; CashBalance
+	// is INR after EnableAccount). The error path on Add/Sub is the
+	// "unreachable defence" branch — log and bail rather than silently
+	// continue with stale balance.
+	var newBalance domain.Money
+	var arithErr error
 	if order.TransactionType == "BUY" {
-		acct.CashBalance -= cost
+		newBalance, arithErr = acct.CashBalance.Sub(cost)
 	} else {
-		acct.CashBalance += cost
+		newBalance, arithErr = acct.CashBalance.Add(cost)
 	}
-	if err := e.store.UpdateCashBalance(acct.Email, acct.CashBalance); err != nil {
+	if arithErr != nil {
+		return nil, fmt.Errorf("update cash arithmetic: %w", arithErr)
+	}
+	acct.CashBalance = newBalance
+	// Store boundary: drop to float64 — SQLite REAL column.
+	if err := e.store.UpdateCashBalance(acct.Email, acct.CashBalance.Float64()); err != nil {
 		return nil, fmt.Errorf("update cash: %w", err)
 	}
 
@@ -721,15 +745,21 @@ func (e *PaperEngine) GetMargins(email string) (any, error) {
 	if acct == nil {
 		return nil, fmt.Errorf("paper trading not enabled for %s", email)
 	}
+	// JSON boundary: Money → float64 so the Kite-API-shaped response
+	// matches the original wire format. utilised.debits is computed via
+	// Money.Sub for currency-aware arithmetic; the cross-currency error
+	// path is unreachable here (both fields are INR after EnableAccount)
+	// but the Sub call defends in depth.
+	debits, _ := acct.InitialCash.Sub(acct.CashBalance)
 	return map[string]any{
 		"equity": map[string]any{
 			"available": map[string]any{
-				"cash": acct.CashBalance,
+				"cash": acct.CashBalance.Float64(),
 			},
 			"utilised": map[string]any{
-				"debits": acct.InitialCash - acct.CashBalance,
+				"debits": debits.Float64(),
 			},
-			"net": acct.InitialCash,
+			"net": acct.InitialCash.Float64(),
 		},
 	}, nil
 }

@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 import (
 	"log/slog"
@@ -59,8 +59,8 @@ func TestEnableDisable(t *testing.T) {
 	// Account has correct cash.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.Equal(t, 1_000_000.0, acct.CashBalance)
-	assert.Equal(t, 1_000_000.0, acct.InitialCash)
+	assert.Equal(t, 1_000_000.0, acct.CashBalance.Float64())
+	assert.Equal(t, 1_000_000.0, acct.InitialCash.Float64())
 
 	// Disable.
 	require.NoError(t, engine.Disable(testEmail))
@@ -94,7 +94,7 @@ func TestPlaceMarketOrder(t *testing.T) {
 	// Cash should be deducted: 1M - 10*2500 = 975000.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 975_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 975_000.0, acct.CashBalance.Float64(), 0.01)
 
 	// Position should exist.
 	positions, err := engine.store.GetPositions(testEmail)
@@ -193,7 +193,7 @@ func TestInsufficientCash(t *testing.T) {
 	// Cash should be unchanged.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 10_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 10_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 func TestSellOrder(t *testing.T) {
@@ -215,7 +215,7 @@ func TestSellOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	cashAfterBuy, _ := engine.store.GetAccount(testEmail)
-	assert.InDelta(t, 920_000.0, cashAfterBuy.CashBalance, 0.01) // 1M - 100*800
+	assert.InDelta(t, 920_000.0, cashAfterBuy.CashBalance.Float64(), 0.01) // 1M - 100*800
 
 
 	// SELL 50.
@@ -233,7 +233,7 @@ func TestSellOrder(t *testing.T) {
 	// Cash should increase: 920000 + 50*800 = 960000.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 960_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 960_000.0, acct.CashBalance.Float64(), 0.01)
 
 	// Position should be reduced to 50.
 	positions, err := engine.store.GetPositions(testEmail)
@@ -363,7 +363,7 @@ func TestReset(t *testing.T) {
 	// Cash restored to initial.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_000_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // ===========================================================================
@@ -487,7 +487,7 @@ func TestMonitor_FillLimitOrder(t *testing.T) {
 	// Cash should be reduced.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.Less(t, acct.CashBalance, 1_000_000.0)
+	assert.Less(t, acct.CashBalance.Float64(), 1_000_000.0)
 
 	// Since CNC, holdings should be updated.
 	holdings, err := engine.store.GetHoldings(testEmail)
@@ -605,7 +605,7 @@ func TestResetAccount(t *testing.T) {
 
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_000_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 // TestPlaceOrder_DispatchesDomainEvents pins the paper-engine -> domain event

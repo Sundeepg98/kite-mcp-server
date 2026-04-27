@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // Monitor polls for OPEN paper orders and fills them when the LTP crosses
@@ -172,23 +174,26 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 		return
 	}
 
-	cost := float64(o.Quantity) * fillPrice
+	cost := domain.NewINR(float64(o.Quantity) * fillPrice)
 
 	// Cash check for BUY orders.
 	if o.TransactionType == "BUY" {
-		if cost > acct.CashBalance {
+		// Currency-aware: GreaterThan refuses cross-currency comparison;
+		// fail-closed on error (treat as "cannot verify" → reject).
+		over, cmpErr := cost.GreaterThan(acct.CashBalance)
+		if cmpErr != nil || over {
 			if err := m.engine.store.UpdateOrderStatus(o.OrderID, "REJECTED", 0, 0); err != nil {
 				m.logger.Error("monitor: reject order", "order_id", o.OrderID, "error", err)
 			}
 			m.logger.Warn("monitor: order rejected, insufficient cash",
-				"order_id", o.OrderID, "needed", cost, "available", acct.CashBalance)
+				"order_id", o.OrderID, "needed", cost.Float64(), "available", acct.CashBalance.Float64())
 			// ES: typed rejection event — monitor branch (place passed,
 			// fill failed because cash dropped between place and fill).
 			// Source "fill_monitor" lets projector consumers identify
 			// the time-delayed rejection branch for forensic timeline
 			// reconstruction.
 			m.engine.dispatchRejection(o.Email, o.OrderID,
-				fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost, acct.CashBalance),
+				fmt.Sprintf("insufficient cash: need %.2f, have %.2f", cost.Float64(), acct.CashBalance.Float64()),
 				"fill_monitor")
 			return
 		}
@@ -200,13 +205,23 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 		return
 	}
 
-	// Update cash balance.
+	// Update cash balance via Money arithmetic. Cross-currency error path
+	// is unreachable in practice (both INR after EnableAccount) but the
+	// typed Add/Sub defends in depth.
+	var newBalance domain.Money
+	var arithErr error
 	if o.TransactionType == "BUY" {
-		acct.CashBalance -= cost
+		newBalance, arithErr = acct.CashBalance.Sub(cost)
 	} else {
-		acct.CashBalance += cost
+		newBalance, arithErr = acct.CashBalance.Add(cost)
 	}
-	if err := m.engine.store.UpdateCashBalance(o.Email, acct.CashBalance); err != nil {
+	if arithErr != nil {
+		m.logger.Error("monitor: cash arithmetic", "order_id", o.OrderID, "error", arithErr)
+		return
+	}
+	acct.CashBalance = newBalance
+	// Store boundary: drop to float64 for SQLite REAL.
+	if err := m.engine.store.UpdateCashBalance(o.Email, acct.CashBalance.Float64()); err != nil {
 		m.logger.Error("monitor: update cash", "order_id", o.OrderID, "error", err)
 		return
 	}

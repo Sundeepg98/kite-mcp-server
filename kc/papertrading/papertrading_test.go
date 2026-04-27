@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 import (
 	"log/slog"
@@ -971,7 +971,7 @@ func TestMonitor_Fill_BuyCNC(t *testing.T) {
 	// Cash reduced.
 	acct, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.Less(t, acct.CashBalance, 1_000_000.0)
+	assert.Less(t, acct.CashBalance.Float64(), 1_000_000.0)
 }
 
 // monitor.fill — SELL order (cash should increase).
@@ -1007,7 +1007,7 @@ func TestMonitor_Fill_SellMIS(t *testing.T) {
 	// Cash should increase after SELL fill.
 	acctAfterSell, err := engine.store.GetAccount(testEmail)
 	require.NoError(t, err)
-	assert.Greater(t, acctAfterSell.CashBalance, cashAfterBuy.CashBalance)
+	assert.Greater(t, acctAfterSell.CashBalance.Float64(), cashAfterBuy.CashBalance.Float64())
 }
 
 // GetMargins with active account.
@@ -1300,5 +1300,5 @@ func TestResetAccount_ClearsAll(t *testing.T) {
 	holdings, _ := store.GetHoldings(testEmail)
 	assert.Empty(t, holdings)
 	acct, _ := store.GetAccount(testEmail)
-	assert.InDelta(t, 1_000_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_000_000.0, acct.CashBalance.Float64(), 0.01)
 }

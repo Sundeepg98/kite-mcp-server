@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 import (
 	"log/slog"
@@ -194,7 +194,7 @@ func TestMonitor_Tick_SellFillAddsCash(t *testing.T) {
 
 	// Cash after selling: 1M + 10*2500 = 1,025,000.
 	acct, _ := store.GetAccount(testEmail)
-	assert.InDelta(t, 1_025_000.0, acct.CashBalance, 0.01)
+	assert.InDelta(t, 1_025_000.0, acct.CashBalance.Float64(), 0.01)
 }
 
 
@@ -233,7 +233,7 @@ func TestMonitorFill_InsufficientCash(t *testing.T) {
 	// Verify cash is now 2000
 	acct, err := engine.store.GetAccount(push100Email)
 	require.NoError(t, err)
-	assert.InDelta(t, 2000, acct.CashBalance, 1)
+	assert.InDelta(t, 2000, acct.CashBalance.Float64(), 1)
 
 	// Now drop LTP to 400 so the LIMIT BUY triggers, but cash (2000) < cost (4000)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))

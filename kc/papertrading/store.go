@@ -7,14 +7,23 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // Account represents a paper trading account for a user.
+//
+// InitialCash and CashBalance use the domain.Money value object so the
+// engine fails fast on cross-currency comparisons rather than silently
+// coercing — same Slice 1 pattern as UserLimits.Max*INR. The zero Money
+// (Amount=0, Currency="") is the "empty / not yet funded" sentinel; once
+// EnableAccount runs, both fields hold an INR Money. SQLite REAL columns
+// stay; we bind via .Float64() and rehydrate via domain.NewINR(scanned)
+// on Scan so the wire / persistence shape is unchanged.
 type Account struct {
 	Email       string
 	Enabled     bool
-	InitialCash float64
-	CashBalance float64
+	InitialCash domain.Money
+	CashBalance domain.Money
 	CreatedAt   time.Time
 	ResetAt     time.Time
 }
@@ -155,6 +164,11 @@ CREATE TABLE IF NOT EXISTS paper_holdings (
 
 // GetAccount retrieves the paper trading account for the given email.
 // Returns nil, nil if no account exists.
+//
+// SQLite REAL → domain.Money rehydration: the underlying column type is
+// REAL (float64); we scan into local floats and wrap with domain.NewINR
+// so the returned Account presents Money values to engine code. Boundary
+// pattern matches kc/riskguard/limits.go LoadLimits (Slice 1).
 func (s *Store) GetAccount(email string) (*Account, error) {
 	row := s.db.QueryRow(
 		`SELECT email, enabled, initial_cash, cash_balance, created_at, reset_at
@@ -163,7 +177,8 @@ func (s *Store) GetAccount(email string) (*Account, error) {
 	var a Account
 	var enabled int
 	var createdAt, resetAt string
-	err := row.Scan(&a.Email, &enabled, &a.InitialCash, &a.CashBalance, &createdAt, &resetAt)
+	var initialCash, cashBalance float64
+	err := row.Scan(&a.Email, &enabled, &initialCash, &cashBalance, &createdAt, &resetAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -171,6 +186,8 @@ func (s *Store) GetAccount(email string) (*Account, error) {
 		return nil, fmt.Errorf("get account: %w", err)
 	}
 	a.Enabled = enabled == 1
+	a.InitialCash = domain.NewINR(initialCash)
+	a.CashBalance = domain.NewINR(cashBalance)
 	a.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	a.ResetAt, _ = time.Parse(time.RFC3339, resetAt)
 	return &a, nil
