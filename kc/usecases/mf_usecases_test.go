@@ -949,29 +949,6 @@ func TestConvertPosition_NilDispatcherSafe(t *testing.T) {
 	assert.True(t, ok)
 }
 
-// TestConvertPosition_AuxEventStillAppended: the existing untyped
-// appendAuxEvent path is preserved alongside the new typed dispatch
-// so audit consumers depending on the historical "position.converted"
-// StoredEvent rows aren't broken by the migration. Both paths fire on
-// success.
-func TestConvertPosition_AuxEventStillAppended(t *testing.T) {
-	t.Parallel()
-	client := &mfMockBrokerClient{convertOK: true}
-	store := &mockEventAppender{}
-	uc := NewConvertPositionUseCase(&mockBrokerResolver{client: client}, testLogger())
-	uc.SetEventStore(store)
-
-	ok, err := uc.Execute(context.Background(), cqrs.ConvertPositionCommand{
-		Email: "u@test.com", Exchange: "NSE", Tradingsymbol: "INFY", Quantity: 10,
-		OldProduct: "MIS", NewProduct: "CNC",
-	})
-	require.NoError(t, err)
-	assert.True(t, ok)
-	require.Len(t, store.appended, 1)
-	assert.Equal(t, "position.converted", store.appended[0].EventType)
-	assert.Equal(t, "Position", store.appended[0].AggregateType)
-	assert.Equal(t, "u@test.com|NSE|INFY|MIS", store.appended[0].AggregateID)
-}
 
 // ===========================================================================
 // Paper Trading Toggle Tests

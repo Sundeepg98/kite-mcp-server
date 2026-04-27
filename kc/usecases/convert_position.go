@@ -84,11 +84,17 @@ func (uc *ConvertPositionUseCase) Execute(ctx context.Context, cmd cqrs.ConvertP
 		"new_product", cmd.NewProduct,
 	)
 
-	now := time.Now().UTC()
-
-	// Typed domain event — preferred path for new projector consumers.
-	// Replaces the prior untyped map[string]any payload with a stable
-	// schema. Nil-safe: dispatcher is optional in bootstrap / tests.
+	// ES post-migration: typed event only. Persister in app/wire.go
+	// subscribes "position.converted" to makeEventPersister and writes
+	// the audit row from this dispatch (with EmailHash for PII
+	// correlation, an improvement over the prior aux-event row which
+	// lacked it). Follow-up to commit 9a36681 which migrated the
+	// other 15 dual-emit sites; position.converted was deferred to
+	// avoid cross-batch overlap with the Money VO Wave A slices.
+	//
+	// Aggregate-ID derivation lives in app/adapters.go's
+	// deriveAggregateID, routed through
+	// domain.PositionConvertedAggregateID.
 	if uc.events != nil {
 		uc.events.Dispatch(domain.PositionConvertedEvent{
 			Email:           cmd.Email,
@@ -98,28 +104,9 @@ func (uc *ConvertPositionUseCase) Execute(ctx context.Context, cmd cqrs.ConvertP
 			OldProduct:      cmd.OldProduct,
 			NewProduct:      cmd.NewProduct,
 			PositionType:    cmd.PositionType,
-			Timestamp:       now,
+			Timestamp:       time.Now().UTC(),
 		})
 	}
-
-	// Legacy untyped audit path retained for backward compatibility —
-	// existing audit-trail readers may already consume the
-	// "position.converted" StoredEvent rows under the historical
-	// map[string]any payload. Aggregate key composed of
-	// email+exchange+symbol+old_product so a CNC→MIS→CNC sequence
-	// replays cleanly under stable IDs (matches
-	// domain.PositionConvertedAggregateID).
-	aggregateID := domain.PositionConvertedAggregateID(cmd.Email, cmd.Exchange, cmd.Tradingsymbol, cmd.OldProduct)
-	appendAuxEvent(uc.eventStore, uc.logger, "Position", aggregateID, "position.converted", map[string]any{
-		"email":            cmd.Email,
-		"exchange":         cmd.Exchange,
-		"tradingsymbol":    cmd.Tradingsymbol,
-		"transaction_type": cmd.TransactionType,
-		"quantity":         cmd.Quantity,
-		"old_product":      cmd.OldProduct,
-		"new_product":      cmd.NewProduct,
-		"position_type":    cmd.PositionType,
-	})
 
 	return ok, nil
 }
