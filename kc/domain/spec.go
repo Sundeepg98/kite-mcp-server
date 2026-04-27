@@ -124,26 +124,42 @@ func (s *QuantitySpec) IsSatisfiedBy(qty int) bool {
 
 func (s *QuantitySpec) Reason() string { return s.reason }
 
-// PriceSpec validates that a price (float64) is positive and within an optional ceiling.
-// MaxPrice of 0 means no upper bound.
+// PriceSpec validates that a price is positive and within an optional ceiling.
+// A zero-Money MaxPrice means no upper bound. Currency-aware: a candidate
+// price in a different currency than the configured ceiling is rejected
+// with an explanatory reason — never silently coerced.
 type PriceSpec struct {
-	MaxPrice float64
+	MaxPrice Money // zero-Money means no upper bound
 	reason   string
 }
 
 // NewPriceSpec creates a price specification with the given ceiling.
-// Pass 0 for no upper bound.
-func NewPriceSpec(maxPrice float64) *PriceSpec {
+// Pass a zero-Money (e.g. domain.Money{}) for no upper bound; the standard
+// constructor for "no bound" is the literal zero value, which IsSatisfiedBy
+// treats as "skip ceiling check" via IsZero.
+func NewPriceSpec(maxPrice Money) *PriceSpec {
 	return &PriceSpec{MaxPrice: maxPrice}
 }
 
-func (s *PriceSpec) IsSatisfiedBy(price float64) bool {
-	if price <= 0 {
-		s.reason = fmt.Sprintf("price %.2f must be positive", price)
+// IsSatisfiedBy reports whether the candidate price is positive and (when
+// the spec has a non-zero ceiling) does not exceed MaxPrice. Cross-currency
+// comparisons are rejected — a USD ceiling cannot validate an INR
+// candidate, so the spec records a currency-mismatch reason rather than
+// performing implicit conversion.
+func (s *PriceSpec) IsSatisfiedBy(price Money) bool {
+	if !price.IsPositive() {
+		s.reason = fmt.Sprintf("price %s must be positive", price)
 		return false
 	}
-	if s.MaxPrice > 0 && price > s.MaxPrice {
-		s.reason = fmt.Sprintf("price %.2f exceeds maximum %.2f", price, s.MaxPrice)
+	if s.MaxPrice.IsZero() {
+		return true
+	}
+	if s.MaxPrice.Currency != price.Currency {
+		s.reason = fmt.Sprintf("price currency %s does not match maximum %s", price.Currency, s.MaxPrice.Currency)
+		return false
+	}
+	if price.Amount > s.MaxPrice.Amount {
+		s.reason = fmt.Sprintf("price %s exceeds maximum %s", price, s.MaxPrice)
 		return false
 	}
 	return true
@@ -153,9 +169,12 @@ func (s *PriceSpec) Reason() string { return s.reason }
 
 // OrderCandidate bundles the fields needed for composite order validation.
 // This is a transient value — not persisted, just passed through specs.
+// Price is a Money value object (currency-aware); MARKET / SL-M orders
+// carry the zero-Money by convention, and OrderSpec.IsSatisfiedBy skips
+// the price check on those order types.
 type OrderCandidate struct {
 	Quantity        int
-	Price           float64
+	Price           Money
 	Exchange        string
 	Tradingsymbol   string
 	TransactionType string // "BUY" or "SELL"

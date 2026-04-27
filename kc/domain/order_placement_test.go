@@ -187,3 +187,42 @@ func TestNewOrderPlacement_RejectsInvalidQuantity(t *testing.T) {
 	_, err := NewOrderPlacement(inst, badQty, price, "BUY", "LIMIT")
 	assert.Error(t, err)
 }
+
+// TestOrderPlacement_Notional verifies the Money×Qty product on a LIMIT
+// placement preserves the price's currency and computes the expected
+// amount. Notional is the canonical "what's the order worth?" question
+// that downstream riskguard / margin / billing calculations want — the
+// aggregate exposes it instead of every consumer doing price.Amount * qty
+// inline.
+func TestOrderPlacement_Notional(t *testing.T) {
+	t.Parallel()
+
+	price, _ := NewMoney(2500.50)
+	qty, _ := NewQuantity(100)
+	inst, _ := NewInstrumentKeyStrict("NSE", "RELIANCE")
+
+	p, err := NewOrderPlacement(inst, qty, price, "BUY", "LIMIT")
+	assert.NoError(t, err)
+
+	notional := p.Notional()
+	assert.Equal(t, "INR", notional.Currency)
+	assert.Equal(t, 250050.0, notional.Amount)
+	assert.True(t, notional.IsPositive())
+}
+
+// TestOrderPlacement_Notional_MarketOrder verifies that a MARKET
+// placement (zero-Money price by convention) produces a zero-Money
+// notional — callers that need a meaningful notional for MARKET orders
+// must estimate from LTP separately.
+func TestOrderPlacement_Notional_MarketOrder(t *testing.T) {
+	t.Parallel()
+
+	qty, _ := NewQuantity(50)
+	inst, _ := NewInstrumentKeyStrict("NSE", "INFY")
+
+	p, err := NewOrderPlacement(inst, qty, Money{}, "BUY", "MARKET")
+	assert.NoError(t, err)
+
+	notional := p.Notional()
+	assert.True(t, notional.IsZero())
+}

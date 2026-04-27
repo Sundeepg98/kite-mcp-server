@@ -90,3 +90,14 @@ func (p OrderPlacement) TransactionType() string { return p.transactionType }
 
 // OrderType returns MARKET, LIMIT, SL, or SL-M.
 func (p OrderPlacement) OrderType() string { return p.orderType }
+
+// Notional returns the placement's price × quantity as a Money value in the
+// price's currency. For MARKET / SL-M orders the price is zero-Money by
+// convention; Notional in those cases returns a zero-Money in the SAME
+// currency as the configured price (which is INR by default for unset
+// prices). Callers that need a meaningful notional for MARKET orders must
+// estimate from LTP separately — this aggregate intentionally does not
+// reach for live market data.
+func (p OrderPlacement) Notional() Money {
+	return p.price.Multiply(float64(p.qty.Int()))
+}

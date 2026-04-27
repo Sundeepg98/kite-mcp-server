@@ -92,17 +92,17 @@ func TestQuantitySpec_NegativeMinDefaultsTo1(t *testing.T) {
 
 func TestPriceSpec_ValidPrice(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(100000)
-	if !spec.IsSatisfiedBy(2500.50) {
+	spec := NewPriceSpec(NewINR(100000))
+	if !spec.IsSatisfiedBy(NewINR(2500.50)) {
 		t.Error("expected 2500.50 to satisfy")
 	}
 }
 
 func TestPriceSpec_ZeroPrice(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(100000)
-	if spec.IsSatisfiedBy(0) {
-		t.Error("expected 0 to fail (must be positive)")
+	spec := NewPriceSpec(NewINR(100000))
+	if spec.IsSatisfiedBy(Money{}) {
+		t.Error("expected zero-Money to fail (must be positive)")
 	}
 	if spec.Reason() == "" {
 		t.Error("expected non-empty reason")
@@ -111,16 +111,16 @@ func TestPriceSpec_ZeroPrice(t *testing.T) {
 
 func TestPriceSpec_NegativePrice(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(100000)
-	if spec.IsSatisfiedBy(-10) {
+	spec := NewPriceSpec(NewINR(100000))
+	if spec.IsSatisfiedBy(NewINR(-10)) {
 		t.Error("expected negative to fail")
 	}
 }
 
 func TestPriceSpec_AboveMax(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(500000)
-	if spec.IsSatisfiedBy(600000) {
+	spec := NewPriceSpec(NewINR(500000))
+	if spec.IsSatisfiedBy(NewINR(600000)) {
 		t.Error("expected 600000 to fail with max=500000")
 	}
 	if spec.Reason() == "" {
@@ -130,17 +130,33 @@ func TestPriceSpec_AboveMax(t *testing.T) {
 
 func TestPriceSpec_NoMaxBound(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(0)
-	if !spec.IsSatisfiedBy(99999999) {
-		t.Error("expected large price to satisfy when max=0")
+	spec := NewPriceSpec(Money{}) // zero-Money = no upper bound
+	if !spec.IsSatisfiedBy(NewINR(99999999)) {
+		t.Error("expected large price to satisfy when max=zero-Money")
 	}
 }
 
 func TestPriceSpec_AtMax(t *testing.T) {
 	t.Parallel()
-	spec := NewPriceSpec(500)
-	if !spec.IsSatisfiedBy(500) {
+	spec := NewPriceSpec(NewINR(500))
+	if !spec.IsSatisfiedBy(NewINR(500)) {
 		t.Error("expected price at max to satisfy")
+	}
+}
+
+// TestPriceSpec_CrossCurrencyRejected exercises the new currency-aware
+// guard added when MaxPrice was elevated from float64 to Money. A USD
+// candidate against an INR ceiling must be rejected with a currency
+// mismatch reason — never silently coerced.
+func TestPriceSpec_CrossCurrencyRejected(t *testing.T) {
+	t.Parallel()
+	spec := NewPriceSpec(NewINR(100000))
+	usd := Money{Amount: 50, Currency: "USD"}
+	if spec.IsSatisfiedBy(usd) {
+		t.Error("expected USD candidate against INR ceiling to fail")
+	}
+	if spec.Reason() == "" {
+		t.Error("expected non-empty reason for currency mismatch")
 	}
 }
 
@@ -148,10 +164,10 @@ func TestPriceSpec_AtMax(t *testing.T) {
 
 func TestOrderSpec_ValidBuyLimit(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           2500,
+		Price:           NewINR(2500),
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "BUY",
@@ -164,42 +180,42 @@ func TestOrderSpec_ValidBuyLimit(t *testing.T) {
 
 func TestOrderSpec_MarketOrderSkipsPriceCheck(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           0, // MARKET orders have price=0
+		Price:           Money{}, // MARKET orders have zero-Money price
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "BUY",
 		OrderType:       "MARKET",
 	}
 	if !spec.IsSatisfiedBy(candidate) {
-		t.Errorf("MARKET order with price=0 should pass: %s", spec.Reason())
+		t.Errorf("MARKET order with zero price should pass: %s", spec.Reason())
 	}
 }
 
 func TestOrderSpec_SLMOrderSkipsPriceCheck(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           0,
+		Price:           Money{},
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "SELL",
 		OrderType:       "SL-M",
 	}
 	if !spec.IsSatisfiedBy(candidate) {
-		t.Errorf("SL-M order with price=0 should pass: %s", spec.Reason())
+		t.Errorf("SL-M order with zero price should pass: %s", spec.Reason())
 	}
 }
 
 func TestOrderSpec_MissingTradingsymbol(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           2500,
+		Price:           NewINR(2500),
 		TransactionType: "BUY",
 		OrderType:       "LIMIT",
 	}
@@ -210,10 +226,10 @@ func TestOrderSpec_MissingTradingsymbol(t *testing.T) {
 
 func TestOrderSpec_InvalidTransactionType(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           2500,
+		Price:           NewINR(2500),
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "HOLD", // invalid
 		OrderType:       "LIMIT",
@@ -225,10 +241,10 @@ func TestOrderSpec_InvalidTransactionType(t *testing.T) {
 
 func TestOrderSpec_QtyFails(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(10, 100), NewPriceSpec(500000))
+	spec := NewOrderSpec(NewQuantitySpec(10, 100), NewPriceSpec(NewINR(500000)))
 	candidate := OrderCandidate{
 		Quantity:        5, // below min
-		Price:           2500,
+		Price:           NewINR(2500),
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "BUY",
 		OrderType:       "LIMIT",
@@ -240,10 +256,10 @@ func TestOrderSpec_QtyFails(t *testing.T) {
 
 func TestOrderSpec_PriceFails(t *testing.T) {
 	t.Parallel()
-	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(1000))
+	spec := NewOrderSpec(NewQuantitySpec(1, 10000), NewPriceSpec(NewINR(1000)))
 	candidate := OrderCandidate{
 		Quantity:        100,
-		Price:           2000, // above max
+		Price:           NewINR(2000), // above max
 		Tradingsymbol:   "RELIANCE",
 		TransactionType: "SELL",
 		OrderType:       "LIMIT",
