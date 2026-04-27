@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // PaperEngine abstracts the paper trading engine for use cases.
@@ -22,6 +24,7 @@ type PaperEngine interface {
 type PaperTradingToggleUseCase struct {
 	engine     PaperEngine
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -32,6 +35,11 @@ func NewPaperTradingToggleUseCase(engine PaperEngine, logger *slog.Logger) *Pape
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PaperTradingToggleUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful enable/disable emits PaperTradingEnabledEvent or
+// PaperTradingDisabledEvent. Nil-safe.
+func (uc *PaperTradingToggleUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute enables or disables paper trading.
 func (uc *PaperTradingToggleUseCase) Execute(ctx context.Context, cmd cqrs.PaperTradingToggleCommand) (string, error) {
@@ -47,6 +55,14 @@ func (uc *PaperTradingToggleUseCase) Execute(ctx context.Context, cmd cqrs.Paper
 			uc.logger.Error("Failed to enable paper trading", "email", cmd.Email, "error", err)
 			return "", fmt.Errorf("usecases: enable paper trading: %w", err)
 		}
+		// ES dual-emit on success.
+		if uc.events != nil {
+			uc.events.Dispatch(domain.PaperTradingEnabledEvent{
+				Email:       cmd.Email,
+				InitialCash: cmd.InitialCash,
+				Timestamp:   time.Now().UTC(),
+			})
+		}
 		appendAuxEvent(uc.eventStore, uc.logger, "PaperTrading", cmd.Email, "paper.enabled", map[string]any{
 			"email":        cmd.Email,
 			"initial_cash": cmd.InitialCash,
@@ -57,6 +73,13 @@ func (uc *PaperTradingToggleUseCase) Execute(ctx context.Context, cmd cqrs.Paper
 	if err := uc.engine.Disable(cmd.Email); err != nil {
 		uc.logger.Error("Failed to disable paper trading", "email", cmd.Email, "error", err)
 		return "", fmt.Errorf("usecases: disable paper trading: %w", err)
+	}
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.PaperTradingDisabledEvent{
+			Email:     cmd.Email,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 	appendAuxEvent(uc.eventStore, uc.logger, "PaperTrading", cmd.Email, "paper.disabled", map[string]any{
 		"email": cmd.Email,
@@ -98,6 +121,7 @@ func (uc *PaperTradingStatusUseCase) Execute(ctx context.Context, query cqrs.Pap
 type PaperTradingResetUseCase struct {
 	engine     PaperEngine
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -109,6 +133,10 @@ func NewPaperTradingResetUseCase(engine PaperEngine, logger *slog.Logger) *Paper
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PaperTradingResetUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful reset emits PaperTradingResetEvent. Nil-safe.
+func (uc *PaperTradingResetUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
+
 // Execute resets the paper trading portfolio.
 func (uc *PaperTradingResetUseCase) Execute(ctx context.Context, cmd cqrs.PaperTradingResetCommand) error {
 	if cmd.Email == "" {
@@ -118,6 +146,14 @@ func (uc *PaperTradingResetUseCase) Execute(ctx context.Context, cmd cqrs.PaperT
 	if err := uc.engine.Reset(cmd.Email); err != nil {
 		uc.logger.Error("Failed to reset paper trading", "email", cmd.Email, "error", err)
 		return fmt.Errorf("usecases: reset paper trading: %w", err)
+	}
+
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.PaperTradingResetEvent{
+			Email:     cmd.Email,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 
 	appendAuxEvent(uc.eventStore, uc.logger, "PaperTrading", cmd.Email, "paper.reset", map[string]any{

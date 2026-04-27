@@ -480,6 +480,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, client, cmd)
 	}); err != nil {
 		return err
@@ -498,6 +501,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, client, cmd)
 	}); err != nil {
 		return err
@@ -515,6 +521,9 @@ func (m *Manager) registerNativeAlertCommands() error {
 		uc := usecases.NewDeleteNativeAlertUseCase(m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return nil, uc.Execute(ctx, client, cmd)
 	}); err != nil {

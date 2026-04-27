@@ -1223,6 +1223,131 @@ type TrailingStopCancelledEvent struct {
 func (e TrailingStopCancelledEvent) EventType() string    { return "trailing_stop.cancelled" }
 func (e TrailingStopCancelledEvent) OccurredAt() time.Time { return e.Timestamp }
 
+// NativeAlertPlacedEvent is emitted on successful broker creation of
+// a server-side (Kite-native) price alert. Replaces the prior untyped
+// appendAuxEvent("native_alert.placed", ...) emit.
+//
+// UUID may be empty at place time — the broker assigns the alert UUID
+// lazily and the immediate response doesn't always carry it. The
+// aggregate ID falls back to email in that case (matching the prior
+// PlaceNativeAlertUseCase behaviour where keying-by-email was the
+// documented choice). Once the broker exposes the UUID via list, a
+// future "native_alert.uuid_assigned" event could close the loop.
+//
+// Distinct from AlertCreatedEvent (custom in-process alerts) which
+// fires from kc/alerts/store.go on user-side alert creation.
+type NativeAlertPlacedEvent struct {
+	Email     string
+	UUID      string // optional — broker may assign lazily
+	Timestamp time.Time
+}
+
+func (e NativeAlertPlacedEvent) EventType() string    { return "native_alert.placed" }
+func (e NativeAlertPlacedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// NativeAlertModifiedEvent is emitted on successful broker
+// modification of an existing native alert. UUID is required —
+// the modify use case validates it upfront.
+type NativeAlertModifiedEvent struct {
+	Email     string
+	UUID      string
+	Timestamp time.Time
+}
+
+func (e NativeAlertModifiedEvent) EventType() string    { return "native_alert.modified" }
+func (e NativeAlertModifiedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// NativeAlertDeletedEvent is emitted on successful broker deletion
+// of a native alert. One event per UUID — DeleteNativeAlertUseCase
+// loops over UUIDs and emits per-alert (matching the existing
+// appendAuxEvent loop shape).
+type NativeAlertDeletedEvent struct {
+	Email     string
+	UUID      string
+	Timestamp time.Time
+}
+
+func (e NativeAlertDeletedEvent) EventType() string    { return "native_alert.deleted" }
+func (e NativeAlertDeletedEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// NativeAlertAggregateID returns the natural aggregate key for native
+// alert events. Non-empty UUID joins the alert aggregate stream;
+// empty UUID falls back to the email (matching the prior
+// PlaceNativeAlertUseCase aggregate-id choice for placement events
+// where the broker hadn't yet assigned a UUID). Both empty falls
+// back to "native-alert:unknown" so malformed dispatches don't
+// collide with real rows.
+func NativeAlertAggregateID(uuid, email string) string {
+	if uuid != "" {
+		return uuid
+	}
+	if email != "" {
+		return email
+	}
+	return "native-alert:unknown"
+}
+
+// PaperTradingEnabledEvent is emitted on successful activation of a
+// user's paper-trading account. Captures InitialCash so a forensic
+// walk can reconstruct the seed condition without re-querying the
+// engine. Replaces the prior untyped appendAuxEvent("paper.enabled",
+// ...) emit.
+//
+// Aggregate-ID rule: keyed by email via PaperTradingAggregateID. The
+// full enable -> N resets -> disable lifecycle replays under one
+// stream. Disjoint from PaperOrderRejectedEvent (per-paper-order)
+// which keys by OrderID.
+type PaperTradingEnabledEvent struct {
+	Email       string
+	InitialCash float64
+	Timestamp   time.Time
+}
+
+func (e PaperTradingEnabledEvent) EventType() string    { return "paper.enabled" }
+func (e PaperTradingEnabledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PaperTradingDisabledEvent is emitted on successful deactivation
+// of a user's paper-trading account. Pairs with
+// PaperTradingEnabledEvent under the same email-keyed aggregate.
+type PaperTradingDisabledEvent struct {
+	Email     string
+	Timestamp time.Time
+}
+
+func (e PaperTradingDisabledEvent) EventType() string    { return "paper.disabled" }
+func (e PaperTradingDisabledEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PaperTradingResetEvent is emitted on successful reset of the
+// virtual portfolio (cash balance back to InitialCash, positions /
+// holdings cleared). Pairs with PaperTradingEnabledEvent /
+// PaperTradingDisabledEvent under the same email-keyed aggregate
+// so a full lifecycle replays cleanly.
+type PaperTradingResetEvent struct {
+	Email     string
+	Timestamp time.Time
+}
+
+func (e PaperTradingResetEvent) EventType() string    { return "paper.reset" }
+func (e PaperTradingResetEvent) OccurredAt() time.Time { return e.Timestamp }
+
+// PaperTradingAggregateID returns the natural aggregate key for
+// paper-trading lifecycle events. Keyed by email — the user's paper
+// account is per-user so the full enable / reset / disable lifecycle
+// replays under one stream. Empty falls back to "paper-trading:unknown"
+// so malformed dispatches don't collide with real rows.
+//
+// Note the disjoint key prefix from PaperOrderAggregateID
+// ("PAPER_<n>" for individual paper orders) — these two paper
+// aggregate streams (per-user lifecycle vs per-order rejection) live
+// under different ID shapes intentionally so projector consumers can
+// query them separately.
+func PaperTradingAggregateID(email string) string {
+	if email == "" {
+		return "paper-trading:unknown"
+	}
+	return email
+}
+
 // --- Event dispatcher ---
 
 // EventDispatcher is a simple in-process pub/sub for domain events.

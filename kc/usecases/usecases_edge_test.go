@@ -1899,3 +1899,202 @@ func TestServerMetrics_TopErrorUsersError(t *testing.T) {
 	require.NoError(t, err) // topErrorUsers error is silently ignored
 	assert.Nil(t, result.TopErrorUsers)
 }
+
+// --- ES success-path migration: typed events for native_alert lifecycle ---
+
+// TestPlaceNativeAlert_SuccessDispatchesNativeAlertPlaced verifies the
+// typed event fires alongside the legacy aux-event row on successful
+// alert creation. UUID is empty here because the broker doesn't carry
+// it in the immediate response (commonly assigned lazily).
+func TestPlaceNativeAlert_SuccessDispatchesNativeAlertPlaced(t *testing.T) {
+	t.Parallel()
+	client := &mockNativeAlertClient{createResult: "ok"}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("native_alert.placed", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPlaceNativeAlertUseCase(testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), client, cqrs.PlaceNativeAlertCommand{
+		Email: "trader@example.com", Params: map[string]any{"name": "test"},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured, "NativeAlertPlacedEvent must dispatch on success")
+	ev, ok := captured.(domain.NativeAlertPlacedEvent)
+	require.True(t, ok, "captured event should be NativeAlertPlacedEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", ev.Email)
+	assert.False(t, ev.Timestamp.IsZero())
+}
+
+// TestModifyNativeAlert_SuccessDispatchesNativeAlertModified verifies
+// the typed modify event fires with the UUID preserved.
+func TestModifyNativeAlert_SuccessDispatchesNativeAlertModified(t *testing.T) {
+	t.Parallel()
+	client := &mockNativeAlertClient{modifyResult: "updated"}
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("native_alert.modified", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewModifyNativeAlertUseCase(testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), client, cqrs.ModifyNativeAlertCommand{
+		Email: "trader@example.com", UUID: "alert-uuid-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.NativeAlertModifiedEvent)
+	require.True(t, ok)
+	assert.Equal(t, "alert-uuid-1", ev.UUID)
+}
+
+// TestDeleteNativeAlert_SuccessDispatchesNativeAlertDeletedPerUUID
+// verifies the typed delete event fires once per UUID — matching the
+// existing appendAuxEvent loop shape.
+func TestDeleteNativeAlert_SuccessDispatchesNativeAlertDeletedPerUUID(t *testing.T) {
+	t.Parallel()
+	events := domain.NewEventDispatcher()
+
+	var captured []domain.NativeAlertDeletedEvent
+	events.Subscribe("native_alert.deleted", func(e domain.Event) {
+		captured = append(captured, e.(domain.NativeAlertDeletedEvent))
+	})
+
+	uc := NewDeleteNativeAlertUseCase(testLogger())
+	uc.SetEventDispatcher(events)
+
+	err := uc.Execute(context.Background(), &mockNativeAlertClient{}, cqrs.DeleteNativeAlertCommand{
+		Email: "trader@example.com", UUIDs: []string{"u1", "u2", "u3"},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, captured, 3, "one event per UUID")
+	assert.Equal(t, "u1", captured[0].UUID)
+	assert.Equal(t, "u2", captured[1].UUID)
+	assert.Equal(t, "u3", captured[2].UUID)
+}
+
+// TestPlaceNativeAlert_SuccessKeepsLegacyAuxEvent verifies dual-emit:
+// typed event PLUS legacy aux-event row both fire.
+func TestPlaceNativeAlert_SuccessKeepsLegacyAuxEvent(t *testing.T) {
+	t.Parallel()
+	client := &mockNativeAlertClient{createResult: "ok"}
+	store := &mockEventAppender{}
+	uc := NewPlaceNativeAlertUseCase(testLogger())
+	uc.SetEventStore(store)
+
+	_, err := uc.Execute(context.Background(), client, cqrs.PlaceNativeAlertCommand{
+		Email: "trader@example.com",
+	})
+	require.NoError(t, err)
+	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
+	assert.Equal(t, "trader@example.com", store.appended[0].AggregateID)
+	assert.Equal(t, "NativeAlert", store.appended[0].AggregateType)
+	assert.Equal(t, "native_alert.placed", store.appended[0].EventType)
+}
+
+// --- ES success-path migration: typed events for paper trading lifecycle ---
+
+// TestPaperTradingToggle_EnableDispatchesPaperEnabled verifies the
+// typed event fires on successful paper-trading activation, with
+// InitialCash captured.
+func TestPaperTradingToggle_EnableDispatchesPaperEnabled(t *testing.T) {
+	t.Parallel()
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("paper.enabled", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPaperTradingToggleUseCase(&mockPaperEngine{}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PaperTradingToggleCommand{
+		Email: "trader@example.com", Enable: true, InitialCash: 500000,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.PaperTradingEnabledEvent)
+	require.True(t, ok, "captured event should be PaperTradingEnabledEvent, got %T", captured)
+	assert.Equal(t, "trader@example.com", ev.Email)
+	assert.InDelta(t, 500000.0, ev.InitialCash, 0.001)
+}
+
+// TestPaperTradingToggle_DisableDispatchesPaperDisabled verifies the
+// typed disable event fires on successful deactivation.
+func TestPaperTradingToggle_DisableDispatchesPaperDisabled(t *testing.T) {
+	t.Parallel()
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("paper.disabled", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPaperTradingToggleUseCase(&mockPaperEngine{}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	_, err := uc.Execute(context.Background(), cqrs.PaperTradingToggleCommand{
+		Email: "trader@example.com", Enable: false,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.PaperTradingDisabledEvent)
+	require.True(t, ok)
+	assert.Equal(t, "trader@example.com", ev.Email)
+}
+
+// TestPaperTradingReset_DispatchesPaperReset verifies the typed reset
+// event fires on successful portfolio reset.
+func TestPaperTradingReset_DispatchesPaperReset(t *testing.T) {
+	t.Parallel()
+	events := domain.NewEventDispatcher()
+
+	var captured domain.Event
+	events.Subscribe("paper.reset", func(e domain.Event) {
+		captured = e
+	})
+
+	uc := NewPaperTradingResetUseCase(&mockPaperEngine{}, testLogger())
+	uc.SetEventDispatcher(events)
+
+	err := uc.Execute(context.Background(), cqrs.PaperTradingResetCommand{
+		Email: "trader@example.com",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	ev, ok := captured.(domain.PaperTradingResetEvent)
+	require.True(t, ok)
+	assert.Equal(t, "trader@example.com", ev.Email)
+}
+
+// TestPaperTradingToggle_EnableKeepsLegacyAuxEvent verifies dual-emit
+// preserves the legacy audit row alongside the new typed dispatch.
+func TestPaperTradingToggle_EnableKeepsLegacyAuxEvent(t *testing.T) {
+	t.Parallel()
+	store := &mockEventAppender{}
+	uc := NewPaperTradingToggleUseCase(&mockPaperEngine{}, testLogger())
+	uc.SetEventStore(store)
+
+	_, err := uc.Execute(context.Background(), cqrs.PaperTradingToggleCommand{
+		Email: "trader@example.com", Enable: true, InitialCash: 100000,
+	})
+	require.NoError(t, err)
+	require.Len(t, store.appended, 1, "legacy aux-event row must still be appended")
+	assert.Equal(t, "trader@example.com", store.appended[0].AggregateID)
+	assert.Equal(t, "PaperTrading", store.appended[0].AggregateType)
+	assert.Equal(t, "paper.enabled", store.appended[0].EventType)
+}

@@ -639,6 +639,18 @@ func deriveEmailHash(e domain.Event) string {
 		return audit.HashEmail(ev.Email)
 	case domain.TrailingStopCancelledEvent:
 		return audit.HashEmail(ev.Email)
+	case domain.NativeAlertPlacedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.NativeAlertModifiedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.NativeAlertDeletedEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PaperTradingEnabledEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PaperTradingDisabledEvent:
+		return audit.HashEmail(ev.Email)
+	case domain.PaperTradingResetEvent:
+		return audit.HashEmail(ev.Email)
 	case domain.GlobalFreezeEvent:
 		// System event — no user-association field. Empty hash means
 		// "this row is not user-correlated" (the email_hash WHERE
@@ -779,6 +791,23 @@ func deriveAggregateID(e domain.Event) string {
 		return domain.TrailingStopAggregateID(ev.TrailingStopID)
 	case domain.TrailingStopCancelledEvent:
 		return domain.TrailingStopAggregateID(ev.TrailingStopID)
+	case domain.NativeAlertPlacedEvent:
+		// UUID is empty at place time (broker assigns lazily); helper
+		// falls back to email when UUID is empty (matching the prior
+		// PlaceNativeAlertUseCase aggregate-id choice).
+		return domain.NativeAlertAggregateID(ev.UUID, ev.Email)
+	case domain.NativeAlertModifiedEvent:
+		return domain.NativeAlertAggregateID(ev.UUID, ev.Email)
+	case domain.NativeAlertDeletedEvent:
+		return domain.NativeAlertAggregateID(ev.UUID, ev.Email)
+	case domain.PaperTradingEnabledEvent:
+		// Keyed by email — paper account is per-user, full enable/reset/
+		// disable lifecycle replays under one stream.
+		return domain.PaperTradingAggregateID(ev.Email)
+	case domain.PaperTradingDisabledEvent:
+		return domain.PaperTradingAggregateID(ev.Email)
+	case domain.PaperTradingResetEvent:
+		return domain.PaperTradingAggregateID(ev.Email)
 	default:
 		return "unknown"
 	}

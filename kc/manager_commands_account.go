@@ -203,6 +203,9 @@ func (m *Manager) registerAccountCommands() error {
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
+		}
 		return uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
@@ -220,6 +223,9 @@ func (m *Manager) registerAccountCommands() error {
 		uc := usecases.NewPaperTradingResetUseCase(m.paperEngine, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
+		}
+		if m.eventDispatcher != nil {
+			uc.SetEventDispatcher(m.eventDispatcher)
 		}
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {

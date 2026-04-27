@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // NativeAlertClient abstracts the Kite alert API for use cases.
@@ -22,6 +24,7 @@ type NativeAlertClient interface {
 // PlaceNativeAlertUseCase creates a server-side alert at Zerodha.
 type PlaceNativeAlertUseCase struct {
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -33,6 +36,10 @@ func NewPlaceNativeAlertUseCase(logger *slog.Logger) *PlaceNativeAlertUseCase {
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *PlaceNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
 
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful placement emits NativeAlertPlacedEvent. Nil-safe.
+func (uc *PlaceNativeAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
+
 // Execute creates a native alert via the provided client.
 func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.PlaceNativeAlertCommand) (any, error) {
 	if cmd.Email == "" {
@@ -43,6 +50,17 @@ func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAle
 	if err != nil {
 		uc.logger.Error("Failed to create native alert", "email", cmd.Email, "error", err)
 		return nil, fmt.Errorf("usecases: create native alert: %w", err)
+	}
+
+	// ES success-path migration: dual-emit. Typed event for projector
+	// consumers, legacy aux-event row for existing audit consumers.
+	// UUID is empty here — the broker assigns it lazily and the use
+	// case doesn't always see it in the immediate response.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.NativeAlertPlacedEvent{
+			Email:     cmd.Email,
+			Timestamp: time.Now().UTC(),
+		})
 	}
 
 	// Aggregate ID is the email (the broker assigns the alert UUID lazily;
@@ -87,6 +105,7 @@ func (uc *ListNativeAlertsUseCase) Execute(ctx context.Context, client NativeAle
 // ModifyNativeAlertUseCase modifies an existing native alert.
 type ModifyNativeAlertUseCase struct {
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -97,6 +116,10 @@ func NewModifyNativeAlertUseCase(logger *slog.Logger) *ModifyNativeAlertUseCase 
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *ModifyNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful modification emits NativeAlertModifiedEvent. Nil-safe.
+func (uc *ModifyNativeAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute modifies a native alert.
 func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.ModifyNativeAlertCommand) (any, error) {
@@ -113,6 +136,15 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 		return nil, fmt.Errorf("usecases: modify native alert: %w", err)
 	}
 
+	// ES dual-emit on success.
+	if uc.events != nil {
+		uc.events.Dispatch(domain.NativeAlertModifiedEvent{
+			Email:     cmd.Email,
+			UUID:      cmd.UUID,
+			Timestamp: time.Now().UTC(),
+		})
+	}
+
 	appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", cmd.UUID, "native_alert.modified", map[string]any{
 		"email": cmd.Email,
 		"uuid":  cmd.UUID,
@@ -126,6 +158,7 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 // DeleteNativeAlertUseCase deletes one or more native alerts.
 type DeleteNativeAlertUseCase struct {
 	eventStore EventAppender
+	events     *domain.EventDispatcher
 	logger     *slog.Logger
 }
 
@@ -136,6 +169,11 @@ func NewDeleteNativeAlertUseCase(logger *slog.Logger) *DeleteNativeAlertUseCase 
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
 func (uc *DeleteNativeAlertUseCase) SetEventStore(s EventAppender) { uc.eventStore = s }
+
+// SetEventDispatcher wires the typed domain event dispatcher so
+// successful deletion emits NativeAlertDeletedEvent (one per UUID).
+// Nil-safe.
+func (uc *DeleteNativeAlertUseCase) SetEventDispatcher(d *domain.EventDispatcher) { uc.events = d }
 
 // Execute deletes native alert(s).
 func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAlertClient, cmd cqrs.DeleteNativeAlertCommand) error {
@@ -152,7 +190,16 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 	}
 
 	// One event per UUID so the per-aggregate replay stream stays clean.
+	now := time.Now().UTC()
 	for _, uuid := range cmd.UUIDs {
+		// ES dual-emit on success — one typed event per UUID.
+		if uc.events != nil {
+			uc.events.Dispatch(domain.NativeAlertDeletedEvent{
+				Email:     cmd.Email,
+				UUID:      uuid,
+				Timestamp: now,
+			})
+		}
 		appendAuxEvent(uc.eventStore, uc.logger, "NativeAlert", uuid, "native_alert.deleted", map[string]any{
 			"email": cmd.Email,
 			"uuid":  uuid,

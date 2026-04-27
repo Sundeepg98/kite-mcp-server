@@ -34,6 +34,12 @@ func TestAllEventTypes_Interface(t *testing.T) {
 		{"TrailingStopTriggeredEvent", TrailingStopTriggeredEvent{Timestamp: now}, "trailing_stop.triggered"},
 		{"TrailingStopSetEvent", TrailingStopSetEvent{Timestamp: now}, "trailing_stop.set"},
 		{"TrailingStopCancelledEvent", TrailingStopCancelledEvent{Timestamp: now}, "trailing_stop.cancelled"},
+		{"NativeAlertPlacedEvent", NativeAlertPlacedEvent{Timestamp: now}, "native_alert.placed"},
+		{"NativeAlertModifiedEvent", NativeAlertModifiedEvent{Timestamp: now}, "native_alert.modified"},
+		{"NativeAlertDeletedEvent", NativeAlertDeletedEvent{Timestamp: now}, "native_alert.deleted"},
+		{"PaperTradingEnabledEvent", PaperTradingEnabledEvent{Timestamp: now}, "paper.enabled"},
+		{"PaperTradingDisabledEvent", PaperTradingDisabledEvent{Timestamp: now}, "paper.disabled"},
+		{"PaperTradingResetEvent", PaperTradingResetEvent{Timestamp: now}, "paper.reset"},
 		{"PositionOpenedEvent", PositionOpenedEvent{Timestamp: now}, "position.opened"},
 		{"PositionClosedEvent", PositionClosedEvent{Timestamp: now}, "position.closed"},
 		{"PositionConvertedEvent", PositionConvertedEvent{Timestamp: now}, "position.converted"},
@@ -913,6 +919,158 @@ func TestTrailingStopCancelledEvent_Fields(t *testing.T) {
 	}
 	if e.EventType() != "trailing_stop.cancelled" {
 		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// --- Native alert + paper trading lifecycle: typed events ---
+
+// TestNativeAlertPlacedEvent_Fields pins the typed event surface
+// for native (Kite-side) alert creation. UUID may be empty here —
+// the broker assigns it lazily and the use case doesn't always see
+// it in the immediate response. Aggregate-ID falls back to email
+// when UUID is empty (matching the existing appendAuxEvent shape).
+func TestNativeAlertPlacedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := NativeAlertPlacedEvent{
+		Email:     "trader@example.com",
+		UUID:      "", // commonly empty at place time
+		Timestamp: now,
+	}
+	if e.EventType() != "native_alert.placed" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Error("OccurredAt() mismatch")
+	}
+	if e.Email != "trader@example.com" {
+		t.Errorf("Email = %q", e.Email)
+	}
+}
+
+// TestNativeAlertModifiedEvent_Fields pins the modified-alert surface.
+// UUID is required for modify (broker needs the existing alert ID).
+func TestNativeAlertModifiedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := NativeAlertModifiedEvent{
+		Email:     "trader@example.com",
+		UUID:      "alert-uuid-1",
+		Timestamp: now,
+	}
+	if e.EventType() != "native_alert.modified" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if e.UUID != "alert-uuid-1" {
+		t.Errorf("UUID = %q", e.UUID)
+	}
+}
+
+// TestNativeAlertDeletedEvent_Fields pins the deleted-alert surface.
+// One event per UUID (matching the existing appendAuxEvent loop in
+// DeleteNativeAlertUseCase).
+func TestNativeAlertDeletedEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := NativeAlertDeletedEvent{
+		Email:     "trader@example.com",
+		UUID:      "alert-uuid-2",
+		Timestamp: now,
+	}
+	if e.EventType() != "native_alert.deleted" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestNativeAlertAggregateID pins the aggregate-key derivation:
+// non-empty UUID joins the alert aggregate stream; empty UUID falls
+// back to the email (matching the prior appendAuxEvent behaviour
+// where PlaceNativeAlertUseCase keyed by email because the broker
+// hadn't assigned a UUID yet).
+func TestNativeAlertAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, uuid, email, want string
+	}{
+		{"UUID present joins alert stream", "alert-1", "u@t.com", "alert-1"},
+		{"empty UUID falls back to email", "", "u@t.com", "u@t.com"},
+		{"both empty falls back to unknown", "", "", "native-alert:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NativeAlertAggregateID(tc.uuid, tc.email); got != tc.want {
+				t.Errorf("NativeAlertAggregateID(%q, %q) = %q, want %q",
+					tc.uuid, tc.email, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPaperTradingEnabledEvent_Fields pins the typed event surface
+// for paper-trading lifecycle activation. InitialCash captures the
+// virtual portfolio's starting capital so a forensic walk can
+// reconstruct the seed condition without re-querying the engine.
+func TestPaperTradingEnabledEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := PaperTradingEnabledEvent{
+		Email:       "trader@example.com",
+		InitialCash: 10000000,
+		Timestamp:   now,
+	}
+	if e.EventType() != "paper.enabled" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+	if e.InitialCash != 10000000 {
+		t.Errorf("InitialCash = %v", e.InitialCash)
+	}
+}
+
+// TestPaperTradingDisabledEvent_Fields pins the disable surface.
+func TestPaperTradingDisabledEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := PaperTradingDisabledEvent{
+		Email:     "trader@example.com",
+		Timestamp: now,
+	}
+	if e.EventType() != "paper.disabled" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestPaperTradingResetEvent_Fields pins the reset surface — clears
+// the virtual portfolio back to InitialCash and zero positions.
+func TestPaperTradingResetEvent_Fields(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	e := PaperTradingResetEvent{
+		Email:     "trader@example.com",
+		Timestamp: now,
+	}
+	if e.EventType() != "paper.reset" {
+		t.Errorf("EventType() = %q", e.EventType())
+	}
+}
+
+// TestPaperTradingAggregateID pins the aggregate-key derivation:
+// keyed by email (the user's paper-trading "account"). The full
+// enable->reset->disable lifecycle replays under one stream.
+func TestPaperTradingAggregateID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, email, want string
+	}{
+		{"present", "trader@example.com", "trader@example.com"},
+		{"empty falls back to unknown", "", "paper-trading:unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PaperTradingAggregateID(tc.email); got != tc.want {
+				t.Errorf("PaperTradingAggregateID(%q) = %q, want %q",
+					tc.email, got, tc.want)
+			}
+		})
 	}
 }
 
