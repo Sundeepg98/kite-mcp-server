@@ -1,6 +1,7 @@
 package riskguard
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // System defaults — overridable via env vars or per-user DB config.
@@ -185,7 +187,12 @@ type Guard struct {
 	marginCheckEnabled  bool             // T5: opt-in flag; default false
 	baseline            BaselineProvider // optional — nil ⇒ anomaly check is a no-op
 	db                  *alerts.DB
-	logger              *slog.Logger
+	logger              logport.Logger
+	// serviceCtx is the parent application ctx, captured by SetServiceCtx
+	// for goroutine + lifecycle (FreezeGlobal/UnfreezeGlobal/persistLimits)
+	// log calls that originate outside a request path. Nil falls back to
+	// context.Background() at the use site. Wave D Phase 3 Package 2.
+	serviceCtx          context.Context
 	autoFreezeNotifier  AutoFreezeNotifier
 	clock               func() time.Time // defaults to time.Now
 	// dedup tracks user-supplied client_order_id idempotency keys. Complements
@@ -227,11 +234,18 @@ type Guard struct {
 // order — see check.go for the stable Order() constants and the
 // builtinChecks() list. Additional checks can be wired via
 // Guard.RegisterCheck before the guard sees its first order.
+//
+// Wave D Phase 3 Package 2: the supplied *slog.Logger is converted to
+// the kc/logger.Logger port at the boundary. Internal log calls use
+// the port API; existing callers (app/wire.go, app/providers/riskguard.go,
+// testutil/kcfixture/manager.go) continue to pass *slog.Logger
+// unchanged. SetLoggerPort lets new callers supply a port-typed
+// logger directly without re-wrapping.
 func NewGuard(logger *slog.Logger) *Guard {
 	g := &Guard{
 		trackers:  make(map[string]*UserTracker),
 		limits:    make(map[string]*UserLimits),
-		logger:    logger,
+		logger:    logport.NewSlog(logger),
 		clock:     time.Now,
 		dedup:     NewDedup(DefaultDedupTTL),
 		perSecond: newPerSecondCounter(),
@@ -380,7 +394,17 @@ type OrderCheckRequest struct {
 // within autoFreezeWindow trigger an auto-freeze. Policy checks (kill
 // switch, confirmation gate) return false so they don't drive a user
 // toward a lockout for an error they didn't make.
-func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
+//
+// Wave D Phase 3 Package 2: CheckOrderCtx is the ctx-aware variant
+// — middleware paths call it with the request ctx so panic-recovery
+// log entries from safeEvaluate carry trace correlation. The legacy
+// CheckOrder shim below preserves the no-ctx public API for existing
+// callers; subsequent sweep packages migrate use-case sites
+// (kc/usecases/, kc/papertrading/, kc/telegram/) to CheckOrderCtx.
+func (g *Guard) CheckOrderCtx(ctx context.Context, req OrderCheckRequest) CheckResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// 0. Global freeze — blocks ALL users before any per-user checks.
 	if g.IsGloballyFrozen() {
 		return CheckResult{
@@ -395,7 +419,7 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 	// Snapshot the chain so per-check calls that themselves take g.mu
 	// (tracker bookkeeping) do not deadlock against a writer.
 	for _, c := range g.snapshotChecks() {
-		r := safeEvaluate(g.logger, c, req)
+		r := safeEvaluate(ctx, g.logger, c, req)
 		if r.Allowed {
 			continue
 		}
@@ -408,6 +432,19 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 		return r
 	}
 	return CheckResult{Allowed: true}
+}
+
+// CheckOrder is the legacy non-ctx variant, retained as a thin shim
+// that calls CheckOrderCtx with context.Background(). Existing callers
+// (4 use-case sites in kc/usecases/, kc/papertrading/integration tests,
+// kc/telegram/trading_commands.go, ~13 test files) continue to work
+// unchanged; new callers should reach for CheckOrderCtx.
+//
+// Deprecated: use CheckOrderCtx with the request context. This shim
+// exists for the migration window only and will be removed once
+// Wave D Phase 3 Package 8 (cleanup) lands.
+func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
+	return g.CheckOrderCtx(context.Background(), req)
 }
 
 // safeEvaluate runs Check.Evaluate with panic recovery. A panicking
@@ -424,7 +461,7 @@ func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
 // silently allow the order is a worse outcome than falsely
 // rejecting one — a rejected order can be retried; a placed order
 // carries financial consequences.
-func safeEvaluate(logger *slog.Logger, c Check, req OrderCheckRequest) (result CheckResult) {
+func safeEvaluate(ctx context.Context, logger logport.Logger, c Check, req OrderCheckRequest) (result CheckResult) {
 	defer func() {
 		if r := recover(); r != nil {
 			name := "<nil>"
@@ -432,7 +469,7 @@ func safeEvaluate(logger *slog.Logger, c Check, req OrderCheckRequest) (result C
 				name = c.Name()
 			}
 			if logger != nil {
-				logger.Error("riskguard: Check.Evaluate panicked",
+				logger.Error(ctx, "riskguard: Check.Evaluate panicked", nil,
 					"check", name, "panic", r)
 			}
 			result = CheckResult{

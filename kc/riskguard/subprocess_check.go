@@ -13,6 +13,8 @@ import (
 
 	hplugin "github.com/hashicorp/go-plugin"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard/checkrpc"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // SubprocessCheckConfig wires a subprocess-based Check into the
@@ -318,11 +320,17 @@ var _ Check = (*SubprocessCheck)(nil)
 // that relaunches from disk and picks up the new binary. No
 // server restart required.
 func (g *Guard) RegisterSubprocessCheck(name, executable string, order int) error {
+	// Wave D Phase 3 Package 2: g.logger is now logport.Logger; the
+	// SubprocessCheckConfig still holds *slog.Logger because hclog_shim.go
+	// bridges to hashicorp/go-hclog (whose Info/Warn/Error methods take
+	// no ctx). Extract the underlying *slog.Logger via logport.AsSlog —
+	// returns nil when g.logger is nil-equivalent, which the hclog shim
+	// nil-checks gracefully.
 	cfg := SubprocessCheckConfig{
 		Name:       name,
 		Order:      order,
 		Executable: executable,
-		Logger:     g.logger,
+		Logger:     logport.AsSlog(g.logger),
 	}
 	if err := cfg.Validate(); err != nil {
 		return err

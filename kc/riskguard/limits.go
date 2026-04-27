@@ -1,12 +1,14 @@
 package riskguard
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // limits.go — UserLimits type + per-collaborator Set* hooks +
@@ -124,6 +126,44 @@ func (g *Guard) SetEventDispatcher(d *domain.EventDispatcher) {
 	g.events = d
 }
 
+// SetLoggerPort assigns a structured logger via the kc/logger.Logger
+// port. Preferred over the implicit-conversion-in-NewGuard path for
+// callers that already work in port-typed terms (Phase 2 providers).
+//
+// Wave D Phase 3 Package 2. Nil-safe: the internal logger field is
+// nil-checked at every use site (matches pre-migration semantics).
+func (g *Guard) SetLoggerPort(l logport.Logger) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.logger = l
+}
+
+// SetServiceCtx captures the parent application context used by
+// goroutine + lifecycle log calls (FreezeGlobal, UnfreezeGlobal,
+// persistLimits, the auto-freeze admin alert) that originate outside
+// a request path. Without this, those log calls fall back to
+// context.Background() — losing app-level trace correlation.
+//
+// Wave D Phase 3 Package 2. Optional: a Guard constructed without
+// SetServiceCtx degrades cleanly to context.Background().
+func (g *Guard) SetServiceCtx(ctx context.Context) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.serviceCtx = ctx
+}
+
+// ctxOrBackground returns g.serviceCtx if set, else
+// context.Background(). Internal helper used by lifecycle log calls
+// that have no request ctx in scope. Lock-free read of serviceCtx is
+// safe: the field is set once at startup (SetServiceCtx) and never
+// mutated thereafter; reads in log paths happen long after init.
+func (g *Guard) ctxOrBackground() context.Context {
+	if g.serviceCtx != nil {
+		return g.serviceCtx
+	}
+	return context.Background()
+}
+
 // --- Effective-limits resolution ------------------------------------------
 
 // GetEffectiveLimits returns the active limits for a user (per-user override or system default).
@@ -209,7 +249,7 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 		email, l.MaxSingleOrderINR.Float64(), l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR.Float64(), autoFreeze, requireConfirm, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
 	)
 	if err != nil && g.logger != nil {
-		g.logger.Error("Failed to persist risk limits", "email", email, "error", err)
+		g.logger.Error(g.ctxOrBackground(), "Failed to persist risk limits", err, "email", email)
 	}
 }
 

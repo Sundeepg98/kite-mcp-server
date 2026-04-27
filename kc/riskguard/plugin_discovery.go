@@ -1,12 +1,15 @@
 package riskguard
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // PluginDiscoveryEntry is one row of the plugin manifest. It maps a
@@ -59,6 +62,17 @@ func DiscoverPlugins(dir string, registrar PluginRegistrar, logger *slog.Logger)
 	if registrar == nil {
 		return errors.New("riskguard: DiscoverPlugins requires a non-nil registrar")
 	}
+	// Wave D Phase 3 Package 2: convert at the boundary. Public
+	// signature retains *slog.Logger for caller compatibility
+	// (app/providers/riskguard.go:194); internal log calls use the
+	// kc/logger.Logger port. ctx is context.Background() because
+	// DiscoverPlugins is a one-shot startup function with no
+	// request context in scope — same pattern as audit.StartHashPublisher.
+	ctx := context.Background()
+	var l logport.Logger
+	if logger != nil {
+		l = logport.NewSlog(logger)
+	}
 	manifestPath := filepath.Join(dir, "plugins.json")
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -78,15 +92,15 @@ func DiscoverPlugins(dir string, registrar PluginRegistrar, logger *slog.Logger)
 	var aggregated []error
 	for _, e := range entries {
 		if err := registrar(e.Name, e.Executable, e.Order); err != nil {
-			if logger != nil {
-				logger.Warn("riskguard: plugin discovery failed for entry",
+			if l != nil {
+				l.Warn(ctx, "riskguard: plugin discovery failed for entry",
 					"name", e.Name, "executable", e.Executable, "order", e.Order, "error", err)
 			}
 			aggregated = append(aggregated, fmt.Errorf("plugin %q: %w", e.Name, err))
 			continue
 		}
-		if logger != nil {
-			logger.Info("riskguard: plugin discovered + registered",
+		if l != nil {
+			l.Info(ctx, "riskguard: plugin discovered + registered",
 				"name", e.Name, "executable", e.Executable, "order", e.Order)
 		}
 	}

@@ -41,7 +41,7 @@ func (g *Guard) FreezeGlobal(frozenBy, reason string) {
 	dispatcher := g.events
 	g.mu.Unlock()
 	if g.logger != nil {
-		g.logger.Warn("GLOBAL TRADING FREEZE ACTIVATED", "by", frozenBy, "reason", reason)
+		g.logger.Warn(g.ctxOrBackground(), "GLOBAL TRADING FREEZE ACTIVATED", "by", frozenBy, "reason", reason)
 	}
 	if !wasFrozen && dispatcher != nil {
 		dispatcher.Dispatch(domain.RiskguardKillSwitchTrippedEvent{
@@ -68,7 +68,7 @@ func (g *Guard) UnfreezeGlobal() {
 	dispatcher := g.events
 	g.mu.Unlock()
 	if g.logger != nil {
-		g.logger.Info("Global trading freeze lifted")
+		g.logger.Info(g.ctxOrBackground(), "Global trading freeze lifted")
 	}
 	if wasFrozen && dispatcher != nil {
 		dispatcher.Dispatch(domain.RiskguardKillSwitchTrippedEvent{
@@ -210,7 +210,7 @@ func (g *Guard) checkAutoFreeze(email string) bool {
 		l.FrozenAt = time.Now()
 		g.persistLimits(email, l)
 		if g.logger != nil {
-			g.logger.Warn("ADMIN ALERT: RiskGuard auto-froze user",
+			g.logger.Warn(g.ctxOrBackground(), "ADMIN ALERT: RiskGuard auto-froze user",
 				"email", email,
 				"reason", l.FrozenReason,
 				"rejections_in_window", len(t.RecentRejections),

@@ -56,10 +56,10 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 				req.Price = domain.NewINR(safeFloat(args["trigger_price"]))
 			}
 
-			result := guard.CheckOrder(req)
+			result := guard.CheckOrderCtx(ctx, req)
 			if !result.Allowed {
 				if guard.logger != nil {
-					guard.logger.Warn("Order blocked by riskguard",
+					guard.logger.Warn(ctx, "Order blocked by riskguard",
 						"email", email, "tool", toolName, "reason", result.Reason, "message", result.Message)
 				}
 				return gomcp.NewToolResultError(
