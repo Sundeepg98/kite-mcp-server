@@ -120,7 +120,7 @@ func (uc *ClosePositionUseCase) Execute(ctx context.Context, email, exchange, sy
 	// invoked close_position with elicitation already gating the MCP
 	// boundary), so the synthetic order is Confirmed by construction.
 	if uc.riskguard != nil {
-		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
+		result := uc.riskguard.CheckOrderCtx(ctx, riskguard.OrderCheckRequest{
 			Email:           email,
 			ToolName:        "close_position",
 			Exchange:        matched.Exchange,

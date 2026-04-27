@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"testing"
@@ -39,7 +40,7 @@ func TestMarginCheck_AllowsSufficientMargin(t *testing.T) {
 	g := newGuardWithMargin(newStubMargin(map[string]float64{
 		"trader@test.com": 100000,
 	}), true)
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
@@ -64,7 +65,7 @@ func TestMarginCheck_RejectsInsufficientMargin(t *testing.T) {
 		RequireConfirmAllOrders: false,
 	}
 	g.mu.Unlock()
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(1000), Confirmed: true,
 	})
@@ -87,7 +88,7 @@ func TestMarginCheck_DisabledByDefault(t *testing.T) {
 		"trader@test.com": 0, // would reject if check ran
 	}))
 	// NO SetMarginCheckEnabled call.
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
@@ -104,7 +105,7 @@ func TestMarginCheck_AllowsAtBoundary(t *testing.T) {
 	g := newGuardWithMargin(newStubMargin(map[string]float64{
 		"trader@test.com": 50000,
 	}), true)
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
@@ -119,7 +120,7 @@ func TestMarginCheck_AllowsMarketOrder(t *testing.T) {
 	g := newGuardWithMargin(newStubMargin(map[string]float64{
 		"trader@test.com": 0,
 	}), true)
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "MARKET", Price: domain.Money{}, Confirmed: true,
 	})
@@ -137,7 +138,7 @@ func TestMarginCheck_NoLookupConfigured(t *testing.T) {
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	g.SetMarginCheckEnabled(true)
 	// NO SetMarginLookup.
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})
@@ -151,7 +152,7 @@ func TestMarginCheck_NoLookupConfigured(t *testing.T) {
 func TestMarginCheck_LookupMissBypasses(t *testing.T) {
 	t.Parallel()
 	g := newGuardWithMargin(newStubMargin(map[string]float64{}), true)
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "unknown@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 100, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})

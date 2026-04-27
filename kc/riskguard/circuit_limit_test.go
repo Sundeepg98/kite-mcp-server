@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"testing"
@@ -41,7 +42,7 @@ func TestCircuitLimit_AllowsWithinBand(t *testing.T) {
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{
 		"NSE|RELIANCE": {95, 105},
 	}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(100), Confirmed: true,
 	})
@@ -55,7 +56,7 @@ func TestCircuitLimit_RejectsAboveUpper(t *testing.T) {
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{
 		"NSE|RELIANCE": {95, 105},
 	}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(120), Confirmed: true,
 	})
@@ -71,7 +72,7 @@ func TestCircuitLimit_RejectsBelowLower(t *testing.T) {
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{
 		"NSE|RELIANCE": {95, 105},
 	}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(80), Confirmed: true,
 	})
@@ -87,7 +88,7 @@ func TestCircuitLimit_AllowsAtBoundary(t *testing.T) {
 		"NSE|RELIANCE": {95, 105},
 	}))
 	for _, p := range []float64{95, 105} {
-		res := g.CheckOrder(OrderCheckRequest{
+		res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 			Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(p), Confirmed: true,
 		})
@@ -103,7 +104,7 @@ func TestCircuitLimit_AllowsMarket(t *testing.T) {
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{
 		"NSE|RELIANCE": {95, 105},
 	}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 1, OrderType: "MARKET", Price: domain.Money{}, Confirmed: true,
 	})
@@ -115,7 +116,7 @@ func TestCircuitLimit_AllowsMarket(t *testing.T) {
 func TestCircuitLimit_NoLookupConfigured(t *testing.T) {
 	t.Parallel()
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(99999), Confirmed: true,
 	})
@@ -131,7 +132,7 @@ func TestCircuitLimit_NoLookupConfigured(t *testing.T) {
 func TestCircuitLimit_LookupMissBypasses(t *testing.T) {
 	t.Parallel()
 	g := newGuardWithCircuit(newStubCircuit(map[string][2]float64{}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "trader@test.com", Exchange: "NSE", Tradingsymbol: "UNKNOWN",
 		Quantity: 1, OrderType: "LIMIT", Price: domain.NewINR(500), Confirmed: true,
 	})

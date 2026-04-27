@@ -1,4 +1,4 @@
-package riskguard
+﻿package riskguard
 
 import (
 	"context"
@@ -140,11 +140,11 @@ func TestGuard_CheckOrder_NoClientOrderID_BackwardCompat(t *testing.T) {
 		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
 	}
-	r1 := g.CheckOrder(req)
+	r1 := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r1.Allowed, "first order without client_order_id allowed")
 	// Second with different tradingsymbol so time-based dedup doesn't fire.
 	req.Tradingsymbol = "TCS"
-	r2 := g.CheckOrder(req)
+	r2 := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r2.Allowed, "second order (different symbol) allowed")
 }
 
@@ -161,11 +161,11 @@ func TestGuard_CheckOrder_DuplicateClientOrderID_Blocked(t *testing.T) {
 		Confirmed:     true,
 		ClientOrderID: "req-abc-123",
 	}
-	r1 := g.CheckOrder(req)
+	r1 := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r1.Allowed, "first submission with client_order_id allowed")
 
 	// Simulate retry — exact same ClientOrderID.
-	r2 := g.CheckOrder(req)
+	r2 := g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r2.Allowed, "retry with same client_order_id must be blocked")
 	assert.Equal(t, ReasonDuplicateOrder, r2.Reason, "TestGuard_CheckOrder_DuplicateClientOrderID_Blocked: want=%v got=%v", ReasonDuplicateOrder, r2.Reason)
 }
@@ -188,9 +188,9 @@ func TestGuard_CheckOrder_ClientOrderID_DifferentUsers(t *testing.T) {
 	bobReq := base
 	bobReq.Email = "bob@test.com"
 
-	r1 := g.CheckOrder(aliceReq)
+	r1 := g.CheckOrderCtx(context.Background(), aliceReq)
 	assert.True(t, r1.Allowed, "alice's order allowed")
-	r2 := g.CheckOrder(bobReq)
+	r2 := g.CheckOrderCtx(context.Background(), bobReq)
 	assert.True(t, r2.Allowed,
 		"bob's order with same client_order_id must be allowed (user-scoped)")
 }

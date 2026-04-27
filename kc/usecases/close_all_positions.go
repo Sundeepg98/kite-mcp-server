@@ -141,7 +141,7 @@ func (uc *CloseAllPositionsUseCase) Execute(ctx context.Context, email, productF
 		// close_all_positions is an exit derived from a confirmed tool
 		// call, so each synthetic order is Confirmed by construction.
 		if uc.riskguard != nil {
-			result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
+			result := uc.riskguard.CheckOrderCtx(ctx, riskguard.OrderCheckRequest{
 				Email:           email,
 				ToolName:        "close_all_positions",
 				Exchange:        p.Exchange,

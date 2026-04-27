@@ -91,7 +91,7 @@ func (uc *ModifyOrderUseCase) Execute(ctx context.Context, cmd cqrs.ModifyOrderC
 	// Modify orders still need rate-limit and daily-count checks.
 	// Confirmed is threaded through ModifyOrderCommand from the MCP handler.
 	if uc.riskguard != nil {
-		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
+		result := uc.riskguard.CheckOrderCtx(ctx, riskguard.OrderCheckRequest{
 			Email:     cmd.Email,
 			ToolName:  "modify_order",
 			OrderType: cmd.OrderType,

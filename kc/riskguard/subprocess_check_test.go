@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -235,7 +236,7 @@ func TestSubprocessCheck_RegisterOnGuard(t *testing.T) {
 	// Because the binary doesn't exist, CheckOrder should fail
 	// closed with Reason="subprocess_unavailable" (or whatever
 	// safeEvaluate surfaces) when the chain reaches that check.
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:     "user@test.com",
 		ToolName:  "place_order",
 		Confirmed: true,

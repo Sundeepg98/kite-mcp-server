@@ -1,4 +1,4 @@
-package riskguard
+﻿package riskguard
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 
 	// Orders should be blocked (Confirmed=true so the confirmation gate is
 	// not the reason; global freeze must take precedence).
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
@@ -66,7 +66,7 @@ func TestGlobalFreeze_FullLifecycle(t *testing.T) {
 	assert.True(t, status.FrozenAt.IsZero())
 
 	// Orders should pass again
-	r = g.CheckOrder(OrderCheckRequest{
+	r = g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
@@ -82,7 +82,7 @@ func TestGlobalFreeze_BlocksBeforeUserChecks(t *testing.T) {
 	// Even a frozen user should get global freeze reason, not per-user freeze reason
 	g.Freeze("user@test.com", "admin", "user-level freeze")
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "user@test.com", ToolName: "place_order",
 	})
 	assert.False(t, r.Allowed)
@@ -121,9 +121,9 @@ func TestSetAutoFreezeNotifier(t *testing.T) {
 	}
 
 	// Trigger 3 rejections to auto-freeze
-	g.CheckOrder(overLimitReq)
-	g.CheckOrder(overLimitReq)
-	g.CheckOrder(overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
 
 	// Wait for the async notifier
 	wg.Wait()
@@ -149,7 +149,7 @@ func TestCheckKillSwitch_EmptyReason(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "noreason@test.com", ToolName: "place_order",
 	})
 	assert.False(t, r.Allowed)
@@ -533,7 +533,7 @@ func TestMaybeResetDay_CrossesBoundary(t *testing.T) {
 	g.mu.Unlock()
 
 	// CheckOrder will call maybeResetDay internally
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		Confirmed: true,
@@ -608,12 +608,12 @@ func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
 	}
 
 	// Place and record
-	r := g.CheckOrder(req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed)
 	g.RecordOrder(email, req)
 
 	// Same order should pass (duplicate detection disabled)
-	r = g.CheckOrder(req)
+	r = g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed)
 }
 
@@ -674,7 +674,7 @@ func TestCheckQuantityLimit_NoLookup(t *testing.T) {
 	// No SetFreezeQuantityLookup called => nil
 
 	// Use price=0 (MARKET) to skip order value check
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "nolookup@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "INFY",
 		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
@@ -696,7 +696,7 @@ func TestCheckQuantityLimit_ZeroFreezeQty(t *testing.T) {
 	}})
 
 	// Use price=0 (MARKET) to skip order value check
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "zerofq@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "ZEROFQ",
 		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
@@ -718,7 +718,7 @@ func TestCheckQuantityLimit_EmptyFields(t *testing.T) {
 	}})
 
 	// Empty tradingsymbol — use price=0 (MARKET) to skip order value check
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "empty@test.com", ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "",
 		Quantity: 999999, Price: domain.Money{}, OrderType: "MARKET",
@@ -761,7 +761,7 @@ func TestGlobalFreeze_ConcurrentAccess(t *testing.T) {
 	// Concurrent checks
 	for range 50 {
 		wg.Go(func() {
-			g.CheckOrder(OrderCheckRequest{
+			g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 				Email: "concurrent@test.com", ToolName: "place_order",
 				Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			})
@@ -795,9 +795,9 @@ func TestAutoFreezeWithLogger(t *testing.T) {
 	}
 
 	// 3 rejections => auto-freeze (logger.Warn should be called)
-	g.CheckOrder(overLimitReq)
-	g.CheckOrder(overLimitReq)
-	g.CheckOrder(overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
 
 	assert.True(t, g.IsFrozen(email))
 }
@@ -911,9 +911,9 @@ func TestCheckOrder_AutoFreezeOnQuantityLimit(t *testing.T) {
 	}
 
 	// 3 rejections should trigger auto-freeze
-	g.CheckOrder(overQtyReq)
-	g.CheckOrder(overQtyReq)
-	r := g.CheckOrder(overQtyReq)
+	g.CheckOrderCtx(context.Background(), overQtyReq)
+	g.CheckOrderCtx(context.Background(), overQtyReq)
+	r := g.CheckOrderCtx(context.Background(), overQtyReq)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email))
 	assert.Contains(t, r.Message, "auto-frozen")
@@ -944,9 +944,9 @@ func TestCheckOrder_AutoFreezeOnDailyOrderCount(t *testing.T) {
 	}
 
 	// 3 rejections should trigger auto-freeze
-	g.CheckOrder(req)
-	g.CheckOrder(req)
-	r := g.CheckOrder(req)
+	g.CheckOrderCtx(context.Background(), req)
+	g.CheckOrderCtx(context.Background(), req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email))
 	assert.Contains(t, r.Message, "auto-frozen")
@@ -977,9 +977,9 @@ func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
 	}
 
 	// 3 rejections should trigger auto-freeze
-	g.CheckOrder(req)
-	g.CheckOrder(req)
-	r := g.CheckOrder(req)
+	g.CheckOrderCtx(context.Background(), req)
+	g.CheckOrderCtx(context.Background(), req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email))
 	assert.Contains(t, r.Message, "auto-frozen")
@@ -1007,14 +1007,14 @@ func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
 	}
 
 	// First order passes and gets recorded
-	r := g.CheckOrder(req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed)
 	g.RecordOrder(email, req)
 
 	// 3 duplicate rejections should trigger auto-freeze
-	g.CheckOrder(req)
-	g.CheckOrder(req)
-	r = g.CheckOrder(req)
+	g.CheckOrderCtx(context.Background(), req)
+	g.CheckOrderCtx(context.Background(), req)
+	r = g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email))
 	assert.Contains(t, r.Message, "auto-frozen")
@@ -1046,9 +1046,9 @@ func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
 	}
 
 	// 3 rejections should trigger auto-freeze
-	g.CheckOrder(req)
-	g.CheckOrder(req)
-	r := g.CheckOrder(req)
+	g.CheckOrderCtx(context.Background(), req)
+	g.CheckOrderCtx(context.Background(), req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email))
 	assert.Contains(t, r.Message, "auto-frozen")

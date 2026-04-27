@@ -434,19 +434,6 @@ func (g *Guard) CheckOrderCtx(ctx context.Context, req OrderCheckRequest) CheckR
 	return CheckResult{Allowed: true}
 }
 
-// CheckOrder is the legacy non-ctx variant, retained as a thin shim
-// that calls CheckOrderCtx with context.Background(). Existing callers
-// (4 use-case sites in kc/usecases/, kc/papertrading/integration tests,
-// kc/telegram/trading_commands.go, ~13 test files) continue to work
-// unchanged; new callers should reach for CheckOrderCtx.
-//
-// Deprecated: use CheckOrderCtx with the request context. This shim
-// exists for the migration window only and will be removed once
-// Wave D Phase 3 Package 8 (cleanup) lands.
-func (g *Guard) CheckOrder(req OrderCheckRequest) CheckResult {
-	return g.CheckOrderCtx(context.Background(), req)
-}
-
 // safeEvaluate runs Check.Evaluate with panic recovery. A panicking
 // custom check is treated as a REJECTION (fail-closed) so a buggy
 // plugin cannot silently wave bad orders through. The panic is logged

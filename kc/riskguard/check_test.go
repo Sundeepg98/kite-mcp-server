@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,7 +38,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 			},
 		})
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email:     "user@test.com",
 			ToolName:  "place_order",
 			Confirmed: true,
@@ -83,7 +84,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 			},
 		})
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email:     "user@test.com",
 			ToolName:  "place_order",
 			Confirmed: true,
@@ -129,7 +130,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 		})
 
 		// Order that passes all prior checks (small, confirmed, no dup).
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email:     "user@test.com",
 			ToolName:  "place_order",
 			Confirmed: true,
@@ -158,7 +159,7 @@ func TestRegisterCustomCheck(t *testing.T) {
 			},
 		})
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email:     "user@test.com",
 			ToolName:  "place_order",
 			Confirmed: true,
@@ -265,7 +266,7 @@ func TestPanickingCheckFailsClosed(t *testing.T) {
 		},
 	})
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:     "user@test.com",
 		ToolName:  "place_order",
 		Confirmed: true,
@@ -304,7 +305,7 @@ func TestPanickingCheckDoesNotBlockSubsequentCalls(t *testing.T) {
 	})
 
 	for i := 0; i < 3; i++ {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email:     "user@test.com",
 			ToolName:  "place_order",
 			Confirmed: true,

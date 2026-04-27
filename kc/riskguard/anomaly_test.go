@@ -1,4 +1,4 @@
-// Tests for the anomaly-detection and off-hours checks added on top of the
+﻿// Tests for the anomaly-detection and off-hours checks added on top of the
 // existing static riskguard defences. See guard.go for the check methods.
 //
 // Attack scenario: a user whose historical mean order value is ~Rs 5,000
@@ -15,6 +15,7 @@
 package riskguard
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "attacker@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(60_000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -77,7 +78,7 @@ func TestCheckAnomalyMultiplier_AllowsWithinBaseline(t *testing.T) {
 	g.mu.Unlock()
 
 	// 2× mean = Rs 10,000. > μ+3σ (= 6500) but NOT > 10×μ (= 50000).
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "steady@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(10000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -106,7 +107,7 @@ func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 	g.limits["volatile@test.com"].MaxSingleOrderINR = domain.NewINR(1_000_000) // Rs 10L override
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "volatile@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(60000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -131,7 +132,7 @@ func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 	g.mu.Unlock()
 
 	// Big order, no history → anomaly check must not block it.
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "newbie@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(500_000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -150,7 +151,7 @@ func TestCheckAnomalyMultiplier_MarketOrderSkipped(t *testing.T) {
 	g.limits["mo@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "mo@test.com", ToolName: "place_order",
 		Quantity: 1_000_000, Price: domain.Money{}, OrderType: "MARKET",
 		Confirmed: true,
@@ -173,7 +174,7 @@ func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "np@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(500_000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -195,7 +196,7 @@ func TestCheckOffHours_BlocksAt3AM(t *testing.T) {
 	g.limits["night@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "night@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -215,7 +216,7 @@ func TestCheckOffHours_BlocksAtBoundary0200(t *testing.T) {
 	g.limits["boundary@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "boundary@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -237,7 +238,7 @@ func TestCheckOffHours_AllowsAtBoundary0600(t *testing.T) {
 	g.limits["b2@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "b2@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Variety:   "amo", // bypass market_hours; we only test off_hours here
@@ -256,7 +257,7 @@ func TestCheckOffHours_AllowsAtMarketHours(t *testing.T) {
 	g.limits["day@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "day@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,
@@ -281,7 +282,7 @@ func TestCheckOffHours_AllowOptIn(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "owl@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Variety:   "amo", // bypass market_hours; we only test off_hours opt-in here
@@ -303,7 +304,7 @@ func TestCheckOffHours_TimezoneCorrectness(t *testing.T) {
 	g.limits["tz@test.com"] = &UserLimits{RequireConfirmAllOrders: false}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: "tz@test.com", ToolName: "place_order",
 		Quantity: 1, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		Confirmed: true,

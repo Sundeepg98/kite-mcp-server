@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -61,7 +62,7 @@ func TestFullChain_AllChecksPass(t *testing.T) {
 
 	req := validSmallOrder(email)
 
-	r := g.CheckOrder(req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed, "valid small order should pass all 8 checks")
 	assert.Empty(t, r.Message)
 	assert.Equal(t, RejectionReason(""), r.Reason)
@@ -86,7 +87,7 @@ func TestFullChain_KillSwitchBlocks(t *testing.T) {
 	// Freeze the user with a reason.
 	g.Freeze(email, "compliance@firm.com", "Suspicious activity detected")
 
-	r := g.CheckOrder(validSmallOrder(email))
+	r := g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonTradingFrozen, r.Reason)
 	assert.Contains(t, r.Message, "Suspicious activity detected")
@@ -100,7 +101,7 @@ func TestFullChain_KillSwitchBlocks(t *testing.T) {
 
 	// Unfreeze and verify order passes.
 	g.Unfreeze(email)
-	r = g.CheckOrder(validSmallOrder(email))
+	r = g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.True(t, r.Allowed)
 }
 
@@ -143,7 +144,7 @@ func TestFullChain_OrderValueLimit(t *testing.T) {
 			if tc.price == 0 {
 				req.OrderType = "MARKET"
 			}
-			r := g.CheckOrder(req)
+			r := g.CheckOrderCtx(context.Background(), req)
 			assert.Equal(t, tc.allowed, r.Allowed, tc.name)
 			if !tc.allowed {
 				assert.Equal(t, tc.reason, r.Reason, tc.name)
@@ -203,7 +204,7 @@ func TestFullChain_QuantityLimit(t *testing.T) {
 				TransactionType: "BUY", Quantity: tc.qty,
 				Price: domain.NewINR(tc.price), OrderType: orderType,
 			}
-			r := g.CheckOrder(req)
+			r := g.CheckOrderCtx(context.Background(), req)
 			assert.Equal(t, tc.allowed, r.Allowed, tc.name)
 			if !tc.allowed {
 				assert.Equal(t, ReasonQuantityLimit, r.Reason, tc.name)
@@ -228,7 +229,7 @@ func TestFullChain_DailyOrderLimit(t *testing.T) {
 	tracker.DayResetAt = g.clock()
 	g.mu.Unlock()
 
-	r := g.CheckOrder(validSmallOrder(email))
+	r := g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
 	assert.Contains(t, r.Message, "20")
@@ -238,7 +239,7 @@ func TestFullChain_DailyOrderLimit(t *testing.T) {
 	tracker.DailyOrderCount = 19
 	g.mu.Unlock()
 
-	r = g.CheckOrder(validSmallOrder(email))
+	r = g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.True(t, r.Allowed)
 }
 
@@ -265,13 +266,13 @@ func TestFullChain_DailyOrderLimit_CustomPerUser(t *testing.T) {
 			TransactionType: "BUY", Quantity: 1,
 			Price: domain.NewINR(100), OrderType: "LIMIT",
 		}
-		r := g.CheckOrder(req)
+		r := g.CheckOrderCtx(context.Background(), req)
 		require.True(t, r.Allowed, "order %d should pass", i+1)
 		g.RecordOrder(email, req)
 	}
 
 	// 6th should be blocked.
-	r := g.CheckOrder(validSmallOrder(email))
+	r := g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonDailyOrderLimit, r.Reason)
 }
@@ -295,7 +296,7 @@ func TestFullChain_RateLimit(t *testing.T) {
 	tracker.DayResetAt = now
 	g.mu.Unlock()
 
-	r := g.CheckOrder(validSmallOrder(email))
+	r := g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonRateLimit, r.Reason)
 	assert.Contains(t, r.Message, "limit: 10")
@@ -314,7 +315,7 @@ func TestFullChain_RateLimit_OldOrdersPruned(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r := g.CheckOrder(validSmallOrder(email))
+	r := g.CheckOrderCtx(context.Background(), validSmallOrder(email))
 	assert.True(t, r.Allowed, "old orders should be pruned and not count toward rate limit")
 }
 
@@ -338,12 +339,12 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 	}
 
 	// First order passes.
-	r := g.CheckOrder(req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed)
 	g.RecordOrder(email, req)
 
 	// Identical order within 30s blocked.
-	r = g.CheckOrder(req)
+	r = g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonDuplicateOrder, r.Reason)
 	assert.Contains(t, r.Message, "BUY NSE SBIN qty 50")
@@ -351,13 +352,13 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 	// Different symbol passes.
 	diffReq := req
 	diffReq.Tradingsymbol = "HDFC"
-	r = g.CheckOrder(diffReq)
+	r = g.CheckOrderCtx(context.Background(), diffReq)
 	assert.True(t, r.Allowed)
 
 	// Same symbol, different direction passes.
 	sellReq := req
 	sellReq.TransactionType = "SELL"
-	r = g.CheckOrder(sellReq)
+	r = g.CheckOrderCtx(context.Background(), sellReq)
 	assert.True(t, r.Allowed)
 
 	// After window expires, same order passes.
@@ -368,7 +369,7 @@ func TestFullChain_DuplicateOrder(t *testing.T) {
 	}
 	g.mu.Unlock()
 
-	r = g.CheckOrder(req)
+	r = g.CheckOrderCtx(context.Background(), req)
 	assert.True(t, r.Allowed)
 }
 
@@ -390,7 +391,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 
 	// An order for Rs 12,000 would push total to Rs 2,02,000 > Rs 2,00,000
 	// and also passes the per-order Rs 50,000 cap.
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", Quantity: 4, Price: domain.NewINR(3000),
@@ -402,7 +403,7 @@ func TestFullChain_DailyValueLimit(t *testing.T) {
 	assert.Contains(t, r.Message, "exceeds daily limit")
 
 	// An order for Rs 8,000 fits: 190000 + 8000 = 198000 < 200000.
-	r = g.CheckOrder(OrderCheckRequest{
+	r = g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", Quantity: 4, Price: domain.NewINR(2000),
@@ -424,7 +425,7 @@ func TestFullChain_DailyValueLimit_MarketOrderSkips(t *testing.T) {
 	g.mu.Unlock()
 
 	// MARKET order with price=0 should skip daily value check.
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Exchange: "NSE", Tradingsymbol: "TCS",
 		TransactionType: "BUY", Quantity: 1000, Price: domain.Money{},
@@ -458,18 +459,18 @@ func TestFullChain_AutoFreezeCircuitBreaker(t *testing.T) {
 	}
 
 	// First rejection: not frozen.
-	r := g.CheckOrder(overLimitReq)
+	r := g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonOrderValue, r.Reason)
 	assert.False(t, g.IsFrozen(email))
 
 	// Second rejection: still not frozen.
-	r = g.CheckOrder(overLimitReq)
+	r = g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, r.Allowed)
 	assert.False(t, g.IsFrozen(email))
 
 	// Third rejection: auto-freeze triggers (threshold = 3).
-	r = g.CheckOrder(overLimitReq)
+	r = g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, r.Allowed)
 	assert.True(t, g.IsFrozen(email), "user should be auto-frozen after 3 rejections")
 	assert.Contains(t, r.Message, "auto-frozen due to repeated violations")
@@ -480,7 +481,7 @@ func TestFullChain_AutoFreezeCircuitBreaker(t *testing.T) {
 	assert.Equal(t, "riskguard:circuit-breaker", status.FrozenBy)
 
 	// Subsequent order blocked by kill switch (check 1), not value limit.
-	r = g.CheckOrder(overLimitReq)
+	r = g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonTradingFrozen, r.Reason)
 
@@ -510,7 +511,7 @@ func TestFullChain_AutoFreezeDisabled(t *testing.T) {
 
 	// 5 rejections — none should freeze.
 	for i := 0; i < 5; i++ {
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed)
 		assert.NotContains(t, r.Message, "auto-frozen")
 	}
@@ -534,8 +535,8 @@ func TestFullChain_AutoFreeze_OldRejectionsExpire(t *testing.T) {
 	}
 
 	// Two rejections, then move them outside the 5-minute window.
-	g.CheckOrder(overLimitReq)
-	g.CheckOrder(overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, g.IsFrozen(email))
 
 	g.mu.Lock()
@@ -546,7 +547,7 @@ func TestFullChain_AutoFreeze_OldRejectionsExpire(t *testing.T) {
 	g.mu.Unlock()
 
 	// One more rejection — should NOT trigger freeze (only 1 in window).
-	g.CheckOrder(overLimitReq)
+	g.CheckOrderCtx(context.Background(), overLimitReq)
 	assert.False(t, g.IsFrozen(email), "old rejections outside window should not count")
 }
 
@@ -561,7 +562,7 @@ func TestFullChain_FreezeBlocksBeforeOtherChecks(t *testing.T) {
 	g.Freeze(email, "admin", "compliance hold")
 
 	// Even a massive illegal order should return "frozen", not "order value".
-	r := g.CheckOrder(OrderCheckRequest{
+	r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email: email, ToolName: "place_order",
 		Quantity: 1000000, Price: domain.NewINR(100000), OrderType: "LIMIT",
 	})
@@ -621,7 +622,7 @@ func TestFullChain_ConcurrentAccess(t *testing.T) {
 				Price: domain.NewINR(1500), OrderType: "LIMIT",
 				Confirmed: true,
 			}
-			r := g.CheckOrder(req)
+			r := g.CheckOrderCtx(context.Background(), req)
 			if r.Allowed {
 				g.RecordOrder(email, req)
 			} else {

@@ -1,4 +1,4 @@
-package papertrading
+﻿package papertrading
 
 // riskguard_integration_test.go — cross-slice integration tests pinning
 // the Money-VO interop contract between paper trading (Slice 5) and
@@ -18,6 +18,7 @@ package papertrading
 // boot. Hermetic via :memory: SQLite + mockLTP.
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
@@ -98,7 +99,7 @@ func (h *rgPaperHarness) chainedPlaceOrder(
 		Confirmed:       confirmed,
 		Variety:         variety,
 	}
-	rgResult := h.guard.CheckOrder(req)
+	rgResult := h.guard.CheckOrderCtx(context.Background(), req)
 	if !rgResult.Allowed {
 		return rgResult, nil, nil
 	}

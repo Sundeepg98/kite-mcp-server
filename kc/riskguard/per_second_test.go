@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -214,7 +215,7 @@ func TestPerSecondRate_IntegratedInCheckOrder_Denies10th(t *testing.T) {
 
 	// 10th through CheckOrder should be rejected by per-second gate.
 	req.Tradingsymbol = "SYM10"
-	r := g.CheckOrder(req)
+	r := g.CheckOrderCtx(context.Background(), req)
 	assert.False(t, r.Allowed)
 	assert.Equal(t, ReasonPerSecondRateExceeded, r.Reason)
 }

@@ -149,7 +149,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, cmd cqrs.PlaceOrderCom
 	// Confirmed is threaded through PlaceOrderCommand from the MCP handler
 	// (where elicitation + `confirm: true` arg already satisfied the gate).
 	if uc.riskguard != nil {
-		result := uc.riskguard.CheckOrder(riskguard.OrderCheckRequest{
+		result := uc.riskguard.CheckOrderCtx(ctx, riskguard.OrderCheckRequest{
 			Email:           cmd.Email,
 			ToolName:        "place_order",
 			Exchange:        exchange,

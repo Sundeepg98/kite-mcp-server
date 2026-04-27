@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -215,9 +216,10 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 
 	h.answerCallback(cq.ID, "Processing order...")
 
-	// Run riskguard checks.
+	// Run riskguard checks. Telegram callback handlers don't carry a
+	// request ctx — use context.Background() for the riskguard call.
 	if guard := h.manager.RiskGuard(); guard != nil {
-		result := guard.CheckOrder(riskguard.OrderCheckRequest{
+		result := guard.CheckOrderCtx(context.Background(), riskguard.OrderCheckRequest{
 			Email:           email,
 			ToolName:        "telegram_order",
 			Exchange:        order.Exchange,

@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"testing"
@@ -34,7 +35,7 @@ func newGuardWithLookup(lookup LTPLookup) *Guard {
 func TestOTRBand_AllowsMarketOrder(t *testing.T) {
 	t.Parallel()
 	g := newGuardWithLookup(newStubLookup(map[string]float64{"NSE|RELIANCE": 1000}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:           "trader@test.com",
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
@@ -51,7 +52,7 @@ func TestOTRBand_AllowsCashOrderWithinBand(t *testing.T) {
 	t.Parallel()
 	// LTP 1000, ±0.75% band = 992.5 .. 1007.5
 	g := newGuardWithLookup(newStubLookup(map[string]float64{"NSE|RELIANCE": 1000}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:           "trader@test.com",
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
@@ -69,7 +70,7 @@ func TestOTRBand_RejectsCashOrderAboveBand(t *testing.T) {
 	// LTP 1000, ±0.75% upper = 1007.5; 1010 is outside (above) but
 	// stays under the order_value cap so we hit the band check.
 	g := newGuardWithLookup(newStubLookup(map[string]float64{"NSE|RELIANCE": 1000}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:           "trader@test.com",
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
@@ -87,7 +88,7 @@ func TestOTRBand_RejectsCashOrderAboveBand(t *testing.T) {
 func TestOTRBand_RejectsCashOrderBelowBand(t *testing.T) {
 	t.Parallel()
 	g := newGuardWithLookup(newStubLookup(map[string]float64{"NSE|RELIANCE": 1000}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:           "trader@test.com",
 		Exchange:        "NSE",
 		Tradingsymbol:   "RELIANCE",
@@ -106,7 +107,7 @@ func TestOTRBand_OptionsBandIs40Percent(t *testing.T) {
 	// NFO option (suffix CE) gets the 40% band: 100 * 0.6 .. 100 * 1.4
 	// = 60 .. 140. Order at 130 should pass; at 200 should fail.
 	g := newGuardWithLookup(newStubLookup(map[string]float64{"NFO|NIFTY24DEC25000CE": 100}))
-	pass := g.CheckOrder(OrderCheckRequest{
+	pass := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:         "trader@test.com",
 		Exchange:      "NFO",
 		Tradingsymbol: "NIFTY24DEC25000CE",
@@ -117,7 +118,7 @@ func TestOTRBand_OptionsBandIs40Percent(t *testing.T) {
 	})
 	assert.True(t, pass.Allowed, "130 is within the 40%% options band around LTP 100")
 
-	fail := g.CheckOrder(OrderCheckRequest{
+	fail := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:         "trader@test.com",
 		Exchange:      "NFO",
 		Tradingsymbol: "NIFTY24DEC25000CE",
@@ -133,7 +134,7 @@ func TestOTRBand_NoLookupConfigured_AllowsAll(t *testing.T) {
 	t.Parallel()
 	// No SetLTPLookup called → check no-ops, all orders pass through.
 	g := NewGuard(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:         "trader@test.com",
 		Exchange:      "NSE",
 		Tradingsymbol: "RELIANCE",
@@ -155,7 +156,7 @@ func TestOTRBand_LookupMissBypasses(t *testing.T) {
 	// Lookup wired but the specific instrument has no quote → band check
 	// fails open. (Other checks may still reject.)
 	g := newGuardWithLookup(newStubLookup(map[string]float64{}))
-	res := g.CheckOrder(OrderCheckRequest{
+	res := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 		Email:         "trader@test.com",
 		Exchange:      "NSE",
 		Tradingsymbol: "UNKNOWN",

@@ -1,6 +1,7 @@
-package riskguard
+﻿package riskguard
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -72,13 +73,13 @@ func TestCheckKillSwitch(t *testing.T) {
 	t.Run("unfrozen user passes", func(t *testing.T) {
 		// Confirmed=true bypasses the new default-on require-confirm gate so
 		// this test isolates the kill-switch behaviour.
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed, "TestCheckKillSwitch: r.Allowed")
 	})
 
 	t.Run("frozen user blocked", func(t *testing.T) {
 		g.Freeze("user@test.com", "admin@test.com", "testing")
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed, "TestCheckKillSwitch: r.Allowed")
 		assert.Equal(t, ReasonTradingFrozen, r.Reason, "TestCheckKillSwitch: want=%v got=%v", ReasonTradingFrozen, r.Reason)
 		assert.Contains(t, r.Message, "testing")
@@ -86,7 +87,7 @@ func TestCheckKillSwitch(t *testing.T) {
 
 	t.Run("unfreeze restores access", func(t *testing.T) {
 		g.Unfreeze("user@test.com")
-		r := g.CheckOrder(OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: "user@test.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed, "TestCheckKillSwitch: r.Allowed")
 	})
 }
@@ -100,7 +101,7 @@ func TestCheckOrderValue(t *testing.T) {
 	// the new cap. Confirmed=true bypasses the new default-on require-confirm
 	// gate so these tests isolate the value-check behaviour.
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 			Confirmed: true,
@@ -109,7 +110,7 @@ func TestCheckOrderValue(t *testing.T) {
 	})
 
 	t.Run("over limit blocked", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Quantity: 10, Price: domain.NewINR(10000), OrderType: "LIMIT",
 			Confirmed: true,
@@ -119,7 +120,7 @@ func TestCheckOrderValue(t *testing.T) {
 	})
 
 	t.Run("MARKET order skipped (price 0)", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Quantity: 100000, Price: domain.Money{}, OrderType: "MARKET",
 			Confirmed: true,
@@ -147,7 +148,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 	}})
 
 	t.Run("under freeze qty passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 100,
 			Confirmed: true,
@@ -156,7 +157,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 	})
 
 	t.Run("over freeze qty blocked", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "RELIANCE", Quantity: 2000,
 			Confirmed: true,
@@ -166,7 +167,7 @@ func TestCheckQuantityLimit(t *testing.T) {
 	})
 
 	t.Run("unknown instrument passes (fail open)", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "u@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "UNKNOWN", Quantity: 999999,
 			Confirmed: true,
@@ -181,7 +182,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 	pinClockInMarketHours(g)
 
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed, "TestCheckDailyOrderCount: r.Allowed")
 	})
 
@@ -192,7 +193,7 @@ func TestCheckDailyOrderCount(t *testing.T) {
 		g.trackers["u@t.com"] = &UserTracker{DailyOrderCount: 3, DayResetAt: g.clock()}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: "u@t.com", ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed, "TestCheckDailyOrderCount: r.Allowed")
 		assert.Equal(t, ReasonDailyOrderLimit, r.Reason, "TestCheckDailyOrderCount: want=%v got=%v", ReasonDailyOrderLimit, r.Reason)
 	})
@@ -263,7 +264,7 @@ func TestCheckRateLimit(t *testing.T) {
 	g.mu.Unlock()
 
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed, "TestCheckRateLimit: r.Allowed")
 	})
 
@@ -279,7 +280,7 @@ func TestCheckRateLimit(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.False(t, r.Allowed, "TestCheckRateLimit: r.Allowed")
 		assert.Equal(t, ReasonRateLimit, r.Reason, "TestCheckRateLimit: want=%v got=%v", ReasonRateLimit, r.Reason)
 		assert.Contains(t, r.Message, "limit: 3")
@@ -295,7 +296,7 @@ func TestCheckRateLimit(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{Email: email, ToolName: "place_order", Confirmed: true})
 		assert.True(t, r.Allowed, "TestCheckRateLimit: r.Allowed")
 	})
 }
@@ -313,14 +314,14 @@ func TestCheckDuplicate(t *testing.T) {
 	}
 
 	t.Run("first order passes", func(t *testing.T) {
-		r := g.CheckOrder(baseReq)
+		r := g.CheckOrderCtx(context.Background(), baseReq)
 		assert.True(t, r.Allowed, "TestCheckDuplicate: r.Allowed")
 		// Record it
 		g.RecordOrder(email, baseReq)
 	})
 
 	t.Run("same order within window blocked", func(t *testing.T) {
-		r := g.CheckOrder(baseReq)
+		r := g.CheckOrderCtx(context.Background(), baseReq)
 		assert.False(t, r.Allowed, "TestCheckDuplicate: r.Allowed")
 		assert.Equal(t, ReasonDuplicateOrder, r.Reason, "TestCheckDuplicate: want=%v got=%v", ReasonDuplicateOrder, r.Reason)
 		assert.Contains(t, r.Message, "BUY NSE RELIANCE qty 10")
@@ -329,14 +330,14 @@ func TestCheckDuplicate(t *testing.T) {
 	t.Run("different quantity passes", func(t *testing.T) {
 		diffReq := baseReq
 		diffReq.Quantity = 20
-		r := g.CheckOrder(diffReq)
+		r := g.CheckOrderCtx(context.Background(), diffReq)
 		assert.True(t, r.Allowed, "TestCheckDuplicate: r.Allowed")
 	})
 
 	t.Run("different transaction type passes", func(t *testing.T) {
 		diffReq := baseReq
 		diffReq.TransactionType = "SELL"
-		r := g.CheckOrder(diffReq)
+		r := g.CheckOrderCtx(context.Background(), diffReq)
 		assert.True(t, r.Allowed, "TestCheckDuplicate: r.Allowed")
 	})
 
@@ -349,7 +350,7 @@ func TestCheckDuplicate(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(baseReq)
+		r := g.CheckOrderCtx(context.Background(), baseReq)
 		assert.True(t, r.Allowed, "TestCheckDuplicate: r.Allowed")
 	})
 }
@@ -366,7 +367,7 @@ func TestCheckDailyValue(t *testing.T) {
 	g.mu.Unlock()
 
 	t.Run("under limit passes", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		})
@@ -381,7 +382,7 @@ func TestCheckDailyValue(t *testing.T) {
 		tracker.DayResetAt = g.clock()
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Quantity: 10, Price: domain.NewINR(1500), OrderType: "LIMIT", // 15000, total would be 105000
 		})
@@ -391,7 +392,7 @@ func TestCheckDailyValue(t *testing.T) {
 	})
 
 	t.Run("MARKET order skipped (price 0)", func(t *testing.T) {
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Quantity: 10000, Price: domain.Money{}, OrderType: "MARKET",
 		})
@@ -408,7 +409,7 @@ func TestCheckDailyValue(t *testing.T) {
 		tracker.DailyPlacedValue = domain.NewINR(99999)
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Quantity: 10, Price: domain.NewINR(1000), OrderType: "LIMIT",
 		})
@@ -449,18 +450,18 @@ func TestAutoFreeze(t *testing.T) {
 	}
 
 	t.Run("first two rejections do not freeze", func(t *testing.T) {
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 		assert.Equal(t, ReasonOrderValue, r.Reason, "TestAutoFreeze: want=%v got=%v", ReasonOrderValue, r.Reason)
 		assert.False(t, g.IsFrozen(email))
 
-		r = g.CheckOrder(overLimitReq)
+		r = g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 		assert.False(t, g.IsFrozen(email))
 	})
 
 	t.Run("third rejection triggers auto-freeze", func(t *testing.T) {
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 		assert.True(t, g.IsFrozen(email))
 		assert.Contains(t, r.Message, "auto-frozen due to repeated violations")
@@ -472,7 +473,7 @@ func TestAutoFreeze(t *testing.T) {
 	})
 
 	t.Run("subsequent orders blocked by kill switch", func(t *testing.T) {
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 		assert.Equal(t, ReasonTradingFrozen, r.Reason, "TestAutoFreeze: want=%v got=%v", ReasonTradingFrozen, r.Reason)
 	})
@@ -486,7 +487,7 @@ func TestAutoFreeze(t *testing.T) {
 			Email: email, ToolName: "place_order",
 			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT", // 100 < 1000
 		}
-		r := g.CheckOrder(underLimitReq)
+		r := g.CheckOrderCtx(context.Background(), underLimitReq)
 		assert.True(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 	})
 
@@ -502,7 +503,7 @@ func TestAutoFreeze(t *testing.T) {
 		g.mu.Unlock()
 
 		// One new rejection should NOT trigger freeze (only 1 in window, 2 outside)
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreeze: r.Allowed")
 		assert.False(t, g.IsFrozen(email))
 	})
@@ -528,7 +529,7 @@ func TestAutoFreezeDisabled(t *testing.T) {
 
 	// Trigger 5 rejections — none should cause auto-freeze
 	for i := 0; i < 5; i++ {
-		r := g.CheckOrder(overLimitReq)
+		r := g.CheckOrderCtx(context.Background(), overLimitReq)
 		assert.False(t, r.Allowed, "TestAutoFreezeDisabled: r.Allowed")
 		assert.Equal(t, ReasonOrderValue, r.Reason, "TestAutoFreezeDisabled: want=%v got=%v", ReasonOrderValue, r.Reason)
 		assert.NotContains(t, r.Message, "auto-frozen")

@@ -1,4 +1,4 @@
-// Tests for tightened Free-tier defaults introduced to mitigate the
+﻿// Tests for tightened Free-tier defaults introduced to mitigate the
 // "prompt-injection / market-manipulation via sub-cap orders" landmine.
 //
 // Scenario: an adversarial prompt injects 10x Rs 49,999 buy orders which are
@@ -15,6 +15,7 @@
 package riskguard
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,7 +64,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		g.mu.Unlock()
 
 		// 1 x Rs 49,999 — under the 50k cap
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "valtest@t.com", ToolName: "place_order",
 			Quantity: 1, Price: domain.NewINR(49999), OrderType: "LIMIT",
 			Confirmed: true,
@@ -71,7 +72,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		assert.True(t, r.Allowed, "Rs 49,999 should pass the new Rs 50k cap")
 
 		// 1 x Rs 50,001 — over the cap
-		r = g.CheckOrder(OrderCheckRequest{
+		r = g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "valtest@t.com", ToolName: "place_order",
 			Quantity: 1, Price: domain.NewINR(50001), OrderType: "LIMIT",
 			Confirmed: true,
@@ -99,7 +100,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 			Confirmed: true,
@@ -126,7 +127,7 @@ func TestTightenedDefaults_EnforcedAtRuntime(t *testing.T) {
 		g.mu.Unlock()
 
 		// Rs 2,000 order => total Rs 2,01,000 > Rs 2,00,000 cap → blocked
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: email, ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "X",
 			TransactionType: "BUY",
@@ -147,7 +148,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 	t.Run("fresh guard: unconfirmed order blocked", func(t *testing.T) {
 		g := newTestGuard()
 		// No per-user override — pure SystemDefaults path.
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "fresh@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
@@ -162,7 +163,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 	t.Run("fresh guard: confirmed order passes", func(t *testing.T) {
 		g := newTestGuard()
 		pinClockInMarketHours(g)
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "ack@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
@@ -182,7 +183,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 		}
 		g.mu.Unlock()
 
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "power@t.com", ToolName: "place_order",
 			Exchange: "NSE", Tradingsymbol: "INFY",
 			TransactionType: "BUY",
@@ -199,7 +200,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 		// Even without Confirmed=true, the response must say "frozen" not
 		// "confirmation required" — otherwise an attacker could probe freeze
 		// state by checking which error they get.
-		r := g.CheckOrder(OrderCheckRequest{
+		r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 			Email: "frozen@t.com", ToolName: "place_order",
 			Quantity: 1, Price: domain.NewINR(100), OrderType: "LIMIT",
 		})
@@ -212,7 +213,7 @@ func TestRequireConfirmAllOrders(t *testing.T) {
 		g := newTestGuard()
 		email := "victim@t.com"
 		for i := 0; i < 10; i++ {
-			r := g.CheckOrder(OrderCheckRequest{
+			r := g.CheckOrderCtx(context.Background(), OrderCheckRequest{
 				Email: email, ToolName: "place_order",
 				Exchange: "NSE", Tradingsymbol: "TARGET",
 				TransactionType: "BUY",
