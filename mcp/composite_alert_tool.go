@@ -249,7 +249,7 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Note:       responseNote,
 		}
 
-		handler.deps.Logger.Info("composite_alert created",
+		handler.deps.LoggerPort.Info(ctx, "composite_alert created",
 			"email", email,
 			"alert_id", alertID,
 			"name", name,

@@ -412,10 +412,10 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 						ltpMap[key] = data.LastPrice
 					}
 				} else {
-					handler.Logger().Warn("Failed to fetch LTP for watchlist", "error", ltpErr)
+					handler.LoggerPort().Warn(ctx, "Failed to fetch LTP for watchlist", "error", ltpErr)
 				}
 			} else {
-				handler.Logger().Warn("Failed to get Kite session for watchlist LTP", "error", clientErr)
+				handler.LoggerPort().Warn(ctx, "Failed to get Kite session for watchlist LTP", "error", clientErr)
 			}
 		}
 

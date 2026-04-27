@@ -201,7 +201,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 					// Skip, don't fail the whole scan — a single
 					// suspended / newly-listed instrument shouldn't take
 					// out the rest of the run.
-					handler.deps.Logger.Warn("volume_spike_detector: historical fetch failed",
+					handler.deps.LoggerPort.Warn(ctx, "volume_spike_detector: historical fetch failed",
 						"instrument", id,
 						"error", err)
 					skipped = append(skipped, volumeSpikeSkipped{Instrument: id, Reason: fmt.Sprintf("historical data unavailable: %s", err.Error())})

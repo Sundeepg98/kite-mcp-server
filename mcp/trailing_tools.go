@@ -198,7 +198,7 @@ func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Ma
 		apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
 		if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
 			if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
-				handler.Logger().Warn("Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
+				handler.LoggerPort().Warn(ctx, "Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
 			} else {
 				tickerMsg = "\nTicker auto-started."
 			}
@@ -206,7 +206,7 @@ func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Ma
 	}
 	if tickerSvc.IsRunning(email) {
 		if subErr := tickerSvc.Subscribe(email, []uint32{instrumentToken}, ticker.ModeLTP); subErr != nil {
-			handler.Logger().Warn("Failed to auto-subscribe instrument for trailing stop", "email", email, "error", subErr)
+			handler.LoggerPort().Warn(ctx, "Failed to auto-subscribe instrument for trailing stop", "email", email, "error", subErr)
 		} else {
 			tickerMsg += fmt.Sprintf("\nSubscribed %s:%s for real-time trailing.", exchange, tradingsymbol)
 		}

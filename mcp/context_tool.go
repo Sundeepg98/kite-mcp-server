@@ -104,7 +104,7 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 			ucResult, terr := BusResult[*usecases.TradingContextResult](raw)
 			if terr != nil {
-				handler.Logger().Error("trading_context bus result type mismatch", "error", terr)
+				handler.LoggerPort().Error(ctx, "trading_context bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 
