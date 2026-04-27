@@ -339,6 +339,28 @@ type Manager struct {
 	getOrderMarginsUC  *usecases.GetOrderMarginsUseCase
 	getBasketMarginsUC *usecases.GetBasketMarginsUseCase
 	getOrderChargesUC  *usecases.GetOrderChargesUseCase
+
+	// Wave D Phase 1 Slice D6: widget read-side use cases.
+	//
+	// GetPortfolioForWidget — clean hoist: only depends on the broker
+	// resolver. Constructed once in initOrderUseCases.
+	//
+	// GetAlertsForWidget — hoist: depends on broker resolver +
+	// alertStore (a Manager field, stable for the manager's lifetime
+	// after initAlertSystem runs). Constructed once.
+	//
+	// GetOrdersForWidget is intentionally NOT hoisted: its second
+	// dependency (audit store) can come either from a ctx-bound
+	// override (test-isolation contract via cqrs.WithWidgetAuditStore)
+	// OR from the Manager's audit store. Hoisting at startup would
+	// lock the audit store choice and break the test fixture. The
+	// handler keeps per-dispatch use case construction but swaps
+	// m.resolverFromContext(ctx) → m.sessionSvc, which is the actual
+	// Wave D goal (kill the resolverFromContext fork). Same reasoning
+	// applies to GetActivityForWidget, except that one has no broker
+	// resolver dimension at all so it's not a Wave D site.
+	getPortfolioForWidgetUC *usecases.GetPortfolioForWidgetUseCase
+	getAlertsForWidgetUC    *usecases.GetAlertsForWidgetUseCase
 }
 
 // NewManager creates a new manager with default configuration.

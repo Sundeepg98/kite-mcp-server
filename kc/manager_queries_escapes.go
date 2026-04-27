@@ -68,16 +68,22 @@ func (m *Manager) registerEscapeQueries() error {
 		return err
 	}
 
-	// --- Widget queries ---
+	// --- Widget queries (Wave D Slice D6) ---
+	//
+	// Portfolio + Alerts are hoisted to startup-once Manager fields.
+	// Orders + Activity keep per-dispatch construction because their
+	// audit-store dependency can be ctx-overridden for tests; see
+	// manager_use_cases.go for the design rationale.
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPortfolioForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetPortfolioForWidgetQuery)
-		uc := usecases.NewGetPortfolioForWidgetUseCase(m.resolverFromContext(ctx), m.Logger)
-		return uc.Execute(ctx, cqrs.GetWidgetPortfolioQuery{Email: q.Email})
+		return m.getPortfolioForWidgetUC.Execute(ctx, cqrs.GetWidgetPortfolioQuery{Email: q.Email})
 	}); err != nil {
 		return err
 	}
 
+	// Activity is NOT a Wave D site (no broker resolver) but stays per-
+	// dispatch because the audit store can come from ctx (test contract).
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetActivityForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetActivityForWidgetQuery)
 		store := m.widgetAuditStoreFromCtxOrManager(ctx)
@@ -90,26 +96,31 @@ func (m *Manager) registerEscapeQueries() error {
 		return err
 	}
 
+	// Orders keeps per-dispatch construction (audit store ctx fork)
+	// but swaps m.resolverFromContext(ctx) → m.sessionSvc — that's the
+	// Wave D goal for this site. The audit-store ctx override stays.
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrdersForWidgetQuery)
 		store := m.widgetAuditStoreFromCtxOrManager(ctx)
 		if store == nil {
 			return nil, nil
 		}
-		uc := usecases.NewGetOrdersForWidgetUseCase(m.resolverFromContext(ctx), store, m.Logger)
+		uc := usecases.NewGetOrdersForWidgetUseCase(m.sessionSvc, store, m.Logger)
 		return uc.Execute(ctx, cqrs.GetWidgetOrdersQuery{Email: q.Email})
 	}); err != nil {
 		return err
 	}
 
+	// Alerts: hoisted (alertStore is a Manager field). When the
+	// startup-time alertStore was nil (no DB / pre-init Manager), the
+	// hoisted UC will be nil too — nil-result fallback matches the
+	// pre-D6 handler contract.
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetAlertsForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetAlertsForWidgetQuery)
-		alertStore := m.AlertStore()
-		if alertStore == nil {
+		if m.getAlertsForWidgetUC == nil {
 			return nil, nil
 		}
-		uc := usecases.NewGetAlertsForWidgetUseCase(m.resolverFromContext(ctx), alertStore, m.Logger)
-		return uc.Execute(ctx, cqrs.GetWidgetAlertsQuery{Email: q.Email})
+		return m.getAlertsForWidgetUC.Execute(ctx, cqrs.GetWidgetAlertsQuery{Email: q.Email})
 	}); err != nil {
 		return err
 	}

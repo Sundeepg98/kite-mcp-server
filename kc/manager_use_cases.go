@@ -147,4 +147,24 @@ func (m *Manager) initOrderUseCases() {
 	m.getOrderMarginsUC = usecases.NewGetOrderMarginsUseCase(m.sessionSvc, m.Logger)
 	m.getBasketMarginsUC = usecases.NewGetBasketMarginsUseCase(m.sessionSvc, m.Logger)
 	m.getOrderChargesUC = usecases.NewGetOrderChargesUseCase(m.sessionSvc, m.Logger)
+
+	// Widget queries — Slice D6. Two of the four widget use cases are
+	// fully hoistable (single dependency that's stable for Manager
+	// lifetime); the other two (Activity, Orders) keep per-dispatch
+	// construction so the ctx-bound audit-store override (test contract
+	// via cqrs.WithWidgetAuditStore) keeps working. See the field-doc
+	// comment in manager.go for the design tradeoff.
+	m.getPortfolioForWidgetUC = usecases.NewGetPortfolioForWidgetUseCase(m.sessionSvc, m.Logger)
+
+	// Alerts widget needs the alert store. Manager-side initAlertSystem
+	// runs before initOrderUseCases so m.alertStore is non-nil here in
+	// every code path. Defensive nil-check anyway — match existing
+	// handler pattern that returns nil result when no store is wired.
+	if m.alertStore != nil {
+		m.getAlertsForWidgetUC = usecases.NewGetAlertsForWidgetUseCase(
+			m.sessionSvc,
+			m.alertStore,
+			m.Logger,
+		)
+	}
 }
