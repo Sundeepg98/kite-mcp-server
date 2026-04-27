@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -109,7 +110,7 @@ func TestSetAutoFreezeNotifier(t *testing.T) {
 	// Set low limits with auto-freeze enabled
 	g.mu.Lock()
 	g.limits["notifier@test.com"] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: true,
 	}
 	g.mu.Unlock()
@@ -168,7 +169,7 @@ func TestCheckAutoFreeze_AlreadyFrozenNotRefrozen(t *testing.T) {
 	// Already frozen AND auto-freeze enabled
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: true,
 		TradingFrozen:        true,
 		FrozenBy:             "admin",
@@ -593,9 +594,9 @@ func TestCheckDuplicateOrder_DisabledWindow(t *testing.T) {
 
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		DuplicateWindowSecs: -1,          // disabled (negative bypasses the fill-from-defaults)
-		MaxSingleOrderINR:   10000000,    // high limit to not interfere
-		MaxDailyValueINR:    100000000,
+		DuplicateWindowSecs: -1,                          // disabled (negative bypasses the fill-from-defaults)
+		MaxSingleOrderINR:   domain.NewINR(10000000),     // high limit to not interfere
+		MaxDailyValueINR:    domain.NewINR(100000000),
 	}
 	g.mu.Unlock()
 
@@ -783,7 +784,7 @@ func TestAutoFreezeWithLogger(t *testing.T) {
 	email := "logfreeze@test.com"
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: true,
 	}
 	g.mu.Unlock()
@@ -897,8 +898,8 @@ func TestCheckOrder_AutoFreezeOnQuantityLimit(t *testing.T) {
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
 		AutoFreezeOnLimitHit: true,
-		MaxSingleOrderINR:    10000000, // high, won't interfere
-		MaxDailyValueINR:     100000000,
+		MaxSingleOrderINR:    domain.NewINR(10000000), // high, won't interfere
+		MaxDailyValueINR:     domain.NewINR(100000000),
 	}
 	g.mu.Unlock()
 
@@ -927,8 +928,8 @@ func TestCheckOrder_AutoFreezeOnDailyOrderCount(t *testing.T) {
 	g.limits[email] = &UserLimits{
 		MaxOrdersPerDay:      1,
 		AutoFreezeOnLimitHit: true,
-		MaxSingleOrderINR:    10000000,
-		MaxDailyValueINR:     100000000,
+		MaxSingleOrderINR:    domain.NewINR(10000000),
+		MaxDailyValueINR:     domain.NewINR(100000000),
 	}
 	// Pre-populate tracker so daily count is at limit
 	g.trackers[email] = &UserTracker{
@@ -960,8 +961,8 @@ func TestCheckOrder_AutoFreezeOnRateLimit(t *testing.T) {
 	g.limits[email] = &UserLimits{
 		MaxOrdersPerMinute:   1,
 		AutoFreezeOnLimitHit: true,
-		MaxSingleOrderINR:    10000000,
-		MaxDailyValueINR:     100000000,
+		MaxSingleOrderINR:    domain.NewINR(10000000),
+		MaxDailyValueINR:     domain.NewINR(100000000),
 	}
 	now := time.Now()
 	g.trackers[email] = &UserTracker{
@@ -993,8 +994,8 @@ func TestCheckOrder_AutoFreezeOnDuplicateOrder(t *testing.T) {
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
 		AutoFreezeOnLimitHit: true,
-		MaxSingleOrderINR:    10000000,
-		MaxDailyValueINR:     100000000,
+		MaxSingleOrderINR:    domain.NewINR(10000000),
+		MaxDailyValueINR:     domain.NewINR(100000000),
 	}
 	g.mu.Unlock()
 
@@ -1026,9 +1027,9 @@ func TestCheckOrder_AutoFreezeOnDailyValue(t *testing.T) {
 
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxDailyValueINR:     1000, // very low
+		MaxDailyValueINR:     domain.NewINR(1000), // very low
 		AutoFreezeOnLimitHit: true,
-		MaxSingleOrderINR:    10000000,
+		MaxSingleOrderINR:    domain.NewINR(10000000),
 		DuplicateWindowSecs:  -1, // disable duplicate
 	}
 	g.trackers[email] = &UserTracker{
@@ -1228,7 +1229,7 @@ func TestPersistLimits_AutoFreezeFlag(t *testing.T) {
 	// Set limits with auto-freeze disabled, then persist
 	g.mu.Lock()
 	g.limits["autotest@test.com"] = &UserLimits{
-		MaxSingleOrderINR:    200000,
+		MaxSingleOrderINR:    domain.NewINR(200000),
 		AutoFreezeOnLimitHit: false,
 	}
 	g.persistLimits("autotest@test.com", g.limits["autotest@test.com"])

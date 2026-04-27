@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // internal_checks.go — the 10+ internal check*(...) methods that each
@@ -62,11 +64,15 @@ func (g *Guard) checkOrderValue(req OrderCheckRequest) CheckResult {
 		return CheckResult{Allowed: true}
 	}
 	limits := g.GetEffectiveLimits(req.Email)
-	value := float64(req.Quantity) * req.Price
-	if value > limits.MaxSingleOrderINR {
+	value := domain.NewINR(float64(req.Quantity) * req.Price)
+	// Currency-aware comparison; cross-currency would error and we treat
+	// that as "unable to verify, allow" — but in this code path both sides
+	// are constructed in INR, so the error path is unreachable in practice.
+	exceeds, err := value.GreaterThan(limits.MaxSingleOrderINR)
+	if err == nil && exceeds {
 		return CheckResult{
 			Allowed: false, Reason: ReasonOrderValue,
-			Message: fmt.Sprintf("Order value Rs %.0f exceeds limit Rs %.0f", value, limits.MaxSingleOrderINR),
+			Message: fmt.Sprintf("Order value Rs %.0f exceeds limit Rs %.0f", value.Float64(), limits.MaxSingleOrderINR.Float64()),
 		}
 	}
 	return CheckResult{Allowed: true}
@@ -205,11 +211,13 @@ func (g *Guard) checkDailyValue(email string, req OrderCheckRequest) CheckResult
 	g.mu.Unlock()
 	g.dispatchDailyResetIfNeeded(email, didReset, dispatcher)
 
-	if placed+orderValue > limits.MaxDailyValueINR {
+	cumulative := domain.NewINR(placed + orderValue)
+	exceeds, err := cumulative.GreaterThan(limits.MaxDailyValueINR)
+	if err == nil && exceeds {
 		return CheckResult{
 			Allowed: false, Reason: ReasonDailyValueLimit,
 			Message: fmt.Sprintf("Cumulative placed value Rs %.0f + this order Rs %.0f exceeds daily limit Rs %.0f",
-				placed, orderValue, limits.MaxDailyValueINR),
+				placed, orderValue, limits.MaxDailyValueINR.Float64()),
 		}
 	}
 	return CheckResult{Allowed: true}

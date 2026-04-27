@@ -181,7 +181,10 @@ func (uc *AdminGetRiskStatusUseCase) Execute(ctx context.Context, query cqrs.Adm
 
 	status := uc.riskguard.GetUserStatus(query.TargetEmail)
 	limits := uc.riskguard.GetEffectiveLimits(query.TargetEmail)
-	headroom := limits.MaxDailyValueINR - status.DailyPlacedValue
+	// MaxDailyValueINR is now a Money VO; convert to float at the boundary
+	// because OrderHeadroom is a JSON wire field consumed by external dashboards.
+	// Slice 3 of the Money sweep will Money-ify DailyPlacedValue too.
+	headroom := limits.MaxDailyValueINR.Float64() - status.DailyPlacedValue
 	headroom = max(headroom, 0)
 
 	return &AdminGetRiskStatusResult{

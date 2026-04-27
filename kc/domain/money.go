@@ -64,6 +64,26 @@ func (m Money) IsPositive() bool {
 	return m.Amount > 0
 }
 
+// GreaterThan reports whether m's amount is strictly greater than other's.
+// Returns an error if the currencies differ — silent cross-currency
+// comparison would defeat the type's purpose (e.g. comparing a USD limit
+// against an INR order value would silently coerce). The riskguard
+// per-user MaxSingleOrderINR / MaxDailyValueINR caps use this method.
+func (m Money) GreaterThan(other Money) (bool, error) {
+	if m.Currency != other.Currency {
+		return false, fmt.Errorf("domain: cannot compare %s to %s", m.Currency, other.Currency)
+	}
+	return m.Amount > other.Amount, nil
+}
+
+// Float64 returns the underlying amount. Boundary accessor for JSON
+// serialization, log fields, and SQLite REAL bindings — call sites that
+// invoke this are deliberately crossing out of the domain layer. New
+// in-domain code should keep working with Money values directly.
+func (m Money) Float64() float64 {
+	return m.Amount
+}
+
 // IsZero returns true if the amount is exactly zero.
 func (m Money) IsZero() bool {
 	return m.Amount == 0

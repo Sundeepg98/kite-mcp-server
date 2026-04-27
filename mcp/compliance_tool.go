@@ -92,13 +92,13 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			rgSection := complianceSection{
 				Status:      "ACTIVE",
 				Checks:      7,
-				OrderValueCap: formatINR(riskguard.SystemDefaults.MaxSingleOrderINR),
+				OrderValueCap: formatINR(riskguard.SystemDefaults.MaxSingleOrderINR.Float64()),
 				DailyLimit:  fmt.Sprintf("%d orders/day", riskguard.SystemDefaults.MaxOrdersPerDay),
 			}
 
 			if guard := handler.RiskGuard(); guard != nil {
 				limits := guard.GetEffectiveLimits(email)
-				rgSection.OrderValueCap = formatINR(limits.MaxSingleOrderINR)
+				rgSection.OrderValueCap = formatINR(limits.MaxSingleOrderINR.Float64())
 				rgSection.DailyLimit = fmt.Sprintf("%d orders/day", limits.MaxOrdersPerDay)
 				rgSection.Checks = 7 // kill-switch, order value, quantity, daily count, rate, duplicate, daily value
 

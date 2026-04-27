@@ -89,11 +89,11 @@ func (h *SafetyHandler) buildSafetyData(email string) map[string]any {
 		"enabled": true,
 		"status":  status,
 		"limits": map[string]any{
-			"max_single_order_inr":  limits.MaxSingleOrderINR,
+			"max_single_order_inr":  limits.MaxSingleOrderINR.Float64(),
 			"max_orders_per_day":    limits.MaxOrdersPerDay,
 			"max_orders_per_minute": limits.MaxOrdersPerMinute,
 			"duplicate_window_secs": limits.DuplicateWindowSecs,
-			"max_daily_value_inr":   limits.MaxDailyValueINR,
+			"max_daily_value_inr":   limits.MaxDailyValueINR.Float64(),
 		},
 		"sebi": map[string]any{
 			"static_egress_ip": true,

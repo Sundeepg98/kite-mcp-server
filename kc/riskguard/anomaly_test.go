@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // mockBaseline is a test double for the anomaly baseline provider. It lets
@@ -47,8 +49,8 @@ func TestCheckAnomalyMultiplier_BlocksFarOutlier(t *testing.T) {
 	g.mu.Lock()
 	g.limits["attacker@test.com"] = &UserLimits{
 		RequireConfirmAllOrders: false,
-		MaxSingleOrderINR:       1_000_000, // Rs 10L — lets the anomaly check be decisive
-		MaxDailyValueINR:        10_000_000,
+		MaxSingleOrderINR:       domain.NewINR(1_000_000), // Rs 10L — lets the anomaly check be decisive
+		MaxDailyValueINR:        domain.NewINR(10_000_000),
 	}
 	g.mu.Unlock()
 
@@ -101,7 +103,7 @@ func TestCheckAnomalyMultiplier_RequiresBothConditions(t *testing.T) {
 	// separate check — we're asserting the anomaly check specifically
 	// lets it through. Use a tiny override to disable the static cap.
 	g.mu.Lock()
-	g.limits["volatile@test.com"].MaxSingleOrderINR = 1_000_000 // Rs 10L override
+	g.limits["volatile@test.com"].MaxSingleOrderINR = domain.NewINR(1_000_000) // Rs 10L override
 	g.mu.Unlock()
 
 	r := g.CheckOrder(OrderCheckRequest{
@@ -123,8 +125,8 @@ func TestCheckAnomalyMultiplier_NoBaselineSkips(t *testing.T) {
 	g.mu.Lock()
 	g.limits["newbie@test.com"] = &UserLimits{
 		RequireConfirmAllOrders: false,
-		MaxSingleOrderINR:       10_000_000, // raise static caps so we isolate anomaly check
-		MaxDailyValueINR:        100_000_000,
+		MaxSingleOrderINR:       domain.NewINR(10_000_000), // raise static caps so we isolate anomaly check
+		MaxDailyValueINR:        domain.NewINR(100_000_000),
 	}
 	g.mu.Unlock()
 
@@ -166,8 +168,8 @@ func TestCheckAnomalyMultiplier_NoProviderSkips(t *testing.T) {
 	g.mu.Lock()
 	g.limits["np@test.com"] = &UserLimits{
 		RequireConfirmAllOrders: false,
-		MaxSingleOrderINR:       10_000_000,
-		MaxDailyValueINR:        100_000_000,
+		MaxSingleOrderINR:       domain.NewINR(10_000_000),
+		MaxDailyValueINR:        domain.NewINR(100_000_000),
 	}
 	g.mu.Unlock()
 

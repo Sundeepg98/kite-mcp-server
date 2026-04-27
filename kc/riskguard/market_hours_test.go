@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // mustIST is a tiny test helper that fails the test rather than swallowing a
@@ -150,8 +152,8 @@ func TestCheckMarketHours_TableDriven(t *testing.T) {
 			g.mu.Lock()
 			g.limits[email] = &UserLimits{
 				RequireConfirmAllOrders: false, // isolate this check
-				MaxSingleOrderINR:       1_000_000,
-				MaxDailyValueINR:        100_000_000,
+				MaxSingleOrderINR:       domain.NewINR(1_000_000),
+				MaxDailyValueINR:        domain.NewINR(100_000_000),
 				MaxOrdersPerDay:         1_000_000,
 				MaxOrdersPerMinute:      1_000_000,
 				AllowOffHours:           tc.allowOffHrs,

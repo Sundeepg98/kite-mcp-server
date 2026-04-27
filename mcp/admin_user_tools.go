@@ -175,11 +175,11 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		if result.EffectiveLimits != nil {
 			resp.EffectiveLimits = &adminEffectiveLimits{
-				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR,
+				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR.Float64(),
 				MaxOrdersPerDay:     result.EffectiveLimits.MaxOrdersPerDay,
 				MaxOrdersPerMinute:  result.EffectiveLimits.MaxOrdersPerMinute,
 				DuplicateWindowSecs: result.EffectiveLimits.DuplicateWindowSecs,
-				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR,
+				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR.Float64(),
 			}
 		}
 

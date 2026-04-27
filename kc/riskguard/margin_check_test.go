@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // stubMarginLookup returns canned available-margin values for tests.
@@ -58,7 +60,7 @@ func TestMarginCheck_RejectsInsufficientMargin(t *testing.T) {
 	// our Rs 100,000 notional before margin sees it.
 	g.mu.Lock()
 	g.limits["trader@test.com"] = &UserLimits{
-		MaxSingleOrderINR:       1000000,
+		MaxSingleOrderINR:       domain.NewINR(1000000),
 		RequireConfirmAllOrders: false,
 	}
 	g.mu.Unlock()

@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // TestTightenedSystemDefaults asserts the new Free-tier default values.
@@ -31,9 +33,9 @@ func TestTightenedSystemDefaults(t *testing.T) {
 		got  any
 		want any
 	}{
-		{"per-order cap Rs 50,000", SystemDefaults.MaxSingleOrderINR, float64(50000)},
+		{"per-order cap Rs 50,000", SystemDefaults.MaxSingleOrderINR, domain.NewINR(50000)},
 		{"daily order count 20", SystemDefaults.MaxOrdersPerDay, 20},
-		{"daily notional Rs 2,00,000", SystemDefaults.MaxDailyValueINR, float64(200000)},
+		{"daily notional Rs 2,00,000", SystemDefaults.MaxDailyValueINR, domain.NewINR(200000)},
 		{"require-confirm-all-orders default ON", SystemDefaults.RequireConfirmAllOrders, true},
 	}
 	for _, tc := range tests {

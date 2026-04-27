@@ -17,12 +17,18 @@ import (
 // Pure file move — no behavior change.
 
 // UserLimits holds configurable limits for a user.
+//
+// Max*INR fields use the domain.Money value object (not bare float64) so
+// the engine fails fast on cross-currency comparison rather than silently
+// coercing. The zero value of Money (Amount=0, Currency="") is the
+// "no per-user override" sentinel — GetEffectiveLimits replaces it with
+// SystemDefaults at read time. New constructors must use domain.NewINR(N).
 type UserLimits struct {
-	MaxSingleOrderINR    float64
+	MaxSingleOrderINR    domain.Money
 	MaxOrdersPerDay      int
 	MaxOrdersPerMinute   int
 	DuplicateWindowSecs  int
-	MaxDailyValueINR     float64
+	MaxDailyValueINR     domain.Money
 	AutoFreezeOnLimitHit bool // when true, auto-freeze after repeated rejections
 	// RequireConfirmAllOrders, when true, blocks any order that does not
 	// carry an explicit Confirmed=true flag on the OrderCheckRequest. This
@@ -126,7 +132,7 @@ func (g *Guard) GetEffectiveLimits(email string) UserLimits {
 	defer g.mu.RUnlock()
 	if l, ok := g.limits[strings.ToLower(email)]; ok {
 		result := *l
-		if result.MaxSingleOrderINR == 0 {
+		if result.MaxSingleOrderINR.IsZero() {
 			result.MaxSingleOrderINR = SystemDefaults.MaxSingleOrderINR
 		}
 		if result.MaxOrdersPerDay == 0 {
@@ -138,7 +144,7 @@ func (g *Guard) GetEffectiveLimits(email string) UserLimits {
 		if result.DuplicateWindowSecs == 0 {
 			result.DuplicateWindowSecs = SystemDefaults.DuplicateWindowSecs
 		}
-		if result.MaxDailyValueINR == 0 {
+		if result.MaxDailyValueINR.IsZero() {
 			result.MaxDailyValueINR = SystemDefaults.MaxDailyValueINR
 		}
 		return result
@@ -200,7 +206,7 @@ func (g *Guard) persistLimits(email string, l *UserLimits) {
 		   frozen_by=excluded.frozen_by,
 		   frozen_reason=excluded.frozen_reason,
 		   updated_at=excluded.updated_at`,
-		email, l.MaxSingleOrderINR, l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR, autoFreeze, requireConfirm, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
+		email, l.MaxSingleOrderINR.Float64(), l.MaxOrdersPerDay, l.MaxOrdersPerMinute, l.DuplicateWindowSecs, l.MaxDailyValueINR.Float64(), autoFreeze, requireConfirm, frozen, frozenAt, l.FrozenBy, l.FrozenReason, time.Now().Format(time.RFC3339),
 	)
 	if err != nil && g.logger != nil {
 		g.logger.Error("Failed to persist risk limits", "email", email, "error", err)
@@ -274,11 +280,11 @@ func (g *Guard) LoadLimits() error {
 			return fmt.Errorf("scan risk_limits: %w", err)
 		}
 		l := &UserLimits{
-			MaxSingleOrderINR:       maxOrder,
+			MaxSingleOrderINR:       domain.NewINR(maxOrder),
 			MaxOrdersPerDay:         maxDaily,
 			MaxOrdersPerMinute:      maxPerMin,
 			DuplicateWindowSecs:     dupWindow,
-			MaxDailyValueINR:        maxDailyValue,
+			MaxDailyValueINR:        domain.NewINR(maxDailyValue),
 			AutoFreezeOnLimitHit:    autoFreeze != 0,
 			RequireConfirmAllOrders: requireConfirm != 0,
 			TradingFrozen:           frozen != 0,

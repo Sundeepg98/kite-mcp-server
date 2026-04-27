@@ -70,11 +70,11 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			GloballyFrozen: result.GloballyFrozen,
 			UserStatus:     result.UserStatus,
 			EffectiveLimits: adminEffectiveLimits{
-				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR,
+				MaxSingleOrderINR:   result.EffectiveLimits.MaxSingleOrderINR.Float64(),
 				MaxOrdersPerDay:     result.EffectiveLimits.MaxOrdersPerDay,
 				MaxOrdersPerMinute:  result.EffectiveLimits.MaxOrdersPerMinute,
 				DuplicateWindowSecs: result.EffectiveLimits.DuplicateWindowSecs,
-				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR,
+				MaxDailyValueINR:    result.EffectiveLimits.MaxDailyValueINR.Float64(),
 			},
 			OrderHeadroom: result.OrderHeadroom,
 		}, "admin_get_risk_status")

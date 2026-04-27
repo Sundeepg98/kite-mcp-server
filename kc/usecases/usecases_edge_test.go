@@ -213,7 +213,7 @@ func TestAdminGetRiskStatus_Success(t *testing.T) {
 	t.Parallel()
 	rg := &mockRiskGuard{
 		userStatus: riskguard.UserStatus{DailyPlacedValue: 50000},
-		userLimits: riskguard.UserLimits{MaxDailyValueINR: 1000000},
+		userLimits: riskguard.UserLimits{MaxDailyValueINR: domain.NewINR(1000000)},
 	}
 	uc := NewAdminGetRiskStatusUseCase(rg, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.AdminGetRiskStatusQuery{TargetEmail: "a@test.com"})
@@ -225,7 +225,7 @@ func TestAdminGetRiskStatus_NegativeHeadroom(t *testing.T) {
 	t.Parallel()
 	rg := &mockRiskGuard{
 		userStatus: riskguard.UserStatus{DailyPlacedValue: 2000000},
-		userLimits: riskguard.UserLimits{MaxDailyValueINR: 1000000},
+		userLimits: riskguard.UserLimits{MaxDailyValueINR: domain.NewINR(1000000)},
 	}
 	uc := NewAdminGetRiskStatusUseCase(rg, testLogger())
 	result, err := uc.Execute(context.Background(), cqrs.AdminGetRiskStatusQuery{TargetEmail: "a@test.com"})

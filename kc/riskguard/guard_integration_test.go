@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // newIntegrationGuard creates a Guard backed by in-memory SQLite for persistence tests.
@@ -444,7 +445,7 @@ func TestFullChain_AutoFreezeCircuitBreaker(t *testing.T) {
 	// Set a low order value limit to easily trigger rejections.
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,  // Rs 1,000
+		MaxSingleOrderINR:    domain.NewINR(1000), // Rs 1,000
 		AutoFreezeOnLimitHit: true,
 	}
 	g.mu.Unlock()
@@ -497,7 +498,7 @@ func TestFullChain_AutoFreezeDisabled(t *testing.T) {
 
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: false, // disabled
 	}
 	g.mu.Unlock()
@@ -522,7 +523,7 @@ func TestFullChain_AutoFreeze_OldRejectionsExpire(t *testing.T) {
 
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: true,
 	}
 	g.mu.Unlock()

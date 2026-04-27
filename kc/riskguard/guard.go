@@ -21,11 +21,11 @@ import (
 // too permissive for an autonomous agent execution path. Power users can still
 // raise their limits per-account via risk_limits overrides.
 var SystemDefaults = UserLimits{
-	MaxSingleOrderINR:       50000,  // Rs 50,000 (Free tier — was Rs 5,00,000)
-	MaxOrdersPerDay:         20,     // Free tier — was 200
+	MaxSingleOrderINR:       domain.NewINR(50000),  // Rs 50,000 (Free tier — was Rs 5,00,000)
+	MaxOrdersPerDay:         20,                    // Free tier — was 200
 	MaxOrdersPerMinute:      10,
 	DuplicateWindowSecs:     30,
-	MaxDailyValueINR:        200000, // Rs 2,00,000 (Free tier — was Rs 10,00,000)
+	MaxDailyValueINR:        domain.NewINR(200000), // Rs 2,00,000 (Free tier — was Rs 10,00,000)
 	AutoFreezeOnLimitHit:    true,
 	RequireConfirmAllOrders: true, // Default ON: every order needs an explicit ACK
 }

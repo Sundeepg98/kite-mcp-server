@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 func newTestGuard() *Guard {
@@ -230,21 +232,21 @@ func TestGetEffectiveLimits(t *testing.T) {
 
 	t.Run("returns per-user override", func(t *testing.T) {
 		g.mu.Lock()
-		g.limits["custom@test.com"] = &UserLimits{MaxSingleOrderINR: 100000, MaxOrdersPerDay: 50}
+		g.limits["custom@test.com"] = &UserLimits{MaxSingleOrderINR: domain.NewINR(100000), MaxOrdersPerDay: 50}
 		g.mu.Unlock()
 
 		l := g.GetEffectiveLimits("custom@test.com")
-		assert.Equal(t, float64(100000), l.MaxSingleOrderINR)
+		assert.Equal(t, domain.NewINR(100000), l.MaxSingleOrderINR)
 		assert.Equal(t, 50, l.MaxOrdersPerDay, "TestGetEffectiveLimits: want=%v got=%v", 50, l.MaxOrdersPerDay)
 	})
 
 	t.Run("fills zero values from defaults", func(t *testing.T) {
 		g.mu.Lock()
-		g.limits["partial@test.com"] = &UserLimits{MaxSingleOrderINR: 100000} // MaxOrdersPerDay=0
+		g.limits["partial@test.com"] = &UserLimits{MaxSingleOrderINR: domain.NewINR(100000)} // MaxOrdersPerDay=0
 		g.mu.Unlock()
 
 		l := g.GetEffectiveLimits("partial@test.com")
-		assert.Equal(t, float64(100000), l.MaxSingleOrderINR)
+		assert.Equal(t, domain.NewINR(100000), l.MaxSingleOrderINR)
 		assert.Equal(t, SystemDefaults.MaxOrdersPerDay, l.MaxOrdersPerDay) // filled from default
 	})
 }
@@ -360,7 +362,7 @@ func TestCheckDailyValue(t *testing.T) {
 
 	// Set a low daily value limit for testing
 	g.mu.Lock()
-	g.limits[email] = &UserLimits{MaxDailyValueINR: 100000} // Rs 1,00,000
+	g.limits[email] = &UserLimits{MaxDailyValueINR: domain.NewINR(100000)} // Rs 1,00,000
 	g.mu.Unlock()
 
 	t.Run("under limit passes", func(t *testing.T) {
@@ -436,7 +438,7 @@ func TestAutoFreeze(t *testing.T) {
 	// Set a very low single order limit to easily trigger rejections.
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000, // Rs 1,000
+		MaxSingleOrderINR:    domain.NewINR(1000), // Rs 1,000
 		AutoFreezeOnLimitHit: true,
 	}
 	g.mu.Unlock()
@@ -514,7 +516,7 @@ func TestAutoFreezeDisabled(t *testing.T) {
 	// Explicitly disable auto-freeze
 	g.mu.Lock()
 	g.limits[email] = &UserLimits{
-		MaxSingleOrderINR:    1000,
+		MaxSingleOrderINR:    domain.NewINR(1000),
 		AutoFreezeOnLimitHit: false,
 	}
 	g.mu.Unlock()
