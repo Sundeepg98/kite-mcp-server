@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,9 +11,21 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 )
 
-// StartWorker starts a background goroutine that drains the write channel.
-// Call Stop() to gracefully drain and close.
-func (s *Store) StartWorker() {
+// StartWorkerCtx starts a background goroutine that drains the write
+// channel. The ctx is the parent service context — typically the App
+// startup ctx — and is captured on the Store as serviceCtx so the
+// goroutine's logger calls can correlate with app-level traces.
+//
+// Call Stop() to gracefully drain and close. ctx cancellation is NOT
+// the shutdown trigger today (Stop() closes the channel directly),
+// but a future enhancement could honour ctx.Done() to abort in-flight
+// writes; capturing the ctx now positions us for that without a
+// public-API change.
+func (s *Store) StartWorkerCtx(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.serviceCtx = ctx
 	s.writeCh = make(chan *ToolCall, auditBufferSize)
 	s.done = make(chan struct{})
 	go func() {
@@ -22,7 +35,7 @@ func (s *Store) StartWorker() {
 			s.computeChainLink(entry)
 			if err := s.Record(entry); err != nil {
 				if s.logger != nil {
-					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
+					s.logger.Error(s.serviceCtx, "Audit write failed", err, "call_id", entry.CallID)
 				}
 			} else {
 				// Broadcast to SSE listeners after successful write.
@@ -30,6 +43,18 @@ func (s *Store) StartWorker() {
 			}
 		}
 	}()
+}
+
+// StartWorker is the legacy non-ctx setter, retained as a thin shim
+// that calls StartWorkerCtx with context.Background(). Existing test
+// fixtures and external callers continue to work unchanged; new
+// callers should reach for StartWorkerCtx.
+//
+// Deprecated: use StartWorkerCtx with the parent service context.
+// This shim exists for the migration window only and will be removed
+// once Wave D Phase 3 Package 8 (cleanup) lands.
+func (s *Store) StartWorker() {
+	s.StartWorkerCtx(context.Background())
 }
 
 // computeChainLink sets PrevHash and EntryHash on the entry using the HMAC
@@ -48,8 +73,10 @@ func (s *Store) computeChainLink(entry *ToolCall) {
 	s.lastHash = entry.EntryHash
 }
 
-// Enqueue adds a tool call to the write buffer. Non-blocking; logs and counts
-// any dropped entries via DroppedCount so operators can detect compliance gaps.
+// EnqueueCtx adds a tool call to the write buffer with a request
+// context for log correlation. Non-blocking; logs and counts any
+// dropped entries via DroppedCount so operators can detect compliance
+// gaps.
 //
 // H3 fix (phase 2i): previously the worker-not-started fallback swallowed
 // Record errors with `_ = s.Record(entry)` and the buffer-full path logged at
@@ -59,7 +86,14 @@ func (s *Store) computeChainLink(entry *ToolCall) {
 // Sync-fallback path logs Error on every drop (rare — worker normally running).
 // Buffer-full path logs a Warning every 100 drops with the cumulative count so
 // a noisy backlog doesn't spam error logs but operators still see the trend.
-func (s *Store) Enqueue(entry *ToolCall) {
+//
+// ctx flows from the audit middleware (request-scoped) so trace IDs
+// thread through to the persistence-failure log. nil ctx falls back
+// to context.Background — preserves existing test-fixture callers.
+func (s *Store) EnqueueCtx(ctx context.Context, entry *ToolCall) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if s.writeCh == nil {
 		// Worker not started — synchronous fallback. Compute the chain link
 		// here since the worker goroutine is not draining.
@@ -67,8 +101,8 @@ func (s *Store) Enqueue(entry *ToolCall) {
 		if err := s.Record(entry); err != nil {
 			s.incDropped()
 			if s.logger != nil {
-				s.logger.Error("Audit sync-fallback write failed, entry dropped",
-					"error", err, "call_id", entry.CallID, "tool", entry.ToolName)
+				s.logger.Error(ctx, "Audit sync-fallback write failed, entry dropped",
+					err, "call_id", entry.CallID, "tool", entry.ToolName)
 			}
 		}
 		return
@@ -82,13 +116,26 @@ func (s *Store) Enqueue(entry *ToolCall) {
 			// Throttle log noise: one warning per 100 drops, with cumulative
 			// count so ops can chart the trend via log aggregation.
 			if total%100 == 0 {
-				s.logger.Warn("Audit buffer full, entries dropped (compliance gap)",
+				s.logger.Warn(ctx, "Audit buffer full, entries dropped (compliance gap)",
 					"dropped_total", total,
 					"last_call_id", entry.CallID,
 					"last_tool", entry.ToolName)
 			}
 		}
 	}
+}
+
+// Enqueue is the legacy non-ctx Enqueue, retained as a thin shim
+// that calls EnqueueCtx with context.Background(). Existing callers
+// (audit middleware, test fixtures) continue to work unchanged; new
+// callers should reach for EnqueueCtx and pass the request ctx so
+// trace correlation flows through to the audit log.
+//
+// Deprecated: use EnqueueCtx with the request context. This shim
+// exists for the migration window only and will be removed once
+// Wave D Phase 3 Package 8 (cleanup) lands.
+func (s *Store) Enqueue(entry *ToolCall) {
+	s.EnqueueCtx(context.Background(), entry)
 }
 
 // Stop gracefully drains the buffer and waits for completion.

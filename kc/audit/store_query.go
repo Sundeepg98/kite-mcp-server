@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -275,7 +276,11 @@ func (s *Store) DeleteOlderThan(before time.Time) (int64, error) {
 
 		if recErr := s.Record(marker); recErr != nil {
 			if s.logger != nil {
-				s.logger.Error("Failed to insert chain-break marker", "error", recErr)
+				ctx := s.serviceCtx
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				s.logger.Error(ctx, "Failed to insert chain-break marker", recErr)
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"strconv"
 	"time"
 )
@@ -82,11 +83,21 @@ func ParseRetentionDays(raw string, defaultDays int) int {
 //
 // Safe to call multiple times: a second call is a no-op while a worker is
 // already running.
-func (s *Store) StartRetentionWorker(days int) {
+//
+// ctx is the parent service context — captured by the goroutine for
+// log correlation (the goroutine's cleanup-success / cleanup-failure
+// log entries flow through it). Shutdown is still driven by the
+// stop channel (close via StopRetentionWorker); ctx is currently for
+// logging only, but capturing it now positions us to honour
+// ctx.Done() without a public-API change.
+func (s *Store) StartRetentionWorkerCtx(ctx context.Context, days int) {
 	if days <= 0 {
 		// Retention disabled — do not spawn the goroutine. StopRetentionWorker
 		// will see nil channels and return immediately.
 		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	s.retentionMu.Lock()
@@ -112,13 +123,13 @@ func (s *Store) StartRetentionWorker(days int) {
 				deleted, err := s.CleanupOldRecords(days)
 				if err != nil {
 					if s.logger != nil {
-						s.logger.Error("audit retention cleanup failed",
-							"error", err, "retention_days", days)
+						s.logger.Error(ctx, "audit retention cleanup failed",
+							err, "retention_days", days)
 					}
 					continue
 				}
 				if deleted > 0 && s.logger != nil {
-					s.logger.Info("audit retention cleanup completed",
+					s.logger.Info(ctx, "audit retention cleanup completed",
 						"rows_deleted", deleted, "retention_days", days)
 				}
 			case <-stop:
@@ -126,6 +137,19 @@ func (s *Store) StartRetentionWorker(days int) {
 			}
 		}
 	}()
+}
+
+// StartRetentionWorker is the legacy non-ctx variant, retained as a
+// thin shim that calls StartRetentionWorkerCtx with
+// context.Background(). Existing test fixtures continue to work
+// unchanged; new callers should reach for StartRetentionWorkerCtx
+// and pass the parent service context.
+//
+// Deprecated: use StartRetentionWorkerCtx. This shim exists for the
+// migration window only and will be removed once Wave D Phase 3
+// Package 8 (cleanup) lands.
+func (s *Store) StartRetentionWorker(days int) {
+	s.StartRetentionWorkerCtx(context.Background(), days)
 }
 
 // StopRetentionWorker signals the retention goroutine to exit and blocks

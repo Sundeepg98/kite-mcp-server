@@ -297,7 +297,7 @@ func TestStartWorker_RecordError(t *testing.T) {
 			s.computeChainLink(entry)
 			if err := s.Record(entry); err != nil {
 				if s.logger != nil {
-					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
+					s.logger.Error(context.Background(), "Audit write failed", err, "call_id", entry.CallID)
 				}
 			} else {
 				s.broadcastToListeners(entry)
@@ -328,7 +328,7 @@ func TestStartWorker_RecordError_NoLogger(t *testing.T) {
 			s.computeChainLink(entry)
 			if err := s.Record(entry); err != nil {
 				if s.logger != nil {
-					s.logger.Error("Audit write failed", "error", err, "call_id", entry.CallID)
+					s.logger.Error(context.Background(), "Audit write failed", err, "call_id", entry.CallID)
 				}
 			}
 		}

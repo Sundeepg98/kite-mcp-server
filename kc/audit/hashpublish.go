@@ -41,6 +41,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // HashPublishConfig holds configuration for the hash-chain external publisher.
@@ -151,20 +153,27 @@ type HashTipPublication struct {
 // refuses to start and logs an error. This is a startup-time check — fail
 // fast beats fail silently.
 func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) {
+	// Wave D Phase 3 Logger sweep — kc/audit/ Package 1: convert at
+	// the boundary. Public signature retains *slog.Logger for caller
+	// compatibility (app/providers/audit_init.go); internal log calls
+	// use the kc/logger.Logger port. The wrap is zero-allocation
+	// (*slogAdapter holds the same pointer) and lets the private
+	// helpers below adopt the ctx-aware port API uniformly.
 	if logger == nil {
 		logger = slog.Default()
 	}
+	l := logport.NewSlog(logger)
 	if store == nil {
-		logger.Warn("Audit hash publisher: no audit store provided, skipping")
+		l.Warn(ctx, "Audit hash publisher: no audit store provided, skipping")
 		return
 	}
 	if !cfg.Enabled() {
-		logger.Info("Audit hash publishing disabled (no storage configured)",
+		l.Info(ctx, "Audit hash publishing disabled (no storage configured)",
 			"hint", "set AUDIT_HASH_PUBLISH_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY to enable")
 		return
 	}
 	if len(cfg.SigningKey) == 0 {
-		logger.Warn("Audit hash publisher: no signing key available (OAUTH_JWT_SECRET empty and AUDIT_HASH_PUBLISH_KEY unset); refusing to publish unsigned")
+		l.Warn(ctx, "Audit hash publisher: no signing key available (OAUTH_JWT_SECRET empty and AUDIT_HASH_PUBLISH_KEY unset); refusing to publish unsigned")
 		return
 	}
 	// SSRF guard: reject endpoints resolving to internal / private / loopback
@@ -172,14 +181,14 @@ func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig
 	// could otherwise point the publisher at cloud metadata services
 	// (169.254.169.254), kubelet, or localhost daemons.
 	if err := ValidateS3Endpoint(cfg.S3Endpoint); err != nil {
-		logger.Error("Audit hash publisher: S3 endpoint blocked by SSRF guard; refusing to start",
-			"endpoint", cfg.S3Endpoint, "error", err)
+		l.Error(ctx, "Audit hash publisher: S3 endpoint blocked by SSRF guard; refusing to start", err,
+			"endpoint", cfg.S3Endpoint)
 		return
 	}
 
-	go runHashPublisher(ctx, store, cfg, logger)
+	go runHashPublisher(ctx, store, cfg, l)
 
-	logger.Info("Audit hash publisher started",
+	l.Info(ctx, "Audit hash publisher started",
 		"interval", cfg.Interval,
 		"endpoint", cfg.S3Endpoint,
 		"bucket", cfg.Bucket)
@@ -298,37 +307,41 @@ func isPrivateIP(ip net.IP) bool {
 // runHashPublisher is the goroutine body. Ticks every cfg.Interval, queries
 // the chain tip, signs it, and uploads. Errors are logged and retried on
 // the next tick — we do not crash the app on publish failures.
-func runHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) {
+//
+// Logger is the kc/logger.Logger port (Wave D Phase 3 Logger sweep —
+// kc/audit/ Package 1). Private signature; the public StartHashPublisher
+// converts at the boundary.
+func runHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig, l logport.Logger) {
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
 
 	// Publish once immediately so we have an anchor on process start.
-	if err := publishOnce(ctx, store, cfg, logger); err != nil {
-		logger.Warn("Audit hash tip publish failed (initial)", "error", err)
+	if err := publishOnce(ctx, store, cfg, l); err != nil {
+		l.Warn(ctx, "Audit hash tip publish failed (initial)", "error", err)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("Audit hash publisher stopping (context cancelled)")
+			l.Info(ctx, "Audit hash publisher stopping (context cancelled)")
 			return
 		case <-ticker.C:
-			if err := publishOnce(ctx, store, cfg, logger); err != nil {
-				logger.Warn("Audit hash tip publish failed", "error", err)
+			if err := publishOnce(ctx, store, cfg, l); err != nil {
+				l.Warn(ctx, "Audit hash tip publish failed", "error", err)
 			}
 		}
 	}
 }
 
 // publishOnce reads the chain tip, builds the signed blob, and PUTs it.
-func publishOnce(ctx context.Context, store *Store, cfg HashPublishConfig, logger *slog.Logger) error {
+func publishOnce(ctx context.Context, store *Store, cfg HashPublishConfig, l logport.Logger) error {
 	tipHash, count, err := store.ChainTip()
 	if err != nil {
 		return fmt.Errorf("query chain tip: %w", err)
 	}
 	if tipHash == "" {
 		// No entries yet — nothing to anchor. Not an error, just skip.
-		logger.Debug("Audit hash publisher: chain empty, skipping publish")
+		l.Debug(ctx, "Audit hash publisher: chain empty, skipping publish")
 		return nil
 	}
 
@@ -355,7 +368,7 @@ func publishOnce(ctx context.Context, store *Store, cfg HashPublishConfig, logge
 		return fmt.Errorf("put object %s: %w", objectKey, err)
 	}
 
-	logger.Info("Audit hash tip published",
+	l.Info(ctx, "Audit hash tip published",
 		"tip_hash", tipHash[:min(12, len(tipHash))]+"...",
 		"entry_count", count,
 		"key", objectKey)
