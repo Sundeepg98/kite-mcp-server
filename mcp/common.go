@@ -125,7 +125,7 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 		h.deps.Logger,
 	)
 	if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
-		h.deps.Logger.Warn("Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
+		h.deps.LoggerPort.Warn(ctx, "Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
 		h.deps.TokenStore.Delete(email)
 		h.trackToolError(ctx, toolName, "token_expired")
 		return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error()))
@@ -146,12 +146,12 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	sessionID := sess.SessionID()
 	email := oauth.EmailFromContext(ctx)
 
-	h.deps.Logger.Debug("Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
+	h.deps.LoggerPort.Debug(ctx, "Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
 
 	// Step 2: Session lookup/creation.
 	kiteSession, isNew, err := h.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 	if err != nil {
-		h.deps.Logger.Error("Failed to establish session", "tool", toolName, "session_id", sessionID, "error", err)
+		h.deps.LoggerPort.Error(ctx, "Failed to establish session", err, "tool", toolName, "session_id", sessionID)
 		h.trackToolError(ctx, toolName, "session_error")
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to establish a session: %s", err.Error())), nil
 	}
@@ -160,7 +160,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	// The stub Kite client (non-nil, dead base URI) lets handler bodies execute
 	// and return API errors instead of panicking on nil dereference.
 	if h.deps.Config.DevMode() {
-		h.deps.Logger.Debug("DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
+		h.deps.LoggerPort.Debug(ctx, "DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
 		return fn(kiteSession)
 	}
 
@@ -170,19 +170,19 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 			// Verify the cached token is still valid
 			_, err := kiteSession.Kite.Client.GetUserProfile()
 			if err != nil {
-				h.deps.Logger.Warn("Cached Kite token expired", "email", email, "error", err)
+				h.deps.LoggerPort.Warn(ctx, "Cached Kite token expired", "email", email, "error", err)
 				h.deps.TokenStore.Delete(email)
 				h.trackToolError(ctx, toolName, "auth_required")
 				return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error())), nil
 			}
-			h.deps.Logger.Info("Auto-authenticated via cached token", "tool", toolName, "email", email)
+			h.deps.LoggerPort.Info(ctx, "Auto-authenticated via cached token", "tool", toolName, "email", email)
 			h.deps.Metrics.TrackDailyUser(email)
 		} else if !h.deps.Credentials.HasPreAuth() {
-			h.deps.Logger.Info("New session created, login required", "tool", toolName, "session_id", sessionID)
+			h.deps.LoggerPort.Info(ctx, "New session created, login required", "tool", toolName, "session_id", sessionID)
 			h.trackToolError(ctx, toolName, "auth_required")
 			return mcp.NewToolResultError("Please log in first using the login tool"), nil
 		} else {
-			h.deps.Logger.Info("New session with pre-auth token", "tool", toolName, "session_id", sessionID)
+			h.deps.LoggerPort.Info(ctx, "New session with pre-auth token", "tool", toolName, "session_id", sessionID)
 		}
 	}
 
@@ -193,7 +193,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		}
 	}
 
-	h.deps.Logger.Debug("Session validated successfully", "tool", toolName, "session_id", sessionID)
+	h.deps.LoggerPort.Debug(ctx, "Session validated successfully", "tool", toolName, "session_id", sessionID)
 	return fn(kiteSession)
 }
 
@@ -203,7 +203,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 func (h *ToolHandler) callWithNilKiteGuard(toolName string, session *kc.KiteSessionData, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (result *mcp.CallToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			h.deps.Logger.Warn("DEV_MODE: tool panicked (likely accessed session.Kite.Client)", "tool", toolName, "panic", r)
+			h.deps.LoggerPort.Warn(context.Background(), "DEV_MODE: tool panicked (likely accessed session.Kite.Client)", "tool", toolName, "panic", r)
 			result = mcp.NewToolResultError(fmt.Sprintf("This tool (%s) requires a real Kite connection and is not available in DEV_MODE. Disable DEV_MODE to use it.", toolName))
 			err = nil
 		}
@@ -524,7 +524,7 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 			// Get the data
 			data, err := apiCall(ctx, session)
 			if err != nil {
-				handler.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
+				handler.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 				handler.trackToolError(ctx, toolName, "api_error")
 				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 			}
@@ -569,7 +569,7 @@ func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, a
 			args := request.GetArguments()
 			data, err := apiCall(ctx, session, args)
 			if err != nil {
-				handler.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
+				handler.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 				handler.trackToolError(ctx, toolName, "api_error")
 				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 			}

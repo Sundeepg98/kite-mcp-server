@@ -29,14 +29,19 @@ import (
 // programmatic consumers (UI widgets, dashboard, tests) keep working
 // while the LLM-facing string contents are neutralized.
 func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolResult, error) {
+	// MarshalResponse is signature-stable (no ctx parameter) for backward
+	// compatibility with 100+ tool-handler call sites. Marshaling errors are
+	// infrastructure-level and not request-correlated, so context.Background()
+	// at the log boundary is acceptable per the kc/usecases helper convention
+	// (see account_usecases.appendRevokedEvent for the precedent).
 	cleaned := SanitizeData(data)
 	v, err := json.Marshal(cleaned)
 	if err != nil {
-		h.deps.Logger.Error("Failed to marshal response", "tool", toolName, "error", err)
+		h.deps.LoggerPort.Error(context.Background(), "Failed to marshal response", err, "tool", toolName)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to process response data: %s", err.Error())), nil
 	}
 
-	h.deps.Logger.Debug("Response marshaled successfully", "tool", toolName, "response_size", len(v))
+	h.deps.LoggerPort.Debug(context.Background(), "Response marshaled successfully", "tool", toolName, "response_size", len(v))
 	structured := wrapForStructuredContent(cleaned)
 	return mcp.NewToolResultStructured(structured, string(v)), nil
 }
@@ -69,7 +74,7 @@ func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCal
 	return h.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 		data, err := apiCall(ctx, session)
 		if err != nil {
-			h.deps.Logger.Error("API call failed", "tool", toolName, "error", err)
+			h.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 			return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 		}
 
