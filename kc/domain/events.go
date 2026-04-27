@@ -367,10 +367,21 @@ func (e CredentialRevokedEvent) OccurredAt() time.Time { return e.Timestamp }
 // "admin_set_billing_tier") so auditors can distinguish webhook-driven
 // changes from operator-driven changes without joining against another
 // table.
+//
+// Amount (Money VO Slice 4) is the to-tier's canonical monthly INR
+// amount — the same value billing.TierMonthlyINR(ToTier) returns. Free
+// transitions surface zero Money (IsZero() = true), paid tiers surface
+// the published list price. Audit consumers compute MRR delta by
+// summing Amount across emitted events without a join into billing.
+// Stays a Money value rather than a bare float64 so a future multi-
+// currency split (USD enterprise, INR retail) trips a currency-mismatch
+// error in any downstream Add/GreaterThan call rather than silently
+// corrupting the figure.
 type TierChangedEvent struct {
 	UserEmail string
 	FromTier  int
 	ToTier    int
+	Amount    Money
 	Reason    string
 	Timestamp time.Time
 }

@@ -1,5 +1,7 @@
 package billing
 
+import "github.com/zerodha/kite-mcp-server/kc/domain"
+
 // Tier represents a billing subscription level.
 type Tier int
 
@@ -32,6 +34,41 @@ func (t Tier) EffectiveTier() Tier {
 		return TierPro
 	}
 	return t
+}
+
+// tierMonthlyINRAmounts is the canonical per-tier monthly rupee amount
+// in float64 form. Kept as a private map so we always go through
+// TierMonthlyINR (which returns Money) at every read site, eliminating
+// the chance that a downstream caller picks up a bare float64. This is
+// the in-process mirror of Stripe's price list, used for two purposes:
+//   - stamping Subscription.MonthlyAmount when SetSubscription is called
+//     without an explicit amount (the common path — webhook + admin
+//     tool both leave it unset);
+//   - annotating TierChangedEvent.Amount so audit consumers can compute
+//     MRR delta without a join into the billing table.
+//
+// Stripe remains the source of truth for what the user is actually
+// charged; this table is only consulted on the in-process side.
+var tierMonthlyINRAmounts = map[Tier]float64{
+	TierFree:    0,
+	TierSoloPro: 500,
+	TierPro:     999,
+	TierPremium: 2999,
+}
+
+// TierMonthlyINR returns the canonical monthly INR amount for the
+// given tier as a domain.Money. TierFree is the zero Money — callers
+// that want to detect "no paid plan" should use the IsZero() sentinel
+// rather than comparing against a magic float, mirroring Slice 1's
+// UserLimits zero-Money convention.
+//
+// Unknown tiers fall through to zero Money rather than panicking — a
+// future tier added without a price entry behaves like Free until the
+// table is updated, which is the safer failure mode for audit-event
+// annotation (downstream MRR consumers see "no contribution" rather
+// than a corrupt figure).
+func TierMonthlyINR(t Tier) domain.Money {
+	return domain.NewINR(tierMonthlyINRAmounts[t])
 }
 
 // toolTiers maps each MCP tool name to its minimum required billing tier.

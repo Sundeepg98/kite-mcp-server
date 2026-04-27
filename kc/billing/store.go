@@ -20,15 +20,26 @@ const (
 )
 
 // Subscription holds a user's billing subscription details.
+//
+// MonthlyAmount carries the per-month rupee amount for the active plan
+// as a domain.Money value (Slice 4 of the Money VO sweep). The zero
+// Money is the "no paid plan / Free" sentinel — IsZero() returns true
+// for free or unset subscriptions; paid tiers carry the canonical
+// TierMonthlyINR(Tier) amount unless an explicit override is supplied
+// (enterprise contract, custom price). Stripe remains the source of
+// truth for what the user is actually charged; MonthlyAmount is the
+// in-process mirror used to annotate TierChangedEvent and to render
+// the dashboard plan card.
 type Subscription struct {
-	AdminEmail       string    `json:"admin_email"`
-	Tier             Tier      `json:"tier"`
-	StripeCustomerID string    `json:"stripe_customer_id,omitempty"`
-	StripeSubID      string    `json:"stripe_sub_id,omitempty"`
-	Status           string    `json:"status"`
-	ExpiresAt        time.Time `json:"expires_at,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	MaxUsers int `json:"max_users"`
+	AdminEmail       string       `json:"admin_email"`
+	Tier             Tier         `json:"tier"`
+	StripeCustomerID string       `json:"stripe_customer_id,omitempty"`
+	StripeSubID      string       `json:"stripe_sub_id,omitempty"`
+	Status           string       `json:"status"`
+	ExpiresAt        time.Time    `json:"expires_at,omitempty"`
+	UpdatedAt        time.Time    `json:"updated_at"`
+	MaxUsers         int          `json:"max_users"`
+	MonthlyAmount    domain.Money `json:"monthly_amount"`
 }
 
 // Store is a thread-safe in-memory billing store backed by SQLite.
@@ -104,6 +115,13 @@ CREATE TABLE IF NOT EXISTS billing (
 	}
 	// Migration: add max_users column for family billing.
 	_ = s.db.ExecDDL(`ALTER TABLE billing ADD COLUMN max_users INTEGER NOT NULL DEFAULT 1`)
+	// Migration (Money VO Slice 4): add monthly_amount column for tier
+	// pricing. REAL column (float64) so the schema stays primitive at
+	// rest — Money is reconstructed via domain.NewINR on Scan, dropped
+	// to .Float64() on Bind. Idempotent: ALTER COLUMN errors silently
+	// when the column already exists, matching the max_users pattern
+	// just above.
+	_ = s.db.ExecDDL(`ALTER TABLE billing ADD COLUMN monthly_amount REAL NOT NULL DEFAULT 0`)
 
 	// Migration: rename billing PK from email to admin_email (idempotent).
 	// Check if admin_email column already exists — if so, migration is done.
@@ -112,7 +130,10 @@ CREATE TABLE IF NOT EXISTS billing (
 		_ = row.Scan(&colCount)
 	}
 	if colCount == 0 {
-		// Table rebuild: email → admin_email
+		// Table rebuild: email → admin_email. Pre-rebuild rows had no
+		// monthly_amount; default to 0 (Free / unset) so the rebuilt
+		// table is well-formed and Slice 4's REAL boundary stays consistent
+		// with the post-rebuild ALTER above.
 		_ = s.db.ExecDDL(`CREATE TABLE IF NOT EXISTS billing_mig (
 			admin_email        TEXT PRIMARY KEY,
 			tier               INTEGER NOT NULL DEFAULT 0,
@@ -121,9 +142,10 @@ CREATE TABLE IF NOT EXISTS billing (
 			status             TEXT NOT NULL DEFAULT 'active',
 			expires_at         TEXT DEFAULT '',
 			updated_at         TEXT NOT NULL,
-			max_users          INTEGER NOT NULL DEFAULT 1
+			max_users          INTEGER NOT NULL DEFAULT 1,
+			monthly_amount     REAL NOT NULL DEFAULT 0
 		)`)
-		_ = s.db.ExecDDL(`INSERT OR IGNORE INTO billing_mig (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users) SELECT email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, COALESCE(max_users, 1) FROM billing`)
+		_ = s.db.ExecDDL(`INSERT OR IGNORE INTO billing_mig (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users, monthly_amount) SELECT email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, COALESCE(max_users, 1), 0 FROM billing`)
 		_ = s.db.ExecDDL(`DROP TABLE billing`)
 		_ = s.db.ExecDDL(`ALTER TABLE billing_mig RENAME TO billing`)
 	}
@@ -131,11 +153,16 @@ CREATE TABLE IF NOT EXISTS billing (
 }
 
 // LoadFromDB populates the in-memory store from the database.
+//
+// monthly_amount is read as a REAL (float64) and reconstructed via
+// domain.NewINR — this is the Slice 4 SQLite boundary: persistence stays
+// primitive, the in-memory representation is Money. COALESCE guards
+// pre-migration rows where the column might not have a value.
 func (s *Store) LoadFromDB() error {
 	if s.db == nil {
 		return nil
 	}
-	rows, err := s.db.RawQuery(`SELECT admin_email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at, COALESCE(max_users, 1) FROM billing`)
+	rows, err := s.db.RawQuery(`SELECT admin_email, tier, stripe_customer_id, stripe_sub_id, status, COALESCE(expires_at, ''), updated_at, COALESCE(max_users, 1), COALESCE(monthly_amount, 0) FROM billing`)
 	if err != nil {
 		return fmt.Errorf("query billing: %w", err)
 	}
@@ -148,12 +175,18 @@ func (s *Store) LoadFromDB() error {
 		var sub Subscription
 		var tierInt int
 		var maxUsers int
+		var monthlyAmount float64
 		var expiresAtS, updatedAtS string
-		if err := rows.Scan(&sub.AdminEmail, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers); err != nil { // COVERAGE: unreachable — SQLite query success implies scan success (dynamic typing)
+		if err := rows.Scan(&sub.AdminEmail, &tierInt, &sub.StripeCustomerID, &sub.StripeSubID, &sub.Status, &expiresAtS, &updatedAtS, &maxUsers, &monthlyAmount); err != nil { // COVERAGE: unreachable — SQLite query success implies scan success (dynamic typing)
 			return fmt.Errorf("scan billing row: %w", err)
 		}
 		sub.MaxUsers = maxUsers
 		sub.Tier = Tier(tierInt)
+		// Reconstruct Money on the way out of the persistence boundary.
+		// Empty/zero amount yields the zero INR Money (the "no paid
+		// plan" sentinel) — IsZero() detection works without further
+		// special-casing.
+		sub.MonthlyAmount = domain.NewINR(monthlyAmount)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtS)
 		if expiresAtS != "" {
 			sub.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAtS)
@@ -218,6 +251,18 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 	stored := *sub
 	stored.AdminEmail = key
 	stored.UpdatedAt = now
+	// Slice 4: stamp the canonical monthly amount when the caller
+	// leaves MonthlyAmount unset (zero Money). Webhook + admin tool
+	// both take the lazy path — they never bother to populate
+	// MonthlyAmount because they don't carry the price list. Callers
+	// that supply an explicit value (enterprise contract, custom
+	// price) are honoured. We use the IsZero sentinel rather than a
+	// bare float compare to keep the boundary symmetric with
+	// LoadFromDB and to side-step accidental "0.0 INR vs 0.0 USD"
+	// confusion if the type ever goes multi-currency.
+	if stored.MonthlyAmount.IsZero() {
+		stored.MonthlyAmount = TierMonthlyINR(stored.Tier)
+	}
 
 	s.mu.Lock()
 	prev := s.subs[key]
@@ -235,8 +280,8 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			expiresAtS = stored.ExpiresAt.Format(time.RFC3339)
 		}
 		err := s.db.ExecInsert(
-			`INSERT INTO billing (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO billing (admin_email, tier, stripe_customer_id, stripe_sub_id, status, expires_at, updated_at, max_users, monthly_amount)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(admin_email) DO UPDATE SET
 			   tier = excluded.tier,
 			   stripe_customer_id = excluded.stripe_customer_id,
@@ -244,9 +289,15 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 			   status = excluded.status,
 			   expires_at = excluded.expires_at,
 			   updated_at = excluded.updated_at,
-			   max_users = excluded.max_users`,
+			   max_users = excluded.max_users,
+			   monthly_amount = excluded.monthly_amount`,
 			stored.AdminEmail, int(stored.Tier), stored.StripeCustomerID, stored.StripeSubID,
 			stored.Status, expiresAtS, stored.UpdatedAt.Format(time.RFC3339), stored.MaxUsers,
+			// .Float64() at the SQLite REAL bind boundary — the only
+			// place in this package where Money drops back to a primitive,
+			// matching the Slice 1 convention in
+			// kc/riskguard/limits.go::persistLimits.
+			stored.MonthlyAmount.Float64(),
 		)
 		if err != nil {
 			if s.logger != nil {
@@ -259,11 +310,15 @@ func (s *Store) SetSubscription(sub *Subscription) error {
 	// Dispatch tier-change event after persistence succeeds. We emit
 	// only on real transitions so idempotent webhook replays don't
 	// litter the audit log with no-op rows. Dispatcher is nil-safe.
+	// Amount carries the to-tier monthly Money so audit consumers can
+	// compute MRR delta from the event stream alone (no join into
+	// the billing table).
 	if dispatcher != nil && fromTier != toTier {
 		dispatcher.Dispatch(domain.TierChangedEvent{
 			UserEmail: key,
 			FromTier:  int(fromTier),
 			ToTier:    int(toTier),
+			Amount:    TierMonthlyINR(toTier),
 			Reason:    reason,
 			Timestamp: now,
 		})
