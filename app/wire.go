@@ -428,116 +428,38 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 				app.logger.Info("Event outbox pump started")
 			}
 			kcManager.SetEventStore(eventStore)
-			// Subscribe the domain audit log to persist all dispatched events.
-			// Phase C ES: order.placed / .modified / .cancelled are appended
-			// to the audit log by their use cases (PlaceOrderUseCase etc.) via
-			// eventStore.Append — subscribing the persister here would
-			// double-write. order.filled still flows via dispatcher because
-			// fill_watcher.go (not a use case) is its origin, and paper
-			// trading also dispatches it from outside the command bus.
-			eventDispatcher.Subscribe("order.filled", makeEventPersister(eventStore, "Order", app.logger))
-			eventDispatcher.Subscribe("position.opened", makeEventPersister(eventStore, "Position", app.logger))
-			eventDispatcher.Subscribe("position.closed", makeEventPersister(eventStore, "Position", app.logger))
-			// Phase C ES: alert.created and alert.deleted are appended to the
-			// audit log by the use cases themselves (CreateAlertUseCase /
-			// DeleteAlertUseCase) via eventStore.Append — subscribing the
-			// persister here would double-write. alert.triggered is still
-			// fired from manager_init.go's polling loop (not a use case),
-			// so it stays on the dispatcher→persister path.
-			eventDispatcher.Subscribe("alert.triggered", makeEventPersister(eventStore, "Alert", app.logger))
-			eventDispatcher.Subscribe("user.frozen", makeEventPersister(eventStore, "User", app.logger))
-			eventDispatcher.Subscribe("user.suspended", makeEventPersister(eventStore, "User", app.logger))
-			eventDispatcher.Subscribe("global.freeze", makeEventPersister(eventStore, "Global", app.logger))
-			eventDispatcher.Subscribe("family.invited", makeEventPersister(eventStore, "Family", app.logger))
-			eventDispatcher.Subscribe("family.member_removed", makeEventPersister(eventStore, "Family", app.logger))
-			eventDispatcher.Subscribe("risk.limit_breached", makeEventPersister(eventStore, "RiskGuard", app.logger))
-			eventDispatcher.Subscribe("session.created", makeEventPersister(eventStore, "Session", app.logger))
-			eventDispatcher.Subscribe("billing.tier_changed", makeEventPersister(eventStore, "Billing", app.logger))
-			// Riskguard counters aggregate — three event types share the
-			// "RiskguardCounters" aggregate type so projector queries can
-			// pull the full counters stream by aggregate_type without
-			// joining across event_type rows.
-			eventDispatcher.Subscribe("riskguard.kill_switch_tripped", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
-			eventDispatcher.Subscribe("riskguard.daily_counter_reset", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
-			eventDispatcher.Subscribe("riskguard.rejection_recorded", makeEventPersister(eventStore, "RiskguardCounters", app.logger))
-			// order.rejected dispatches from place/modify/cancel use cases
-			// when the broker round-trip fails (post-riskguard). Persisting
-			// it lands the failure path on the order aggregate stream so
-			// projector queries can render full place→modify→reject→cancel
-			// timelines without joining against a separate broker-error log.
-			eventDispatcher.Subscribe("order.rejected", makeEventPersister(eventStore, "Order", app.logger))
-			// position.converted dispatches from ConvertPositionUseCase on
-			// successful CNC<->MIS<->NRML conversions. Replaces the prior
-			// untyped appendAuxEvent path with a typed event so projector
-			// consumers receive a stable schema. The legacy aux-event path
-			// still fires alongside during the migration window so audit
-			// readers depending on the historical map[string]any payload
-			// aren't broken.
-			eventDispatcher.Subscribe("position.converted", makeEventPersister(eventStore, "Position", app.logger))
-			// paper.order_rejected dispatches from the paper-trading
-			// engine on virtual-account rejections (LTP unavailable,
-			// insufficient cash). Distinct from order.rejected (real
-			// broker) so projector consumers can filter virtual vs real
-			// without parsing OrderID prefixes.
-			eventDispatcher.Subscribe("paper.order_rejected", makeEventPersister(eventStore, "PaperOrder", app.logger))
-			// mf.order_rejected dispatches from the four MF use cases
-			// (PlaceMFOrder, CancelMFOrder, PlaceMFSIP, CancelMFSIP) on
-			// broker round-trip failure. Distinct from order.rejected
-			// (equity) so projector consumers can filter MF surface
-			// without parsing OrderID prefixes — Kite assigns separate
-			// ID namespaces for MF orders, MF SIPs, and equity orders.
-			eventDispatcher.Subscribe("mf.order_rejected", makeEventPersister(eventStore, "MFOrder", app.logger))
-			// gtt.rejected dispatches from PlaceGTT, ModifyGTT, DeleteGTT
-			// use cases on broker round-trip failure. Source field
-			// ("place"/"modify"/"delete") distinguishes the three GTT
-			// mutation surfaces in projector consumers.
-			eventDispatcher.Subscribe("gtt.rejected", makeEventPersister(eventStore, "GTT", app.logger))
-			// trailing_stop.triggered dispatches from
-			// kc/alerts/trailing.go evaluateOne when the underlying SL
-			// order modify succeeds — captures the trailing transition
-			// (oldStop -> newStop, HWM, modify count) so a forensic walk
-			// of the SL order ID sees trailing-stop modifications inline
-			// with place/modify/cancel events.
-			eventDispatcher.Subscribe("trailing_stop.triggered", makeEventPersister(eventStore, "TrailingStop", app.logger))
-			// Success-path typed events for the mutation surfaces that
-			// previously dual-emitted via appendAuxEvent. Post-migration
-			// cleanup removed the legacy aux-event path from each use
-			// case; the persister now writes the audit row from these
-			// dispatches (with EmailHash for PII correlation, an
-			// improvement over the prior aux-event row which lacked it).
+
+			// Wave D Phase 2 Slice P2.4f: the 36 imperative
+			// Subscribe calls that used to live here are delegated
+			// to providers.BuildEventSubscriptions. The full list
+			// (event-type, aggregate-type) is the public
+			// providers.CanonicalPersisterSubscriptions slice; see
+			// that file for the per-event rationale comments that
+			// previously inlined here. Order, count, and per-event
+			// aggregate-type mapping are preserved exactly.
 			//
-			// MF: order placement / cancellation / SIP placement /
-			// SIP cancellation. Aggregate types are split between
-			// "MFOrder" (single MF buy/sell orders) and "MFSIP"
-			// (recurring systematic investment plans) to match the
-			// pre-cleanup aggregate IDs.
-			eventDispatcher.Subscribe("mf.order_placed", makeEventPersister(eventStore, "MFOrder", app.logger))
-			eventDispatcher.Subscribe("mf.order_cancelled", makeEventPersister(eventStore, "MFOrder", app.logger))
-			eventDispatcher.Subscribe("mf.sip_placed", makeEventPersister(eventStore, "MFSIP", app.logger))
-			eventDispatcher.Subscribe("mf.sip_cancelled", makeEventPersister(eventStore, "MFSIP", app.logger))
-			// GTT: place / modify / delete success events.
-			eventDispatcher.Subscribe("gtt.placed", makeEventPersister(eventStore, "GTT", app.logger))
-			eventDispatcher.Subscribe("gtt.modified", makeEventPersister(eventStore, "GTT", app.logger))
-			eventDispatcher.Subscribe("gtt.deleted", makeEventPersister(eventStore, "GTT", app.logger))
-			// Trailing stop set/cancelled. Pairs with
-			// trailing_stop.triggered above so a forensic walk of a
-			// single TrailingStopID sees the full set -> N triggers
-			// -> cancel lifecycle in one aggregate stream.
-			eventDispatcher.Subscribe("trailing_stop.set", makeEventPersister(eventStore, "TrailingStop", app.logger))
-			eventDispatcher.Subscribe("trailing_stop.cancelled", makeEventPersister(eventStore, "TrailingStop", app.logger))
-			// Native (Kite-side) alerts: placed / modified / deleted.
-			eventDispatcher.Subscribe("native_alert.placed", makeEventPersister(eventStore, "NativeAlert", app.logger))
-			eventDispatcher.Subscribe("native_alert.modified", makeEventPersister(eventStore, "NativeAlert", app.logger))
-			eventDispatcher.Subscribe("native_alert.deleted", makeEventPersister(eventStore, "NativeAlert", app.logger))
-			// Paper trading lifecycle: enabled / disabled / reset.
-			// Disjoint aggregate from PaperOrder (per-order rejections):
-			// "PaperTrading" keys per-user account; "PaperOrder" keys
-			// per virtual order. Both streams persisted via the
-			// per-aggregate-type Subscribe.
-			eventDispatcher.Subscribe("paper.enabled", makeEventPersister(eventStore, "PaperTrading", app.logger))
-			eventDispatcher.Subscribe("paper.disabled", makeEventPersister(eventStore, "PaperTrading", app.logger))
-			eventDispatcher.Subscribe("paper.reset", makeEventPersister(eventStore, "PaperTrading", app.logger))
-			app.logger.Info("Domain event store initialized and subscribed")
+			// makeEventPersister stays in app/adapters.go (depends
+			// on package-private deriveAggregateID + deriveEmailHash)
+			// — composition closes over eventStore + logger and
+			// supplies the closure as PersisterBuilder.
+			var edInit *providers.InitializedEventDispatcher
+			edFxApp := fx.New(
+				fx.NopLogger,
+				fx.Supply(providers.EventDispatcherDeps{
+					Dispatcher: eventDispatcher,
+					PersisterBuilder: func(aggType string) func(domain.Event) {
+						return makeEventPersister(eventStore, aggType, app.logger)
+					},
+				}),
+				fx.Provide(providers.BuildEventSubscriptions),
+				fx.Populate(&edInit),
+			)
+			if err := edFxApp.Err(); err != nil {
+				app.logger.Error("Failed to wire event dispatcher subscriptions", "error", err)
+			} else {
+				app.logger.Info("Domain event store initialized and subscribed",
+					"subscription_count", edInit.SubscriptionCount)
+			}
 		}
 	}
 
