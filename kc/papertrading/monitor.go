@@ -1,16 +1,24 @@
 package papertrading
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // Monitor polls for OPEN paper orders and fills them when the LTP crosses
 // the limit/trigger price. It runs as a background goroutine.
+//
+// Wave D Phase 3 Package 3 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. The goroutine uses context.Background() at
+// each log call site — Monitor is a long-lived service with no
+// request ctx; future ctx threading would tie it to a parent app ctx
+// captured by Start.
 type Monitor struct {
 	engine   *PaperEngine
 	interval time.Duration
@@ -18,17 +26,19 @@ type Monitor struct {
 	doneCh   chan struct{}
 	stopOnce sync.Once
 	started  bool
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewMonitor creates a new background monitor for the paper trading engine.
+// Accepts *slog.Logger for caller compatibility (app/wire.go:712); the
+// logger is converted to the kc/logger.Logger port at the boundary.
 func NewMonitor(engine *PaperEngine, interval time.Duration, logger *slog.Logger) *Monitor {
 	return &Monitor{
 		engine:   engine,
 		interval: interval,
 		stopCh:   make(chan struct{}),
 		doneCh:   make(chan struct{}),
-		logger:   logger,
+		logger:   logport.NewSlog(logger),
 	}
 }
 
@@ -38,7 +48,7 @@ func NewMonitor(engine *PaperEngine, interval time.Duration, logger *slog.Logger
 func (m *Monitor) Start() {
 	m.started = true
 	go m.loop()
-	m.logger.Info("paper trading monitor started", "interval", m.interval)
+	m.logger.Info(context.Background(), "paper trading monitor started", "interval", m.interval)
 }
 
 // Stop signals the monitor goroutine to exit and waits for it to terminate.
@@ -54,7 +64,7 @@ func (m *Monitor) Stop() {
 		if m.started {
 			<-m.doneCh
 		}
-		m.logger.Info("paper trading monitor stopped")
+		m.logger.Info(context.Background(), "paper trading monitor stopped")
 	})
 }
 
@@ -76,7 +86,7 @@ func (m *Monitor) loop() {
 func (m *Monitor) tick() {
 	orders, err := m.engine.store.GetAllOpenOrders()
 	if err != nil {
-		m.logger.Error("monitor: get open orders", "error", err)
+		m.logger.Error(context.Background(), "monitor: get open orders", err)
 		return
 	}
 	if len(orders) == 0 {
@@ -95,7 +105,7 @@ func (m *Monitor) tick() {
 
 	ltps, err := m.engine.ltpProvider.GetLTP(instruments...)
 	if err != nil {
-		m.logger.Error("monitor: fetch LTPs", "error", err)
+		m.logger.Error(context.Background(), "monitor: fetch LTPs", err)
 		return
 	}
 
@@ -185,7 +195,7 @@ func determineFillPrice(o *Order, ltp float64) float64 {
 func (m *Monitor) fill(o *Order, fillPrice float64) {
 	acct, err := m.engine.store.GetAccount(o.Email)
 	if err != nil || acct == nil {
-		m.logger.Error("monitor: get account for fill", "email", o.Email, "error", err)
+		m.logger.Error(context.Background(), "monitor: get account for fill", err, "email", o.Email)
 		return
 	}
 
@@ -198,9 +208,9 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 		over, cmpErr := cost.GreaterThan(acct.CashBalance)
 		if cmpErr != nil || over {
 			if err := m.engine.store.UpdateOrderStatus(o.OrderID, "REJECTED", 0, 0); err != nil {
-				m.logger.Error("monitor: reject order", "order_id", o.OrderID, "error", err)
+				m.logger.Error(context.Background(), "monitor: reject order", err, "order_id", o.OrderID)
 			}
-			m.logger.Warn("monitor: order rejected, insufficient cash",
+			m.logger.Warn(context.Background(), "monitor: order rejected, insufficient cash",
 				"order_id", o.OrderID, "needed", cost.Float64(), "available", acct.CashBalance.Float64())
 			// ES: typed rejection event — monitor branch (place passed,
 			// fill failed because cash dropped between place and fill).
@@ -216,7 +226,7 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 
 	// Update order status.
 	if err := m.engine.store.UpdateOrderStatus(o.OrderID, "COMPLETE", o.Quantity, fillPrice); err != nil {
-		m.logger.Error("monitor: update order status", "order_id", o.OrderID, "error", err)
+		m.logger.Error(context.Background(), "monitor: update order status", err, "order_id", o.OrderID)
 		return
 	}
 
@@ -231,13 +241,13 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 		newBalance, arithErr = acct.CashBalance.Add(cost)
 	}
 	if arithErr != nil {
-		m.logger.Error("monitor: cash arithmetic", "order_id", o.OrderID, "error", arithErr)
+		m.logger.Error(context.Background(), "monitor: cash arithmetic", arithErr, "order_id", o.OrderID)
 		return
 	}
 	acct.CashBalance = newBalance
 	// Store boundary: drop to float64 for SQLite REAL.
 	if err := m.engine.store.UpdateCashBalance(o.Email, acct.CashBalance.Float64()); err != nil {
-		m.logger.Error("monitor: update cash", "order_id", o.OrderID, "error", err)
+		m.logger.Error(context.Background(), "monitor: update cash", err, "order_id", o.OrderID)
 		return
 	}
 
@@ -246,19 +256,19 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 	o.FilledQuantity = o.Quantity
 	o.AveragePrice = domain.NewINR(fillPrice)
 	if err := m.engine.updatePosition(o.Email, o, fillPrice); err != nil {
-		m.logger.Error("monitor: update position", "order_id", o.OrderID, "error", err)
+		m.logger.Error(context.Background(), "monitor: update position", err, "order_id", o.OrderID)
 		return
 	}
 
 	// For CNC products, also update holdings.
 	if o.Product == "CNC" {
 		if err := m.engine.updateHolding(o.Email, o, fillPrice); err != nil {
-			m.logger.Error("monitor: update holding", "order_id", o.OrderID, "error", err)
+			m.logger.Error(context.Background(), "monitor: update holding", err, "order_id", o.OrderID)
 			return
 		}
 	}
 
-	m.logger.Info("monitor: paper order filled",
+	m.logger.Info(context.Background(), "monitor: paper order filled",
 		"order_id", o.OrderID,
 		"symbol", o.Tradingsymbol,
 		"type", o.TransactionType,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // Account represents a paper trading account for a user.
@@ -100,14 +101,18 @@ type Holding struct {
 }
 
 // Store provides SQLite persistence for paper trading data.
+//
+// Wave D Phase 3 Package 3: logger is typed as the kc/logger.Logger
+// port. NewStore takes *slog.Logger for caller compatibility
+// (app/wire.go:478) and converts via logport.NewSlog at the boundary.
 type Store struct {
 	db     *alerts.DB
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewStore creates a new paper trading store backed by the given alerts DB.
 func NewStore(db *alerts.DB, logger *slog.Logger) *Store {
-	return &Store{db: db, logger: logger}
+	return &Store{db: db, logger: logport.NewSlog(logger)}
 }
 
 // InitTables creates the paper trading tables if they don't already exist.

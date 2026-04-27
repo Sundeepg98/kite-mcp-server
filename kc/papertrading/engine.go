@@ -1,6 +1,7 @@
 package papertrading
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // orderSeq is a package-scope monotonic counter backing nextOrderID.
@@ -35,16 +37,24 @@ type LTPProvider interface {
 }
 
 // PaperEngine orchestrates virtual trading logic against a Store.
+//
+// Wave D Phase 3 Package 3 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewEngine accepts *slog.Logger for caller
+// compatibility (app/wire.go:482) and converts at the boundary via
+// logport.NewSlog. Internal log calls use the ctx-aware port API
+// with context.Background() — paper-engine methods don't carry a
+// request ctx today, but the port abstraction positions the package
+// for ctx threading in a later sweep.
 type PaperEngine struct {
 	store       *Store
 	ltpProvider LTPProvider
 	dispatcher  *domain.EventDispatcher
-	logger      *slog.Logger
+	logger      logport.Logger
 }
 
 // NewEngine creates a new PaperEngine.
 func NewEngine(store *Store, logger *slog.Logger) *PaperEngine {
-	return &PaperEngine{store: store, logger: logger}
+	return &PaperEngine{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetLTPProvider sets the LTP provider used for market price lookups.
@@ -103,7 +113,7 @@ func (e *PaperEngine) Enable(email string, initialCash float64) error {
 	if err := e.store.EnableAccount(email, initialCash); err != nil {
 		return fmt.Errorf("enable paper trading: %w", err)
 	}
-	e.logger.Info("paper trading enabled", "email", email, "initial_cash", initialCash)
+	e.logger.Info(context.Background(), "paper trading enabled", "email", email, "initial_cash", initialCash)
 	return nil
 }
 
@@ -112,7 +122,7 @@ func (e *PaperEngine) Disable(email string) error {
 	if err := e.store.DisableAccount(email); err != nil {
 		return fmt.Errorf("disable paper trading: %w", err)
 	}
-	e.logger.Info("paper trading disabled", "email", email)
+	e.logger.Info(context.Background(), "paper trading disabled", "email", email)
 	return nil
 }
 
@@ -121,7 +131,7 @@ func (e *PaperEngine) Reset(email string) error {
 	if err := e.store.ResetAccount(email); err != nil {
 		return fmt.Errorf("reset paper account: %w", err)
 	}
-	e.logger.Info("paper trading reset", "email", email)
+	e.logger.Info(context.Background(), "paper trading reset", "email", email)
 	return nil
 }
 
@@ -371,7 +381,7 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 		}
 	}
 
-	e.logger.Info("paper order filled",
+	e.logger.Info(context.Background(), "paper order filled",
 		"order_id", order.OrderID,
 		"symbol", order.Tradingsymbol,
 		"type", order.TransactionType,
@@ -706,7 +716,7 @@ func (e *PaperEngine) CancelOrder(email, orderID string) (map[string]any, error)
 	if err := e.store.UpdateOrderStatus(orderID, "CANCELLED", 0, 0); err != nil {
 		return nil, fmt.Errorf("cancel order: %w", err)
 	}
-	e.logger.Info("paper order cancelled", "order_id", orderID)
+	e.logger.Info(context.Background(), "paper order cancelled", "order_id", orderID)
 	return map[string]any{"order_id": orderID, "status": "CANCELLED"}, nil
 }
 
