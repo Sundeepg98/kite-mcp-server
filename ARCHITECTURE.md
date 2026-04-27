@@ -394,6 +394,35 @@ for paper trading, `FreezeQuantityLookup` for riskguard, `AutoFreezeNotifier`.
 The 9 primary seams are all mockable and are exercised by tests under
 `kc/usecases/`, `mcp/`, `app/`, and `testutil/kcfixture/`.
 
+### 9a. Composition root (Wave D Phase 2: Fx adoption)
+
+As of April 2026, the App's outer composition uses `go.uber.org/fx` for
+graph-resolved wiring of major subsystems. `app/wire.go:initializeServices`
+remains the entry point, but the audit chain, scheduler tasks, riskguard
+init, the 10-layer middleware chain, MCP server construction, and the 36
+event-dispatcher subscriptions all live as Fx providers in `app/providers/`.
+
+| Subsystem | Provider file | Wrapper type |
+|---|---|---|
+| Logger | `providers/logger.go` | (none — passthrough) |
+| Alert DB | `providers/alertdb.go` | (none — `*alerts.DB` directly) |
+| Audit store | `providers/audit_init.go` | `*InitializedAuditStore` |
+| Audit middleware | `providers/audit_middleware.go` | (pure function) |
+| Lifecycle bridge | `providers/lifecycle.go` | `*FxLifecycleAdapter` |
+| Telegram notifier | `providers/telegram.go` | (passthrough) |
+| Scheduler tasks | `providers/scheduler.go` | `*InitializedScheduler` |
+| Riskguard | `providers/riskguard.go` | `*InitializedRiskGuard` |
+| MCP server + chain | `providers/mcpserver.go` | (none — chain is `[]ServerOption`) |
+| Event subscriptions | `providers/event_dispatcher.go` | `*InitializedEventDispatcher` |
+
+Patterns established (full design rationale at each call site + `docs/adr/0006-fx-adoption.md`):
+
+- **`*InitializedXxx` wrapper-type convention** — solves Fx's "type already provided" graph conflict when an input pointer (`fx.Supply(*T)`) and an output pointer (post-init `*T`) would otherwise collide. The wrapper's nil-or-populated state additionally signals init-success vs init-failure.
+- **Fan-in struct convention for same-typed inputs** — `MiddlewareDeps` bundles 10 same-typed `server.ToolHandlerMiddleware` values into one Fx-supply'd struct, avoiding `fx.Annotate` ceremony.
+- **"Composition keeps adapters, provider takes ports"** — when a provider needs an unexported app-package adapter (e.g., `briefingTokenAdapter`, `riskguardLTPAdapter`, `makeEventPersister`), composition site supplies it as a closure or narrow port; provider stays decoupled.
+
+The inner `kc.Manager` composition (`kc/manager_init.go`) was intentionally NOT migrated to Fx — its 16 functional options + 16 named init helpers already give a structured surface, and Mode-2 conflict on that file is low. Future work may revisit; see ADR 0006 §"What was rejected" for the deferral rationale.
+
 ## 10. Manager as service locator (known wart)
 
 `kc.Manager` still holds ~25 fields and exposes ~90 accessor methods. Services
