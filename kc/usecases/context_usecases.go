@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // AlertLister abstracts reading active alerts for a user.
@@ -37,12 +38,12 @@ type TradingContextResult struct {
 // TradingContextUseCase retrieves a unified trading context snapshot.
 type TradingContextUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewTradingContextUseCase creates a TradingContextUseCase with dependencies injected.
 func NewTradingContextUseCase(resolver BrokerResolver, logger *slog.Logger) *TradingContextUseCase {
-	return &TradingContextUseCase{brokerResolver: resolver, logger: logger}
+	return &TradingContextUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves margins, positions, orders, and holdings in parallel.
@@ -89,7 +90,7 @@ func (uc *TradingContextUseCase) Execute(ctx context.Context, query cqrs.Trading
 		r := <-ch
 		if r.err != nil {
 			result.Errors[r.key] = r.err.Error()
-			uc.logger.Error("Trading context API call failed", "key", r.key, "email", query.Email, "error", r.err)
+			uc.logger.Error(ctx, "Trading context API call failed", r.err, "key", r.key, "email", query.Email)
 			continue
 		}
 		switch r.key {

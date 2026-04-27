@@ -8,7 +8,13 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5f (Logger sweep): observability/pnl/
+// pretrade/ticker/watchlist/telegram/context/saga use cases type
+// their logger field as the kc/logger.Logger port; constructors
+// retain *slog.Logger and convert via logport.NewSlog.
 
 // AuditReader provides read-only query access for audit records (ISP-narrowed).
 type AuditReader interface {
@@ -43,12 +49,12 @@ type ServerMetricsResult struct {
 // ServerMetricsUseCase retrieves server observability metrics.
 type ServerMetricsUseCase struct {
 	auditStore AuditReader
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewServerMetricsUseCase creates a ServerMetricsUseCase with dependencies injected.
 func NewServerMetricsUseCase(store AuditReader, logger *slog.Logger) *ServerMetricsUseCase {
-	return &ServerMetricsUseCase{auditStore: store, logger: logger}
+	return &ServerMetricsUseCase{auditStore: store, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves server metrics for the given period.
@@ -80,13 +86,13 @@ func (uc *ServerMetricsUseCase) Execute(ctx context.Context, query cqrs.ServerMe
 
 	stats, err := uc.auditStore.GetGlobalStats(since)
 	if err != nil {
-		uc.logger.Error("Failed to get global stats", "error", err)
+		uc.logger.Error(ctx, "Failed to get global stats", err)
 		return nil, fmt.Errorf("usecases: get global stats: %w", err)
 	}
 
 	toolMetrics, err := uc.auditStore.GetToolMetrics(since)
 	if err != nil {
-		uc.logger.Error("Failed to get tool metrics", "error", err)
+		uc.logger.Error(ctx, "Failed to get tool metrics", err)
 		return nil, fmt.Errorf("usecases: get tool metrics: %w", err)
 	}
 

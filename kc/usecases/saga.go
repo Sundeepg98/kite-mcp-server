@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // SagaStep is one unit of a multi-step business operation that may need
@@ -83,12 +85,16 @@ func (e *SagaError) Unwrap() error {
 // returns nil.
 //
 // The logger MAY be nil; nil-logger is treated as a no-op for diagnostic
-// log lines. The context is threaded into both Action and Compensate so
-// cancellation propagates to in-flight steps and to compensations.
+// log lines. The signature accepts *slog.Logger for caller compatibility
+// and converts via logport.NewSlog at the boundary so internal log
+// statements use the kc/logger.Logger port. The context is threaded
+// into both Action and Compensate so cancellation propagates to
+// in-flight steps and to compensations.
 //
 // Compensation runs in REVERSE order: step N-1, N-2, ..., 0. This matches
 // LIFO undo semantics — the most recent change is undone first.
 func RunSaga(ctx context.Context, logger *slog.Logger, name string, steps []SagaStep) error {
+	lg := logport.NewSlog(logger)
 	completed := make([]int, 0, len(steps))
 
 	for i, step := range steps {
@@ -97,15 +103,15 @@ func RunSaga(ctx context.Context, logger *slog.Logger, name string, steps []Saga
 		}
 		if err := step.Action(ctx); err != nil {
 			if step.ContinueOnError {
-				if logger != nil {
-					logger.Warn("saga step failed (continuing)",
+				if lg != nil {
+					lg.Warn(ctx, "saga step failed (continuing)",
 						"saga", name, "step", step.Name, "error", err)
 				}
 				completed = append(completed, i)
 				continue
 			}
 			// Triggering failure: roll back completed steps in reverse.
-			compErrs := compensateSteps(ctx, logger, name, steps, completed)
+			compErrs := compensateSteps(ctx, lg, name, steps, completed)
 			return &SagaError{
 				FailedStep:         step.Name,
 				Cause:              err,
@@ -120,7 +126,7 @@ func RunSaga(ctx context.Context, logger *slog.Logger, name string, steps []Saga
 // compensateSteps walks the completed step indices in reverse and runs
 // each step's Compensate (when non-nil). All errors are collected — a
 // failure in one compensation does not abort the others.
-func compensateSteps(ctx context.Context, logger *slog.Logger, sagaName string, steps []SagaStep, completed []int) []error {
+func compensateSteps(ctx context.Context, logger logport.Logger, sagaName string, steps []SagaStep, completed []int) []error {
 	var errs []error
 	for i := len(completed) - 1; i >= 0; i-- {
 		idx := completed[i]
@@ -130,8 +136,8 @@ func compensateSteps(ctx context.Context, logger *slog.Logger, sagaName string, 
 		}
 		if err := step.Compensate(ctx); err != nil {
 			if logger != nil {
-				logger.Error("saga compensation failed",
-					"saga", sagaName, "step", step.Name, "error", err)
+				logger.Error(ctx, "saga compensation failed", err,
+					"saga", sagaName, "step", step.Name)
 			}
 			errs = append(errs, fmt.Errorf("compensate %q: %w", step.Name, err))
 		}

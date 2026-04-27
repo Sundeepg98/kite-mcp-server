@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // PreTradeData holds the raw data collected from parallel API calls.
@@ -24,12 +25,12 @@ type PreTradeData struct {
 // PreTradeCheckUseCase performs pre-trade validation by gathering data from the broker.
 type PreTradeCheckUseCase struct {
 	brokerResolver BrokerResolver
-	logger         *slog.Logger
+	logger         logport.Logger
 }
 
 // NewPreTradeCheckUseCase creates a PreTradeCheckUseCase with dependencies injected.
 func NewPreTradeCheckUseCase(resolver BrokerResolver, logger *slog.Logger) *PreTradeCheckUseCase {
-	return &PreTradeCheckUseCase{brokerResolver: resolver, logger: logger}
+	return &PreTradeCheckUseCase{brokerResolver: resolver, logger: logport.NewSlog(logger)}
 }
 
 // Execute gathers LTP, margins, positions, holdings, and order margins in parallel.
@@ -90,7 +91,7 @@ func (uc *PreTradeCheckUseCase) Execute(ctx context.Context, query cqrs.PreTrade
 		r := <-ch
 		if r.err != nil {
 			result.Errors[r.key] = r.err.Error()
-			uc.logger.Error("Pre-trade API call failed", "key", r.key, "email", query.Email, "error", r.err)
+			uc.logger.Error(ctx, "Pre-trade API call failed", r.err, "key", r.key, "email", query.Email)
 			continue
 		}
 		switch r.key {

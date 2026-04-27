@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -33,12 +34,12 @@ type CreateWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewCreateWatchlistUseCase creates a CreateWatchlistUseCase with dependencies injected.
 func NewCreateWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *CreateWatchlistUseCase {
-	return &CreateWatchlistUseCase{store: store, logger: logger}
+	return &CreateWatchlistUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
@@ -74,7 +75,7 @@ func (uc *CreateWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.CreateWa
 
 	id, err := uc.store.CreateWatchlist(cmd.Email, cmd.Name)
 	if err != nil {
-		uc.logger.Error("Failed to create watchlist", "email", cmd.Email, "name", cmd.Name, "error", err)
+		uc.logger.Error(ctx, "Failed to create watchlist", err, "email", cmd.Email, "name", cmd.Name)
 		return nil, fmt.Errorf("usecases: create watchlist: %w", err)
 	}
 
@@ -103,12 +104,12 @@ type DeleteWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewDeleteWatchlistUseCase creates a DeleteWatchlistUseCase with dependencies injected.
 func NewDeleteWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *DeleteWatchlistUseCase {
-	return &DeleteWatchlistUseCase{store: store, logger: logger}
+	return &DeleteWatchlistUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
@@ -147,7 +148,7 @@ func (uc *DeleteWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.DeleteWa
 	itemCount := uc.store.ItemCount(cmd.WatchlistID)
 
 	if err := uc.store.DeleteWatchlist(cmd.Email, cmd.WatchlistID); err != nil {
-		uc.logger.Error("Failed to delete watchlist", "email", cmd.Email, "id", cmd.WatchlistID, "error", err)
+		uc.logger.Error(ctx, "Failed to delete watchlist", err, "email", cmd.Email, "id", cmd.WatchlistID)
 		return nil, fmt.Errorf("usecases: delete watchlist: %w", err)
 	}
 
@@ -176,12 +177,12 @@ func (uc *DeleteWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.DeleteWa
 // ListWatchlistsUseCase retrieves all watchlists for a user.
 type ListWatchlistsUseCase struct {
 	store  WatchlistStore
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewListWatchlistsUseCase creates a ListWatchlistsUseCase with dependencies injected.
 func NewListWatchlistsUseCase(store WatchlistStore, logger *slog.Logger) *ListWatchlistsUseCase {
-	return &ListWatchlistsUseCase{store: store, logger: logger}
+	return &ListWatchlistsUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // WatchlistInfo holds summary information about a watchlist.
@@ -219,12 +220,12 @@ type AddToWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewAddToWatchlistUseCase creates an AddToWatchlistUseCase with dependencies injected.
 func NewAddToWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *AddToWatchlistUseCase {
-	return &AddToWatchlistUseCase{store: store, logger: logger}
+	return &AddToWatchlistUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
@@ -254,7 +255,7 @@ func (uc *AddToWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.AddToWatc
 	}
 
 	if err := uc.store.AddItem(cmd.Email, cmd.WatchlistID, item); err != nil {
-		uc.logger.Error("Failed to add to watchlist", "email", cmd.Email, "watchlist_id", cmd.WatchlistID, "error", err)
+		uc.logger.Error(ctx, "Failed to add to watchlist", err, "email", cmd.Email, "watchlist_id", cmd.WatchlistID)
 		return fmt.Errorf("usecases: add to watchlist: %w", err)
 	}
 
@@ -282,12 +283,12 @@ func (uc *AddToWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.AddToWatc
 // GetWatchlistUseCase retrieves items in a watchlist.
 type GetWatchlistUseCase struct {
 	store  WatchlistStore
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewGetWatchlistUseCase creates a GetWatchlistUseCase with dependencies injected.
 func NewGetWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *GetWatchlistUseCase {
-	return &GetWatchlistUseCase{store: store, logger: logger}
+	return &GetWatchlistUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves all items in a watchlist.
@@ -309,12 +310,12 @@ type RemoveFromWatchlistUseCase struct {
 	store      WatchlistStore
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewRemoveFromWatchlistUseCase creates a RemoveFromWatchlistUseCase with dependencies injected.
 func NewRemoveFromWatchlistUseCase(store WatchlistStore, logger *slog.Logger) *RemoveFromWatchlistUseCase {
-	return &RemoveFromWatchlistUseCase{store: store, logger: logger}
+	return &RemoveFromWatchlistUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore wires the domain audit-log appender. Phase C ES.
@@ -338,7 +339,7 @@ func (uc *RemoveFromWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.Remo
 	}
 
 	if err := uc.store.RemoveItem(cmd.Email, cmd.WatchlistID, cmd.ItemID); err != nil {
-		uc.logger.Error("Failed to remove from watchlist", "email", cmd.Email, "watchlist_id", cmd.WatchlistID, "item_id", cmd.ItemID, "error", err)
+		uc.logger.Error(ctx, "Failed to remove from watchlist", err, "email", cmd.Email, "watchlist_id", cmd.WatchlistID, "item_id", cmd.ItemID)
 		return fmt.Errorf("usecases: remove from watchlist: %w", err)
 	}
 
@@ -364,14 +365,14 @@ func (uc *RemoveFromWatchlistUseCase) Execute(ctx context.Context, cmd cqrs.Remo
 // Failures are logged and swallowed — the SQL write is source of truth and
 // has already succeeded. Aggregate ID is the watchlist ID so all events
 // for a given watchlist sort under one replay stream.
-func appendWatchlistEvent(store EventAppender, logger *slog.Logger, aggregateID, eventType string, payload map[string]any) {
+func appendWatchlistEvent(store EventAppender, logger logport.Logger, aggregateID, eventType string, payload map[string]any) {
 	if store == nil {
 		return
 	}
 	seq, err := store.NextSequence(aggregateID)
 	if err != nil {
 		if logger != nil {
-			logger.Warn("event store NextSequence failed on "+eventType, "watchlist_id", aggregateID, "error", err)
+			logger.Warn(context.Background(), "event store NextSequence failed on "+eventType, "watchlist_id", aggregateID, "error", err)
 		}
 		return
 	}
@@ -389,7 +390,7 @@ func appendWatchlistEvent(store EventAppender, logger *slog.Logger, aggregateID,
 	}
 	if err := store.Append(evt); err != nil {
 		if logger != nil {
-			logger.Warn("event store Append failed on "+eventType, "watchlist_id", aggregateID, "error", err)
+			logger.Warn(context.Background(), "event store Append failed on "+eventType, "watchlist_id", aggregateID, "error", err)
 		}
 	}
 }

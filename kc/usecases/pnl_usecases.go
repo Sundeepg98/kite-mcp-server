@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // PnLService abstracts P&L snapshot retrieval for use cases.
@@ -19,12 +20,12 @@ type PnLService interface {
 // GetPnLJournalUseCase retrieves P&L journal data.
 type GetPnLJournalUseCase struct {
 	service PnLService
-	logger  *slog.Logger
+	logger  logport.Logger
 }
 
 // NewGetPnLJournalUseCase creates a GetPnLJournalUseCase with dependencies injected.
 func NewGetPnLJournalUseCase(service PnLService, logger *slog.Logger) *GetPnLJournalUseCase {
-	return &GetPnLJournalUseCase{service: service, logger: logger}
+	return &GetPnLJournalUseCase{service: service, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves the P&L journal.
@@ -41,7 +42,7 @@ func (uc *GetPnLJournalUseCase) Execute(ctx context.Context, query cqrs.GetPnLJo
 
 	result, err := uc.service.GetJournal(query.Email, query.FromDate, query.ToDate)
 	if err != nil {
-		uc.logger.Error("Failed to get P&L journal", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to get P&L journal", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: get pnl journal: %w", err)
 	}
 

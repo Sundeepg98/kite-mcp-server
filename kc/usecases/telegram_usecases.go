@@ -8,6 +8,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TelegramStore abstracts Telegram chat ID persistence.
@@ -22,12 +23,12 @@ type TelegramStore interface {
 type SetupTelegramUseCase struct {
 	store  TelegramStore
 	events *domain.EventDispatcher
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewSetupTelegramUseCase creates a SetupTelegramUseCase with dependencies injected.
 func NewSetupTelegramUseCase(store TelegramStore, logger *slog.Logger) *SetupTelegramUseCase {
-	return &SetupTelegramUseCase{store: store, logger: logger}
+	return &SetupTelegramUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventDispatcher wires the domain event dispatcher so a typed
@@ -65,7 +66,7 @@ func (uc *SetupTelegramUseCase) Execute(ctx context.Context, cmd cqrs.SetupTeleg
 	priorChatID, hadPrior := uc.store.GetTelegramChatID(cmd.Email)
 
 	uc.store.SetTelegramChatID(cmd.Email, cmd.ChatID)
-	uc.logger.Debug("Telegram chat ID registered", "email", cmd.Email, "chat_id", cmd.ChatID)
+	uc.logger.Debug(ctx, "Telegram chat ID registered", "email", cmd.Email, "chat_id", cmd.ChatID)
 
 	if uc.events != nil {
 		now := time.Now()
