@@ -19,12 +19,11 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
-// BrokerResolver resolves a broker.Client for a given user email.
-// This abstracts the session/credential lookup so use cases don't depend on
-// the full SessionService.
-type BrokerResolver interface {
-	GetBrokerForEmail(email string) (broker.Client, error)
-}
+// BrokerResolver has been hoisted to ports.go as the architectural
+// anchor for Wave D Phase 1 (resolver refactor → Wire/fx). The
+// interface contract — including signature, error semantics, email
+// pass-through policy, thread-safety, and lifetime — is documented
+// in ports.go. This use case still consumes the interface unchanged.
 
 // InstrumentLookup looks up lot size and tick size for an instrument. Narrow
 // port so the use case does not pull in the full instruments.Manager surface
