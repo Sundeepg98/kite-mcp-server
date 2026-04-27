@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // BrokerDataProvider abstracts broker API calls for testability.
@@ -106,12 +108,19 @@ type CredentialGetter interface {
 
 // BriefingService generates and sends morning briefings and daily P&L summaries
 // via Telegram for users who have a registered chat ID and valid Kite token.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewBriefingService takes *slog.Logger for
+// caller compatibility (app/wire.go's scheduler init) and converts
+// at the boundary via logport.NewSlog. Internal log calls use
+// context.Background() — Briefing is invoked from scheduler goroutines
+// with no request ctx in scope.
 type BriefingService struct {
 	notifier          *TelegramNotifier
 	alertStore        *Store
 	tokens            TokenChecker
 	creds             CredentialGetter
-	logger            *slog.Logger
+	logger            logport.Logger
 	brokerProvider    BrokerDataProvider // nil = use default via kiteClientFactory
 	kiteClientFactory KiteClientFactory  // required for defaultBrokerProvider fallback
 }
@@ -132,7 +141,7 @@ func NewBriefingService(
 		alertStore: alertStore,
 		tokens:     tokens,
 		creds:      creds,
-		logger:     logger,
+		logger:     logport.NewSlog(logger),
 	}
 }
 
@@ -168,7 +177,7 @@ func (b *BriefingService) SendMorningBriefings() {
 
 	chatIDs := b.alertStore.ListAllTelegram()
 	if len(chatIDs) == 0 {
-		b.logger.Info("Briefing: no users with Telegram chat IDs, skipping morning briefing")
+		b.logger.Info(context.Background(), "Briefing: no users with Telegram chat IDs, skipping morning briefing")
 		return
 	}
 
@@ -178,10 +187,10 @@ func (b *BriefingService) SendMorningBriefings() {
 	for email, chatID := range chatIDs {
 		msg := b.buildMorningBriefing(email, dateStr, now)
 		if err := b.notifier.SendHTMLMessage(chatID, msg); err != nil {
-			b.logger.Error("Briefing: failed to send morning briefing",
-				"email", email, "chat_id", chatID, "error", err)
+			b.logger.Error(context.Background(), "Briefing: failed to send morning briefing", err,
+				"email", email, "chat_id", chatID)
 		} else {
-			b.logger.Info("Briefing: morning briefing sent", "email", email)
+			b.logger.Info(context.Background(), "Briefing: morning briefing sent", "email", email)
 		}
 	}
 }
@@ -349,7 +358,7 @@ func (b *BriefingService) SendDailySummaries() {
 
 	chatIDs := b.alertStore.ListAllTelegram()
 	if len(chatIDs) == 0 {
-		b.logger.Info("Briefing: no users with Telegram chat IDs, skipping daily summary")
+		b.logger.Info(context.Background(), "Briefing: no users with Telegram chat IDs, skipping daily summary")
 		return
 	}
 
@@ -360,22 +369,22 @@ func (b *BriefingService) SendDailySummaries() {
 		// Need a valid token to fetch portfolio data.
 		accessToken, storedAt, hasToken := b.tokens.GetToken(email)
 		if !hasToken || b.tokens.IsExpired(storedAt) {
-			b.logger.Warn("Briefing: skipping daily summary (no valid token)", "email", email)
+			b.logger.Warn(context.Background(), "Briefing: skipping daily summary (no valid token)", "email", email)
 			continue
 		}
 
 		apiKey := b.creds.GetAPIKey(email)
 		if apiKey == "" {
-			b.logger.Warn("Briefing: skipping daily summary (no API key)", "email", email)
+			b.logger.Warn(context.Background(), "Briefing: skipping daily summary (no API key)", "email", email)
 			continue
 		}
 
 		msg := b.buildDailySummary(email, apiKey, accessToken, dateStr)
 		if err := b.notifier.SendHTMLMessage(chatID, msg); err != nil {
-			b.logger.Error("Briefing: failed to send daily summary",
-				"email", email, "chat_id", chatID, "error", err)
+			b.logger.Error(context.Background(), "Briefing: failed to send daily summary", err,
+				"email", email, "chat_id", chatID)
 		} else {
-			b.logger.Info("Briefing: daily summary sent", "email", email)
+			b.logger.Info(context.Background(), "Briefing: daily summary sent", "email", email)
 		}
 	}
 }
@@ -389,7 +398,7 @@ func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr 
 
 	holdings, err := bp.GetHoldings(apiKey, accessToken)
 	if err != nil {
-		b.logger.Error("Briefing: failed to fetch holdings", "email", email, "error", err)
+		b.logger.Error(context.Background(), "Briefing: failed to fetch holdings", err, "email", email)
 		data.HoldingsErr = true
 	} else {
 		data.HoldingsCount = len(holdings)
@@ -408,7 +417,7 @@ func (b *BriefingService) buildDailySummary(email, apiKey, accessToken, dateStr 
 
 	positions, err := bp.GetPositions(apiKey, accessToken)
 	if err != nil {
-		b.logger.Error("Briefing: failed to fetch positions", "email", email, "error", err)
+		b.logger.Error(context.Background(), "Briefing: failed to fetch positions", err, "email", email)
 		data.PositionsErr = true
 	} else {
 		data.PositionsCount = len(positions.Day)
@@ -625,7 +634,7 @@ func (b *BriefingService) SendMISWarnings() {
 
 	chatIDs := b.alertStore.ListAllTelegram()
 	if len(chatIDs) == 0 {
-		b.logger.Info("Briefing: no users with Telegram chat IDs, skipping MIS warning")
+		b.logger.Info(context.Background(), "Briefing: no users with Telegram chat IDs, skipping MIS warning")
 		return
 	}
 
@@ -644,7 +653,7 @@ func (b *BriefingService) SendMISWarnings() {
 
 		positions, err := bp.GetPositions(apiKey, accessToken)
 		if err != nil {
-			b.logger.Error("MIS warning: failed to fetch positions", "email", email, "error", err)
+			b.logger.Error(context.Background(), "MIS warning: failed to fetch positions", err, "email", email)
 			continue
 		}
 
@@ -655,9 +664,9 @@ func (b *BriefingService) SendMISWarnings() {
 
 		msg := formatMISWarning(open)
 		if err := b.notifier.SendHTMLMessage(chatID, msg); err != nil {
-			b.logger.Error("MIS warning: failed to send", "email", email, "error", err)
+			b.logger.Error(context.Background(), "MIS warning: failed to send", err, "email", email)
 		} else {
-			b.logger.Info("MIS warning: sent", "email", email, "open_mis", len(open))
+			b.logger.Info(context.Background(), "MIS warning: sent", "email", email, "open_mis", len(open))
 		}
 	}
 }

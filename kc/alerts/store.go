@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // The Alert entity + Direction type + trigger constants now live in
@@ -67,13 +69,23 @@ type NotifyCallback func(alert *Alert, currentPrice float64)
 
 // Store is a thread-safe in-memory store for price alerts and Telegram chat IDs.
 // Optionally backed by SQLite for persistence via SetDB.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. SetLogger keeps the *slog.Logger entry point
+// for caller compatibility (kc/manager_init.go) and converts at the
+// boundary via logport.NewSlog. SetLoggerPort is the port-typed
+// alternative for callers already holding a logport.Logger. Internal
+// log calls use context.Background() — Store methods are invoked
+// from many call sites (HTTP handlers, ticker goroutines, scheduler)
+// and the persistence-layer error logs don't carry a meaningful
+// request ctx that's worth threading through every Add/Delete sig.
 type Store struct {
 	mu       sync.RWMutex
 	alerts   map[string][]*Alert  // email -> alerts
 	telegram map[string]int64     // email -> chat ID
 	onNotify NotifyCallback
 	db       *DB                  // optional: write-through persistence
-	logger   *slog.Logger
+	logger   logport.Logger
 }
 
 // NewStore creates a new alert store.
@@ -82,12 +94,21 @@ func NewStore(onNotify NotifyCallback) *Store {
 		alerts:   make(map[string][]*Alert),
 		telegram: make(map[string]int64),
 		onNotify: onNotify,
-		logger:   slog.Default(),
+		logger:   logport.NewSlog(slog.Default()),
 	}
 }
 
 // SetLogger sets the logger for DB error reporting.
+//
+// Deprecated shim (Wave D Phase 3 Package 4): forwards to SetLoggerPort
+// after wrapping via logport.NewSlog. Callers already on the port API
+// should call SetLoggerPort directly.
 func (s *Store) SetLogger(logger *slog.Logger) {
+	s.SetLoggerPort(logport.NewSlog(logger))
+}
+
+// SetLoggerPort sets the logger using the kc/logger.Logger port directly.
+func (s *Store) SetLoggerPort(logger logport.Logger) {
 	s.logger = logger
 }
 
@@ -151,7 +172,7 @@ func (s *Store) AddWithReferencePrice(email, tradingsymbol, exchange string, ins
 	s.alerts[email] = append(s.alerts[email], alert)
 	if s.db != nil {
 		if err := s.db.SaveAlert(alert); err != nil {
-			s.logger.Error("Failed to persist alert", "id", alert.ID, "error", err)
+			s.logger.Error(context.Background(), "Failed to persist alert", err, "id", alert.ID)
 		}
 	}
 	return alert.ID, nil
@@ -212,7 +233,7 @@ func (s *Store) AddComposite(email, name string, logic CompositeLogic, conds []C
 	s.alerts[email] = append(s.alerts[email], alert)
 	if s.db != nil {
 		if err := s.db.SaveAlert(alert); err != nil {
-			s.logger.Error("Failed to persist composite alert", "id", alert.ID, "error", err)
+			s.logger.Error(context.Background(), "Failed to persist composite alert", err, "id", alert.ID)
 		}
 	}
 	return alert.ID, nil
@@ -233,7 +254,7 @@ func (s *Store) Delete(email, alertID string) error {
 			s.alerts[email] = append(alerts[:i], alerts[i+1:]...)
 			if s.db != nil {
 				if err := s.db.DeleteAlert(email, alertID); err != nil {
-					s.logger.Error("Failed to delete alert from DB", "id", alertID, "error", err)
+					s.logger.Error(context.Background(), "Failed to delete alert from DB", err, "id", alertID)
 				}
 			}
 			return nil
@@ -254,10 +275,10 @@ func (s *Store) DeleteByEmail(email string) {
 
 	if s.db != nil {
 		if err := s.db.DeleteAlertsByEmail(email); err != nil {
-			s.logger.Error("Failed to delete alerts from DB", "email", email, "error", err)
+			s.logger.Error(context.Background(), "Failed to delete alerts from DB", err, "email", email)
 		}
 		if err := s.db.DeleteTelegramChatID(email); err != nil {
-			s.logger.Error("Failed to delete telegram chat ID from DB", "email", email, "error", err)
+			s.logger.Error(context.Background(), "Failed to delete telegram chat ID from DB", err, "email", email)
 		}
 	}
 }
@@ -309,7 +330,7 @@ func (s *Store) MarkTriggered(alertID string, currentPrice float64) bool {
 				}
 				if s.db != nil {
 					if err := s.db.UpdateTriggered(alertID, currentPrice, a.TriggeredAt); err != nil {
-						s.logger.Error("Failed to persist triggered alert", "id", alertID, "error", err)
+						s.logger.Error(context.Background(), "Failed to persist triggered alert", err, "id", alertID)
 					}
 				}
 				return true
@@ -334,7 +355,7 @@ func (s *Store) MarkNotificationSent(alertID string, sentAt time.Time) {
 	}
 	if s.db != nil {
 		if err := s.db.UpdateAlertNotification(alertID, sentAt); err != nil {
-			s.logger.Error("Failed to persist notification sent time", "id", alertID, "error", err)
+			s.logger.Error(context.Background(), "Failed to persist notification sent time", err, "id", alertID)
 		}
 	}
 }
@@ -346,7 +367,7 @@ func (s *Store) SetTelegramChatID(email string, chatID int64) {
 	s.telegram[email] = chatID
 	if s.db != nil {
 		if err := s.db.SaveTelegramChatID(email, chatID); err != nil {
-			s.logger.Error("Failed to persist telegram chat ID", "email", email, "error", err)
+			s.logger.Error(context.Background(), "Failed to persist telegram chat ID", err, "email", email)
 		}
 	}
 }

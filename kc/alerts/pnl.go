@@ -1,12 +1,14 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // PnLJournalResult holds the result of a P&L journal query.
@@ -25,11 +27,18 @@ type PnLJournalResult struct {
 }
 
 // PnLSnapshotService takes daily P&L snapshots and provides journal queries.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewPnLSnapshotService takes *slog.Logger for
+// caller compatibility (kc/manager_init.go) and converts at the
+// boundary via logport.NewSlog. Internal log calls use
+// context.Background() — TakeSnapshots is invoked from scheduler
+// goroutines with no request ctx in scope.
 type PnLSnapshotService struct {
 	db                *DB
 	tokens            TokenChecker
 	creds             CredentialGetter
-	logger            *slog.Logger
+	logger            logport.Logger
 	brokerProvider    BrokerDataProvider // nil = use default via kiteClientFactory
 	kiteClientFactory KiteClientFactory  // required for defaultBrokerProvider fallback
 }
@@ -44,7 +53,7 @@ func NewPnLSnapshotService(db *DB, tokens TokenChecker, creds CredentialGetter, 
 		db:     db,
 		tokens: tokens,
 		creds:  creds,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 	}
 }
 
@@ -112,14 +121,14 @@ func buildPnLEntry(date, email string, holdings []kiteconnect.Holding, holdingsE
 func (s *PnLSnapshotService) TakeSnapshots() {
 	chatIDs, err := s.db.LoadTelegramChatIDs()
 	if err != nil {
-		s.logger.Error("Failed to load users for P&L snapshot", "error", err)
+		s.logger.Error(context.Background(), "Failed to load users for P&L snapshot", err)
 		return
 	}
 
 	// Also check for users with tokens but no Telegram
 	tokens, err := s.db.LoadTokens()
 	if err != nil {
-		s.logger.Error("Failed to load tokens for P&L snapshot", "error", err)
+		s.logger.Error(context.Background(), "Failed to load tokens for P&L snapshot", err)
 		return
 	}
 
@@ -149,25 +158,25 @@ func (s *PnLSnapshotService) TakeSnapshots() {
 
 		holdings, holdingsErr := bp.GetHoldings(apiKey, accessToken)
 		if holdingsErr != nil {
-			s.logger.Warn("Failed to fetch holdings for P&L snapshot", "email", email, "error", holdingsErr)
+			s.logger.Warn(context.Background(), "Failed to fetch holdings for P&L snapshot", "email", email, "error", holdingsErr)
 		}
 
 		positions, positionsErr := bp.GetPositions(apiKey, accessToken)
 		if positionsErr != nil {
-			s.logger.Warn("Failed to fetch positions for P&L snapshot", "email", email, "error", positionsErr)
+			s.logger.Warn(context.Background(), "Failed to fetch positions for P&L snapshot", "email", email, "error", positionsErr)
 		}
 
 		entry := buildPnLEntry(today, email, holdings, holdingsErr, positions, positionsErr)
 
 		if err := s.db.SaveDailyPnL(entry); err != nil {
-			s.logger.Error("Failed to save P&L snapshot", "email", email, "error", err)
+			s.logger.Error(context.Background(), "Failed to save P&L snapshot", err, "email", email)
 			continue
 		}
 		snapshotCount++
 	}
 
 	if snapshotCount > 0 {
-		s.logger.Info("Daily P&L snapshots saved", "count", snapshotCount, "date", today)
+		s.logger.Info(context.Background(), "Daily P&L snapshots saved", "count", snapshotCount, "date", today)
 	}
 }
 

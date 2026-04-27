@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // BotAPI abstracts the Telegram bot client for testability.
@@ -41,10 +43,18 @@ func escapeTelegramMarkdown(s string) string {
 }
 
 // TelegramNotifier sends alert notifications via Telegram.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. Constructors keep *slog.Logger parameters
+// for caller compatibility (kc/manager_init.go) and convert at the
+// boundary via logport.NewSlog. The Logger() accessor preserves its
+// *slog.Logger return type via logport.AsSlog so existing tests
+// (assert.Equal on the raw *slog.Logger) continue to pass — AsSlog
+// returns the same instance NewSlog wrapped, not a copy.
 type TelegramNotifier struct {
 	bot    BotAPI
 	store  *Store
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewTelegramNotifier creates a new Telegram notifier using the package-level
@@ -87,7 +97,7 @@ func NewTelegramNotifierWithFactory(botToken string, store *Store, logger *slog.
 	return &TelegramNotifier{
 		bot:    bot,
 		store:  store,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 	}, nil
 }
 
@@ -134,8 +144,25 @@ func (t *TelegramNotifier) Store() *Store {
 	return t.store
 }
 
-// Logger returns the notifier's logger.
+// Logger returns the notifier's logger as a *slog.Logger.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): the underlying field is now
+// a logport.Logger; we extract via logport.AsSlog. Returns nil if the
+// notifier was constructed with a non-slogAdapter port (no production
+// path does this — only mock-Logger tests, which don't call Logger()).
 func (t *TelegramNotifier) Logger() *slog.Logger {
+	if t == nil {
+		return nil
+	}
+	return logport.AsSlog(t.logger)
+}
+
+// LoggerPort returns the notifier's logger as a kc/logger.Logger port.
+// New code should prefer this over Logger().
+func (t *TelegramNotifier) LoggerPort() logport.Logger {
+	if t == nil {
+		return nil
+	}
 	return t.logger
 }
 
@@ -147,7 +174,7 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 
 	chatID, ok := t.store.GetTelegramChatID(alert.Email)
 	if !ok {
-		t.logger.Warn("No Telegram chat ID for user, skipping notification", "email", alert.Email)
+		t.logger.Warn(context.Background(), "No Telegram chat ID for user, skipping notification", "email", alert.Email)
 		return
 	}
 
@@ -201,13 +228,12 @@ func (t *TelegramNotifier) Notify(alert *Alert, currentPrice float64) {
 	msg.ParseMode = tgbotapi.ModeMarkdownV2
 
 	if _, err := t.bot.Send(msg); err != nil {
-		t.logger.Error("Failed to send Telegram notification",
+		t.logger.Error(context.Background(), "Failed to send Telegram notification", err,
 			"email", alert.Email,
 			"chat_id", chatID,
-			"error", err,
 		)
 	} else {
-		t.logger.Info("Telegram notification sent",
+		t.logger.Info(context.Background(), "Telegram notification sent",
 			"email", alert.Email,
 			"instrument", alert.Exchange+":"+alert.Tradingsymbol,
 		)

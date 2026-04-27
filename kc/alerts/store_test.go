@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 
@@ -1179,9 +1181,12 @@ func TestTelegramNotifier_StoreAndLogger(t *testing.T) {
 	s := newTestStore()
 	logger := defaultTestLogger()
 	// Construct a TelegramNotifier directly (no bot, but non-nil receiver).
+	// Wave D Phase 3 Package 4: the field is now a logport.Logger, so we
+	// wrap the *slog.Logger via NewSlog. Logger() returns the underlying
+	// *slog.Logger via AsSlog, which preserves identity.
 	tn := &TelegramNotifier{
 		store:  s,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 	}
 	assert.Equal(t, s, tn.Store())
 	assert.Equal(t, logger, tn.Logger())
@@ -1208,7 +1213,7 @@ func TestBriefingService_RecentlyTriggeredAlerts(t *testing.T) {
 	// Can't use NewBriefingService (requires non-nil notifier), so construct directly.
 	bs := &BriefingService{
 		alertStore: s,
-		logger:     logger,
+		logger:     logport.NewSlog(logger),
 	}
 
 	// Cutoff before now — the triggered alert should be included.

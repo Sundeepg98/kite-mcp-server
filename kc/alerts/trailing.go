@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // TrailingStop represents a trailing stop-loss that modifies an existing SL order
@@ -51,7 +53,13 @@ type TrailingStopManager struct {
 	lastModify map[string]time.Time // trailing stop ID -> last modify time
 
 	db     *DB
-	logger *slog.Logger
+	// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as
+	// the kc/logger.Logger port. NewTrailingStopManager takes
+	// *slog.Logger for caller compatibility (kc/manager_init.go) and
+	// converts at the boundary via logport.NewSlog. Internal log
+	// calls use context.Background() — Evaluate is invoked from the
+	// ticker goroutine with no request ctx in scope.
+	logger logport.Logger
 
 	// getModifier returns a KiteOrderModifier for the given email.
 	// Injected by the app layer since the manager package doesn't know about kc.Manager sessions.
@@ -75,7 +83,7 @@ func NewTrailingStopManager(logger *slog.Logger) *TrailingStopManager {
 		stops:      make(map[string]*TrailingStop),
 		byToken:    make(map[uint32][]string),
 		lastModify: make(map[string]time.Time),
-		logger:     logger,
+		logger:     logport.NewSlog(logger),
 	}
 }
 
@@ -118,7 +126,7 @@ func (m *TrailingStopManager) LoadFromDB() error {
 		m.stops[ts.ID] = ts
 		m.byToken[ts.InstrumentToken] = append(m.byToken[ts.InstrumentToken], ts.ID)
 	}
-	m.logger.Info("Trailing stops loaded from database", "count", len(stops))
+	m.logger.Info(context.Background(), "Trailing stops loaded from database", "count", len(stops))
 	return nil
 }
 
@@ -166,7 +174,7 @@ func (m *TrailingStopManager) Add(ts *TrailingStop) (string, error) {
 
 	if m.db != nil {
 		if err := m.db.SaveTrailingStop(ts); err != nil {
-			m.logger.Error("Failed to persist trailing stop", "id", ts.ID, "error", err)
+			m.logger.Error(context.Background(), "Failed to persist trailing stop", err, "id", ts.ID)
 		}
 	}
 
@@ -194,7 +202,7 @@ func (m *TrailingStopManager) Cancel(email, id string) error {
 
 	if m.db != nil {
 		if err := m.db.DeactivateTrailingStop(id); err != nil {
-			m.logger.Error("Failed to persist trailing stop deactivation", "id", id, "error", err)
+			m.logger.Error(context.Background(), "Failed to persist trailing stop deactivation", err, "id", id)
 		}
 	}
 
@@ -214,7 +222,7 @@ func (m *TrailingStopManager) CancelByEmail(email string) {
 			ts.DeactivatedAt = now
 			if m.db != nil {
 				if err := m.db.DeactivateTrailingStop(id); err != nil {
-					m.logger.Error("Failed to deactivate trailing stop", "id", id, "error", err)
+					m.logger.Error(context.Background(), "Failed to deactivate trailing stop", err, "id", id)
 				}
 			}
 		}
@@ -333,19 +341,19 @@ func (m *TrailingStopManager) evaluateOne(id, email string, lastPrice float64) {
 	// Persist updated state
 	if m.db != nil {
 		if err := m.db.UpdateTrailingStop(id, newHWM, newStop, ts.ModifyCount); err != nil {
-			m.logger.Error("Failed to persist trailing stop update", "id", id, "error", err)
+			m.logger.Error(context.Background(), "Failed to persist trailing stop update", err, "id", id)
 		}
 	}
 
 	// Modify the SL order via Kite API
 	if m.getModifier == nil {
-		m.logger.Warn("No order modifier configured for trailing stop", "id", id)
+		m.logger.Warn(context.Background(), "No order modifier configured for trailing stop", "id", id)
 		return
 	}
 
 	modifier, err := m.getModifier(email)
 	if err != nil {
-		m.logger.Error("Failed to get order modifier", "id", id, "email", email, "error", err)
+		m.logger.Error(context.Background(), "Failed to get order modifier", err, "id", id, "email", email)
 		return
 	}
 
@@ -355,16 +363,16 @@ func (m *TrailingStopManager) evaluateOne(id, email string, lastPrice float64) {
 	}
 	_, err = modifier.ModifyOrder(variety, orderID, orderParams)
 	if err != nil {
-		m.logger.Error("Failed to modify trailing SL order",
+		m.logger.Error(context.Background(), "Failed to modify trailing SL order", err,
 			"id", id,
 			"order_id", orderID,
 			"old_stop", oldStop,
 			"new_stop", newStop,
-			"error", err)
+		)
 		return
 	}
 
-	m.logger.Info("Trailing stop modified",
+	m.logger.Info(context.Background(), "Trailing stop modified",
 		"id", id,
 		"instrument", ts.Exchange+":"+ts.Tradingsymbol,
 		"direction", ts.Direction,

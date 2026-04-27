@@ -19,6 +19,7 @@ import (
 	"github.com/zerodha/gokiteconnect/v4/models"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 func TestEvaluator_MarkTriggeredRace(t *testing.T) {
@@ -569,7 +570,7 @@ func TestBuildMorningBriefing_RealisticPortfolio(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -604,7 +605,7 @@ func TestBuildMorningBriefing_WithTriggeredAlerts_RealisticData(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -630,7 +631,7 @@ func TestBuildDailySummary_RealisticPortfolio(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -666,7 +667,7 @@ func TestBuildDailySummary_BrokerErrors_Graceful(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -769,7 +770,7 @@ func TestBuildMorningBriefing_NegativePortfolio(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -802,7 +803,7 @@ func TestBuildMorningBriefing_LTPError_GracefulDegradation(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -835,7 +836,7 @@ func TestBuildDailySummary_OnlyHoldingsError(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -885,7 +886,7 @@ func TestBrokerProvider_DefaultFallback(t *testing.T) {
 
 	bs := &BriefingService{
 		alertStore: newTestStore(),
-		logger:     defaultTestLogger(),
+		logger:     logport.NewSlog(defaultTestLogger()),
 	}
 
 	bp := bs.broker()
@@ -901,7 +902,7 @@ func TestBrokerProvider_OverrideUsed(t *testing.T) {
 
 	bs := &BriefingService{
 		alertStore: newTestStore(),
-		logger:     defaultTestLogger(),
+		logger:     logport.NewSlog(defaultTestLogger()),
 	}
 
 	mock := &mockBrokerProvider{}
@@ -925,7 +926,7 @@ func TestBuildDailySummary_EmptyPortfolio(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("newuser@test.com"),
 		creds:          credsFor(map[string]string{"newuser@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 
@@ -953,7 +954,7 @@ func TestBuildMorningBriefing_AllBrokerErrors(t *testing.T) {
 		alertStore:     newTestStore(),
 		tokens:         validTokenChecker("trader@test.com"),
 		creds:          credsFor(map[string]string{"trader@test.com": "api-key"}),
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: bp,
 	}
 

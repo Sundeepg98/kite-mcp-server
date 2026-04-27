@@ -1,22 +1,32 @@
 package alerts
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // Evaluator checks incoming ticks against active alerts.
+//
+// Wave D Phase 3 Package 4 (Logger sweep): logger is typed as the
+// kc/logger.Logger port. NewEvaluator takes *slog.Logger for caller
+// compatibility (kc/manager_init.go) and converts at the boundary
+// via logport.NewSlog. Internal log calls use context.Background()
+// — Evaluator is invoked from a long-lived ticker goroutine with
+// no request ctx in scope.
 type Evaluator struct {
 	store  *Store
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewEvaluator creates a new alert evaluator.
 func NewEvaluator(store *Store, logger *slog.Logger) *Evaluator {
 	return &Evaluator{
 		store:  store,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 	}
 }
 
@@ -44,7 +54,7 @@ func (e *Evaluator) Evaluate(email string, tick models.Tick) {
 			if alert.IsPercentageAlert() {
 				logAttrs = append(logAttrs, "reference_price", alert.ReferencePrice)
 			}
-			e.logger.Info("Alert triggered", logAttrs...)
+			e.logger.Info(context.Background(), "Alert triggered", logAttrs...)
 
 			if e.store.onNotify != nil {
 				e.store.onNotify(alert, tick.LastPrice)

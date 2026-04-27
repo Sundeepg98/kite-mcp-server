@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 
@@ -93,7 +94,7 @@ func newTestNotifier(t *testing.T, failSend bool) (*TelegramNotifier, *httptest.
 	notifier := &TelegramNotifier{
 		bot:    bot,
 		store:  store,
-		logger: logger,
+		logger: logport.NewSlog(logger),
 	}
 	return notifier, server
 }
@@ -364,7 +365,7 @@ func TestNotify_NilNotifier(t *testing.T) {
 
 func TestNotify_NilBot(t *testing.T) {
 	t.Parallel()
-	notifier := &TelegramNotifier{bot: nil, store: newTestStore(), logger: slog.Default()}
+	notifier := &TelegramNotifier{bot: nil, store: newTestStore(), logger: logport.NewSlog(slog.Default())}
 	alert := &Alert{
 		Email:         "user@test.com",
 		Tradingsymbol: "RELIANCE",
@@ -413,7 +414,7 @@ func TestSendMessage_VerifiesParseMode(t *testing.T) {
 	defer server.Close()
 
 	bot := newMockBot(t, server.URL)
-	notifier := &TelegramNotifier{bot: bot, store: newTestStore(), logger: slog.Default()}
+	notifier := &TelegramNotifier{bot: bot, store: newTestStore(), logger: logport.NewSlog(slog.Default())}
 
 	err := notifier.SendMessage(12345, "test")
 	require.NoError(t, err)
@@ -458,7 +459,7 @@ func TestSendHTMLMessage_VerifiesParseMode(t *testing.T) {
 	defer server.Close()
 
 	bot := newMockBot(t, server.URL)
-	notifier := &TelegramNotifier{bot: bot, store: newTestStore(), logger: slog.Default()}
+	notifier := &TelegramNotifier{bot: bot, store: newTestStore(), logger: logport.NewSlog(slog.Default())}
 
 	err := notifier.SendHTMLMessage(12345, "<b>test</b>")
 	require.NoError(t, err)
@@ -560,8 +561,11 @@ func TestTelegramNotifier_Accessors(t *testing.T) {
 	s := newTestStore()
 	logger := defaultTestLogger()
 
-	// Non-nil notifier with nil bot — test Store() and Logger() accessors
-	tn := &TelegramNotifier{store: s, logger: logger}
+	// Non-nil notifier with nil bot — test Store() and Logger() accessors.
+	// Wave D Phase 3 Package 4: the field is now a logport.Logger, so we
+	// wrap the *slog.Logger via NewSlog. Logger() returns the underlying
+	// *slog.Logger via AsSlog, which preserves identity.
+	tn := &TelegramNotifier{store: s, logger: logport.NewSlog(logger)}
 	assert.Equal(t, s, tn.Store())
 	assert.Equal(t, logger, tn.Logger())
 }

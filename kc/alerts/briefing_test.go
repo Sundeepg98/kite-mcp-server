@@ -13,6 +13,7 @@ import (
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 
@@ -842,7 +843,7 @@ func TestBuildMorningBriefing_WithMockBroker(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: mockBP,
 	}
 
@@ -877,7 +878,7 @@ func TestBuildMorningBriefing_NoAPIKey(t *testing.T) {
 		alertStore: store,
 		tokens:     tokens,
 		creds:      creds,
-		logger:     defaultTestLogger(),
+		logger:     logport.NewSlog(defaultTestLogger()),
 	}
 
 	now := time.Date(2026, 4, 7, 8, 0, 0, 0, kolkataLoc)
@@ -907,7 +908,7 @@ func TestBuildMorningBriefing_ExpiredToken(t *testing.T) {
 		alertStore: store,
 		tokens:     tokens,
 		creds:      creds,
-		logger:     defaultTestLogger(),
+		logger:     logport.NewSlog(defaultTestLogger()),
 	}
 
 	now := time.Date(2026, 4, 7, 8, 0, 0, 0, kolkataLoc)
@@ -949,7 +950,7 @@ func TestBuildMorningBriefing_WithTriggeredAlerts(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: mockBP,
 	}
 
@@ -995,7 +996,7 @@ func TestBuildDailySummary_WithMockBroker(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: mockBP,
 	}
 
@@ -1025,7 +1026,7 @@ func TestBuildDailySummary_HoldingsError(t *testing.T) {
 
 	bs := &BriefingService{
 		alertStore:     store,
-		logger:         defaultTestLogger(),
+		logger:         logport.NewSlog(defaultTestLogger()),
 		brokerProvider: mockBP,
 	}
 
@@ -1731,7 +1732,7 @@ func TestBuildDailySummary_FullIntegration_Send(t *testing.T) {
 		alertStore:     store,
 		tokens:         tokens,
 		creds:          creds,
-		logger:         slog.Default(),
+		logger:         logport.NewSlog(slog.Default()),
 		brokerProvider: broker,
 	}
 
@@ -1758,7 +1759,7 @@ func TestBuildDailySummary_HoldingsError_Send(t *testing.T) {
 		alertStore: store,
 		tokens:     validTokenChecker("alice@test.com"),
 		creds:      credsFor(map[string]string{"alice@test.com": "key"}),
-		logger:     slog.Default(),
+		logger:     logport.NewSlog(slog.Default()),
 		brokerProvider: &mockBrokerProvider{
 			holdingsErr: fmt.Errorf("API error"),
 			positions: kiteconnect.Positions{
@@ -1781,7 +1782,7 @@ func TestBuildDailySummary_PositionsError_Send(t *testing.T) {
 		alertStore: store,
 		tokens:     validTokenChecker("alice@test.com"),
 		creds:      credsFor(map[string]string{"alice@test.com": "key"}),
-		logger:     slog.Default(),
+		logger:     logport.NewSlog(slog.Default()),
 		brokerProvider: &mockBrokerProvider{
 			holdings:     []kiteconnect.Holding{{DayChange: 200}},
 			positionsErr: fmt.Errorf("API error"),
