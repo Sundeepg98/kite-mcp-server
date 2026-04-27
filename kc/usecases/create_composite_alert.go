@@ -27,6 +27,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // CompositeAlertStore is the subset of kc.AlertStoreInterface needed to
@@ -43,11 +44,14 @@ const (
 )
 
 // CreateCompositeAlertUseCase creates a composite alert for a user.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type CreateCompositeAlertUseCase struct {
 	store       CompositeAlertStore
 	instruments InstrumentResolver
 	eventStore  EventAppender
-	logger      *slog.Logger
+	logger      logport.Logger
 }
 
 // NewCreateCompositeAlertUseCase wires the use case with its dependencies.
@@ -59,7 +63,7 @@ func NewCreateCompositeAlertUseCase(
 	return &CreateCompositeAlertUseCase{
 		store:       store,
 		instruments: instruments,
-		logger:      logger,
+		logger:      logport.NewSlog(logger),
 	}
 }
 
@@ -109,16 +113,15 @@ func (uc *CreateCompositeAlertUseCase) Execute(ctx context.Context, cmd cqrs.Cre
 
 	id, err := uc.store.AddComposite(cmd.Email, cmd.Name, logic, conds)
 	if err != nil {
-		uc.logger.Error("Failed to create composite alert",
+		uc.logger.Error(ctx, "Failed to create composite alert", err,
 			"email", cmd.Email,
 			"name", cmd.Name,
 			"logic", logic,
-			"error", err,
 		)
 		return "", fmt.Errorf("usecases: create composite alert: %w", err)
 	}
 
-	uc.logger.Info("Composite alert created",
+	uc.logger.Info(ctx, "Composite alert created",
 		"email", cmd.Email,
 		"alert_id", id,
 		"name", cmd.Name,
@@ -193,7 +196,7 @@ func (uc *CreateCompositeAlertUseCase) appendCreatedEvent(alertID, email, name s
 	}
 	seq, err := uc.eventStore.NextSequence(alertID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on composite alert.created", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on composite alert.created", "alert_id", alertID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(map[string]any{
@@ -215,6 +218,6 @@ func (uc *CreateCompositeAlertUseCase) appendCreatedEvent(alertID, email, name s
 		Sequence:      seq,
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on composite alert.created", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "event store Append failed on composite alert.created", "alert_id", alertID, "error", err)
 	}
 }

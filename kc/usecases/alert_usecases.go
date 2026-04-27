@@ -10,7 +10,12 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5 (Logger sweep): use cases in this file
+// type their logger field as the kc/logger.Logger port; constructors
+// retain *slog.Logger and convert via logport.NewSlog.
 
 // AlertReader abstracts alert read/delete operations for use cases.
 type AlertReader interface {
@@ -23,12 +28,12 @@ type AlertReader interface {
 // ListAlertsUseCase retrieves all alerts for a user.
 type ListAlertsUseCase struct {
 	store  AlertReader
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewListAlertsUseCase creates a ListAlertsUseCase with dependencies injected.
 func NewListAlertsUseCase(store AlertReader, logger *slog.Logger) *ListAlertsUseCase {
-	return &ListAlertsUseCase{store: store, logger: logger}
+	return &ListAlertsUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves all alerts for the given user.
@@ -46,12 +51,12 @@ type DeleteAlertUseCase struct {
 	store      AlertReader
 	events     *domain.EventDispatcher
 	eventStore EventAppender
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewDeleteAlertUseCase creates a DeleteAlertUseCase with dependencies injected.
 func NewDeleteAlertUseCase(store AlertReader, logger *slog.Logger) *DeleteAlertUseCase {
-	return &DeleteAlertUseCase{store: store, logger: logger}
+	return &DeleteAlertUseCase{store: store, logger: logport.NewSlog(logger)}
 }
 
 // SetEventDispatcher wires an event dispatcher so AlertDeletedEvent is
@@ -79,7 +84,7 @@ func (uc *DeleteAlertUseCase) Execute(ctx context.Context, cmd cqrs.DeleteAlertC
 		return fmt.Errorf("usecases: alert_id is required")
 	}
 	if err := uc.store.Delete(cmd.Email, cmd.AlertID); err != nil {
-		uc.logger.Error("Failed to delete alert", "email", cmd.Email, "alert_id", cmd.AlertID, "error", err)
+		uc.logger.Error(ctx, "Failed to delete alert", err, "email", cmd.Email, "alert_id", cmd.AlertID)
 		return fmt.Errorf("usecases: delete alert: %w", err)
 	}
 	now := time.Now()
@@ -102,7 +107,7 @@ func (uc *DeleteAlertUseCase) appendDeletedEvent(email, alertID string, occurred
 	}
 	seq, err := uc.eventStore.NextSequence(alertID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on alert.deleted", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on alert.deleted", "alert_id", alertID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(map[string]string{
@@ -121,6 +126,6 @@ func (uc *DeleteAlertUseCase) appendDeletedEvent(email, alertID string, occurred
 		Sequence:      seq,
 	}
 	if err := uc.eventStore.Append(evt); err != nil {
-		uc.logger.Warn("event store Append failed on alert.deleted", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "event store Append failed on alert.deleted", "alert_id", alertID, "error", err)
 	}
 }

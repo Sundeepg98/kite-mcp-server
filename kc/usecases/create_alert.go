@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // AlertStore is the interface needed by CreateAlertUseCase.
@@ -25,12 +26,15 @@ type InstrumentResolver interface {
 }
 
 // CreateAlertUseCase creates a new price alert for a user.
+//
+// Wave D Phase 3 Package 5 (Logger sweep): logger is the kc/logger.Logger
+// port; constructor takes *slog.Logger and converts via logport.NewSlog.
 type CreateAlertUseCase struct {
 	alertStore  AlertStore
 	instruments InstrumentResolver
 	events      *domain.EventDispatcher
 	eventStore  EventAppender
-	logger      *slog.Logger
+	logger      logport.Logger
 }
 
 // NewCreateAlertUseCase creates a CreateAlertUseCase with all dependencies injected.
@@ -42,7 +46,7 @@ func NewCreateAlertUseCase(
 	return &CreateAlertUseCase{
 		alertStore:  store,
 		instruments: instruments,
-		logger:      logger,
+		logger:      logport.NewSlog(logger),
 	}
 }
 
@@ -106,15 +110,14 @@ func (uc *CreateAlertUseCase) Execute(ctx context.Context, cmd cqrs.CreateAlertC
 		)
 	}
 	if err != nil {
-		uc.logger.Error("Failed to create alert",
+		uc.logger.Error(ctx, "Failed to create alert", err,
 			"email", cmd.Email,
 			"tradingsymbol", cmd.Tradingsymbol,
-			"error", err,
 		)
 		return "", fmt.Errorf("usecases: create alert: %w", err)
 	}
 
-	uc.logger.Info("Alert created",
+	uc.logger.Info(ctx, "Alert created",
 		"email", cmd.Email,
 		"alert_id", alertID,
 		"tradingsymbol", cmd.Tradingsymbol,
@@ -148,7 +151,7 @@ func (uc *CreateAlertUseCase) appendCreatedEvent(alertID string, cmd cqrs.Create
 	}
 	seq, err := uc.eventStore.NextSequence(alertID)
 	if err != nil {
-		uc.logger.Warn("event store NextSequence failed on alert.created", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "event store NextSequence failed on alert.created", "alert_id", alertID, "error", err)
 		return
 	}
 	payload, err := eventsourcing.MarshalPayload(eventsourcing.AlertCreatedPayload{
@@ -171,9 +174,9 @@ func (uc *CreateAlertUseCase) appendCreatedEvent(alertID string, cmd cqrs.Create
 	}
 	// Hot mutation path — route through outbox. See kc/eventsourcing/outbox.go.
 	if err := uc.eventStore.AppendToOutbox(evt); err != nil {
-		uc.logger.Warn("outbox append failed on alert.created; trying direct path", "alert_id", alertID, "error", err)
+		uc.logger.Warn(context.Background(), "outbox append failed on alert.created; trying direct path", "alert_id", alertID, "error", err)
 		if err := uc.eventStore.Append(evt); err != nil {
-			uc.logger.Warn("event store Append failed on alert.created", "alert_id", alertID, "error", err)
+			uc.logger.Warn(context.Background(), "event store Append failed on alert.created", "alert_id", alertID, "error", err)
 		}
 	}
 }

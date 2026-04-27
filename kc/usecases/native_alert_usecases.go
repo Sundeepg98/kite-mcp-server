@@ -8,7 +8,12 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
+
+// Wave D Phase 3 Package 5 (Logger sweep): use cases in this file
+// type their logger field as the kc/logger.Logger port; constructors
+// retain *slog.Logger and convert via logport.NewSlog.
 
 // NativeAlertClient abstracts the Kite alert API for use cases.
 type NativeAlertClient interface {
@@ -25,12 +30,12 @@ type NativeAlertClient interface {
 type PlaceNativeAlertUseCase struct {
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewPlaceNativeAlertUseCase creates a PlaceNativeAlertUseCase with dependencies injected.
 func NewPlaceNativeAlertUseCase(logger *slog.Logger) *PlaceNativeAlertUseCase {
-	return &PlaceNativeAlertUseCase{logger: logger}
+	return &PlaceNativeAlertUseCase{logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -48,7 +53,7 @@ func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAle
 
 	result, err := client.CreateAlert(cmd.Params)
 	if err != nil {
-		uc.logger.Error("Failed to create native alert", "email", cmd.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to create native alert", err, "email", cmd.Email)
 		return nil, fmt.Errorf("usecases: create native alert: %w", err)
 	}
 
@@ -72,12 +77,12 @@ func (uc *PlaceNativeAlertUseCase) Execute(ctx context.Context, client NativeAle
 
 // ListNativeAlertsUseCase lists all native alerts.
 type ListNativeAlertsUseCase struct {
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewListNativeAlertsUseCase creates a ListNativeAlertsUseCase with dependencies injected.
 func NewListNativeAlertsUseCase(logger *slog.Logger) *ListNativeAlertsUseCase {
-	return &ListNativeAlertsUseCase{logger: logger}
+	return &ListNativeAlertsUseCase{logger: logport.NewSlog(logger)}
 }
 
 // Execute lists native alerts.
@@ -88,7 +93,7 @@ func (uc *ListNativeAlertsUseCase) Execute(ctx context.Context, client NativeAle
 
 	alerts, err := client.GetAlerts(query.Filters)
 	if err != nil {
-		uc.logger.Error("Failed to list native alerts", "email", query.Email, "error", err)
+		uc.logger.Error(ctx, "Failed to list native alerts", err, "email", query.Email)
 		return nil, fmt.Errorf("usecases: list native alerts: %w", err)
 	}
 
@@ -101,12 +106,12 @@ func (uc *ListNativeAlertsUseCase) Execute(ctx context.Context, client NativeAle
 type ModifyNativeAlertUseCase struct {
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewModifyNativeAlertUseCase creates a ModifyNativeAlertUseCase with dependencies injected.
 func NewModifyNativeAlertUseCase(logger *slog.Logger) *ModifyNativeAlertUseCase {
-	return &ModifyNativeAlertUseCase{logger: logger}
+	return &ModifyNativeAlertUseCase{logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -127,7 +132,7 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 
 	result, err := client.ModifyAlert(cmd.UUID, cmd.Params)
 	if err != nil {
-		uc.logger.Error("Failed to modify native alert", "email", cmd.Email, "uuid", cmd.UUID, "error", err)
+		uc.logger.Error(ctx, "Failed to modify native alert", err, "email", cmd.Email, "uuid", cmd.UUID)
 		return nil, fmt.Errorf("usecases: modify native alert: %w", err)
 	}
 
@@ -150,12 +155,12 @@ func (uc *ModifyNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 type DeleteNativeAlertUseCase struct {
 	eventStore EventAppender
 	events     *domain.EventDispatcher
-	logger     *slog.Logger
+	logger     logport.Logger
 }
 
 // NewDeleteNativeAlertUseCase creates a DeleteNativeAlertUseCase with dependencies injected.
 func NewDeleteNativeAlertUseCase(logger *slog.Logger) *DeleteNativeAlertUseCase {
-	return &DeleteNativeAlertUseCase{logger: logger}
+	return &DeleteNativeAlertUseCase{logger: logport.NewSlog(logger)}
 }
 
 // SetEventStore opts the use case into event-sourced audit. nil disables.
@@ -176,7 +181,7 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 	}
 
 	if err := client.DeleteAlerts(cmd.UUIDs...); err != nil {
-		uc.logger.Error("Failed to delete native alert(s)", "email", cmd.Email, "uuids", cmd.UUIDs, "error", err)
+		uc.logger.Error(ctx, "Failed to delete native alert(s)", err, "email", cmd.Email, "uuids", cmd.UUIDs)
 		return fmt.Errorf("usecases: delete native alert: %w", err)
 	}
 
@@ -201,12 +206,12 @@ func (uc *DeleteNativeAlertUseCase) Execute(ctx context.Context, client NativeAl
 
 // GetNativeAlertHistoryUseCase retrieves trigger history for a native alert.
 type GetNativeAlertHistoryUseCase struct {
-	logger *slog.Logger
+	logger logport.Logger
 }
 
 // NewGetNativeAlertHistoryUseCase creates a GetNativeAlertHistoryUseCase with dependencies injected.
 func NewGetNativeAlertHistoryUseCase(logger *slog.Logger) *GetNativeAlertHistoryUseCase {
-	return &GetNativeAlertHistoryUseCase{logger: logger}
+	return &GetNativeAlertHistoryUseCase{logger: logport.NewSlog(logger)}
 }
 
 // Execute retrieves alert history.
@@ -220,7 +225,7 @@ func (uc *GetNativeAlertHistoryUseCase) Execute(ctx context.Context, client Nati
 
 	history, err := client.GetAlertHistory(query.UUID)
 	if err != nil {
-		uc.logger.Error("Failed to get native alert history", "email", query.Email, "uuid", query.UUID, "error", err)
+		uc.logger.Error(ctx, "Failed to get native alert history", err, "email", query.Email, "uuid", query.UUID)
 		return nil, fmt.Errorf("usecases: get native alert history: %w", err)
 	}
 
