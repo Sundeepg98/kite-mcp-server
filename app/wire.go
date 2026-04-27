@@ -303,52 +303,52 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Cycle inversion step 3: riskGuard was constructed pre-NewWithOptions
 	// (preRiskGuard) and threaded into the manager via WithRiskGuard. The
 	// reassignment here keeps the local name 'riskGuard' for the rest of
-	// the setup block (DB init, anomaly baseline, auto-freeze closure)
-	// without changing semantics — same pointer the manager holds.
+	// the setup block (auto-freeze closure) without changing semantics —
+	// same pointer the manager holds.
+	//
+	// Wave D Phase 2 Slice P2.4c: DB init + LoadLimits + lookup wiring +
+	// plugin discovery delegated to providers.InitializeRiskGuard via an
+	// Fx graph. The auto-freeze closure stays at the composition site
+	// because it captures kcManager (for lazy EventDispatcher resolution)
+	// and AdminEmails (app-package state). Same split rationale as the
+	// scheduler P2.4b BriefingService construction.
 	riskGuard := preRiskGuard
-	// Default to "loaded" — if there's no DB (DevMode without ALERT_DB_PATH)
-	// the guard runs with SystemDefaults, which is the intended DevMode path;
-	// we only flip this to false when LoadLimits is actually attempted and fails.
-	app.riskLimitsLoaded = true
-	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		riskGuard.SetDB(alertDB)
-		if err := riskGuard.InitTable(); err != nil {
-			if !app.DevMode {
-				return nil, nil, fmt.Errorf("riskguard required in production: init risk_limits table: %w", err)
-			}
-			app.logger.Error("Failed to initialize risk_limits table (DevMode: continuing)", "error", err)
-			app.riskLimitsLoaded = false
+
+	var rgInit *providers.InitializedRiskGuard
+	{
+		var freezeLookup riskguard.FreezeQuantityLookup
+		if im := kcManager.InstrumentsManagerConcrete(); im != nil {
+			freezeLookup = &instrumentsFreezeAdapter{mgr: im}
 		}
-		if err := riskGuard.LoadLimits(); err != nil {
-			if !app.DevMode {
-				return nil, nil, fmt.Errorf("riskguard required in production: load limits (refusing to start without user-configured limits): %w", err)
-			}
-			app.logger.Error("Failed to load risk limits (DevMode: continuing with defaults)", "error", err)
-			app.riskLimitsLoaded = false
+		var ltpLookup riskguard.LTPLookup = &riskguardLTPAdapter{manager: kcManager}
+		rgCfg := providers.RiskGuardConfig{
+			DevMode:   app.DevMode,
+			PluginDir: app.Config.RiskguardPluginDir,
 		}
-	} else if !app.DevMode {
-		return nil, nil, fmt.Errorf("riskguard required in production: no alert DB configured (set ALERT_DB_PATH)")
+		fxApp := fx.New(
+			fx.NopLogger,
+			fx.Supply(riskGuard),
+			fx.Provide(func() *alerts.DB { return kcManager.AlertDB() }),
+			fx.Provide(func() riskguard.FreezeQuantityLookup { return freezeLookup }),
+			fx.Provide(func() riskguard.LTPLookup { return ltpLookup }),
+			fx.Provide(func() *audit.Store { return app.auditStore }),
+			fx.Supply(rgCfg),
+			fx.Supply(app.logger),
+			fx.Provide(providers.InitializeRiskGuard),
+			fx.Populate(&rgInit),
+		)
+		if err := fxApp.Err(); err != nil {
+			return nil, nil, err
+		}
 	}
+	app.riskLimitsLoaded = rgInit.LimitsLoaded
 	app.riskGuard = riskGuard
-	if kcManager.InstrumentsManagerConcrete() != nil {
-		// Wrap instruments manager as FreezeQuantityLookup
-		riskGuard.SetFreezeQuantityLookup(&instrumentsFreezeAdapter{mgr: kcManager.InstrumentsManagerConcrete()})
-	}
-	// PR-C: SEBI OTR band check oracle. The adapter pulls live quotes via
-	// any active Kite session — see riskguardLTPAdapter / paperLTPAdapter.
-	// nil-safe: the band check no-ops when no quote is available.
-	riskGuard.SetLTPLookup(&riskguardLTPAdapter{manager: kcManager})
-	// Wire the anomaly-detection baseline. audit.Store.UserOrderStats matches
-	// riskguard.BaselineProvider exactly (same signature), so it's a direct
-	// assignment — no adapter shim needed. Without this wire the anomaly
-	// check in checkAnomalyMultiplier silently no-ops (fail-open) because
-	// g.baseline is nil. When auditStore is nil (DevMode without ALERT_DB_PATH),
-	// we leave baseline unset and the fail-open behaviour continues.
-	if app.auditStore != nil {
-		riskGuard.SetBaselineProvider(app.auditStore)
-		app.logger.Info("riskguard anomaly baseline wired", "provider", "audit")
-	}
+
 	// Wire auto-freeze Telegram admin notification + domain event dispatch.
+	// STAYS at composition site: closure captures kcManager (for lazy
+	// EventDispatcher resolution), notifier (snapshot at construction
+	// time), and admin emails — all app-package state that doesn't
+	// belong inside providers/.
 	{
 		adminEmails := strings.Split(app.Config.AdminEmails, ",")
 		notifier := kcManager.TelegramNotifier()
@@ -389,22 +389,6 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Note: kcManager.SetRiskGuard(riskGuard) is no longer needed — the
 	// manager's riskGuard field was populated by initInjectedStores via
 	// WithRiskGuard at construction time (cycle inversion step 3).
-
-	// Plugin discovery: scan RISKGUARD_PLUGIN_DIR for a plugins.json
-	// manifest of subprocess checks and register each via the existing
-	// RegisterSubprocessCheck path. Empty dir = no-op (default).
-	// Failed entries log + continue — one broken plugin must not block
-	// the rest from loading. See kc/riskguard/plugin_discovery.go.
-	if app.Config.RiskguardPluginDir != "" {
-		if err := riskguard.DiscoverPlugins(
-			app.Config.RiskguardPluginDir,
-			riskGuard.RegisterSubprocessCheck,
-			app.logger,
-		); err != nil {
-			app.logger.Warn("riskguard plugin discovery had errors (continuing)",
-				"plugin_dir", app.Config.RiskguardPluginDir, "error", err)
-		}
-	}
 
 	// Initialize domain event dispatcher and audit log.
 	// Events flow: use case -> EventDispatcher.Dispatch() -> makeEventPersister() -> domain_events table.
