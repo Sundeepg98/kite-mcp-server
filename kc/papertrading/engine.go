@@ -203,6 +203,10 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 	orderID := nextOrderID()
 	now := time.Now().UTC()
 
+	// Money boundary: user-supplied price (float64 from MCP arg) becomes
+	// INR Money on the Order aggregate. MARKET orders pass price=0 from
+	// getFloat which produces a zero Money — the "no user-supplied
+	// price" sentinel matching Slice 2's OrderCheckRequest pattern.
 	order := &Order{
 		OrderID:         orderID,
 		Email:           email,
@@ -213,7 +217,7 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 		Product:         product,
 		Variety:         variety,
 		Quantity:        quantity,
-		Price:           price,
+		Price:           domain.NewINR(price),
 		TriggerPrice:    triggerPrice,
 		Tag:             tag,
 		PlacedAt:        now,
@@ -242,6 +246,11 @@ func (e *PaperEngine) PlaceOrder(email string, params map[string]any) (map[strin
 	case "LIMIT":
 		if ltpErr == nil {
 			// Check if the limit order is immediately marketable.
+			// price + ltp are local floats inside this scope; compare
+			// at the float layer (boundary) rather than re-wrapping
+			// with NewINR — semantically identical, and the user-supplied
+			// price flowed through getFloat above so no cross-currency
+			// risk exists at this site.
 			marketable := false
 			if txnType == "BUY" && price >= ltp {
 				marketable = true
@@ -316,11 +325,13 @@ func (e *PaperEngine) fillOrder(acct *Account, order *Order, fillPrice float64) 
 		}
 	}
 
-	// Fill the order.
+	// Fill the order. AveragePrice is the broker-reported fill price;
+	// wrap fillPrice with domain.NewINR at this boundary so the Order
+	// aggregate carries an INR Money value.
 	now := time.Now().UTC()
 	order.Status = "COMPLETE"
 	order.FilledQuantity = order.Quantity
-	order.AveragePrice = fillPrice
+	order.AveragePrice = domain.NewINR(fillPrice)
 	order.FilledAt = now
 
 	if err := e.store.InsertOrder(order); err != nil {
@@ -620,7 +631,7 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 
 	// Apply modifications.
 	if v, ok := params["price"]; ok {
-		order.Price = toFloat(v)
+		order.Price = domain.NewINR(toFloat(v))
 	}
 	if v, ok := params["quantity"]; ok {
 		order.Quantity = toInt(v)
@@ -633,14 +644,26 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 	}
 
 	// Check if the modified LIMIT order is now marketable.
+	// Money boundary: wrap LTP with domain.NewINR for currency-aware
+	// GreaterThan comparison; cmpErr (cross-currency mismatch) falls
+	// through to "not marketable" — fail-soft on the display path. The
+	// downstream cash check inside fillOrder is the fail-closed gate.
 	if order.OrderType == "LIMIT" {
 		instrument := order.Exchange + ":" + order.Tradingsymbol
 		if ltp, err := e.fetchLTP(instrument); err == nil {
+			ltpMoney := domain.NewINR(ltp)
 			marketable := false
-			if order.TransactionType == "BUY" && order.Price >= ltp {
-				marketable = true
-			} else if order.TransactionType == "SELL" && order.Price <= ltp {
-				marketable = true
+			switch order.TransactionType {
+			case "BUY":
+				// price >= ltp ⇔ NOT (price < ltp) ⇔ NOT (ltp > price)
+				if over, cmpErr := ltpMoney.GreaterThan(order.Price); cmpErr == nil && !over {
+					marketable = true
+				}
+			case "SELL":
+				// price <= ltp ⇔ NOT (price > ltp)
+				if over, cmpErr := order.Price.GreaterThan(ltpMoney); cmpErr == nil && !over {
+					marketable = true
+				}
 			}
 			if marketable {
 				acct, err := e.store.GetAccount(email)
@@ -657,11 +680,11 @@ func (e *PaperEngine) ModifyOrder(email, orderID string, params map[string]any) 
 		}
 	}
 
-	// Update the order in place.
+	// Update the order in place. SQL bind boundary: Money → float64.
 	if err := e.store.db.ExecInsert(
 		`UPDATE paper_orders SET price = ?, quantity = ?, order_type = ?, trigger_price = ?
 		 WHERE order_id = ?`,
-		order.Price, order.Quantity, order.OrderType, order.TriggerPrice, orderID); err != nil {
+		order.Price.Float64(), order.Quantity, order.OrderType, order.TriggerPrice, orderID); err != nil {
 		return nil, fmt.Errorf("modify order: %w", err)
 	}
 
@@ -846,6 +869,10 @@ func (e *PaperEngine) fetchLTP(instrument string) (float64, error) {
 }
 
 // orderToMap converts an Order to a Kite API-compatible map.
+//
+// JSON wire boundary: Price + AveragePrice (Money) → float64 so the
+// Kite-API-shaped response keeps the original number shape. Same Slice
+// 5 / 6a pattern.
 func orderToMap(o *Order) map[string]any {
 	m := map[string]any{
 		"order_id":         o.OrderID,
@@ -856,11 +883,11 @@ func orderToMap(o *Order) map[string]any {
 		"product":          o.Product,
 		"variety":          o.Variety,
 		"quantity":         o.Quantity,
-		"price":            o.Price,
+		"price":            o.Price.Float64(),
 		"trigger_price":    o.TriggerPrice,
 		"status":           o.Status,
 		"filled_quantity":  o.FilledQuantity,
-		"average_price":    o.AveragePrice,
+		"average_price":    o.AveragePrice.Float64(),
 		"placed_at":        o.PlacedAt.Format(time.RFC3339),
 		"tag":              o.Tag,
 	}

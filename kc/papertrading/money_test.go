@@ -736,6 +736,198 @@ func TestPnLM2MMatchesPnL(t *testing.T) {
 	assert.InDelta(t, 50.0, pnl, 0.01)
 }
 
+// TestOrderPrice_IsMoney is the type-level assertion for Slice 6b
+// (papertrading Order Money sweep): Order.Price MUST be domain.Money.
+// Price is the user-supplied LIMIT/SL limit price, written by PlaceOrder
+// + ModifyOrder and consumed by the marketability check + the
+// monitor's shouldFill / determineFillPrice predicates.
+func TestOrderPrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	o := Order{}
+	got := reflect.TypeOf(o.Price)
+	if got != moneyType {
+		t.Fatalf("Order.Price must be domain.Money, got %s", got)
+	}
+}
+
+// TestOrderAveragePrice_IsMoney is the type-level assertion for
+// Order.AveragePrice — the broker-reported fill price written by
+// fillOrder + Monitor.fill, consumed by orderToMap JSON output and
+// the Kite-API-shaped trades response in middleware.go.
+func TestOrderAveragePrice_IsMoney(t *testing.T) {
+	t.Parallel()
+
+	moneyType := reflect.TypeOf(domain.Money{})
+	o := Order{}
+	got := reflect.TypeOf(o.AveragePrice)
+	if got != moneyType {
+		t.Fatalf("Order.AveragePrice must be domain.Money, got %s", got)
+	}
+}
+
+// TestOrderUnfilledZeroAveragePriceSentinel verifies the zero-Money
+// "unfilled order" semantic: an Order placed as OPEN (LIMIT below
+// market, SL/SL-M before trigger) has IsZero() AveragePrice until
+// the fill machinery runs. Same Slice 5 sentinel pattern as
+// LastPrice / cash.
+func TestOrderUnfilledZeroAveragePriceSentinel(t *testing.T) {
+	t.Parallel()
+
+	// Bare struct: zero value is "unfilled" semantic.
+	o := Order{}
+	if !o.AveragePrice.IsZero() {
+		t.Errorf("zero Order should have zero AveragePrice, got %v", o.AveragePrice)
+	}
+
+	// After fill — IsPositive flips true.
+	o.AveragePrice = domain.NewINR(2500)
+	if !o.AveragePrice.IsPositive() {
+		t.Errorf("filled order should have positive AveragePrice")
+	}
+}
+
+// TestOrderMarketHasZeroPrice verifies that a MARKET order placed
+// without an explicit price has IsZero() Price — Slice 2 established
+// the same sentinel for OrderCheckRequest.Price. The PlaceOrder
+// MARKET branch never reads Price (snap-to-LTP); the zero Money
+// remains as the "MARKET / no price set" indicator for downstream
+// consumers (orderToMap JSON output for instance).
+func TestOrderMarketHasZeroPrice(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "MARKET",
+		"product":          "MIS",
+		"quantity":         5,
+		// no "price" key — MARKET order
+	})
+	require.NoError(t, err)
+
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+
+	// MARKET orders have zero Price (no user-supplied limit).
+	if !orders[0].Price.IsZero() {
+		t.Errorf("MARKET order Price should be zero, got %v", orders[0].Price)
+	}
+	// AveragePrice is the snap-to-LTP fill price — not zero.
+	assert.InDelta(t, 2500.0, orders[0].AveragePrice.Float64(), 0.01)
+	assert.Equal(t, "INR", orders[0].AveragePrice.Currency)
+}
+
+// TestOrderLIMITRoundTripsAsMoney verifies the SQLite REAL ↔ Money
+// round-trip for Order.Price + AveragePrice via InsertOrder + GetOrders.
+// LIMIT BUY @ 2400 with LTP 2500 stays OPEN (not marketable), so
+// Price = 2400 INR Money but AveragePrice = zero Money.
+func TestOrderLIMITRoundTripsAsMoney(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "LIMIT",
+		"product":          "MIS",
+		"quantity":         10,
+		"price":            2400.0, // below LTP — non-marketable
+	})
+	require.NoError(t, err)
+
+	orders, err := engine.store.GetOrders(testEmail)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+
+	assert.Equal(t, "OPEN", orders[0].Status)
+	assert.Equal(t, "INR", orders[0].Price.Currency)
+	assert.InDelta(t, 2400.0, orders[0].Price.Float64(), 0.01)
+	// Unfilled — AveragePrice is zero Money.
+	assert.True(t, orders[0].AveragePrice.IsZero())
+}
+
+// TestOrderJSONWireStaysFloat verifies that the GetOrders JSON map
+// output (orderToMap in engine.go) keeps "price" + "average_price"
+// as float64 so external Kite-API-shaped consumers see numbers, not
+// {"amount", "currency"} objects. Same Slice 5 / 6a boundary pattern.
+func TestOrderJSONWireStaysFloat(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	_, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "LIMIT",
+		"product":          "MIS",
+		"quantity":         10,
+		"price":            2400.0,
+	})
+	require.NoError(t, err)
+
+	raw, err := engine.GetOrders(testEmail)
+	require.NoError(t, err)
+	mapped := raw.([]map[string]any)
+	require.Len(t, mapped, 1)
+
+	price, ok := mapped[0]["price"].(float64)
+	if !ok {
+		t.Fatalf("orders[0][price] must be float64 at JSON boundary, got %T", mapped[0]["price"])
+	}
+	assert.InDelta(t, 2400.0, price, 0.01)
+
+	// average_price is zero on unfilled — but still float64 at the wire.
+	avg, ok := mapped[0]["average_price"].(float64)
+	if !ok {
+		t.Fatalf("orders[0][average_price] must be float64, got %T", mapped[0]["average_price"])
+	}
+	assert.InDelta(t, 0.0, avg, 0.01)
+}
+
+// TestModifyOrderMarketabilityViaMoney verifies the modify-path
+// marketability check uses currency-aware comparison: a LIMIT BUY
+// modified to a price >= LTP becomes immediately marketable and
+// fills via fillOrder. Cross-currency error path falls through
+// to "not marketable" (fail-soft on display flow — actual cash
+// check is in fillOrder which is currency-aware-fail-closed).
+func TestModifyOrderMarketabilityViaMoney(t *testing.T) {
+	t.Parallel()
+
+	engine := testEngine(t, map[string]float64{"NSE:RELIANCE": 2500.0})
+	require.NoError(t, engine.Enable(testEmail, 10_000_000))
+
+	res, err := engine.PlaceOrder(testEmail, map[string]any{
+		"exchange":         "NSE",
+		"tradingsymbol":    "RELIANCE",
+		"transaction_type": "BUY",
+		"order_type":       "LIMIT",
+		"product":          "MIS",
+		"quantity":         10,
+		"price":            2400.0,
+	})
+	require.NoError(t, err)
+	orderID := res["order_id"].(string)
+
+	// Modify to a price >= LTP (2500); should become marketable and fill.
+	modified, err := engine.ModifyOrder(testEmail, orderID, map[string]any{
+		"price": 2600.0,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETE", modified["status"])
+}
+
 // TestGetMargins_BoundaryStaysFloat verifies GetMargins (consumed by the
 // Kite-API-shaped paper response) preserves float64 at the JSON wire so
 // existing dashboards / chat clients that read margin data as numbers

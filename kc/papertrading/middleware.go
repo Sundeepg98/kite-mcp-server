@@ -218,8 +218,9 @@ func handleGetTrades(engine *PaperEngine, email string) (*gomcp.CallToolResult, 
 			"transaction_type": o.TransactionType,
 			"product":          o.Product,
 			"quantity":         o.FilledQuantity,
-			"average_price":    o.AveragePrice,
-			"fill_timestamp":   o.FilledAt.Format("2006-01-02 15:04:05"),
+			// JSON wire boundary: Money → float64 (Slice 6b).
+			"average_price":  o.AveragePrice.Float64(),
+			"fill_timestamp": o.FilledAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	return paperResult(trades, nil)

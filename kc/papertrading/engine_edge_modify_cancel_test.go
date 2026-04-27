@@ -37,7 +37,7 @@ func TestModifyOrder_AllFields(t *testing.T) {
 	// Verify modifications persisted.
 	order, err := store.GetOrder(orderID)
 	require.NoError(t, err)
-	assert.InDelta(t, 2350.0, order.Price, 0.01)
+	assert.InDelta(t, 2350.0, order.Price.Float64(), 0.01)
 	assert.Equal(t, 10, order.Quantity)
 	assert.Equal(t, "SL", order.OrderType)
 	assert.InDelta(t, 2300.0, order.TriggerPrice, 0.01)

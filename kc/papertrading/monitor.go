@@ -116,13 +116,21 @@ func (m *Monitor) tick() {
 }
 
 // shouldFill checks whether an open order should be filled at the given LTP.
+//
+// Money boundary: o.Price is domain.Money (Slice 6b); for the LIMIT
+// comparisons we drop to .Float64() because the LTP is a raw float
+// from the broker and the comparison is by value within the same INR
+// scope. Cross-currency mismatch is impossible in practice
+// (LTPProvider only emits INR prices, Order.Price was constructed
+// via NewINR), so the simpler float comparison preserves the original
+// fill semantics without an unreachable error branch.
 func shouldFill(o *Order, ltp float64) bool {
 	switch o.OrderType {
 	case "LIMIT":
-		if o.TransactionType == "BUY" && ltp <= o.Price {
+		if o.TransactionType == "BUY" && ltp <= o.Price.Float64() {
 			return true
 		}
-		if o.TransactionType == "SELL" && ltp >= o.Price {
+		if o.TransactionType == "SELL" && ltp >= o.Price.Float64() {
 			return true
 		}
 	case "SL":
@@ -146,16 +154,20 @@ func shouldFill(o *Order, ltp float64) bool {
 }
 
 // determineFillPrice returns the price at which to fill the order.
+// Returns float64 (not Money) because callers downstream pass the
+// fillPrice into fillOrder / updatePosition which work in float at the
+// fill seam — Money construction happens inside fillOrder via NewINR.
 func determineFillPrice(o *Order, ltp float64) float64 {
 	switch o.OrderType {
 	case "LIMIT":
 		// Limit orders fill at the limit price.
-		return o.Price
+		return o.Price.Float64()
 	case "SL":
 		// SL orders have a limit price after trigger — fill at the limit price
-		// if it's still favorable, otherwise at LTP.
-		if o.Price > 0 {
-			return o.Price
+		// if it's still favorable (positive Money), otherwise at LTP. Use
+		// IsPositive sentinel rather than > 0 — same Slice 2 pattern.
+		if o.Price.IsPositive() {
+			return o.Price.Float64()
 		}
 		return ltp
 	case "SL-M":
@@ -226,9 +238,10 @@ func (m *Monitor) fill(o *Order, fillPrice float64) {
 		return
 	}
 
-	// Update position.
+	// Update position. AveragePrice on the Order aggregate is Money
+	// (Slice 6b); wrap fillPrice with NewINR at this boundary.
 	o.FilledQuantity = o.Quantity
-	o.AveragePrice = fillPrice
+	o.AveragePrice = domain.NewINR(fillPrice)
 	if err := m.engine.updatePosition(o.Email, o, fillPrice); err != nil {
 		m.logger.Error("monitor: update position", "order_id", o.OrderID, "error", err)
 		return

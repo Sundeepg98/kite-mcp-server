@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // testEngineWithStore is like testEngine but also returns the store.
@@ -61,7 +62,7 @@ func TestOrderToMap(t *testing.T) {
 		OrderID: "PAPER_123", Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "MARKET", Product: "CNC",
 		Variety: "regular", Quantity: 10, Status: "COMPLETE",
-		FilledQuantity: 10, AveragePrice: 2500.0,
+		FilledQuantity: 10, AveragePrice: domain.NewINR(2500.0),
 		PlacedAt: now, FilledAt: now, Tag: "test",
 	}
 	m := orderToMap(order)
@@ -84,12 +85,12 @@ func TestOrderToMap_NoFill(t *testing.T) {
 
 func TestShouldFill_Limit(t *testing.T) {
 	t.Parallel()
-	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: 2500}, 2500))
-	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: 2500}, 2400))
-	assert.False(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: 2500}, 2600))
-	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: 2500}, 2500))
-	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: 2500}, 2600))
-	assert.False(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: 2500}, 2400))
+	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: domain.NewINR(2500)}, 2500))
+	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: domain.NewINR(2500)}, 2400))
+	assert.False(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "BUY", Price: domain.NewINR(2500)}, 2600))
+	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: domain.NewINR(2500)}, 2500))
+	assert.True(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: domain.NewINR(2500)}, 2600))
+	assert.False(t, shouldFill(&Order{OrderType: "LIMIT", TransactionType: "SELL", Price: domain.NewINR(2500)}, 2400))
 }
 
 func TestShouldFill_SL(t *testing.T) {
@@ -118,9 +119,9 @@ func TestShouldFill_UnknownType(t *testing.T) {
 
 func TestDetermineFillPrice(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, 2400.0, determineFillPrice(&Order{OrderType: "LIMIT", Price: 2400}, 2500))
-	assert.Equal(t, 2600.0, determineFillPrice(&Order{OrderType: "SL", Price: 2600}, 2500))
-	assert.Equal(t, 2500.0, determineFillPrice(&Order{OrderType: "SL", Price: 0}, 2500))
+	assert.Equal(t, 2400.0, determineFillPrice(&Order{OrderType: "LIMIT", Price: domain.NewINR(2400)}, 2500))
+	assert.Equal(t, 2600.0, determineFillPrice(&Order{OrderType: "SL", Price: domain.NewINR(2600)}, 2500))
+	assert.Equal(t, 2500.0, determineFillPrice(&Order{OrderType: "SL", Price: domain.NewINR(0)}, 2500))
 	assert.Equal(t, 2500.0, determineFillPrice(&Order{OrderType: "SL-M"}, 2500))
 	assert.Equal(t, 2500.0, determineFillPrice(&Order{OrderType: "FOK"}, 2500))
 }
@@ -214,7 +215,7 @@ func TestMonitor_Tick_InsufficientCash(t *testing.T) {
 		OrderID: "PAPER_CASH_TEST", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "LIMIT",
-		Product: "MIS", Quantity: 10, Price: 2400.0,
+		Product: "MIS", Quantity: 10, Price: domain.NewINR(2400.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
@@ -238,7 +239,7 @@ func TestMonitor_Tick_CNCUpdatesHoldings(t *testing.T) {
 		OrderID: "PAPER_CNC_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "LIMIT",
-		Product: "CNC", Quantity: 5, Price: 2400.0,
+		Product: "CNC", Quantity: 5, Price: domain.NewINR(2400.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
@@ -1040,7 +1041,7 @@ func TestMonitor_Fill_GetAccountError(t *testing.T) {
 		OrderID: "PAPER_FILL_TEST_1", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "FILL",
 		TransactionType: "BUY", OrderType: "LIMIT", Product: "MIS",
-		Quantity: 10, Price: 100.0, Status: "OPEN",
+		Quantity: 10, Price: domain.NewINR(100.0), Status: "OPEN",
 	}
 
 	// Close DB so GetAccount fails inside fill.
@@ -1069,7 +1070,7 @@ func TestMonitor_Fill_UpdateOrderStatusError(t *testing.T) {
 		OrderID: "PAPER_FILL_DBERR", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "FILL",
 		TransactionType: "BUY", OrderType: "LIMIT", Product: "CNC",
-		Quantity: 1, Price: 100.0, Status: "OPEN",
+		Quantity: 1, Price: domain.NewINR(100.0), Status: "OPEN",
 		PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))

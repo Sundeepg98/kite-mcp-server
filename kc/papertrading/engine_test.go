@@ -136,7 +136,7 @@ func TestPlaceLimitOrder(t *testing.T) {
 	require.Len(t, orders, 1)
 	assert.Equal(t, "OPEN", orders[0].Status)
 	assert.Equal(t, "LIMIT", orders[0].OrderType)
-	assert.InDelta(t, 1400.0, orders[0].Price, 0.01)
+	assert.InDelta(t, 1400.0, orders[0].Price.Float64(), 0.01)
 }
 
 func TestCancelOrder(t *testing.T) {

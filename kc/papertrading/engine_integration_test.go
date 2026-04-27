@@ -717,7 +717,7 @@ func TestIntegration_ModifyLimitOrder(t *testing.T) {
 	// Verify the order price was updated.
 	order, err := engine.store.GetOrder(orderID)
 	require.NoError(t, err)
-	assert.InDelta(t, 3300.0, order.Price, 0.01)
+	assert.InDelta(t, 3300.0, order.Price.Float64(), 0.01)
 }
 
 // ---------------------------------------------------------------------------

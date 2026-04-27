@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/domain"
 )
 
 // --- toInt / toFloat coverage ---
@@ -33,7 +34,7 @@ func TestMonitor_Tick_SellOrder(t *testing.T) {
 		OrderID: "PAPER_SELL_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "SELL", OrderType: "LIMIT",
-		Product: "MIS", Quantity: 5, Price: 2600.0,
+		Product: "MIS", Quantity: 5, Price: domain.NewINR(2600.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
@@ -60,7 +61,7 @@ func TestMonitor_Tick_SLOrder(t *testing.T) {
 		OrderID: "PAPER_SL_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "SL",
-		Product: "MIS", Quantity: 5, Price: 2600.0, TriggerPrice: 2550.0,
+		Product: "MIS", Quantity: 5, Price: domain.NewINR(2600.0), TriggerPrice: 2550.0,
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
@@ -102,7 +103,7 @@ func TestMonitor_Tick_SLMOrder(t *testing.T) {
 	filled, _ := store.GetOrder("PAPER_SLM_MON")
 	assert.Equal(t, "COMPLETE", filled.Status)
 	// SL-M fills at LTP.
-	assert.InDelta(t, 2400.0, filled.AveragePrice, 0.01)
+	assert.InDelta(t, 2400.0, filled.AveragePrice.Float64(), 0.01)
 }
 
 
@@ -116,14 +117,14 @@ func TestMonitor_Tick_MultipleOrdersDifferentInstruments(t *testing.T) {
 		OrderID: "PAPER_MULTI_1", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "LIMIT",
-		Product: "MIS", Quantity: 5, Price: 2400.0,
+		Product: "MIS", Quantity: 5, Price: domain.NewINR(2400.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	o2 := &Order{
 		OrderID: "PAPER_MULTI_2", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "SBIN",
 		TransactionType: "BUY", OrderType: "LIMIT",
-		Product: "MIS", Quantity: 10, Price: 750.0,
+		Product: "MIS", Quantity: 10, Price: domain.NewINR(750.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(o1))
@@ -164,7 +165,7 @@ func TestMonitor_Tick_LTPProviderError(t *testing.T) {
 		OrderID: "PAPER_ERR_MON", Email: testEmail,
 		Exchange: "NSE", Tradingsymbol: "RELIANCE",
 		TransactionType: "BUY", OrderType: "LIMIT",
-		Product: "MIS", Quantity: 5, Price: 2400.0,
+		Product: "MIS", Quantity: 5, Price: domain.NewINR(2400.0),
 		Status: "OPEN", PlacedAt: time.Now().UTC(),
 	}
 	require.NoError(t, store.InsertOrder(order))
