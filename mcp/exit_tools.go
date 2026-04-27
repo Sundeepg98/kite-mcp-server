@@ -74,7 +74,7 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				ProductFilter: productFilter,
 			})
 			if err != nil {
-				handler.Logger().Error("Failed to close position", "error", err)
+				handler.LoggerPort().Error(ctx, "Failed to close position", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_position: %s", err.Error())), nil
 			}
 			result, _ := raw.(*usecases.ClosePositionResult)
@@ -152,7 +152,7 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 				ProductFilter: productFilter,
 			})
 			if err != nil {
-				handler.Logger().Error("Failed to close all positions", "error", err)
+				handler.LoggerPort().Error(ctx, "Failed to close all positions", err)
 				return mcp.NewToolResultError(fmt.Sprintf("close_all_positions: %s", err.Error())), nil
 			}
 			result, _ := raw.(*usecases.CloseAllResult)

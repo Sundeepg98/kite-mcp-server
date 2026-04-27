@@ -142,7 +142,7 @@ func (*ListMCPSessionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 						entry.LastActivity = lastAct.UTC().Format(time.RFC3339)
 					}
 				} else {
-					handler.deps.Logger.Warn("list_mcp_sessions: audit list failed",
+					handler.deps.LoggerPort.Warn(ctx, "list_mcp_sessions: audit list failed",
 						"email", email, "session_id", s.ID, "error", err)
 				}
 			}
@@ -218,7 +218,7 @@ func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 		kd, ok := s.Data.(*kc.KiteSessionData)
 		if !ok || kd == nil || !strings.EqualFold(kd.Email, email) {
-			handler.deps.Logger.Warn("revoke_mcp_session: ownership mismatch",
+			handler.deps.LoggerPort.Warn(ctx, "revoke_mcp_session: ownership mismatch",
 				"caller_email", email, "session_id", sessionID)
 			return mcp.NewToolResultError(fmt.Sprintf("Session not found: %s", truncateSessionID(sessionID))), nil
 		}

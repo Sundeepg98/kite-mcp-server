@@ -209,7 +209,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
 			if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
 				if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
-					handler.Logger().Warn("Failed to auto-start ticker for alert", "email", email, "error", startErr)
+					handler.LoggerPort().Warn(ctx, "Failed to auto-start ticker for alert", "email", email, "error", startErr)
 				} else {
 					tickerMsg = "\nTicker auto-started."
 				}
@@ -217,7 +217,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		if tickerSvc.IsRunning(email) {
 			if subErr := tickerSvc.Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr != nil {
-				handler.Logger().Warn("Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
+				handler.LoggerPort().Warn(ctx, "Failed to auto-subscribe instrument for alert", "email", email, "error", subErr)
 			} else {
 				tickerMsg += fmt.Sprintf("\nSubscribed %s for real-time alerts.", instrumentID)
 			}

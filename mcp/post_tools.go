@@ -188,7 +188,7 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Confirmed: true,
 			})
 			if err != nil {
-				handler.Logger().Error("Failed to place order", "error", err)
+				handler.LoggerPort().Error(ctx, "Failed to place order", err)
 				return mcp.NewToolResultError(fmt.Sprintf("place_order: %s", err.Error())), nil
 			}
 			orderID, _ := raw.(string)
@@ -329,12 +329,12 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Confirmed: true,
 			})
 			if err != nil {
-				handler.Logger().Error("Failed to modify order", "error", err)
+				handler.LoggerPort().Error(ctx, "Failed to modify order", err)
 				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
 			resp, terr := BusResult[broker.OrderResponse](raw)
 			if terr != nil {
-				handler.Logger().Error("modify_order bus result type mismatch", "error", terr)
+				handler.LoggerPort().Error(ctx, "modify_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "modify_order")
@@ -388,12 +388,12 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Variety: variety,
 			})
 			if err != nil {
-				handler.Logger().Error("Failed to cancel order", "error", err)
+				handler.LoggerPort().Error(ctx, "Failed to cancel order", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
 			resp, terr := BusResult[broker.OrderResponse](raw)
 			if terr != nil {
-				handler.Logger().Error("cancel_order bus result type mismatch", "error", terr)
+				handler.LoggerPort().Error(ctx, "cancel_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 			return handler.MarshalResponse(resp, "cancel_order")
