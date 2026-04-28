@@ -194,31 +194,30 @@ type InvocationContext struct {
 
 // Proceed runs the next inner Around or the real method and
 // populates Returns + the surfaced error. Returns the error from
-// the inner call (or nil). May be called at most once per
-// invocation; subsequent calls are no-ops to avoid double-invocation
-// bugs in user advice.
+// the inner call (or nil). The composeChain driver enforces
+// per-level idempotency: an advice that calls Proceed twice gets
+// the second call as a no-op (returns nil, the chain does NOT
+// re-advance).
 //
 // Returning an error here from Proceed surfaces to the caller AS-IS
 // once all After advice has run (After is observe-only and cannot
 // change the error).
 func (ic *InvocationContext) Proceed() error {
-	if ic.proceeded {
-		// Idempotent — returning nil rather than panicking to
-		// match Go's "be liberal in what you accept" disposition
-		// for error-handling primitives.
-		return nil
-	}
-	ic.proceeded = true
 	if ic.proceed == nil {
+		// No driver wired — degenerate construction (e.g. a unit
+		// test building IC directly). Mark as proceeded so
+		// Proceeded() reports correctly, return nil.
+		ic.proceeded = true
 		return nil
 	}
 	return ic.proceed(ic)
 }
 
-// Proceeded reports whether Proceed has been called. Useful for
-// Around advice that wants to assert "I did call through" before
-// running its post-block, mirroring mcp.HookMiddleware's
-// short-circuit detection.
+// Proceeded reports whether Proceed has been called for this
+// invocation context's current level. Useful for Around advice
+// that wants to assert "I did call through" before running its
+// post-block, mirroring mcp.HookMiddleware's short-circuit
+// detection.
 func (ic *InvocationContext) Proceeded() bool {
 	return ic.proceeded
 }
@@ -525,6 +524,16 @@ func splitTagTokens(tagValue string) []string {
 // This is the core dispatch engine. Per-call overhead is the chain
 // walk (no map lookups, no pointcut re-evaluation — both happened at
 // weave time).
+//
+// Around composition: we collect the Around aspects in registration
+// order, then drive them via an explicit step-counter walking the
+// chain from outermost (index 0) to innermost (index len-1) →
+// real method (index == len). Each Proceed() call advances by
+// exactly one step; the same Proceed-twice idempotency contract
+// holds at every level because Proceeded() reflects whether that
+// level has already advanced. This avoids the closure-recursion
+// pitfall where a per-level closure's reset of ic.proceeded races
+// with the outer advice's idempotency check.
 func composeChain(matched []Aspect, callMethod func(*InvocationContext) error, methodName string, ctx context.Context, args []reflect.Value) (returns []reflect.Value, err error) {
 	ic := &InvocationContext{
 		Ctx:        ctx,
@@ -546,31 +555,84 @@ func composeChain(matched []Aspect, callMethod func(*InvocationContext) error, m
 	}
 
 	// Phase 2: Around composition + real method dispatch.
-	// Build the proceed chain right-to-left so the FIRST Around
-	// in registration order ends up OUTERMOST. The innermost
-	// proceed is callMethod itself.
-	proceed := callMethod
-	// Collect Arounds in registration order, then walk in reverse
-	// to wrap.
 	var arounds []Aspect
 	for _, a := range matched {
 		if a.Phase == PhaseAround {
 			arounds = append(arounds, a)
 		}
 	}
-	for i := len(arounds) - 1; i >= 0; i-- {
-		advice := arounds[i].Advice
-		next := proceed
-		proceed = func(ic *InvocationContext) error {
-			ic.proceed = next
-			ic.proceeded = false
-			return advice(ic)
+
+	if len(arounds) == 0 {
+		// No Around aspects — call the real method directly.
+		ic.proceed = func(ic *InvocationContext) error {
+			ic.proceeded = true
+			return callMethod(ic)
 		}
+		err = ic.Proceed()
+	} else {
+		// Step-counter chain walker with per-level idempotency.
+		//
+		//   step=0 means "run arounds[0]"
+		//   step=len(arounds) means "run callMethod"
+		//
+		// Each driver invocation advances step by 1 to the next
+		// level — UNLESS the advice at the CURRENT level has already
+		// triggered an advance in this call frame (idempotency
+		// contract for buggy double-Proceed advice).
+		//
+		// Tracking: we record per-level advance state in `advanced`,
+		// keyed by the level whose advice called Proceed. The
+		// current level is captured as `currentLevel` when entering
+		// each advice; the closure read it at Proceed time is the
+		// level whose advice is calling — exactly what we want for
+		// the idempotency key.
+		step := 0
+		currentLevel := -1 // -1 = entry from composeChain (the outer Proceed)
+		advanced := make(map[int]bool, len(arounds)+1)
+
+		var driver func(ic *InvocationContext) error
+		driver = func(ic *InvocationContext) error {
+			// The level whose advice triggered this Proceed call
+			// is the currentLevel observed at entry. Save it before
+			// any reassignment so we can restore on return.
+			callingLevel := currentLevel
+
+			if advanced[callingLevel] {
+				// Same advice level called Proceed twice —
+				// second-and-onward calls are no-ops. Real method
+				// stays unrun on this branch.
+				return nil
+			}
+			advanced[callingLevel] = true
+
+			cur := step
+			step++
+
+			if cur >= len(arounds) {
+				ic.proceeded = true
+				return callMethod(ic)
+			}
+
+			// Descend into arounds[cur]. Save+restore currentLevel
+			// so the parent's call-site sees the same value after
+			// our advice returns.
+			currentLevel = cur
+			ic.proceed = driver
+			ic.proceeded = false
+			err := arounds[cur].Advice(ic)
+			currentLevel = callingLevel
+
+			// After advice returns, proceeded should reflect the
+			// callingLevel's view: true iff arounds[cur] called
+			// through (advanced[cur] is set above when it did).
+			if advanced[cur] {
+				ic.proceeded = true
+			}
+			return err
+		}
+		ic.proceed = driver
+		err = ic.Proceed()
 	}
-	// Reset proceed-tracking before the outer call.
-	ic.proceed = proceed
-	ic.proceeded = false
-	err = proceed(ic)
 
 	// Phase 3: After. Always runs, error-or-not.
 	runAfter(matched, ic)
