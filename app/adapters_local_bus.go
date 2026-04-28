@@ -41,15 +41,24 @@ func localBusLogger(l *slog.Logger) *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// oauthBridgeStores carries the concrete stores the local bus's handlers
-// need to bind. Each store may be nil — handlers no-op when their backing
-// store is missing (mirrors the production handler's nil-check pattern in
+// oauthBridgeStores carries the stores the local bus's handlers need to
+// bind. Each store may be nil — handlers no-op when their backing store
+// is missing (mirrors the production handler's nil-check pattern in
 // kc/manager_commands_oauth.go).
+//
+// Phase 3a kc/-side close-out: fields are typed as kc-package interfaces
+// rather than concrete pointers. The local* adapter implementations
+// below only call methods that are on the kc-level interfaces (Set,
+// EnsureUser, GetByEmail, etc.). *users.Store / *kc.KiteTokenStore /
+// *kc.KiteCredentialStore / *registry.Store satisfy the interfaces
+// structurally so the wire-up site at app/adapters.go's
+// kiteExchangerAdapter.ensureBus passes its own interface-typed fields
+// through unchanged.
 type oauthBridgeStores struct {
-	Users       *users.Store
-	Tokens      *kc.KiteTokenStore
-	Credentials *kc.KiteCredentialStore
-	Registry    *registry.Store
+	Users       kc.UserStoreInterface
+	Tokens      kc.TokenStoreInterface
+	Credentials kc.CredentialStoreInterface
+	Registry    kc.RegistryStoreInterface
 }
 
 // newLocalOAuthBridgeBus constructs a CommandBus pre-registered with the
@@ -171,8 +180,14 @@ func newLocalOAuthClientBus(logger *slog.Logger, db *alerts.DB) cqrs.CommandBus 
 // implement the narrow ports without the manager. Production handlers
 // continue to use the kc-package adapters.
 
+// Phase 3a kc/-side close-out: each local* adapter's `store` field is
+// now typed as the matching kc-level interface (UserStoreInterface,
+// TokenStoreInterface, CredentialStoreInterface, RegistryStoreInterface).
+// The methods called below are all on the interface surface; the
+// upstream concrete types (*users.Store, *kc.KiteTokenStore,
+// *kc.KiteCredentialStore, *registry.Store) satisfy them structurally.
 type localUserProvisioner struct {
-	store *users.Store
+	store kc.UserStoreInterface
 }
 
 func (a *localUserProvisioner) GetStatus(email string) string {
@@ -193,7 +208,7 @@ type localUserRecord struct{ u *users.User }
 func (r *localUserRecord) GetKiteUID() string { return r.u.KiteUID }
 
 type localKiteTokenWriter struct {
-	store *kc.KiteTokenStore
+	store kc.TokenStoreInterface
 }
 
 func (a *localKiteTokenWriter) SetToken(email, accessToken, userID, userName string) {
@@ -205,7 +220,7 @@ func (a *localKiteTokenWriter) SetToken(email, accessToken, userID, userName str
 }
 
 type localKiteCredentialWriter struct {
-	store *kc.KiteCredentialStore
+	store kc.CredentialStoreInterface
 }
 
 func (a *localKiteCredentialWriter) SetCredentials(email, apiKey, apiSecret string) {
@@ -216,7 +231,7 @@ func (a *localKiteCredentialWriter) SetCredentials(email, apiKey, apiSecret stri
 }
 
 type localRegistrySync struct {
-	store *registry.Store
+	store kc.RegistryStoreInterface
 }
 
 func (a *localRegistrySync) GetByEmail(email string) (string, bool) {

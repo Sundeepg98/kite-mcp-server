@@ -604,13 +604,20 @@ func (app *App) RunServer() error {
 			return fmt.Errorf("invalid OAuth config: %w", err)
 		}
 		signer := &signerAdapter{signer: kcManager.SessionSigner()}
+		// Phase 3a kc/-side close-out: pass through interface accessors
+		// (TokenStore / CredentialStore / RegistryStore / UserStore)
+		// instead of the *Concrete() siblings. The kiteExchangerAdapter
+		// struct fields and the local-bus oauthBridgeStores struct are
+		// both typed as kc-package interfaces; *kc.KiteTokenStore /
+		// *kc.KiteCredentialStore / *registry.Store / *users.Store
+		// satisfy them structurally.
 		exchanger := &kiteExchangerAdapter{
 			apiKey:          app.Config.KiteAPIKey,
 			apiSecret:       app.Config.KiteAPISecret,
-			tokenStore:      kcManager.TokenStoreConcrete(),
-			credentialStore: kcManager.CredentialStoreConcrete(),
-			registryStore:   kcManager.RegistryStoreConcrete(),
-			userStore:       kcManager.UserStoreConcrete(),
+			tokenStore:      kcManager.TokenStore(),
+			credentialStore: kcManager.CredentialStore(),
+			registryStore:   kcManager.RegistryStore(),
+			userStore:       kcManager.UserStore(),
 			logger:          app.Logger(),
 			authenticator:   zerodha.NewAuth(),
 			commandBus:      kcManager.CommandBus(), // CQRS: every write dispatches via bus
@@ -679,8 +686,12 @@ func (app *App) RunServer() error {
 			}
 		}
 
-		// Wire key registry for zero-config onboarding
-		if regStore := kcManager.RegistryStoreConcrete(); regStore != nil {
+		// Wire key registry for zero-config onboarding.
+		// Phase 3a kc/-side close-out: route through RegistryStore()
+		// (interface accessor; Count + HasEntries + GetByEmail +
+		// GetByAPIKey are all on RegistryReader). registryAdapter's
+		// store field is now interface-typed.
+		if regStore := kcManager.RegistryStore(); regStore != nil {
 			app.oauthHandler.SetRegistry(&registryAdapter{store: regStore})
 			app.Logger().Info(context.Background(), "Key registry wired into OAuth handler", "entries", regStore.Count())
 		}

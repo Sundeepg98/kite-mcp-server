@@ -875,7 +875,10 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 	var taskNames []string
 	notifier := kcManager.TelegramNotifier()
 	if notifier != nil {
-		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
+		// Phase 3a kc/-side close-out: tokenAdapter.store is interface-
+		// typed, so pass through TokenStore() (interface accessor)
+		// instead of TokenStoreConcrete().
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
 		briefingSvc = alerts.NewBriefingService(notifier, kcManager.AlertStoreConcrete(), tokenAdapter, credAdapter, app.logger)
 		if briefingSvc != nil {
@@ -888,7 +891,8 @@ func (app *App) initScheduler(kcManager *kc.Manager) {
 
 	var pnlService *alerts.PnLSnapshotService
 	if alertDB := kcManager.AlertDB(); alertDB != nil {
-		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStoreConcrete()}
+		// Phase 3a kc/-side close-out: TokenStore() interface accessor.
+		tokenAdapter := &briefingTokenAdapter{store: kcManager.TokenStore()}
 		credAdapter := &briefingCredAdapter{manager: kcManager}
 		pnlService = alerts.NewPnLSnapshotService(alertDB, tokenAdapter, credAdapter, app.logger)
 		if pnlService != nil {

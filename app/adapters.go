@@ -18,16 +18,24 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	logport "github.com/zerodha/kite-mcp-server/kc/logger"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
+// briefingTokenAdapter bridges a token store to alerts.TokenChecker.
+//
+// Phase 3a kc/-side close-out: store is typed as the kc.TokenStoreInterface
+// port rather than the concrete *kc.KiteTokenStore. The two methods used
+// by GetToken — Get(email) — are part of the interface, so narrowing
+// the field eliminates a Concrete-pattern leak at this construction site
+// without behaviour change. The concrete *kc.KiteTokenStore satisfies
+// the interface structurally so existing struct-literal sites (tests,
+// wire.go's briefingSvc construction) keep compiling under
+// implicit-conversion.
 type briefingTokenAdapter struct {
-	store *kc.KiteTokenStore
+	store kc.TokenStoreInterface
 }
 
 func (a *briefingTokenAdapter) GetToken(email string) (string, time.Time, bool) {
@@ -160,19 +168,33 @@ func (s *signerAdapter) Verify(signed string) (string, error) {
 // would have wired. The adapter therefore has a single dispatch path —
 // no "fallback to raw store write" gate.
 type kiteExchangerAdapter struct {
-	apiKey          string
-	apiSecret       string
-	tokenStore      *kc.KiteTokenStore      // read paths AND test-local-bus handler backing
-	credentialStore *kc.KiteCredentialStore // read paths AND test-local-bus handler backing
-	registryStore   *registry.Store         // test-local-bus handler backing
-	userStore       *users.Store            // test-local-bus handler backing
+	apiKey    string
+	apiSecret string
+	// Phase 3a kc/-side close-out: the four store fields below are typed
+	// as kc-package interfaces (TokenStoreInterface, CredentialStoreInterface,
+	// users.UserStore via the kc.UserStoreInterface alias path here is
+	// retained as *users.Store because users.Store has a few non-interface
+	// methods the local-bus path uses indirectly via localUserProvisioner —
+	// see adapters_local_bus.go's narrowed port story below) where the
+	// methods used by both direct reads (GetCredentials, GetSecretByAPIKey)
+	// AND the test-local-bus handler backing (oauthBridgeStores → local*
+	// adapters) are all on the kc-level interface surface. *kc.KiteTokenStore
+	// / *kc.KiteCredentialStore / *registry.Store / *users.Store satisfy
+	// these interfaces structurally so app/app.go's struct-literal
+	// construction site can pass kcManager.TokenStore() / .CredentialStore()
+	// / .RegistryStore() / .UserStore() (port accessors) instead of the
+	// *Concrete() siblings.
+	tokenStore      kc.TokenStoreInterface      // read paths AND test-local-bus handler backing
+	credentialStore kc.CredentialStoreInterface // read paths AND test-local-bus handler backing
+	registryStore   kc.RegistryStoreInterface   // test-local-bus handler backing
+	userStore       kc.UserStoreInterface       // test-local-bus handler backing
 	// Wave D Phase 3 Package 7c-4b: logger field carries the
 	// kc/logger.Logger port. Constructor sites (adapters_local_bus.go)
 	// take *slog.Logger params and wrap via logport.NewSlog.
-	logger          logport.Logger
-	authenticator   broker.Authenticator
-	commandBus      cqrs.CommandBus // never nil at use time — see ensureBus
-	busOnce         sync.Once
+	logger        logport.Logger
+	authenticator broker.Authenticator
+	commandBus    cqrs.CommandBus // never nil at use time — see ensureBus
+	busOnce       sync.Once
 }
 
 // ensureBus guarantees a.commandBus is non-nil before any Dispatch call.
@@ -419,9 +441,15 @@ func (a *clientPersisterAdapter) DeleteClient(clientID string) error {
 	})
 }
 
-// registryAdapter bridges registry.Store to oauth.KeyRegistry.
+// registryAdapter bridges a registry store to oauth.KeyRegistry.
+//
+// Phase 3a kc/-side close-out: store is typed as kc.RegistryStoreInterface
+// port. The three methods called below — HasEntries, GetByEmail,
+// GetByAPIKey — are all on the interface. *registry.Store satisfies it
+// structurally so the construction site at app/app.go can pass
+// kcManager.RegistryStore() instead of RegistryStoreConcrete().
 type registryAdapter struct {
-	store *registry.Store
+	store kc.RegistryStoreInterface
 }
 
 func (a *registryAdapter) HasEntries() bool {
