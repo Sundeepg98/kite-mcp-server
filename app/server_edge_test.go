@@ -743,15 +743,15 @@ func TestTelegramManagerAdapter_AllMethods(t *testing.T) {
 	// Some may be nil depending on config, we just verify no panics.
 	_ = adapter.TelegramStore()
 	_ = adapter.TelegramNotifier()
-	_ = adapter.AlertStoreConcrete()
-	_ = adapter.WatchlistStoreConcrete()
-	assert.NotNil(t, adapter.InstrumentsManagerConcrete())
+	_ = adapter.AlertStore()
+	_ = adapter.WatchlistStore()
+	assert.NotNil(t, adapter.InstrumentsManager())
 	_ = adapter.GetAPIKeyForEmail("nobody@test.com")
 	_ = adapter.GetAccessTokenForEmail("nobody@test.com")
 	assert.False(t, adapter.IsTokenValid("nobody@test.com"))
 	_ = adapter.RiskGuard()
-	_ = adapter.PaperEngineConcrete()
-	_ = adapter.TickerServiceConcrete()
+	_ = adapter.PaperEngine()
+	_ = adapter.TickerService()
 }
 
 

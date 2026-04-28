@@ -36,18 +36,18 @@ func TestTelegramAdapter_TelegramStore(t *testing.T) {
 	_ = adapter.TelegramStore()
 }
 
-func TestTelegramAdapter_AlertStoreConcrete(t *testing.T) {
+func TestTelegramAdapter_AlertStore(t *testing.T) {
 	mgr := newTestManager(t)
 	adapter := &telegramManagerAdapter{m: mgr}
-	store := adapter.AlertStoreConcrete()
+	store := adapter.AlertStore()
 	// In DevMode without DB, may be nil.
 	_ = store
 }
 
-func TestTelegramAdapter_WatchlistStoreConcrete(t *testing.T) {
+func TestTelegramAdapter_WatchlistStore(t *testing.T) {
 	mgr := newTestManager(t)
 	adapter := &telegramManagerAdapter{m: mgr}
-	store := adapter.WatchlistStoreConcrete()
+	store := adapter.WatchlistStore()
 	_ = store
 }
 
@@ -75,10 +75,10 @@ func TestTelegramAdapter_TelegramNotifier(t *testing.T) {
 	assert.Nil(t, notifier)
 }
 
-func TestTelegramAdapter_InstrumentsManagerConcrete(t *testing.T) {
+func TestTelegramAdapter_InstrumentsManager(t *testing.T) {
 	mgr := newTestManager(t)
 	adapter := &telegramManagerAdapter{m: mgr}
-	instrMgr := adapter.InstrumentsManagerConcrete()
+	instrMgr := adapter.InstrumentsManager()
 	assert.NotNil(t, instrMgr)
 }
 
@@ -97,18 +97,18 @@ func TestTelegramAdapter_RiskGuard(t *testing.T) {
 	_ = guard
 }
 
-func TestTelegramAdapter_PaperEngineConcrete(t *testing.T) {
+func TestTelegramAdapter_PaperEngine(t *testing.T) {
 	mgr := newTestManager(t)
 	adapter := &telegramManagerAdapter{m: mgr}
-	pe := adapter.PaperEngineConcrete()
+	pe := adapter.PaperEngine()
 	// Nil when not configured.
 	_ = pe
 }
 
-func TestTelegramAdapter_TickerServiceConcrete(t *testing.T) {
+func TestTelegramAdapter_TickerService(t *testing.T) {
 	mgr := newTestManager(t)
 	adapter := &telegramManagerAdapter{m: mgr}
-	ts := adapter.TickerServiceConcrete()
+	ts := adapter.TickerService()
 	// Nil when not configured.
 	_ = ts
 }

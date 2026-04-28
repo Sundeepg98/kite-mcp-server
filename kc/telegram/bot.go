@@ -16,12 +16,11 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
-	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 )
 
@@ -40,22 +39,75 @@ type KiteClientFactory interface {
 	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
 }
 
+// AlertLookup is the narrow port over the alert store's CRUD surface used
+// by /alerts, /setalert, /status. Locally-declared (rather than imported
+// from kc) so the package stays free of an upward dependency on the
+// parent kc package; *alerts.Store satisfies it structurally, as does
+// kc.AlertStoreInterface.
+type AlertLookup interface {
+	Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction) (string, error)
+	AddWithReferencePrice(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction, referencePrice float64) (string, error)
+	List(email string) []*alerts.Alert
+	ActiveCount(email string) int
+}
+
+// WatchlistLookup is the narrow port over the watchlist store's read
+// surface used by /mywatchlist. Returns are exactly the upstream concrete
+// pointer slices so the call site needs no projection layer; *watchlist.Store
+// satisfies it structurally.
+type WatchlistLookup interface {
+	ListWatchlists(email string) []*watchlist.Watchlist
+	GetItems(watchlistID string) []*watchlist.WatchlistItem
+}
+
+// InstrumentLookup is the narrow port over the instruments manager used
+// by /setalert (resolves "NSE:SYMBOL" → instrument token). Returns the
+// upstream concrete instruments.Instrument value type.
+type InstrumentLookup interface {
+	GetByID(id string) (instruments.Instrument, error)
+}
+
+// PaperEngineLookup is the narrow port over the paper engine used by
+// /buy, /sell, /quick to detect paper-trading mode and route confirmed
+// orders through the paper-trading simulator. *papertrading.PaperEngine
+// satisfies it structurally.
+type PaperEngineLookup interface {
+	IsEnabled(email string) bool
+	PlaceOrder(email string, params map[string]any) (map[string]any, error)
+}
+
+// TickerLookup is the narrow port over the ticker service used by
+// /setalert to auto-subscribe instruments for real-time monitoring.
+type TickerLookup interface {
+	IsRunning(email string) bool
+	Subscribe(email string, tokens []uint32, mode kiteticker.Mode) error
+}
+
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
-// Using an interface avoids a circular import between kc and kc/telegram.
+// Phase 3a kc/-side migration: store/service returns are now port-typed
+// (AlertLookup, WatchlistLookup, InstrumentLookup, PaperEngineLookup,
+// TickerLookup) instead of concrete pointer types — the prior
+// `*alerts.Store`, `*watchlist.Store`, `*instruments.Manager`,
+// `*papertrading.PaperEngine`, `*ticker.Service` returns leaked
+// Concrete-pattern abstraction breaks across the package boundary.
+// TelegramNotifier and RiskGuard remain on concrete types per their
+// leaf-domain ownership (alerts.TelegramNotifier is the alert subsystem's
+// exposed type; riskguard.Guard is the canonical Guard whose full method
+// surface trading consumers depend on).
 type KiteManager interface {
 	TelegramStore() TelegramLookup
-	AlertStoreConcrete() *alerts.Store
-	WatchlistStoreConcrete() *watchlist.Store
+	AlertStore() AlertLookup
+	WatchlistStore() WatchlistLookup
 	GetAPIKeyForEmail(email string) string
 	GetAccessTokenForEmail(email string) string
 	TelegramNotifier() *alerts.TelegramNotifier
-	InstrumentsManagerConcrete() *instruments.Manager
+	InstrumentsManager() InstrumentLookup
 	IsTokenValid(email string) bool
 
 	// Trading support — riskguard, paper trading, ticker.
 	RiskGuard() *riskguard.Guard
-	PaperEngineConcrete() *papertrading.PaperEngine
-	TickerServiceConcrete() *ticker.Service
+	PaperEngine() PaperEngineLookup
+	TickerService() TickerLookup
 }
 
 // pendingOrder holds an order awaiting user confirmation via inline keyboard.

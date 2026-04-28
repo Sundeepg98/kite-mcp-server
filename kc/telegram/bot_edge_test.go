@@ -28,7 +28,7 @@ import (
 // ===========================================================================
 // trading_commands.go:229-231 — paper trading PlaceOrder error
 //
-// This path fires when PaperEngineConcrete().IsEnabled(email) is true but
+// This path fires when PaperEngine().IsEnabled(email) is true but
 // PlaceOrder returns an error. We trigger this by closing the paper DB
 // after enabling paper trading.
 // ===========================================================================

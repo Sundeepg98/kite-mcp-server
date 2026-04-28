@@ -99,7 +99,7 @@ func (h *BotHandler) handleOrderCommand(chatID int64, email, args, side string) 
 	sb.WriteString("Product: <b>CNC</b>\n")
 
 	// Check paper mode.
-	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
 		sb.WriteString("\n\u26A0\uFE0F <i>Paper trading mode — order will be simulated.</i>\n")
 	}
 
@@ -177,7 +177,7 @@ func (h *BotHandler) handleQuick(chatID int64, email, args string) {
 	}
 	sb.WriteString("Product: <b>CNC</b>\n")
 
-	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
 		sb.WriteString("\n\u26A0\uFE0F <i>Paper trading mode — order will be simulated.</i>\n")
 	}
 
@@ -242,7 +242,7 @@ func (h *BotHandler) executeConfirmedOrder(chatID int64, email string, cq *tgbot
 
 	// Route to paper engine or real Kite API.
 	var resultMsg string
-	if pe := h.manager.PaperEngineConcrete(); pe != nil && pe.IsEnabled(email) {
+	if pe := h.manager.PaperEngine(); pe != nil && pe.IsEnabled(email) {
 		resp, err := pe.PlaceOrder(email, map[string]any{
 			"exchange":         order.Exchange,
 			"tradingsymbol":    order.Tradingsymbol,
@@ -355,7 +355,7 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 
 	// Resolve instrument to get token.
 	instrumentID := "NSE:" + symbol
-	im := h.manager.InstrumentsManagerConcrete()
+	im := h.manager.InstrumentsManager()
 	if im == nil {
 		return "Instruments data not available."
 	}
@@ -405,11 +405,11 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 
 	var alertID string
 	if alerts.IsPercentageDirection(direction) && referencePrice > 0 {
-		alertID, err = h.manager.AlertStoreConcrete().AddWithReferencePrice(
+		alertID, err = h.manager.AlertStore().AddWithReferencePrice(
 			email, tradingsymbol, exchange, inst.InstrumentToken,
 			targetPrice, direction, referencePrice)
 	} else {
-		alertID, err = h.manager.AlertStoreConcrete().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
+		alertID, err = h.manager.AlertStore().Add(email, tradingsymbol, exchange, inst.InstrumentToken, targetPrice, direction)
 	}
 	if err != nil {
 		return fmt.Sprintf("Failed to set alert: %s", escapeHTML(err.Error()))
@@ -417,7 +417,7 @@ func (h *BotHandler) handleSetAlert(_ int64, email, args string) string {
 
 	// Auto-subscribe to ticker for real-time monitoring.
 	tickerMsg := ""
-	ts := h.manager.TickerServiceConcrete()
+	ts := h.manager.TickerService()
 	if ts != nil {
 		if ts.IsRunning(email) {
 			if subErr := ts.Subscribe(email, []uint32{inst.InstrumentToken}, ticker.ModeLTP); subErr == nil {

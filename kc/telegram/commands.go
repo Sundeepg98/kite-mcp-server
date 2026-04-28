@@ -337,7 +337,7 @@ func (h *BotHandler) handlePnL(_ int64, email string) string {
 
 // handleAlerts lists active (non-triggered) alerts for the user.
 func (h *BotHandler) handleAlerts(_ int64, email string) string {
-	store := h.manager.AlertStoreConcrete()
+	store := h.manager.AlertStore()
 	all := store.List(email)
 
 	var active []*alerts.Alert
@@ -433,7 +433,7 @@ func (h *BotHandler) handlePrices(_ int64, email string, args string) string {
 
 // handleMyWatchlist shows MCP watchlist items with current LTP.
 func (h *BotHandler) handleMyWatchlist(_ int64, email string) string {
-	store := h.manager.WatchlistStoreConcrete()
+	store := h.manager.WatchlistStore()
 	if store == nil {
 		return "Watchlist feature not available."
 	}
@@ -522,7 +522,7 @@ func (h *BotHandler) handleStatus(_ int64, email string) string {
 	}
 
 	// Alert count.
-	store := h.manager.AlertStoreConcrete()
+	store := h.manager.AlertStore()
 	alertCount := store.ActiveCount(email)
 	fmt.Fprintf(&sb, "Active alerts: %d\n", alertCount)
 

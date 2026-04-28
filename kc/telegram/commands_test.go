@@ -127,17 +127,47 @@ func newMockKiteManager() *mockKiteManager {
 	}
 }
 
-func (m *mockKiteManager) TelegramStore() TelegramLookup                 { return m.tgStore }
-func (m *mockKiteManager) AlertStoreConcrete() *alerts.Store              { return m.alertStore }
-func (m *mockKiteManager) WatchlistStoreConcrete() *watchlist.Store       { return m.watchlistStore }
-func (m *mockKiteManager) GetAPIKeyForEmail(email string) string          { return m.apiKeys[email] }
-func (m *mockKiteManager) GetAccessTokenForEmail(email string) string     { return m.accessTokens[email] }
-func (m *mockKiteManager) IsTokenValid(email string) bool                 { return m.tokenValid[email] }
-func (m *mockKiteManager) TelegramNotifier() *alerts.TelegramNotifier     { return m.notifier }
-func (m *mockKiteManager) InstrumentsManagerConcrete() *instruments.Manager { return m.instrMgr }
-func (m *mockKiteManager) RiskGuard() *riskguard.Guard                    { return m.guard }
-func (m *mockKiteManager) PaperEngineConcrete() *papertrading.PaperEngine { return m.paperEngine }
-func (m *mockKiteManager) TickerServiceConcrete() *ticker.Service         { return m.tickerService }
+func (m *mockKiteManager) TelegramStore() TelegramLookup             { return m.tgStore }
+func (m *mockKiteManager) GetAPIKeyForEmail(email string) string      { return m.apiKeys[email] }
+func (m *mockKiteManager) GetAccessTokenForEmail(email string) string { return m.accessTokens[email] }
+func (m *mockKiteManager) IsTokenValid(email string) bool             { return m.tokenValid[email] }
+func (m *mockKiteManager) TelegramNotifier() *alerts.TelegramNotifier { return m.notifier }
+func (m *mockKiteManager) RiskGuard() *riskguard.Guard                { return m.guard }
+
+// Phase 3a kc/-side migration: port-typed accessors. Each method returns
+// a literal `nil` (not a typed-nil concrete pointer) when the underlying
+// store is unset — preserving the `if x == nil` guards in the handlers
+// (commands.go's handleMyWatchlist, trading_commands.go's handleQuick).
+func (m *mockKiteManager) AlertStore() AlertLookup {
+	if m.alertStore == nil {
+		return nil
+	}
+	return m.alertStore
+}
+func (m *mockKiteManager) WatchlistStore() WatchlistLookup {
+	if m.watchlistStore == nil {
+		return nil
+	}
+	return m.watchlistStore
+}
+func (m *mockKiteManager) InstrumentsManager() InstrumentLookup {
+	if m.instrMgr == nil {
+		return nil
+	}
+	return m.instrMgr
+}
+func (m *mockKiteManager) PaperEngine() PaperEngineLookup {
+	if m.paperEngine == nil {
+		return nil
+	}
+	return m.paperEngine
+}
+func (m *mockKiteManager) TickerService() TickerLookup {
+	if m.tickerService == nil {
+		return nil
+	}
+	return m.tickerService
+}
 
 type mockTelegramLookup struct {
 	emails map[int64]string
@@ -1439,7 +1469,7 @@ func TestHandleMyWatchlist_NilStore(t *testing.T) {
 func TestHandleAlerts_NoStore(t *testing.T) {
 	t.Parallel()
 	// alertStore is nil — this will panic in production. We test the guard.
-	// Actually the handler calls h.manager.AlertStoreConcrete() which returns nil.
+	// Actually the handler calls h.manager.AlertStore() which returns nil.
 	// This would panic. In production it's always set. We skip this test.
 }
 
