@@ -203,26 +203,17 @@ func HookMiddlewareFor(reg *Registry) server.ToolHandlerMiddleware {
 			// ends up as the outermost wrapper — matches HTTP
 			// middleware convention and gives plugin authors a
 			// single intuitive rule regardless of hook kind.
+			//
+			// The around chain composition is delegated to
+			// composeAroundChain (decorator_chain.go), which expresses
+			// the layered wrap as a kc/decorators.Compose call over
+			// typed Decorator[Req, Resp] values. Behaviour is
+			// identical to the prior hand-written reverse-iteration
+			// loop; the typed surface lets the chain be reasoned
+			// about with the same vocabulary used for other
+			// cross-cutting concerns in the codebase.
 			merged := reg.mergedAroundChain()
-
-			// Compose right-to-left.
-			handler := ToolHandlerNext(next)
-			for i := len(merged) - 1; i >= 0; i-- {
-				entry := merged[i]
-				inner := handler
-				if entry.mutable != nil {
-					hook := entry.mutable
-					handler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-						m := NewMutableCallToolRequest(req)
-						return safeInvokeMutableAroundHook(hook, ctx, m, inner)
-					}
-				} else {
-					hook := entry.immutable
-					handler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-						return safeInvokeAroundHook(hook, ctx, req, inner)
-					}
-				}
-			}
+			handler := composeAroundChain(merged, next)
 
 			result, err := handler(ctx, request)
 			reg.RunAfterHooks(ctx, request.Params.Name, request.GetArguments())
