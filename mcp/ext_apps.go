@@ -20,7 +20,6 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -164,11 +163,6 @@ type extAppManagerPort interface {
 	// count (live in the same admin-only DataFunc closures that need
 	// UserStore-based admin checks).
 	GetActiveSessionCount() int
-	// RegistryStoreConcrete for the admin DataFunc that reads the key
-	// registry. Concrete-type access matches the pattern documented on
-	// admin_baseline_tool.go's AuditStoreConcrete usage — admin
-	// forensics is the legitimate concrete-type consumer.
-	RegistryStoreConcrete() *registry.Store
 }
 
 // appResource defines a UI resource served as an MCP App widget.
@@ -346,7 +340,15 @@ var appResources = []appResource{
 			if uStore := manager.UserStore(); uStore == nil || !uStore.IsAdmin(email) {
 				return nil
 			}
-			regStore := manager.RegistryStoreConcrete()
+			// Phase 3a kc/-side migration (Hex 99→100 close-out): route
+			// through the RegistryStore() port (RegistryReader.List
+			// satisfies the only call below) instead of the prior
+			// RegistryStoreConcrete() leak. Symmetric with the
+			// admin_baseline / admin_cache_info forensics-only escape
+			// hatches: those NEED concrete because UserOrderStats /
+			// StatsCacheHitRate are not on AuditStoreInterface — the
+			// list-all-registrations path does NOT need concrete.
+			regStore := manager.RegistryStore()
 			if regStore == nil {
 				return map[string]any{"total": 0, "active": 0, "registrations": []any{}}
 			}

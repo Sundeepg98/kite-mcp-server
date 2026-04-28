@@ -379,7 +379,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 				return
 			}
 			// Auto-create user if needed and link to admin.
-			uStore := kcManager.UserStoreConcrete()
+			// Phase 3a kc/-side migration: route through UserStore()
+			// (UserReader.EnsureUser + UserWriter.SetAdminEmail are both
+			// on the interface) instead of UserStoreConcrete(). Symmetric
+			// with the mcp/-consumer Phase 3a batches.
+			uStore := kcManager.UserStore()
 			if uStore != nil {
 				uStore.EnsureUser(inv.InvitedEmail, "", "", "family_invite")
 				if err := uStore.SetAdminEmail(inv.InvitedEmail, inv.AdminEmail); err != nil {
@@ -401,7 +405,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 				app.Logger().Error(context.Background(), "Failed to initialize webhook_events table", err)
 			}
 			adminUpgrade := func(email string) {
-				if uStore := kcManager.UserStoreConcrete(); uStore != nil {
+				// Phase 3a kc/-side migration: route through UserStore()
+				// (UserWriter.UpdateRole is on the interface) instead of
+				// UserStoreConcrete(). Same rationale as the family-invite
+				// callback above.
+				if uStore := kcManager.UserStore(); uStore != nil {
 					if err := uStore.UpdateRole(email, "admin"); err != nil {
 						app.Logger().Error(context.Background(), "Failed to upgrade payer to admin", err, "email", email)
 					}

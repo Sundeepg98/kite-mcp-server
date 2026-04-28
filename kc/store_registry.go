@@ -13,6 +13,46 @@ import (
 // exposed directly. Manager retains a *StoreRegistry field and thin delegator
 // methods (defined below) forward to it for backward compatibility with the
 // 73 files that already depend on the Manager-level accessors.
+//
+// Concrete vs interface-typed accessor pairing
+// --------------------------------------------
+// Each store has two accessors: an interface-typed one (e.g., TokenStore() →
+// TokenStoreInterface) and a *Concrete()-suffixed sibling (e.g.,
+// TokenStoreConcrete() → *KiteTokenStore). The interface-typed pair is the
+// canonical "consumer" surface — application logic that depends on a store
+// should accept the narrowest interface that lets it work, per ISP and the
+// hexagonal port discipline.
+//
+// The *Concrete() siblings are an architectural escape hatch retained
+// **for construction-site use only** — composition-root files that pass
+// concrete pointer types into adapter struct literals or service
+// constructors that legitimately need access to fields/methods not on the
+// interface surface. Examples: app/app.go's kiteExchangerAdapter (needs
+// *KiteTokenStore for direct cache access on a CQRS-bypass-ok read path),
+// app/wire.go's briefingTokenAdapter, kc/ops/handler.go (UI handler that
+// needs *registry.Store for List() shape — wider than RegistryReader.List()
+// can express). Phase 3a kc/-side migration documented this status; the
+// *Concrete() methods are not "leaks" to be retired — they are an
+// architectural exception, symmetric with the mcp/-consumer side's
+// admin_baseline_tool.go / admin_cache_info_tool.go AuditStoreConcrete
+// uses for forensics-only methods (UserOrderStats / StatsCacheHitRate).
+//
+// Phase 3a-complete state at this commit:
+//   - Consumer surfaces (mcp/, kc/telegram, kc/manager_use_cases.go's
+//     read paths) route through interface-typed accessors.
+//   - Construction-site surfaces (app/app.go, app/wire.go, kc/ops/handler.go,
+//     and kc-internal manager_queries_escapes.go's audit fallback) use
+//     *Concrete() siblings explicitly because they need concrete-type
+//     access for adapter constructions.
+//
+// Future deletion of the *Concrete() siblings would require either
+// (a) widening every store interface to absorb every concrete-only method
+// (UserOrderStats, StatsCacheHitRate, etc.) — anti-Go-idiom, surface bloat,
+// fails ISP, or (b) restructuring the construction-site adapters to take
+// interface fields and threading the concrete-method calls through their
+// own adapter ports — substantial app/wire.go churn that ADR 0006 §"What
+// was rejected" explicitly excluded for ROI reasons. Both options are
+// anti-rec'd; the current state is the calibrated end-state.
 type StoreRegistry struct {
 	m *Manager
 }
