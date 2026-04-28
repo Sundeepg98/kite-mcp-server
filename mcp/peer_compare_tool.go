@@ -200,11 +200,12 @@ func (*PeerCompareTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				Status:  "pointer_available",
 				Metrics: make(map[string]peerCompareMetricCell, len(metrics)),
 			}
-			if manager != nil && manager.Instruments != nil {
-				if inst, err := manager.Instruments.GetByTradingsymbol("NSE", sym); err == nil {
+			// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
+			if instr := handler.Instruments(); instr != nil {
+				if inst, err := instr.GetByTradingsymbol("NSE", sym); err == nil {
 					row.CompanyName = inst.Name
 					row.Exchange = inst.Exchange
-				} else if inst, err := manager.Instruments.GetByTradingsymbol("BSE", sym); err == nil {
+				} else if inst, err := instr.GetByTradingsymbol("BSE", sym); err == nil {
 					row.CompanyName = inst.Name
 					row.Exchange = inst.Exchange
 				} else {

@@ -128,10 +128,12 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		query := p.String("query", "")
 		filterOn := p.String("filter_on", "id")
 
-		// Don't call UpdateInstruments() here since it might already be happening in another thread
-		// But we do need to ensure instruments are loaded
-		if manager.Instruments.Count() == 0 {
-			manager.Logger.Warn("No instruments loaded, search may return incomplete results")
+		// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
+		// Don't call UpdateInstruments() here since it might already be happening
+		// in another thread — we just need a count.
+		instr := handler.Instruments()
+		if instr == nil || instr.Count() == 0 {
+			handler.LoggerPort().Warn(ctx, "No instruments loaded, search may return incomplete results")
 		}
 
 		var out []instruments.Instrument
@@ -148,18 +150,18 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 				exch := parts[0]
 				underlying := parts[1]
 
-				instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
+				instruments, _ := instr.GetAllByUnderlying(exch, underlying)
 				out = instruments
 			} else {
 				// Assume query is just the underlying symbol and try. Just to save prompt calls.
 				exch := "NFO"
 				underlying := query
 
-				instruments, _ := manager.Instruments.GetAllByUnderlying(exch, underlying)
+				instruments, _ := instr.GetAllByUnderlying(exch, underlying)
 				out = instruments
 			}
 		default:
-			instruments := manager.Instruments.Filter(func(instrument instruments.Instrument) bool {
+			instruments := instr.Filter(func(instrument instruments.Instrument) bool {
 				switch filterOn {
 				case "name":
 					return strings.Contains(strings.ToLower(instrument.Name), strings.ToLower(query))

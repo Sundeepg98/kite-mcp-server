@@ -553,10 +553,12 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		// Detect lot size from instruments if not overridden
+		// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
 		lotSize := lotSizeOverride
+		instr := handler.Instruments()
 		if lotSize <= 0 {
-			if manager.Instruments != nil && manager.Instruments.Count() > 0 {
-				found := manager.Instruments.Filter(func(inst instruments.Instrument) bool {
+			if instr != nil && instr.Count() > 0 {
+				found := instr.Filter(func(inst instruments.Instrument) bool {
 					return inst.Exchange == "NFO" &&
 						strings.EqualFold(inst.Name, underlying) &&
 						(inst.InstrumentType == "CE" || inst.InstrumentType == "PE") &&
@@ -577,10 +579,14 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			instrumentKeys := make([]string, 0, len(specs))
 			symbolForSpec := make([]string, len(specs))
 
-			// Find trading symbols from the instruments store
+			// Find trading symbols from the instruments store. Phase 3a
+			// Batch 1: instr was already obtained above; hoist nil check.
+			if instr == nil {
+				return gomcp.NewToolResultError("Instruments manager not available"), nil
+			}
 			for i, spec := range specs {
 				optType := spec.optionType
-				found := manager.Instruments.Filter(func(inst instruments.Instrument) bool {
+				found := instr.Filter(func(inst instruments.Instrument) bool {
 					return inst.Exchange == "NFO" &&
 						strings.EqualFold(inst.Name, underlying) &&
 						inst.InstrumentType == optType &&

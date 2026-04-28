@@ -100,12 +100,14 @@ func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			strikesAround = 10
 		}
 
-		if manager.Instruments.Count() == 0 {
+		// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
+		instr := handler.Instruments()
+		if instr == nil || instr.Count() == 0 {
 			return mcp.NewToolResultError("No instruments loaded. Please wait for instruments to be fetched."), nil
 		}
 
 		// Step 1: Find all NFO options for this underlying
-		allNFO := manager.Instruments.Filter(func(inst instruments.Instrument) bool {
+		allNFO := instr.Filter(func(inst instruments.Instrument) bool {
 			return inst.Exchange == "NFO" &&
 				strings.EqualFold(inst.Name, underlying) &&
 				(inst.InstrumentType == "CE" || inst.InstrumentType == "PE")

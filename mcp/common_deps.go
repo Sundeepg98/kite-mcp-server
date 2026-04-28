@@ -221,3 +221,35 @@ func (h *ToolHandler) WatchlistStore() kc.WatchlistStoreInterface {
 	}
 	return h.deps.Watchlist.WatchlistStore()
 }
+
+// Instruments returns the instruments manager port. Phase 3a Batch 1
+// (read-only consumers): prefer over h.manager.Instruments field access so
+// handlers depend on the narrow InstrumentsManagerProvider port through
+// ToolHandlerDeps. Returns nil only when InstrumentsManagerProvider was
+// not configured (test scaffolding); production callers should treat nil
+// as "instruments not yet loaded" and degrade accordingly.
+func (h *ToolHandler) Instruments() kc.InstrumentManagerInterface {
+	if h.deps.Instruments == nil {
+		return nil
+	}
+	return h.deps.Instruments.InstrumentsManager()
+}
+
+// AuditStore returns the audit-trail store. Phase 3a Batch 1 (admin
+// read-only consumers): prefer over h.manager.AuditStoreConcrete() so
+// admin tools that only need methods on the AuditStoreInterface
+// (GetTopErrorUsers, List, GetGlobalStats, etc.) depend on the narrow
+// AuditStoreProvider port through ToolHandlerDeps. Returns nil if the
+// audit subsystem is disabled.
+//
+// Tools that need concrete-only methods (UserOrderStats,
+// StatsCacheHitRate) must continue to reach for h.manager.AuditStoreConcrete()
+// — those forensics methods are intentionally NOT on the interface
+// surface. See admin_baseline_tool.go and admin_cache_info_tool.go for
+// the documented exceptions.
+func (h *ToolHandler) AuditStore() kc.AuditStoreInterface {
+	if h.deps.Audit == nil {
+		return nil
+	}
+	return h.deps.Audit.AuditStore()
+}

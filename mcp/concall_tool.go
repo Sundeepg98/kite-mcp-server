@@ -83,11 +83,12 @@ func (*AnalyzeConcallTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		companyName := ""
 		exchange := "NSE" // default assumption for Indian equities
 		documentStatus := "pointer_available"
-		if manager != nil && manager.Instruments != nil {
-			if inst, err := manager.Instruments.GetByTradingsymbol("NSE", symbol); err == nil {
+		// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
+		if instr := handler.Instruments(); instr != nil {
+			if inst, err := instr.GetByTradingsymbol("NSE", symbol); err == nil {
 				companyName = inst.Name
 				exchange = inst.Exchange
-			} else if inst, err := manager.Instruments.GetByTradingsymbol("BSE", symbol); err == nil {
+			} else if inst, err := instr.GetByTradingsymbol("BSE", symbol); err == nil {
 				companyName = inst.Name
 				exchange = inst.Exchange
 			} else {

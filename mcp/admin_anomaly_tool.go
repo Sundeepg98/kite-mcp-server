@@ -145,11 +145,11 @@ func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandle
 			hours = adminAnomalyDefaultHours
 		}
 
-		// Route through the concrete audit store: we need decrypted emails
-		// (via GetTopErrorUsers) and then per-email List results. Neither
-		// facet is on AuditStoreInterface, and inlining the SQL here would
-		// duplicate the hmac/encryption handling that store_query.go owns.
-		auditStore := manager.AuditStoreConcrete()
+		// Route through the AuditStoreProvider port: GetTopErrorUsers and
+		// List are both on AuditStoreInterface. Phase 3a Batch 1 dropped
+		// the prior manager.AuditStoreConcrete() leak — the older comment
+		// (now removed) was empirically stale.
+		auditStore := handler.AuditStore()
 		if auditStore == nil {
 			return mcp.NewToolResultError(
 				"Audit store not available — anomaly flag history requires database persistence.",
@@ -163,9 +163,9 @@ func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandle
 }
 
 // buildAnomalyFlagResponse does the aggregation off the MCP hot path so it
-// can be unit-tested in isolation. Takes the concrete audit store (we need
-// GetTopErrorUsers + List + the encryption-key context) and returns a fully
-// populated structured payload.
+// can be unit-tested in isolation. Takes the AuditStoreInterface port —
+// GetTopErrorUsers + List are both on AuditReader, no concrete-only methods
+// needed — and returns a fully populated structured payload.
 //
 // Flow:
 //  1. Pull top-error users within the window (bounded).
@@ -174,7 +174,7 @@ func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandle
 //     tag, parse reason + order value, append to the aggregate.
 //  4. Cap per-user and total event counts; sort users by flag count desc
 //     for a stable, operator-friendly ordering.
-func buildAnomalyFlagResponse(auditStore *audit.Store, since time.Time, windowHours int) *adminAnomalyFlagsResponse {
+func buildAnomalyFlagResponse(auditStore kc.AuditStoreInterface, since time.Time, windowHours int) *adminAnomalyFlagsResponse {
 	resp := &adminAnomalyFlagsResponse{
 		WindowHours: windowHours,
 		Since:       since,
