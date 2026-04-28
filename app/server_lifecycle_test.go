@@ -1103,7 +1103,7 @@ func TestSetupGracefulShutdown_ShutdownSequence(t *testing.T) {
 	app := newTestApp(t)
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
-	app.auditStore.StartWorker()
+	app.auditStore.StartWorkerCtx(context.Background())
 
 	// Create an HTTP server on a free port. Use srv.Serve(listener) to
 	// adopt the pre-bound listener directly — eliminates the close-then-

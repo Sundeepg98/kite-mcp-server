@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -216,12 +217,12 @@ func TestStore_GetStats(t *testing.T) {
 func TestStore_EnqueueAndWorker(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	entry := makeEntry("enq-001", "worker@example.com", "get_ltp", "market_data", false, now)
 
-	s.Enqueue(entry)
+	s.EnqueueCtx(context.Background(), entry)
 
 	// Stop drains the buffer and waits for completion.
 	s.Stop()
@@ -235,14 +236,14 @@ func TestStore_EnqueueAndWorker(t *testing.T) {
 }
 
 func TestStore_EnqueueWithoutWorker(t *testing.T) {
-	// When StartWorker is not called, Enqueue falls back to synchronous write.
+	// When StartWorkerCtx is not called, EnqueueCtx falls back to synchronous write.
 	t.Parallel()
 	s := openTestStore(t)
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	entry := makeEntry("sync-001", "sync@example.com", "get_ltp", "market_data", false, now)
 
-	s.Enqueue(entry)
+	s.EnqueueCtx(context.Background(), entry)
 
 	results, total, err := s.List("sync@example.com", ListOptions{})
 	require.NoError(t, err, "TestStore_EnqueueWithoutWorker: err")

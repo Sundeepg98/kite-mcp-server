@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -45,9 +46,9 @@ func setupChain(t *testing.T, handler server.ToolHandlerFunc) (server.ToolHandle
 
 	// Audit store
 	auditStore := audit.New(db)
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	require.NoError(t, auditStore.InitTable())
-	auditStore.StartWorker()
+	auditStore.StartWorkerCtx(context.Background())
 
 	// Billing store
 	billingStore := billing.NewStore(db, logger)

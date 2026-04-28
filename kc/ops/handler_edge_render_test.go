@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // ops_push100_test.go: push ops coverage from ~89% toward 100%.
 // Targets remaining uncovered branches in handler.go, user_render.go,
@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -400,7 +401,7 @@ func TestPush100_ServeOrdersPageSSR_WithAuditData(t *testing.T) {
 	t.Cleanup(func() { mgr.Shutdown() })
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	d := NewDashboardHandler(mgr, logger, auditStore)
@@ -507,7 +508,7 @@ func TestPush100_RenderUserFragment_AlertsActive(t *testing.T) {
 
 
 // ===========================================================================
-// handler.go: overviewStream — cancel context
+// handler.go: overviewStream â€” cancel context
 // ===========================================================================
 func TestPush100_OverviewStream_Cancel(t *testing.T) {
 	t.Parallel()
@@ -535,7 +536,7 @@ func TestPush100_OverviewStream_Cancel(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard.go: RegisterRoutes — static file serving and billing no-store branch
+// dashboard.go: RegisterRoutes â€” static file serving and billing no-store branch
 // ===========================================================================
 func TestPush100_StaticCSS(t *testing.T) {
 	t.Parallel()
@@ -566,7 +567,7 @@ func TestPush100_StaticHTMX(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard_templates.go: serveActivityPageSSR — with audit data
+// dashboard_templates.go: serveActivityPageSSR â€” with audit data
 // ===========================================================================
 func TestPush100_ServeActivityPageSSR_WithData(t *testing.T) {
 	t.Parallel()
@@ -591,7 +592,7 @@ func TestPush100_ServeActivityPageSSR_WithData(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard_templates.go: serveAlertsPageSSR — with triggered alerts
+// dashboard_templates.go: serveAlertsPageSSR â€” with triggered alerts
 // ===========================================================================
 func TestPush100_ServeAlertsPageSSR_WithTriggered(t *testing.T) {
 	t.Parallel()
@@ -610,7 +611,7 @@ func TestPush100_ServeAlertsPageSSR_WithTriggered(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard_templates.go: servePortfolioPage — no email redirect
+// dashboard_templates.go: servePortfolioPage â€” no email redirect
 // ===========================================================================
 func TestPush100_ServePortfolioPage_NoEmail(t *testing.T) {
 	t.Parallel()
@@ -627,7 +628,7 @@ func TestPush100_ServePortfolioPage_NoEmail(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard_templates.go: servePaperFragment — various branches
+// dashboard_templates.go: servePaperFragment â€” various branches
 // ===========================================================================
 func TestPush100_ServePaperFragment_NoEngine(t *testing.T) {
 	t.Parallel()
@@ -643,7 +644,7 @@ func TestPush100_ServePaperFragment_NoEngine(t *testing.T) {
 
 
 // ===========================================================================
-// dashboard_templates.go: servePortfolioFragment — without creds
+// dashboard_templates.go: servePortfolioFragment â€” without creds
 // ===========================================================================
 func TestPush100_ServePortfolioFragment_NoCreds(t *testing.T) {
 	t.Parallel()

@@ -45,18 +45,6 @@ func (s *Store) StartWorkerCtx(ctx context.Context) {
 	}()
 }
 
-// StartWorker is the legacy non-ctx setter, retained as a thin shim
-// that calls StartWorkerCtx with context.Background(). Existing test
-// fixtures and external callers continue to work unchanged; new
-// callers should reach for StartWorkerCtx.
-//
-// Deprecated: use StartWorkerCtx with the parent service context.
-// This shim exists for the migration window only and will be removed
-// once Wave D Phase 3 Package 8 (cleanup) lands.
-func (s *Store) StartWorker() {
-	s.StartWorkerCtx(context.Background())
-}
-
 // computeChainLink sets PrevHash and EntryHash on the entry using the HMAC
 // hash chain. Must be called sequentially (worker goroutine or under chainMu).
 func (s *Store) computeChainLink(entry *ToolCall) {
@@ -125,18 +113,6 @@ func (s *Store) EnqueueCtx(ctx context.Context, entry *ToolCall) {
 	}
 }
 
-// Enqueue is the legacy non-ctx Enqueue, retained as a thin shim
-// that calls EnqueueCtx with context.Background(). Existing callers
-// (audit middleware, test fixtures) continue to work unchanged; new
-// callers should reach for EnqueueCtx and pass the request ctx so
-// trace correlation flows through to the audit log.
-//
-// Deprecated: use EnqueueCtx with the request context. This shim
-// exists for the migration window only and will be removed once
-// Wave D Phase 3 Package 8 (cleanup) lands.
-func (s *Store) Enqueue(entry *ToolCall) {
-	s.EnqueueCtx(context.Background(), entry)
-}
 
 // Stop gracefully drains the buffer and waits for completion.
 //

@@ -6,6 +6,7 @@
 package kc
 
 import (
+	"context"
 	"time"
 
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
@@ -91,8 +92,11 @@ type TelegramStoreInterface interface {
 
 // AuditWriter provides write operations for audit records.
 type AuditWriter interface {
-	// Enqueue adds a tool call to the async write buffer.
-	Enqueue(entry *audit.ToolCall)
+	// EnqueueCtx adds a tool call to the async write buffer with a
+	// request context for trace correlation. SOLID 99→100 cleanup
+	// retired the legacy non-ctx Enqueue shim; consumers must thread
+	// ctx (or context.Background() for service-ctx callbacks).
+	EnqueueCtx(ctx context.Context, entry *audit.ToolCall)
 
 	// Record inserts a tool call synchronously.
 	Record(entry *audit.ToolCall) error

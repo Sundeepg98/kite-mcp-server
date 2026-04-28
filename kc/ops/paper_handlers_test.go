@@ -1641,7 +1641,7 @@ func newTestHandlerWithAudit(t *testing.T) *Handler {
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	require.NoError(t, auditStore.InitTable())
 
 	uStore := mgr.UserStoreConcrete()

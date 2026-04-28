@@ -15,6 +15,7 @@ package app
 // well-covered in app/http_privacy_test.go and app/server_edge_test.go.
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -287,12 +288,12 @@ func TestAuditComponentStatus_DroppingNonZero(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// Don't InitTable — Enqueue without a table forces a drop on the
+	// Don't InitTable — EnqueueCtx without a table forces a drop on the
 	// sync-fallback path.
 	auditStore := audit.New(db)
-	auditStore.Enqueue(&audit.ToolCall{CallID: "drop-me", ToolName: "x"})
+	auditStore.EnqueueCtx(context.Background(), &audit.ToolCall{CallID: "drop-me", ToolName: "x"})
 	require.Greater(t, auditStore.DroppedCount(), int64(0),
-		"test setup: Enqueue without a table must drop")
+		"test setup: EnqueueCtx without a table must drop")
 
 	app := newTestApp(t)
 	app.auditStore = auditStore
@@ -383,7 +384,7 @@ func TestHandleHealthz_FormatJSON_Degraded(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	auditStore := audit.New(db)
-	auditStore.Enqueue(&audit.ToolCall{CallID: "drop", ToolName: "x"})
+	auditStore.EnqueueCtx(context.Background(), &audit.ToolCall{CallID: "drop", ToolName: "x"})
 	require.Greater(t, auditStore.DroppedCount(), int64(0))
 
 	app := newTestApp(t)

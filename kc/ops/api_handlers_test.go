@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // coverage_push_test.go: push ops coverage from 75.5% -> 90%+.
 // Tests every low-coverage dashboard handler success path using httptest
@@ -23,6 +23,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -63,7 +64,7 @@ func newFullTestDashboard(t *testing.T, kiteBaseURL string) *DashboardHandler {
 
 	// Audit store
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	require.NoError(t, auditStore.InitTable())
 
 	// Seed credentials + tokens for test user
@@ -1104,7 +1105,7 @@ func TestCov_AlertsAPI_Success(t *testing.T) {
 }
 
 // ===========================================================================
-// Mock Kite HTTP server — returns valid JSON for common Kite API endpoints
+// Mock Kite HTTP server â€” returns valid JSON for common Kite API endpoints
 // ===========================================================================
 
 // kiteJSON wraps data in the Kite API envelope: {"status":"success","data":...}
@@ -1182,7 +1183,7 @@ func newMockKiteServer() *httptest.Server {
 				},
 			}))
 
-		// GET /quote — gokiteconnect uses /quote for GetLTP, GetOHLC, and GetQuotes
+		// GET /quote â€” gokiteconnect uses /quote for GetLTP, GetOHLC, and GetQuotes
 		case path == "/quote" && r.Method == http.MethodGet:
 			// Return a combined response suitable for LTP, OHLC, and full quotes
 			data := map[string]interface{}{
@@ -1238,7 +1239,7 @@ func newMockKiteClient(mockURL string) *kiteconnect.Client {
 }
 
 // ===========================================================================
-// enrichOrdersWithKite — direct test with mock server (7.4% -> high)
+// enrichOrdersWithKite â€” direct test with mock server (7.4% -> high)
 // ===========================================================================
 
 func TestEnrichOrdersWithKite_Success(t *testing.T) {
@@ -1347,7 +1348,7 @@ func TestEnrichOrdersWithKite_MultipleOrders(t *testing.T) {
 }
 
 // ===========================================================================
-// buildOrderEntries with mock Kite server — covers the enrichment path
+// buildOrderEntries with mock Kite server â€” covers the enrichment path
 // ===========================================================================
 
 func TestBuildOrderEntries_WithMockKite(t *testing.T) {
@@ -1537,7 +1538,7 @@ func TestCov_OrdersAPI_WithSeededOrders(t *testing.T) {
 		StartedAt:    time.Now(),
 		DurationMs:   50,
 	})
-	// audit.Store.Record is synchronous — no flush wait needed.
+	// audit.Store.Record is synchronous â€” no flush wait needed.
 
 	req := reqWithEmail(http.MethodGet, "/dashboard/api/orders", "user@test.com")
 	rec := httptest.NewRecorder()
@@ -1658,7 +1659,7 @@ func TestCov_OrderAttribution_WithData(t *testing.T) {
 		StartedAt:     time.Now().Add(-4 * time.Minute),
 		DurationMs:    200,
 	})
-	// audit.Store.Record is synchronous — no flush wait needed.
+	// audit.Store.Record is synchronous â€” no flush wait needed.
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux, noopAuth)
@@ -1671,7 +1672,7 @@ func TestCov_OrderAttribution_WithData(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin ops handler — more paths
+// Admin ops handler â€” more paths
 // ===========================================================================
 
 func TestCov_AdminOps_MetricsFragment_WithAudit(t *testing.T) {

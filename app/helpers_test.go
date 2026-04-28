@@ -4,6 +4,7 @@ package app
 // Consolidates: testLogger, newTestManager variants, mock types, cleanup helpers.
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -185,7 +186,7 @@ func newTestAuditStore(t *testing.T, db *alerts.DB) *audit.Store {
 	t.Helper()
 	s := audit.New(db)
 	require.NoError(t, s.InitTable())
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 	return s
 }
 

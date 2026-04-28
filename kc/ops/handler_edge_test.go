@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // ops_push100_test.go: push ops coverage from ~89% toward 100%.
 // Targets remaining uncovered branches in handler.go, user_render.go,
@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
@@ -88,7 +89,7 @@ func newPush100OpsHandlerFull(t *testing.T) *Handler {
 	}
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	lb := NewLogBuffer(100)
@@ -137,7 +138,7 @@ func newPush100Dashboard(t *testing.T) (*DashboardHandler, *kc.Manager) {
 	t.Cleanup(func() { mgr.Shutdown() })
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	d := NewDashboardHandler(mgr, logger, auditStore)
@@ -165,7 +166,7 @@ func push100DashReqBody(method, target, email, body string) *http.Request {
 
 
 // ===========================================================================
-// data.go: buildOverview — admin sees global counts
+// data.go: buildOverview â€” admin sees global counts
 // ===========================================================================
 func TestPush100_BuildOverview_Admin(t *testing.T) {
 	t.Parallel()
@@ -181,7 +182,7 @@ func TestPush100_BuildOverview_Admin(t *testing.T) {
 
 
 // ===========================================================================
-// data.go: buildSessions — with real sessions containing KiteSessionData
+// data.go: buildSessions â€” with real sessions containing KiteSessionData
 // ===========================================================================
 func TestPush100_BuildSessions_WithData(t *testing.T) {
 	t.Parallel()
@@ -191,7 +192,7 @@ func TestPush100_BuildSessions_WithData(t *testing.T) {
 	sm := h.manager.SessionManager()
 	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "user1@test.com"})
 	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: "user2@test.com"})
-	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: ""}) // orphan session — should be skipped
+	_ = sm.GenerateWithData(&kc.KiteSessionData{Email: ""}) // orphan session â€” should be skipped
 
 	sessions := h.buildSessions()
 	assert.Equal(t, 2, len(sessions))

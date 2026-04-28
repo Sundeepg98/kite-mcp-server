@@ -1,6 +1,7 @@
 package kc
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -116,9 +117,11 @@ func (m *Manager) initAlertSystem(cfg Config) {
 			m.telegramNotifier.Notify(alert, currentPrice)
 		}
 		// Log alert trigger to audit trail for SSE browser notifications.
+		// Alert-trigger callback runs from the alerts evaluator goroutine
+		// with no request ctx in scope; service-ctx fallback is correct.
 		if m.auditStore != nil {
 			now := time.Now()
-			m.auditStore.Enqueue(&audit.ToolCall{
+			m.auditStore.EnqueueCtx(context.Background(), &audit.ToolCall{
 				CallID:        fmt.Sprintf("alert-%s-%d", alert.ID, now.UnixNano()),
 				Email:         alert.Email,
 				ToolName:      "alert_triggered",
@@ -271,13 +274,15 @@ func (m *Manager) initTrailingStop(cfg Config) {
 	// Wire trailing stop modification notification to Telegram + audit.
 	m.trailingStopMgr.SetOnModify(func(ts *alerts.TrailingStop, oldStop, newStop float64) {
 		// Log trailing stop modification to audit trail for SSE browser notifications.
+		// Trailing-stop callback runs from the trailing-stop manager
+		// goroutine with no request ctx in scope; service-ctx fallback.
 		if m.auditStore != nil {
 			now := time.Now()
 			trailDesc := fmt.Sprintf("%.2f", ts.TrailAmount)
 			if ts.TrailPct > 0 {
 				trailDesc = fmt.Sprintf("%.1f%%", ts.TrailPct)
 			}
-			m.auditStore.Enqueue(&audit.ToolCall{
+			m.auditStore.EnqueueCtx(context.Background(), &audit.ToolCall{
 				CallID:        fmt.Sprintf("trail-%s-%d", ts.ID, now.UnixNano()),
 				Email:         ts.Email,
 				ToolName:      "trailing_stop_modified",

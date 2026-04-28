@@ -450,7 +450,7 @@ func newTestAuditStore(t *testing.T) *audit.Store {
 	require.NoError(t, err)
 	store := audit.New(db)
 	require.NoError(t, store.InitTable())
-	store.StartWorker()
+	store.StartWorkerCtx(context.Background())
 	t.Cleanup(func() {
 		store.Stop()
 		db.Close()

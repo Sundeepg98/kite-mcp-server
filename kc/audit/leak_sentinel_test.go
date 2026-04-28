@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 )
 
 // leak_sentinel_test.go — goroutine-leak sentinel for the audit
-// Store.StartWorker/Stop lifecycle. StartWorker spawns a drain
+// Store.StartWorkerCtx/Stop lifecycle. StartWorkerCtx spawns a drain
 // goroutine that ranges over writeCh until Stop closes it; the
 // goroutine signals exit by closing s.done, which Stop waits on.
 // A refactor that drops either side of that handshake would leak
@@ -46,11 +47,11 @@ func TestGoroutineLeakSentinel_StoreWorker(t *testing.T) {
 	const cycles = 10
 	for i := 0; i < cycles; i++ {
 		s, closeDB := newShortLivedStore(t)
-		s.StartWorker()
+		s.StartWorkerCtx(context.Background())
 		// Enqueue one entry so the worker exercises its read-and-hash
 		// path at least once — catches leaks that only surface after
 		// the first channel receive.
-		s.Enqueue(&ToolCall{
+		s.EnqueueCtx(context.Background(), &ToolCall{
 			CallID:      "leak-sentinel",
 			Email:       "",
 			ToolName:    "noop",
@@ -67,7 +68,7 @@ func TestGoroutineLeakSentinel_StoreWorker(t *testing.T) {
 // on the second close(writeCh) or NPE on the nil-channel receive.
 func TestStoreStopIdempotent(t *testing.T) {
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 	// Triple Stop — must not panic.
 	s.Stop()
 	s.Stop()

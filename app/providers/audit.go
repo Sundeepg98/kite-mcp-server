@@ -21,8 +21,8 @@ import (
 //	                 1. store.InitTable()       — creates the SQL schema
 //	                 2. store.SetEncryptionKey  — derived from OAUTH_JWT_SECRET
 //	                 3. store.SeedChain()       — initializes hash chain head
-//	                 4. store.SetLogger(logger) — wires log output
-//	                 5. store.StartWorker()     — async writer goroutine
+//	                 4. store.SetLoggerPort(logger) — wires log output
+//	                 5. store.StartWorkerCtx(ctx)   — async writer goroutine
 //	               And the lifecycle hook for store.Stop() on shutdown.
 //
 // Why is the post-construction sequence NOT inside this provider?

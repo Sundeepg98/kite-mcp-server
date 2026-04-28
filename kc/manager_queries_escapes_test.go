@@ -23,7 +23,7 @@ func newRegisteredAuditStore(t *testing.T) *audit.Store {
 	if err := store.InitTable(); err != nil {
 		t.Fatalf("init audit table: %v", err)
 	}
-	store.StartWorker()
+	store.StartWorkerCtx(context.Background())
 	t.Cleanup(func() {
 		store.Stop()
 		db.Close()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // audit_init.go runs the audit store's startup-time initialization
@@ -199,11 +200,17 @@ func InitializeAuditStore(in auditInitInput) (*InitializedAuditStore, error) {
 	}
 
 	// Step 3: logger + worker. These are infallible in our codebase
-	// (SetLogger is a struct-field write; StartWorker spawns a
-	// goroutine with sync.Once). Lifecycle Stop is registered by
+	// (SetLoggerPort is a struct-field write; StartWorkerCtx spawns
+	// a goroutine with sync.Once). Lifecycle Stop is registered by
 	// the composition site's existing app.lifecycle.Append chain.
-	store.SetLogger(logger)
-	store.StartWorker()
+	//
+	// SOLID 99→100 cleanup: migrated from the deprecated SetLogger
+	// (*slog.Logger) and StartWorker() shims to the canonical
+	// port-typed + ctx-aware variants. context.Background() is the
+	// service-ctx — InitializeAuditStore runs at app startup with
+	// no request ctx in scope.
+	store.SetLoggerPort(logport.NewSlog(logger))
+	store.StartWorkerCtx(context.Background())
 	if logger != nil {
 		logger.Info("Audit trail enabled")
 	}

@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -63,22 +62,19 @@ const auditBufferSize = 1000
 
 // Store provides audit trail persistence backed by SQLite via alerts.DB.
 //
-// LOGGER MIGRATION (Wave D Phase 3 Logger sweep — kc/audit/ Package 1 of 8)
-//
 // `logger` is typed as the kc/logger.Logger port (aliased here as
-// logport.Logger). Background workers (StartWorker, StartRetentionWorker)
-// take a context.Context parameter that drives both shutdown AND log
-// correlation — the goroutine stores the parent ctx on serviceCtx and
-// passes it to every Logger call. This preserves trace correlation
-// from app-startup through to async drain operations, which raw
-// slog (no ctx in Info/Warn) could not.
+// logport.Logger). Background workers (StartWorkerCtx,
+// StartRetentionWorkerCtx) take a context.Context parameter that
+// drives both shutdown AND log correlation — the goroutine stores
+// the parent ctx on serviceCtx and passes it to every Logger call.
+// This preserves trace correlation from app-startup through to async
+// drain operations, which raw slog (no ctx in Info/Warn) could not.
 //
-// Backward compatibility: the legacy `SetLogger(*slog.Logger)` and
-// `StartWorker()`/`Enqueue(*ToolCall)`/`StartRetentionWorker(int)`
-// signatures are retained as thin shims that wrap the new API with
-// `context.Background()` so external callers (Packages 2-7 of the
-// sweep) can migrate incrementally. The shims will be removed when
-// the sweep completes (Package 8).
+// SOLID 99→100 cleanup: the legacy *slog.Logger and non-ctx variants
+// (SetLogger, StartWorker, Enqueue) were retired once all callers
+// migrated to the canonical port-typed + ctx-aware API. The
+// remaining surface is SetLoggerPort + StartWorkerCtx +
+// EnqueueCtx + StartRetentionWorkerCtx.
 type Store struct {
 	db            *alerts.DB
 	writeCh       chan *ToolCall
@@ -172,26 +168,12 @@ func (s *Store) SetAnomalyCacheEventDispatcher(d *domain.EventDispatcher) {
 }
 
 // SetLoggerPort assigns a structured logger via the kc/logger.Logger
-// port. Preferred over SetLogger for new call sites — composes with
-// the rest of the sweep-migrated codebase without an adapter wrap.
+// port for background-worker diagnostics.
 //
-// Nil is permitted: every internal logger call sites is nil-checked
+// Nil is permitted: every internal logger call site is nil-checked
 // (matches pre-migration semantics where unset s.logger was a no-op).
 func (s *Store) SetLoggerPort(l logport.Logger) {
 	s.logger = l
-}
-
-// SetLogger is the legacy *slog.Logger setter, retained as a thin
-// shim that wraps the supplied logger via logport.NewSlog and forwards
-// to SetLoggerPort. Existing callers (test fixtures, app/wire.go,
-// app/providers/audit_init.go) continue to work unchanged; new
-// callers should reach for SetLoggerPort.
-//
-// Deprecated: use SetLoggerPort. This shim exists for the migration
-// window only and will be removed once Wave D Phase 3 Package 8
-// (cleanup) lands.
-func (s *Store) SetLogger(l *slog.Logger) {
-	s.logger = logport.NewSlog(l)
 }
 
 // SetEncryptionKey configures the key used for HMAC email hashing, AES-GCM

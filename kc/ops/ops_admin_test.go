@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"context"
@@ -17,6 +17,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
@@ -51,7 +52,7 @@ func newTestAdminOpsHandler(t *testing.T) *Handler {
 	}
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	lb := NewLogBuffer(100)
@@ -60,7 +61,7 @@ func newTestAdminOpsHandler(t *testing.T) *Handler {
 }
 
 // ===========================================================================
-// TeeHandler — full coverage
+// TeeHandler â€” full coverage
 // ===========================================================================
 
 func TestTeeHandler_Handle(t *testing.T) {
@@ -133,7 +134,7 @@ func TestTeeHandler_WithGroup(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — listUsers
+// Admin Ops Handler â€” listUsers
 // ===========================================================================
 
 func TestOpsHandler_ListUsers_Admin(t *testing.T) {
@@ -166,7 +167,7 @@ func TestOpsHandler_ListUsers_Forbidden(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — suspendUser
+// Admin Ops Handler â€” suspendUser
 // ===========================================================================
 
 func TestOpsHandler_SuspendUser_Success(t *testing.T) {
@@ -229,7 +230,7 @@ func TestOpsHandler_SuspendUser_WrongMethod_Final(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — activateUser
+// Admin Ops Handler â€” activateUser
 // ===========================================================================
 
 func TestOpsHandler_ActivateUser_Success(t *testing.T) {
@@ -264,7 +265,7 @@ func TestOpsHandler_ActivateUser_SelfAction(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — offboardUser
+// Admin Ops Handler â€” offboardUser
 // ===========================================================================
 
 func TestOpsHandler_OffboardUser_Success(t *testing.T) {
@@ -318,7 +319,7 @@ func TestOpsHandler_OffboardUser_SelfAction(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — changeRole
+// Admin Ops Handler â€” changeRole
 // ===========================================================================
 
 func TestOpsHandler_ChangeRole_Success(t *testing.T) {
@@ -340,7 +341,7 @@ func TestOpsHandler_ChangeRole_Success(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — freezeTrading
+// Admin Ops Handler â€” freezeTrading
 // ===========================================================================
 
 func TestOpsHandler_FreezeTrading_NoRiskGuard(t *testing.T) {
@@ -414,7 +415,7 @@ func TestOpsHandler_FreezeTrading_SelfAction(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — unfreezeTrading
+// Admin Ops Handler â€” unfreezeTrading
 // ===========================================================================
 
 func TestOpsHandler_UnfreezeTrading_WithRiskGuard(t *testing.T) {
@@ -456,7 +457,7 @@ func TestOpsHandler_UnfreezeTrading_SelfAction(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — freezeTradingGlobal + unfreezeTradingGlobal
+// Admin Ops Handler â€” freezeTradingGlobal + unfreezeTradingGlobal
 // ===========================================================================
 
 func TestOpsHandler_FreezeTradingGlobal_WithRiskGuard(t *testing.T) {
@@ -516,7 +517,7 @@ func TestOpsHandler_UnfreezeTradingGlobal_WithRiskGuard(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — verifyChain
+// Admin Ops Handler â€” verifyChain
 // ===========================================================================
 
 func TestOpsHandler_VerifyChain_Admin(t *testing.T) {
@@ -548,7 +549,7 @@ func TestOpsHandler_VerifyChain_WrongMethod_Final(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — registry CRUD
+// Admin Ops Handler â€” registry CRUD
 // ===========================================================================
 
 func TestOpsHandler_Registry_GET(t *testing.T) {
@@ -614,7 +615,7 @@ func TestOpsHandler_Registry_POST_InvalidJSON(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — registryItemHandler PUT/DELETE
+// Admin Ops Handler â€” registryItemHandler PUT/DELETE
 // ===========================================================================
 
 func TestOpsHandler_RegistryItem_PUT(t *testing.T) {
@@ -695,7 +696,7 @@ func TestOpsHandler_RegistryItem_EmptyID(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — metricsAPI
+// Admin Ops Handler â€” metricsAPI
 // ===========================================================================
 
 func TestOpsHandler_MetricsAPI_Admin(t *testing.T) {
@@ -728,7 +729,7 @@ func TestOpsHandler_MetricsAPI_AllPeriods(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — logAdminAction coverage (auditStore nil path)
+// Admin Ops Handler â€” logAdminAction coverage (auditStore nil path)
 // ===========================================================================
 
 func TestOpsHandler_LogAdminAction_NilAuditStore(t *testing.T) {
@@ -739,7 +740,7 @@ func TestOpsHandler_LogAdminAction_NilAuditStore(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — servePage with nil opsTmpl
+// Admin Ops Handler â€” servePage with nil opsTmpl
 // ===========================================================================
 
 func TestOpsHandler_ServePage_NilTemplate(t *testing.T) {
@@ -755,7 +756,7 @@ func TestOpsHandler_ServePage_NilTemplate(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — activityAPI
+// Dashboard Handler â€” activityAPI
 // ===========================================================================
 
 func TestDashboard_ActivityAPI(t *testing.T) {
@@ -814,7 +815,7 @@ func TestDashboard_ActivityAPI_WithFilters(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — activityExport
+// Dashboard Handler â€” activityExport
 // ===========================================================================
 
 func TestDashboard_ActivityExport_CSV(t *testing.T) {
@@ -859,7 +860,7 @@ func TestDashboard_ActivityExport_Unauthenticated(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — paperStatus, paperHoldings, paperPositions, paperOrders, paperReset
+// Dashboard Handler â€” paperStatus, paperHoldings, paperPositions, paperOrders, paperReset
 // ===========================================================================
 
 func TestDashboard_PaperStatus_NoPaperEngine(t *testing.T) {
@@ -954,7 +955,7 @@ func TestDashboard_PaperReset_WrongMethod(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — safetyStatus
+// Dashboard Handler â€” safetyStatus
 // ===========================================================================
 
 func TestDashboard_SafetyStatus_NoRiskGuard(t *testing.T) {
@@ -1007,7 +1008,7 @@ func TestDashboard_SafetyStatus_Unauthenticated(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — selfDeleteAccount
+// Dashboard Handler â€” selfDeleteAccount
 // ===========================================================================
 
 func TestDashboard_SelfDeleteAccount_Success(t *testing.T) {
@@ -1069,7 +1070,7 @@ func TestDashboard_SelfDeleteAccount_WrongMethod(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — selfManageCredentials
+// Dashboard Handler â€” selfManageCredentials
 // ===========================================================================
 
 func TestDashboard_SelfManageCredentials_GET_NoCreds(t *testing.T) {
@@ -1151,7 +1152,7 @@ func TestDashboard_SelfManageCredentials_Unauthenticated(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — alerts API
+// Dashboard Handler â€” alerts API
 // ===========================================================================
 
 func TestDashboard_Alerts(t *testing.T) {
@@ -1181,7 +1182,7 @@ func TestDashboard_Alerts_Unauthenticated(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — marketIndices
+// Dashboard Handler â€” marketIndices
 // ===========================================================================
 
 func TestDashboard_MarketIndices_NoCreds(t *testing.T) {
@@ -1224,7 +1225,7 @@ func TestDashboard_MarketIndices_WrongMethod(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — portfolio + ordersAPI
+// Dashboard Handler â€” portfolio + ordersAPI
 // ===========================================================================
 
 func TestDashboard_Portfolio_NoCreds(t *testing.T) {
@@ -1267,7 +1268,7 @@ func TestDashboard_OrdersAPI_WithAuditStore(t *testing.T) {
 }
 
 // ===========================================================================
-// Dashboard Handler — writeJSON error path (unmarshalable)
+// Dashboard Handler â€” writeJSON error path (unmarshalable)
 // ===========================================================================
 
 func TestDashboard_WriteJSON_ErrorPath(t *testing.T) {
@@ -1283,7 +1284,7 @@ func TestDashboard_WriteJSON_ErrorPath(t *testing.T) {
 }
 
 // ===========================================================================
-// Admin Ops Handler — writeJSON + writeJSONError on handler
+// Admin Ops Handler â€” writeJSON + writeJSONError on handler
 // ===========================================================================
 
 func TestOpsHandler_WriteJSONError_Final(t *testing.T) {
@@ -1325,7 +1326,7 @@ func newTestDashboardWithAudit(t *testing.T) *DashboardHandler {
 	t.Cleanup(func() { mgr.Shutdown() })
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	d := NewDashboardHandler(mgr, logger, auditStore)

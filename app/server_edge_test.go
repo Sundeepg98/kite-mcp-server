@@ -55,7 +55,7 @@ func TestSetupGracefulShutdown_WithAllComponents(t *testing.T) {
 
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
-	app.auditStore.StartWorker()
+	app.auditStore.StartWorkerCtx(context.Background())
 	t.Cleanup(app.auditStore.Stop)
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)
@@ -458,12 +458,12 @@ func TestBuildHealthzReport_AuditDropping(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	// Create the store WITHOUT InitTable — Record() will fail because the
-	// tool_calls table doesn't exist. Without StartWorker the sync-fallback
+	// tool_calls table doesn't exist. Without StartWorkerCtx the sync-fallback
 	// path runs, which increments droppedCount when Record fails.
 	auditStore := audit.New(db)
-	auditStore.Enqueue(&audit.ToolCall{CallID: "dropped-test", ToolName: "x"})
+	auditStore.EnqueueCtx(context.Background(), &audit.ToolCall{CallID: "dropped-test", ToolName: "x"})
 	require.Greater(t, auditStore.DroppedCount(), int64(0),
-		"test setup: expected Enqueue without a table to drop the entry")
+		"test setup: expected EnqueueCtx without a table to drop the entry")
 
 	app := newTestApp(t)
 	app.auditStore = auditStore

@@ -50,7 +50,7 @@ func TestSetupGracefulShutdown_ViaShutdownCh(t *testing.T) {
 	app := newTestApp(t)
 	app.auditStore = audit.New(db)
 	require.NoError(t, app.auditStore.InitTable())
-	app.auditStore.StartWorker()
+	app.auditStore.StartWorkerCtx(context.Background())
 	t.Cleanup(app.auditStore.Stop)
 	app.rateLimiters = newRateLimiters()
 	t.Cleanup(app.rateLimiters.Stop)

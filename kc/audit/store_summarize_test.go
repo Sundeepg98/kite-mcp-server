@@ -1,6 +1,7 @@
-package audit
+﻿package audit
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -10,12 +11,12 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// --- SetLogger / SetEncryptionKey ---
+// --- SetLoggerPort / SetEncryptionKey ---
 
-func TestStore_SetLogger(t *testing.T) {
+func TestStore_SetLoggerPort(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(nil) // should not panic
+	s.SetLoggerPort(nil) // should not panic
 }
 
 func TestStore_SetEncryptionKey(t *testing.T) {
@@ -57,7 +58,7 @@ func TestStore_hmacEmail_WithKey(t *testing.T) {
 func TestStore_SeedChain_NoKey(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SeedChain() // no hashKey set — should be a no-op
+	s.SeedChain() // no hashKey set â€” should be a no-op
 	assert.Equal(t, "", s.lastHash)
 }
 
@@ -154,7 +155,7 @@ func TestStore_GetOrderAttribution(t *testing.T) {
 	email := "attrib@test.com"
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
-	// Insert a sequence: context query → LTP check → place_order (with order_id).
+	// Insert a sequence: context query â†’ LTP check â†’ place_order (with order_id).
 	e1 := makeEntry("oa-001", email, "get_positions", "query", false, now)
 	e1.SessionID = "sess-xyz"
 	require.NoError(t, s.Record(e1))
@@ -353,14 +354,14 @@ func TestStore_GetTopErrorUsers_DefaultLimit(t *testing.T) {
 func TestStore_ActivityListeners(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	ch := s.AddActivityListener("test-listener")
 	require.NotNil(t, ch)
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	entry := makeEntry("al-001", "listener@test.com", "get_ltp", "market_data", false, now)
-	s.Enqueue(entry)
+	s.EnqueueCtx(context.Background(), entry)
 
 	// Stop to drain the buffer.
 	s.Stop()
@@ -405,7 +406,7 @@ func TestStore_VerifyChain_ValidChain(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	s.SetEncryptionKey(key)
 	s.SeedChain()
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	// Use empty emails so hmacEmail("") returns "" and the DB stores ""
 	// which matches what computeChainLink uses. This avoids the HMAC email
@@ -413,7 +414,7 @@ func TestStore_VerifyChain_ValidChain(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	for i := 0; i < 5; i++ {
 		e := makeEntry("vc-"+string(rune('a'+i)), "", "get_ltp", "market_data", false, now.Add(time.Duration(i)*time.Second))
-		s.Enqueue(e)
+		s.EnqueueCtx(context.Background(), e)
 	}
 	s.Stop()
 
@@ -618,7 +619,7 @@ func TestSummarizeOutput_MarginsNoSegments(t *testing.T) {
 	t.Parallel()
 	result := gomcp.NewToolResultText(`{"data":{}}`)
 	summary := SummarizeOutput("get_margins", result)
-	// No equity/commodity segments — should fall back to truncate.
+	// No equity/commodity segments â€” should fall back to truncate.
 	assert.NotEmpty(t, summary)
 }
 
@@ -698,14 +699,14 @@ func TestStore_DeleteOlderThan_WithChain(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	s.SetEncryptionKey(key)
 	s.SeedChain()
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	old := makeEntry("del-chain-1", "user@test.com", "get_ltp", "market_data", false, now.Add(-200*24*time.Hour))
 	fresh := makeEntry("del-chain-2", "user@test.com", "get_ltp", "market_data", false, now)
 
-	s.Enqueue(old)
-	s.Enqueue(fresh)
+	s.EnqueueCtx(context.Background(), old)
+	s.EnqueueCtx(context.Background(), fresh)
 	s.Stop()
 
 	deleted, err := s.DeleteOlderThan(now.Add(-100 * 24 * time.Hour))

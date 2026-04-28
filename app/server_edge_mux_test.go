@@ -1,12 +1,13 @@
-package app
+﻿package app
 
-// app_coverage_test.go — targeted tests to boost coverage from ~78% to 90%+.
+// app_coverage_test.go â€” targeted tests to boost coverage from ~78% to 90%+.
 // Focuses on uncovered branches in: setupGracefulShutdown, initializeServices,
 // initScheduler, paperLTPAdapter.GetLTP, setupMux, registerTelegramWebhook,
 // RunServer, ExchangeWithCredentials, makeEventPersister, serveStatusPage,
 // serveLegalPages, newRateLimiters, and startHybridServer/startStdIOServer.
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -29,18 +30,18 @@ import (
 )
 
 // ===========================================================================
-// setupGracefulShutdown — exercise the inner goroutine's shutdown paths
+// setupGracefulShutdown â€” exercise the inner goroutine's shutdown paths
 // ===========================================================================
 
 // TestSetupGracefulShutdown_WithAllComponents exercises the shutdown goroutine
-// body by using context.WithCancel and manually triggering the cancel — which
+// body by using context.WithCancel and manually triggering the cancel â€” which
 // won't work directly since the function uses signal.NotifyContext.
 // Instead, we test that the function sets up without panicking when the app
 // has scheduler, auditStore, telegramBot, oauthHandler, and rateLimiters set.
 
 
 // ===========================================================================
-// setupMux — exercise browser flow callback path
+// setupMux â€” exercise browser flow callback path
 // ===========================================================================
 func TestSetupMux_Callback_BrowserFlow_NoHandler(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -59,7 +60,7 @@ func TestSetupMux_Callback_BrowserFlow_NoHandler(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — robots.txt endpoint
+// setupMux â€” robots.txt endpoint
 // ===========================================================================
 func TestSetupMux_RobotsTxt(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -78,7 +79,7 @@ func TestSetupMux_RobotsTxt(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — server card CORS preflight (OPTIONS)
+// setupMux â€” server card CORS preflight (OPTIONS)
 // ===========================================================================
 func TestSetupMux_ServerCard_OptionsMethod(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -97,7 +98,7 @@ func TestSetupMux_ServerCard_OptionsMethod(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — admin password seeding: already has password
+// setupMux â€” admin password seeding: already has password
 // ===========================================================================
 func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
 	t.Parallel()
@@ -122,7 +123,7 @@ func TestSetupMux_AdminPassword_AlreadyHasPassword(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — Stripe webhook with billing store AND webhook events table
+// setupMux â€” Stripe webhook with billing store AND webhook events table
 // ===========================================================================
 func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
 	t.Parallel()
@@ -147,14 +148,14 @@ func TestSetupMux_StripeWebhookWithEventLog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader("{}"))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// Should not be 404 — the handler is registered (it may reject due to
+	// Should not be 404 â€” the handler is registered (it may reject due to
 	// invalid Stripe signature, but it won't be 404)
 	assert.NotEqual(t, http.StatusNotFound, rec.Code)
 }
 
 
 // ===========================================================================
-// setupMux — admin auth with valid JWT and admin role
+// setupMux â€” admin auth with valid JWT and admin role
 // ===========================================================================
 func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -199,7 +200,7 @@ func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — Google SSO config wiring (both with and without credentials)
+// setupMux â€” Google SSO config wiring (both with and without credentials)
 // ===========================================================================
 func TestSetupMux_GoogleSSO_NoCredentials(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -231,7 +232,7 @@ func TestSetupMux_GoogleSSO_NoCredentials(t *testing.T) {
 
 
 // ===========================================================================
-// serveStatusPage — test landing template write error (exercise the error log)
+// serveStatusPage â€” test landing template write error (exercise the error log)
 // ===========================================================================
 func TestServeStatusPage_LandingTemplate_ExecuteError(t *testing.T) {
 	app := newTestApp(t)
@@ -253,7 +254,7 @@ func TestServeStatusPage_LandingTemplate_ExecuteError(t *testing.T) {
 
 
 // ===========================================================================
-// serveStatusPage — fallback to status template when landing is nil
+// serveStatusPage â€” fallback to status template when landing is nil
 // ===========================================================================
 func TestServeStatusPage_FallbackToStatus(t *testing.T) {
 	app := newTestApp(t)
@@ -274,7 +275,7 @@ func TestServeStatusPage_FallbackToStatus(t *testing.T) {
 
 
 // ===========================================================================
-// serveStatusPage — neither template set
+// serveStatusPage â€” neither template set
 // ===========================================================================
 func TestServeStatusPage_BothTemplatesNil(t *testing.T) {
 	app := newTestApp(t)
@@ -293,7 +294,7 @@ func TestServeStatusPage_BothTemplatesNil(t *testing.T) {
 
 
 // ===========================================================================
-// serveErrorPage — direct function test
+// serveErrorPage â€” direct function test
 // ===========================================================================
 func TestServeErrorPage_NotFoundCov(t *testing.T) {
 	rec := httptest.NewRecorder()
@@ -313,7 +314,7 @@ func TestServeErrorPage_ServerErrorCov(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — healthz endpoint verification
+// setupMux â€” healthz endpoint verification
 // ===========================================================================
 func TestSetupMux_Healthz_Content(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -340,7 +341,7 @@ func TestSetupMux_Healthz_Content(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — healthz ?format=json: component-level health report
+// setupMux â€” healthz ?format=json: component-level health report
 // ===========================================================================
 func TestSetupMux_Healthz_JSONFormat_AllHealthy(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -352,7 +353,7 @@ func TestSetupMux_Healthz_JSONFormat_AllHealthy(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	auditStore := audit.New(db)
 	require.NoError(t, auditStore.InitTable())
-	auditStore.StartWorker()
+	auditStore.StartWorkerCtx(context.Background())
 	t.Cleanup(auditStore.Stop)
 
 	app := newTestApp(t)
@@ -438,12 +439,12 @@ func TestSetupMux_Healthz_JSONFormat_RiskLimitsNotLoaded(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	auditStore := audit.New(db)
 	require.NoError(t, auditStore.InitTable())
-	auditStore.StartWorker()
+	auditStore.StartWorkerCtx(context.Background())
 	t.Cleanup(auditStore.Stop)
 
 	app := newTestApp(t)
 	app.auditStore = auditStore
-	// Simulate LoadLimits failure in DevMode — guard is running with SystemDefaults.
+	// Simulate LoadLimits failure in DevMode â€” guard is running with SystemDefaults.
 	app.riskGuard = riskguard.NewGuard(testLogger())
 	app.riskLimitsLoaded = false
 
@@ -481,7 +482,7 @@ func TestSetupMux_Healthz_JSONFormat_AnomalyCacheShape(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	auditStore := audit.New(db)
 	require.NoError(t, auditStore.InitTable())
-	auditStore.StartWorker()
+	auditStore.StartWorkerCtx(context.Background())
 	t.Cleanup(auditStore.Stop)
 
 	app := newTestApp(t)
@@ -506,7 +507,7 @@ func TestSetupMux_Healthz_JSONFormat_AnomalyCacheShape(t *testing.T) {
 	require.True(t, ok, "components.anomaly_cache must be a JSON object")
 
 	assert.Equal(t, "ok", cache["status"])
-	// JSON numbers unmarshal to float64 — check the field exists and matches.
+	// JSON numbers unmarshal to float64 â€” check the field exists and matches.
 	assert.Contains(t, cache, "hit_rate")
 	assert.Contains(t, cache, "max_entries")
 	assert.EqualValues(t, audit.DefaultMaxStatsCacheEntries, cache["max_entries"])
@@ -514,7 +515,7 @@ func TestSetupMux_Healthz_JSONFormat_AnomalyCacheShape(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — favicon endpoint
+// setupMux â€” favicon endpoint
 // ===========================================================================
 func TestSetupMux_Favicon_CacheControl(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -536,7 +537,7 @@ func TestSetupMux_Favicon_CacheControl(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — with OAuth enabled: endpoints wiring
+// setupMux â€” with OAuth enabled: endpoints wiring
 // ===========================================================================
 func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -597,7 +598,7 @@ func TestSetupMux_WithOAuth_AllEndpointsWired(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — accept-invite endpoint with various states
+// setupMux â€” accept-invite endpoint with various states
 // ===========================================================================
 func TestSetupMux_AcceptInvite_TokenNotFound(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -614,7 +615,7 @@ func TestSetupMux_AcceptInvite_TokenNotFound(t *testing.T) {
 
 
 // ===========================================================================
-// serveLegalPages — Cache-Control header
+// serveLegalPages â€” Cache-Control header
 // ===========================================================================
 func TestServeLegalPages_CacheControl(t *testing.T) {
 	app := newTestApp(t)
@@ -635,7 +636,7 @@ func TestServeLegalPages_CacheControl(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — pricing page with premium tier cookie
+// setupMux â€” pricing page with premium tier cookie
 // ===========================================================================
 func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -676,7 +677,7 @@ func TestSetupMux_PricingPage_WithPremiumTier(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — pricing page without cookie
+// setupMux â€” pricing page without cookie
 // ===========================================================================
 func TestSetupMux_PricingPage_NoCookie(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -695,7 +696,7 @@ func TestSetupMux_PricingPage_NoCookie(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — admin auth: redirect with various path values
+// setupMux â€” admin auth: redirect with various path values
 // ===========================================================================
 func TestSetupMux_AdminAuth_EmptyPath_DefaultRedirect(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -735,7 +736,7 @@ func TestSetupMux_AdminAuth_EmptyPath_DefaultRedirect(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — checkout success page
+// setupMux â€” checkout success page
 // ===========================================================================
 func TestSetupMux_CheckoutSuccess(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -753,7 +754,7 @@ func TestSetupMux_CheckoutSuccess(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — security.txt content verification
+// setupMux â€” security.txt content verification
 // ===========================================================================
 func TestSetupMux_SecurityTxt_Content(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -773,7 +774,7 @@ func TestSetupMux_SecurityTxt_Content(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — server card GET request
+// setupMux â€” server card GET request
 // ===========================================================================
 func TestSetupMux_ServerCard_GETRequest(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -800,7 +801,7 @@ func TestSetupMux_ServerCard_GETRequest(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — family invitation acceptance branches
+// setupMux â€” family invitation acceptance branches
 // ===========================================================================
 
 // newTestManagerWithInvitations is now in helpers_test.go
@@ -886,19 +887,19 @@ func TestSetupMux_AcceptInvite_ValidInv_Cov(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/auth/accept-invite?token="+invID, nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// Valid invite → redirect to login
+	// Valid invite â†’ redirect to login
 	assert.Equal(t, http.StatusFound, rec.Code)
 	assert.Contains(t, rec.Header().Get("Location"), "/auth/login")
 }
 
 
 // ===========================================================================
-// setupMux — Stripe webhook with billing store but NO STRIPE_SECRET (warn branch)
+// setupMux â€” Stripe webhook with billing store but NO STRIPE_SECRET (warn branch)
 // ===========================================================================
 func TestSetupMux_StripeWebhookNoBillingStore_Cov(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManagerWithDB(t)
-	// Do NOT set billing store → the warning branch is exercised
+	// Do NOT set billing store â†’ the warning branch is exercised
 	app := newTestAppWithConfig(t, &Config{
 		StripeWebhookSecret:  "whsec_test_no_billing_123",
 		InstrumentsSkipFetch: true,
@@ -916,7 +917,7 @@ func TestSetupMux_StripeWebhookNoBillingStore_Cov(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — billing checkout + portal handlers (with OAuth + billing store)
+// setupMux â€” billing checkout + portal handlers (with OAuth + billing store)
 // ===========================================================================
 func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -964,7 +965,7 @@ func TestSetupMux_BillingCheckout_RequiresAuth(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — pricing page with pro tier cookie
+// setupMux â€” pricing page with pro tier cookie
 // ===========================================================================
 func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1017,7 +1018,7 @@ func TestSetupMux_PricingPage_WithProTier_Cov(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — AdminAuth — non-admin user gets forbidden
+// setupMux â€” AdminAuth â€” non-admin user gets forbidden
 // ===========================================================================
 func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1062,7 +1063,7 @@ func TestSetupMux_AdminAuth_NonAdminUser_Forbidden(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — Google SSO with credentials
+// setupMux â€” Google SSO with credentials
 // ===========================================================================
 func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1100,7 +1101,7 @@ func TestSetupMux_GoogleSSO_WithCredentials(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — ops handler registration with AdminSecretPath (no OAuth)
+// setupMux â€” ops handler registration with AdminSecretPath (no OAuth)
 // ===========================================================================
 func TestSetupMux_OpsHandler_AdminSecretPathFallback(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1114,13 +1115,13 @@ func TestSetupMux_OpsHandler_AdminSecretPathFallback(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin/ops", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// Should not be 404 — the ops handler is registered
+	// Should not be 404 â€” the ops handler is registered
 	assert.NotEqual(t, http.StatusNotFound, rec.Code)
 }
 
 
 // ===========================================================================
-// setupMux — admin password seeding (multiple admin emails)
+// setupMux â€” admin password seeding (multiple admin emails)
 // ===========================================================================
 func TestSetupMux_AdminPassword_MultipleEmails(t *testing.T) {
 	t.Parallel()
@@ -1143,7 +1144,7 @@ func TestSetupMux_AdminPassword_MultipleEmails(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — admin seeding skipped when users already exist
+// setupMux â€” admin seeding skipped when users already exist
 // ===========================================================================
 func TestSetupMux_AdminSeeding_SkipsWhenUsersExist(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1165,7 +1166,7 @@ func TestSetupMux_AdminSeeding_SkipsWhenUsersExist(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — callback with browser flow and no OAuth handler
+// setupMux â€” callback with browser flow and no OAuth handler
 // ===========================================================================
 func TestSetupMux_Callback_OAuthFlow_NoHandler_Cov(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1183,7 +1184,7 @@ func TestSetupMux_Callback_OAuthFlow_NoHandler_Cov(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — callback default flow (no flow param)
+// setupMux â€” callback default flow (no flow param)
 // ===========================================================================
 func TestSetupMux_Callback_DefaultFlow_Cov(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1196,13 +1197,13 @@ func TestSetupMux_Callback_DefaultFlow_Cov(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/callback?request_token=test", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// Won't be 404 — the handler exists
+	// Won't be 404 â€” the handler exists
 	assert.NotEqual(t, http.StatusNotFound, rec.Code)
 }
 
 
 // ===========================================================================
-// serveLegalPages — all legal page routes
+// serveLegalPages â€” all legal page routes
 // ===========================================================================
 func TestServeLegalPages_AllRoutes(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1225,7 +1226,7 @@ func TestServeLegalPages_AllRoutes(t *testing.T) {
 
 
 // ===========================================================================
-// newRateLimiters — exercise with AdminSecretPath set
+// newRateLimiters â€” exercise with AdminSecretPath set
 // ===========================================================================
 func TestSetupMux_RateLimitersWithAdmin(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1240,7 +1241,7 @@ func TestSetupMux_RateLimitersWithAdmin(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — Dashboard handler with billing store
+// setupMux â€” Dashboard handler with billing store
 // ===========================================================================
 func TestSetupMux_DashboardWithBilling(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1264,7 +1265,7 @@ func TestSetupMux_DashboardWithBilling(t *testing.T) {
 
 
 // ===========================================================================
-// setupMux — admin seeding with empty email in list
+// setupMux â€” admin seeding with empty email in list
 // ===========================================================================
 func TestSetupMux_AdminSeeding_EmptyEmailInList(t *testing.T) {
 	mgr := newTestManagerWithDB(t)
@@ -1281,7 +1282,7 @@ func TestSetupMux_AdminSeeding_EmptyEmailInList(t *testing.T) {
 }
 
 // ===========================================================================
-// /healthz?probe=deep — runtime DB ping + broker-factory check + WAL stat
+// /healthz?probe=deep â€” runtime DB ping + broker-factory check + WAL stat
 // ===========================================================================
 
 func TestHealthz_DeepProbe_AllHealthy(t *testing.T) {
@@ -1314,18 +1315,18 @@ func TestHealthz_DeepProbe_AllHealthy(t *testing.T) {
 	assert.Equal(t, "ok", dbComp["status"], "in-memory DB should ping cleanly")
 
 	// broker_factory: in-memory test mgr uses kcfixture which doesn't
-	// inject a Factory by default → in DevMode, that's "ok" with note.
+	// inject a Factory by default â†’ in DevMode, that's "ok" with note.
 	bf, _ := components["broker_factory"].(map[string]any)
 	assert.Contains(t, []any{"ok", "degraded"}, bf["status"],
 		"factory either wired (ok) or absent in DevMode (still ok with note)")
 
-	// litestream: :memory: AlertDBPath → "ok" with N/A note.
+	// litestream: :memory: AlertDBPath â†’ "ok" with N/A note.
 	ls, _ := components["litestream"].(map[string]any)
 	assert.Equal(t, "ok", ls["status"])
 }
 
 func TestHealthz_DeepProbe_NoManager(t *testing.T) {
-	// App with no kcManager → database + broker_factory probes should
+	// App with no kcManager â†’ database + broker_factory probes should
 	// surface the disabled state explicitly. Tests the nil-guard paths.
 	app := newTestApp(t)
 	app.kcManager = nil
@@ -1377,7 +1378,7 @@ func TestHealthz_DeepProbe_LitestreamMissingWAL(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/alerts.db"
 	require.NoError(t, os.WriteFile(dbPath, []byte("x"), 0644))
-	// No WAL file at all → "unknown" (cold start before first commit).
+	// No WAL file at all â†’ "unknown" (cold start before first commit).
 
 	app := newTestApp(t)
 	app.Config = &Config{AlertDBPath: dbPath}
@@ -1394,7 +1395,7 @@ func TestHealthz_DeepProbe_LitestreamMissingWAL(t *testing.T) {
 }
 
 func TestHealthz_DeepProbe_TopLevelDegraded(t *testing.T) {
-	// No manager → database "disabled" → top-level should be "degraded".
+	// No manager â†’ database "disabled" â†’ top-level should be "degraded".
 	app := newTestApp(t)
 	app.kcManager = nil
 

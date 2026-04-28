@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // coverage_max_test.go: push ops coverage toward 100%.
 // Targets remaining uncovered branches across handler.go, data.go,
@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -53,7 +54,7 @@ func newHandlerWithAuditAndMetrics(t *testing.T) *Handler {
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	require.NoError(t, auditStore.InitTable())
 
 	uStore := mgr.UserStoreConcrete()
@@ -103,7 +104,7 @@ func newDashboardWithAuditAndPaper(t *testing.T) *DashboardHandler {
 	mgr.SetPaperEngine(papertrading.NewEngine(paperStore, logger))
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	require.NoError(t, auditStore.InitTable())
 
 	d := NewDashboardHandler(mgr, logger, auditStore)
@@ -181,7 +182,7 @@ func newTestAdminOpsHandlerWithRiskGuard(t *testing.T) *Handler {
 	}
 
 	auditStore := audit.New(mgr.AlertDB())
-	auditStore.SetLogger(logger)
+	auditStore.SetLoggerPort(logport.NewSlog(logger))
 	_ = auditStore.InitTable()
 
 	// Seed some credentials and tokens for a regular user
@@ -225,7 +226,7 @@ func userReq(method, target string, body string) *http.Request {
 	return req.WithContext(ctx)
 }
 
-// Coverage ceiling: ~89% — ~60 unreachable lines, mostly behind Kite API calls.
+// Coverage ceiling: ~89% â€” ~60 unreachable lines, mostly behind Kite API calls.
 // Categories: (1) Kite API enrichment paths (holdings, positions, OHLC, LTP),
 // (2) SSE streaming with long-lived connections, (3) paper trading success paths
 // requiring valid credentials, (4) writeJSONError encoding failure (unreachable).

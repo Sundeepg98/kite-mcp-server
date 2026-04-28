@@ -98,7 +98,10 @@ func Middleware(store *Store) server.ToolHandlerMiddleware {
 			}
 
 			// Write to DB via buffered channel (non-blocking, graceful shutdown).
-			store.Enqueue(entry)
+			// SOLID 99→100 cleanup: ctx-aware variant — request ctx threads
+			// through to the worker's persistence-failure log for trace
+			// correlation across the async write boundary.
+			store.EnqueueCtx(ctx, entry)
 
 			return result, err
 		}

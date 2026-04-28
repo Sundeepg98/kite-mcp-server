@@ -1,4 +1,4 @@
-package audit
+﻿package audit
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -30,17 +31,17 @@ func openTestStoreWithKey(t *testing.T) *Store {
 // Entries have empty emails to avoid HMAC mismatch between chain computation and DB storage.
 func insertChainedEntries(t *testing.T, s *Store, n int, baseTime time.Time) {
 	t.Helper()
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 	for i := 0; i < n; i++ {
 		e := makeEntry("ch-"+string(rune('a'+i)), "", "get_ltp", "market_data", false,
 			baseTime.Add(time.Duration(i)*time.Second))
-		s.Enqueue(e)
+		s.EnqueueCtx(context.Background(), e)
 	}
 	s.Stop()
 }
 
 // ===========================================================================
-// VerifyChain — comprehensive coverage
+// VerifyChain â€” comprehensive coverage
 // ===========================================================================
 
 func TestVerifyChain_EmptyDB(t *testing.T) {
@@ -59,10 +60,10 @@ func TestVerifyChain_LegacyRowsWithoutHashes(t *testing.T) {
 	t.Parallel()
 	s := openTestStoreWithKey(t)
 
-	// Insert rows directly (bypass chain computation) — simulates legacy data.
+	// Insert rows directly (bypass chain computation) â€” simulates legacy data.
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	e := makeEntry("legacy-1", "", "get_ltp", "market_data", false, now)
-	// PrevHash and EntryHash left empty — legacy row.
+	// PrevHash and EntryHash left empty â€” legacy row.
 	require.NoError(t, s.Record(e))
 
 	result, err := s.VerifyChain()
@@ -111,19 +112,19 @@ func TestVerifyChain_TamperedPrevHash(t *testing.T) {
 func TestVerifyChain_WithChainBreakMarker(t *testing.T) {
 	t.Parallel()
 	s := openTestStoreWithKey(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	// Insert entries: old + new via worker.
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 	old := makeEntry("brk-old", "", "get_ltp", "market_data", false, now.Add(-200*24*time.Hour))
 	fresh := makeEntry("brk-new", "", "get_ltp", "market_data", false, now)
-	s.Enqueue(old)
-	s.Enqueue(fresh)
+	s.EnqueueCtx(context.Background(), old)
+	s.EnqueueCtx(context.Background(), fresh)
 	s.Stop()
 
-	// Delete old entries — this inserts a chain-break marker.
+	// Delete old entries â€” this inserts a chain-break marker.
 	deleted, err := s.DeleteOlderThan(now.Add(-100 * 24 * time.Hour))
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), deleted)
@@ -138,18 +139,18 @@ func TestVerifyChain_WithChainBreakMarker(t *testing.T) {
 func TestVerifyChain_TamperedChainBreakMarker(t *testing.T) {
 	t.Parallel()
 	s := openTestStoreWithKey(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 	old := makeEntry("tbm-old", "", "get_ltp", "market_data", false, now.Add(-200*24*time.Hour))
 	fresh := makeEntry("tbm-new", "", "get_ltp", "market_data", false, now)
-	s.Enqueue(old)
-	s.Enqueue(fresh)
+	s.EnqueueCtx(context.Background(), old)
+	s.EnqueueCtx(context.Background(), fresh)
 	s.Stop()
 
-	// Delete old entries — inserts chain-break marker.
+	// Delete old entries â€” inserts chain-break marker.
 	_, err := s.DeleteOlderThan(now.Add(-100 * 24 * time.Hour))
 	require.NoError(t, err)
 
@@ -185,25 +186,25 @@ func TestVerifyChain_MixedLegacyAndChained(t *testing.T) {
 }
 
 // ===========================================================================
-// Enqueue — buffer full path
+// Enqueue â€” buffer full path
 // ===========================================================================
 
 func TestEnqueue_BufferFull(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	// Create a channel with capacity 1 to easily fill it.
 	s.writeCh = make(chan *ToolCall, 1)
 	s.done = make(chan struct{})
 
-	// Don't start a consumer — the channel will fill up.
+	// Don't start a consumer â€” the channel will fill up.
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	e1 := makeEntry("buf-1", "user@test.com", "get_ltp", "market_data", false, now)
 	e2 := makeEntry("buf-2", "user@test.com", "get_ltp", "market_data", false, now.Add(time.Second))
 
-	s.Enqueue(e1) // fills the buffer
-	s.Enqueue(e2) // should be dropped (buffer full)
+	s.EnqueueCtx(context.Background(), e1) // fills the buffer
+	s.EnqueueCtx(context.Background(), e2) // should be dropped (buffer full)
 
 	// Drain the channel manually.
 	close(s.writeCh)
@@ -213,7 +214,7 @@ func TestEnqueue_BufferFull(t *testing.T) {
 func TestEnqueue_BufferFull_NoLogger(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	// No logger set — s.logger is nil.
+	// No logger set â€” s.logger is nil.
 
 	s.writeCh = make(chan *ToolCall, 1)
 	s.done = make(chan struct{})
@@ -222,21 +223,21 @@ func TestEnqueue_BufferFull_NoLogger(t *testing.T) {
 	e1 := makeEntry("bufnl-1", "user@test.com", "get_ltp", "market_data", false, now)
 	e2 := makeEntry("bufnl-2", "user@test.com", "get_ltp", "market_data", false, now.Add(time.Second))
 
-	s.Enqueue(e1)
-	s.Enqueue(e2) // dropped, no logger, should not panic
+	s.EnqueueCtx(context.Background(), e1)
+	s.EnqueueCtx(context.Background(), e2) // dropped, no logger, should not panic
 
 	close(s.writeCh)
 	close(s.done)
 }
 
 // ===========================================================================
-// Phase 2i H3 fix — DroppedCount tracking on buffer-full and sync-fallback paths.
+// Phase 2i H3 fix â€” DroppedCount tracking on buffer-full and sync-fallback paths.
 // ===========================================================================
 
 func TestEnqueue_BufferFull_IncrementsDroppedCount(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	// Starting dropped count is zero.
 	assert.Equal(t, int64(0), s.DroppedCount())
@@ -246,9 +247,9 @@ func TestEnqueue_BufferFull_IncrementsDroppedCount(t *testing.T) {
 	s.done = make(chan struct{})
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	s.Enqueue(makeEntry("drop-1", "", "get_ltp", "market_data", false, now))
-	s.Enqueue(makeEntry("drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
-	s.Enqueue(makeEntry("drop-3", "", "get_ltp", "market_data", false, now.Add(2*time.Second)))
+	s.EnqueueCtx(context.Background(), makeEntry("drop-1", "", "get_ltp", "market_data", false, now))
+	s.EnqueueCtx(context.Background(), makeEntry("drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
+	s.EnqueueCtx(context.Background(), makeEntry("drop-3", "", "get_ltp", "market_data", false, now.Add(2*time.Second)))
 
 	assert.Equal(t, int64(2), s.DroppedCount(),
 		"buffer-full entries should be counted via incDropped")
@@ -260,9 +261,9 @@ func TestEnqueue_BufferFull_IncrementsDroppedCount(t *testing.T) {
 func TestEnqueue_SyncFallback_RecordFailureIncrementsDroppedCount(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
-	// writeCh nil → sync fallback path. Close the DB so Record() returns
+	// writeCh nil â†’ sync fallback path. Close the DB so Record() returns
 	// an error, then Enqueue should bump droppedCount.
 	s.writeCh = nil
 	s.db.Close()
@@ -270,21 +271,21 @@ func TestEnqueue_SyncFallback_RecordFailureIncrementsDroppedCount(t *testing.T) 
 	assert.Equal(t, int64(0), s.DroppedCount())
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	s.Enqueue(makeEntry("sync-drop-1", "", "get_ltp", "market_data", false, now))
-	s.Enqueue(makeEntry("sync-drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
+	s.EnqueueCtx(context.Background(), makeEntry("sync-drop-1", "", "get_ltp", "market_data", false, now))
+	s.EnqueueCtx(context.Background(), makeEntry("sync-drop-2", "", "get_ltp", "market_data", false, now.Add(time.Second)))
 
 	assert.Equal(t, int64(2), s.DroppedCount(),
 		"sync fallback Record() failures should be counted via incDropped")
 }
 
 // ===========================================================================
-// StartWorker — Record error path
+// StartWorker â€” Record error path
 // ===========================================================================
 
 func TestStartWorker_RecordError(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	// Close the DB to force Record to fail.
 	s.db.Close()
@@ -343,7 +344,7 @@ func TestStartWorker_RecordError_NoLogger(t *testing.T) {
 }
 
 // ===========================================================================
-// DeleteOlderThan — chain marker edge cases
+// DeleteOlderThan â€” chain marker edge cases
 // ===========================================================================
 
 func TestDeleteOlderThan_WithChain_NoRowsToDelete(t *testing.T) {
@@ -353,7 +354,7 @@ func TestDeleteOlderThan_WithChain_NoRowsToDelete(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	insertChainedEntries(t, s, 2, now)
 
-	// Delete with cutoff in the past — nothing to delete.
+	// Delete with cutoff in the past â€” nothing to delete.
 	deleted, err := s.DeleteOlderThan(now.Add(-1000 * 24 * time.Hour))
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), deleted)
@@ -373,7 +374,7 @@ func TestDeleteOlderThan_WithChain_AllDeleted(t *testing.T) {
 }
 
 // ===========================================================================
-// GetTopErrorUsers — with encryption
+// GetTopErrorUsers â€” with encryption
 // ===========================================================================
 
 func TestGetTopErrorUsers_WithEncryption(t *testing.T) {
@@ -408,7 +409,7 @@ func TestGetTopErrorUsers_NegativeLimit(t *testing.T) {
 }
 
 // ===========================================================================
-// GetToolMetrics — empty result
+// GetToolMetrics â€” empty result
 // ===========================================================================
 
 func TestGetToolMetrics_Empty(t *testing.T) {
@@ -421,7 +422,7 @@ func TestGetToolMetrics_Empty(t *testing.T) {
 }
 
 // ===========================================================================
-// ListOrders — empty result
+// ListOrders â€” empty result
 // ===========================================================================
 
 func TestListOrders_Empty(t *testing.T) {
@@ -453,7 +454,7 @@ func TestListOrders_WithEncryption(t *testing.T) {
 }
 
 // ===========================================================================
-// GetOrderAttribution — with encryption + more edge cases
+// GetOrderAttribution â€” with encryption + more edge cases
 // ===========================================================================
 
 func TestGetOrderAttribution_WithEncryption(t *testing.T) {
@@ -480,7 +481,7 @@ func TestGetOrderAttribution_WithEncryption(t *testing.T) {
 }
 
 // ===========================================================================
-// GetStats — empty DB top tool (sql.ErrNoRows path)
+// GetStats â€” empty DB top tool (sql.ErrNoRows path)
 // ===========================================================================
 
 func TestGetStats_EmptyDB(t *testing.T) {
@@ -494,7 +495,7 @@ func TestGetStats_EmptyDB(t *testing.T) {
 }
 
 // ===========================================================================
-// GetGlobalStats — empty DB (ErrNoRows for top tool)
+// GetGlobalStats â€” empty DB (ErrNoRows for top tool)
 // ===========================================================================
 
 func TestGetGlobalStats_EmptyDB(t *testing.T) {
@@ -508,7 +509,7 @@ func TestGetGlobalStats_EmptyDB(t *testing.T) {
 }
 
 // ===========================================================================
-// GetToolCounts — with since filter
+// GetToolCounts â€” with since filter
 // ===========================================================================
 
 func TestGetToolCounts_WithSinceFilter(t *testing.T) {
@@ -530,7 +531,7 @@ func TestGetToolCounts_WithSinceFilter(t *testing.T) {
 }
 
 // ===========================================================================
-// InitTable — idempotent (run twice)
+// InitTable â€” idempotent (run twice)
 // ===========================================================================
 
 func TestInitTable_Idempotent(t *testing.T) {
@@ -541,7 +542,7 @@ func TestInitTable_Idempotent(t *testing.T) {
 }
 
 // ===========================================================================
-// Record — with encryption key set (covers email encryption path)
+// Record â€” with encryption key set (covers email encryption path)
 // ===========================================================================
 
 func TestRecord_WithEncryption_EmptyEmail(t *testing.T) {
@@ -561,10 +562,10 @@ func TestRecord_WithEncryption_EmptyEmail(t *testing.T) {
 }
 
 // ===========================================================================
-// summarize — edge cases for uncovered branches
+// summarize â€” edge cases for uncovered branches
 // ===========================================================================
 
-// jsonFloat — int and json.Number branches
+// jsonFloat â€” int and json.Number branches
 
 func TestJsonFloat_IntValue(t *testing.T) {
 	t.Parallel()
@@ -596,7 +597,7 @@ func TestJsonFloat_JSONNumber(t *testing.T) {
 	assert.Equal(t, 42.5, jsonFloat(m, "val"))
 }
 
-// summarizeOrderResult — various paths
+// summarizeOrderResult â€” various paths
 
 func TestSummarizeOrderResult_DataOrderID(t *testing.T) {
 	t.Parallel()
@@ -626,7 +627,7 @@ func TestSummarizeOrderResult_InvalidJSON(t *testing.T) {
 	assert.Equal(t, "not json", summary)
 }
 
-// summarizePositions — edge cases
+// summarizePositions â€” edge cases
 
 func TestSummarizePositions_Empty(t *testing.T) {
 	t.Parallel()
@@ -649,7 +650,7 @@ func TestSummarizePositions_NonObjectItems(t *testing.T) {
 	assert.Contains(t, summary, "2 positions")
 }
 
-// summarizeOrders — edge cases
+// summarizeOrders â€” edge cases
 
 func TestSummarizeOrders_Empty(t *testing.T) {
 	t.Parallel()
@@ -672,7 +673,7 @@ func TestSummarizeOrders_NonObjectItems(t *testing.T) {
 	assert.Contains(t, summary, "1 orders")
 }
 
-// summarizeLTP — edge cases
+// summarizeLTP â€” edge cases
 
 func TestSummarizeLTP_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -703,7 +704,7 @@ func TestSummarizeLTP_NonObjectValue(t *testing.T) {
 	assert.Contains(t, summary, "0 instruments")
 }
 
-// summarizeMargins — edge cases
+// summarizeMargins â€” edge cases
 
 func TestSummarizeMargins_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -735,7 +736,7 @@ func TestSummarizeMargins_TopLevelWithoutDataKey(t *testing.T) {
 	assert.Contains(t, summary, "equity")
 }
 
-// summarizeSearch — edge cases
+// summarizeSearch â€” edge cases
 
 func TestSummarizeSearch_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -751,7 +752,7 @@ func TestSummarizeSearch_WithResults(t *testing.T) {
 	assert.Contains(t, summary, "Found 2 instruments")
 }
 
-// summarizeMFOrderResult — edge cases
+// summarizeMFOrderResult â€” edge cases
 
 func TestSummarizeMFOrderResult_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -767,7 +768,7 @@ func TestSummarizeMFOrderResult_NoID(t *testing.T) {
 	assert.Contains(t, summary, "status")
 }
 
-// summarizeMFSIPResult — edge cases
+// summarizeMFSIPResult â€” edge cases
 
 func TestSummarizeMFSIPResult_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -783,7 +784,7 @@ func TestSummarizeMFSIPResult_NoID(t *testing.T) {
 	assert.Contains(t, summary, "status")
 }
 
-// summarizeOptionChain — edge cases
+// summarizeOptionChain â€” edge cases
 
 func TestSummarizeOptionChain_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -800,7 +801,7 @@ func TestSummarizeOptionChain_NoChainArray(t *testing.T) {
 	assert.Contains(t, summary, "0 strikes")
 }
 
-// SummarizeOutput — error result, nil result, empty result
+// SummarizeOutput â€” error result, nil result, empty result
 
 func TestSummarizeOutput_ErrorResult(t *testing.T) {
 	t.Parallel()
@@ -837,7 +838,7 @@ func TestSummarizeOutput_DefaultTruncate(t *testing.T) {
 	assert.Contains(t, summary, "some")
 }
 
-// summarizeHoldings — edge cases
+// summarizeHoldings â€” edge cases
 
 func TestSummarizeHoldings_InvalidJSON(t *testing.T) {
 	t.Parallel()
@@ -861,7 +862,7 @@ func TestSummarizeHoldings_NonObjectItems(t *testing.T) {
 }
 
 // ===========================================================================
-// List — edge case: combined category + errors + since + until
+// List â€” edge case: combined category + errors + since + until
 // ===========================================================================
 
 func TestList_AllFilters(t *testing.T) {
@@ -893,7 +894,7 @@ func TestList_AllFilters(t *testing.T) {
 }
 
 // ===========================================================================
-// GetStats — with both category and errorsOnly at once
+// GetStats â€” with both category and errorsOnly at once
 // ===========================================================================
 
 func TestGetStats_CategoryAndErrors(t *testing.T) {
@@ -919,7 +920,7 @@ func TestGetStats_CategoryAndErrors(t *testing.T) {
 }
 
 // ===========================================================================
-// GetToolCounts — empty result
+// GetToolCounts â€” empty result
 // ===========================================================================
 
 func TestGetToolCounts_Empty(t *testing.T) {
@@ -932,7 +933,7 @@ func TestGetToolCounts_Empty(t *testing.T) {
 }
 
 // ===========================================================================
-// Stop — nil channels (no worker started)
+// Stop â€” nil channels (no worker started)
 // ===========================================================================
 
 func TestStop_NoWorker(t *testing.T) {
@@ -949,20 +950,20 @@ func TestStop_NoWorker(t *testing.T) {
 func TestStore_Stop_Idempotent(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	// Two sequential Stop() calls must not panic. The second call must also
 	// return promptly (the first call already drained and joined the worker).
 	s.Stop()
 	s.Stop()
 
-	// A third call for good measure — sync.Once guarantees all calls after
+	// A third call for good measure â€” sync.Once guarantees all calls after
 	// the first are no-ops.
 	s.Stop()
 }
 
 // ===========================================================================
-// Closed DB error paths — store operations on closed databases
+// Closed DB error paths â€” store operations on closed databases
 // ===========================================================================
 
 func TestList_ClosedDB(t *testing.T) {
@@ -1084,27 +1085,27 @@ func TestInitTable_ClosedDB(t *testing.T) {
 func TestStartWorker_ActualWorker_RecordFails(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	// Close the DB so Record fails when the worker processes the entry.
 	s.db.Close()
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	e := makeEntry("sw-fail-1", "user@test.com", "get_ltp", "market_data", false, now)
-	s.Enqueue(e)
+	s.EnqueueCtx(context.Background(), e)
 
-	s.Stop() // drains and completes — should not panic
+	s.Stop() // drains and completes â€” should not panic
 }
 
 // ===========================================================================
-// DeleteOlderThan with chain — marker record error (DB closed after delete)
+// DeleteOlderThan with chain â€” marker record error (DB closed after delete)
 // ===========================================================================
 
 func TestDeleteOlderThan_ChainMarkerRecordError(t *testing.T) {
 	t.Parallel()
 	s := openTestStoreWithKey(t)
-	s.SetLogger(slog.Default())
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	// Record entries directly (bypass worker) with chain hashes.
@@ -1125,7 +1126,7 @@ func TestDeleteOlderThan_ChainMarkerRecordError(t *testing.T) {
 }
 
 // ===========================================================================
-// scanToolCall — with encryption, email_encrypted is empty (legacy row)
+// scanToolCall â€” with encryption, email_encrypted is empty (legacy row)
 // ===========================================================================
 
 func TestScanToolCall_EncryptedStore_LegacyRow(t *testing.T) {
@@ -1137,7 +1138,7 @@ func TestScanToolCall_EncryptedStore_LegacyRow(t *testing.T) {
 	e := makeEntry("scan-leg", "plaintext@test.com", "get_ltp", "market_data", false, now)
 	require.NoError(t, s.Record(e))
 
-	// Now set encryption key and query — the email_encrypted column is empty.
+	// Now set encryption key and query â€” the email_encrypted column is empty.
 	key := []byte("0123456789abcdef0123456789abcdef")
 	s.SetEncryptionKey(key)
 
@@ -1157,7 +1158,7 @@ func TestScanToolCall_EncryptedStore_LegacyRow(t *testing.T) {
 }
 
 // ===========================================================================
-// GetToolMetrics — with since filter (covers the WHERE clause)
+// GetToolMetrics â€” with since filter (covers the WHERE clause)
 // ===========================================================================
 
 func TestGetToolMetrics_WithSinceFilter(t *testing.T) {
@@ -1179,7 +1180,7 @@ func TestGetToolMetrics_WithSinceFilter(t *testing.T) {
 }
 
 // ===========================================================================
-// SeedChain after entries exist — verify it picks up the last hash
+// SeedChain after entries exist â€” verify it picks up the last hash
 // ===========================================================================
 
 func TestSeedChain_AfterEntries(t *testing.T) {
@@ -1198,14 +1199,14 @@ func TestSeedChain_AfterEntries(t *testing.T) {
 }
 
 // ===========================================================================
-// Middleware — integration test
+// Middleware â€” integration test
 // ===========================================================================
 
 func TestMiddleware_Success(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 	require.NotNil(t, mw)
@@ -1238,8 +1239,8 @@ func TestMiddleware_Success(t *testing.T) {
 func TestMiddleware_HandlerError(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1270,8 +1271,8 @@ func TestMiddleware_HandlerError(t *testing.T) {
 func TestMiddleware_ToolError(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1301,8 +1302,8 @@ func TestMiddleware_ToolError(t *testing.T) {
 func TestMiddleware_PlaceOrderWithOrderID(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1338,8 +1339,8 @@ func TestMiddleware_PlaceOrderWithOrderID(t *testing.T) {
 func TestMiddleware_PlaceOrderWithNestedOrderID(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.SetLogger(slog.Default())
-	s.StartWorker()
+	s.SetLoggerPort(logport.NewSlog(slog.Default()))
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1364,7 +1365,7 @@ func TestMiddleware_PlaceOrderWithNestedOrderID(t *testing.T) {
 func TestMiddleware_NoEmail(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1392,7 +1393,7 @@ func TestMiddleware_NoEmail(t *testing.T) {
 func TestMiddleware_SensitiveParamsSanitized(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)
-	s.StartWorker()
+	s.StartWorkerCtx(context.Background())
 
 	mw := Middleware(s)
 
@@ -1507,7 +1508,7 @@ func TestVerifyChain_ClosedDB_RowsErr(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// scanToolCall error paths — bad timestamps
+// scanToolCall error paths â€” bad timestamps
 // ---------------------------------------------------------------------------
 
 func TestList_ScanToolCallError_BadTimestamp(t *testing.T) {
@@ -1583,7 +1584,7 @@ func TestDeleteOlderThan_ChainBreakRecordError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// broadcastToListeners default branch — channel full
+// broadcastToListeners default branch â€” channel full
 // ---------------------------------------------------------------------------
 
 func TestBroadcastToListeners_ChannelFull(t *testing.T) {
@@ -1604,7 +1605,7 @@ func TestBroadcastToListeners_ChannelFull(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListOrders scanToolCall error — bad timestamp
+// ListOrders scanToolCall error â€” bad timestamp
 // ---------------------------------------------------------------------------
 
 func TestListOrders_ScanError_BadTimestamp(t *testing.T) {
@@ -1774,6 +1775,6 @@ func TestGetGlobalStats_TopToolViewError(t *testing.T) {
 	assert.Error(t, gsErr)
 }
 
-// Coverage ceiling: 97.2% — uncovered lines are middleware.go:33-35 (requires
+// Coverage ceiling: 97.2% â€” uncovered lines are middleware.go:33-35 (requires
 // MCP server transport context), rows.Err() defensive guards (SQLite driver
 // never produces mid-iteration errors), and aggregate query scan errors.
