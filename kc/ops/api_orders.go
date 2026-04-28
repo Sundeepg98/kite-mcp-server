@@ -118,7 +118,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 
 	toolCalls, err := d.auditStore.ListOrders(email, since)
 	if err != nil {
-		d.logger.Error("Failed to list orders", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to list orders", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -228,7 +228,7 @@ func (h *OrdersHandler) ordersAPI(w http.ResponseWriter, r *http.Request) {
 			}
 			ltpMap, ltpErr := client.GetLTP(instruments...)
 			if ltpErr != nil {
-				d.logger.Error("Failed to get LTP for orders", "email", email, "error", ltpErr)
+				d.loggerPort.Error(r.Context(), "Failed to get LTP for orders", ltpErr, "email", email)
 			} else {
 				for i := range entries {
 					oe := &entries[i]
@@ -315,7 +315,7 @@ func (h *OrdersHandler) orderAttributionAPI(w http.ResponseWriter, r *http.Reque
 
 	toolCalls, err := d.auditStore.GetOrderAttribution(email, orderID)
 	if err != nil {
-		d.logger.Error("Failed to get order attribution", "email", email, "order_id", orderID, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get order attribution", err, "email", email, "order_id", orderID)
 		d.writeJSON(w, attributionResponse{OrderID: orderID, Steps: []attributionStep{}})
 		return
 	}

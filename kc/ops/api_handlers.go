@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"encoding/json"
@@ -89,7 +89,7 @@ func (d *DashboardHandler) status(w http.ResponseWriter, r *http.Request) {
 
 	tickerSt, err := d.manager.TickerService().GetStatus(email)
 	if err != nil {
-		d.logger.Error("Failed to get ticker status", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get ticker status", err, "email", email)
 		resp.Ticker = tickerStatus{Running: false, Subscriptions: 0}
 	} else {
 		resp.Ticker = tickerStatus{
@@ -198,7 +198,7 @@ func (h *AccountHandler) selfDeleteAccount(w http.ResponseWriter, r *http.Reques
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	d.logger.Info("User self-deleted account", "email", email)
+	d.loggerPort.Info(r.Context(), "User self-deleted account", "email", email)
 	d.writeJSON(w, map[string]string{"status": "ok", "message": "Account deleted. All data has been removed."})
 }
 
@@ -261,7 +261,7 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 			d.writeJSONError(w, http.StatusBadRequest, "update_failed", err.Error())
 			return
 		}
-		d.logger.Info("User updated credentials via dashboard", "email", email)
+		d.loggerPort.Info(r.Context(), "User updated credentials via dashboard", "email", email)
 		d.writeJSON(w, map[string]string{
 			"status":  "ok",
 			"message": "Credentials updated. Your cached Kite token has been cleared; please re-authenticate.",
@@ -279,7 +279,7 @@ func (h *AccountHandler) selfManageCredentials(w http.ResponseWriter, r *http.Re
 			d.writeJSONError(w, http.StatusBadRequest, "revoke_failed", err.Error())
 			return
 		}
-		d.logger.Info("User deleted credentials via dashboard", "email", email)
+		d.loggerPort.Info(r.Context(), "User deleted credentials via dashboard", "email", email)
 		d.writeJSON(w, map[string]string{
 			"status":  "ok",
 			"message": "Credentials removed. You will need to re-register to use the service.",
@@ -452,7 +452,7 @@ func (d *DashboardHandler) connections(w http.ResponseWriter, r *http.Request) {
 		}
 		calls, _, err := d.auditStore.List(email, opts)
 		if err != nil {
-			d.logger.Warn("connections: audit list failed", "email", email, "error", err)
+			d.loggerPort.Warn(r.Context(), "connections: audit list failed", "email", email, "error", err)
 		}
 		for _, c := range calls {
 			if c == nil || c.SessionID == "" {

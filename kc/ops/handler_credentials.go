@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
-			h.logger.Error("Failed to encode JSON error response", "error", err)
+			h.loggerPort.Error(r.Context(), "Failed to encode JSON error response", err)
 		}
 	}
 
@@ -84,11 +84,11 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 				Label:        "Self-provisioned (dashboard)",
 				AutoRegister: true,
 			}); dispErr != nil {
-				h.logger.Warn("Failed to dispatch SyncRegistryAfterLoginCommand", "email", authEmail, "error", dispErr)
+				h.loggerPort.Warn(r.Context(), "Failed to dispatch SyncRegistryAfterLoginCommand", "email", authEmail, "error", dispErr)
 			}
 		}
 
-		h.logger.Info("Stored Kite credentials", "email", authEmail)
+		h.loggerPort.Info(r.Context(), "Stored Kite credentials", "email", authEmail)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
@@ -113,7 +113,7 @@ func (h *Handler) credentials(w http.ResponseWriter, r *http.Request) {
 			h.writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		h.logger.Info("Deleted Kite credentials", "email", targetEmail, "by", authEmail)
+		h.loggerPort.Info(r.Context(), "Deleted Kite credentials", "email", targetEmail, "by", authEmail)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
 	default:
@@ -150,7 +150,7 @@ func (h *Handler) forceReauth(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logger.Info("Admin forced re-auth", "admin", adminEmail, "target", targetEmail)
+	h.loggerPort.Info(r.Context(), "Admin forced re-auth", "admin", adminEmail, "target", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Token deleted, user will re-authenticate on next MCP call"})
 }
 
@@ -172,7 +172,7 @@ func (h *Handler) verifyChain(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.auditStore.VerifyChain()
 	if err != nil {
-		h.logger.Error("Chain verification failed", "error", err)
+		h.loggerPort.Error(r.Context(), "Chain verification failed", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

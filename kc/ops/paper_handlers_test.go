@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // coverage_100_test.go: push ops coverage toward 100%.
 // Targets every function below 95% with specific branch/path tests.
@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -1293,7 +1294,7 @@ func TestCov100_BillingFallback_NoBillingStore(t *testing.T) {
 func TestCov100_WriteJSONError(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(devNull{}, &slog.HandlerOptions{Level: slog.LevelError}))
-	d := &DashboardHandler{logger: logger}
+	d := &DashboardHandler{loggerPort: logport.NewSlog(logger)}
 
 	rec := httptest.NewRecorder()
 	d.writeJSONError(rec, http.StatusBadRequest, "test_error", "test message")
@@ -1418,7 +1419,7 @@ func TestCov100_SendAllAdminEvents_NilTemplates(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	// Should not panic even with nil templates
-	h.sendAllAdminEvents(rec, rec, "admin@test.com")
+	h.sendAllAdminEvents(context.Background(), rec, rec, "admin@test.com")
 }
 
 // ===========================================================================

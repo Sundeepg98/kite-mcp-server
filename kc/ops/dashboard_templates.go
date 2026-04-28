@@ -1,6 +1,7 @@
-package ops
+﻿package ops
 
 import (
+	"context"
 	htmltemplate "html/template"
 	"net/http"
 	"time"
@@ -126,7 +127,7 @@ func (d *DashboardHandler) InitTemplates() {
 		files := append([]string{page}, partials...)
 		tmpl, err := htmltemplate.ParseFS(templates.FS, files...)
 		if err != nil {
-			d.logger.Error("Failed to parse user dashboard template", "page", page, "error", err)
+			d.loggerPort.Error(context.Background(), "Failed to parse user dashboard template", err, "page", page)
 			return nil
 		}
 		return tmpl
@@ -141,7 +142,7 @@ func (d *DashboardHandler) InitTemplates() {
 
 	fragTmpl, err := userDashboardFragmentTemplates()
 	if err != nil {
-		d.logger.Error("Failed to parse user fragment templates", "error", err)
+		d.loggerPort.Error(context.Background(), "Failed to parse user fragment templates", err)
 	} else {
 		d.fragmentTmpl = fragTmpl
 	}

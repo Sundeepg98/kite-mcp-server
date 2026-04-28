@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"net/http"
@@ -25,7 +25,7 @@ func (h *PaperHandler) paperStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	status, err := engine.Status(email)
 	if err != nil {
-		d.logger.Error("Failed to get paper status", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get paper status", err, "email", email)
 		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper trading status.")
 		return
 	}
@@ -51,7 +51,7 @@ func (h *PaperHandler) paperHoldings(w http.ResponseWriter, r *http.Request) {
 	}
 	holdings, err := engine.GetHoldings(email)
 	if err != nil {
-		d.logger.Error("Failed to get paper holdings", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get paper holdings", err, "email", email)
 		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper holdings.")
 		return
 	}
@@ -77,7 +77,7 @@ func (h *PaperHandler) paperPositions(w http.ResponseWriter, r *http.Request) {
 	}
 	positions, err := engine.GetPositions(email)
 	if err != nil {
-		d.logger.Error("Failed to get paper positions", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get paper positions", err, "email", email)
 		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper positions.")
 		return
 	}
@@ -103,7 +103,7 @@ func (h *PaperHandler) paperOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	orders, err := engine.GetOrders(email)
 	if err != nil {
-		d.logger.Error("Failed to get paper orders", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to get paper orders", err, "email", email)
 		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to get paper orders.")
 		return
 	}
@@ -128,7 +128,7 @@ func (h *PaperHandler) paperReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := engine.Reset(email); err != nil {
-		d.logger.Error("Failed to reset paper account", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to reset paper account", err, "email", email)
 		d.writeJSONError(w, http.StatusInternalServerError, "internal_error", "Failed to reset paper trading account.")
 		return
 	}

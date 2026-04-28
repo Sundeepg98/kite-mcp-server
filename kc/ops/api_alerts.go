@@ -200,7 +200,7 @@ func (h *AlertsHandler) alertsEnrichedAPI(w http.ResponseWriter, r *http.Request
 		}
 		ltpData, err := client.GetLTP(instList...)
 		if err != nil {
-			d.logger.Error("Failed to get LTP for alerts", "email", email, "error", err)
+			d.loggerPort.Error(r.Context(), "Failed to get LTP for alerts", err, "email", email)
 		} else {
 			for k, v := range ltpData {
 				if v.LastPrice > 0 {
@@ -316,7 +316,7 @@ func (h *AlertsHandler) pnlChartAPI(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := alertDB.LoadDailyPnL(email, fromDate, toDate)
 	if err != nil {
-		d.logger.Error("Failed to load daily P&L for chart", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to load daily P&L for chart", err, "email", email)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

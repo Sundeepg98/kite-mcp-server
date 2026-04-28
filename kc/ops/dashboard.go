@@ -1,6 +1,7 @@
-package ops
+﻿package ops
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	htmltemplate "html/template"
@@ -23,16 +24,14 @@ import (
 // Sub-handlers hold a `core *DashboardHandler` back-reference so they can
 // reach the shared state and helpers (writeJSON, userContext, ...).
 //
-// Wave D Phase 3 Package 7c-2 (Logger sweep): loggerPort field carries
-// the kc/logger.Logger port. The deprecated slog-typed logger field
-// stays populated from the same source so the ~80 consumer sites
-// across api_*.go, handler_*.go, and dashboard_*.go keep compiling
-// against the legacy slog-shape `d.logger.X(...)` idiom. After
-// consumer sites migrate to ctx-aware port surface (future cleanup
-// commit), the slog logger field is removed.
+// SOLID 99→100 cleanup: the deprecated *slog.Logger field is retired.
+// All ~33 consumer sites across api_*.go, handler_*.go, and
+// dashboard_*.go now use d.loggerPort with ctx threaded from the
+// containing HTTP request (r.Context()) — the writeJSON /
+// writeJSONError helpers fall back to context.Background() because
+// they have no request ctx in scope.
 type DashboardHandler struct {
 	manager      *kc.Manager
-	logger       *slog.Logger // Deprecated: use loggerPort
 	loggerPort   logport.Logger
 	auditStore   *audit.Store
 	adminCheck   func(string) bool // returns true if email is admin
@@ -68,13 +67,12 @@ type billingStoreIface interface {
 //
 // Public signature retains *slog.Logger for backward-compat with
 // app/wire.go's call site; the value is wrapped via logport.NewSlog
-// so the typed-port loggerPort field is also populated. New code
-// paths should consume d.loggerPort with ctx threading; existing
-// d.logger.X(slog-shape) call sites stay green.
+// onto loggerPort. The duplicate slog field was retired during the
+// SOLID 99→100 deprecation-shim sweep — all consumers use loggerPort
+// with ctx threaded from the containing HTTP request.
 func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *audit.Store) *DashboardHandler {
 	d := &DashboardHandler{
 		manager:    manager,
-		logger:     logger,
 		loggerPort: logport.NewSlog(logger),
 		auditStore: auditStore,
 	}
@@ -181,7 +179,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 func (d *DashboardHandler) writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		d.logger.Error("Failed to encode JSON response", "error", err)
+		d.loggerPort.Error(context.Background(), "Failed to encode JSON response", err)
 	}
 }
 
@@ -193,7 +191,7 @@ func (d *DashboardHandler) writeJSONError(w http.ResponseWriter, status int, err
 		"error":   errorCode,
 		"message": message,
 	}); err != nil {
-		d.logger.Error("Failed to encode JSON error response", "error", err)
+		d.loggerPort.Error(context.Background(), "Failed to encode JSON error response", err)
 	}
 }
 

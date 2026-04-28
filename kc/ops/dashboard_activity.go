@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"net/http"
@@ -47,6 +47,6 @@ func (h *ActivityHandler) serveActivityPageSSR(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.activityTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render activity page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render activity page", err)
 	}
 }

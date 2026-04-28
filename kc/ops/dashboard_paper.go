@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func (h *PaperHandler) servePaperPageSSR(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.paperTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render paper page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render paper page", err)
 	}
 }
 

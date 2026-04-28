@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"fmt"
@@ -53,10 +53,10 @@ func (h *PortfolioHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 				portfolio = buildPortfolioResponse(holdings, positions)
 			} else {
 				if holdingsErr != nil {
-					d.logger.Error("Failed to fetch holdings for SSR", "email", email, "error", holdingsErr)
+					d.loggerPort.Error(r.Context(), "Failed to fetch holdings for SSR", holdingsErr, "email", email)
 				}
 				if positionsErr != nil {
-					d.logger.Error("Failed to fetch positions for SSR", "email", email, "error", positionsErr)
+					d.loggerPort.Error(r.Context(), "Failed to fetch positions for SSR", positionsErr, "email", email)
 				}
 			}
 		}
@@ -87,7 +87,7 @@ func (h *PortfolioHandler) servePortfolioPage(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.portfolioTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render portfolio page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render portfolio page", err)
 	}
 }
 

@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"encoding/csv"
@@ -56,7 +56,7 @@ func (h *ActivityHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 
 	results, total, err := h.core.auditStore.List(email, opts)
 	if err != nil {
-		h.core.logger.Error("Failed to list audit entries", "error", err)
+		h.core.loggerPort.Error(r.Context(), "Failed to list audit entries", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -64,12 +64,12 @@ func (h *ActivityHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 	var stats *audit.Stats
 	stats, err = h.core.auditStore.GetStats(email, opts.Since, opts.Category, opts.OnlyErrors)
 	if err != nil {
-		h.core.logger.Error("Failed to get audit stats", "error", err)
+		h.core.loggerPort.Error(r.Context(), "Failed to get audit stats", err)
 	}
 
 	toolCounts, tcErr := h.core.auditStore.GetToolCounts(email, opts.Since, opts.Category, opts.OnlyErrors)
 	if tcErr != nil {
-		h.core.logger.Error("Failed to get tool counts", "error", tcErr)
+		h.core.loggerPort.Error(r.Context(), "Failed to get tool counts", tcErr)
 	}
 
 	h.core.writeJSON(w, map[string]any{
@@ -115,7 +115,7 @@ func (h *ActivityHandler) activityExport(w http.ResponseWriter, r *http.Request)
 
 	results, _, err := h.core.auditStore.List(email, opts)
 	if err != nil {
-		h.core.logger.Error("Failed to export activity", "error", err)
+		h.core.loggerPort.Error(r.Context(), "Failed to export activity", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -124,7 +124,7 @@ func (h *ActivityHandler) activityExport(w http.ResponseWriter, r *http.Request)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", "attachment; filename=activity.json")
 		if err := json.NewEncoder(w).Encode(results); err != nil {
-			h.core.logger.Error("Failed to encode JSON export", "error", err)
+			h.core.loggerPort.Error(r.Context(), "Failed to encode JSON export", err)
 		}
 		return
 	}

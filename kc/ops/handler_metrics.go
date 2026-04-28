@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"fmt"
@@ -31,14 +31,14 @@ func (h *Handler) metricsAPI(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.auditStore.GetGlobalStats(since)
 	if err != nil {
-		h.logger.Error("Failed to get global stats", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to get global stats", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	toolMetrics, err := h.auditStore.GetToolMetrics(since)
 	if err != nil {
-		h.logger.Error("Failed to get tool metrics", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to get tool metrics", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -97,13 +97,13 @@ func (h *Handler) metricsFragment(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.auditStore.GetGlobalStats(since)
 	if err != nil {
-		h.logger.Error("Failed to get global stats for fragment", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to get global stats for fragment", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	toolMetrics, err := h.auditStore.GetToolMetrics(since)
 	if err != nil {
-		h.logger.Error("Failed to get tool metrics for fragment", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to get tool metrics for fragment", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -112,13 +112,13 @@ func (h *Handler) metricsFragment(w http.ResponseWriter, r *http.Request) {
 
 	cardsHTML, err := renderFragment(h.adminTmpl, "admin_metrics_cards", data)
 	if err != nil {
-		h.logger.Error("Failed to render metrics cards fragment", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to render metrics cards fragment", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	tableHTML, err := renderFragment(h.adminTmpl, "admin_metrics_table", data)
 	if err != nil {
-		h.logger.Error("Failed to render metrics table fragment", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to render metrics table fragment", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

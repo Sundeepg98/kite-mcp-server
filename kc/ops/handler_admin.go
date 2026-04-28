@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"encoding/json"
@@ -65,7 +65,7 @@ func (h *Handler) suspendUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logger.Info("Admin suspended user", "admin", adminEmail, "target", targetEmail)
+	h.loggerPort.Info(r.Context(), "Admin suspended user", "admin", adminEmail, "target", targetEmail)
 	h.logAdminAction(adminEmail, "suspend_user", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "User suspended"})
 }
@@ -102,7 +102,7 @@ func (h *Handler) activateUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logger.Info("Admin activated user", "admin", adminEmail, "target", targetEmail)
+	h.loggerPort.Info(r.Context(), "Admin activated user", "admin", adminEmail, "target", targetEmail)
 	h.logAdminAction(adminEmail, "activate_user", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "User activated"})
 }
@@ -171,7 +171,7 @@ func (h *Handler) offboardUser(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logger.Info("Admin offboarded user", "admin", adminEmail, "target", targetEmail)
+	h.loggerPort.Info(r.Context(), "Admin offboarded user", "admin", adminEmail, "target", targetEmail)
 	h.logAdminAction(adminEmail, "offboard_user", targetEmail)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "User offboarded, all data removed"})
 }
@@ -230,7 +230,7 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logger.Info("Admin changed user role", "admin", adminEmail, "target", targetEmail, "role", req.Role)
+	h.loggerPort.Info(r.Context(), "Admin changed user role", "admin", adminEmail, "target", targetEmail, "role", req.Role)
 	h.logAdminAction(adminEmail, "change_role", targetEmail+" -> "+req.Role)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Role updated to " + req.Role})
 }
@@ -274,7 +274,7 @@ func (h *Handler) freezeTrading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guard.Freeze(body.Email, adminEmail, body.Reason)
-	h.logger.Info("Admin froze trading", "admin", adminEmail, "target", body.Email, "reason", body.Reason)
+	h.loggerPort.Info(r.Context(), "Admin froze trading", "admin", adminEmail, "target", body.Email, "reason", body.Reason)
 	h.logAdminAction(adminEmail, "freeze_trading", body.Email)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Trading frozen for " + body.Email})
 }
@@ -307,7 +307,7 @@ func (h *Handler) unfreezeTrading(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guard.Unfreeze(body.Email)
-	h.logger.Info("Admin unfroze trading", "admin", adminEmail, "target", body.Email)
+	h.loggerPort.Info(r.Context(), "Admin unfroze trading", "admin", adminEmail, "target", body.Email)
 	h.logAdminAction(adminEmail, "unfreeze_trading", body.Email)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Trading unfrozen for " + body.Email})
 }
@@ -345,7 +345,7 @@ func (h *Handler) freezeTradingGlobal(w http.ResponseWriter, r *http.Request) {
 		reason = "Admin emergency freeze"
 	}
 	guard.FreezeGlobal(adminEmail, reason)
-	h.logger.Warn("Admin activated GLOBAL trading freeze", "admin", adminEmail, "reason", reason)
+	h.loggerPort.Warn(r.Context(), "Admin activated GLOBAL trading freeze", "admin", adminEmail, "reason", reason)
 	h.logAdminAction(adminEmail, "freeze_global", reason)
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Global trading freeze activated"})
 }
@@ -367,7 +367,7 @@ func (h *Handler) unfreezeTradingGlobal(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	guard.UnfreezeGlobal()
-	h.logger.Info("Admin lifted global trading freeze", "admin", adminEmail)
+	h.loggerPort.Info(r.Context(), "Admin lifted global trading freeze", "admin", adminEmail)
 	h.logAdminAction(adminEmail, "unfreeze_global", "")
 	h.writeJSON(w, map[string]string{"status": "ok", "message": "Global trading freeze lifted"})
 }
@@ -421,7 +421,7 @@ func (h *Handler) registryHandler(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return
 		}
-		h.logger.Info("Admin registered app in key registry", "admin", email, "id", req.ID, "api_key", req.APIKey[:8]+"...")
+		h.loggerPort.Info(r.Context(), "Admin registered app in key registry", "admin", email, "id", req.ID, "api_key", req.APIKey[:8]+"...")
 		h.logAdminAction(email, "register_app", req.ID+" ("+req.Label+")")
 		w.WriteHeader(http.StatusCreated)
 		h.writeJSON(w, map[string]string{"status": "ok", "id": req.ID})
@@ -474,7 +474,7 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return
 		}
-		h.logger.Info("Admin updated registry entry", "admin", email, "id", id)
+		h.loggerPort.Info(r.Context(), "Admin updated registry entry", "admin", email, "id", id)
 		h.logAdminAction(email, "update_registry", id)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 
@@ -484,7 +484,7 @@ func (h *Handler) registryItemHandler(w http.ResponseWriter, r *http.Request) {
 			h.writeJSON(w, map[string]string{"error": err.Error()})
 			return
 		}
-		h.logger.Info("Admin deleted registry entry", "admin", email, "id", id)
+		h.loggerPort.Info(r.Context(), "Admin deleted registry entry", "admin", email, "id", id)
 		h.logAdminAction(email, "delete_registry", id)
 		h.writeJSON(w, map[string]string{"status": "ok"})
 

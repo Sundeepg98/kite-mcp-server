@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"math"
@@ -139,6 +139,6 @@ func (h *AlertsHandler) serveAlertsPageSSR(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.alertsTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render alerts page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render alerts page", err)
 	}
 }

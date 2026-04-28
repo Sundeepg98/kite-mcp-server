@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/zerodha/kite-mcp-server/kc"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 )
 
@@ -679,8 +680,11 @@ func TestFinal_PaperFragment_Enabled(t *testing.T) {
 	require.NotNil(t, pe)
 	require.NoError(t, pe.Enable("user@test.com", 10000000))
 
-	// Create paper engine and enable for user
-	paperStore := papertrading.NewStore(d.manager.AlertDB(), d.logger)
+	// Create paper engine and enable for user. Bridge through
+	// logport.AsSlog because papertrading.NewStore still consumes
+	// *slog.Logger directly (its own Logger sweep is a separate
+	// commit; doesn't block this SOLID cleanup).
+	paperStore := papertrading.NewStore(d.manager.AlertDB(), logport.AsSlog(d.loggerPort))
 	require.NoError(t, paperStore.InitTables())
 
 	mux := http.NewServeMux()

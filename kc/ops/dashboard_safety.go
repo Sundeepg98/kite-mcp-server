@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"fmt"
@@ -30,7 +30,7 @@ func (h *SafetyHandler) serveSafetyPageSSR(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.safetyTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render safety page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render safety page", err)
 	}
 }
 

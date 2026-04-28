@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"math"
@@ -72,7 +72,7 @@ func (h *TaxHandler) taxAnalysisAPI(w http.ResponseWriter, r *http.Request) {
 
 	holdings, err := client.GetHoldings()
 	if err != nil {
-		d.logger.Error("Failed to fetch holdings for tax analysis", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to fetch holdings for tax analysis", err, "email", email)
 		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
 			"Failed to fetch holdings: "+err.Error())
 		return

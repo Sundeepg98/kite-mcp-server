@@ -1,6 +1,7 @@
-package ops
+﻿package ops
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	htmltemplate "html/template"
@@ -30,12 +31,17 @@ import (
 //   - handler_metrics.go      metricsAPI / metricsFragment
 //   - handler_logs.go         logStream (SSE)
 type Handler struct {
-	manager       *kc.Manager
-	metrics       *metrics.Manager
-	logBuffer     *LogBuffer
-	logger        *slog.Logger // Deprecated: use loggerPort
-	loggerPort    logport.Logger
-	startTime     time.Time
+	manager   *kc.Manager
+	metrics   *metrics.Manager
+	logBuffer *LogBuffer
+	// SOLID 99→100 cleanup: the deprecated *slog.Logger field is
+	// retired. All ~33 consumer sites across handler.go,
+	// handler_admin.go, handler_credentials.go, handler_metrics.go,
+	// and overview_sse.go now use h.loggerPort with ctx threaded from
+	// the containing HTTP request — helpers without `r` in scope use
+	// context.Background() with a service-ctx fallback comment.
+	loggerPort logport.Logger
+	startTime  time.Time
 	version       string
 	userStore     *users.Store
 	auditStore    *audit.Store
@@ -66,16 +72,15 @@ func (h *Handler) SetAlertDBPath(path string) {
 
 // New creates a new ops Handler.
 //
-// Wave D Phase 3 Package 7c-2 (Logger sweep): public signature
-// retains *slog.Logger for backward-compat with app/wire.go's call
-// site; internally also wires loggerPort via logport.NewSlog so
-// new code paths can consume the typed port with ctx threading.
+// Public signature retains *slog.Logger for backward-compat with
+// app/wire.go's call site; the value is wrapped via logport.NewSlog
+// onto loggerPort. The duplicate slog field was retired during the
+// SOLID 99→100 deprecation-shim sweep — all consumers use loggerPort.
 func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, logger *slog.Logger, version string, startTime time.Time, userStore *users.Store, auditStore *audit.Store) *Handler {
 	h := &Handler{
 		manager:       manager,
 		metrics:       metrics,
 		logBuffer:     logBuffer,
-		logger:        logger,
 		loggerPort:    logport.NewSlog(logger),
 		startTime:     startTime,
 		version:       version,
@@ -83,6 +88,8 @@ func New(manager *kc.Manager, metrics *metrics.Manager, logBuffer *LogBuffer, lo
 		auditStore:    auditStore,
 		registryStore: manager.RegistryStoreConcrete(),
 	}
+	// Template-parse error logs use the slog handle directly (init-time;
+	// no request ctx).
 	tmpl, err := overviewFragmentTemplates()
 	if err != nil {
 		logger.Error("Failed to parse overview templates", "error", err)
@@ -211,7 +218,7 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.opsTmpl.Execute(w, data); err != nil {
-		h.logger.Error("Failed to render ops page", "error", err)
+		h.loggerPort.Error(r.Context(), "Failed to render ops page", err)
 	}
 }
 
@@ -220,7 +227,8 @@ func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		h.logger.Error("Failed to encode JSON response", "error", err)
+		// Helper has no request ctx in scope; service-ctx fallback.
+		h.loggerPort.Error(context.Background(), "Failed to encode JSON response", err)
 	}
 }
 
@@ -229,7 +237,7 @@ func (h *Handler) writeJSONError(w http.ResponseWriter, status int, msg string) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
-		h.logger.Error("Failed to encode JSON error response", "error", err)
+		h.loggerPort.Error(context.Background(), "Failed to encode JSON error response", err)
 	}
 }
 
@@ -259,6 +267,7 @@ func (h *Handler) logAdminAction(adminEmail, action, target string) {
 		CompletedAt:   now,
 	}
 	if err := h.auditStore.Record(entry); err != nil {
-		h.logger.Error("Failed to record admin action", "action", action, "error", err)
+		// Helper has no request ctx in scope; service-ctx fallback.
+		h.loggerPort.Error(context.Background(), "Failed to record admin action", err, "action", action)
 	}
 }

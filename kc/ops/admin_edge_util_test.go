@@ -1,10 +1,11 @@
-package ops
+﻿package ops
 
 // coverage_max_test.go: push ops coverage toward 100%.
 // Targets remaining uncovered branches across handler.go, data.go,
 // dashboard.go, dashboard_templates.go, and overview_sse.go.
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -143,7 +144,7 @@ func TestMax_SendAllAdminEvents(t *testing.T) {
 	h := newHandlerWithAuditAndMetrics(t)
 
 	rec := httptest.NewRecorder()
-	h.sendAllAdminEvents(rec, rec, "admin@test.com")
+	h.sendAllAdminEvents(context.Background(), rec, rec, "admin@test.com")
 	body := rec.Body.String()
 	assert.Contains(t, body, "event: overview-stats")
 	assert.Contains(t, body, "event: overview-tools")

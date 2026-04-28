@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"encoding/json"
@@ -42,7 +42,7 @@ func (h *OrdersHandler) serveOrdersPageSSR(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := d.ordersTmpl.Execute(w, data); err != nil {
-		d.logger.Error("Failed to render orders page", "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to render orders page", err)
 	}
 }
 

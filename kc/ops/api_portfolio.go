@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 import (
 	"fmt"
@@ -156,7 +156,7 @@ func (h *PortfolioHandler) portfolio(w http.ResponseWriter, r *http.Request) {
 
 	holdings, holdingsErr := client.GetHoldings()
 	if holdingsErr != nil {
-		d.logger.Error("Failed to fetch holdings", "email", email, "error", holdingsErr)
+		d.loggerPort.Error(r.Context(), "Failed to fetch holdings", holdingsErr, "email", email)
 		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
 			"Failed to fetch holdings from Kite: "+holdingsErr.Error())
 		return
@@ -164,7 +164,7 @@ func (h *PortfolioHandler) portfolio(w http.ResponseWriter, r *http.Request) {
 
 	positions, positionsErr := client.GetPositions()
 	if positionsErr != nil {
-		d.logger.Error("Failed to fetch positions", "email", email, "error", positionsErr)
+		d.loggerPort.Error(r.Context(), "Failed to fetch positions", positionsErr, "email", email)
 		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
 			"Failed to fetch positions from Kite: "+positionsErr.Error())
 		return
@@ -254,7 +254,7 @@ func (h *PortfolioHandler) sectorExposureAPI(w http.ResponseWriter, r *http.Requ
 
 	holdings, err := client.GetHoldings()
 	if err != nil {
-		d.logger.Error("Failed to fetch holdings for sector exposure", "email", email, "error", err)
+		d.loggerPort.Error(r.Context(), "Failed to fetch holdings for sector exposure", err, "email", email)
 		d.writeJSONError(w, http.StatusBadGateway, "kite_error",
 			"Failed to fetch holdings: "+err.Error())
 		return

@@ -1,4 +1,4 @@
-package ops
+﻿package ops
 
 // ops_push100_test.go: push ops coverage from ~89% toward 100%.
 // Targets remaining uncovered branches in handler.go, user_render.go,
@@ -448,7 +448,7 @@ func TestPush100_SendAllAdminEvents_WithData(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	// httptest.ResponseRecorder implements http.Flusher directly
-	h.sendAllAdminEvents(rec, rec, "admin@test.com")
+	h.sendAllAdminEvents(context.Background(), rec, rec, "admin@test.com")
 
 	body := rec.Body.String()
 	assert.Contains(t, body, "event:")

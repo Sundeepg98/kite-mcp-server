@@ -1,6 +1,7 @@
-package ops
+﻿package ops
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,15 +31,17 @@ func (h *Handler) overviewStream(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	// Send initial event immediately.
-	h.sendAllAdminEvents(w, flusher, email)
+	// Send initial event immediately. Thread r.Context() through so
+	// fragment-render error logs carry the request's trace correlation
+	// (Wave D Phase 3 Logger sweep — SOLID 99→100 cleanup).
+	h.sendAllAdminEvents(r.Context(), w, flusher, email)
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			h.sendAllAdminEvents(w, flusher, email)
+			h.sendAllAdminEvents(r.Context(), w, flusher, email)
 		}
 	}
 }
@@ -46,7 +49,10 @@ func (h *Handler) overviewStream(w http.ResponseWriter, r *http.Request) {
 // sendAllAdminEvents renders and sends fragments for Overview and all other
 // SSE-driven admin tabs (sessions, tickers, alerts, users).
 // Metrics is excluded (expensive + has user-interactive period selector).
-func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher, currentEmail string) {
+//
+// ctx threads through to fragment-render error logs so trace
+// correlation survives the SSE-loop ticker.C handoff.
+func (h *Handler) sendAllAdminEvents(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, currentEmail string) {
 	// --- Overview ---
 	if h.overviewTmpl != nil {
 		overview := h.buildOverview()
@@ -55,13 +61,13 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 		if html, err := renderFragment(h.overviewTmpl, "overview_stats", data); err == nil {
 			writeSSEEvent(w, "overview-stats", html)
 		} else {
-			h.logger.Error("Failed to render overview stats fragment", "error", err)
+			h.loggerPort.Error(ctx, "Failed to render overview stats fragment", err)
 		}
 
 		if html, err := renderFragment(h.overviewTmpl, "overview_tools", data); err == nil {
 			writeSSEEvent(w, "overview-tools", html)
 		} else {
-			h.logger.Error("Failed to render overview tools fragment", "error", err)
+			h.loggerPort.Error(ctx, "Failed to render overview tools fragment", err)
 		}
 
 		writeSSEEvent(w, "overview-uptime", "up "+overview.Uptime)
@@ -74,7 +80,7 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 		if html, err := renderFragment(h.adminTmpl, "admin_sessions", sessionsData); err == nil {
 			writeSSEEvent(w, "admin-sessions", html)
 		} else {
-			h.logger.Error("Failed to render sessions fragment", "error", err)
+			h.loggerPort.Error(ctx, "Failed to render sessions fragment", err)
 		}
 
 		// Tickers
@@ -82,7 +88,7 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 		if html, err := renderFragment(h.adminTmpl, "admin_tickers", tickersData); err == nil {
 			writeSSEEvent(w, "admin-tickers", html)
 		} else {
-			h.logger.Error("Failed to render tickers fragment", "error", err)
+			h.loggerPort.Error(ctx, "Failed to render tickers fragment", err)
 		}
 
 		// Alerts
@@ -90,7 +96,7 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 		if html, err := renderFragment(h.adminTmpl, "admin_alerts", alertsData); err == nil {
 			writeSSEEvent(w, "admin-alerts", html)
 		} else {
-			h.logger.Error("Failed to render alerts fragment", "error", err)
+			h.loggerPort.Error(ctx, "Failed to render alerts fragment", err)
 		}
 
 		// Users (needs currentEmail for IsSelf check)
@@ -99,7 +105,7 @@ func (h *Handler) sendAllAdminEvents(w http.ResponseWriter, flusher http.Flusher
 			if html, err := renderFragment(h.adminTmpl, "admin_users", usersData); err == nil {
 				writeSSEEvent(w, "admin-users", html)
 			} else {
-				h.logger.Error("Failed to render users fragment", "error", err)
+				h.loggerPort.Error(ctx, "Failed to render users fragment", err)
 			}
 		}
 	}
