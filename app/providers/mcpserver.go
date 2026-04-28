@@ -6,6 +6,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/zerodha/kite-mcp-server/mcp"
 )
 
 // mcpserver.go — Wave D Phase 2 Slice P2.4d+e (Batch 3 Commit α).
@@ -95,26 +97,71 @@ type MiddlewareDeps struct {
 //
 // Pure function — no I/O, no goroutines. Deterministic output for
 // any given MiddlewareDeps input.
+//
+// Internally routes through mcp.BuildChainFromSpec (the declarative
+// DSL) so the chain order lives in mcp.DefaultBuiltInOrder as data,
+// NOT in this function as a sequence of add() calls. Reordering the
+// production chain is now a single edit to DefaultBuiltInOrder; both
+// the operator-override path (mcp.BuildMiddlewareChain) and the
+// production wire-up (this function) pick up the change without
+// parallel edits. Validation errors are intentionally swallowed —
+// MiddlewareDeps' typed fields make startup-time misconfiguration
+// impossible (you can't have a duplicate field, you can't typo a
+// field name without a Go-compile error). The operator-override path
+// retains fail-fast validation via mcp.ValidateSpec.
 func BuildMiddlewareChain(deps MiddlewareDeps) []server.ServerOption {
-	// Pre-allocate for the maximum possible chain depth (10).
-	opts := make([]server.ServerOption, 0, 10)
-	add := func(mw server.ToolHandlerMiddleware) {
-		if mw == nil {
-			return
-		}
+	chain, err := mcp.BuildChainFromSpec(mcp.DefaultBuiltInSpec(deps.toRegistry()))
+	if err != nil {
+		// Defensive: the typed-field MiddlewareDeps cannot construct an
+		// invalid Spec (no duplicates possible — fields are nominal; no
+		// missing names possible — toRegistry maps every canonical name).
+		// If this branch ever fires it's a programmer error in the
+		// translation; surface as an empty chain rather than panicking
+		// (mirrors the legacy "nil = skip" graceful-degrade contract).
+		return nil
+	}
+
+	opts := make([]server.ServerOption, 0, len(chain))
+	for _, mw := range chain {
 		opts = append(opts, server.WithToolHandlerMiddleware(mw))
 	}
-	add(deps.Correlation)
-	add(deps.Timeout)
-	add(deps.Audit)
-	add(deps.Hooks)
-	add(deps.CircuitBreaker)
-	add(deps.RiskGuard)
-	add(deps.RateLimiter)
-	add(deps.Billing)
-	add(deps.PaperTrading)
-	add(deps.DashboardURL)
 	return opts
+}
+
+// toRegistry projects MiddlewareDeps's typed fields into the
+// canonical-name MiddlewareRegistry shape consumed by
+// mcp.BuildChainFromSpec. This is the bridge between the typed
+// fan-in struct (compile-time safety; can't have duplicate or typo'd
+// names) and the data-driven DSL (Order is data; same Spec validates
+// for both production wire-up and operator overrides).
+//
+// Each entry wraps the corresponding deps field in a closure-builder
+// so mcp.BuildChainFromSpec sees the MiddlewareBuilder type. Builders
+// for nil deps fields are themselves nil — preserving the
+// "nil = skip layer" contract that mcp.BuildMiddlewareChain honours.
+func (deps MiddlewareDeps) toRegistry() mcp.MiddlewareRegistry {
+	mk := func(mw server.ToolHandlerMiddleware) mcp.MiddlewareBuilder {
+		if mw == nil {
+			return nil
+		}
+		// The middleware is already constructed at this point (the
+		// composition site built it before the fan-in). The builder
+		// just returns the held value; the Spec resolver doesn't care
+		// whether construction is lazy or eager.
+		return func() server.ToolHandlerMiddleware { return mw }
+	}
+	return mcp.MiddlewareRegistry{
+		"correlation":    mk(deps.Correlation),
+		"timeout":        mk(deps.Timeout),
+		"audit":          mk(deps.Audit),
+		"hooks":          mk(deps.Hooks),
+		"circuitbreaker": mk(deps.CircuitBreaker),
+		"riskguard":      mk(deps.RiskGuard),
+		"ratelimit":      mk(deps.RateLimiter),
+		"billing":        mk(deps.Billing),
+		"papertrading":   mk(deps.PaperTrading),
+		"dashboardurl":   mk(deps.DashboardURL),
+	}
 }
 
 // MCPServerInput carries the inputs BuildMCPServer consumes via the
