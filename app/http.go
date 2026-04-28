@@ -245,9 +245,18 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 	// reading os.Getenv at request time. Empty AlertDBPath leaves the
 	// metrics endpoint reporting db_size_mb=0 (same behaviour as before).
 	opsHandler.SetAlertDBPath(app.Config.AlertDBPath)
-	// Admin auth middleware: checks kite_jwt cookie, redirects to /auth/admin-login if missing,
-	// and requires the authenticated email to be in ADMIN_EMAILS.
-	adminAuth := func(next http.Handler) http.Handler {
+	// Admin auth — split into two layers so the MFA enrollment endpoints
+	// can pass through the role check WITHOUT recursively requiring MFA
+	// (they ARE the MFA gate; gating them through themselves would loop).
+	//
+	//   adminAuthBase   = JWT cookie + ADMIN_EMAILS role check
+	//   adminAuth       = adminAuthBase + RequireAdminMFA (production gate)
+	//
+	// Per docs/access-control.md §8 (MFA on admin actions, shipped via
+	// SECURITY_POSTURE.md §4.3 close-out): every /admin/ops/* route runs
+	// adminAuth. The /auth/admin-mfa/{enroll,verify} routes run
+	// adminAuthBase only.
+	adminAuthBase := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var email string
 			// If OAuth handler is available, try extracting email from JWT cookie
@@ -276,6 +285,15 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 			ctx := oauth.ContextWithEmail(r.Context(), email)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+	// adminAuth is adminAuthBase + RequireAdminMFA. When the OAuth handler
+	// is unavailable (DEV_MODE / fallback), the MFA gate is skipped — the
+	// fallback identity middleware path below already takes that branch.
+	adminAuth := func(next http.Handler) http.Handler {
+		if app.oauthHandler == nil {
+			return adminAuthBase(next)
+		}
+		return adminAuthBase(app.oauthHandler.RequireAdminMFA(next))
 	}
 	if app.oauthHandler != nil || userStore != nil {
 		opsHandler.RegisterRoutes(mux, adminAuth)
@@ -353,6 +371,11 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		mux.Handle("/auth/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleLoginChoice))
 		mux.Handle("/auth/browser-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleBrowserLogin))
 		mux.Handle("/auth/admin-login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleAdminLogin))
+		// MFA enrollment + verification — gated by adminAuthBase (email +
+		// admin role) but NOT by RequireAdminMFA (gating through self loops).
+		// Per docs/access-control.md §8 / SECURITY_POSTURE.md §4.3 closeout.
+		mux.Handle("/auth/admin-mfa/enroll", rateLimitFunc(app.rateLimiters.auth, adminAuthBase(http.HandlerFunc(app.oauthHandler.HandleAdminMFAEnroll)).ServeHTTP))
+		mux.Handle("/auth/admin-mfa/verify", rateLimitFunc(app.rateLimiters.auth, adminAuthBase(http.HandlerFunc(app.oauthHandler.HandleAdminMFAVerify)).ServeHTTP))
 		mux.Handle("/auth/google/login", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleLogin))
 		mux.Handle("/auth/google/callback", rateLimitFunc(app.rateLimiters.auth, app.oauthHandler.HandleGoogleCallback))
 	}

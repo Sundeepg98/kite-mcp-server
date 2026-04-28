@@ -43,6 +43,10 @@ type ConsentRecorder func(email, ipAddress, userAgent string)
 
 // AdminUserStore provides user lookup, password verification, and auto-provisioning for login.
 // Implemented by users.Store to avoid direct import of the users package.
+//
+// MFA methods (HasTOTP/SetTOTPSecret/VerifyTOTP/ClearTOTPSecret) gate admin
+// actions per docs/access-control.md §8. Implementations must reject
+// SetTOTPSecret on non-admin users (defence in depth).
 type AdminUserStore interface {
 	GetRole(email string) string
 	GetStatus(email string) string
@@ -50,6 +54,17 @@ type AdminUserStore interface {
 	// EnsureGoogleUser auto-creates a trader account on first Google SSO login.
 	// Existing users are left unchanged (admins keep admin role).
 	EnsureGoogleUser(email string)
+	// HasTOTP reports whether the given user has an enrolled TOTP secret.
+	// Used by the MFA gate to decide between enrollment vs verification.
+	HasTOTP(email string) bool
+	// SetTOTPSecret persists a TOTP secret for the user (encrypted at rest).
+	// Returns error if the user is not admin or no encryption key is wired.
+	SetTOTPSecret(email, plaintextSecret string) error
+	// VerifyTOTP checks the supplied 6-digit code against the stored secret.
+	// Returns (false, nil) for any non-match (wrong code, not enrolled).
+	VerifyTOTP(email, code string) (bool, error)
+	// ClearTOTPSecret removes a user's TOTP enrollment (admin recovery flow).
+	ClearTOTPSecret(email string) error
 }
 
 // RegistryEntry is a thin projection of a pre-registered Kite app, used inside
@@ -92,11 +107,13 @@ type Handler struct {
 	httpClient       *http.Client // nil = default; injectable for testing Google OAuth
 
 	// Cached templates (parsed once at startup)
-	loginSuccessTmpl *template.Template
-	browserLoginTmpl *template.Template
-	adminLoginTmpl   *template.Template
-	emailPromptTmpl  *template.Template
-	loginChoiceTmpl  *template.Template
+	loginSuccessTmpl   *template.Template
+	browserLoginTmpl   *template.Template
+	adminLoginTmpl     *template.Template
+	emailPromptTmpl    *template.Template
+	loginChoiceTmpl    *template.Template
+	adminMfaEnrollTmpl *template.Template
+	adminMfaVerifyTmpl *template.Template
 }
 
 // NewHandler creates a new OAuth handler. Config must be validated first.
@@ -135,6 +152,14 @@ func NewHandler(cfg *Config, signer Signer, exchanger KiteExchanger) *Handler {
 	h.loginChoiceTmpl, err = template.ParseFS(templates.FS, "base.html", "login_choice.html")
 	if err != nil {
 		cfg.Logger.Error("Failed to parse login_choice template", "error", err)
+	}
+	h.adminMfaEnrollTmpl, err = template.ParseFS(templates.FS, "base.html", "admin_mfa_enroll.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse admin_mfa_enroll template", "error", err)
+	}
+	h.adminMfaVerifyTmpl, err = template.ParseFS(templates.FS, "base.html", "admin_mfa_verify.html")
+	if err != nil {
+		cfg.Logger.Error("Failed to parse admin_mfa_verify template", "error", err)
 	}
 
 	return h

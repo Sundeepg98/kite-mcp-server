@@ -53,6 +53,14 @@ func (m *mockAdminUserStore) VerifyPassword(email, password string) (bool, error
 }
 
 func (m *mockAdminUserStore) EnsureGoogleUser(email string) {}
+
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStore) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStore) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStore) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStore) ClearTOTPSecret(email string) error                 { return nil }
+
 func TestHandleAdminLogin_POST_ValidCredentials(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()
@@ -483,6 +491,14 @@ func (m *mockAdminUserStoreFinal) VerifyPassword(email, password string) (bool, 
 }
 
 func (m *mockAdminUserStoreFinal) EnsureGoogleUser(email string) {}
+
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStoreFinal) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStoreFinal) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStoreFinal) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStoreFinal) ClearTOTPSecret(email string) error                 { return nil }
+
 func TestHandleAdminLogin_POST_WrongPassword_Final(t *testing.T) {
 	t.Parallel()
 	h := newTestHandler()

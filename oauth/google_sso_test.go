@@ -925,3 +925,10 @@ func (m *mockAdminUserStoreFinalWithError) VerifyPassword(email, password string
 }
 
 func (m *mockAdminUserStoreFinalWithError) EnsureGoogleUser(email string) {}
+
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStoreFinalWithError) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStoreFinalWithError) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStoreFinalWithError) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStoreFinalWithError) ClearTOTPSecret(email string) error                 { return nil }

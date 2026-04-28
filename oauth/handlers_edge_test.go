@@ -907,6 +907,13 @@ func (m *mockAdminUserStoreWithPassword) VerifyPassword(email, password string) 
 }
 func (m *mockAdminUserStoreWithPassword) EnsureGoogleUser(email string) {}
 
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStoreWithPassword) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStoreWithPassword) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStoreWithPassword) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStoreWithPassword) ClearTOTPSecret(email string) error                 { return nil }
+
 type mockAdminUserStoreWithSetAdmin struct {
 	roles    map[string]string
 	statuses map[string]string
@@ -921,6 +928,13 @@ func (m *mockAdminUserStoreWithSetAdmin) EnsureGoogleUser(email string) {}
 func (m *mockAdminUserStoreWithSetAdmin) SetAdminEmail(email, admin string) error {
 	return nil
 }
+
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStoreWithSetAdmin) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStoreWithSetAdmin) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStoreWithSetAdmin) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStoreWithSetAdmin) ClearTOTPSecret(email string) error                 { return nil }
 
 type mockAdminUserStoreWithSetAdminError struct {
 	roles    map[string]string
@@ -938,3 +952,10 @@ func (m *mockAdminUserStoreWithSetAdminError) EnsureGoogleUser(email string) {}
 func (m *mockAdminUserStoreWithSetAdminError) SetAdminEmail(email, admin string) error {
 	return fmt.Errorf("failed to link admin")
 }
+
+// MFA stubs — these existing tests don't exercise MFA; the stubs satisfy
+// the AdminUserStore interface contract.
+func (m *mockAdminUserStoreWithSetAdminError) HasTOTP(email string) bool                          { return false }
+func (m *mockAdminUserStoreWithSetAdminError) SetTOTPSecret(email, plaintextSecret string) error  { return nil }
+func (m *mockAdminUserStoreWithSetAdminError) VerifyTOTP(email, code string) (bool, error)        { return false, nil }
+func (m *mockAdminUserStoreWithSetAdminError) ClearTOTPSecret(email string) error                 { return nil }

@@ -282,6 +282,7 @@ type Manager struct {
 	telegramNotifier  *alerts.TelegramNotifier    // Telegram alert sender
 	alertDB           *alerts.DB                  // optional: SQLite persistence for alerts
 	ownsAlertDB       bool                        // true => Manager.Shutdown closes alertDB; false when supplied via Config.AlertDB
+	encryptionKey     []byte                      // AES-256 key derived via HKDF from cfg.EncryptionSecret; mirrors alertDB.encryptionKey for stores that encrypt outside the alerts.DB layer (e.g. users.Store TOTP secrets)
 	auditStore        *audit.Store                // optional: audit trail for synthetic events
 	riskGuard         *riskguard.Guard            // optional: financial safety controls
 	paperEngine       *papertrading.PaperEngine   // optional: virtual trading engine

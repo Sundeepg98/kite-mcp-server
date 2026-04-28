@@ -1,0 +1,83 @@
+{{define "content"}}
+<div class="card">
+    <div class="icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="12" fill="var(--primary)" />
+            <path
+                d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4z"
+                fill="#fff"
+                transform="scale(0.5) translate(12 12)"
+            />
+        </svg>
+    </div>
+    <h1>Set up two-factor authentication</h1>
+    <p style="margin-bottom: 1rem;">
+        Admin actions require a second factor. Add this to Google Authenticator,
+        Authy, 1Password, or any RFC 6238 TOTP app.
+    </p>
+    {{if .Error}}
+    <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem; color: #e65100;">
+        {{.Error}}
+    </div>
+    {{end}}
+
+    <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-muted, #f5f5f5); border-radius: 6px; border: 1px solid var(--border);">
+        <p style="margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: var(--heading);">
+            Step 1: Add this entry to your authenticator
+        </p>
+        <p style="margin: 0 0 0.75rem 0; font-size: 0.8125rem; color: var(--text-muted);">
+            On mobile, tap the link below. On desktop, copy the secret into a
+            new entry manually (Issuer: <strong>{{.Issuer}}</strong>, Account:
+            <strong>{{.Account}}</strong>, Type: TOTP, Algorithm: SHA1, Digits:
+            6, Period: 30s).
+        </p>
+        <a href="{{.OtpAuthURI}}" style="display: inline-block; margin-bottom: 0.75rem; font-size: 0.875rem; color: var(--primary); word-break: break-all;">
+            Open in authenticator app
+        </a>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+            Setup key (manual entry)
+        </div>
+        <div style="font-family: monospace; font-size: 0.9375rem; padding: 0.5rem; background: #fff; border: 1px solid var(--border); border-radius: 4px; word-break: break-all; user-select: all; letter-spacing: 0.05em;">
+            {{.Secret}}
+        </div>
+    </div>
+
+    <form method="POST" action="/auth/admin-mfa/enroll" style="text-align: left;">
+        <input type="hidden" name="redirect" value="{{.Redirect}}" />
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" />
+        <input type="hidden" name="secret" value="{{.Secret}}" />
+        <label for="code" style="display: block; font-size: 0.875rem; font-weight: 600; color: var(--heading); margin-bottom: 0.5rem;">
+            Step 2: Enter the 6-digit code from your app
+        </label>
+        <input
+            type="text"
+            id="code"
+            name="code"
+            placeholder="123456"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            autocomplete="one-time-code"
+            required
+            autofocus
+            style="width: 100%; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-size: 1.125rem; letter-spacing: 0.25em; text-align: center; outline: none; transition: border-color 0.2s;"
+            onfocus="this.style.borderColor='var(--primary)'"
+            onblur="this.style.borderColor='var(--border)'"
+        />
+        <button
+            type="submit"
+            style="width: 100%; margin-top: 1rem; padding: 0.625rem; background: var(--primary); color: #fff; border: none; border-radius: 4px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s;"
+            onmouseover="this.style.opacity='0.9'"
+            onmouseout="this.style.opacity='1'"
+        >
+            Confirm and enroll
+        </button>
+    </form>
+    <p style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted);">
+        Save the setup key in a password manager. If you lose your phone, an
+        admin recovery flow is required to re-enroll.
+    </p>
+</div>
+{{end}}
+
+{{template "base" .}}

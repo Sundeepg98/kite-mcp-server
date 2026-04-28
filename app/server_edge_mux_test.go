@@ -194,8 +194,19 @@ func TestSetupMux_AdminAuth_ValidJWT_AdminAccess(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "kite_jwt", Value: token})
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	// Should get something other than 302 redirect to login
-	assert.NotEqual(t, http.StatusFound, rec.Code)
+	// MFA gate (docs/access-control.md §8): an authenticated admin
+	// without an MFA enrollment is redirected (302) to the enrollment
+	// endpoint, NOT to the login page. So we accept 302 here and assert
+	// the destination is the MFA flow, not the login flow. Tests that
+	// want to reach the actual /admin/ops page need to pre-enroll the
+	// admin and supply a valid kite_admin_mfa cookie.
+	if rec.Code == http.StatusFound {
+		loc := rec.Header().Get("Location")
+		assert.NotContains(t, loc, "/auth/admin-login",
+			"redirected to admin-login despite valid JWT — middleware regression")
+		assert.Contains(t, loc, "/auth/admin-mfa/",
+			"302 must point at the MFA enroll/verify flow, got %q", loc)
+	}
 }
 
 

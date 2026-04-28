@@ -187,6 +187,10 @@ func (m *Manager) initPersistence(cfg Config) {
 			cfg.Logger.Error("Failed to derive encryption key with salt", "error", encErr)
 		} else {
 			alertDB.SetEncryptionKey(encKey)
+			// Cache the key on Manager so initStores can wire it into
+			// userStore (TOTP MFA secrets are AES-256-GCM-encrypted with
+			// the same key — see kc/users/mfa.go).
+			m.encryptionKey = encKey
 			cfg.Logger.Info("Credential encryption enabled (with HKDF salt)")
 		}
 	}
@@ -356,6 +360,13 @@ func (m *Manager) initSideStores(cfg Config) {
 		} else {
 			cfg.Logger.Info("Users loaded from database", "count", m.userStore.Count())
 		}
+	}
+	// Wire the encryption key for TOTP MFA secrets. Same HKDF-derived key
+	// the rest of T1 storage uses — rotation via cmd/rotate-key already
+	// handles the round-trip migration. SetEncryptionKey is a no-op when
+	// the key is empty (DEV_MODE without OAUTH_JWT_SECRET).
+	if len(m.encryptionKey) > 0 {
+		m.userStore.SetEncryptionKey(m.encryptionKey)
 	}
 
 	// Initialize key registry store (zero-config onboarding)

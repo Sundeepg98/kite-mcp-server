@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="card">
+    <div class="icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="12" fill="var(--primary)" />
+            <path
+                d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4z"
+                fill="#fff"
+                transform="scale(0.5) translate(12 12)"
+            />
+        </svg>
+    </div>
+    <h1>Two-factor verification</h1>
+    <p style="margin-bottom: 1.5rem;">
+        Enter the 6-digit code from your authenticator app.
+    </p>
+    {{if .Error}}
+    <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.875rem; color: #e65100;">
+        {{.Error}}
+    </div>
+    {{end}}
+    <form method="POST" action="/auth/admin-mfa/verify" style="text-align: left;">
+        <input type="hidden" name="redirect" value="{{.Redirect}}" />
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" />
+        <label for="code" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--heading); margin-bottom: 0.5rem;">
+            Verification code
+        </label>
+        <input
+            type="text"
+            id="code"
+            name="code"
+            placeholder="123456"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            autocomplete="one-time-code"
+            required
+            autofocus
+            style="width: 100%; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: 4px; font-size: 1.125rem; letter-spacing: 0.25em; text-align: center; outline: none; transition: border-color 0.2s;"
+            onfocus="this.style.borderColor='var(--primary)'"
+            onblur="this.style.borderColor='var(--border)'"
+        />
+        <button
+            type="submit"
+            style="width: 100%; margin-top: 1rem; padding: 0.625rem; background: var(--primary); color: #fff; border: none; border-radius: 4px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s;"
+            onmouseover="this.style.opacity='0.9'"
+            onmouseout="this.style.opacity='1'"
+        >
+            Verify
+        </button>
+    </form>
+    <p style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted);">
+        This MFA session lasts 15 minutes. After that you'll be asked again.
+    </p>
+</div>
+{{end}}
+
+{{template "base" .}}
