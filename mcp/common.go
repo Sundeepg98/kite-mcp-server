@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -120,9 +121,12 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 	if !ok || !isExpired(entry.StoredAt) {
 		return nil
 	}
+	// SOLID 99→100 cleanup: ToolHandlerDeps.Logger was retired; bridge
+	// to *slog.Logger for the use-case constructor (which still
+	// accepts slog directly per kc/usecases/queries.go convention).
 	profileUC := usecases.NewGetProfileUseCase(
 		&sessionBrokerResolver{client: session.Broker},
-		h.deps.Logger,
+		logport.AsSlog(h.deps.LoggerPort),
 	)
 	if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
 		h.deps.LoggerPort.Warn(ctx, "Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
