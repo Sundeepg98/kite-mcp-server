@@ -168,8 +168,37 @@ func StartHashPublisher(ctx context.Context, store *Store, cfg HashPublishConfig
 		return
 	}
 	if !cfg.Enabled() {
-		l.Info(ctx, "Audit hash publishing disabled (no storage configured)",
-			"hint", "set AUDIT_HASH_PUBLISH_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY to enable")
+		// Two-tier severity per .research/scorecard-final-v2.md Phase 3
+		// item #1 ("hash-publish default-on" — NIST CSF DE.CM-8 visibility
+		// upgrade):
+		//
+		//   - When NO signing key is available (OAUTH_JWT_SECRET unset
+		//     AND AUDIT_HASH_PUBLISH_KEY unset), log at INFO. The
+		//     operator has chosen unsigned-only deployment and the
+		//     publisher could not run regardless of external storage.
+		//     Common in DevMode and local development; a quiet log is
+		//     appropriate.
+		//
+		//   - When a signing key IS available but external storage is
+		//     unconfigured, escalate to WARN with a tamper-evidence
+		//     anchor message + actionable hint. This is the
+		//     "production deployed without external CSCRF anchor"
+		//     case — operator has the secret in env and DID NOT wire
+		//     external storage; SEBI CSCRF requires tamper-evident
+		//     audit logs and the absence of external anchor here is a
+		//     compliance gap to surface loudly at startup.
+		//
+		// The dispatch shape is unchanged — both branches return
+		// without starting the publisher goroutine. Only the log
+		// level + message escalates.
+		hint := "set AUDIT_HASH_PUBLISH_S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY to enable"
+		if len(cfg.SigningKey) > 0 {
+			l.Warn(ctx, "Audit hash-chain tamper-evidence anchor missing (CSCRF gap): signing key available but external storage unconfigured",
+				"hint", hint)
+		} else {
+			l.Info(ctx, "Audit hash publishing disabled (no storage configured)",
+				"hint", hint)
+		}
 		return
 	}
 	if len(cfg.SigningKey) == 0 {
