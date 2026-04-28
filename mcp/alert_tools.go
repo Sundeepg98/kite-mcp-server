@@ -52,8 +52,8 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.trackToolCall(ctx, "setup_telegram")
 
-		// TelegramNotifier() not on AlertStoreProvider port; consult manager directly.
-		if manager.TelegramNotifier() == nil {
+		// Phase 3a Batch 2: route through the TelegramNotifierProvider port.
+		if handler.deps.TelegramNotifier == nil || handler.deps.TelegramNotifier.TelegramNotifier() == nil {
 			return mcp.NewToolResultError("Telegram notifications are not configured on this server. Contact the server admin."), nil
 		}
 

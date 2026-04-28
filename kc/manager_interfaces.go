@@ -302,6 +302,14 @@ type ManagerLifecycle interface {
 	StopCleanupRoutine()
 }
 
+// BrowserOpener exposes the local-mode browser-open helper. Phase 3a
+// Batch 2 narrow port for setup_tools.go (auto-open Kite login URL +
+// dashboard URL on local STDIO runs). Hosted Fly.io callers depend on
+// this being a no-op or returning an error — production safety.
+type BrowserOpener interface {
+	OpenBrowser(rawURL string) error
+}
+
 // ---------------------------------------------------------------------------
 // Compile-time interface satisfaction checks
 // ---------------------------------------------------------------------------
@@ -337,4 +345,7 @@ var (
 	// remaining service-locator calls (manager.SessionSvc(), manager.TrailingStopManager()).
 	_ BrokerResolverProvider     = (*Manager)(nil)
 	_ TrailingStopManagerProvider = (*Manager)(nil)
+
+	// Phase 3a Batch 2 narrow ports.
+	_ BrowserOpener = (*Manager)(nil)
 )

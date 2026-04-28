@@ -51,24 +51,26 @@ type ToolHandlerDeps struct {
 	// at the point of use. Providers are preferred over raw store interfaces
 	// because they can return nil when a subsystem is disabled without the
 	// caller needing to know the disable semantics up front.
-	Tokens         kc.TokenStoreProvider
-	CredStore      kc.CredentialStoreProvider
-	Alerts         kc.AlertStoreProvider
-	Telegram       kc.TelegramStoreProvider
-	Watchlist      kc.WatchlistStoreProvider
-	Users          kc.UserStoreProvider
-	Registry       kc.RegistryStoreProvider
-	Audit          kc.AuditStoreProvider
-	Billing        kc.BillingStoreProvider
-	Ticker         kc.TickerServiceProvider
-	Paper          kc.PaperEngineProvider
-	Instruments    kc.InstrumentsManagerProvider
-	AlertDB        kc.AlertDBProvider
-	RiskGuard      kc.RiskGuardProvider
-	MCPServer      kc.MCPServerProvider
-	BrokerResolver kc.BrokerResolverProvider
-	TrailingStop   kc.TrailingStopManagerProvider
-	Events         kc.EventDispatcherProvider
+	Tokens           kc.TokenStoreProvider
+	CredStore        kc.CredentialStoreProvider
+	Browser          kc.BrowserOpener
+	Alerts           kc.AlertStoreProvider
+	Telegram         kc.TelegramStoreProvider
+	TelegramNotifier kc.TelegramNotifierProvider
+	Watchlist        kc.WatchlistStoreProvider
+	Users            kc.UserStoreProvider
+	Registry         kc.RegistryStoreProvider
+	Audit            kc.AuditStoreProvider
+	Billing          kc.BillingStoreProvider
+	Ticker           kc.TickerServiceProvider
+	Paper            kc.PaperEngineProvider
+	Instruments      kc.InstrumentsManagerProvider
+	AlertDB          kc.AlertDBProvider
+	RiskGuard        kc.RiskGuardProvider
+	MCPServer        kc.MCPServerProvider
+	BrokerResolver   kc.BrokerResolverProvider
+	TrailingStop     kc.TrailingStopManagerProvider
+	Events           kc.EventDispatcherProvider
 
 	// CQRS bus providers — handlers that dispatch commands/queries
 	// depend on these narrow ports rather than pulling the full
@@ -115,11 +117,13 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			Tokens:      sd.Tokens,
 			CredStore:   sd.CredStore,
 			Users:       sd.Users,
+			Browser:     sd.Browser,
 			// AlertDepsFields
-			Alerts:       ad.Alerts,
-			Telegram:     ad.Telegram,
-			AlertDB:      ad.AlertDB,
-			TrailingStop: ad.TrailingStop,
+			Alerts:           ad.Alerts,
+			Telegram:         ad.Telegram,
+			TelegramNotifier: ad.TelegramNotifier,
+			AlertDB:          ad.AlertDB,
+			TrailingStop:     ad.TrailingStop,
 			// OrderDepsFields
 			RiskGuard:      od.RiskGuard,
 			BrokerResolver: od.BrokerResolver,

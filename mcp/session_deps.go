@@ -25,6 +25,7 @@ type SessionDepsFields struct {
 	Tokens      kc.TokenStoreProvider
 	CredStore   kc.CredentialStoreProvider
 	Users       kc.UserStoreProvider
+	Browser     kc.BrowserOpener
 }
 
 // newSessionDeps populates the session-context subset from a Manager.
@@ -40,5 +41,6 @@ func newSessionDeps(manager *kc.Manager) SessionDepsFields {
 		Tokens:      manager,
 		CredStore:   manager,
 		Users:       manager,
+		Browser:     manager,
 	}
 }

@@ -10,17 +10,19 @@ import "github.com/zerodha/kite-mcp-server/kc"
 //
 // Investment K — see session_deps.go for rationale.
 type AlertDepsFields struct {
-	Alerts       kc.AlertStoreProvider
-	Telegram     kc.TelegramStoreProvider
-	AlertDB      kc.AlertDBProvider
-	TrailingStop kc.TrailingStopManagerProvider
+	Alerts           kc.AlertStoreProvider
+	Telegram         kc.TelegramStoreProvider
+	TelegramNotifier kc.TelegramNotifierProvider
+	AlertDB          kc.AlertDBProvider
+	TrailingStop     kc.TrailingStopManagerProvider
 }
 
 func newAlertDeps(manager *kc.Manager) AlertDepsFields {
 	return AlertDepsFields{
-		Alerts:       manager,
-		Telegram:     manager,
-		AlertDB:      manager,
-		TrailingStop: manager,
+		Alerts:           manager,
+		Telegram:         manager,
+		TelegramNotifier: manager,
+		AlertDB:          manager,
+		TrailingStop:     manager,
 	}
 }

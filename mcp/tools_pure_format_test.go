@@ -111,7 +111,7 @@ func TestResolveTickerMode(t *testing.T) {
 func TestResolveInstrumentTokens_AllInvalid(t *testing.T) {
 	mgr := newTestManager(t)
 	// Test data instruments don't have ID field set, so GetByID won't find them
-	tokens, failed := resolveInstrumentTokens(mgr, []string{"NSE:NONEXISTENT"})
+	tokens, failed := resolveInstrumentTokens(mgr.InstrumentsManager(), []string{"NSE:NONEXISTENT"})
 	assert.Empty(t, tokens)
 	assert.Len(t, failed, 1)
 	assert.Equal(t, "NSE:NONEXISTENT", failed[0])
@@ -120,7 +120,7 @@ func TestResolveInstrumentTokens_AllInvalid(t *testing.T) {
 
 func TestResolveInstrumentTokens_Empty(t *testing.T) {
 	mgr := newTestManager(t)
-	tokens, failed := resolveInstrumentTokens(mgr, []string{})
+	tokens, failed := resolveInstrumentTokens(mgr.InstrumentsManager(), []string{})
 	assert.Empty(t, tokens)
 	assert.Empty(t, failed)
 }
@@ -128,7 +128,7 @@ func TestResolveInstrumentTokens_Empty(t *testing.T) {
 
 func TestResolveInstrumentTokens_MultipleFailed(t *testing.T) {
 	mgr := newTestManager(t)
-	tokens, failed := resolveInstrumentTokens(mgr, []string{"NSE:AAA", "NSE:BBB", "NSE:CCC"})
+	tokens, failed := resolveInstrumentTokens(mgr.InstrumentsManager(), []string{"NSE:AAA", "NSE:BBB", "NSE:CCC"})
 	assert.Empty(t, tokens)
 	assert.Len(t, failed, 3)
 }
@@ -194,7 +194,7 @@ func TestResolveTickerMode_V2(t *testing.T) {
 func TestResolveInstrumentTokens_AllFailed(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	tokens, failed := resolveInstrumentTokens(mgr, []string{"NSE:UNKNOWN1", "NSE:UNKNOWN2"})
+	tokens, failed := resolveInstrumentTokens(mgr.InstrumentsManager(), []string{"NSE:UNKNOWN1", "NSE:UNKNOWN2"})
 	assert.Empty(t, tokens)
 	assert.Len(t, failed, 2)
 }

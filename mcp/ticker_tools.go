@@ -188,8 +188,8 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 
 			modeStr := p.String("mode", "full")
 
-			// Resolve instrument IDs to tokens using the instruments manager
-			tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
+			// Resolve instrument IDs to tokens via the InstrumentsManagerProvider port.
+			tokens, failed := resolveInstrumentTokens(handler.Instruments(), instrumentIDs)
 			if len(tokens) == 0 {
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
@@ -254,7 +254,7 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError("At least one instrument must be specified"), nil
 			}
 
-			tokens, failed := resolveInstrumentTokens(manager, instrumentIDs)
+			tokens, failed := resolveInstrumentTokens(handler.Instruments(), instrumentIDs)
 			if len(tokens) == 0 {
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
@@ -277,9 +277,14 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 }
 
 // resolveInstrumentTokens converts exchange:tradingsymbol strings to instrument tokens.
-func resolveInstrumentTokens(manager *kc.Manager, instrumentIDs []string) (tokens []uint32, failed []string) {
+// Phase 3a Batch 2: takes the InstrumentManagerInterface port rather than
+// reaching for the *kc.Manager.Instruments concrete field.
+func resolveInstrumentTokens(instr kc.InstrumentManagerInterface, instrumentIDs []string) (tokens []uint32, failed []string) {
+	if instr == nil {
+		return nil, instrumentIDs
+	}
 	for _, id := range instrumentIDs {
-		inst, err := manager.Instruments.GetByID(id)
+		inst, err := instr.GetByID(id)
 		if err != nil {
 			failed = append(failed, id)
 			continue

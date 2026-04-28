@@ -452,9 +452,12 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		handler.LoggerPort().Info(ctx, "Successfully generated Kite login URL", "session_id", mcpSessionID)
 
-		// Auto-open browser in local/STDIO mode
-		if err := manager.OpenBrowser(url); err != nil {
-			handler.LoggerPort().Warn(ctx, "Failed to auto-open browser", "error", err)
+		// Auto-open browser in local/STDIO mode. Phase 3a Batch 2:
+		// route through the BrowserOpener port.
+		if handler.deps.Browser != nil {
+			if err := handler.deps.Browser.OpenBrowser(url); err != nil {
+				handler.LoggerPort().Warn(ctx, "Failed to auto-open browser", "error", err)
+			}
 		}
 
 		return &mcp.CallToolResult{
@@ -558,9 +561,12 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			dashURL = baseURL + fullPath
 		}
 
-		// Auto-open browser in local mode
-		if err := manager.OpenBrowser(dashURL); err != nil {
-			handler.LoggerPort().Warn(ctx, "Failed to auto-open dashboard", "error", err)
+		// Auto-open browser in local mode. Phase 3a Batch 2: route
+		// through the BrowserOpener port.
+		if handler.deps.Browser != nil {
+			if err := handler.deps.Browser.OpenBrowser(dashURL); err != nil {
+				handler.LoggerPort().Warn(ctx, "Failed to auto-open dashboard", "error", err)
+			}
 		}
 
 		// Page title for display
