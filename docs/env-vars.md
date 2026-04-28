@@ -98,6 +98,20 @@ itself. Referenced here for completeness.
 | `LITESTREAM_R2_ACCOUNT_ID` | Cloudflare R2 account ID (used to build the endpoint URL). | Opt | `` (unset) | `etc/litestream.yml:7` | secret |
 | `LITESTREAM_SECRET_ACCESS_KEY` | R2/S3 secret access key. | Opt | `` (unset) | `etc/litestream.yml:10` | secret |
 
+## TLS self-host (off-Fly.io deployments only)
+
+Inline TLS via `golang.org/x/crypto/acme/autocert`. Set on VPS / bare-metal
+deployments where you want HTTPS directly on the binary; leave unset on
+Fly.io / Cloudflare-fronted setups (TLS terminated upstream). See
+[`tls-self-host.md`](tls-self-host.md) for the operator runbook (DNS
+prerequisites, port forwarding, capability grants for non-root binding,
+Cloudflare interaction).
+
+| Env var | Purpose | Required | Default | Consumed by | fly.toml |
+|---|---|---|---|---|---|
+| `TLS_AUTOCERT_DOMAIN` | Single hostname for ACME http-01 validation. When set, server binds `:443` with autocert + `:80` for ACME challenges + 301 redirect. Comma-separated, bare IPs, and wildcards are rejected at startup. | Opt | `` (unset) | `app/config.go`, `app/tls.go`, `app/http.go:serveHTTPSWithAutocert` | no |
+| `TLS_AUTOCERT_CACHE_DIR` | Filesystem path for autocert's DirCache (issued certs + ACME account state). **MUST be on persistent storage** — Let's Encrypt rate-limits 50 certs/domain/week and losing the cache forces re-issuance. | Opt | `${HOME}/.cache/kite-mcp/autocert` (or `/var/lib/kite-mcp/autocert` if no `HOME`) | `app/tls.go` | no |
+
 ## Dev (local development only, never set in production)
 
 | Env var | Purpose | Required | Default | Consumed by | fly.toml |

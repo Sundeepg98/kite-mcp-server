@@ -299,10 +299,31 @@ for the full posture.
 
 ---
 
+## TLS for production self-host
+
+The default config above runs on `http://127.0.0.1:8080` — fine for local
+single-user use, but for a public-facing self-host (VPS with a domain)
+you'll want HTTPS. Two paths:
+
+1. **Inline ACME** — set `TLS_AUTOCERT_DOMAIN=your.domain.com` and the
+   binary acquires + auto-renews a Let's Encrypt cert. Single binary, no
+   sidecar. Requires public ports 80 + 443 + DNS A/AAAA pointing at
+   your server.
+2. **Reverse proxy** — Caddy / Traefik / nginx terminates TLS and
+   forwards plain HTTP to the binary. Recommended if you already run
+   a proxy.
+
+See [`tls-self-host.md`](tls-self-host.md) for the full runbook (cache
+persistence, capability grants, Cloudflare interaction, host-header
+defence).
+
+---
+
 ## Related docs
 
 - [README](../README.md) — project overview, hosted option, feature list
 - [Environment variables inventory](env-vars.md) — every env var the server reads
+- [TLS self-host runbook](tls-self-host.md) — inline ACME or reverse-proxy paths
 - [Daily token refresh runbook](kite-token-refresh.md)
 - [Operator playbook](operator-playbook.md)
 - [Incident response](incident-response.md) — Scenario 1-C is the

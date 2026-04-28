@@ -70,6 +70,8 @@ func ConfigFromEnv() *Config {
 		"STRIPE_PRICE_PRO":           os.Getenv("STRIPE_PRICE_PRO"),
 		"STRIPE_PRICE_PREMIUM":       os.Getenv("STRIPE_PRICE_PREMIUM"),
 		"DEV_MODE":                   os.Getenv("DEV_MODE"),
+		"TLS_AUTOCERT_DOMAIN":        os.Getenv("TLS_AUTOCERT_DOMAIN"),
+		"TLS_AUTOCERT_CACHE_DIR":     os.Getenv("TLS_AUTOCERT_CACHE_DIR"),
 	})
 }
 
@@ -107,6 +109,8 @@ func ConfigFromMap(env map[string]string) *Config {
 		StripePricePro:       env["STRIPE_PRICE_PRO"],
 		StripePricePremium:   env["STRIPE_PRICE_PREMIUM"],
 		DevMode:              env["DEV_MODE"] == "true",
+		TLSAutocertDomain:    env["TLS_AUTOCERT_DOMAIN"],
+		TLSAutocertCacheDir:  env["TLS_AUTOCERT_CACHE_DIR"],
 	}
 }
 

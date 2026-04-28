@@ -421,6 +421,39 @@ type Config struct {
 	// pprof endpoints are exposed, billing is disabled, etc. Field on
 	// Config so tests drop t.Setenv("DEV_MODE", "true") and can t.Parallel.
 	DevMode bool
+
+	// TLSAutocertDomain is the apex hostname Let's Encrypt issues a
+	// certificate for via ACME tls-alpn-01 / http-01 challenges
+	// (TLS_AUTOCERT_DOMAIN env var). Empty (the default) keeps the
+	// server in plain-HTTP mode where TLS is terminated upstream by
+	// Fly.io / Cloudflare / a reverse proxy. Setting this enables
+	// inline single-binary TLS for off-Fly.io self-host deployments
+	// (VPS, bare-metal, on-prem).
+	//
+	// When set, the server:
+	//   - binds 443 with autocert.Manager.TLSConfig
+	//   - binds 80 to handle ACME http-01 challenges and redirect
+	//     everything else to HTTPS (301)
+	//   - caches issued certs in TLSAutocertCacheDir
+	//   - rejects ACME requests for any other domain (host-policy
+	//     allowlist defends against attacker-controlled DNS pointed
+	//     at our IP)
+	//
+	// See docs/tls-self-host.md for the full runbook (DNS, port
+	// forwarding, cache-dir permissions, rate-limit awareness).
+	TLSAutocertDomain string
+
+	// TLSAutocertCacheDir is the filesystem path autocert.DirCache
+	// writes issued certs + ACME account state to (TLS_AUTOCERT_CACHE_DIR
+	// env var). Empty defaults to ${HOME}/.cache/kite-mcp/autocert (or
+	// /var/lib/kite-mcp/autocert on systems without HOME).
+	//
+	// Persistence matters: ACME's rate-limit policy is 50 certificates
+	// per registered domain per week. Losing the cache forces re-
+	// issuance on every restart and rapidly exhausts the budget.
+	// Operators MUST mount this dir on persistent storage (volume,
+	// host bind-mount).
+	TLSAutocertCacheDir string
 }
 
 // Server mode constants

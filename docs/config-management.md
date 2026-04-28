@@ -247,6 +247,26 @@ Optional secrets currently UNSET:
 - [`incident-response.md`](incident-response.md) §"Region failover"
 - User-facing copy on the `byo-api-key.md` page
 
+### 4.4 TLS termination
+
+Fly.io's edge terminates TLS with a Let's Encrypt cert managed by Fly.io (renewed automatically). The `fly.toml [http_service] force_https = true` directive 301-redirects plain HTTP to HTTPS at the edge. The binary itself sees plain HTTP on `internal_port` (8080) and emits OAuth redirects + dashboard links via `EXTERNAL_URL` (which is `https://kite-mcp-server.fly.dev`). No TLS-related env vars are set in the Fly.io deployment.
+
+For **off-Fly.io self-host deployments** (VPS, bare-metal, on-prem), two TLS env vars enable inline TLS via `golang.org/x/crypto/acme/autocert`:
+
+| Var | Purpose | Example |
+|---|---|---|
+| `TLS_AUTOCERT_DOMAIN` | When set, server binds `:443` with autocert + `:80` for ACME challenges + 301 redirects to HTTPS. When unset, plain HTTP only (the Fly.io / Cloudflare-terminated default). | `mcp.example.com` |
+| `TLS_AUTOCERT_CACHE_DIR` | Filesystem path for autocert's DirCache (issued certs + ACME account state). Defaults to `${HOME}/.cache/kite-mcp/autocert`. **MUST be on persistent storage** — Let's Encrypt's rate limit is 50 certs/domain/week; losing the cache forces re-issuance and rapidly exhausts the budget. | `/var/lib/kite-mcp/autocert` |
+
+When `TLS_AUTOCERT_DOMAIN` is set, `APP_HOST` and `APP_PORT` are ignored (TLS needs the privileged port `:443`). Operators who want the binary on a non-standard port behind their own reverse proxy should use the reverse-proxy path instead — see [`tls-self-host.md`](tls-self-host.md) Path 2.
+
+Misconfiguration is rejected at startup:
+- Comma-separated domains (e.g. `a.com,b.com`) — multi-domain not yet supported
+- Bare IPs (`1.2.3.4`) — ACME does not issue certs for IPs
+- Wildcards (`*.example.com`) — wildcard requires DNS-01 challenge (provider-specific), not yet implemented
+
+The Fly.io deployment intentionally leaves both vars unset; flipping them on Fly.io would conflict with Fly.io's edge TLS. See [`tls-self-host.md`](tls-self-host.md) for the full operator runbook (DNS prerequisites, port-forwarding, capability grants for non-root binding, certificate transparency considerations, Cloudflare interaction).
+
 This IP must be whitelisted in each user's Kite developer console for order placement (SEBI April 2026 mandate). It changes only if Fly.io re-provisions our region (rare; would require manual user notification).
 
 ---

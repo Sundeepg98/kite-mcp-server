@@ -917,6 +917,19 @@ func (app *App) registerTelegramWebhook(mux *http.ServeMux, kcManager *kc.Manage
 // Production: preboundListener is nil, srv.ListenAndServe binds via
 // srv.Addr — the standard path, behaviour unchanged.
 func (app *App) serveHTTPServer(srv *http.Server) {
+	// TLS self-host path: when TLS_AUTOCERT_DOMAIN is set, take the
+	// inline-ACME branch (binds 443 with autocert + 80 for ACME challenges
+	// + redirect). Otherwise (the production Fly.io / Cloudflare-terminated
+	// default), fall through to the plain-HTTP path that bound on srv.Addr.
+	//
+	// The preboundListener seam is test-only. When set, no TLS is wired —
+	// tests bind their own listener and exercise plain-HTTP serving without
+	// involving autocert.
+	if app.preboundListener == nil && app.Config.TLSAutocertEnabled() {
+		app.serveHTTPSWithAutocert(srv)
+		return
+	}
+
 	var err error
 	if app.preboundListener != nil {
 		err = srv.Serve(app.preboundListener)
@@ -925,6 +938,74 @@ func (app *App) serveHTTPServer(srv *http.Server) {
 	}
 	if err != nil && err != http.ErrServerClosed {
 		app.Logger().Error(context.Background(), "HTTP server error", err)
+	}
+}
+
+// serveHTTPSWithAutocert binds srv on :443 with TLS via autocert and a
+// sidecar :80 listener for ACME http-01 challenges + 301 redirects to
+// HTTPS. Both listeners share the same graceful-shutdown path the caller
+// already wired (srv.Shutdown drains :443; the :80 listener's Shutdown
+// is registered onto the lifecycle manager).
+//
+// Failure modes (logged + returned via srv error path):
+//   - autocert manager construction error (bad config) → log + return
+//   - :80 bind failure (port in use, no privilege) → log warning, continue
+//     with :443 only. The redirect convenience is lost but TLS still works
+//     for clients that already arrive on https://.
+//   - :443 bind failure (port in use, no privilege) → log error + return
+func (app *App) serveHTTPSWithAutocert(srv *http.Server) {
+	mgr, err := newAutocertManager(app.Config)
+	if err != nil {
+		app.Logger().Error(context.Background(), "TLS autocert manager construction failed", err)
+		return
+	}
+	if mgr == nil {
+		// Should not happen — TLSAutocertEnabled was true at the call site.
+		// Defence in depth.
+		app.Logger().Error(context.Background(), "TLS autocert manager nil with enabled config — falling back to plain HTTP", fmt.Errorf("invariant: enabled-but-nil-manager"))
+		return
+	}
+
+	domain := strings.TrimSpace(app.Config.TLSAutocertDomain)
+	app.Logger().Info(context.Background(), "TLS self-host enabled — binding :443 + :80 for autocert",
+		"domain", domain,
+		"cache_dir_set", app.Config.TLSAutocertCacheDir != "")
+
+	// Configure TLS on the main server. The original srv.Addr (typically
+	// :8080) is overridden to :443 — autocert needs to actually bind a
+	// privileged port to terminate TLS.
+	srv.Addr = ":443"
+	srv.TLSConfig = mgr.TLSConfig()
+
+	// Sidecar :80 listener for ACME challenges + redirects.
+	httpRedirector := &http.Server{
+		Addr:              ":80",
+		Handler:           newTLSRedirectHandler(mgr, domain),
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	// Register the :80 redirector's Shutdown on the lifecycle manager so
+	// graceful-shutdown drains both listeners.
+	if app.lifecycle != nil {
+		app.lifecycle.Append("tls_http_redirector", func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			return httpRedirector.Shutdown(ctx)
+		})
+	}
+
+	// Run :80 in a goroutine. Bind failure is non-fatal — the operator
+	// can fix the conflict later without restarting the main server.
+	go func() {
+		if err := httpRedirector.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			app.Logger().Warn(context.Background(), "TLS :80 redirector bind failed; HTTPS still served on :443",
+				"error", err.Error())
+		}
+	}()
+
+	// Block on :443 — this is the main TLS-terminating listener.
+	if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+		app.Logger().Error(context.Background(), "TLS HTTPS server error", err)
 	}
 }
 
