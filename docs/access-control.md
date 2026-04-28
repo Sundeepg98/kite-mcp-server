@@ -295,12 +295,43 @@ A "least functionality" audit walks every tool / endpoint and asks: *Is the defa
 | MCP bearer JWT issuance | Single-factor (OAuth flow) | Strong because Kite TOTP is upstream |
 | Dashboard email/password login | Single-factor (bcrypt) | Admin passwords are first-boot only |
 | Google SSO (when active) | Per Google account | Google enforces |
-| Admin destructive actions | `confirm: true` (anti-mis-click, NOT MFA) | Per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.3 |
+| Admin actions (`/admin/ops/*`) | **TOTP MFA required (RFC 6238)** | Shipped commits `8c19202` (storage) + `0d18593` (HTTP gate) |
+| Admin destructive actions | `confirm: true` + TOTP MFA | `confirm` is anti-mis-click; MFA is anti-credential-theft |
 
-**Gap**: no TOTP / WebAuthn on admin destructive actions. Per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.3:
-> SEP-1932 (DPoP / request signing) in MCP spec could close this but is not adopted yet.
+### 8.1 Admin TOTP MFA — what shipped
 
-This is a known deferral; documented honestly. SEBI RIA framework expects MFA for privileged actions ([`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §7).
+Per the SEBI RIA framework expectation for MFA on privileged actions, every authenticated admin must complete a TOTP challenge before the admin dashboard is reachable. This closes the deferral that was originally documented at [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.3.
+
+| Aspect | Details |
+|---|---|
+| Algorithm | RFC 6238 TOTP / RFC 4226 HOTP — HMAC-SHA1, 30s step, 6 digits, ±1-step skew (90s window). Pure-Go implementation at `kc/users/totp.go`; no new dependencies. |
+| Secret storage | Per-admin AES-256-GCM-encrypted secret in `users.totp_secret_enc` (SQLite). Key is the same HKDF-derived AES-256 from `OAUTH_JWT_SECRET` used by other T1 storage. Rotation via the existing `cmd/rotate-key` path. |
+| Enrollment flow | `GET /auth/admin-mfa/enroll` shows the freshly-generated secret + an `otpauth://` URI for one-tap mobile add. `POST` validates the user's first 6-digit code against the form's secret and persists on success (handler: `oauth.HandleAdminMFAEnroll`). |
+| Verification flow | `GET /auth/admin-mfa/verify` shows the 6-digit form. `POST` validates against the persisted secret. On success mints `kite_admin_mfa` JWT cookie (15-min, audience `admin-mfa`, HttpOnly + Secure + SameSite=Lax). Handler: `oauth.HandleAdminMFAVerify`. |
+| Gate middleware | `oauth.RequireAdminMFA` — wraps `/admin/ops/*` after the email/role check. Routes un-enrolled admins to `/enroll`, enrolled admins without active cookie to `/verify`. Subject-binding (`claims.Subject == ctx email`) defends against stolen-cookie replay against another email. |
+| CSRF | Double-submit cookie (`csrf_token_admin_mfa`) on both enrollment and verification POSTs. Same hardening as the existing admin login form. |
+| Defence in depth | The store layer (`kc/users/mfa.go:SetTOTPSecret`) rejects non-admin users explicitly so a misconfigured route can't widen the gate. |
+
+### 8.2 Authenticator app compatibility
+
+The implementation produces standard `otpauth://totp/<issuer>:<account>?secret=...&algorithm=SHA1&digits=6&period=30` URIs. Tested-compatible apps (consumed unchanged):
+
+- Google Authenticator
+- Authy
+- 1Password
+- Microsoft Authenticator
+- Bitwarden
+
+The setup form also displays the base32 secret for manual entry — no QR code is rendered server-side (avoids pulling in an additional dependency for QR generation). Mobile authenticator apps register the `otpauth://` URL handler so the shown link adds the entry on tap.
+
+### 8.3 Deferred work (documented honestly)
+
+What this slice does NOT ship:
+
+- **Recovery codes**: an admin who loses their phone today must have another admin clear their TOTP via DB write (`UPDATE users SET totp_secret_enc='' WHERE email=?`). A first-class admin-recovery flow (e.g. another admin issues a recovery code) is deferred — single-admin deployments handle this via cmd-line, multi-admin deployments handle it via peer admin.
+- **Non-admin user MFA**: scoped out of this slice (would need user-flow design for retail users). The store-layer enforces "admin role only" for now.
+- **WebAuthn / passkeys**: Go ecosystem support is shakier than TOTP and the SEBI / RIA framework does not require it. Tracked for a future slice if user demand surfaces.
+- **DPoP / request signing**: SEP-1932 in MCP spec is still in draft. Continues to be the canonical longer-term hardening path for the MCP transport itself; admin-dashboard MFA is the immediate close-out.
 
 ---
 

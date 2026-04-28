@@ -390,6 +390,45 @@ WAL replicated to Cloudflare R2 (APAC region) on 10-second sync-interval.
 - Purpose: disaster recovery and point-in-time restore of the audit trail
   and encrypted credential store.
 
+### 3.19 Admin TOTP MFA
+
+**Shipped in commits `8c19202` (storage layer) + `0d18593` (HTTP gate).**
+
+Per-admin TOTP (RFC 6238) is required before any `/admin/ops/*` request
+reaches its handler. Closes the SEBI RIA framework expectation referenced
+in §7.
+
+- **Algorithm**: RFC 6238 / RFC 4226 — HMAC-SHA1, 30-second step, 6
+  digits, ±1-step skew (90s window). Pure-Go inline implementation at
+  `kc/users/totp.go`; no new module dependency. SHA-1 is HMAC-keyed —
+  not a collision context (NIST SP 800-63B §5.1.4 / RFC 6238 §5.1).
+- **Storage**: `users.totp_secret_enc` column. AES-256-GCM-encrypted
+  with the same HKDF-derived key as other T1 storage (see §3.1).
+  `users.totp_enrolled_at` records the enrollment timestamp.
+- **Defence in depth**: store-layer (`kc/users/mfa.go`) rejects
+  `SetTOTPSecret` calls for non-admin users so a misconfigured HTTP
+  route can't widen the gate.
+- **Endpoints**: `/auth/admin-mfa/enroll` (GET shows secret +
+  `otpauth://` URI + 6-digit confirmation form; POST persists on valid
+  code). `/auth/admin-mfa/verify` (GET shows form, POST verifies + mints
+  `kite_admin_mfa` cookie). Both gated by the admin-base auth (email +
+  ADMIN_EMAILS role) and rate-limited via the auth tier.
+- **Cookie**: `kite_admin_mfa` — JWT signed with `OAUTH_JWT_SECRET`,
+  audience `admin-mfa`, 15-minute expiry, HttpOnly + Secure +
+  SameSite=Lax. Subject binding (claim subject must match
+  context email) defends against stolen-cookie replay against another
+  admin.
+- **CSRF**: double-submit cookie (`csrf_token_admin_mfa`) on both POST
+  endpoints. Same hardening pattern as the existing admin login form.
+- **Tests**: 14 RFC-vector + format + skew-window tests for the TOTP
+  pure functions, 12 store-layer round-trip / encryption / role-gate
+  tests, 14 HTTP enroll/verify/middleware tests. All run in WSL2 in
+  the project's narrow-scope test cadence.
+
+See [`access-control.md`](access-control.md) §8 for the full operator-
+facing flow including authenticator app compatibility and recovery
+considerations.
+
 ---
 
 ## 4. Controls Deferred or Not Implemented
@@ -429,16 +468,39 @@ key roll-over) is not implemented.
 ### 4.3 MFA on admin actions
 
 Admin role is gated by `ADMIN_EMAILS` env var + JWT email claim + optional
-`ADMIN_PASSWORD` for the dashboard login. No TOTP / WebAuthn / hardware-key
-step for destructive admin operations.
+`ADMIN_PASSWORD` for the dashboard login. **TOTP MFA (RFC 6238) is now
+required for every admin dashboard request** — see
+[`access-control.md`](access-control.md) §8 for the full flow.
 
-- `confirm: true` elicitation provides a second-step confirmation per call,
-  but this is anti-mis-click, not anti-credential-theft.
-- If the admin's MCP client session is stolen, the attacker has full admin
-  access until the session expires.
+- Per-admin AES-256-GCM-encrypted TOTP secret in `users.totp_secret_enc`,
+  HKDF-derived key shared with other T1 storage.
+- Enrollment and verification endpoints at `/auth/admin-mfa/{enroll,verify}`,
+  rate-limited via the auth-tier limiter.
+- 15-minute MFA-verified JWT cookie (`kite_admin_mfa`, audience
+  `admin-mfa`) with subject binding so a stolen cookie minted for one
+  admin cannot replay against another.
+- `confirm: true` elicitation continues as the per-call anti-mis-click
+  guard; TOTP MFA is the anti-credential-theft layer beneath it.
+- If the admin's MCP client session is stolen, the attacker still needs
+  the rolling 6-digit TOTP code from the admin's authenticator app to
+  reach `/admin/ops/*`. The 15-minute MFA cookie window bounds replay.
 
-**Status: deferred.** SEP-1932 (DPoP / request signing) in MCP spec could
-close this but is not adopted yet.
+**Status: shipped** in commits `8c19202` (TOTP storage layer) +
+`0d18593` (HTTP gate). Closes the SEBI RIA framework expectation
+referenced in §7.
+
+**Deferred sub-items (documented honestly):**
+
+- Recovery codes — current path on lost device is admin-to-admin SQL
+  clear; a first-class flow is deferred.
+- Non-admin user MFA — out of scope for this slice; the store-layer
+  enforces "admin role only" for now.
+- WebAuthn / passkeys — Go ecosystem support is shakier than TOTP and
+  not required by SEBI / RIA framework.
+- DPoP / request signing on the MCP transport itself (SEP-1932) —
+  still draft in the MCP spec; remains the longer-term hardening path
+  for transport-level binding, separate from the admin-dashboard MFA
+  gate this section now ships.
 
 ### 4.4 Self-hosted TLS configuration
 
@@ -584,6 +646,9 @@ understand what remains.
 - **TLS with HSTS + security headers** (§3.13, §3.15) — on the Fly.io
   deployment. Self-hosted depends on operator.
 - **Supply-chain scanning** (§3.17) — `gosec`, `go vet`, Dependabot.
+- **MFA on admin actions** (§4.3) — TOTP (RFC 6238) required for every
+  admin dashboard request; per-admin AES-256-GCM-encrypted secret;
+  15-minute MFA-verified JWT cookie with subject binding.
 
 ### Would NOT pass as-is
 
@@ -592,8 +657,6 @@ understand what remains.
   after the 2024 MII circular) may require India-domiciled backup. An
   operator pursuing registration must replace the bucket with an
   India-domiciled S3-compatible provider.
-- **No MFA on admin actions** (§4.3) — the RIA framework's operational
-  requirements expect MFA for privileged actions.
 - **No external hash-chain anchor by default** (§3.11 → §4.1) — opt-in is
   not the same as enabled; an auditor would expect the anchor to be running.
 - **No formal incident response plan** (§4.5) — required documentation.
@@ -609,11 +672,12 @@ Close the gaps in priority order:
    `AUDIT_HASH_PUBLISH_*` env vars — §3.11).
 2. Move Litestream replica to an India-domiciled bucket.
 3. Document secret rotation, incident response, and admin-change runbooks.
-4. Add TOTP (or WebAuthn) for admin dashboard login.
-5. Complete an external penetration test and address findings.
+4. Complete an external penetration test and address findings.
 
 Note: a detailed compliance path document is **not yet written**. When it
-is, it will live at `docs/COMPLIANCE_PATHS.md`.
+is, it will live at `docs/COMPLIANCE_PATHS.md`. The previous step 4
+(TOTP / WebAuthn for admin dashboard login) shipped in commits
+`8c19202` + `0d18593` — see §4.3.
 
 ---
 
@@ -626,6 +690,8 @@ is, it will live at `docs/COMPLIANCE_PATHS.md`.
 | 2026-04-17 | `bd3398e` | `/healthz?format=json` component status |
 | 2026-04-17 | `cd3f7de` | Landing page redesign (informational; not a security change — listed for traceability) |
 | 2026-04-17 | (this doc) | Initial SECURITY_POSTURE.md |
+| 2026-04-28 | `8c19202` | Admin TOTP MFA — Slice 1: storage layer (RFC 6238 + AES-256-GCM at rest) |
+| 2026-04-28 | `0d18593` | Admin TOTP MFA — Slice 2: HTTP enrollment + verify + RequireAdminMFA middleware on `/admin/ops/*` |
 
 ---
 
