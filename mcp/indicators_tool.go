@@ -48,8 +48,9 @@ func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		days = max(days, 14)
 
 		return handler.WithSession(ctx, "technical_indicators", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Resolve instrument token via exchange:tradingsymbol lookup
-			inst := manager.Instruments
+			// Resolve instrument token via exchange:tradingsymbol lookup.
+			// Phase 3a Batch 5: route through the InstrumentsManagerProvider port.
+			inst := handler.Instruments()
 			if inst == nil {
 				return mcp.NewToolResultError("Instruments not loaded"), nil
 			}

@@ -81,7 +81,10 @@ func RegisterPrompts(srv *server.MCPServer, manager *kc.Manager) {
 		setupChecklistHandler(manager),
 	)
 
-	manager.Logger.Info("MCP prompts registered", "count", 7)
+	// Phase 3a Batch 5: route the registration log line through the
+	// LoggerPort obtained via the standard ToolHandler factory rather
+	// than the deprecated *kc.Manager.Logger slog field.
+	NewToolHandler(manager).LoggerPort().Info(context.Background(), "MCP prompts registered", "count", 7)
 }
 
 func morningBriefHandler(manager *kc.Manager) server.PromptHandlerFunc {

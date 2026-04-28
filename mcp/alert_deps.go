@@ -15,6 +15,7 @@ type AlertDepsFields struct {
 	TelegramNotifier kc.TelegramNotifierProvider
 	AlertDB          kc.AlertDBProvider
 	TrailingStop     kc.TrailingStopManagerProvider
+	PnL              kc.PnLServiceProvider
 }
 
 func newAlertDeps(manager *kc.Manager) AlertDepsFields {
@@ -24,5 +25,6 @@ func newAlertDeps(manager *kc.Manager) AlertDepsFields {
 		TelegramNotifier: manager,
 		AlertDB:          manager,
 		TrailingStop:     manager,
+		PnL:              manager,
 	}
 }

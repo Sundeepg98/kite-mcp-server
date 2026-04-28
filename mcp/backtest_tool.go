@@ -136,8 +136,9 @@ func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		param1, param2 := backtestDefaults(strategy, args)
 
 		return handler.WithSession(ctx, "historical_price_analyzer", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
-			// Resolve instrument token
-			inst := manager.Instruments
+			// Resolve instrument token. Phase 3a Batch 5: route through the
+			// InstrumentsManagerProvider port.
+			inst := handler.Instruments()
 			if inst == nil {
 				return mcp.NewToolResultError("Instruments not loaded"), nil
 			}

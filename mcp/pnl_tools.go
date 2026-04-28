@@ -48,7 +48,8 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		pnlService := manager.PnLService()
+		// Phase 3a Batch 5: route through the PnLServiceProvider port.
+		var pnlService = handler.deps.PnL.PnLService()
 		if pnlService == nil {
 			return mcp.NewToolResultError("P&L journal not available (requires database persistence)"), nil
 		}

@@ -71,6 +71,7 @@ type ToolHandlerDeps struct {
 	BrokerResolver   kc.BrokerResolverProvider
 	TrailingStop     kc.TrailingStopManagerProvider
 	Events           kc.EventDispatcherProvider
+	PnL              kc.PnLServiceProvider
 
 	// CQRS bus providers — handlers that dispatch commands/queries
 	// depend on these narrow ports rather than pulling the full
@@ -124,6 +125,7 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 			TelegramNotifier: ad.TelegramNotifier,
 			AlertDB:          ad.AlertDB,
 			TrailingStop:     ad.TrailingStop,
+			PnL:              ad.PnL,
 			// OrderDepsFields
 			RiskGuard:      od.RiskGuard,
 			BrokerResolver: od.BrokerResolver,
