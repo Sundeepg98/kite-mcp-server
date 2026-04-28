@@ -39,6 +39,12 @@ type User struct {
 	LastLogin    time.Time `json:"last_login,omitempty"`
 	OnboardedBy  string    `json:"onboarded_by"`
 	AdminEmail   string    `json:"admin_email,omitempty"`
+	// TOTPSecretEnc is the AES-256-GCM-encrypted TOTP secret (RFC 6238)
+	// for admin MFA. Empty when not enrolled. Never serialised to JSON
+	// — the MFA enrollment endpoint returns the plaintext exactly once
+	// at enrollment time, never afterwards. See kc/users/mfa.go.
+	TOTPSecretEnc  string    `json:"-"`
+	TOTPEnrolledAt time.Time `json:"totp_enrolled_at,omitempty"`
 }
 
 // IsAdmin returns true if this user has the admin role and is active.
@@ -111,6 +117,11 @@ type Store struct {
 	users  map[string]*User // keyed by lowercase email
 	db     *alerts.DB
 	logger *slog.Logger
+	// encryptionKey is the AES-256 key used to encrypt T1 secrets stored
+	// on the User record (currently TOTP MFA secrets). Wired by the
+	// composition root via SetEncryptionKey from the same HKDF-derived key
+	// the rest of T1 storage uses. See kc/users/mfa.go.
+	encryptionKey []byte
 }
 
 // NewStore creates a new user store.
@@ -159,6 +170,11 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);`
 	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''`)
 	// Migration: add admin_email column for family billing.
 	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN admin_email TEXT DEFAULT ''`)
+	// Migration: add TOTP MFA columns (admin-only enrollment).
+	// totp_secret_enc holds the AES-256-GCM-encrypted RFC 6238 TOTP secret.
+	// totp_enrolled_at is RFC3339 timestamp of enrollment ("" = not enrolled).
+	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN totp_secret_enc TEXT DEFAULT ''`)
+	_ = s.db.ExecDDL(`ALTER TABLE users ADD COLUMN totp_enrolled_at TEXT DEFAULT ''`)
 	return nil
 }
 
@@ -168,7 +184,9 @@ func (s *Store) LoadFromDB() error {
 		return nil
 	}
 	rows, err := s.db.RawQuery(`SELECT id, email, kite_uid, display_name, role, status,
-		created_at, updated_at, COALESCE(last_login, ''), onboarded_by, COALESCE(password_hash, ''), COALESCE(admin_email, '') FROM users`)
+		created_at, updated_at, COALESCE(last_login, ''), onboarded_by,
+		COALESCE(password_hash, ''), COALESCE(admin_email, ''),
+		COALESCE(totp_secret_enc, ''), COALESCE(totp_enrolled_at, '') FROM users`)
 	if err != nil {
 		return fmt.Errorf("query users: %w", err)
 	}
@@ -179,15 +197,19 @@ func (s *Store) LoadFromDB() error {
 
 	for rows.Next() {
 		var u User
-		var createdAtS, updatedAtS, lastLoginS, onboardedBy, adminEmailStr string
+		var createdAtS, updatedAtS, lastLoginS, onboardedBy, adminEmailStr, totpEnrolledAtS string
 		if err := rows.Scan(&u.ID, &u.Email, &u.KiteUID, &u.DisplayName, &u.Role, &u.Status,
-			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy, &u.PasswordHash, &adminEmailStr); err != nil { // COVERAGE: unreachable — SQLite query succeeds implies scan succeeds (dynamic typing)
+			&createdAtS, &updatedAtS, &lastLoginS, &onboardedBy, &u.PasswordHash, &adminEmailStr,
+			&u.TOTPSecretEnc, &totpEnrolledAtS); err != nil { // COVERAGE: unreachable — SQLite query succeeds implies scan succeeds (dynamic typing)
 			return fmt.Errorf("scan user: %w", err)
 		}
 		u.CreatedAt, _ = time.Parse(time.RFC3339, createdAtS)
 		u.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtS)
 		if lastLoginS != "" {
 			u.LastLogin, _ = time.Parse(time.RFC3339, lastLoginS)
+		}
+		if totpEnrolledAtS != "" {
+			u.TOTPEnrolledAt, _ = time.Parse(time.RFC3339, totpEnrolledAtS)
 		}
 		u.OnboardedBy = onboardedBy
 		u.AdminEmail = adminEmailStr
