@@ -93,7 +93,7 @@ DEV_MODE=true unlocks the in-memory mock broker and skips most production gates.
 
 ### 3.1 `OAUTH_JWT_SECRET` (master encryption key)
 
-**Status**: rotation procedure deferred per [`SECURITY_POSTURE.md`](SECURITY_POSTURE.md) §4.2.
+**Status**: rotation CLI implemented at `cmd/rotate-key/main.go` (168 LOC + 878 LOC tests). Maintenance-window procedure documented below.
 
 This single env var is the HKDF input for ALL T1 encryption-at-rest:
 - `kite_credentials` (api_key, api_secret)
@@ -101,17 +101,28 @@ This single env var is the HKDF input for ALL T1 encryption-at-rest:
 - `oauth_clients` (client_secret)
 - `mcp_sessions` (session_id_enc)
 
-Rotation invalidates all encrypted records. Procedure when implemented:
+Rotation re-encrypts all rows from the old key to the new key in a single pass; correctly-rotated rows continue to decrypt with the new secret. Procedure:
 
-1. Schedule a maintenance window (users will need to re-authenticate).
+1. Schedule a maintenance window (users will need to re-authenticate after step 6 because session decryption keys flip).
 2. Take the service offline: `flyctl scale count 0 -a kite-mcp-server`.
 3. Snapshot the DB: `flyctl ssh sftp get /data/alerts.db ./pre-rotation.db`.
-4. Set new secret: `flyctl secrets set OAUTH_JWT_SECRET=$(openssl rand -hex 32)`.
-5. Migrate existing rows: `cmd/rotate-key/main.go` (planned binary; currently exists as test scaffolding only — `cmd/rotate-key/main_test.go`).
-6. Verify migration via re-encrypted hash chain: `auditStore.VerifyChain(...)`.
-7. Bring service back: `flyctl scale count 1 -a kite-mcp-server`.
+4. Generate the new secret locally: `NEW_SECRET=$(openssl rand -hex 32)`.
+5. Run the rotation CLI against the snapshot:
+   ```bash
+   go run ./cmd/rotate-key \
+     -db ./pre-rotation.db \
+     -old-secret "$OLD_SECRET" \
+     -new-secret "$NEW_SECRET"
+   ```
+   Output enumerates rows rotated per table (`kite_tokens`, `kite_credentials`, `oauth_clients`, `mcp_sessions`).
+6. Upload the rotated DB: `flyctl ssh sftp put ./pre-rotation.db /data/alerts.db`.
+7. Set new secret: `flyctl secrets set OAUTH_JWT_SECRET="$NEW_SECRET"`.
+8. Verify migration via re-encrypted hash chain: `auditStore.VerifyChain(...)`.
+9. Bring service back: `flyctl scale count 1 -a kite-mcp-server`.
 
-**Today's reality**: full rotation requires service downtime; ad-hoc rotation invalidates all sessions and requires user re-auth. The CLI tool is in `cmd/rotate-key/` as scaffolding (test files exist; production binary is the deferred work).
+The CLI handles legacy nil-salt databases (pre-`EnsureEncryptionSalt`) and current salted databases transparently; it reads the `hkdf_salt` config-table value when present. Reference test coverage at `cmd/rotate-key/main_test.go` covers happy path, missing flags, error path, and subprocess behaviour.
+
+**Today's reality**: full rotation requires service downtime; ad-hoc rotation invalidates all sessions and requires user re-auth. The CLI is binary-shippable today; the operational gap is real-time rotation (zero-downtime) which would require dual-key support at the encryption layer.
 
 ### 3.2 `ADMIN_EMAILS`
 
