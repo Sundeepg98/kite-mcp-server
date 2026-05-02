@@ -490,6 +490,27 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 		preBillingStore.SetEventDispatcher(eventDispatcher)
 	}
 
+	// Real-time anomaly push: subscribe an AnomalyNotifier to the
+	// shared dispatcher so RiskguardRejectionEvent (anomaly + 8 other
+	// rejection reasons) immediately pushes a Telegram alert to every
+	// admin in ADMIN_EMAILS who has registered a Telegram chat-id.
+	// Closes the PULL-only gap surfaced in observability-audit-and-roadmap.md
+	// §1.4. Per-(user_email, reason) dedup with 5-minute TTL prevents
+	// alert storms.
+	//
+	// Nil-safe: when ADMIN_EMAILS is empty OR the alert store is nil
+	// OR no Telegram notifier wired, the AnomalyNotifier silently
+	// no-ops. No additional gating needed at the call site.
+	if tn := kcManager.TelegramNotifier(); tn != nil {
+		if alertStore := kcManager.AlertStoreConcrete(); alertStore != nil {
+			adminList := strings.Split(app.Config.AdminEmails, ",")
+			anomalyNotifier := alerts.NewAnomalyNotifier(tn, alertStore, adminList, app.logger)
+			eventDispatcher.Subscribe("riskguard.rejection_recorded", anomalyNotifier.HandleEvent)
+			app.Logger().Info(context.Background(), "Real-time anomaly Telegram push wired",
+				"admin_count", len(adminList))
+		}
+	}
+
 	// Initialize paper trading engine.
 	var paperEngine *papertrading.PaperEngine
 	if alertDB := kcManager.AlertDB(); alertDB != nil {

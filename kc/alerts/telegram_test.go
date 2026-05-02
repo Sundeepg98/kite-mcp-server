@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,21 @@ import (
 //
 // If failSend is true, the server returns an error response for sendMessage calls.
 func fakeTelegramServer(failSend bool) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, _ := newFakeTelegramServerWithCounter(failSend)
+	return srv
+}
+
+// newFakeTelegramServerWithCounter is the per-instance variant used by
+// anomaly_notifier_test.go. Each call returns a fresh server with its
+// own atomic counter and last-message capture — t.Parallel-safe
+// without process-global state.
+//
+// Returned counter pointer is incremented on every sendMessage hit.
+// The lastMsg pointer captures the most recent text (URL-decoded). Use
+// the helper accessors above (snapshot via atomic.LoadInt64).
+func newFakeTelegramServerWithCounter(failSend bool) (*httptest.Server, *fakeTelegramState) {
+	st := &fakeTelegramState{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// The URL pattern is /bot<token>/<method>
@@ -42,6 +57,12 @@ func fakeTelegramServer(failSend bool) *httptest.Server {
 		}
 
 		if strings.HasSuffix(path, "/sendMessage") {
+			_ = r.ParseForm()
+			st.mu.Lock()
+			st.lastMsg = r.PostForm.Get("text")
+			st.mu.Unlock()
+			atomic.AddInt64(&st.count, 1)
+
 			if failSend {
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"ok":          false,
@@ -72,6 +93,28 @@ func fakeTelegramServer(failSend bool) *httptest.Server {
 			"description": "Not Found",
 		})
 	}))
+	return srv, st
+}
+
+// fakeTelegramState holds the per-server counter + last-message capture
+// used by anomaly_notifier_test.go. Methods are safe under concurrent
+// use.
+type fakeTelegramState struct {
+	count   int64
+	mu      sync.Mutex
+	lastMsg string
+}
+
+// Count returns the current sendMessage hit count.
+func (s *fakeTelegramState) Count() int64 {
+	return atomic.LoadInt64(&s.count)
+}
+
+// LastMessage returns the most recent sendMessage text (URL-decoded).
+func (s *fakeTelegramState) LastMessage() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastMsg
 }
 
 // newMockBot creates a BotAPI connected to the given httptest server.
