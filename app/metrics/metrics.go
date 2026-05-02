@@ -44,6 +44,13 @@ type Manager struct {
 
 	cleanupStop chan struct{}
 	cleanupOnce sync.Once
+
+	// histMu guards histogramSource. Optional histogram source (set
+	// via SetHistogramSource) lets the metrics surface emit per-tool
+	// latency histograms sourced from kc/audit at scrape time. Nil =
+	// no histograms emitted (back-compat default). See histogram.go.
+	histMu          sync.Mutex
+	histogramSource HistogramSource
 }
 
 // userSet holds unique users for a day with count
@@ -334,6 +341,14 @@ func (m *Manager) WritePrometheus(buf *bytes.Buffer) {
 			m.formatMetric(buf, "daily_unique_users_total", map[string]string{"date": date}, float64(count))
 		}
 	}
+
+	// Optional per-tool latency histograms — emitted when the wire-up
+	// site has registered a HistogramSource (via SetHistogramSource).
+	// Closes the §1.2 metrics-axis gap surfaced in
+	// .research/observability-audit-and-roadmap.md (per-tool latency
+	// p50/p95/p99 in Prometheus exposition format, queryable via
+	// histogram_quantile in Grafana / Datadog / Loki).
+	m.writeToolHistograms(buf)
 }
 
 // HTTPHandler returns an HTTP handler for the metrics endpoint

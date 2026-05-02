@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
@@ -264,6 +265,49 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// from rewriting the audit log history undetected.
 	if app.auditStore != nil {
 		app.hashPublisherCancel = providers.StartAuditHashPublisher(app.auditStore, auditCfg, app.logger)
+	}
+
+	// Per-tool latency histograms: bridge kc/audit's GetToolHistograms
+	// query into the metrics surface as a HistogramSource closure.
+	// Closes the §1.2 metrics-axis gap surfaced in
+	// .research/observability-audit-and-roadmap.md (per-tool p50/p95/p99
+	// latency in Prometheus exposition format, queryable via
+	// histogram_quantile in any Prometheus-compatible backend —
+	// Grafana / Datadog Agent / Loki / Honeycomb).
+	//
+	// Window: last 24 hours. Long enough that the bucket counts are
+	// stable across short scrape gaps; short enough that anomalies
+	// surface within a daily-ops cycle. Buckets are tuned in
+	// kc/audit.MetricsBuckets for the typical MCP-tool latency profile.
+	//
+	// Nil-safe: when audit store is unavailable (DevMode without
+	// ALERT_DB_PATH), the closure is not registered and the metrics
+	// surface emits no histogram lines (back-compat).
+	if app.auditStore != nil && app.metrics != nil {
+		auditStore := app.auditStore
+		app.metrics.SetHistogramSource(func() ([]metrics.ToolHistogramSnapshot, error) {
+			since := time.Now().Add(-24 * time.Hour)
+			hists, err := auditStore.GetToolHistograms(since)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]metrics.ToolHistogramSnapshot, 0, len(hists))
+			for _, h := range hists {
+				snap := metrics.ToolHistogramSnapshot{
+					ToolName:  h.ToolName,
+					CallCount: h.CallCount,
+					SumMs:     h.SumMs,
+					Buckets:   make([]metrics.ToolBucket, len(h.Buckets)),
+				}
+				for i, b := range h.Buckets {
+					snap.Buckets[i] = metrics.ToolBucket{LeMs: b.LeMs, Count: b.Count}
+				}
+				out = append(out, snap)
+			}
+			return out, nil
+		})
+		app.Logger().Info(context.Background(), "Prometheus tool-latency histogram source wired",
+			"window", "24h", "bucket_count", len(audit.MetricsBuckets))
 	}
 
 	// Initialize DPDP Act 2023 consent log (separate table from tool-call audit).
