@@ -417,3 +417,94 @@ func TestConsentStore_HasActiveGrant_EmptyHash(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, active)
 }
+
+// TestConsentStore_InitTable_Idempotent_FreshDB verifies InitTable can be
+// called repeatedly on a fresh DB without erroring. This is the basic
+// "fresh install" startup path — second InitTable call is what every server
+// restart hits in steady state.
+func TestConsentStore_InitTable_Idempotent_FreshDB(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	cs := NewConsentStore(db)
+	require.NoError(t, cs.InitTable(), "first InitTable on fresh DB must succeed")
+	require.NoError(t, cs.InitTable(), "second InitTable on populated DB must succeed (idempotent)")
+	require.NoError(t, cs.InitTable(), "third InitTable must still succeed")
+}
+
+// TestConsentStore_InitTable_PreMigrationSchema is a regression test for the
+// v181 production crashloop (commit 471b9e8 deploy, 2026-05-03). The bug:
+// the original InitTable bundled CREATE TABLE, CREATE INDEX (with a partial
+// index referencing withdrawn_at), and ALTER TABLE ADD COLUMN withdrawn_at
+// into a single ExecDDL call. SQLite executed them in source order, so on
+// existing v180 databases (which had consent_log WITHOUT withdrawn_at), the
+// partial-index creation failed referencing a non-existent column BEFORE the
+// ALTER TABLE could add it. This took down server startup.
+//
+// The fix splits the DDL into three phases: CREATE TABLE → ALTER ADD COLUMN
+// → CREATE INDEX, ensuring the column exists before any partial index
+// references it.
+//
+// This test simulates a v180 database by hand-rolling the pre-migration
+// schema (no withdrawn_at column), then runs InitTable() and asserts it
+// recovers cleanly. Without the fix, this test reproduces the production
+// crash.
+func TestConsentStore_InitTable_PreMigrationSchema(t *testing.T) {
+	t.Parallel()
+	db, err := alerts.OpenDB(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	// Simulate the v180 schema: consent_log table WITHOUT withdrawn_at.
+	v180DDL := `
+CREATE TABLE consent_log (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email_hash  TEXT NOT NULL,
+    timestamp_utc    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address       TEXT,
+    user_agent       TEXT,
+    notice_version   TEXT NOT NULL,
+    consent_action   TEXT NOT NULL CHECK(consent_action IN ('grant','withdraw')),
+    scope            TEXT NOT NULL,
+    method           TEXT NOT NULL CHECK(method IN ('oauth_callback','dashboard_toggle')),
+    proof_hash       TEXT NOT NULL
+);`
+	require.NoError(t, db.ExecDDL(v180DDL), "set up pre-migration v180 schema")
+
+	// Run InitTable() — this MUST migrate the table forward without erroring.
+	cs := NewConsentStore(db)
+	require.NoError(t, cs.InitTable(),
+		"InitTable on v180 schema must add withdrawn_at column and create indexes")
+
+	// Calling again should still work (idempotent).
+	require.NoError(t, cs.InitTable(),
+		"second InitTable after migration must succeed (idempotent)")
+
+	// Verify the column was actually added by inserting a row that uses it.
+	emailHash := HashEmail("alice@example.com")
+	scopeJSON := `["trading"]`
+	proof := ComputeProofHash("notice v1", "grant")
+	entry := &ConsentLogEntry{
+		UserEmailHash:  emailHash,
+		TimestampUTC:   time.Now().UTC().Truncate(time.Second),
+		IPAddress:      "127.0.0.1",
+		UserAgent:      "test-agent/1.0",
+		NoticeVersion:  "v1",
+		ConsentAction:  ConsentActionGrant,
+		Scope:          scopeJSON,
+		Method:         ConsentMethodOAuthCallback,
+		ProofHash:      proof,
+	}
+	require.NoError(t, cs.Insert(entry), "insert must succeed against migrated schema")
+
+	// MarkWithdrawnByEmailHash exercises the withdrawn_at column directly —
+	// proves both the migration AND the partial-index path function on a
+	// previously pre-migration DB.
+	count, err := cs.MarkWithdrawnByEmailHash(
+		emailHash, time.Now().UTC(), "v1", "regression test", "127.0.0.1", "test/1",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count, "MarkWithdrawnByEmailHash must stamp the migrated grant row")
+}

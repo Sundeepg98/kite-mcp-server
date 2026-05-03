@@ -88,8 +88,19 @@ func NewConsentStore(db *alerts.DB) *ConsentStore {
 // The CHECK constraints on consent_action and method mirror the ConsentAction
 // and ConsentMethod constants. Extending those constants requires an
 // ALTER-TABLE-recreate migration (SQLite can't drop CHECK constraints).
+//
+// Migration sequencing matters: SQLite ADD COLUMN must complete before any
+// partial-index references the column on an existing table. Earlier versions
+// (pre-PR-D) of this DDL ran the partial index `idx_consent_active` (which
+// references `withdrawn_at IS NULL`) BEFORE the ALTER TABLE migration, so on
+// pre-PR-D databases the index creation failed before the column could be
+// added — taking down the whole startup. We now split into three phases:
+//  1. CREATE TABLE — idempotent, no-op on existing tables.
+//  2. ALTER TABLE ADD COLUMN — idempotent via duplicate-column tolerance.
+//  3. CREATE INDEX — now safe; the column is guaranteed to exist.
 func (c *ConsentStore) InitTable() error {
-	ddl := `
+	// Phase 1 — create the table if missing (no-op on existing v180 schema).
+	createTable := `
 CREATE TABLE IF NOT EXISTS consent_log (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     user_email_hash  TEXT NOT NULL,
@@ -102,17 +113,27 @@ CREATE TABLE IF NOT EXISTS consent_log (
     method           TEXT NOT NULL CHECK(method IN ('oauth_callback','dashboard_toggle')),
     proof_hash       TEXT NOT NULL,
     withdrawn_at     DATETIME
-);
+);`
+	if err := c.db.ExecDDL(createTable); err != nil {
+		return fmt.Errorf("consent: create consent_log table: %w", err)
+	}
+
+	// Phase 2 — backfill column for pre-PR-D databases. ALTER TABLE IF NOT
+	// EXISTS isn't supported in SQLite; the duplicate-column error here is
+	// expected and harmless on already-migrated databases. MUST run before
+	// Phase 3 because idx_consent_active references this column in its
+	// WHERE clause.
+	_ = c.db.ExecDDL(`ALTER TABLE consent_log ADD COLUMN withdrawn_at DATETIME`)
+
+	// Phase 3 — create indexes. The partial-index WHERE clause references
+	// withdrawn_at, which Phase 2 has now guaranteed exists.
+	createIndexes := `
 CREATE INDEX IF NOT EXISTS idx_consent_email_hash ON consent_log(user_email_hash);
 CREATE INDEX IF NOT EXISTS idx_consent_timestamp ON consent_log(timestamp_utc);
 CREATE INDEX IF NOT EXISTS idx_consent_active ON consent_log(user_email_hash) WHERE withdrawn_at IS NULL AND consent_action = 'grant';`
-	if err := c.db.ExecDDL(ddl); err != nil {
-		return fmt.Errorf("consent: create consent_log table: %w", err)
+	if err := c.db.ExecDDL(createIndexes); err != nil {
+		return fmt.Errorf("consent: create consent_log indexes: %w", err)
 	}
-	// Migration for pre-PR-D databases. ALTER TABLE IF NOT EXISTS isn't
-	// supported in SQLite; ignore the duplicate-column error and any
-	// other harmless ALTER outcome.
-	_ = c.db.ExecDDL(`ALTER TABLE consent_log ADD COLUMN withdrawn_at DATETIME`)
 	return nil
 }
 
