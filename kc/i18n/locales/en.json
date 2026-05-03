@@ -36,6 +36,13 @@
   "briefing.eod.no_positions": "No open positions today.",
 
   "riskguard.reason.kill_switch": "Trading is currently disabled by the kill switch. Re-enable in /admin/ops to place orders.",
+  "riskguard.reason.trading_frozen": "Trading is currently frozen. Re-enable in /admin/ops to place orders.",
+  "riskguard.reason.global_freeze": "Trading is globally frozen by the admin. Place orders only after the freeze is lifted.",
+  "riskguard.reason.anomaly_high": "Order rejected: anomaly detection (μ+3σ) flagged this as far outside your trading baseline. Review the order or contact admin if intended.",
+  "riskguard.reason.otr_band_violation": "Order price is outside the SEBI OTR band for this contract. Adjust price within ±40% of LTP for options or ±0.75% for cash/futures.",
+  "riskguard.reason.circuit_breached": "Order rejected: an exchange circuit-breaker has tripped on this scrip. Wait for the breaker to reset.",
+  "riskguard.reason.insufficient_margin": "Insufficient margin to place this order. Add funds or reduce quantity.",
+  "riskguard.reason.market_closed": "Order rejected: NSE market is closed. Place orders during regular market hours (09:15-15:30 IST).",
   "riskguard.reason.order_value_limit": "Order value exceeds the per-order cap of ₹50,000. Reduce quantity or split into smaller orders.",
   "riskguard.reason.quantity_limit": "Order quantity exceeds the per-order limit. Reduce the size or contact admin to raise the limit.",
   "riskguard.reason.daily_order_limit": "You have reached the daily order limit (20 orders/day). The counter resets at midnight IST.",

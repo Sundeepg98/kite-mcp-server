@@ -7,8 +7,37 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/i18n"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// rejectionMessage builds the user-facing rejection text using kc/i18n
+// translations keyed on the RejectionReason. Resolves the locale from
+// ctx via i18n.LocaleFromContext (default LocaleEN when not set), so
+// callers wired through HTTP middleware that calls i18n.WithLocale get
+// the user's preferred locale automatically; callers that don't see
+// English. Falls back to result.Message (the check-side free-form
+// detail) when no translation exists for the reason — that path
+// preserves the original behaviour for any RejectionReason not yet
+// in the translation table.
+func rejectionMessage(ctx context.Context, result CheckResult) string {
+	loc := i18n.LocaleFromContext(ctx)
+	key := "riskguard.reason." + string(result.Reason)
+	translated := i18n.T(loc, key)
+	// T() returns the key literal when no translation is found; in that
+	// case fall back to the check-side Message rather than rendering the
+	// dotted key as a user-facing string.
+	if translated == key {
+		return result.Message
+	}
+	// If the check supplied a more specific Message (e.g. with computed
+	// values for an order-value cap), append it after the canonical
+	// translated reason for context.
+	if result.Message != "" && result.Message != translated {
+		return translated + " (" + result.Message + ")"
+	}
+	return translated
+}
 
 // Middleware returns an MCP tool handler middleware that runs risk checks
 // before order tools execute. Non-order tools pass through immediately.
@@ -63,7 +92,7 @@ func Middleware(guard *Guard) server.ToolHandlerMiddleware {
 						"email", email, "tool", toolName, "reason", result.Reason, "message", result.Message)
 				}
 				return gomcp.NewToolResultError(
-					"ORDER BLOCKED [" + string(result.Reason) + "]: " + result.Message,
+					"ORDER BLOCKED [" + string(result.Reason) + "]: " + rejectionMessage(ctx, result),
 				), nil
 			}
 
