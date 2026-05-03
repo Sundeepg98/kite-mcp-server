@@ -538,6 +538,26 @@ func (app *App) setupMux(kcManager *kc.Manager) *http.ServeMux {
 		fmt.Fprint(w, "User-agent: *\nDisallow: /dashboard/\nDisallow: /admin/\nDisallow: /auth/\nDisallow: /oauth/\nDisallow: /mcp\nDisallow: /sse\nAllow: /\nAllow: /terms\nAllow: /privacy\n")
 	})
 
+	// funding.json — FLOSS/fund manifest discovery endpoint. The canonical
+	// source is the repo-root funding.json (which floss.fund's wellKnown
+	// URL points at via github.com/.../blob/master/funding.json per
+	// commit 252c460). The embedded copy in kc/templates/static/funding.json
+	// is byte-identical and serves the deployed-site discovery path so
+	// third-party indexers + curl probes hit a 200, not a 404 (was a
+	// strict Playwright finding on Fly v186). Both files are kept in
+	// sync — see kc/templates/static/funding.json comment for the
+	// drift-prevention convention.
+	mux.HandleFunc("/funding.json", func(w http.ResponseWriter, r *http.Request) {
+		data, err := templates.FS.ReadFile("static/funding.json")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write(data)
+	})
+
 	// DEV_MODE: expose pprof profiling endpoints for debugging.
 	if app.DevMode {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)

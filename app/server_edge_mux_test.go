@@ -1235,6 +1235,40 @@ func TestServeLegalPages_AllRoutes(t *testing.T) {
 	}
 }
 
+// TestServeFundingJSON_RouteRegistered asserts /funding.json returns
+// a 200 with application/json content-type and a parseable funding.json
+// body matching the floss.fund manifest schema. Strict Playwright matrix
+// flagged this as a non-blocking finding on Fly v186: file shipped via
+// 252c460 but no route was registered, so /funding.json returned 404.
+//
+// FLOSS/fund manifest discovery requires the URL be reachable (the
+// wellKnown URL inside funding.json itself points at the GitHub blob
+// URL, but third-party indexers may also probe the deployed site).
+func TestServeFundingJSON_RouteRegistered(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+	app := newTestApp(t)
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	req := httptest.NewRequest(http.MethodGet, "/funding.json", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code,
+		"/funding.json must return 200 (was 404 on Fly v186 — strict Playwright finding)")
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json",
+		"/funding.json must declare application/json Content-Type for floss.fund + curl|jq compatibility")
+
+	// Parseable JSON with the expected manifest fields.
+	var manifest map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &manifest),
+		"/funding.json body must be valid JSON")
+	assert.NotEmpty(t, manifest["version"],
+		"funding manifest must declare a version (FLOSS/fund schema requirement)")
+	assert.NotEmpty(t, manifest["entity"],
+		"funding manifest must declare the entity (FLOSS/fund schema requirement)")
+}
+
 // TestServeLegalPages_LandmarkRoles asserts that /terms and /privacy
 // expose semantic landmark roles (`<main role="main">` + `role="contentinfo"`)
 // matching the pattern landing.html + dashboard.html follow. Strict

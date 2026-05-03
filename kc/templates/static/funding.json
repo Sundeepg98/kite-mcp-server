@@ -1,0 +1,88 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Sundeep Govarthinam",
+    "email": "sundeepg8@gmail.com",
+    "description": "Independent software engineer based in Bengaluru, India. Active Kite Connect developer for 2+ years, maintaining the Kite MCP Server — an MIT-licensed MCP (Model Context Protocol) server that extends Zerodha's upstream read-only MCP with order placement, alerts, paper trading, options analytics, backtesting, and safety controls. Indian Pvt Ltd incorporation pending.",
+    "webpageUrl": {
+      "url": "https://github.com/Sundeepg98"
+    }
+  },
+  "projects": [
+    {
+      "guid": "kite-mcp-server",
+      "name": "Kite MCP Server",
+      "description": "Open-source MCP (Model Context Protocol) server for Zerodha Kite Connect. Extends Zerodha's official read-only MCP with ~80 tools covering order placement, price alerts, Telegram briefings, paper trading, options Greeks (Black-Scholes), backtesting (4 strategies), technical indicators, portfolio rebalancing, sector exposure, tax-harvest analysis, and a riskguard safety layer (kill switch, order caps, rate limits). Per-user OAuth with AES-256-GCM encrypted credential storage. Ships MCP widgets for Claude.ai / Claude Desktop, a 24/7 Telegram trading bot, and a full audit trail. Production deployment on Fly.io. 330+ tests, Go 1.25, MIT licensed.",
+      "webpageUrl": {
+        "url": "https://kite-mcp-server.fly.dev/"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/Sundeepg98/kite-mcp-server",
+        "wellKnown": "https://github.com/Sundeepg98/kite-mcp-server/blob/master/funding.json"
+      },
+      "licenses": [
+        "spdx:MIT"
+      ],
+      "tags": [
+        "go",
+        "mcp",
+        "model-context-protocol",
+        "zerodha",
+        "kite-connect",
+        "trading",
+        "algo-trading",
+        "ai",
+        "llm",
+        "claude",
+        "open-source",
+        "fintech",
+        "india"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "grant-email",
+        "type": "other",
+        "address": "sundeepg8@gmail.com",
+        "description": "Direct grant disbursement via email coordination. Bank transfer / UPI / international wire details will be shared on grant approval. GitHub Sponsors setup pending post-incorporation."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "small-grant",
+        "status": "active",
+        "name": "Small grant — essentials ($10k tier)",
+        "description": "Covers Indian Pvt Ltd incorporation + FY1 ROC compliance (~₹85,000), Class 36 + 42 trademark registration (~₹40,000), and one round of independent CERT-In-empanelled VAPT security audit (~₹2,40,000). Unlocks the legal and security baseline required to offer the service commercially and apply for NSE/BSE empanelment. Total ~₹8,40,000 ≈ $10,000.",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["grant-email"]
+      },
+      {
+        "guid": "substantive-grant",
+        "status": "active",
+        "name": "Substantive grant — 6-month focused runway ($35k tier)",
+        "description": "Small-grant scope PLUS independent security review (~₹4,00,000), 6 months of full-time maintainer runway, BYO-API-key hedge, multi-broker adapter (Dhan port), concall + FII/DII + peer-compare analytics shipped to v1. Enables sustained focused development instead of weekend hacking. Total ~₹29,00,000 ≈ $35,000.",
+        "amount": 35000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["grant-email"]
+      },
+      {
+        "guid": "extended-grant",
+        "status": "active",
+        "name": "Extended grant — 12-month focused runway ($60k tier)",
+        "description": "Substantive-grant scope PLUS extended maintainer runway through 12 months, second VAPT round, NSE empanelment application + filing fees, OpenTelemetry observability migration, user-support staff hours, and reserve fund for unforeseen compliance work. Keeps the project healthy for the broader Kite developer ecosystem through year 1. Total ~₹56,00,000 ≈ $60,000.",
+        "amount": 60000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": ["grant-email"]
+      }
+    ],
+    "history": []
+  }
+}
