@@ -602,6 +602,51 @@ func TestServeErrorPage_500(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Home")
 }
 
+// TestServeErrorPage_500_UsesDashboardBaseCSS asserts the 500 path renders
+// the styled template (referencing /static/dashboard-base.css) rather than
+// the plain-text http.Error fallback. Prevents regression to bare
+// "Internal server error" text on HTML-rendering paths.
+func TestServeErrorPage_500_UsesDashboardBaseCSS(t *testing.T) {
+	rec := httptest.NewRecorder()
+	serveErrorPage(rec, http.StatusInternalServerError, "Server Error", "Something went wrong")
+
+	body := rec.Body.String()
+	assert.Contains(t, body, "/static/dashboard-base.css",
+		"500 page must reference the design-system stylesheet")
+	assert.Contains(t, body, "var(--text-0)",
+		"500 page must use design-system color tokens, not hardcoded colors")
+	assert.Contains(t, body, "var(--accent)",
+		"500 page must use design-system color tokens, not hardcoded colors")
+	assert.Contains(t, body, "<!DOCTYPE html>",
+		"500 page must be valid HTML, not plain text")
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html",
+		"500 page must declare HTML content-type")
+}
+
+// TestServeErrorPage_500_StatusCodes ensures the helper handles the full
+// 5xx range — Show-HN traffic spikes can trigger 502/503/504 from upstream
+// load balancers as well as 500 from in-process panics.
+func TestServeErrorPage_500_StatusCodes(t *testing.T) {
+	cases := []struct {
+		status int
+		title  string
+	}{
+		{http.StatusInternalServerError, "Server Error"},
+		{http.StatusBadGateway, "Bad Gateway"},
+		{http.StatusServiceUnavailable, "Service Unavailable"},
+		{http.StatusGatewayTimeout, "Gateway Timeout"},
+	}
+	for _, c := range cases {
+		t.Run(c.title, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			serveErrorPage(rec, c.status, c.title, "Test")
+			assert.Equal(t, c.status, rec.Code)
+			assert.Contains(t, rec.Body.String(), c.title)
+			assert.Contains(t, rec.Body.String(), "/static/dashboard-base.css")
+		})
+	}
+}
+
 // ===========================================================================
 // withSessionType tests
 // ===========================================================================

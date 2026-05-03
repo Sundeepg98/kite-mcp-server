@@ -54,17 +54,28 @@ func TestServeLegalPages_TemplateExecuteError_Push100(t *testing.T) {
 	mux := http.NewServeMux()
 	app.serveLegalPages(mux)
 
-	// /terms handler calls ExecuteTemplate("legal",...) which fails
+	// /terms handler calls ExecuteTemplate("legal",...) which fails. The
+	// failure path must render the styled error template (referencing
+	// /static/dashboard-base.css) — bare http.Error plain-text would
+	// regress the launch-day production-wobble UX (residual-100 audit
+	// item #3).
 	req := httptest.NewRequest("GET", "/terms", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html",
+		"500 fallback must be HTML, not text/plain")
+	assert.Contains(t, rr.Body.String(), "/static/dashboard-base.css",
+		"500 fallback must reference the design-system stylesheet")
+	assert.Contains(t, rr.Body.String(), "Server Error",
+		"500 fallback must show a friendly title")
 
-	// Also test /privacy
+	// Also test /privacy with the same regression coverage.
 	req2 := httptest.NewRequest("GET", "/privacy", nil)
 	rr2 := httptest.NewRecorder()
 	mux.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusInternalServerError, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), "/static/dashboard-base.css")
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +97,13 @@ func TestServeStatusPage_LandingTemplateExecuteError_Push100(t *testing.T) {
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	// Landing-page render-failure must use the styled 500 page so a
+	// production wobble during a launch-day Show-HN traffic spike still
+	// looks like a finished product (residual-100 audit item #3).
+	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html",
+		"500 fallback must be HTML, not text/plain")
+	assert.Contains(t, rr.Body.String(), "/static/dashboard-base.css",
+		"500 fallback must reference the design-system stylesheet")
 }
 
 // ---------------------------------------------------------------------------

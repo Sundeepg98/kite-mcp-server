@@ -1333,7 +1333,9 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 				Content: htmlContent,
 			}); err != nil {
 				app.Logger().Error(context.Background(), "Failed to execute legal template", err, "page", title)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				serveErrorPage(w, http.StatusInternalServerError, "Server Error",
+					"We hit an unexpected issue rendering this page. Please try again, or "+
+						"contact us via the Issues link on GitHub if it persists.")
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1397,7 +1399,9 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 		var buf bytes.Buffer
 		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 			app.Logger().Error(context.Background(), "Failed to execute landing template", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			serveErrorPage(w, http.StatusInternalServerError, "Server Error",
+				"We hit an unexpected issue rendering this page. Please try again, or "+
+					"contact us via the Issues link on GitHub if it persists.")
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
