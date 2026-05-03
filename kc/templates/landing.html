@@ -65,6 +65,25 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); padding: 2px 6px; border-radius: 4px; }
 
+/* --- Skip-link (WCAG 2.4.1 Bypass Blocks) --- */
+/* Visually hidden until keyboard-focused — Tab once on page load lands here.
+   When focused, becomes a visible accent-tinted pill at the top-left so
+   keyboard users can jump straight to <main>. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: var(--accent);
+  color: var(--bg-0);
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  z-index: 10000;
+  transition: top 0.18s;
+}
+.skip-link:focus { top: 8px; outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* --- Topbar --- */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -256,6 +275,10 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
 </head>
 <body>
 
+<!-- Skip-link: visible only on keyboard focus, jumps past the topbar
+     directly into the main content. WCAG 2.4.1 (Bypass Blocks). -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <noscript>
   <div style="background: var(--warning-dim, #fff3cd); border-bottom: 1px solid var(--warning-border, rgba(251,191,36,0.35)); color: var(--text-0, #0f172a); padding: 12px 24px; font-size: 14px; line-height: 1.5;">
     <strong>JavaScript is disabled in your browser.</strong>
@@ -267,11 +290,11 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
 </noscript>
 
 <!-- Topbar -->
-<div class="topbar">
+<header class="topbar" role="banner">
   <div class="topbar-left">
     <div class="topbar-logo">Kite MCP</div>
     <div class="topbar-sep"></div>
-    <div class="topbar-status"><span class="status-dot"></span> Healthy</div>
+    <div class="topbar-status" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span> Healthy</div>
   </div>
   <div class="topbar-right">
     <span class="topbar-version">{{.Version}}</span>
@@ -288,9 +311,9 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
     <a href="/auth/browser-login?redirect=/dashboard" class="topbar-signin cta-button">{{T .Lang "oauth.login.title"}}</a>
     {{end}}
   </div>
-</div>
+</header>
 
-<div class="container">
+<main id="main-content" class="container" role="main">
 
   <!-- Hero -->
   <section class="hero">
@@ -500,10 +523,10 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
     </a>
   </div>
 
-</div>
+</main>
 
 <!-- Footer -->
-<div class="footer">
+<footer class="footer" role="contentinfo">
   Powered by MCP &middot; Built with Claude &middot; Deployed on Fly.io
   <br>
   <a href="/terms" style="color: var(--text-2); margin-right: 12px;">Terms of Service</a>
@@ -513,7 +536,7 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   <small style="color: var(--text-2); font-size: 0.7rem;">Built on <a href="https://github.com/zerodha/kite-mcp-server" style="color: var(--text-2);">Zerodha's open-source Kite MCP Server</a> (MIT).</small>
   <br>
   <span style="color: var(--warning); font-style: italic; font-size: 0.7rem;">Legal documents are in draft; not yet in force. Service operates in private/technical preview.</span>
-</div>
+</footer>
 
 <script>
 (function() {

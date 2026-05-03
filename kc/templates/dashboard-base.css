@@ -144,6 +144,25 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 .role-badge-admin { background: var(--accent-dim); color: var(--accent); }
 .role-badge-trader { background: var(--green-dim); color: var(--green); }
 
+/* Skip-link (WCAG 2.4.1 Bypass Blocks) — visually hidden until
+   keyboard-focused. Tab once on page load lands here, Enter jumps to
+   <main id="main-content">. Mirrors landing.html's local copy so the
+   shared dashboard pages get the same affordance. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: var(--accent);
+  color: var(--bg-0);
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  z-index: 10000;
+  transition: top 0.18s;
+}
+.skip-link:focus { top: 8px; outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Loading / empty / error states */
 .loading-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
 .empty-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; }
