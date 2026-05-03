@@ -1402,11 +1402,56 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 // --bg-* tokens from dashboard-base.css so the illustration matches
 // the user's resolved color theme (light + dark via prefers-color-
 // scheme). Permissions: hand-drawn / no third-party license needed.
+//
+// This signature is the legacy English-only path retained for callers
+// that don't have an *http.Request handy (e.g. middleware that can only
+// produce a response). For locale-aware error rendering on user-facing
+// HTTP routes, prefer serveErrorPageWithRequest.
 func serveErrorPage(w http.ResponseWriter, status int, title, message string) {
+	renderErrorPageHTML(w, status, "en", title, message,
+		"&larr; Back to home", "Report an issue")
+}
+
+// serveErrorPageWithRequest renders a localized error page. Locale is
+// resolved from the request via the same priority as resolveLocale:
+// ?lang= query > kite_lang cookie > Accept-Language > LocaleEN.
+// Title, message, and action labels are translated via kc/i18n;
+// status-family-aware illustration and design tokens are unchanged.
+//
+// 404 uses error.404.* keys; any 5xx uses error.500.*. Other 4xx
+// statuses (e.g. 403) fall back to the http.StatusText label, since
+// kc/i18n does not yet ship dedicated keys for those — adding them
+// follows the same pattern when needed.
+func serveErrorPageWithRequest(w http.ResponseWriter, r *http.Request, status int) {
+	loc := resolveLocale(r)
+	titleKey, msgKey := errorI18nKeysFor(status)
+	title := i18n.T(loc, titleKey)
+	message := i18n.T(loc, msgKey)
+	homeLabel := "&larr; " + i18n.T(loc, "error.action.home")
+	reportLabel := i18n.T(loc, "error.action.report")
+	renderErrorPageHTML(w, status, string(loc), title, message, homeLabel, reportLabel)
+}
+
+// errorI18nKeysFor maps an HTTP status to the (titleKey, messageKey)
+// pair to look up via kc/i18n. 5xx uses error.500.*; 404 uses
+// error.404.*; other 4xx fall through to the 404 key set since the
+// generic "page not found" copy is the closest existing match.
+func errorI18nKeysFor(status int) (titleKey, messageKey string) {
+	if status >= 500 {
+		return "error.500.title", "error.500.message"
+	}
+	return "error.404.title", "error.404.message"
+}
+
+// renderErrorPageHTML is the shared template body, parameterized so
+// both the legacy serveErrorPage (English) and locale-aware
+// serveErrorPageWithRequest can share rendering. The lang attribute
+// drives `<html lang="...">` for screen readers + browser language
+// detection.
+func renderErrorPageHTML(w http.ResponseWriter, status int, lang, title, message, homeLabel, reportLabel string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 
-	// Pick illustration based on status family.
 	illustration := errorIllustrationFor(status)
 	statusText := http.StatusText(status)
 	if statusText == "" {
@@ -1414,7 +1459,7 @@ func serveErrorPage(w http.ResponseWriter, status int, title, message string) {
 	}
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html lang="en">
+<html lang="%s">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1442,12 +1487,12 @@ func serveErrorPage(w http.ResponseWriter, status int, title, message string) {
   <h1 class="error-title">%s</h1>
   <p class="error-message">%s</p>
   <div class="error-actions">
-    <a href="/" class="error-action-primary">&larr; Back to home</a>
-    <a href="https://github.com/Sundeepg98/kite-mcp-server/issues" class="error-action-secondary" rel="noopener">Report an issue</a>
+    <a href="/" class="error-action-primary">%s</a>
+    <a href="https://github.com/Sundeepg98/kite-mcp-server/issues" class="error-action-secondary" rel="noopener">%s</a>
   </div>
 </main>
 </body>
-</html>`, title, illustration, status, statusText, title, message)
+</html>`, lang, title, illustration, status, statusText, title, message, homeLabel, reportLabel)
 }
 
 // errorIllustrationFor returns an inline SVG appropriate to the HTTP
@@ -1470,9 +1515,12 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// Only serve status page at root path
+		// Only serve status page at root path. Locale-aware 404 honors
+		// ?lang=hi / Accept-Language so the not-found page matches the
+		// landing-page locale resolution instead of always rendering
+		// English (was a strict-matrix gap on the Playwright a11y audit).
 		if path != "/" {
-			serveErrorPage(w, 404, "Page Not Found", "The page you're looking for doesn't exist.")
+			serveErrorPageWithRequest(w, r, http.StatusNotFound)
 			return
 		}
 

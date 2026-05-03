@@ -58,5 +58,12 @@
   "oauth.login.with_google": "Sign in with Google",
   "oauth.login.with_kite": "Sign in with Kite",
 
+  "error.404.title": "Page Not Found",
+  "error.404.message": "The page you're looking for doesn't exist.",
+  "error.500.title": "Server Error",
+  "error.500.message": "We hit an unexpected issue rendering this page. Please try again, or contact us via the Issues link on GitHub if it persists.",
+  "error.action.home": "Back to home",
+  "error.action.report": "Report an issue",
+
   "i18n.test.en_only_key": "English-only synthetic key for fallback test"
 }

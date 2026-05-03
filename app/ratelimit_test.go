@@ -649,6 +649,65 @@ func TestServeErrorPage_500_StatusCodes(t *testing.T) {
 	}
 }
 
+// TestServeErrorPage_HindiLocale asserts the 404 page honors `?lang=hi`
+// and renders `<html lang="hi">` with Hindi-translated title + message.
+// Strict Playwright a11y matrix flagged English-only 404 as a gap;
+// landing.html already honors locale via resolveLocale + i18n.T —
+// the 404 path must match. Pin via TDD red->green.
+//
+// Resolution priority is the same as resolveLocale: ?lang= query > cookie
+// > Accept-Language > LocaleEN.
+func TestServeErrorPage_HindiLocale(t *testing.T) {
+	t.Run("?lang=hi returns html lang=hi + Hindi message", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/no-such-route?lang=hi", nil)
+		serveErrorPageWithRequest(rec, req, http.StatusNotFound)
+
+		body := rec.Body.String()
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Contains(t, body, `<html lang="hi">`,
+			`html lang attribute must reflect resolved locale (hi)`)
+		assert.Contains(t, body, "पेज नहीं मिला",
+			"404 title must render in Hindi when ?lang=hi (got: see body)")
+		assert.Contains(t, body, "/static/dashboard-base.css",
+			"localized 404 must still reference the design-system stylesheet")
+	})
+
+	t.Run("default locale returns html lang=en + English", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/no-such-route", nil)
+		serveErrorPageWithRequest(rec, req, http.StatusNotFound)
+
+		body := rec.Body.String()
+		assert.Contains(t, body, `<html lang="en">`)
+		assert.Contains(t, body, "Page Not Found")
+	})
+
+	t.Run("Accept-Language: hi resolves to Hindi", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/no-such-route", nil)
+		req.Header.Set("Accept-Language", "hi-IN,hi;q=0.9,en;q=0.8")
+		serveErrorPageWithRequest(rec, req, http.StatusNotFound)
+
+		body := rec.Body.String()
+		assert.Contains(t, body, `<html lang="hi">`,
+			"Accept-Language hi-IN must resolve to Hindi when no ?lang= query")
+		assert.Contains(t, body, "पेज नहीं मिला")
+	})
+
+	t.Run("?lang=hi 500 page also localized", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/?lang=hi", nil)
+		serveErrorPageWithRequest(rec, req, http.StatusInternalServerError)
+
+		body := rec.Body.String()
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, body, `<html lang="hi">`)
+		assert.Contains(t, body, "सर्वर त्रुटि",
+			"500 title must render in Hindi when ?lang=hi")
+	})
+}
+
 // ===========================================================================
 // withSessionType tests
 // ===========================================================================

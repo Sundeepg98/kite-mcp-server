@@ -56,5 +56,12 @@
   "oauth.login.title": "साइन इन",
   "oauth.login.prompt": "अपने Kite MCP डैशबोर्ड तक पहुँचने के लिए साइन इन करें।",
   "oauth.login.with_google": "Google के साथ साइन इन करें",
-  "oauth.login.with_kite": "Kite के साथ साइन इन करें"
+  "oauth.login.with_kite": "Kite के साथ साइन इन करें",
+
+  "error.404.title": "पेज नहीं मिला",
+  "error.404.message": "आप जिस पेज की तलाश कर रहे हैं वह मौजूद नहीं है।",
+  "error.500.title": "सर्वर त्रुटि",
+  "error.500.message": "इस पेज को रेंडर करते समय एक अप्रत्याशित समस्या आई। कृपया पुनः प्रयास करें, या यदि समस्या बनी रहती है तो GitHub पर Issues लिंक के माध्यम से हमसे संपर्क करें।",
+  "error.action.home": "होम पर वापस जाएँ",
+  "error.action.report": "समस्या रिपोर्ट करें"
 }
