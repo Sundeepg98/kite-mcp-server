@@ -24,6 +24,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/kc/i18n"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
@@ -1093,6 +1094,38 @@ func (app *App) registerSSEEndpoints(mux *http.ServeMux, sse *server.SSEServer) 
 	}
 }
 
+// langCookieName is the cookie that persists a user's locale choice
+// across visits. A 1-year lifetime is appropriate — language preference
+// is sticky and rarely changes.
+const langCookieName = "kite_lang"
+
+// resolveLocale picks a locale for the request in priority order:
+//
+//  1. ?lang=hi query parameter (explicit, immediate switch — also sets
+//     the cookie via the calling handler if desired)
+//  2. kite_lang cookie (sticky preference from a previous visit)
+//  3. Accept-Language header (browser preference, q-value-aware)
+//  4. LocaleEN default
+//
+// Unsupported locales at any step fall through to the next. The
+// returned value is always a kc/i18n supported locale.
+func resolveLocale(r *http.Request) i18n.Locale {
+	if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+		if loc := i18n.Locale(q); i18n.IsSupported(loc) {
+			return loc
+		}
+	}
+	if c, err := r.Cookie(langCookieName); err == nil && c.Value != "" {
+		if loc := i18n.Locale(c.Value); i18n.IsSupported(loc) {
+			return loc
+		}
+	}
+	if h := r.Header.Get("Accept-Language"); h != "" {
+		return i18n.ParseAcceptLanguage(h)
+	}
+	return i18n.LocaleEN
+}
+
 // securityHeaders wraps a handler with standard security headers.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1260,7 +1293,16 @@ func (app *App) initStatusPageTemplate() error {
 	}
 	app.statusTemplate = tmpl
 
-	landing, err := template.ParseFS(templates.FS, "landing.html")
+	// Landing template gets a FuncMap exposing i18n.T so the page can
+	// render in en or hi based on the StatusPageData.Lang field. T takes
+	// (lang, key) and resolves via kc/i18n with en fallback for missing
+	// hi keys + key-passthrough for fully-unknown keys.
+	landingFuncs := template.FuncMap{
+		"T": func(lang, key string) string {
+			return i18n.T(i18n.Locale(lang), key)
+		},
+	}
+	landing, err := template.New("landing").Funcs(landingFuncs).ParseFS(templates.FS, "landing.html")
 	if err != nil {
 		return fmt.Errorf("failed to parse landing template: %w", err)
 	}
@@ -1384,6 +1426,7 @@ func (app *App) serveStatusPage(mux *http.ServeMux) {
 		// Serve landing page for unauthenticated users
 		data := app.getStatusData()
 		data.OAuthEnabled = app.oauthHandler != nil
+		data.Lang = string(resolveLocale(r))
 
 		// Use landing template if available, fall back to status template
 		tmpl := app.landingTemplate

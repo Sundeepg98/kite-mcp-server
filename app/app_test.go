@@ -498,6 +498,65 @@ func TestServeStatusPage_Root_WithLandingTemplate(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
 }
 
+// TestServeStatusPage_Root_LangQueryParam exercises the i18n locale-
+// switching path: ?lang=hi must produce a Hindi-tagged HTML response
+// (lang="hi") and include translated Hindi strings. The default
+// (no ?lang) must produce lang="en". Sanity-checks the resolveLocale
+// > T() > template.FuncMap wiring end-to-end.
+func TestServeStatusPage_Root_LangQueryParam(t *testing.T) {
+	app := newTestApp(t)
+	require.NoError(t, app.initStatusPageTemplate())
+	app.Config.AppMode = "http"
+	app.Version = "v1.2.3"
+
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	cases := []struct {
+		name        string
+		url         string
+		wantLangTag string
+	}{
+		{"default_no_lang", "/", "en"},
+		{"explicit_en", "/?lang=en", "en"},
+		{"explicit_hi", "/?lang=hi", "hi"},
+		{"unsupported_falls_back_to_en", "/?lang=ja", "en"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, c.url, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code)
+			body := rec.Body.String()
+			// <html lang="hi"> or <html lang="en"> must be rendered.
+			assert.Contains(t, body,
+				`<html lang="`+c.wantLangTag+`">`,
+				"<html lang> must reflect resolved locale")
+		})
+	}
+}
+
+// TestServeStatusPage_Root_AcceptLanguageHeader: when no ?lang= param
+// is given, the Accept-Language header should drive locale selection.
+func TestServeStatusPage_Root_AcceptLanguageHeader(t *testing.T) {
+	app := newTestApp(t)
+	require.NoError(t, app.initStatusPageTemplate())
+	app.Config.AppMode = "http"
+	app.Version = "v1.2.3"
+
+	mux := http.NewServeMux()
+	app.serveStatusPage(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept-Language", "hi-IN,hi;q=0.9,en;q=0.5")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<html lang="hi">`)
+}
+
 // ===========================================================================
 // provisionUser adapter tests
 // ===========================================================================

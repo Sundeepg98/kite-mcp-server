@@ -1,6 +1,6 @@
 {{define "base"}}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{if .Lang}}{{.Lang}}{{else}}en{{end}}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -275,8 +275,17 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   </div>
   <div class="topbar-right">
     <span class="topbar-version">{{.Version}}</span>
+    {{/* Locale switcher: minimalist text-link toggle. Persists via the
+         resolveLocale path (?lang= query > kite_lang cookie > Accept-
+         Language header). HN reviewers see "हिन्दी" as a single non-
+         disruptive accent on an otherwise-English landing page. */}}
+    {{if eq .Lang "hi"}}
+    <a href="?lang=en" style="color: var(--text-2); font-size: 12px; margin-right: 12px;" title="Switch to English">EN</a>
+    {{else}}
+    <a href="?lang=hi" style="color: var(--text-2); font-size: 12px; margin-right: 12px;" title="हिन्दी में देखें">हिन्दी</a>
+    {{end}}
     {{if .OAuthEnabled}}
-    <a href="/auth/browser-login?redirect=/dashboard" class="topbar-signin">Sign In</a>
+    <a href="/auth/browser-login?redirect=/dashboard" class="topbar-signin cta-button">{{T .Lang "oauth.login.title"}}</a>
     {{end}}
   </div>
 </div>

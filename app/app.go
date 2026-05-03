@@ -195,6 +195,12 @@ type StatusPageData struct {
 	Mode         string
 	OAuthEnabled bool
 	ToolCount    int
+	// Lang is the BCP-47 language tag for this render (e.g. "en", "hi").
+	// Resolved from ?lang query param > kite_lang cookie > Accept-Language
+	// header > LocaleEN default. Used by templates for the <html lang="..">
+	// attribute and by the {{T ...}} template function for translation
+	// lookups via kc/i18n.
+	Lang string
 }
 
 // cookieName must match the JWT cookie name used by oauth.RequireAuthBrowser.
