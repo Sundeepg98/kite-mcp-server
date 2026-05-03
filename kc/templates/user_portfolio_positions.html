@@ -22,6 +22,9 @@
   </table>
 </div>
 {{else}}
-<div class="empty-state">No open positions</div>
+<div class="empty-state">
+  <div style="font-weight:500; margin-bottom:6px;">No open positions</div>
+  <div style="font-size:13px; color:var(--text-2);">Intraday and F&amp;O positions appear here once you take a trade. Use <code>get_orders</code> for the full execution log.</div>
+</div>
 {{end}}
 {{end}}

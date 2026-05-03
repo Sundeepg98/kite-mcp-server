@@ -266,12 +266,18 @@
       <tbody id="activeAlertsBody"></tbody>
     </table>
   </div>
-  <div class="empty-state" id="activeAlertsEmpty" style="display:none">No active alerts</div>
+  <div class="empty-state" id="activeAlertsEmpty" style="display:none">
+    <div style="font-weight:500; margin-bottom:6px;">No active alerts</div>
+    <div style="font-size:13px; color:var(--text-2);">Ask your AI: <em>"Set an alert for RELIANCE if it drops 2%"</em> &mdash; or call <code>set_alert</code> directly.</div>
+  </div>
   <div id="activeAlertsLoading" class="loading-state">Loading...</div>
 
   <div class="section-header">Recently Triggered</div>
   <div id="triggeredAlertsWrap" style="display:none"></div>
-  <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">No recently triggered alerts</div>
+  <div class="empty-state" id="triggeredAlertsEmpty" style="display:none">
+    <div style="font-weight:500; margin-bottom:6px;">No recently triggered alerts</div>
+    <div style="font-size:13px; color:var(--text-2);">Triggered alerts from the last 30 days appear here. Telegram notifications fire instantly when an alert hits.</div>
+  </div>
 
   <!-- Sector Exposure -->
   <div class="section-header collapsible-header collapsed" id="sectorHeader">Sector Exposure</div>

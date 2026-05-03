@@ -263,7 +263,16 @@
     var content = document.getElementById('ordersContent');
     clearChildren(content);
     if (orders.length === 0) {
-      content.appendChild(el('div', 'empty-state', 'No AI-assisted orders found in this period.'));
+      var empty = el('div', 'empty-state', '');
+      var title = el('div', '', 'No AI-assisted orders in this period');
+      title.style.fontWeight = '500';
+      title.style.marginBottom = '6px';
+      empty.appendChild(title);
+      var hint = el('div', '', 'Orders placed via MCP tool calls show up here with full audit trail. Try paper-trading mode first to test risk-free.');
+      hint.style.fontSize = '13px';
+      hint.style.color = 'var(--text-2)';
+      empty.appendChild(hint);
+      content.appendChild(empty);
       return;
     }
     var wrap = el('div', 'table-wrap', '');
