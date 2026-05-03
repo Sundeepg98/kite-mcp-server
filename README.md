@@ -2,7 +2,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
 [![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-7000%2B-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions)
+[![Tests](https://img.shields.io/badge/Tests-16209-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions)
 [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
@@ -12,11 +12,11 @@
 
 ## What this is
 
-A Go server that speaks the [Model Context Protocol](https://modelcontextprotocol.io/) and bridges any MCP-compatible AI client to Zerodha's Kite Connect API. Users bring their own Kite developer app (per-user OAuth 2.1 with PKCE) — credentials never leak between accounts. Ships ~80 tools spanning portfolio analysis, market data, options Greeks, backtesting, alerts, paper trading, and order placement, plus MCP Apps widgets that render inline inside chat. Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor, VS Code Copilot, Windsurf — anything MCP-compliant. Forked from and complementary to [Zerodha's official read-only MCP](https://mcp.kite.trade) (22 tools, GTT only); this server adds order placement, Telegram alerts, riskguard safety rails, and analytics.
+A Go server that speaks the [Model Context Protocol](https://modelcontextprotocol.io/) and bridges any MCP-compatible AI client to Zerodha's Kite Connect API. Users bring their own Kite developer app (per-user OAuth 2.1 with PKCE) — credentials never leak between accounts. Ships 117 tools spanning portfolio analysis, market data, options Greeks, backtesting, alerts, paper trading, and order placement, plus MCP Apps widgets that render inline inside chat. Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor, VS Code Copilot, Windsurf — anything MCP-compliant. Forked from and complementary to [Zerodha's official read-only MCP](https://mcp.kite.trade) (22 tools, GTT only); this server adds order placement, Telegram alerts, riskguard safety rails, and analytics.
 
 ## Why trust this
 
-- **7,000+ tests** across 159 test files — run `go test ./... -count=1`
+- **16,209 tests** across 630 test files — run `go test ./... -count=1`
 - **Security audit**: 27-pass manual analysis, 181 findings, all resolved — see [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_PENTEST_RESULTS.md](SECURITY_PENTEST_RESULTS.md)
 - **AES-256-GCM encryption** at rest for every sensitive value — Kite tokens, API secrets, OAuth client secrets — key derived via HKDF from `OAUTH_JWT_SECRET`
 - **RiskGuard** (9 checks) — kill switch, per-order value cap (Rs 50,000 default), quantity limit, daily order count (20/day), rate limit (10/min), duplicate detection (30s window), daily cumulative value cap (Rs 2,00,000), auto-freeze circuit breaker
@@ -192,7 +192,7 @@ Once logged in via MCP OAuth, the dashboard cookie is set automatically (no seco
 
 | Feature | This server | [Official Kite MCP](https://mcp.kite.trade) | Streak |
 |---------|:-----------:|:-------------------------------------------:|:------:|
-| Tools | ~80 | 22 | N/A |
+| Tools | 117 | 22 | N/A |
 | Order placement | Yes (local) | GTT only | Yes |
 | Paper trading | Yes | No | No |
 | Safety checks | 9 | 0 | 0 |
