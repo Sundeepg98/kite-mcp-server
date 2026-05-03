@@ -40,6 +40,16 @@
   --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+/* Light-mode overrides — mirrors dashboard-base.css so users with system
+   light theme don't get whiplash bouncing between landing and dashboard.
+   The dashboard already shipped this; landing was missing the block. */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+    --bg-0: #ffffff; --bg-1: #f8fafc; --bg-2: #f1f5f9; --bg-3: #e2e8f0;
+    --border: #e2e8f0; --border-hi: #cbd5e1;
+    --text-0: #0f172a; --text-1: #475569; --text-2: #94a3b8;
+  }
+}
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: var(--sans); background: var(--bg-0); color: var(--text-0); min-height: 100vh; -webkit-font-smoothing: antialiased; line-height: 1.6; }
 a { color: var(--accent); text-decoration: none; }
@@ -92,7 +102,8 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   padding: 20px; transition: border-color 0.2s;
 }
 .feature-card:hover { border-color: var(--border-hi); }
-.feature-icon { font-size: 1.5rem; margin-bottom: 10px; display: block; }
+.feature-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-bottom: 12px; color: var(--accent); border-radius: 6px; background: var(--accent-dim); }
+.feature-icon svg { width: 20px; height: 20px; }
 .feature-card h3 { font-size: 0.9rem; font-weight: 600; color: var(--text-0); margin-bottom: 6px; }
 .feature-card p { font-size: 0.8rem; color: var(--text-1); line-height: 1.5; }
 
@@ -354,47 +365,47 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   <div class="section-title">Capabilities</div>
   <div class="features">
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9881;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></span>
       <h3>{{.ToolCount}} Tools</h3>
       <p>Orders, portfolio, alerts, options chains, analytics, and inline widgets &mdash; all exposed as MCP tools.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9878;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
       <h3>Paper Trading</h3>
       <p>Risk-free simulation mode. Test strategies with virtual orders before committing real capital.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9888;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
       <h3>Safety Controls</h3>
-      <p>9 riskguard checks, elicitation confirmation prompts, and order validation before every trade.</p>
+      <p>11 pre-trade riskguard checks, elicitation confirmation prompts, and order validation before every trade.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9638;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></span>
       <h3>Inline Widgets</h3>
       <p>Portfolio, activity, orders, and alerts render as interactive HTML widgets inside your chat.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9651;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
       <h3>Technical Analysis</h3>
       <p>RSI, MACD, Bollinger Bands, and Greeks computed server-side. No libraries needed on the client.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9729;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 1 0-7.92.86A5 5 0 1 0 7 20h11a4 4 0 0 0 0-8z"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 17 15 14"/></svg></span>
       <h3>Litestream Backup</h3>
       <p>Continuous SQLite replication to Cloudflare R2. Your alerts and session data survive restarts.</p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9863;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></span>
       <h3>Earnings Concall Summarizer</h3>
       <p><code>analyze_concall</code> &mdash; structured frame for the LLM to parse quarterly earnings calls into themes, guidance, and Q&amp;A signals. <em>(LLM-coordinator pattern &mdash; tool returns BSE corporate-announcements URL + extraction hints; LLM fetches the transcript via WebFetch/Tavily.)</em></p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9650;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="20" x2="3" y2="10"/><line x1="9" y1="20" x2="9" y2="4"/><line x1="15" y1="20" x2="15" y2="14"/><line x1="21" y1="20" x2="21" y2="8"/></svg></span>
       <h3>FII / DII Daily Flow</h3>
       <p><code>get_fii_dii_flow</code> &mdash; institutional cash + F&amp;O flow pointer with extraction themes for the day. <em>(LLM-coordinator pattern &mdash; tool returns NSE / Moneycontrol URL + extraction hints; LLM fetches via WebFetch/Tavily.)</em></p>
     </div>
     <div class="feature-card">
-      <span class="feature-icon" aria-hidden="true">&#9878;</span>
+      <span class="feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h7v14H3z"/><path d="M14 5h7v14h-7z"/><line x1="6.5" y1="9" x2="6.5" y2="15"/><line x1="17.5" y1="9" x2="17.5" y2="15"/></svg></span>
       <h3>Peer Comparison</h3>
       <p><code>peer_compare</code> &mdash; PEG, Piotroski F-Score, Altman Z &mdash; structured report frame with external-data hints. <em>(LLM-coordinator pattern &mdash; tool returns Screener.in URLs + scoring formulas; LLM fetches and computes via WebFetch/Tavily.)</em></p>
     </div>
