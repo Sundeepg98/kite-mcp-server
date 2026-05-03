@@ -235,6 +235,16 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
 </head>
 <body>
 
+<noscript>
+  <div style="background: var(--warning-dim, #fff3cd); border-bottom: 1px solid var(--warning-border, rgba(251,191,36,0.35)); color: var(--text-0, #0f172a); padding: 12px 24px; font-size: 14px; line-height: 1.5;">
+    <strong>JavaScript is disabled in your browser.</strong>
+    The landing page content below is fully readable without JavaScript &mdash; only the copy-button and animations are JS-enhanced.
+    The product itself (the MCP server) does not require JavaScript on the client; all tool calls go over JSON-RPC. See
+    <a href="https://github.com/Sundeepg98/kite-mcp-server#self-host" style="color: var(--accent, #22d3ee);">self-host instructions</a>
+    for a JS-free CLI install.
+  </div>
+</noscript>
+
 <!-- Topbar -->
 <div class="topbar">
   <div class="topbar-left">

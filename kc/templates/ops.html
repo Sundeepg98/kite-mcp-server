@@ -127,6 +127,13 @@ tr:hover td { background: var(--bg-2); }
 </head>
 <body data-email="{{.Email}}" data-admin="{{.IsAdmin}}" hx-ext="sse" sse-connect="{{if eq .IsAdmin "true"}}/admin/ops/api/overview-stream{{end}}">
 
+<noscript>
+  <div style="background: rgba(248,113,113,0.1); border-bottom: 1px solid rgba(248,113,113,0.35); color: #fca5a5; padding: 12px 24px; font-size: 14px; line-height: 1.5;">
+    <strong>JavaScript is required for /admin/ops.</strong>
+    The admin console relies on htmx + SSE for live overview, audit logs, and registry control. Enable JavaScript or use the admin REST API at <code>/admin/api/*</code> directly (programmatic access).
+  </div>
+</noscript>
+
 <div class="topbar">
   <div class="topbar-left">
     <span class="topbar-logo">Kite MCP</span>

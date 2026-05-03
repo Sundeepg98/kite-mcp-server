@@ -142,6 +142,14 @@
 </head>
 <body>
 
+<noscript>
+  <div style="background: rgba(251,191,36,0.1); border-bottom: 1px solid rgba(251,191,36,0.35); color: var(--text-0); padding: 12px 24px; font-size: 14px; line-height: 1.5;">
+    <strong>JavaScript is required for the dashboard's live updates.</strong>
+    The MCP API itself does not require JavaScript &mdash; all tool calls go over JSON-RPC and work fine from a CLI client (Claude Code, mcp-remote, curl).
+    Use the dashboard with JavaScript enabled, or talk to the MCP endpoint at <code>/mcp</code> directly.
+  </div>
+</noscript>
+
 <div class="topbar">
   <div class="topbar-left">
     <span class="topbar-logo">Kite MCP</span>
