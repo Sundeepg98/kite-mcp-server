@@ -8,7 +8,11 @@
 #
 # Build:
 #   docker build -f Dockerfile.selfhost -t kite-mcp-server:selfhost .
-#   docker build -f Dockerfile.selfhost --build-arg VERSION=v1.1.0 -t kite-mcp-server:v1.1.0 .
+#   docker build -f Dockerfile.selfhost --build-arg VERSION=v1.3.0 -t kite-mcp-server:v1.3.0 .
+# When VERSION is unset, the default `dev` is used. Pass an explicit
+# --build-arg VERSION=<tag> for reproducible-version images. The Fly.io
+# `Dockerfile` (sibling file) auto-derives VERSION from server.json so its
+# images stay in lockstep with the registry manifest.
 #
 # Run:
 #   docker run -d -p 8080:8080 --env-file .env -v kite_data:/data kite-mcp-server:selfhost

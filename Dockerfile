@@ -1,11 +1,19 @@
-ARG VERSION=v1.1.0
 FROM golang:1.25.8-alpine AS builder
+RUN apk add --no-cache jq
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-ARG VERSION
-RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.MCP_SERVER_VERSION=${VERSION}" -o kite-mcp-server .
+# VERSION sourced from server.json (single source of truth for the registry
+# manifest version) unless overridden via --build-arg VERSION=vX.Y.Z. Avoids
+# the prior drift where Dockerfile hardcoded v1.1.0 while server.json was
+# bumped to v1.3.0 and beyond. Tool-count-drift CI pins the registry
+# manifest; this build pulls from the same source so the deployed binary's
+# main.MCP_SERVER_VERSION matches what the registry advertises.
+ARG VERSION=""
+RUN VERSION_RESOLVED="${VERSION:-v$(jq -r '.version' server.json)}" && \
+    echo "Building with VERSION=${VERSION_RESOLVED}" && \
+    CGO_ENABLED=0 go build -ldflags "-s -w -X main.MCP_SERVER_VERSION=${VERSION_RESOLVED}" -o kite-mcp-server .
 
 # Download Litestream for SQLite backup replication
 ARG LITESTREAM_VERSION=0.5.10
