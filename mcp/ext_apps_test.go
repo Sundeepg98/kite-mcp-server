@@ -685,3 +685,219 @@ func TestRegisterAppResources_InstallsUIGatingHook(t *testing.T) {
 		}
 	})
 }
+
+// TestChatGPTAppsSDKShim_EndToEndJSON pins the OpenAI Apps SDK contract on
+// the production OnAfterListTools hook + JSON-serialize roundtrip. Three
+// scenarios are covered:
+//
+//   - ChatGPT-style client (advertises io.modelcontextprotocol/ui under
+//     Extensions): BOTH ui/resourceUri AND openai/outputTemplate must
+//     survive the hook AND survive JSON marshalling. ChatGPT reads the
+//     resource URI from `_meta["openai/outputTemplate"]`; if the shim
+//     stripped that key for an advertising client, ChatGPT widget rendering
+//     would silently break.
+//   - Claude Desktop-style client (advertises the same key under
+//     Experimental — some clients adopt the extension before stable):
+//     same outcome — both keys preserved.
+//   - Cursor-pre-2.6 / Claude Code / Windsurf / Zed / 5ire / Cline — none
+//     of these advertise io.modelcontextprotocol/ui. The hook MUST strip
+//     BOTH ui/resourceUri AND openai/outputTemplate before serialize so
+//     these hosts don't render noisy fallback text. This is the defensive-
+//     symmetry assertion: the openai/outputTemplate key must NOT leak past
+//     the gating decision via a path the ui/resourceUri doesn't traverse.
+//
+// Closes the gap from .research/integration-completeness-audit.md
+// (boundary L / 4.5: "no test for ChatGPT Apps SDK shim"). The shim itself
+// is shipped at mcp/ext_apps.go:95-121 (stripUIResourceURIFromTools strips
+// both keys) and mcp/ext_apps.go:42 (openAIMetaKey constant). This test is
+// the end-to-end pin so a future refactor that splits the strip path —
+// e.g., gating only ui/resourceUri while leaving openai/outputTemplate
+// untouched — fails CI before the regression reaches a ChatGPT user.
+func TestChatGPTAppsSDKShim_EndToEndJSON(t *testing.T) {
+	t.Parallel()
+
+	// buildHooks installs the same OnAfterListTools wiring as the
+	// production RegisterAppResources path: read ClientCapabilities from
+	// the session, gate on clientSupportsUIWithOverride(caps, ""), strip
+	// both widget keys for non-advertising sessions.
+	buildHooks := func() *server.Hooks {
+		srv := server.NewMCPServer("test", "1.0", server.WithHooks(&server.Hooks{}))
+		// Seed two tools — exercises the loop in stripUIResourceURIFromTools.
+		t1 := withAppUI(
+			gomcp.NewTool("get_holdings_test", gomcp.WithDescription("seed1")),
+			"ui://kite-mcp/portfolio",
+		)
+		t2 := withAppUI(
+			gomcp.NewTool("get_orders_test", gomcp.WithDescription("seed2")),
+			"ui://kite-mcp/orders",
+		)
+		srv.AddTool(t1, func(_ context.Context, _ gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
+			return &gomcp.CallToolResult{}, nil
+		})
+		srv.AddTool(t2, func(_ context.Context, _ gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
+			return &gomcp.CallToolResult{}, nil
+		})
+		if hooks := srv.GetHooks(); hooks != nil {
+			hooks.AddAfterListTools(func(ctx context.Context, _ any, _ *gomcp.ListToolsRequest, result *gomcp.ListToolsResult) {
+				if result == nil {
+					return
+				}
+				var caps gomcp.ClientCapabilities
+				if session := server.ClientSessionFromContext(ctx); session != nil {
+					if ci, ok := session.(server.SessionWithClientInfo); ok {
+						caps = ci.GetClientCapabilities()
+					}
+				}
+				if clientSupportsUIWithOverride(caps, "") {
+					return
+				}
+				result.Tools = stripUIResourceURIFromTools(result.Tools)
+			})
+		}
+		return srv.GetHooks()
+	}
+
+	// newResult mints a fresh ListToolsResult per subtest — the hook may
+	// mutate it, so subtests cannot share.
+	newResult := func() *gomcp.ListToolsResult {
+		return &gomcp.ListToolsResult{
+			Tools: []gomcp.Tool{
+				withAppUI(
+					gomcp.NewTool("get_holdings_test", gomcp.WithDescription("seed1")),
+					"ui://kite-mcp/portfolio",
+				),
+				withAppUI(
+					gomcp.NewTool("get_orders_test", gomcp.WithDescription("seed2")),
+					"ui://kite-mcp/orders",
+				),
+			},
+		}
+	}
+
+	// runHook fires the registered hooks against a session with the given
+	// capabilities and returns the post-hook result.
+	runHook := func(t *testing.T, caps gomcp.ClientCapabilities) *gomcp.ListToolsResult {
+		t.Helper()
+		hooks := buildHooks()
+		require.NotNil(t, hooks)
+		result := newResult()
+		ctx := context.Background()
+		session := &mockUIClientSession{id: "s", caps: caps}
+		srv := server.NewMCPServer("test", "1.0", server.WithHooks(hooks))
+		ctx = srv.WithContext(ctx, session)
+		req := &gomcp.ListToolsRequest{}
+		for _, hook := range hooks.OnAfterListTools {
+			hook(ctx, nil, req, result)
+		}
+		return result
+	}
+
+	t.Run("ChatGPT-style client (Extensions advertise) preserves BOTH widget keys end-to-end", func(t *testing.T) {
+		t.Parallel()
+		// ChatGPT advertises io.modelcontextprotocol/ui under Extensions.
+		// It then reads the widget URI from _meta["openai/outputTemplate"]
+		// (per the OpenAI Apps SDK contract). Both keys MUST survive.
+		caps := gomcp.ClientCapabilities{
+			Extensions: map[string]any{
+				UICapabilityExtensionKey: map[string]any{},
+			},
+		}
+		result := runHook(t, caps)
+		require.Len(t, result.Tools, 2)
+
+		for i, tool := range result.Tools {
+			require.NotNil(t, tool.Meta, "tool %d meta missing", i)
+			uri, ok := tool.Meta.AdditionalFields[uiMetaKey].(string)
+			require.True(t, ok, "tool %d ui/resourceUri missing for ChatGPT-style client", i)
+			assert.True(t, strings.HasPrefix(uri, "ui://kite-mcp/"),
+				"tool %d ui/resourceUri must remain a ui:// reference", i)
+
+			openAIURI, okAI := tool.Meta.AdditionalFields[openAIMetaKey].(string)
+			require.True(t, okAI, "tool %d openai/outputTemplate missing for ChatGPT-style client — Apps SDK widget would not render", i)
+			assert.Equal(t, uri, openAIURI,
+				"tool %d openai/outputTemplate must mirror ui/resourceUri (same ui:// resource)", i)
+
+			// JSON roundtrip — the wire format must carry both keys.
+			data, err := json.Marshal(tool)
+			require.NoError(t, err)
+			assert.Contains(t, string(data), `"ui/resourceUri":"`+uri+`"`,
+				"tool %d serialized JSON must carry ui/resourceUri", i)
+			assert.Contains(t, string(data), `"openai/outputTemplate":"`+uri+`"`,
+				"tool %d serialized JSON must carry openai/outputTemplate (Apps SDK contract)", i)
+		}
+	})
+
+	t.Run("Experimental-cap client preserves BOTH widget keys (forward-compat path)", func(t *testing.T) {
+		t.Parallel()
+		// Some clients adopt io.modelcontextprotocol/ui under Experimental
+		// before promoting to Extensions. clientSupportsUIWithOverride
+		// honours both — pin that the OpenAI Apps SDK key survives the
+		// Experimental branch too, so a partner client that announces UI
+		// support via Experimental still gets the full Apps-SDK contract.
+		caps := gomcp.ClientCapabilities{
+			Experimental: map[string]any{
+				UICapabilityExtensionKey: map[string]any{},
+			},
+		}
+		result := runHook(t, caps)
+		require.Len(t, result.Tools, 2)
+		require.NotNil(t, result.Tools[0].Meta)
+		_, hasUI := result.Tools[0].Meta.AdditionalFields[uiMetaKey]
+		_, hasAI := result.Tools[0].Meta.AdditionalFields[openAIMetaKey]
+		assert.True(t, hasUI, "Experimental-cap client must keep ui/resourceUri")
+		assert.True(t, hasAI, "Experimental-cap client must keep openai/outputTemplate")
+	})
+
+	t.Run("Cursor-pre-2.6-style client (no UI advertisement) strips BOTH widget keys end-to-end", func(t *testing.T) {
+		t.Parallel()
+		// Cursor pre-2.6, Claude Code, Windsurf, Zed, 5ire, Cline — none of
+		// these advertise io.modelcontextprotocol/ui. They render fallback
+		// text when ui:// resource references arrive, which is noisy. The
+		// hook MUST strip BOTH widget keys before serialize. The serialize
+		// step is the defensive-symmetry assertion: an attacker (or a
+		// careless refactor) that splits the strip path so only
+		// ui/resourceUri is removed would still leak the widget URI via
+		// openai/outputTemplate. Pin both.
+		caps := gomcp.ClientCapabilities{
+			Extensions: map[string]any{
+				"some.unrelated.extension": map[string]any{},
+			},
+		}
+		result := runHook(t, caps)
+		require.Len(t, result.Tools, 2)
+
+		for i, tool := range result.Tools {
+			if tool.Meta != nil {
+				_, hasUI := tool.Meta.AdditionalFields[uiMetaKey]
+				_, hasAI := tool.Meta.AdditionalFields[openAIMetaKey]
+				assert.False(t, hasUI, "tool %d ui/resourceUri must be stripped for non-UI client", i)
+				assert.False(t, hasAI, "tool %d openai/outputTemplate must be stripped for non-UI client (defensive-symmetry: no leak via Apps SDK key)", i)
+			}
+
+			// JSON roundtrip — neither widget key may appear on the wire.
+			data, err := json.Marshal(tool)
+			require.NoError(t, err)
+			assert.NotContains(t, string(data), `ui/resourceUri`,
+				"tool %d serialized JSON must NOT carry ui/resourceUri for non-UI client", i)
+			assert.NotContains(t, string(data), `openai/outputTemplate`,
+				"tool %d serialized JSON must NOT carry openai/outputTemplate for non-UI client", i)
+			assert.NotContains(t, string(data), `ui://kite-mcp/`,
+				"tool %d serialized JSON must NOT carry the resource URI value either", i)
+		}
+	})
+
+	t.Run("empty capabilities (no advertisement at all) strips BOTH widget keys", func(t *testing.T) {
+		t.Parallel()
+		// Bare-bones MCP client with no extensions — fail-closed.
+		result := runHook(t, gomcp.ClientCapabilities{})
+		require.Len(t, result.Tools, 2)
+		for i, tool := range result.Tools {
+			if tool.Meta != nil {
+				_, hasUI := tool.Meta.AdditionalFields[uiMetaKey]
+				_, hasAI := tool.Meta.AdditionalFields[openAIMetaKey]
+				assert.False(t, hasUI, "tool %d ui/resourceUri must be stripped (empty caps)", i)
+				assert.False(t, hasAI, "tool %d openai/outputTemplate must be stripped (empty caps, defensive-symmetry)", i)
+			}
+		}
+	})
+}
