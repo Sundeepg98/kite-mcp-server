@@ -23,12 +23,11 @@ test.describe('/.well-known/mcp/server-card.json — MCP discovery card', () => 
 
     const body = await res.json();
     // Minimum-viable MCP server card. We don't lock the schema version
-    // string itself (might bump), only that ONE of these identity fields
+    // string itself (might bump), only that ONE identity field
     // is present so registries can dedupe entries.
-    const hasIdentity =
-      'name' in body || 'server_name' in body || 'id' in body;
-    expect(hasIdentity, 'server card has identity field (name/server_name/id)')
-      .toBe(true);
+    // SEP-1649 nests identity at serverInfo.name; SEP-2127 promotes to top level. Accept either.
+    const identity = body.name ?? body.server_name ?? body.id ?? body.serverInfo?.name;
+    expect(identity, 'server-card identity field').toBeTruthy();
   });
 
   test('Content-Type prevents browser HTML interpretation', async ({ request }) => {
