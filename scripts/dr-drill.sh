@@ -8,6 +8,16 @@
 # Optional: TELEGRAM_BOT_TOKEN + TELEGRAM_DR_CHAT_ID for success ping.
 # Exit codes: 0 success, 2 missing env, 3 restore fail, 4 empty file,
 # 5 sanity query fail.
+#
+# NOTE: This drill verifies the SQLite file restores and the schema is
+# parseable, but does NOT verify that encrypted columns (kite_tokens,
+# kite_credentials, oauth_clients) actually decrypt. For the full
+# HKDF→AES-256-GCM key chain verification, run the companion drill:
+#   scripts/dr-drill-prod-keys.sh
+# (which requires the production OAUTH_JWT_SECRET).
+#
+# CI also runs a synthetic CI-runnable analog of the prod-keys drill:
+#   go test ./kc/alerts/ -run TestDRDrill
 
 set -euo pipefail
 
