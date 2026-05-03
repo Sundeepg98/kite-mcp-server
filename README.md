@@ -145,6 +145,7 @@ Any MCP-compliant client works with the same `mcp-remote` bridge above. Client-s
 - **[Quick start](#quick-start)** — run locally or connect to hosted
 - **[Terms of Service](TERMS.md)** & **[Privacy Policy](PRIVACY.md)** (currently DRAFT — under legal review)
 - **[BYO Anthropic API key](docs/byo-api-key.md)** — bypass Claude.ai Pro tool-call limits
+- **[Uninstall + DPDP data deletion](docs/uninstall.md)** — disconnect or fully purge your stored data
 
 ### For developers
 - **[Architecture / how it works](docs/blog/oauth-13-levels.md)** — 2,500-word OAuth deep-dive (also published as blog)
