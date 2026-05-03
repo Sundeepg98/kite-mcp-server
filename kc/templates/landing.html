@@ -85,8 +85,14 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
   padding: 5px 14px; border: 1px solid var(--accent); border-radius: 4px;
   background: var(--accent-dim); color: var(--accent); font-size: 12px;
   font-weight: 600; cursor: pointer; font-family: var(--sans); text-decoration: none;
+  transition: transform 0.15s ease-out, background 0.15s ease-out, box-shadow 0.15s ease-out;
 }
-.topbar-signin:hover { background: rgba(34,211,238,0.2); text-decoration: none; }
+.topbar-signin:hover {
+  background: rgba(34,211,238,0.2);
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(34,211,238,0.25);
+}
 {{end}}
 
 /* --- Container --- */
@@ -108,9 +114,24 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 48px; }
 .feature-card {
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 20px; transition: border-color 0.2s;
+  padding: 20px;
+  transition: transform 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out;
 }
-.feature-card:hover { border-color: var(--border-hi); }
+.feature-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+/* Reusable hover/transition primitive for any future call-to-action.
+   Pairs nicely with .topbar-signin and .copy-btn rules below. */
+.cta-button {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background 0.15s ease-out;
+}
+.cta-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
 .feature-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-bottom: 12px; color: var(--accent); border-radius: 6px; background: var(--accent-dim); }
 .feature-icon svg { width: 20px; height: 20px; }
 .feature-card h3 { font-size: 0.9rem; font-weight: 600; color: var(--text-0); margin-bottom: 6px; }
