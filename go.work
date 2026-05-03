@@ -1,0 +1,35 @@
+// Go workspace declaration — multi-module decomposition starting point.
+//
+// This is the in-tree mechanism that lets us extract bounded contexts to
+// their own go.mod files without changing import paths and without
+// publishing separate versioned repos. See:
+//   - .research/disintegrate-and-holistic-architecture.md (commit
+//     5437c32) — the prior audit that recommended this exact pattern;
+//     "kc/money" is the lowest-leaf extractable module (238 LOC, zero
+//     internal deps), making it the safest first extraction.
+//
+// Members:
+//   .          — root module github.com/zerodha/kite-mcp-server
+//                 (everything not yet extracted; app/, mcp/, kc/* except
+//                  kc/money, oauth/, broker/, cmd/, plugins/, etc.).
+//   ./kc/money — Money value object (currency-aware decimal arithmetic +
+//                 JSON marshalling). First extracted module. Future
+//                 broker/ extraction will depend on this one.
+//
+// Adding more members: drop a go.mod into the target directory, append
+// the path here, then `go work sync`. Per the disintegrate audit's
+// trigger-driven escalation: only promote when a candidate genuinely
+// benefits — broker/ at the next slice (already cleanly importable;
+// 55d1a17 broker.PortContract is its standalone test surface), riskguard
+// at 50 stars external interest, audit at the same threshold, etc.
+//
+// CI: matrix-test per member is the canonical path. The default
+// `go test ./...` from the root still works because workspace mode
+// includes all members.
+
+go 1.25.0
+
+use (
+	.
+	./kc/money
+)

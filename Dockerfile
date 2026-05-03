@@ -1,7 +1,15 @@
 FROM golang:1.25.8-alpine AS builder
 RUN apk add --no-cache jq
 WORKDIR /app
+# Multi-module workspace setup (see go.work + .research/disintegrate-and-
+# holistic-architecture.md). The root go.mod has a `replace` directive
+# pointing kc/money at ./kc/money, so kc/money/go.mod must be present
+# BEFORE `go mod download` runs — otherwise the resolver fails with
+# "open kc/money/go.mod: no such file or directory". Pre-stage the
+# manifest by copying go.mod + go.sum + extracted-module manifests
+# in one layer, then run download.
 COPY go.mod go.sum ./
+COPY kc/money/go.mod kc/money/go.sum* kc/money/
 RUN go mod download
 COPY . .
 # VERSION sourced from server.json (single source of truth for the registry

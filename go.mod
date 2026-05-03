@@ -14,6 +14,7 @@ require (
 	github.com/stripe/stripe-go/v82 v82.5.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
+	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.48.0
@@ -22,6 +23,14 @@ require (
 	modernc.org/sqlite v1.46.1
 	pgregory.net/rapid v1.2.0
 )
+
+// Workspace-extracted modules — see go.work. Replace directive keeps the
+// root module buildable from a tagged release tarball that omits go.work
+// (e.g., when goreleaser creates source archives) AND keeps `GOWORK=off`
+// builds working for diagnostics. Without this, the root module's
+// imports of kc/money would fail to resolve outside workspace mode. Drop
+// the replace once kc/money has its own published tag.
+replace github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
