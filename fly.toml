@@ -26,6 +26,14 @@ primary_region = "bom"
   auto_stop_machines = false
   min_machines_running = 1
 
+  # Compress text responses at the Fly proxy. Saves -15-25% wire bytes
+  # on the dashboard / landing / static CSS. Brotli is preferred when
+  # the client advertises it (Chrome / Firefox / Safari), gzip is the
+  # widely-supported fallback. Binary responses (woff2, png) are not
+  # re-compressed.
+  [http_service.compression]
+    algorithms = ["br", "gzip"]
+
 [mounts]
   source = "kite_data"
   destination = "/data"
