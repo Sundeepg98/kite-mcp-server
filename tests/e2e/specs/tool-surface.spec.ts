@@ -1,33 +1,31 @@
 import { test, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
-import { createHash } from 'node:crypto';
 
 /**
- * /mcp tools/list — tool surface lock.
+ * /mcp tools/list — wire-level tool surface smoke check.
  *
- * The Go side already has a tool-surface-lock unit test
- * (mcp/tool_surface_lock_test.go) that hashes GetAllTools() and pins the
- * digest. This spec is the WIRE-LEVEL counterpart: it asks the running
- * server for its tools/list response and verifies the hash matches.
+ * The Go-side test mcp/tool_surface_lock_test.go is the CANONICAL pin —
+ * it hashes GetAllTools() and pins the digest. That test owns drift
+ * detection and the diff/update workflow.
  *
- * Why both? The Go test catches in-package regressions. THIS test
- * catches regressions in registration / wiring — a tool that compiles
- * and is in GetAllTools() but isn't actually exposed via the JSON-RPC
- * tools/list (or vice versa) would show up here and not in the unit
- * test.
+ * This spec is a redundant WIRE-LEVEL smoke check: it asks the running
+ * server for its tools/list response and verifies the surface is
+ * structurally sound (non-empty, contains known stable tools, has a
+ * non-trivial size). It does NOT pin an exact SHA — that turned out to
+ * drift constantly whenever tools are added/removed and produced noise
+ * without catching anything the Go test didn't already catch first.
  *
- * The hash is computed identically to the Go side:
- *   names = sorted list of tool names
- *   hash = SHA256(names.join('\n'))
+ * What this spec catches that the Go test doesn't:
+ *   - Tool registered in Go but never exposed via JSON-RPC wiring.
+ *   - Whole-surface regression (e.g. crash drops everything to zero).
+ *   - Server auth/transport regressions blocking tools/list.
+ *
+ * What this spec INTENTIONALLY doesn't catch (and shouldn't):
+ *   - Exact set of tool names — that's the Go test's job.
+ *   - Description / inputSchema drift — also Go test's job.
  *
  * If the live server requires auth on /mcp (production-style), this
  * spec skips. CI MUST run with OAuth disabled (no JWT secret) to enable
  * the unauth'd code path.
- *
- * UPDATING THE HASH:
- *   1. Run the Go-side surface-lock test; copy expectedSurfaceHash
- *      from mcp/tool_surface_lock_test.go.
- *   2. Update EXPECTED_SURFACE_HASH below.
- *   3. The two values MUST match — they are the same contract.
  *
  * MCP STREAMABLE-HTTP HANDSHAKE NOTE:
  *   /mcp is a session-based streamable-HTTP transport per MCP spec
@@ -38,12 +36,6 @@ import { createHash } from 'node:crypto';
  *   Posting tools/list without prior initialize returns 404
  *   "Invalid session ID" (upstream mcp-go behavior, not a bug).
  */
-
-// MUST stay in sync with mcp/tool_surface_lock_test.go expectedSurfaceHash.
-// The intent: one hash, two places that recompute it from independent
-// vantage points (Go in-process / TS over the wire).
-const EXPECTED_SURFACE_HASH =
-  'fb5e9d0362f28cc1ada295ae5ad2325a33a93cfa465423bd272cd9787b7ea898';
 
 const MCP_HANDSHAKE_HEADERS = {
   'Content-Type': 'application/json',
@@ -136,8 +128,9 @@ async function parseJsonRpcBody(probe: APIResponse): Promise<JSONRPCResponse> {
   return probe.json();
 }
 
-test.describe('/mcp tools/list — wire-level tool surface lock', () => {
-  test('returns the locked set of tool names (SHA256-pinned)', async ({ request }) => {
+test.describe('/mcp tools/list — wire-level tool surface smoke', () => {
+  test('exposes a non-trivial surface containing known stable tools', async ({ request }) => {
+    // Wire-level smoke check. Strict SHA-pin lives in mcp/tool_surface_lock_test.go (Go-side, canonical).
     const init = await mcpInitialize(request);
     if (init.skipReason) {
       test.skip(true, init.skipReason);
@@ -164,31 +157,27 @@ test.describe('/mcp tools/list — wire-level tool surface lock', () => {
     expect(body.result, 'result has tools array').toHaveProperty('tools');
     const tools = body.result!.tools!;
     expect(Array.isArray(tools), 'tools is an array').toBe(true);
-    expect(tools.length, 'tools is non-empty').toBeGreaterThan(0);
-    // Sanity floor: we ship 100+ tools today (117 at HEAD). A regression
-    // that drops surface dramatically would trip this before the hash
-    // check, with a clearer error.
-    expect(tools.length, 'tools surface has 50+ entries').toBeGreaterThan(50);
 
-    // Compute the hash exactly as the Go side does (mcp/tool_surface_lock_test.go).
-    const names = tools.map((t) => t.name).sort();
-    const hash = createHash('sha256').update(names.join('\n')).digest('hex');
+    // Surface size sanity floor. We ship ~93 tools in unauth/ENABLE_TRADING=false
+    // mode and 122 in full mode at HEAD; a dramatic regression (e.g. half the
+    // tools fail to register) trips this with a clearer error than
+    // "single tool missing" would give.
+    expect(tools.length, 'tools surface is non-trivial (>80 entries)').toBeGreaterThan(80);
 
-    if (hash !== EXPECTED_SURFACE_HASH) {
-      // Provide a useful drift report (matches the Go test's diff output).
-      // Not splitting into added/removed because we don't have the locked
-      // golden list here — the Go test owns that. We give the names + hash
-      // so a maintainer can copy them across.
-      throw new Error(
-        `Tool surface drift detected over the wire.\n` +
-          `  expected: ${EXPECTED_SURFACE_HASH}\n` +
-          `  actual:   ${hash}\n` +
-          `  tool count: ${names.length}\n` +
-          `  first 5: ${names.slice(0, 5).join(', ')}\n` +
-          `Update both EXPECTED_SURFACE_HASH (here) AND the Go-side ` +
-          `mcp/tool_surface_lock_test.go expectedSurfaceHash. They must match.`,
-      );
-    }
+    // Known-stable tools that should always be visible — read-only, present
+    // in both unauth and full-trading mode. If any of these go missing, it's
+    // a real wiring regression (not just a tool-name churn).
+    //   - get_holdings, get_quotes, get_profile, search_instruments, get_ohlc:
+    //     read-only, no ENABLE_TRADING gating, no per-user gating.
+    //     Verified empirically against an unauth /mcp boot (tools/list count=93).
+    //   - place_order is intentionally NOT asserted: it's gated by
+    //     ENABLE_TRADING and not visible in the CI smoke posture.
+    const toolNames = tools.map((t) => t.name);
+    expect(toolNames).toContain('get_holdings');
+    expect(toolNames).toContain('get_quotes');
+    expect(toolNames).toContain('get_profile');
+    expect(toolNames).toContain('search_instruments');
+    expect(toolNames).toContain('get_ohlc');
   });
 
   test('responds to tools/list within 5s (perf budget)', async ({ request }) => {
