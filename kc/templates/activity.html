@@ -127,7 +127,12 @@
     <canvas id="toolBarChart" height="200"></canvas>
   </div>
 
-  <div id="loadingState" class="loading-state" style="display:none">Loading activity...</div>
+  <div id="loadingState" class="loading-state" style="display:none" aria-label="Loading activity timeline">
+    <div class="skeleton skeleton-row long"></div>
+    <div class="skeleton skeleton-row medium"></div>
+    <div class="skeleton skeleton-row long"></div>
+    <div class="skeleton skeleton-row short"></div>
+  </div>
   <div id="emptyState" class="empty-state" style="display:none">No activity recorded yet. Use MCP tools to see them here.</div>
   <!-- Server-rendered initial timeline -->
   <div id="initialTimeline">
