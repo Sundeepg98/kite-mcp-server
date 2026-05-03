@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard · Kite MCP</title>
+
+<!-- Preload critical assets — dashboard-base.css is the largest blocking
+     resource on first paint; htmx.min.js is needed for every dashboard
+     interaction; the two woff2 files back the @font-face declarations
+     in dashboard-base.css. -->
+<link rel="preload" as="style" href="/static/dashboard-base.css">
+<link rel="preload" as="script" href="/static/htmx.min.js">
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/dm-sans-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono-latin.woff2" crossorigin>
+
 <link rel="stylesheet" href="/static/dashboard-base.css">
 <script src="/static/htmx.min.js"></script>
 <style>

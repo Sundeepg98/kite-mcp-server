@@ -27,6 +27,15 @@
 <meta name="theme-color" content="#0066cc">
 
 <link rel="canonical" href="https://kite-mcp-server.fly.dev/">
+
+<!-- Preload critical assets so the browser starts fetching them before
+     it parses past the <style> block. og-image is the hero image used
+     by the social-share crawlers AND visible on the page; the two woff2
+     fonts are loaded by the inline @font-face declarations below. -->
+<link rel="preload" as="image" href="/og-image.png">
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/dm-sans-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono-latin.woff2" crossorigin>
+
 <style>
 :root {
   --bg-0: #0a0c10; --bg-1: #0f1218; --bg-2: #161b24; --bg-3: #1e2430;
