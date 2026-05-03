@@ -927,6 +927,84 @@ func TestWebhookHandler_MissingSignatureHeader(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+// TestWebhookHandler_TamperedPayload exercises the security-critical
+// invariant: a valid signature for body A must NOT validate body B.
+// A regression here (e.g. a refactor that compares the signature
+// against a stale buffer, or signs only the first N bytes) is the
+// kind of bug that lets an attacker forge "subscription_canceled"
+// events to drop other users' tiers.
+//
+// Strategy: sign payload P, then send (P + 1 modified byte) with the
+// same signature header. Stripe SDK's ConstructEvent must reject —
+// the handler must return 400, the store must remain untouched.
+func TestWebhookHandler_TamperedPayload(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := NewStore(db, logger)
+	require.NoError(t, store.InitTable())
+	require.NoError(t, store.InitEventLogTable())
+
+	const secret = "whsec_test_tamper"
+	var adminUpgradeCalled bool
+	handler := WebhookHandler(store, secret, logger, func(string) { adminUpgradeCalled = true })
+
+	originalPayload := makeCheckoutPayload("evt_tamper_001", "victim@example.com", "cus_victim", "sub_victim")
+	sig := signTestPayload(originalPayload, secret)
+
+	// Tamper: flip the last byte of the closing brace to '!'. The
+	// signature was computed over the exact original bytes, so this
+	// must fail verification.
+	tampered := make([]byte, len(originalPayload))
+	copy(tampered, originalPayload)
+	tampered[len(tampered)-1] = '!'
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(tampered)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	// The signature scheme MUST reject — anything else is a critical
+	// security regression.
+	assert.Equal(t, http.StatusBadRequest, rr.Code,
+		"tampered payload with valid-for-original signature must be rejected")
+	// And the side-effect must NOT have happened.
+	assert.False(t, adminUpgradeCalled,
+		"adminUpgrade must not be called when signature verification fails")
+	assert.Nil(t, store.GetSubscription("victim@example.com"),
+		"no subscription must be created on signature failure")
+}
+
+// TestWebhookHandler_WrongSecret_RejectsValidlySignedPayload asserts
+// that a payload signed with secret A is rejected when the handler
+// verifies against secret B. This is the canonical "stolen webhook
+// secret rotated, attacker still has old one" scenario — verification
+// must fail closed, not silently downgrade to "any signature accepted".
+func TestWebhookHandler_WrongSecret_RejectsValidlySignedPayload(t *testing.T) {
+	t.Parallel()
+	store := newTestStore()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	const handlerSecret = "whsec_current"
+	const attackerSecret = "whsec_old_compromised"
+	handler := WebhookHandler(store, handlerSecret, logger, nil)
+
+	payload := makeCheckoutPayload("evt_wrong_secret", "user@example.com", "cus_x", "sub_x")
+	// Sign with the WRONG secret (simulating a rotated webhook secret
+	// where the attacker is still using the old one).
+	sig := signTestPayload(payload, attackerSecret)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(string(payload)))
+	req.Header.Set("Stripe-Signature", sig)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code,
+		"payload signed with wrong secret must be rejected (fail closed)")
+}
+
 
 func TestWebhookHandler_SubscriptionDeleted(t *testing.T) {
 	t.Parallel()
