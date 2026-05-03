@@ -31,6 +31,8 @@ A Go server that speaks the [Model Context Protocol](https://modelcontextprotoco
 - **MIT license, open source** — inspect anything. Upstream attribution to Zerodha Tech preserved in [LICENSE](LICENSE)
 - **Threat model**: [THREAT_MODEL.md](THREAT_MODEL.md). Security policy: [SECURITY.md](SECURITY.md)
 
+> Internal architecture journal + per-class deep-dives + fix plans live in the private companion repo [`Sundeepg98/kite-mcp-internal`](https://github.com/Sundeepg98/kite-mcp-internal) — request access for contributor-level architectural context.
+
 ## Quick start
 
 ### Option A — hosted demo (read-only)
