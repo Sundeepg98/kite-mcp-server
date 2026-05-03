@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "locale": "en",
+    "name": "English",
+    "rtl": false
+  },
+
+  "landing.hero.tagline": "Give Claude or ChatGPT direct access to your Zerodha Kite trading account — with order placement, paper trading, options Greeks, backtesting, Telegram alerts, and 11 pre-trade safety checks.",
+  "landing.hero.suffix": "110+ tools. Open source, MIT.",
+  "landing.cta.try_demo": "Try the hosted demo",
+  "landing.cta.self_host": "Self-host in 60 seconds",
+  "landing.cta.compare": "Compare vs official Zerodha MCP",
+  "landing.cta.sign_in": "Sign In",
+
+  "landing.feature.tools.title": "Tools",
+  "landing.feature.tools.body": "Orders, portfolio, alerts, options chains, analytics, and inline widgets — all exposed as MCP tools.",
+  "landing.feature.paper_trading.title": "Paper Trading",
+  "landing.feature.paper_trading.body": "Risk-free simulation mode. Test strategies with virtual orders before committing real capital.",
+  "landing.feature.safety.title": "Safety Controls",
+  "landing.feature.safety.body": "11 pre-trade riskguard checks, elicitation confirmation prompts, and order validation before every trade.",
+  "landing.feature.widgets.title": "Inline Widgets",
+  "landing.feature.widgets.body": "Portfolio, activity, orders, and alerts render as interactive HTML widgets inside your chat.",
+  "landing.feature.indicators.title": "Technical Analysis",
+  "landing.feature.indicators.body": "RSI, MACD, Bollinger Bands, and Greeks computed server-side. No libraries needed on the client.",
+  "landing.feature.litestream.title": "Litestream Backup",
+  "landing.feature.litestream.body": "Continuous SQLite replication to Cloudflare R2. Your alerts and session data survive restarts.",
+
+  "briefing.morning.greeting": "Good morning. Here is your pre-market briefing.",
+  "briefing.morning.token_active": "Kite session is active.",
+  "briefing.morning.token_expired": "Kite session expired — please re-authenticate before placing orders.",
+  "briefing.morning.alerts_active": "Active price alerts: {n}",
+  "briefing.morning.alerts_none": "No active price alerts.",
+  "briefing.eod.greeting": "Good evening. Here is your end-of-day P&L summary.",
+  "briefing.eod.holdings_pnl": "Holdings P&L: {pnl}",
+  "briefing.eod.positions_pnl": "Open positions P&L: {pnl}",
+  "briefing.eod.no_positions": "No open positions today.",
+
+  "riskguard.reason.kill_switch": "Trading is currently disabled by the kill switch. Re-enable in /admin/ops to place orders.",
+  "riskguard.reason.order_value_limit": "Order value exceeds the per-order cap of ₹50,000. Reduce quantity or split into smaller orders.",
+  "riskguard.reason.quantity_limit": "Order quantity exceeds the per-order limit. Reduce the size or contact admin to raise the limit.",
+  "riskguard.reason.daily_order_limit": "You have reached the daily order limit (20 orders/day). The counter resets at midnight IST.",
+  "riskguard.reason.rate_limit": "You are placing orders too quickly (10/min cap). Wait a moment and retry.",
+  "riskguard.reason.duplicate_order": "An identical order was placed within the last 30 seconds. If this is intentional, wait 30s and retry.",
+  "riskguard.reason.daily_value_limit": "Today's cumulative order value exceeds the daily cap of ₹2,00,000. Wait until tomorrow or contact admin.",
+  "riskguard.reason.auto_freeze": "Auto-freeze circuit breaker triggered (consecutive losses). Trading is paused; review your positions before resuming.",
+  "riskguard.reason.confirmation_required": "This order requires explicit confirmation. Re-issue with confirm=true.",
+  "riskguard.reason.off_hours_blocked": "Order rejected: outside market hours (NSE: 09:15-15:30 IST). Place orders during regular market hours.",
+
+  "oauth.login.title": "Sign In",
+  "oauth.login.prompt": "Sign in to access your Kite MCP dashboard.",
+  "oauth.login.with_google": "Sign in with Google",
+  "oauth.login.with_kite": "Sign in with Kite",
+
+  "i18n.test.en_only_key": "English-only synthetic key for fallback test"
+}

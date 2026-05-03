@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "locale": "hi",
+    "name": "हिन्दी",
+    "rtl": false
+  },
+
+  "landing.hero.tagline": "Claude या ChatGPT को सीधे आपके Zerodha Kite ट्रेडिंग अकाउंट तक पहुँच दें — ऑर्डर प्लेसमेंट, पेपर ट्रेडिंग, ऑप्शंस ग्रीक्स, बैकटेस्टिंग, टेलीग्राम अलर्ट और 11 प्री-ट्रेड सेफ्टी चेक्स के साथ।",
+  "landing.hero.suffix": "110+ टूल्स। ओपन सोर्स, MIT।",
+  "landing.cta.try_demo": "होस्टेड डेमो आज़माएँ",
+  "landing.cta.self_host": "60 सेकंड में सेल्फ-होस्ट करें",
+  "landing.cta.compare": "Zerodha के ऑफिशियल MCP से तुलना करें",
+  "landing.cta.sign_in": "साइन इन",
+
+  "landing.feature.tools.title": "टूल्स",
+  "landing.feature.tools.body": "ऑर्डर, पोर्टफोलियो, अलर्ट, ऑप्शंस चेन, एनालिटिक्स और इनलाइन विजेट्स — सभी MCP टूल्स के रूप में उपलब्ध।",
+  "landing.feature.paper_trading.title": "पेपर ट्रेडिंग",
+  "landing.feature.paper_trading.body": "जोखिम-मुक्त सिमुलेशन मोड। असली पूँजी लगाने से पहले वर्चुअल ऑर्डर्स के साथ रणनीतियों का परीक्षण करें।",
+  "landing.feature.safety.title": "सेफ्टी कंट्रोल्स",
+  "landing.feature.safety.body": "हर ट्रेड से पहले 11 प्री-ट्रेड रिस्कगार्ड चेक्स, एलिसिटेशन कन्फर्मेशन प्रॉम्प्ट्स और ऑर्डर वैलिडेशन।",
+  "landing.feature.widgets.title": "इनलाइन विजेट्स",
+  "landing.feature.widgets.body": "पोर्टफोलियो, एक्टिविटी, ऑर्डर्स और अलर्ट्स आपके चैट के अंदर इंटरैक्टिव HTML विजेट्स के रूप में दिखें।",
+  "landing.feature.indicators.title": "टेक्निकल एनालिसिस",
+  "landing.feature.indicators.body": "RSI, MACD, बोलिंजर बैंड्स और ग्रीक्स सर्वर-साइड पर कैलकुलेट। क्लाइंट पर कोई लाइब्रेरी नहीं चाहिए।",
+  "landing.feature.litestream.title": "Litestream बैकअप",
+  "landing.feature.litestream.body": "Cloudflare R2 पर निरंतर SQLite रेप्लिकेशन। आपके अलर्ट्स और सेशन डेटा रीस्टार्ट के बाद भी बने रहते हैं।",
+
+  "briefing.morning.greeting": "सुप्रभात। यह आपकी प्री-मार्केट ब्रीफिंग है।",
+  "briefing.morning.token_active": "Kite सेशन सक्रिय है।",
+  "briefing.morning.token_expired": "Kite सेशन समाप्त हो गया है — ऑर्डर प्लेस करने से पहले कृपया पुनः लॉगिन करें।",
+  "briefing.morning.alerts_active": "सक्रिय प्राइस अलर्ट्स: {n}",
+  "briefing.morning.alerts_none": "कोई सक्रिय प्राइस अलर्ट नहीं।",
+  "briefing.eod.greeting": "शुभ संध्या। यह आपकी एंड-ऑफ-डे P&L समरी है।",
+  "briefing.eod.holdings_pnl": "होल्डिंग्स P&L: {pnl}",
+  "briefing.eod.positions_pnl": "ओपन पोज़िशन्स P&L: {pnl}",
+  "briefing.eod.no_positions": "आज कोई ओपन पोज़िशन्स नहीं।",
+
+  "riskguard.reason.kill_switch": "ट्रेडिंग वर्तमान में किल स्विच द्वारा अक्षम है। ऑर्डर प्लेस करने के लिए /admin/ops में पुनः सक्षम करें।",
+  "riskguard.reason.order_value_limit": "ऑर्डर मूल्य प्रति-ऑर्डर सीमा ₹50,000 से अधिक है। मात्रा घटाएँ या छोटे ऑर्डर्स में बाँटें।",
+  "riskguard.reason.quantity_limit": "ऑर्डर मात्रा प्रति-ऑर्डर सीमा से अधिक है। साइज़ कम करें या सीमा बढ़ाने के लिए एडमिन से संपर्क करें।",
+  "riskguard.reason.daily_order_limit": "आप दैनिक ऑर्डर सीमा (20 ऑर्डर/दिन) तक पहुँच गए हैं। काउंटर मध्यरात्रि IST पर रीसेट होगा।",
+  "riskguard.reason.rate_limit": "आप बहुत तेज़ी से ऑर्डर प्लेस कर रहे हैं (10/मिनट की सीमा)। कुछ क्षण रुकें और पुनः प्रयास करें।",
+  "riskguard.reason.duplicate_order": "पिछले 30 सेकंड में एक समान ऑर्डर प्लेस किया गया था। यदि यह जानबूझकर है, तो 30 सेकंड रुकें और पुनः प्रयास करें।",
+  "riskguard.reason.daily_value_limit": "आज का संचयी ऑर्डर मूल्य दैनिक सीमा ₹2,00,000 से अधिक है। कल तक प्रतीक्षा करें या एडमिन से संपर्क करें।",
+  "riskguard.reason.auto_freeze": "ऑटो-फ़्रीज़ सर्किट ब्रेकर सक्रिय हुआ (लगातार नुकसान)। ट्रेडिंग रुकी हुई है; जारी रखने से पहले अपनी पोज़िशन्स की समीक्षा करें।",
+  "riskguard.reason.confirmation_required": "इस ऑर्डर के लिए स्पष्ट पुष्टि आवश्यक है। confirm=true के साथ पुनः जारी करें।",
+  "riskguard.reason.off_hours_blocked": "ऑर्डर अस्वीकृत: मार्केट के समय के बाहर (NSE: 09:15-15:30 IST)। नियमित मार्केट घंटों में ऑर्डर प्लेस करें।",
+
+  "oauth.login.title": "साइन इन",
+  "oauth.login.prompt": "अपने Kite MCP डैशबोर्ड तक पहुँचने के लिए साइन इन करें।",
+  "oauth.login.with_google": "Google के साथ साइन इन करें",
+  "oauth.login.with_kite": "Kite के साथ साइन इन करें"
+}
