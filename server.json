@@ -9,7 +9,7 @@
     "source": "github",
     "id": "1164168480"
   },
-  "version": "1.2.0",
+  "version": "1.3.0",
   "remotes": [
     {
       "type": "streamable-http",
@@ -22,14 +22,14 @@
       "categories": ["trading", "finance", "brokerage"],
       "keywords": ["zerodha", "kite-connect", "india", "nse", "bse", "options", "backtesting", "paper-trading"],
       "capabilities": {
-        "tools": 80,
+        "tools": 111,
         "paperTrading": true,
         "orderPlacement": false,
         "orderPlacementSelfHostedOnly": true,
         "backtesting": true,
         "optionsGreeks": true,
         "telegramAlerts": true,
-        "riskGuardChecks": 9
+        "riskGuardChecks": 11
       },
       "authentication": "oauth2-pkce",
       "requires": "Zerodha Kite Connect developer app (per-user)",

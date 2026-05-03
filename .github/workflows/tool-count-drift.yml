@@ -1,0 +1,69 @@
+name: Tool Count Drift
+
+# Asserts the canonical tool count in server.json stays within ±5 of the
+# empirical mcp.NewTool(...) count under mcp/. Catches the situation where
+# a new tool ships in code but the registry manifest stays stale (which we
+# discovered at v1.3.0 launch — server.json said 80, code had 111).
+#
+# Tolerance is ±5 (not 0) because some tool registrations are gated by env
+# (ENABLE_TRADING, paper-trading mode), so a strict equality check would
+# false-fail across configurations.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'mcp/**'
+      - 'server.json'
+      - '.github/workflows/tool-count-drift.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'mcp/**'
+      - 'server.json'
+
+permissions:
+  contents: read
+
+jobs:
+  assert-tool-count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute empirical tool count
+        id: empirical
+        run: |
+          set -euo pipefail
+          # Unique tool names registered via mcp.NewTool("...") in production
+          # source files only — explicitly exclude *_test.go fixtures whose
+          # short fake names ("t", "t1", "test_tool") would inflate the count.
+          empirical=$(grep -ho 'mcp\.NewTool("[^"]*"' mcp/ -r \
+            --include='*.go' --exclude='*_test.go' \
+            | sort -u \
+            | wc -l \
+            | tr -d ' ')
+          echo "empirical=${empirical}" >> "$GITHUB_OUTPUT"
+          echo "Empirical mcp.NewTool unique-name count (production only): ${empirical}"
+
+      - name: Read declared tool count from server.json
+        id: declared
+        run: |
+          set -euo pipefail
+          declared=$(jq -r '._meta."io.modelcontextprotocol.registry/publisher-provided".capabilities.tools' server.json)
+          echo "declared=${declared}" >> "$GITHUB_OUTPUT"
+          echo "Declared tools count in server.json: ${declared}"
+
+      - name: Assert drift within tolerance
+        env:
+          EMPIRICAL: ${{ steps.empirical.outputs.empirical }}
+          DECLARED: ${{ steps.declared.outputs.declared }}
+        run: |
+          set -euo pipefail
+          delta=$(( EMPIRICAL > DECLARED ? EMPIRICAL - DECLARED : DECLARED - EMPIRICAL ))
+          echo "Drift: empirical=${EMPIRICAL}, declared=${DECLARED}, delta=${delta}"
+          if [ "${delta}" -gt 5 ]; then
+            echo "::error::Tool count drift exceeds tolerance (±5). server.json declares ${DECLARED} but empirical mcp.NewTool count is ${EMPIRICAL} (delta ${delta}). Update _meta.io.modelcontextprotocol.registry/publisher-provided.capabilities.tools in server.json."
+            exit 1
+          fi
+          echo "OK — drift within ±5 tolerance."
