@@ -1393,10 +1393,74 @@ func (app *App) serveLegalPages(mux *http.ServeMux) {
 }
 
 // serveErrorPage renders a styled HTML error page with the given status code, title, and message.
+//
+// Includes an inline SVG illustration appropriate to the status family:
+// - 4xx: stylized magnifying glass + status code (lost-page metaphor)
+// - 5xx: stylized warning-cone + status code (server-error metaphor)
+//
+// SVG is inline (no /static/ round-trip) and uses --accent / --text-* /
+// --bg-* tokens from dashboard-base.css so the illustration matches
+// the user's resolved color theme (light + dark via prefers-color-
+// scheme). Permissions: hand-drawn / no third-party license needed.
 func serveErrorPage(w http.ResponseWriter, status int, title, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>%s · Kite MCP</title><link rel="stylesheet" href="/static/dashboard-base.css"></head><body><div style="display:flex;justify-content:center;align-items:center;min-height:100vh"><div style="text-align:center;max-width:400px"><h2 style="color:var(--text-0)">%s</h2><p style="color:var(--text-1);margin:16px 0">%s</p><a href="/" style="color:var(--accent)">← Home</a></div></div></body></html>`, title, title, message)
+
+	// Pick illustration based on status family.
+	illustration := errorIllustrationFor(status)
+	statusText := http.StatusText(status)
+	if statusText == "" {
+		statusText = "Error"
+	}
+
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>%s · Kite MCP</title>
+<link rel="stylesheet" href="/static/dashboard-base.css">
+<style>
+.error-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; }
+.error-illust { width: 200px; height: 200px; margin-bottom: 24px; color: var(--accent); }
+.error-illust svg { width: 100%%; height: 100%%; }
+.error-status { font-family: var(--mono); font-size: 14px; color: var(--text-2); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.error-title { color: var(--text-0); font-size: 28px; font-weight: 600; margin-bottom: 12px; }
+.error-message { color: var(--text-1); font-size: 15px; max-width: 480px; margin-bottom: 24px; line-height: 1.6; }
+.error-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.error-actions a { padding: 8px 18px; border-radius: 4px; font-weight: 500; font-size: 14px; text-decoration: none; transition: opacity 0.15s; }
+.error-actions a:hover { opacity: 0.85; }
+.error-action-primary { background: var(--accent); color: var(--bg-0); }
+.error-action-secondary { background: transparent; color: var(--text-1); border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<main id="main-content" class="error-page" role="main">
+  <div class="error-illust" aria-hidden="true">%s</div>
+  <div class="error-status">%d %s</div>
+  <h1 class="error-title">%s</h1>
+  <p class="error-message">%s</p>
+  <div class="error-actions">
+    <a href="/" class="error-action-primary">&larr; Back to home</a>
+    <a href="https://github.com/Sundeepg98/kite-mcp-server/issues" class="error-action-secondary" rel="noopener">Report an issue</a>
+  </div>
+</main>
+</body>
+</html>`, title, illustration, status, statusText, title, message)
+}
+
+// errorIllustrationFor returns an inline SVG appropriate to the HTTP
+// status family. Hand-drawn — no third-party license. currentColor
+// stroke ties to .error-illust { color: var(--accent) } so the
+// illustration auto-themes via dashboard-base.css.
+func errorIllustrationFor(status int) string {
+	if status >= 500 {
+		// 5xx: warning cone — server-side error
+		return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M100 30 L160 160 L40 160 Z"/><line x1="100" y1="80" x2="100" y2="120"/><circle cx="100" cy="138" r="3" fill="currentColor"/></svg>`
+	}
+	// 4xx: magnifying glass + question mark — lost page
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="80" cy="80" r="50"/><line x1="116" y1="116" x2="160" y2="160"/><path d="M68 70 q0 -16 12 -16 q12 0 12 12 q0 8 -12 12 v8" stroke-width="3"/><circle cx="80" cy="100" r="2" fill="currentColor"/></svg>`
 }
 
 // serveStatusPage configures the HTTP mux to serve status page using templates.

@@ -599,7 +599,9 @@ func TestServeErrorPage_500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Server Error")
 	assert.Contains(t, rec.Body.String(), "Something went wrong")
-	assert.Contains(t, rec.Body.String(), "Home")
+	// The polished page (commit Item 6) renders "Back to home" as the
+	// primary CTA — case-insensitive home-link assertion.
+	assert.Contains(t, strings.ToLower(rec.Body.String()), "home")
 }
 
 // TestServeErrorPage_500_UsesDashboardBaseCSS asserts the 500 path renders

@@ -166,6 +166,13 @@ tr.total-row td { border-top: 2px solid var(--border-hi); font-weight: 600; colo
 /* Loading / empty / error states */
 .loading-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
 .empty-state { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; }
+/* Small SVG illustration above an empty-state — sized for inline use,
+   accent-tinted via currentColor so dark/light modes get auto-color.
+   Dashboard widgets that want a visual on empty: wrap an inline svg
+   in <div class="empty-illust">...</div> at the top of the empty-state
+   block. Optional — bare empty-states still look fine. */
+.empty-illust { width: 64px; height: 64px; margin: 0 auto 12px; color: var(--text-2); opacity: 0.6; }
+.empty-illust svg { width: 100%; height: 100%; display: block; }
 .error-state { text-align: center; padding: 32px 20px; color: var(--red); font-size: 13px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 6px; margin-bottom: 16px; }
 
 /* Skeleton loading shimmer — applied to placeholder blocks while htmx
