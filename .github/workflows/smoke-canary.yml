@@ -1,0 +1,96 @@
+name: Smoke Canary
+
+# Runs scripts/smoke-test.sh against the production Fly.io endpoint every
+# 30 minutes. Sends a Telegram alert on failure (red), stays silent on
+# green. Optional: SMOKE_TARGET_URL secret overrides the default endpoint
+# for staging/preview deployments.
+#
+# Required secrets (set via gh secret set, optional):
+#   - TELEGRAM_BOT_TOKEN      : bot token for alert delivery (no alert if absent)
+#   - TELEGRAM_CHAT_ID        : numeric chat ID to receive alerts
+#   - SMOKE_TARGET_URL        : override default endpoint (defaults to fly.dev)
+#
+# If TELEGRAM_BOT_TOKEN/CHAT_ID are unset, the workflow still runs and
+# fails-CI on smoke red — the alert step is best-effort.
+
+on:
+  schedule:
+    # Every 30 minutes — cron syntax. GitHub schedules best-effort, may skew
+    # by a few minutes during peak load.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Endpoint to smoke-test (defaults to fly.dev production)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke vs production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          set -euo pipefail
+          target="${{ github.event.inputs.target_url }}"
+          if [ -z "${target}" ]; then
+            target="${{ secrets.SMOKE_TARGET_URL }}"
+          fi
+          if [ -z "${target}" ]; then
+            target="https://kite-mcp-server.fly.dev"
+          fi
+          echo "url=${target}" >> "$GITHUB_OUTPUT"
+          echo "Smoke target: ${target}"
+
+      - name: Run smoke-test.sh
+        id: smoke
+        env:
+          TARGET: ${{ steps.target.outputs.url }}
+        run: |
+          set -euo pipefail
+          # Tee output so the alert step can extract failed-check lines.
+          if ./scripts/smoke-test.sh "$TARGET" 2>&1 | tee /tmp/smoke.out; then
+            echo "result=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=fail" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Telegram alert on failure
+        if: failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TARGET: ${{ steps.target.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          # Extract failed-check lines from smoke output (best-effort).
+          failed_lines=$(grep -E '^\s*✗|Failed:' /tmp/smoke.out 2>/dev/null | head -20 || echo "(see run logs)")
+          # HTML-escape user-controlled fields. RUN_URL is a stable github.com path.
+          # Telegram parse_mode=HTML is more forgiving than Markdown for stray
+          # underscores/asterisks.
+          read -r -d '' MSG <<EOF || true
+<b>Kite MCP smoke canary FAILED</b>
+Target: <code>${TARGET}</code>
+Run: ${RUN_URL}
+
+Failed checks:
+<pre>${failed_lines}</pre>
+EOF
+          curl -sS --max-time 15 -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            -d "disable_web_page_preview=true" \
+            --data-urlencode "text=${MSG}" \
+            -o /tmp/tg.out -w "HTTP %{http_code}\n" || true
+          tail -20 /tmp/tg.out 2>/dev/null || true

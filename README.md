@@ -12,7 +12,7 @@ Then say: *"Log me in to Kite. Show my portfolio. Backtest SMA crossover on INFY
 
 Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor, VS Code Copilot, Windsurf — anything MCP-compliant. Complementary to [Zerodha's official read-only MCP](https://mcp.kite.trade) (22 tools, GTT only); this server adds order placement, alerts, paper trading, options Greeks, and analytics.
 
-[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev) [![Tests](https://img.shields.io/badge/Tests-9000+-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions) [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md) [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE) [![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
+[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev) [![Tests](https://img.shields.io/badge/Tests-9000+-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions) [![codecov](https://codecov.io/gh/Sundeepg98/kite-mcp-server/branch/master/graph/badge.svg)](https://codecov.io/gh/Sundeepg98/kite-mcp-server) [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md) [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE) [![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
 
 ## Why trust this
 

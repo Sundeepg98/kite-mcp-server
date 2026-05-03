@@ -33,7 +33,15 @@ jobs:
       - name: Test
         run: go test ./... -count=1 -race -timeout 8m -coverprofile=coverage.out -covermode=atomic
 
-      - name: Upload coverage
+      # E1: end-to-end MCP-protocol roundtrip — //go:build e2e gated; runs
+      # only on ubuntu-latest because spawning the compiled binary +
+      # JSON-RPC pipe is the same regression surface across OSes and
+      # ubuntu is fastest in our CI fleet.
+      - name: E2E protocol roundtrip
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -tags=e2e -count=1 -timeout 5m ./mcp/...
+
+      - name: Upload coverage artifact
         if: always() && matrix.os == 'ubuntu-latest' && hashFiles('coverage.out') != ''
         uses: actions/upload-artifact@v4
         with:
@@ -41,3 +49,16 @@ jobs:
           path: coverage.out
           if-no-files-found: ignore
           retention-days: 7
+
+      # E4: Codecov upload — runs only on ubuntu-latest.
+      # Token is optional for public repos (uploads via tokenless mode);
+      # CODECOV_TOKEN secret can be added later for private-repo support
+      # or stricter rate limits without changing this workflow.
+      - name: Upload to Codecov
+        if: matrix.os == 'ubuntu-latest' && hashFiles('coverage.out') != ''
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unit
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
