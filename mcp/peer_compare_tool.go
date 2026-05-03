@@ -52,7 +52,7 @@ var defaultMetrics = []string{"PEG", "Piotroski", "AltmanZ", "PE", "PB", "ROE", 
 
 func (*PeerCompareTool) Tool() mcp.Tool {
 	return mcp.NewTool("peer_compare",
-		mcp.WithDescription("Compare 2-6 stocks side-by-side on fundamental strength (PEG, Piotroski F-score, Altman Z-score) + key ratios (PE, PB, ROE, DE). Returns a structured comparison table with a data-gap pointer (Screener.in URL + formula) per (symbol, metric) pair. Kite Connect does not expose fundamentals directly, so the LLM is expected to fetch the pointer URLs via WebFetch/Tavily and compute scores client-side using the formulas returned by this tool. Does not fetch external data itself."),
+		mcp.WithDescription("(LLM-coordinator pattern — server frames the comparison; LLM fetches Screener.in URLs + computes via WebFetch/Tavily.) Frame a 2-6 stock peer comparison on fundamental strength (PEG, Piotroski F-score, Altman Z-score) + key ratios (PE, PB, ROE, DE). Returns a structured table with one Screener.in URL + formula per (symbol, metric) pair. Kite Connect does NOT expose fundamentals (no P/E, EPS, balance-sheet fields on the Quote struct), so this tool is the framing half of a two-step workflow — it does NOT compute, scrape, or fetch external data itself. The LLM is expected to fetch the URLs via WebFetch/Tavily and compute the scores client-side using the formulas returned."),
 		mcp.WithTitleAnnotation("Peer Comparison (Fundamental Strength)"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),

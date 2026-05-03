@@ -30,7 +30,7 @@ type AnalyzeConcallTool struct{}
 
 func (*AnalyzeConcallTool) Tool() mcp.Tool {
 	return mcp.NewTool("analyze_concall",
-		mcp.WithDescription("Frame an earnings-call (concall) analysis for an Indian listed stock. Returns structured metadata (company name, quarter, BSE corporate-announcements URL) plus a guidance block telling the LLM which transcript-fetching tool to use and which themes to extract (guidance, orders, margins, management commentary, risks). Does not fetch the transcript itself — the LLM is expected to call WebFetch / Tavily on the returned URL. Default quarter is the most recently completed Indian fiscal quarter (Apr–Mar fiscal year)."),
+		mcp.WithDescription("(LLM-coordinator pattern — server frames the analysis; LLM fetches BSE corporate-announcements URLs + extracts themes via WebFetch/Tavily.) Frame an earnings-call (concall) analysis for an Indian listed stock. Returns structured metadata (company name, quarter, BSE corporate-announcements URL) plus a guidance block telling the LLM which transcript-fetching tool to use and which themes to extract (guidance, orders, margins, management commentary, risks). Does NOT fetch or parse the transcript itself — that is the LLM's half of the workflow. Default quarter is the most recently completed Indian fiscal quarter (Apr-Mar fiscal year)."),
 		mcp.WithTitleAnnotation("Analyze Earnings Concall"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),

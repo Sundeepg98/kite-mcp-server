@@ -32,7 +32,7 @@ type GetFIIDIIFlowTool struct{}
 
 func (*GetFIIDIIFlowTool) Tool() mcp.Tool {
 	return mcp.NewTool("get_fii_dii_flow",
-		mcp.WithDescription("Get FII/DII (Foreign/Domestic Institutional Investor) daily buy/sell activity for the Indian equity market. Returns a structured URL pointer + guidance telling the LLM to fetch the data from NSE/Moneycontrol via WebFetch/Tavily. Does not fetch the data itself. Useful for checking which side institutions are net-buying/selling on any given day; divergence between FII and DII flows often precedes short-term volatility."),
+		mcp.WithDescription("(LLM-coordinator pattern — server frames the query; LLM fetches NSE/Moneycontrol URLs via WebFetch/Tavily.) Get FII/DII (Foreign/Domestic Institutional Investor) daily buy/sell activity for the Indian equity market. Returns a structured URL pointer + guidance telling the LLM which page to fetch and which fields to extract. Does NOT fetch the data itself — that is the LLM's half of the workflow. Useful for checking which side institutions are net-buying/selling on any given day; divergence between FII and DII flows often precedes short-term volatility."),
 		mcp.WithTitleAnnotation("FII/DII Daily Flow"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
