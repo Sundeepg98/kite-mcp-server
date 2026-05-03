@@ -1,0 +1,68 @@
+# Docker build context exclusions
+# Mirrors .gitignore + agent worktree dirs that are not part of the production build.
+# Without this, build context balloons to 950MB+ (verified 2026-05-02 — 32 leftover
+# *.exe test binaries totaling 793MB plus .claude/worktrees/, hit depot deadline).
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Agent / IDE
+.claude
+.research
+.idea
+.vscode
+.cursor
+*.swp
+
+# Build artifacts (Go)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+*.test
+*.prof
+*.cov
+*.out
+coverage.out
+coverage.html
+kite-mcp-server
+main
+
+# Test fixtures + ad-hoc scratch HTML
+app_*.html
+ch.html
+*.tmp
+*.temp
+*.log
+
+# Environment / secrets — never copy into image
+.env
+.env.local
+.env.*.local
+
+# Docs / dev-only — image doesn't need them
+docs
+.github
+tests/e2e
+plan
+node_modules
+
+# Backup artifacts
+*.bak
+*.backup
+go.sum.backup
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keep these (NEEDED for runtime, do not exclude):
+#  LICENSE, NOTICE — copied at line 20-21 of Dockerfile
+#  etc/litestream.yml — copied at line 23
+#  scripts/run.sh — copied at line 24
+#  kc/templates/*.html — embedded for landing/dashboard rendering at runtime
