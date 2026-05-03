@@ -83,11 +83,11 @@ func TestToolSchemaLock_PerTool(t *testing.T) {
 		if line == "" {
 			continue
 		}
-		colon := strings.Index(line, ":")
-		if colon < 0 {
+		name, hash, ok := strings.Cut(line, ":")
+		if !ok {
 			continue
 		}
-		expectedMap[line[:colon]] = line[colon+1:]
+		expectedMap[name] = hash
 	}
 
 	var added, removed, changed []string
