@@ -156,10 +156,16 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 		_, _ = w.Write(data)
 	})
 
-	// htmx core + SSE extension — no auth required, long cache.
+	// htmx core + SSE extension + self-hosted fonts — no auth required,
+	// long cache. Fonts are served with immutable + 1-year cache because
+	// the file content is content-addressed (font filename includes the
+	// Google Fonts hash) — if we ever ship a new revision, we change the
+	// filename and the @font-face URL together.
 	for _, sf := range []struct{ path, file, ct string }{
 		{"/static/htmx.min.js", "static/htmx.min.js", "application/javascript; charset=utf-8"},
 		{"/static/htmx-sse.js", "static/htmx-sse.js", "application/javascript; charset=utf-8"},
+		{"/static/fonts/dm-sans-latin.woff2", "static/fonts/dm-sans-latin.woff2", "font/woff2"},
+		{"/static/fonts/jetbrains-mono-latin.woff2", "static/fonts/jetbrains-mono-latin.woff2", "font/woff2"},
 	} {
 		file, ct := sf.file, sf.ct
 		mux.HandleFunc(sf.path, func(w http.ResponseWriter, r *http.Request) {
