@@ -1,14 +1,20 @@
 # Kite MCP Server
 
+Give Claude or ChatGPT direct access to your Zerodha Kite trading account — with order placement, paper trading, options Greeks, backtesting, Telegram alerts, and 9 pre-trade safety checks. 117 tools. Open source, MIT.
+
+[Try the hosted demo](https://kite-mcp-server.fly.dev/mcp) (read-only) · [Self-host in 60 seconds](#quick-start) (full trading) · [Compare vs official Zerodha MCP](#comparison)
+
+```bash
+claude mcp add --transport http kite https://kite-mcp-server.fly.dev/mcp
+```
+
+Then say: *"Log me in to Kite. Show my portfolio. Backtest SMA crossover on INFY. Set an alert for RELIANCE 2% drop."*
+
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
 [![CI](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sundeepg98/kite-mcp-server/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/Tests-16209-brightgreen)](https://github.com/Sundeepg98/kite-mcp-server/actions)
 [![Security Audit](https://img.shields.io/badge/Security%20Audit-passed-brightgreen)](SECURITY_AUDIT_REPORT.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-
-> Self-hosted MCP server that turns Claude / ChatGPT into a power-user trading copilot for your Zerodha Kite account.
-
-<!-- TODO: 30-second demo GIF of portfolio analysis + order placement flow -->
 
 ## What this is
 
