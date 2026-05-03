@@ -44,7 +44,7 @@ Pre-populated for reference; move into the log above when an actual email goes o
 2. **Screenshot or PDF the response.** Emails can be lost / inboxes wiped; keep a local record.
 3. **Keep 2-sentence summaries honest.** If it was a friendly ack with no substance, say so.
 4. **If no response after 10 business days on a disclosure:** escalate per `docs/incident-response.md`.
-5. **Never send legal / compliance email from a non-project address.** Sundeep's product email (not the Foundation address) is the canonical project contact. Previous entries that cite the Foundation address predate the 2026-04-18 rule clarification and should be read as "personal email at the time of the note", not as the canonical contact. The `renusharmafoundation` Gmail address is Foundation-only and must never appear on product communications.
+5. **Never send legal / compliance email from a non-project address.** Sundeep's product email (not the foundation-context address) is the canonical project contact. Previous entries that cite the foundation-context address predate the 2026-04-18 rule clarification and should be read as "personal email at the time of the note", not as the canonical contact. The foundation-context Gmail address is foundation-only and must never appear on product communications.
 
 ## Example filled entry (fictional — do not confuse with real data)
 

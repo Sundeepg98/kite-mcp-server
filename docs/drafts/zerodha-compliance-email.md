@@ -46,7 +46,7 @@ https://github.com/Sundeepg98/kite-mcp-server
 | Check | Status | Note |
 |-------|--------|------|
 | Product email resolved (no `<placeholder>`) | DONE | `sundeepg8@gmail.com` per SECURITY.md, .env.example, plugin.json, funding.json |
-| Foundation email NOT used anywhere | DONE | Verified — no `renusharmafoundation` reference in body or signature |
+| Foundation email NOT used anywhere | DONE | Verified — no foundation-context email reference in body or signature |
 | Recipient + CC correct | DONE | `kiteconnect@zerodha.com`, CC `talk@rainmatter.com` |
 | Subject line clear, no urgency theatre | DONE | "Compliance disclosure — kite-mcp-server (per-user BYO Kite Connect app architecture)" |
 | Three substantive questions present | DONE | Per-user model confirmation, monetisation stance, multi-broker future |

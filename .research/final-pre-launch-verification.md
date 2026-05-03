@@ -155,7 +155,7 @@ YES — Upstox MCP (line 48) and TurtleStack (line 51) rows present in `docs/sho
 
 | # | Item | Status |
 |---|------|--------|
-| 29 | No personal contact info in `docs/` | renusharmafoundation email check: 1 hit in `docs/drafts/zerodha-compliance-email.md` — needs sweep before launch (per global memory rule) |
+| 29 | No personal contact info in `docs/` | foundation-slug email check: 1 hit in `docs/drafts/zerodha-compliance-email.md` — needs sweep before launch (per global memory rule) |
 | 30 | No leaked credentials in tracked files | UNVERIFIED here; per CLAUDE.md fixes already applied |
 | 31 | No `.research/*-msg.txt` scratch in public repo | **PARTIAL** — playwright-diagnosis is fine; root-tree has many `*-msg.txt` files locally but per `git ls-files .research/` only 1 file is tracked — clean in repo |
 | 32 | `SECURITY_AUDIT_FINDINGS.md` shows resolved | per CLAUDE.md history (181 findings, 153 fixed, 28 accepted) |
@@ -180,7 +180,7 @@ YES — Upstox MCP (line 48) and TurtleStack (line 51) rows present in `docs/sho
 2. **Re-auth flyctl** (5min via Playwright CLI auth URL — see MEMORY.md note)
 3. **Reconcile tool/test counts in README + show-hn-post** (15min) — re-run the empirical commands on current HEAD, update 117→122 (or whatever post-deploy `/healthz` shows) and 16,209→8,790; update both prose + badge
 
-Optional but recommended: sweep renusharmafoundation hit in `docs/drafts/zerodha-compliance-email.md`; `git clean -fX` for screen-share hygiene; verify mobile rendering of landing page; morning-of OAuth re-test.
+Optional but recommended: sweep foundation-slug hit in `docs/drafts/zerodha-compliance-email.md`; `git clean -fX` for screen-share hygiene; verify mobile rendering of landing page; morning-of OAuth re-test.
 
 After 1+2+3: launch window per `58dc369` = Tuesday 06:30-08:30 PT or Wednesday 06:30-08:30 PT.
 

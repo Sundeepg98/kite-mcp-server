@@ -23,7 +23,7 @@ Scenario, ~30 seconds, no audio, no narration, no editing beyond trim:
 **Recording recipe (Windows, ~30 minutes total including failed takes):**
 
 1. Install `ScreenToGif` from Microsoft Store (free, signed, OS-native, no admin install): `winget install ScreenToGif` *or* `https://www.screentogif.com/`. (3 min)
-2. **Set paper-trading mode ON** before recording so no real Kite data appears: `paper_trading_toggle enabled=true initial_cash=10000000` in Claude Desktop. **Verify** account email shown in UI is NOT `g.karthick.renusharmafoundation@gmail.com` — switch to a generic test session per `user_email_rule.md`. (5 min)
+2. **Set paper-trading mode ON** before recording so no real Kite data appears: `paper_trading_toggle enabled=true initial_cash=10000000` in Claude Desktop. **Verify** the account email shown in UI is NOT the user's foundation-context email — switch to a generic test session per `user_email_rule.md`. (5 min)
 3. Close Slack/Discord/Outlook/Windows-update-toast/Teams. Set Windows notifications to **Focus Assist: Priority Only**. Browser zoom to **125%** so HN/Reddit thumbnail readers can see. (3 min)
 4. Open ScreenToGif → *Recorder*. Frame to ≤1280×720 around the Claude Desktop window. Set FPS to **10** (web-friendly). Click record. Run the 5-step scenario above. Click stop. (5 min including 2 retakes)
 5. ScreenToGif's editor opens. Trim leading and trailing dead frames. Use *File → Save as → Gif (FFmpeg)* with quality 80, lossy compression. **Target output: ≤4MB** (Twitter native upload limit; Reddit accepts up to 100MB; GitHub README accepts up to 10MB). (5 min)
@@ -474,7 +474,7 @@ Before hitting record on Demo A:
 
 ### A. Sensitive-data scrub
 
-- [ ] **Email displayed in Claude Desktop UI: must NOT be `g.karthick.renusharmafoundation@gmail.com`** per `user_email_rule.md`. Switch to a generic test account (e.g. `kite-mcp-demo@<your-product-domain>` or any test mailbox you control). Verify in Claude Desktop *Settings → Account*.
+- [ ] **Email displayed in Claude Desktop UI: must NOT be the user's foundation-context email** per `user_email_rule.md`. Switch to a generic test account (e.g. `kite-mcp-demo@<your-product-domain>` or any test mailbox you control). Verify in Claude Desktop *Settings → Account*.
 - [ ] **Tool responses must NOT contain real Kite holdings.** Either:
   - (a) Set `paper_trading_toggle enabled=true initial_cash=10000000` BEFORE recording — all tool calls then route to virtual portfolio with mocked data. *(Recommended.)*
   - (b) Use a freshly-created Kite developer app with a test Zerodha account that has zero real positions. *(Backup if paper-trading mode shows obvious "PAPER" labels that would confuse the demo viewer.)*
