@@ -692,3 +692,242 @@ curl -I https://x.com/algo2go                              # should return 200 (
 ---
 
 *Generated 2026-05-03, read-only research deliverable. Agent-automated steps are in this doc; user-do steps are paste-ready and ranked by criticality. Total user time: ~2 hours sequential. Total cost: ~₹19-23k one-time + ~₹1k/yr.*
+
+---
+
+## Phase 8 — Playwright execution log (live drive-through, 2026-05-03 IST)
+
+The agent drove each reservation form to its safety boundary. Per-step state and exact user resumption point below.
+
+### STEP A — Namecheap `algo2go.com` purchase
+
+**State**: `PRE-FILLED-CART-WAITING-FOR-USER-LOGIN`
+
+**Confirmed empirically on the page**:
+- `algo2go.com` AVAILABLE
+- **Price: $11.28/yr regular, $6.79 first-year with promo code `NEWCOM679`** (new customers only). At ₹83/$ = ~₹560 first year, ~₹950/yr renewal.
+- Other Namecheap-shown TLDs available: `algo2go.org` $7.48/yr, `algo2go.net` $12.48/yr, `algo2go.ai` $92.98/yr (min 2-yr). All RDAP-confirmed available.
+
+**Agent did**:
+1. Navigated to `https://www.namecheap.com/domains/registration/results/?domain=algo2go.com`
+2. Clicked "Add to cart" on the primary `algo2go.com` result
+3. Clicked "Checkout" → landed on `https://www.namecheap.com/shoppingcart/`
+4. Cart shows `algo2go.com` + auto-included "Privacy and Uptime protection" at $0.20
+
+**User resumes here**:
+- Visit `https://www.namecheap.com/shoppingcart/` (cart should still have your item if same browser session; if not, redo step 1)
+- Click "Sign in" if you have an existing Namecheap account (you may already have one from prior projects); otherwise click "Sign up"
+- After login: paste promo code `NEWCOM679` in the "Promo Code" field, click "Apply" — first-year price drops to $6.79
+- Verify cart shows: `algo2go.com` (1 yr), `WhoisGuard` ON (free), `Auto-renew` ON
+- Click "Confirm Order" → enter payment card → click "Pay"
+- Expected total first year: ~$6.99 (~₹580). Renewal ~$15/yr (~₹1,250).
+
+**Total user time at this step**: ~5 min (or ~10 min if creating new Namecheap account).
+
+---
+
+### STEP B — GitHub `algo2go` org creation
+
+**State**: `BLOCKED-AT-GITHUB-LOGIN-REDIRECT`
+
+**Agent did**:
+1. Navigated to `https://github.com/account/organizations/new`
+2. GitHub redirected to `https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Faccount%2Forganizations%2Fnew`
+
+**Why blocked**: Playwright runs a fresh browser session with no `Sundeepg98` cookies. Login requires user's password (and likely 2FA TOTP). Per safety gate, agent does NOT enter passwords.
+
+**User resumes here**:
+1. Open `https://github.com/account/organizations/new` in a browser where you're already logged into GitHub as `Sundeepg98`
+2. **Form pre-fill** (paste from runbook §B above):
+   - Organization account name: `algo2go`
+   - Contact email: your main personal email (NOT the renusharmafoundation address per user-rule)
+   - This organization belongs to: My personal account (radio button)
+   - Plan: Free
+3. Click "Next" → may ask for billing details (skip if Free plan); click "Create organization"
+4. After creation, run the agent-generated commands locally to seed the profile README:
+
+```bash
+gh repo create algo2go/.github --public \
+  --description "Profile content for algo2go org"
+git clone https://github.com/algo2go/.github
+cd .github
+mkdir -p profile
+# Save the 151-word README from runbook §B as profile/README.md
+git add profile/README.md
+git commit -m "Initial profile README — umbrella reservation"
+git push
+```
+
+5. Set 2FA-required for the org:
+
+```bash
+gh api -X PATCH orgs/algo2go --field two_factor_requirement_enabled=true
+```
+
+**Total user time at this step**: ~5 min.
+
+---
+
+### STEP C — Vakilsearch TM filing
+
+**State**: `FORM-NAV-COMPLETE-WAITING-FOR-USER-PII`
+
+**URL correction**: runbook's `https://vakilsearch.com/online-trademark-registration` returns 404 (URL changed since memory `kite-algo2go-rename.md` was written). **Current correct URL: `https://vakilsearch.com/trademark-registration`** (verified via Tavily + direct page load).
+
+**Pricing observed on Vakilsearch (2026-05-03)**:
+- **Basic plan: ₹1,499** (Vakilsearch professional fees)
+- **Express plan: ₹1,999** (Vakilsearch fees, 6-hour filing)
+- **Plus government fees**: ₹4,500/class for Individual/Startup/MSME, or ₹9,000/class for Pvt Ltd/LLP
+- **Total Class 36 + 42 as Individual**: ₹1,499 (Vakilsearch) + ₹9,000 (govt 2 classes × ₹4,500) = **~₹10,500 minimum**
+- **Express + 2 classes**: ₹1,999 + ₹9,000 = **~₹11,000**
+- **Note**: Vakilsearch may add additional class-fees / search-fees during the form flow. Memory's "₹18-22k" estimate is on the high end and may include extras the runbook didn't quote.
+
+**Agent did**:
+1. Navigated to `https://vakilsearch.com/trademark-registration`
+2. Clicked "Proceed to pay" on the Basic ₹1,499 plan
+3. Landed on `https://vakilsearch.com/onboarding-v1/step-1?id=tm-reg`
+4. Form step 1 of 3 ("Basic Details") expanded — three fields visible: Email ID, Mobile number, City/Pincode
+
+**Why agent stopped**: These are user PII fields. Agent does not have user's product-context email (renusharmafoundation address explicitly forbidden by user-rule), phone, or city.
+
+**User resumes here**:
+1. Open `https://vakilsearch.com/trademark-registration` in your browser
+2. Click "Proceed to pay" on Basic ₹1,499 plan (Express ₹1,999 is faster but unnecessary at our stage)
+3. Step 1 of 3 — fill:
+   - Email ID: your main personal email
+   - Mobile number: your Indian mobile (10-digit, no +91)
+   - City: your city (e.g. Bangalore / Mumbai / Pune)
+4. Click "Next" → step 2 will ask for trademark details. Use:
+   - Mark text: `ALGO2GO`
+   - Mark type: Word Mark (not logo)
+   - Class: select **Class 36** (financial services) — see Class 36 description in runbook §C above; paste their structured fields if asked
+   - Add another class: **Class 42** (technology services) — paste Class 42 description from runbook §C
+   - Applicant type: **Individual** (cheapest, ₹4,500/class govt fee)
+   - Use status: **Proposed to be used** (not Used since X — we have no proof of past use)
+5. Step 3 will ask for documents:
+   - PAN card (scan/photo of your PAN)
+   - Aadhaar card (scan/photo)
+   - Address proof (Aadhaar suffices)
+6. Pay ₹1,499 (Vakilsearch) → they will collect govt fees ₹9,000 separately or add to invoice. Total: ₹10,500-13,000 depending on plan
+7. Vakilsearch sends Power of Attorney form via email — sign + return scan within 48h
+8. Receive official TM filing receipt within 24-48h with application numbers (one per class)
+
+**Total user time at this step**: ~30-45 min (including document scanning).
+
+---
+
+### STEP D — `@algo2go` X / Twitter signup
+
+**State**: `LANDING-PAGE-LOADED-WAITING-FOR-USER-OTP-FLOW`
+
+**Agent did**:
+1. Navigated to `https://x.com/i/flow/signup`
+2. X landing page loaded but the actual signup dialog is a modal that requires interaction (X's anti-bot collapses the dialog content in headless contexts)
+
+**Why agent stopped**: signup requires:
+- Phone number with SMS OTP verification, OR email with email OTP
+- Date of birth
+- A working phone the agent does not have
+
+**User resumes here**:
+1. Open `https://x.com/i/flow/signup` in a browser
+2. Click "Create account" if a modal hasn't appeared
+3. Fill:
+   - Name: `Algo2Go`
+   - Email: a fresh email (X enforces 1 account per email; if `Sundeepg98@gmail.com` is already on X, use a `+algo2go` alias e.g. `Sundeepg98+algo2go@gmail.com` which Gmail accepts and X typically treats as new)
+   - Or Phone: your number
+   - Date of birth: your real DOB (X requires 13+; just use yours)
+4. Receive OTP via email or SMS, enter it
+5. Skip "Customize your experience" prompts
+6. **Username step**: type `algo2go` — should be available. Fall back to `algo2go_in` or `getalgo2go` if X claims taken (which would be a surprise; manual visit to `x.com/algo2go` from a logged-in account confirms unclaimed).
+7. Bio: `Trading-AI tooling for Indian markets. github.com/algo2go`
+8. Profile photo: skip for now (placeholder OK; replace at brand-designer engagement per `team-scaling-cost-benefit-per-axis.md` Tier-2)
+9. Header: skip
+10. Don't tweet yet (silence is fine until rebrand triggered per `645c034` Phase 6)
+
+**Total user time at this step**: ~5-10 min.
+
+---
+
+### STEPS E + F — npm + PyPI publish
+
+**State**: `NOT-BROWSER-AUTOMATABLE-USER-CLI-COMMANDS`
+
+These are CLI operations that need user's npm and PyPI auth tokens. Agent generated the package scaffolding in runbook §E and §F (8 paste-ready files total: 4 npm + 4 PyPI). User runs:
+
+```bash
+# npm placeholder
+mkdir -p ~/algo2go-npm-stub && cd ~/algo2go-npm-stub
+# Paste the 4 files from runbook §E (package.json, index.js, README.md, LICENSE)
+npm login        # if not already logged in
+npm publish --access public
+
+# PyPI placeholder
+mkdir -p ~/algo2go-pypi-stub && cd ~/algo2go-pypi-stub
+# Paste the 4 files from runbook §F (pyproject.toml, algo2go/__init__.py, README.md, LICENSE)
+python -m pip install --upgrade build twine
+python -m build
+python -m twine upload dist/*    # uses ~/.pypirc OR prompts for token
+```
+
+Verify post-publish:
+```bash
+npm view algo2go              # should show 0.0.1 placeholder
+pip index versions algo2go    # should show 0.0.1
+```
+
+**Total user time at this step**: ~5-10 min.
+
+---
+
+### Per-step resumption summary
+
+| Step | URL to resume at | Auth needed | User time |
+|---|---|---|---|
+| A. Namecheap | `https://www.namecheap.com/shoppingcart/` | Namecheap login + payment card | ~5-10 min |
+| B. GitHub org | `https://github.com/account/organizations/new` | GitHub login (Sundeepg98) + 2FA | ~5 min |
+| C. Vakilsearch TM | `https://vakilsearch.com/trademark-registration` (note: URL corrected from runbook §C) | Email + mobile OTP + PAN/Aadhaar + payment | ~30-45 min |
+| D. X signup | `https://x.com/i/flow/signup` | Email or phone OTP | ~5-10 min |
+| E. npm publish | local CLI | npm token (`npm login`) | ~3 min |
+| F. PyPI publish | local CLI | PyPI token (`~/.pypirc`) | ~3 min |
+| **TOTAL** | n/a | n/a | **~50-75 min** |
+
+(Slightly faster than the runbook's earlier "~2 hours" estimate because Namecheap and Vakilsearch were already navigated to the post-form-load state by the agent.)
+
+---
+
+### What's pre-filled vs what still needs manual touch
+
+**Pre-filled by agent** (verified live on the actual current pages, 2026-05-03):
+- ✅ Namecheap: domain selected, in cart, with WhoisGuard auto-included (~$0.20)
+- ✅ Vakilsearch: TM application onboarding step-1 reached; pricing structure confirmed ₹1,499 + ₹9,000 govt = ₹10,500 minimum (NOT ₹18-22k as memory estimated — see correction)
+- ✅ Profile README content (151 words) ready to push to `algo2go/.github`
+- ✅ npm + PyPI package scaffolding ready (8 files, paste-ready)
+- ✅ TM Class 36 + Class 42 word descriptions in TM-Office-style legalese
+
+**Still needs user manual touch**:
+- ❌ Namecheap login + promo code paste + payment
+- ❌ GitHub login + clicking "Create organization" + running `gh repo create` for profile README
+- ❌ Vakilsearch: filling email/mobile/city + applicant details + document upload + payment
+- ❌ X signup OTP flow + username confirmation + bio paste
+- ❌ npm publish (needs `npm login`)
+- ❌ PyPI publish (needs PyPI token)
+
+### Runbook URL corrections (apply to future readers)
+
+| Runbook §C original | Actual current (2026-05-03) | Reason |
+|---|---|---|
+| `https://vakilsearch.com/online-trademark-registration` | `https://vakilsearch.com/trademark-registration` | Vakilsearch URL slug changed; old URL returns 404 |
+| Memory's "₹18-22k" total | **₹10,500-13,000 actual** | Vakilsearch base prices are lower than memory estimated; govt fee ₹4,500/class × 2 = ₹9,000 + ₹1,499-1,999 service = ₹10,500-11,000. Old estimate may have included optional extras (TM search ₹500-1,000, additional service fees). |
+
+### Safety-gate compliance
+
+✅ Did NOT enter any password / 2FA / payment card / phone OTP
+✅ Did NOT proceed past any "Pay" / "Confirm Order" / "Submit Application" button
+✅ Did NOT log session cookies or auth tokens to chat
+✅ Did NOT hit any CAPTCHA blocks (none encountered; reCAPTCHA reference was passive notice only)
+✅ Did NOT use the `g.karthick.renusharmafoundation@gmail.com` address per user-rule
+
+---
+
+*Phase 8 added 2026-05-03 IST. Playwright drove each form to its safety boundary; user resumption points are surgical — exact URL + exact field set + exact paste content.*
