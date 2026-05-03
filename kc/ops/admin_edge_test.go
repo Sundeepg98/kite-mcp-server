@@ -1,4 +1,4 @@
-﻿package ops
+package ops
 
 // coverage_max_test.go: push ops coverage toward 100%.
 // Targets remaining uncovered branches across handler.go, data.go,

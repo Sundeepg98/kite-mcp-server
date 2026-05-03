@@ -1,4 +1,4 @@
-﻿package domain
+package domain
 
 // position_test.go — unit tests for the rich Position domain entity.
 

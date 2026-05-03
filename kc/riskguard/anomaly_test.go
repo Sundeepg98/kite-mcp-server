@@ -1,4 +1,4 @@
-﻿// Tests for the anomaly-detection and off-hours checks added on top of the
+// Tests for the anomaly-detection and off-hours checks added on top of the
 // existing static riskguard defences. See guard.go for the check methods.
 //
 // Attack scenario: a user whose historical mean order value is ~Rs 5,000

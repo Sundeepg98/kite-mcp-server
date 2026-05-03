@@ -1,4 +1,4 @@
-﻿package ops
+package ops
 
 // coverage_100_test.go: push ops coverage toward 100%.
 // Targets every function below 95% with specific branch/path tests.

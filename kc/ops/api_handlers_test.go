@@ -1,4 +1,4 @@
-﻿package ops
+package ops
 
 // coverage_push_test.go: push ops coverage from 75.5% -> 90%+.
 // Tests every low-coverage dashboard handler success path using httptest

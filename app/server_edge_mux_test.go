@@ -1,4 +1,4 @@
-﻿package app
+package app
 
 // app_coverage_test.go â€” targeted tests to boost coverage from ~78% to 90%+.
 // Focuses on uncovered branches in: setupGracefulShutdown, initializeServices,

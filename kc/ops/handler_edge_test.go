@@ -1,4 +1,4 @@
-﻿package ops
+package ops
 
 // ops_push100_test.go: push ops coverage from ~89% toward 100%.
 // Targets remaining uncovered branches in handler.go, user_render.go,

@@ -1,4 +1,4 @@
-﻿package usecases
+package usecases
 
 // Slice 6b of the Money VO sweep — accessor migration on
 // Holding.PnL consumers (commit lineage: 5ce3eb0 -> 0e516e7 ->

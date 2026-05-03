@@ -1,4 +1,4 @@
-﻿package papertrading
+package papertrading
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-﻿// Tests for tightened Free-tier defaults introduced to mitigate the
+// Tests for tightened Free-tier defaults introduced to mitigate the
 // "prompt-injection / market-manipulation via sub-cap orders" landmine.
 //
 // Scenario: an adversarial prompt injects 10x Rs 49,999 buy orders which are

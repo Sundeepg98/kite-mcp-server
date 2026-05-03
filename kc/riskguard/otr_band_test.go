@@ -1,4 +1,4 @@
-﻿package riskguard
+package riskguard
 
 import (
 	"context"

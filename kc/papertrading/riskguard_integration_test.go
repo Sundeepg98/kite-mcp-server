@@ -1,4 +1,4 @@
-﻿package papertrading
+package papertrading
 
 // riskguard_integration_test.go — cross-slice integration tests pinning
 // the Money-VO interop contract between paper trading (Slice 5) and

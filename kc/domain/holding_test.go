@@ -1,4 +1,4 @@
-﻿package domain
+package domain
 
 // holding_test.go — unit tests for the rich Holding domain entity
 // (Slice 6b of the Money VO sweep). Mirrors position_test.go in
