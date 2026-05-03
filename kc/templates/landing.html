@@ -386,17 +386,17 @@ code { font-family: var(--mono); font-size: 0.85em; background: var(--bg-3); pad
     <div class="feature-card">
       <span class="feature-icon" aria-hidden="true">&#9863;</span>
       <h3>Earnings Concall Summarizer</h3>
-      <p><code>analyze_concall</code> &mdash; structured frame for the LLM to parse quarterly earnings calls into themes, guidance, and Q&amp;A signals.</p>
+      <p><code>analyze_concall</code> &mdash; structured frame for the LLM to parse quarterly earnings calls into themes, guidance, and Q&amp;A signals. <em>(LLM-coordinator pattern &mdash; tool returns BSE corporate-announcements URL + extraction hints; LLM fetches the transcript via WebFetch/Tavily.)</em></p>
     </div>
     <div class="feature-card">
       <span class="feature-icon" aria-hidden="true">&#9650;</span>
       <h3>FII / DII Daily Flow</h3>
-      <p><code>get_fii_dii_flow</code> &mdash; institutional cash + F&amp;O flow pointer with extraction themes for the day.</p>
+      <p><code>get_fii_dii_flow</code> &mdash; institutional cash + F&amp;O flow pointer with extraction themes for the day. <em>(LLM-coordinator pattern &mdash; tool returns NSE / Moneycontrol URL + extraction hints; LLM fetches via WebFetch/Tavily.)</em></p>
     </div>
     <div class="feature-card">
       <span class="feature-icon" aria-hidden="true">&#9878;</span>
       <h3>Peer Comparison</h3>
-      <p><code>peer_compare</code> &mdash; PEG, Piotroski F-Score, Altman Z &mdash; structured report frame with external-data hints.</p>
+      <p><code>peer_compare</code> &mdash; PEG, Piotroski F-Score, Altman Z &mdash; structured report frame with external-data hints. <em>(LLM-coordinator pattern &mdash; tool returns Screener.in URLs + scoring formulas; LLM fetches and computes via WebFetch/Tavily.)</em></p>
     </div>
   </div>
 

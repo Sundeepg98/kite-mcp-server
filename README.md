@@ -1,6 +1,6 @@
 # Kite MCP Server
 
-Give Claude or ChatGPT direct access to your Zerodha Kite trading account — with order placement, paper trading, options Greeks, backtesting, Telegram alerts, and 9 pre-trade safety checks. 120+ tools. Open source, MIT.
+Give Claude or ChatGPT direct access to your Zerodha Kite trading account — with order placement, paper trading, options Greeks, backtesting, Telegram alerts, and 11 pre-trade safety checks. 110+ tools. Open source, MIT.
 
 [Try the hosted demo](https://kite-mcp-server.fly.dev/mcp) (read-only) · [Self-host in 60 seconds](#quick-start) (full trading) · [Compare vs official Zerodha MCP](#comparison)
 
@@ -19,7 +19,7 @@ Works inside Claude Desktop, Claude Code, claude.ai, ChatGPT Connectors, Cursor,
 - **~9,000 tests** across 437 test files — run `go test ./... -count=1`
 - **Security audit**: 27-pass manual analysis, 181 findings, all resolved — see [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) and [SECURITY_PENTEST_RESULTS.md](SECURITY_PENTEST_RESULTS.md)
 - **AES-256-GCM encryption** at rest for every sensitive value — Kite tokens, API secrets, OAuth client secrets — key derived via HKDF from `OAUTH_JWT_SECRET`
-- **RiskGuard** (9 checks) — kill switch, per-order value cap (Rs 50,000 default), quantity limit, daily order count (20/day), rate limit (10/min), duplicate detection (30s window), daily cumulative value cap (Rs 2,00,000), auto-freeze circuit breaker
+- **RiskGuard** (11 pre-trade checks) — kill switch, per-order value cap (Rs 50,000 default), quantity limit, daily order count (20/day), rate limit (10/min), per-second rate limit, duplicate detection (30s window), daily cumulative value cap (Rs 2,00,000), idempotency dedup, confirmation required, anomaly μ+3σ, off-hours block — plus circuit breaker + global freeze layers
 - **Per-tool-call audit trail** with 90-day retention — every MCP call logged to SQLite, CSV/JSON export via dashboard
 - **CI on every push** — `go build`, `go vet`, `go test -race` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml))
 - **MIT license, open source** — inspect anything. Upstream attribution to Zerodha Tech preserved in [LICENSE](LICENSE)
