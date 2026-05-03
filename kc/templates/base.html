@@ -120,11 +120,13 @@
         </style>
     </head>
     <body>
-        {{template "content" .}}
-        
-        <div class="footer">
+        <main id="main-content" role="main">
+            {{template "content" .}}
+        </main>
+
+        <footer class="footer" role="contentinfo">
             &copy; Zerodha&nbsp;&bull;&nbsp;Kite MCP Server
-        </div>
+        </footer>
     </body>
 </html>
 {{end}}

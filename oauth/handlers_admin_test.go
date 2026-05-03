@@ -37,6 +37,55 @@ func TestHandleLoginChoice_GET_NoCookie(t *testing.T) {
 	}
 }
 
+// TestHandleLoginChoice_LandmarkRoles asserts the /auth/login template
+// declares semantic landmark roles for accessibility — `<main role="main">`
+// and `role="contentinfo"` on the footer. Pattern matches landing.html
+// + dashboard.html. Strict Playwright a11y matrix flagged this as a
+// non-blocking finding; this test pins the regression.
+func TestHandleLoginChoice_LandmarkRoles(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=/dashboard", nil)
+	rr := httptest.NewRecorder()
+	h.HandleLoginChoice(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `role="main"`) {
+		t.Error("/auth/login must declare a `role=\"main\"` landmark for screen-reader nav")
+	}
+	if !strings.Contains(body, `role="contentinfo"`) {
+		t.Error("/auth/login footer must use `role=\"contentinfo\"` landmark")
+	}
+}
+
+// TestHandleBrowserLogin_LandmarkRoles asserts /auth/browser-login
+// renders the same landmark-role contract as /auth/login.
+func TestHandleBrowserLogin_LandmarkRoles(t *testing.T) {
+	t.Parallel()
+	h := newTestHandler()
+	defer h.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/browser-login?redirect=/dashboard", nil)
+	rr := httptest.NewRecorder()
+	h.HandleBrowserLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `role="main"`) {
+		t.Error("/auth/browser-login must declare a `role=\"main\"` landmark")
+	}
+	if !strings.Contains(body, `role="contentinfo"`) {
+		t.Error("/auth/browser-login footer must use `role=\"contentinfo\"` landmark")
+	}
+}
+
 
 func TestHandleLoginChoice_GET_ValidCookie(t *testing.T) {
 	t.Parallel()

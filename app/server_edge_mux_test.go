@@ -1235,6 +1235,37 @@ func TestServeLegalPages_AllRoutes(t *testing.T) {
 	}
 }
 
+// TestServeLegalPages_LandmarkRoles asserts that /terms and /privacy
+// expose semantic landmark roles (`<main role="main">` + `role="contentinfo"`)
+// matching the pattern landing.html + dashboard.html follow. Strict
+// Playwright accessibility audits flag templates without these landmarks
+// — see the Playwright a11y matrix gap that prompted this test.
+//
+// Pattern source: kc/templates/landing.html lines 27-29 ("<main
+// id=\"main-content\" role=\"main\">") + the `<footer role=\"contentinfo\">`
+// element. Same convention applied to legal.html in this commit.
+func TestServeLegalPages_LandmarkRoles(t *testing.T) {
+	mgr := newTestManagerWithDB(t)
+	app := newTestApp(t)
+	require.NoError(t, app.initStatusPageTemplate())
+	mux := app.setupMux(mgr)
+	defer app.rateLimiters.Stop()
+
+	for _, page := range []string{"/terms", "/privacy"} {
+		t.Run(page, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, page, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+			body := rec.Body.String()
+			assert.Contains(t, body, `role="main"`,
+				"%s must declare a `role=\"main\"` landmark for screen-reader nav", page)
+			assert.Contains(t, body, `role="contentinfo"`,
+				"%s footer must use `role=\"contentinfo\"` for the page-info landmark", page)
+		})
+	}
+}
+
 
 // ===========================================================================
 // newRateLimiters â€” exercise with AdminSecretPath set

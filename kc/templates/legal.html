@@ -69,23 +69,23 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--te
 </head>
 <body>
 
-<div class="topbar">
+<header class="topbar" role="banner">
   <div class="topbar-left">
     <a href="/" class="topbar-logo" style="text-decoration:none;">Kite MCP</a>
     <div class="topbar-sep"></div>
     <div class="topbar-nav">{{.Title}}</div>
   </div>
-</div>
+</header>
 
-<div class="container">
+<main id="main-content" class="container" role="main">
 {{.Content}}
-</div>
+</main>
 
-<div class="footer">
+<footer class="footer" role="contentinfo">
   <a href="/" style="color: var(--text-2); margin-right: 12px;">Home</a>
   <a href="/terms" style="color: var(--text-2); margin-right: 12px;">Terms of Service</a>
   <a href="/privacy" style="color: var(--text-2);">Privacy Policy</a>
-</div>
+</footer>
 
 </body>
 </html>
