@@ -124,6 +124,7 @@ func defaultAutocertCacheDir() string {
 func newTLSRedirectHandler(mgr *autocert.Manager, domain string) http.Handler {
 	fallback := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		target := "https://" + domain + r.URL.RequestURI()
+		// #nosec G710 -- target host is the ACME-validated `domain` parameter (server config), not the inbound Host header. Defends against Host-header reflection class of bugs.
 		http.Redirect(w, r, target, http.StatusMovedPermanently)
 	})
 	return mgr.HTTPHandler(fallback)

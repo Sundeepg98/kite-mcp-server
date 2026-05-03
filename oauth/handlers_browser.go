@@ -74,6 +74,7 @@ func (h *Handler) HandleBrowserAuthCallback(w http.ResponseWriter, r *http.Reque
 	}
 
 	h.logger.Info("Browser auth login successful", "email", email)
+	// #nosec G710 -- redirect was constrained to relative paths above (strings.HasPrefix "/" and not "//"). Open-redirect not possible.
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
@@ -100,14 +101,14 @@ func (h *Handler) GenerateBrowserLoginURL(apiKey, email, redirect string) string
 // HandleLoginChoice serves a unified login page offering Kite login and admin login.
 // If the user already has a valid dashboard cookie, redirects to the dashboard.
 func (h *Handler) HandleLoginChoice(w http.ResponseWriter, r *http.Request) {
-	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" {
-		redirect = "/dashboard"
-	}
+	// Constrain redirect to relative paths only (open-redirect defense).
+	// safeRedirect rejects absolute URLs and protocol-relative // paths.
+	redirect := safeRedirect(r.URL.Query().Get("redirect"), "/dashboard")
 
 	// If the user already has a valid cookie, skip the login page.
 	if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
 		if _, err := h.jwt.ValidateToken(cookie.Value, "dashboard"); err == nil {
+			// #nosec G710 -- redirect was sanitized via safeRedirect (relative-paths-only allowlist) at function entry.
 			http.Redirect(w, r, redirect, http.StatusFound)
 			return
 		}

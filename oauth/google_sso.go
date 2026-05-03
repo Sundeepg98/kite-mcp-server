@@ -229,6 +229,7 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 			redirect = "/dashboard"
 		}
 	}
+	// #nosec G710 -- redirect was constrained to relative paths in the block above.
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 

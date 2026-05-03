@@ -116,6 +116,7 @@ func buildForkExecHandlerWithPort(
 		if err != nil {
 			return fmt.Errorf("locate executable: %w", err)
 		}
+		// #nosec G702 G204 -- self-fork-exec of os.Executable() with the same os.Args we were launched with; not user input.
 		cmd := exec.Command(executable, os.Args[1:]...)
 		cmd.Env = append(os.Environ(), "KITE_GRACEFUL_CHILD=1")
 		cmd.Stdout = os.Stdout
@@ -192,7 +193,7 @@ func makeSocketpair() (parentConn net.Conn, childFile *os.File, err error) {
 	// We no longer need parentFile after net.FileConn succeeds.
 	_ = parentFile.Close()
 	if err != nil {
-		syscall.Close(fds[1])
+		_ = syscall.Close(fds[1]) //nolint:errcheck // best-effort cleanup on error path
 		return nil, nil, fmt.Errorf("net.FileConn: %w", err)
 	}
 	// Child side — returned as *os.File for ExtraFiles inheritance.

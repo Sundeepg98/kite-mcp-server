@@ -115,6 +115,7 @@ func ChecksumBytes(data []byte) string {
 // file at path. Streams the file rather than loading it whole —
 // subprocess plugin binaries are megabytes.
 func ChecksumFile(path string) (string, error) {
+	// #nosec G304 -- path is the resolved binary path of an operator-supplied plugin (plugins.json). Not request input.
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("sbom: open %s: %w", path, err)

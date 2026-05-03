@@ -78,6 +78,7 @@ func (h *Handler) HandleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.logger.Info("Admin password login successful", "email", email)
+		// #nosec G710 -- redirect was constrained to relative paths above (HasPrefix "/" and not "//").
 		http.Redirect(w, r, redirect, http.StatusFound)
 		return
 	}

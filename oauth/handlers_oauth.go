@@ -123,6 +123,7 @@ func (h *Handler) redirectToKiteLogin(w http.ResponseWriter, r *http.Request, ki
 		apiKeyPrefix = apiKeyPrefix[:8] + "..."
 	}
 	h.logger.Info("Redirecting to Kite login", "client_id", stateData.ClientID, "api_key", apiKeyPrefix, "registry_flow", stateData.RegistryKey != "")
+	// #nosec G710 -- kiteURL is constructed from a hardcoded "https://kite.zerodha.com/connect/login?..." prefix; only the api_key (server config) and signed redirect_params are appended via url.QueryEscape. Not user-controlled redirect target.
 	http.Redirect(w, r, kiteURL, http.StatusFound)
 }
 

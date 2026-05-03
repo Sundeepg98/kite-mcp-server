@@ -363,7 +363,12 @@ func runPluginBinaryWatcher(ctx context.Context, w *fsnotify.Watcher) {
 			r, ok := pluginBinaryWatchRegistry.entries[path]
 			pluginBinaryWatchRegistry.mu.RUnlock()
 			if ok && r != nil {
-				SafeInvoke("plugin_watcher:"+path, func() error {
+				// SafeInvoke only returns non-nil on panic recovery; the
+				// inner closure cannot itself produce an error. We don't
+				// surface panic errors here because (a) we're inside a
+				// debounced timer goroutine with no caller to bubble to,
+				// and (b) the recover already swallowed the panic.
+				_ = SafeInvoke("plugin_watcher:"+path, func() error { //nolint:errcheck // see comment above
 					r.Close()
 					return nil
 				})

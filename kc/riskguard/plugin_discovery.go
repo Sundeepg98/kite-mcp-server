@@ -74,6 +74,7 @@ func DiscoverPlugins(dir string, registrar PluginRegistrar, logger *slog.Logger)
 		l = logport.NewSlog(logger)
 	}
 	manifestPath := filepath.Join(dir, "plugins.json")
+	// #nosec G304 -- dir is operator-supplied plugin directory (server config), not request input. Manifest path is fixed.
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

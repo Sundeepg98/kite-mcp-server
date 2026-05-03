@@ -196,7 +196,7 @@ func (s *EventStore) Drain(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("eventsourcing: outbox query: %w", err)
 	}
 	pending, err := scanEvents(rows)
-	rows.Close()
+	_ = rows.Close() //nolint:errcheck // sql.Rows.Close after scan: cleanup, no actionable error
 	if err != nil {
 		return 0, fmt.Errorf("eventsourcing: outbox scan: %w", err)
 	}

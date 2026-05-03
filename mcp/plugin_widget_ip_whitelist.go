@@ -59,6 +59,7 @@ func ipWhitelistWidgetData(_ context.Context, _ extAppManagerPort, email string)
 
 // ipWhitelistTemplateHTML is a two-panel card: big IP readout with a
 // copy button, and a three-step walkthrough. Safe DOM APIs only.
+// #nosec G101 -- HTML/CSS/JS template literal, no credentials. gosec G101 has a known false-positive on long template strings.
 const ipWhitelistTemplateHTML = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">

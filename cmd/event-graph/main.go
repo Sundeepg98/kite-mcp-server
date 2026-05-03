@@ -60,6 +60,7 @@ func openWriter(path string) (io.Writer, func(), error) {
 	if path == "-" {
 		return os.Stdout, func() {}, nil
 	}
+	// #nosec G304 -- path is a CLI -o flag from a developer running the event-graph binary, not request input.
 	f, err := os.Create(path)
 	if err != nil {
 		return nil, nil, err

@@ -236,7 +236,8 @@ func (s *SubprocessCheck) launchLocked() error {
 	client := hplugin.NewClient(&hplugin.ClientConfig{
 		HandshakeConfig: checkrpc.Handshake,
 		Plugins:         checkrpc.PluginMap,
-		Cmd:             exec.Command(s.cfg.Executable, s.cfg.Args...),
+		// #nosec G204 -- s.cfg.Executable comes from operator-managed plugins.json, not request input. Plugin paths are admin-supplied and SBOM-recorded with SHA-256 (see checksumExecutable).
+		Cmd: exec.Command(s.cfg.Executable, s.cfg.Args...),
 		Logger:          newHclogShim(s.cfg.Logger),
 		// Explicit AllowedProtocols=netRPC: pure Go, no protoc
 		// dependency. Matches the examples/riskguard-check-plugin
@@ -378,6 +379,7 @@ func (g *Guard) RegisterSubprocessCheckWithSBOM(
 // mcp — the callback pattern inverts the dependency so the caller
 // (typically app/wire.go) owns the SBOM-emission side.
 func checksumExecutable(path string) (string, error) {
+	// #nosec G304 -- path is the resolved plugin executable from operator-supplied plugins.json, not request input.
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("checksumExecutable: open %s: %w", path, err)

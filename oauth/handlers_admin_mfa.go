@@ -119,6 +119,7 @@ func (h *Handler) HandleAdminMFAEnroll(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setAdminMFACookie(w, token)
 		h.logger.Info("Admin MFA enrolled", "email", email)
+		// #nosec G710 -- formRedirect went through safeRedirect (relative-paths-only allowlist) above.
 		http.Redirect(w, r, formRedirect, http.StatusFound)
 		return
 	}
@@ -150,6 +151,7 @@ func (h *Handler) HandleAdminMFAVerify(w http.ResponseWriter, r *http.Request) {
 	// If not enrolled, route to enrollment first — avoids a confusing
 	// "verify failed" loop for an unenrolled admin.
 	if h.userStore == nil || !h.userStore.HasTOTP(email) {
+		// #nosec G710 -- target is a hardcoded relative path "/auth/admin-mfa/enroll"; redirect query param was sanitized by safeRedirect above.
 		http.Redirect(w, r, "/auth/admin-mfa/enroll?redirect="+redirect, http.StatusFound)
 		return
 	}
@@ -182,6 +184,7 @@ func (h *Handler) HandleAdminMFAVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setAdminMFACookie(w, token)
 		h.logger.Info("Admin MFA verified", "email", email)
+		// #nosec G710 -- formRedirect went through safeRedirect (relative-paths-only allowlist) above.
 		http.Redirect(w, r, formRedirect, http.StatusFound)
 		return
 	}
@@ -226,6 +229,7 @@ func (h *Handler) RequireAdminMFA(next http.Handler) http.Handler {
 		if h.userStore == nil || !h.userStore.HasTOTP(email) {
 			dest = "/auth/admin-mfa/enroll"
 		}
+		// #nosec G710 -- dest is a hardcoded relative path; r.URL.Path is appended as a query parameter (not as the redirect target itself), and is bounded to the current request's path (no scheme/host).
 		http.Redirect(w, r, dest+"?redirect="+r.URL.Path, http.StatusFound)
 	})
 }
