@@ -30,14 +30,19 @@ type TelegramLookup interface {
 	GetEmailByChatID(chatID int64) (string, bool)
 }
 
-// KiteClientFactory creates Kite API clients. Mirrors kc.KiteClientFactory
-// to avoid a circular import between kc and kc/telegram. Returns the
-// hexagonal zerodha.KiteSDK port rather than the concrete SDK client so
-// trading commands can be exercised off-HTTP with zerodha.MockKiteSDK.
-type KiteClientFactory interface {
-	NewClient(apiKey string) zerodha.KiteSDK
-	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
-}
+// KiteClientFactory creates Kite API clients. Type alias to the canonical
+// declaration in broker/zerodha — kc/telegram cannot import kc directly
+// (would cycle through kc → kc/telegram), but broker/zerodha is a leaf
+// package safely importable from anywhere. Returns the hexagonal
+// zerodha.KiteSDK port rather than the concrete SDK client so trading
+// commands can be exercised off-HTTP with zerodha.MockKiteSDK.
+//
+// F4 consolidation (Phase B/D close-out): was a duplicate 2-method
+// interface declaration; aliased to broker/zerodha.KiteClientFactory
+// to eliminate drift risk while preserving the package-local name +
+// existing callsites unchanged. See broker/zerodha/sdk_adapter.go for
+// the canonical declaration.
+type KiteClientFactory = zerodha.KiteClientFactory
 
 // AlertLookup is the narrow port over the alert store's CRUD surface used
 // by /alerts, /setalert, /status. Locally-declared (rather than imported

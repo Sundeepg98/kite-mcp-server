@@ -61,6 +61,40 @@ func NewKiteSDK(apiKey string) KiteSDK {
 	return newKiteSDKAdapter(NewKiteClient(apiKey))
 }
 
+// KiteClientFactory creates Kite API clients. The canonical declaration
+// — kc/kite_client.go and kc/telegram/bot.go alias this type via Go
+// type alias to keep their package-local names while sharing one source
+// of truth for the contract.
+//
+// F4 consolidation (Phase B/D close-out): before this canonical lived
+// here, three packages declared the same 2-method interface
+// independently (kc.KiteClientFactory, kc/telegram.KiteClientFactory,
+// briefing's narrow 1-method variant in kc/alerts). The duplication
+// was a cycle-avoidance artifact — kc/alerts and kc/telegram cannot
+// import kc, but they CAN import broker/zerodha (this package is a
+// leaf in the import graph). Hosting the declaration here breaks the
+// duplication without re-introducing cycles.
+//
+// Used by background services (briefing, P&L snapshots, telegram bot)
+// that run outside MCP tool handlers and therefore don't have access
+// to a session-pinned broker. Test code injects mocks satisfying this
+// interface via testKiteFactory / testKiteClientFactory patterns; the
+// production implementation is *kc.defaultKiteClientFactory which
+// delegates to NewKiteSDK above so every SDK client originates from
+// the same seam.
+//
+// kc/alerts.KiteClientFactory is intentionally a 1-method narrow
+// subset (NewClientWithToken only). Briefing + PnL services don't
+// need NewClient(apiKey)-without-token, so the narrow port preserves
+// ISP. zerodha.KiteClientFactory satisfies it structurally — any
+// caller passing a zerodha.KiteClientFactory to a function that takes
+// alerts.KiteClientFactory works because Go interfaces match
+// structurally.
+type KiteClientFactory interface {
+	NewClient(apiKey string) KiteSDK
+	NewClientWithToken(apiKey, accessToken string) KiteSDK
+}
+
 // defaultKiteSDKConstructor is the production SDK constructor used by
 // Factory and Auth when no override is supplied. Routes through
 // NewKiteClient so the gokiteconnect.New call lives in one place.

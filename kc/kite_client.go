@@ -10,18 +10,20 @@ import (
 //
 // This factory is used by background services (briefing, pnl snapshots,
 // telegram bot) that run outside MCP tool handlers and therefore don't
-// have access to a session-pinned broker. The return type is now the
-// broker-owned zerodha.KiteSDK interface rather than the raw SDK
-// *kiteconnect.Client. Collapsing the SDK type behind an interface was
-// the residual Hexagonal-100 gap flagged by path-to-100-final:
-// background services can now be exercised off-HTTP with the same mock
-// the broker adapter uses, and the concrete kiteconnect.New call site
-// is confined to broker/zerodha — the single-seam guarantee the
-// hexagonal claim always promised.
-type KiteClientFactory interface {
-	NewClient(apiKey string) zerodha.KiteSDK
-	NewClientWithToken(apiKey, accessToken string) zerodha.KiteSDK
-}
+// have access to a session-pinned broker. The return type is the
+// broker-owned zerodha.KiteSDK interface, NOT the raw SDK
+// *kiteconnect.Client — the concrete kiteconnect.New call site is
+// confined to broker/zerodha (the single-seam guarantee that the
+// hexagonal-100 claim always promised).
+//
+// F4 consolidation (Phase B/D close-out): canonical declaration moved
+// to broker/zerodha (commit-this). kc.KiteClientFactory is now a Go
+// type alias preserving the historical name + import path while
+// pointing at the single source of truth. kc/telegram.KiteClientFactory
+// got the same alias treatment. kc/alerts.KiteClientFactory stays as a
+// narrow 1-method subset (intentional ISP narrowness — briefing only
+// needs NewClientWithToken).
+type KiteClientFactory = zerodha.KiteClientFactory
 
 // defaultKiteClientFactory is the production implementation. It
 // delegates to broker/zerodha.NewKiteSDK so every SDK client — MCP
