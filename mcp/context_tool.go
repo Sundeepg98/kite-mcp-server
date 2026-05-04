@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/kc/ports"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
@@ -118,11 +119,13 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 // Consumes the typed *usecases.TradingContextResult directly so broker types flow
 // end-to-end without map[string]any reboxing at the tool layer.
 //
-// Phase 3a Batch 6: alertProvider is the narrow port surface this function
-// actually needs (single AlertStore() accessor). *kc.Manager satisfies
-// kc.AlertStoreProvider, so existing callers compile unchanged — narrowing
-// is signature-only, no semantic change.
-func buildTradingContext(data *usecases.TradingContextResult, alertProvider kc.AlertStoreProvider, email string) *TradingContext {
+// Phase 3a Batch 6: alertProvider is the alert-context port. The function
+// only reads .AlertStore(); ports.AlertPort exposes that method (alongside
+// AlertDB / TelegramNotifier / TrailingStopManager / PnLService — unused
+// here). *kc.Manager satisfies ports.AlertPort, so existing callers
+// compile unchanged. Phase B/D F1 close: was kc.AlertStoreProvider before
+// the consolidation.
+func buildTradingContext(data *usecases.TradingContextResult, alertProvider ports.AlertPort, email string) *TradingContext {
 	tc := &TradingContext{
 		Warnings: make([]string, 0),
 	}

@@ -44,9 +44,9 @@ type ToolHandlerDeps struct {
 	Tokens           kc.TokenStoreProvider
 	CredStore        kc.CredentialStoreProvider
 	Browser          kc.BrowserOpener
-	Alerts           kc.AlertStoreProvider
+	Alerts           ports.AlertPort
 	Telegram         kc.TelegramStoreProvider
-	TelegramNotifier kc.TelegramNotifierProvider
+	TelegramNotifier ports.AlertPort
 	Watchlist        kc.WatchlistStoreProvider
 	Users            kc.UserStoreProvider
 	Registry         kc.RegistryStoreProvider
@@ -55,13 +55,13 @@ type ToolHandlerDeps struct {
 	Ticker           kc.TickerServiceProvider
 	Paper            kc.PaperEngineProvider
 	Instruments      ports.InstrumentPort
-	AlertDB          kc.AlertDBProvider
+	AlertDB          ports.AlertPort
 	RiskGuard        kc.RiskGuardProvider
 	MCPServer        kc.MCPServerProvider
 	BrokerResolver   kc.BrokerResolverProvider
-	TrailingStop     kc.TrailingStopManagerProvider
+	TrailingStop     ports.AlertPort
 	Events           kc.EventDispatcherProvider
-	PnL              kc.PnLServiceProvider
+	PnL              ports.AlertPort
 
 	// CQRS bus providers — handlers that dispatch commands/queries
 	// depend on these narrow ports rather than pulling the full

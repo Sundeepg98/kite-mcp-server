@@ -31,13 +31,6 @@ type CredentialStoreProvider interface {
 	CredentialStore() CredentialStoreInterface
 }
 
-// AlertStoreProvider exposes the per-user alert store (alert CRUD).
-//
-// Deprecated: prefer ports.AlertPort (kc/ports/alert.go) which composes
-// this with the four alert-adjacent accessors.
-type AlertStoreProvider interface {
-	AlertStore() AlertStoreInterface
-}
 
 // TelegramStoreProvider exposes the per-user Telegram chat ID store.
 type TelegramStoreProvider interface {
@@ -79,23 +72,9 @@ type PaperEngineProvider interface {
 	PaperEngine() PaperEngineInterface
 }
 
-// AlertDBProvider exposes the optional SQLite database used by the alerts subsystem.
-//
-// Deprecated: prefer ports.AlertPort.
-type AlertDBProvider interface {
-	AlertDB() *alerts.DB
-}
-
 // RiskGuardProvider exposes the risk guard. Returns nil if disabled.
 type RiskGuardProvider interface {
 	RiskGuard() *riskguard.Guard
-}
-
-// TelegramNotifierProvider exposes the Telegram notifier. Returns nil if unconfigured.
-//
-// Deprecated: prefer ports.AlertPort.
-type TelegramNotifierProvider interface {
-	TelegramNotifier() *alerts.TelegramNotifier
 }
 
 // EventDispatcherProvider exposes the domain event dispatcher. Returns nil
@@ -105,20 +84,6 @@ type TelegramNotifierProvider interface {
 // through ToolHandlerDeps.Events instead.
 type EventDispatcherProvider interface {
 	EventDispatcher() *domain.EventDispatcher
-}
-
-// TrailingStopManagerProvider exposes the trailing stop manager.
-//
-// Deprecated: prefer ports.AlertPort.
-type TrailingStopManagerProvider interface {
-	TrailingStopManager() *alerts.TrailingStopManager
-}
-
-// PnLServiceProvider exposes the P&L snapshot service.
-//
-// Deprecated: prefer ports.AlertPort.
-type PnLServiceProvider interface {
-	PnLService() *alerts.PnLSnapshotService
 }
 
 // MCPServerProvider exposes the stored MCP server reference. Returns nil before
@@ -139,17 +104,18 @@ type BrokerResolverProvider interface {
 // StoreAccessor is the aggregate composition of every Manager-implemented
 // store-provider interface, retained for consumers that legitimately need
 // broad access (e.g. the Manager itself, admin tooling, and registration
-// code). New code should depend on the narrowest provider(s) it needs
-// instead.
+// code). New code should depend on the narrowest port (kc/ports) or
+// provider it needs instead of the aggregate.
 //
-// Note: TelegramNotifierProvider, TrailingStopManagerProvider, and
-// PnLServiceProvider are intentionally excluded — those three accessors live
-// on AlertService (obtain them via m.AlertSvc().TelegramNotifier() etc.) and
-// are not exposed on Manager itself after the Round 3 decomposition.
+// Note: TelegramNotifier, TrailingStopManager, and PnLService are
+// intentionally excluded — those three accessors live on AlertService
+// (obtain them via m.AlertSvc().TelegramNotifier() etc.) and are not
+// exposed on Manager itself after the Round 3 decomposition. Consumers
+// that need them depend on ports.AlertPort directly (which mirrors
+// AlertService's surface), not on StoreAccessor.
 type StoreAccessor interface {
 	TokenStoreProvider
 	CredentialStoreProvider
-	AlertStoreProvider
 	TelegramStoreProvider
 	WatchlistStoreProvider
 	UserStoreProvider
@@ -159,16 +125,20 @@ type StoreAccessor interface {
 	TickerServiceProvider
 	PaperEngineProvider
 
-	// InstrumentsManager() inlined here (Phase B/D F1 close): the
-	// previous InstrumentsManagerProvider alias was deleted in favor
-	// of ports.InstrumentPort at consumer sites. StoreAccessor lives
-	// in package kc and cannot embed kc/ports types without creating
-	// a cycle, so the single accessor is inlined directly. See
-	// kc/ports/instrument.go:32 for the canonical port; *kc.Manager
-	// satisfies both via its existing implementation.
+	// AlertStore() + AlertDB() + InstrumentsManager() inlined here
+	// (Phase B/D F1 close): the previous AlertStoreProvider /
+	// AlertDBProvider / InstrumentsManagerProvider single-method
+	// aliases were deleted in favor of ports.AlertPort + ports.
+	// InstrumentPort at consumer sites. StoreAccessor lives in package
+	// kc and cannot embed kc/ports types without creating a cycle
+	// (kc/ports already imports kc), so each accessor is inlined here
+	// directly. *kc.Manager satisfies the corresponding ports via its
+	// existing method implementations — see kc/ports/alert.go:25,
+	// kc/ports/instrument.go:32, and kc/ports/assertions.go.
+	AlertStore() AlertStoreInterface
+	AlertDB() *alerts.DB
 	InstrumentsManager() InstrumentManagerInterface
 
-	AlertDBProvider
 	RiskGuardProvider
 	MCPServerProvider
 }
@@ -260,7 +230,6 @@ var (
 	// consumers are refactored.
 	_ TokenStoreProvider         = (*Manager)(nil)
 	_ CredentialStoreProvider    = (*Manager)(nil)
-	_ AlertStoreProvider         = (*Manager)(nil)
 	_ TelegramStoreProvider      = (*Manager)(nil)
 	_ WatchlistStoreProvider     = (*Manager)(nil)
 	_ UserStoreProvider          = (*Manager)(nil)
@@ -269,14 +238,12 @@ var (
 	_ BillingStoreProvider       = (*Manager)(nil)
 	_ TickerServiceProvider      = (*Manager)(nil)
 	_ PaperEngineProvider        = (*Manager)(nil)
-	_ AlertDBProvider            = (*Manager)(nil)
 	_ RiskGuardProvider          = (*Manager)(nil)
 	_ MCPServerProvider          = (*Manager)(nil)
 
 	// Round 4 narrow providers — used by mcp.ToolHandlerDeps to replace
-	// remaining service-locator calls (manager.SessionSvc(), manager.TrailingStopManager()).
+	// remaining service-locator calls (manager.SessionSvc()).
 	_ BrokerResolverProvider     = (*Manager)(nil)
-	_ TrailingStopManagerProvider = (*Manager)(nil)
 
 	// Phase 3a Batch 2 narrow ports.
 	_ BrowserOpener = (*Manager)(nil)
