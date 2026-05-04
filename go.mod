@@ -24,6 +24,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.48.0
@@ -52,6 +53,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/templates => ./kc/templates
+	github.com/zerodha/kite-mcp-server/kc/watchlist => ./kc/watchlist
 )
 
 require (
