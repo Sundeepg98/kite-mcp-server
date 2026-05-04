@@ -62,6 +62,7 @@ use (
 	./kc/audit
 	./kc/billing
 	./kc/i18n
+	./kc/isttz
 	./kc/money
 	./kc/riskguard
 )
