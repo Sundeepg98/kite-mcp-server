@@ -19,6 +19,7 @@ COPY kc/i18n/go.mod kc/i18n/go.sum* kc/i18n/
 COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/legaldocs/go.mod kc/legaldocs/go.sum* kc/legaldocs/
 COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
+COPY kc/templates/go.mod kc/templates/go.sum* kc/templates/
 RUN go mod download
 COPY . .
 # VERSION sourced from server.json (single source of truth for the registry

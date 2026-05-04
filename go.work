@@ -67,4 +67,5 @@ use (
 	./kc/logger
 	./kc/money
 	./kc/riskguard
+	./kc/templates
 )
