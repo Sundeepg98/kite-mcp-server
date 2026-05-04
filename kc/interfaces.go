@@ -9,8 +9,7 @@ import (
 	"context"
 	"time"
 
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
-
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
@@ -438,7 +437,7 @@ type TickerServiceInterface interface {
 	UpdateToken(email, apiKey, accessToken string) error
 
 	// Subscribe subscribes the user's ticker to instrument tokens.
-	Subscribe(email string, tokens []uint32, mode kiteticker.Mode) error
+	Subscribe(email string, tokens []uint32, mode brokerticker.Mode) error
 
 	// Unsubscribe removes instrument tokens from the user's ticker.
 	Unsubscribe(email string, tokens []uint32) error

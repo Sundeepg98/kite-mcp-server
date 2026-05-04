@@ -32,6 +32,7 @@ package zerodha
 // connection.
 
 import (
+	"context"
 	"time"
 
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
@@ -84,6 +85,12 @@ type TickerAdapter struct {
 	sub kiteSubscriber
 	cb  kiteCallbackRegistrar
 
+	// serveFn is invoked by Serve. For real production
+	// (*kiteticker.Ticker) it calls ServeWithContext on the
+	// underlying ticker, blocking until ctx cancellation. Tests
+	// inject a no-op or capturing fake.
+	serveFn func(ctx context.Context)
+
 	// closeFn is invoked by Close. For real production
 	// (*kiteticker.Ticker) the underlying client doesn't expose
 	// an explicit Close — Stop is via context cancellation in
@@ -120,12 +127,15 @@ func NewTickerAdapter(apiKey, accessToken string) *TickerAdapter {
 	// kiteSubscriber interface's SetMode(string, ...). Tests inject a
 	// fakeKiteSubscriber directly — the shim is production-only.
 	shim := &kiteSubscriberShim{t: t}
-	return newTickerAdapter(shim, t, t, func() error {
-		// kiteticker has no Close; consumer drives lifecycle via
-		// context cancellation in the goroutine that called
-		// ServeWithContext. Return nil so Close stays idempotent.
-		return nil
-	})
+	return newTickerAdapter(
+		shim, t, t,
+		func(ctx context.Context) { t.ServeWithContext(ctx) },
+		func() error {
+			// kiteticker has no Close; consumer drives lifecycle via
+			// context cancellation. Return nil so Close stays idempotent.
+			return nil
+		},
+	)
 }
 
 // kiteSubscriberShim adapts *kiteticker.Ticker's typed-Mode SetMode
@@ -153,10 +163,12 @@ func newTickerAdapter(
 	sub kiteSubscriber,
 	cb kiteCallbackRegistrar,
 	tickReg kiteTickRegistrar,
+	serveFn func(ctx context.Context),
 	closeFn func() error,
 ) *TickerAdapter {
 	a := &TickerAdapter{
 		sub:     sub,
+		serveFn: serveFn,
 		closeFn: closeFn,
 	}
 	// Register a single OnTick hook on the underlying subscriber
@@ -252,11 +264,23 @@ func (a *TickerAdapter) OnNoReconnect(handler func(attempt int)) {
 	a.cb.OnNoReconnect(handler)
 }
 
+// Serve implements broker/ticker.Ticker.Serve. Delegates to the
+// underlying *kiteticker.Ticker's ServeWithContext, which blocks
+// the calling goroutine until ctx is cancelled or the transport
+// gives up reconnecting. Tests inject a fake server (via
+// newTickerAdapter's serveFn) that returns immediately.
+func (a *TickerAdapter) Serve(ctx context.Context) {
+	if a.serveFn == nil {
+		return
+	}
+	a.serveFn(ctx)
+}
+
 // Close implements broker/ticker.Ticker.Close. For Zerodha's
 // kiteticker, the underlying transport is owned by the consumer's
-// ServeWithContext goroutine; Close here is a no-op by default
-// (returns nil). Future adapters with explicit close semantics
-// can substitute a non-nil closeFn.
+// Serve goroutine; Close here is a no-op by default (returns nil).
+// Future adapters with explicit close semantics can substitute a
+// non-nil closeFn.
 func (a *TickerAdapter) Close() error {
 	if a.closeFn == nil {
 		return nil

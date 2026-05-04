@@ -7,21 +7,38 @@ import (
 	"sync"
 	"time"
 
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 )
 
-// Mode is an alias for kiteticker.Mode.
-type Mode = kiteticker.Mode
+// Mode aliases the broker-agnostic broker/ticker.Mode so external
+// consumers (mcp/ticker_tools.go, mcp/alert_tools.go, mcp/trailing_
+// tools.go) keep using kc/ticker.Mode unchanged. Migration target for
+// post-launch cleanup: callsites import broker/ticker directly.
+type Mode = brokerticker.Mode
 
-// Mode aliases for kiteticker modes.
+// Mode aliases for the broker-agnostic mode constants. Same byte
+// values as kiteticker.ModeLTP/ModeQuote/ModeFull (typed string
+// "ltp"/"quote"/"full"); existing kc/ticker.ModeLTP callsites
+// continue to work unchanged.
 const (
-	ModeLTP   = kiteticker.ModeLTP
-	ModeQuote = kiteticker.ModeQuote
-	ModeFull  = kiteticker.ModeFull
+	ModeLTP   = brokerticker.ModeLTP
+	ModeQuote = brokerticker.ModeQuote
+	ModeFull  = brokerticker.ModeFull
 )
 
-// TickCallback is invoked on each incoming tick for a user.
+// TickCallback is invoked on each incoming tick for a user. Carries
+// gokiteconnect models.Tick because kc/alerts.Evaluator.Evaluate
+// takes that signature today; the broker/ticker.Tick translation
+// happens INSIDE wireCallbacks so the kiteticker dependency stays
+// hidden from anything outside this package + kc/alerts.
+//
+// Future cleanup (out of scope for the multi-broker port-adapter
+// commit): kc/alerts.Evaluator.Evaluate accepts broker/ticker.Tick;
+// this signature swaps too; the round-trip translation in
+// wireCallbacks is dropped.
 type TickCallback func(email string, tick models.Tick)
 
 // Config holds configuration for creating a new ticker Service.
@@ -31,16 +48,20 @@ type Config struct {
 }
 
 // UserTicker holds a single user's WebSocket ticker connection.
+//
+// Ticker holds a broker/ticker.Ticker port — production wires
+// *zerodha.TickerAdapter (which wraps *kiteticker.Ticker); future
+// non-Zerodha adapters slot in here without touching this struct.
 type UserTicker struct {
 	Email       string
 	APIKey      string
 	AccessToken string
-	Ticker      *kiteticker.Ticker
+	Ticker      brokerticker.Ticker
 	Cancel      context.CancelFunc
 	Connected   bool
 	StartedAt   time.Time
-	Subscribed  map[uint32]kiteticker.Mode // token -> mode
-	conn        tickerConn                 // mockable subscribe/unsubscribe/setmode ops
+	Subscribed  map[uint32]brokerticker.Mode // token -> mode
+	conn        tickerConn                   // mockable subscribe/unsubscribe/setmode ops
 	mu          sync.RWMutex
 }
 
@@ -85,10 +106,11 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 		}
 	}
 
-	// Create a new Kite Ticker
-	t := kiteticker.New(apiKey, accessToken)
-	t.SetAutoReconnect(true)
-	t.SetReconnectMaxRetries(300)
+	// Create a new broker-agnostic ticker via the Zerodha adapter.
+	// Production today is Zerodha-only; future broker support swaps
+	// the factory here without touching the UserTicker struct or the
+	// callback wiring.
+	t := zerodha.NewTickerAdapter(apiKey, accessToken)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -100,7 +122,7 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 		conn:        t,
 		Cancel:      cancel,
 		StartedAt:   time.Now(),
-		Subscribed:  make(map[uint32]kiteticker.Mode),
+		Subscribed:  make(map[uint32]brokerticker.Mode),
 	}
 
 	// Wire callbacks
@@ -111,39 +133,73 @@ func (s *Service) Start(email, apiKey, accessToken string) error {
 	// Start serving in a goroutine (blocking call)
 	go func() {
 		s.logger.Info("Starting ticker", "email", email)
-		t.ServeWithContext(ctx)
+		t.Serve(ctx)
 		s.logger.Info("Ticker serve exited", "email", email)
 	}()
 
 	return nil
 }
 
-// tickerSubscriber is the subset of kiteticker.Ticker used by onConnect to
+// tickerSubscriber is the subset of broker/ticker.Ticker used by onConnect to
 // resubscribe tokens after a WebSocket reconnection. Extracted as an interface
 // so callback logic can be unit-tested without a real WebSocket.
 type tickerSubscriber interface {
 	Subscribe(tokens []uint32) error
-	SetMode(mode kiteticker.Mode, tokens []uint32) error
+	SetMode(mode brokerticker.Mode, tokens []uint32) error
 }
 
 // tickerConn abstracts the subscribe/unsubscribe/mode operations on a ticker
-// connection. The real *kiteticker.Ticker satisfies this. Stored on UserTicker
-// so tests can inject a mock without a WebSocket.
+// connection. *zerodha.TickerAdapter (and any future broker adapter) satisfies
+// this. Stored on UserTicker so tests can inject a mock without a WebSocket.
 type tickerConn interface {
 	Subscribe(tokens []uint32) error
 	Unsubscribe(tokens []uint32) error
-	SetMode(mode kiteticker.Mode, tokens []uint32) error
+	SetMode(mode brokerticker.Mode, tokens []uint32) error
 }
 
 // callbackRegistrar abstracts the On* methods used by wireCallbacks to register
-// event handlers. The real *kiteticker.Ticker satisfies this interface.
+// event handlers. *zerodha.TickerAdapter satisfies this via the broker/ticker.
+// Ticker port. We use a local subset rather than embedding broker/ticker.Ticker
+// directly because OnTick on the port takes broker/ticker.TickHandler (Tick
+// payload) while we want to wire to onTickReceived which takes models.Tick
+// today (kc/alerts.Evaluator boundary). The translation happens INSIDE
+// wireCallbacks via brokerToModelsTick.
 type callbackRegistrar interface {
 	OnConnect(f func())
-	OnTick(f func(models.Tick))
+	OnTick(handler brokerticker.TickHandler)
 	OnError(f func(error))
 	OnClose(f func(int, string))
 	OnReconnect(f func(int, time.Duration))
 	OnNoReconnect(f func(int))
+}
+
+// brokerToModelsTick translates a broker-agnostic broker/ticker.Tick back
+// to gokiteconnect models.Tick for compatibility with kc/alerts.Evaluator
+// (which takes models.Tick today). Round-trip is loss-free for the
+// Zerodha adapter because translateTick at broker/zerodha/ticker_adapter.go
+// fills every field this function reads.
+//
+// Future cleanup (out of scope for the multi-broker port-adapter commit):
+// kc/alerts.Evaluator accepts broker/ticker.Tick; this function disappears
+// alongside the TickCallback signature change.
+func brokerToModelsTick(tk brokerticker.Tick) models.Tick {
+	return models.Tick{
+		InstrumentToken:    tk.InstrumentToken,
+		LastPrice:          tk.LastPrice,
+		LastTradedQuantity: tk.LastQuantity,
+		AverageTradePrice:  tk.AverageTradePrice,
+		VolumeTraded:       tk.Volume,
+		TotalBuyQuantity:   tk.BuyQuantity,
+		TotalSellQuantity:  tk.SellQuantity,
+		NetChange:          tk.ChangePercent,
+		Mode:               string(tk.Mode),
+		OHLC: models.OHLC{
+			Open:  tk.OHLC.Open,
+			High:  tk.OHLC.High,
+			Low:   tk.OHLC.Low,
+			Close: tk.OHLC.Close,
+		},
+	}
 }
 
 // wireCallbacks sets up all WebSocket event handlers (OnConnect, OnClose,
@@ -152,7 +208,7 @@ type callbackRegistrar interface {
 // UpdateToken to eliminate callback-wiring duplication.
 func (s *Service) wireCallbacks(ut *UserTicker, t callbackRegistrar) {
 	t.OnConnect(func() { s.onConnect(ut, ut.conn) })
-	t.OnTick(func(tick models.Tick) { s.onTickReceived(ut.Email, tick) })
+	t.OnTick(func(tk brokerticker.Tick) { s.onTickReceived(ut.Email, brokerToModelsTick(tk)) })
 	t.OnError(func(err error) { s.onError(ut.Email, err) })
 	t.OnClose(func(code int, reason string) { s.onClose(ut, code, reason) })
 	t.OnReconnect(func(attempt int, delay time.Duration) { s.onReconnect(ut.Email, attempt, delay) })
@@ -182,7 +238,7 @@ func (s *Service) onConnect(ut *UserTicker, sub tickerSubscriber) {
 			s.logger.Error("Failed to resubscribe on connect", "email", email, "error", err)
 		}
 		// Restore modes per-token group
-		modeTokens := make(map[kiteticker.Mode][]uint32)
+		modeTokens := make(map[brokerticker.Mode][]uint32)
 		ut.mu.RLock()
 		for token, mode := range ut.Subscribed {
 			modeTokens[mode] = append(modeTokens[mode], token)
@@ -260,7 +316,7 @@ func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 
 	// Capture current subscriptions before stopping
 	oldUT.mu.RLock()
-	subs := make(map[uint32]kiteticker.Mode, len(oldUT.Subscribed))
+	subs := make(map[uint32]brokerticker.Mode, len(oldUT.Subscribed))
 	for token, mode := range oldUT.Subscribed {
 		subs[token] = mode
 	}
@@ -271,10 +327,8 @@ func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 	delete(s.tickers, email)
 	s.logger.Info("Ticker stopped for token update", "email", email)
 
-	// Create a new Kite Ticker
-	t := kiteticker.New(apiKey, accessToken)
-	t.SetAutoReconnect(true)
-	t.SetReconnectMaxRetries(300)
+	// Create a new broker-agnostic ticker via the Zerodha adapter.
+	t := zerodha.NewTickerAdapter(apiKey, accessToken)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -297,7 +351,7 @@ func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 	// Start serving in a goroutine (blocking call)
 	go func() {
 		s.logger.Info("Starting ticker", "email", email)
-		t.ServeWithContext(ctx)
+		t.Serve(ctx)
 		s.logger.Info("Ticker serve exited", "email", email)
 	}()
 
@@ -306,7 +360,7 @@ func (s *Service) UpdateToken(email, apiKey, accessToken string) error {
 }
 
 // Subscribe subscribes the user's ticker to the given instrument tokens with the specified mode.
-func (s *Service) Subscribe(email string, tokens []uint32, mode kiteticker.Mode) error {
+func (s *Service) Subscribe(email string, tokens []uint32, mode brokerticker.Mode) error {
 	s.mu.RLock()
 	ut, ok := s.tickers[email]
 	s.mu.RUnlock()

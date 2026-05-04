@@ -10,8 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
 )
 
 // --- mock tickerSubscriber ---
@@ -26,7 +27,7 @@ type mockSubscriber struct {
 }
 
 type modeCall struct {
-	mode   kiteticker.Mode
+	mode   brokerticker.Mode
 	tokens []uint32
 }
 
@@ -39,7 +40,7 @@ func (m *mockSubscriber) Subscribe(tokens []uint32) error {
 	return m.subscribeErr
 }
 
-func (m *mockSubscriber) SetMode(mode kiteticker.Mode, tokens []uint32) error {
+func (m *mockSubscriber) SetMode(mode brokerticker.Mode, tokens []uint32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cp := make([]uint32, len(tokens))
@@ -61,7 +62,7 @@ func newTestService(onTick TickCallback) (*Service, *bytes.Buffer) {
 func TestOnConnect_SetsConnectedTrue(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("conn@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("conn@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 
 	assert.False(t, ut.Connected)
 	svc.onConnect(ut, &mockSubscriber{})
@@ -74,7 +75,7 @@ func TestOnConnect_SetsConnectedTrue(t *testing.T) {
 func TestOnConnect_NoSubscriptions_NoResubscribe(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("empty@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("empty@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 
 	mock := &mockSubscriber{}
 	svc.onConnect(ut, mock)
@@ -89,7 +90,7 @@ func TestOnConnect_ResubscribesTokens(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 		738561: ModeFull,
@@ -119,7 +120,7 @@ func TestOnConnect_ResubscribesTokens(t *testing.T) {
 	assert.Len(t, mock.modes, 3)
 
 	// Collect modes -> tokens for verification
-	modeMap := make(map[kiteticker.Mode][]uint32)
+	modeMap := make(map[brokerticker.Mode][]uint32)
 	for _, mc := range mock.modes {
 		modeMap[mc.mode] = append(modeMap[mc.mode], mc.tokens...)
 	}
@@ -136,7 +137,7 @@ func TestOnConnect_SameModeGroupedTogether(t *testing.T) {
 	svc, _ := newTestService(nil)
 
 	// Multiple tokens with same mode
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		100: ModeLTP,
 		200: ModeLTP,
 		300: ModeLTP,
@@ -159,7 +160,7 @@ func TestOnConnect_SubscribeError_LoggedAndContinues(t *testing.T) {
 	t.Parallel()
 	svc, buf := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP}
 	ut := newTestUserTicker("sub-err@test.com", "k", "t", subs)
 
 	mock := &mockSubscriber{subscribeErr: errors.New("ws write failed")}
@@ -183,7 +184,7 @@ func TestOnConnect_SetModeError_LoggedAndContinues(t *testing.T) {
 	t.Parallel()
 	svc, buf := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP, 260105: ModeQuote}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP, 260105: ModeQuote}
 	ut := newTestUserTicker("mode-err@test.com", "k", "t", subs)
 
 	mock := &mockSubscriber{setModeErr: errors.New("mode write failed")}
@@ -250,7 +251,7 @@ func TestOnClose_SetsConnectedFalse(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	ut := newTestUserTicker("close@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("close@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -266,7 +267,7 @@ func TestOnClose_LogsCodeAndReason(t *testing.T) {
 	t.Parallel()
 	svc, buf := newTestService(nil)
 
-	ut := newTestUserTicker("close-log@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("close-log@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	svc.onClose(ut, 1006, "abnormal closure")
 
 	logOutput := buf.String()
@@ -296,7 +297,7 @@ func TestOnNoReconnect_SetsConnectedFalse(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	ut := newTestUserTicker("norecon@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("norecon@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -312,7 +313,7 @@ func TestOnNoReconnect_LogsAttempts(t *testing.T) {
 	t.Parallel()
 	svc, buf := newTestService(nil)
 
-	ut := newTestUserTicker("norecon-log@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("norecon-log@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	svc.onNoReconnect(ut, 300)
 
 	logOutput := buf.String()
@@ -331,7 +332,7 @@ func TestWireCallbacks_Integration(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	ut := newTestUserTicker("wire@test.com", "k", "t", map[uint32]kiteticker.Mode{
+	ut := newTestUserTicker("wire@test.com", "k", "t", map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 	})
 
@@ -347,7 +348,7 @@ func TestOnConnect_ConcurrentSafe(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		100: ModeLTP,
 		200: ModeQuote,
 	}
@@ -371,7 +372,7 @@ func TestOnConnect_ConcurrentSafe(t *testing.T) {
 func TestOnClose_ConcurrentSafe(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("conc-close@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("conc-close@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -417,7 +418,7 @@ func TestOnTickReceived_ConcurrentSafe(t *testing.T) {
 func TestOnConnect_EmptySubscriptions(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("empty-sub@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("empty-sub@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 
 	mock := &mockSubscriber{}
 	svc.onConnect(ut, mock)
@@ -436,7 +437,7 @@ func TestOnConnect_SingleToken(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeFull}
+	subs := map[uint32]brokerticker.Mode{256265: ModeFull}
 	ut := newTestUserTicker("single@test.com", "k", "t", subs)
 
 	mock := &mockSubscriber{}
@@ -456,7 +457,7 @@ func TestOnConnect_SingleToken(t *testing.T) {
 func TestOnClose_AlreadyDisconnected(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("already-dc@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("already-dc@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	// Connected is already false
 
 	// Should not panic
@@ -472,7 +473,7 @@ func TestOnClose_AlreadyDisconnected(t *testing.T) {
 func TestOnNoReconnect_AlreadyDisconnected(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(nil)
-	ut := newTestUserTicker("already-dc-norecon@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker("already-dc-norecon@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 
 	assert.NotPanics(t, func() {
 		svc.onNoReconnect(ut, 100)
@@ -487,7 +488,7 @@ func TestOnConnect_BothSubscribeAndSetModeError(t *testing.T) {
 	t.Parallel()
 	svc, buf := newTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP}
 	ut := newTestUserTicker("both-err@test.com", "k", "t", subs)
 
 	mock := &mockSubscriber{

@@ -18,6 +18,7 @@ package ticker_test
 // runtime asserts here cover the rest.
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -117,6 +118,9 @@ func TestTicker_InterfaceMethods(t *testing.T) {
 	assert.NotPanics(t, func() { tk.OnClose(func(_ int, _ string) {}) })
 	assert.NotPanics(t, func() { tk.OnReconnect(func(_ int, _ time.Duration) {}) })
 	assert.NotPanics(t, func() { tk.OnNoReconnect(func(_ int) {}) })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancelled so Serve returns immediately on the fake
+	assert.NotPanics(t, func() { tk.Serve(ctx) })
 	assert.NotPanics(t, func() { _ = tk.Close() })
 }
 
@@ -125,13 +129,14 @@ func TestTicker_InterfaceMethods(t *testing.T) {
 // (Zerodha, Upstox, Dhan) ship their own real implementations.
 type fakeTicker struct{}
 
-func (*fakeTicker) Subscribe([]uint32) error                       { return nil }
-func (*fakeTicker) Unsubscribe([]uint32) error                     { return nil }
-func (*fakeTicker) SetMode(ticker.Mode, []uint32) error            { return nil }
-func (*fakeTicker) OnTick(ticker.TickHandler)                      {}
-func (*fakeTicker) OnConnect(func())                               {}
-func (*fakeTicker) OnError(func(error))                            {}
-func (*fakeTicker) OnClose(func(int, string))                      {}
-func (*fakeTicker) OnReconnect(func(int, time.Duration))           {}
-func (*fakeTicker) OnNoReconnect(func(int))                        {}
-func (*fakeTicker) Close() error                                   { return nil }
+func (*fakeTicker) Subscribe([]uint32) error             { return nil }
+func (*fakeTicker) Unsubscribe([]uint32) error           { return nil }
+func (*fakeTicker) SetMode(ticker.Mode, []uint32) error  { return nil }
+func (*fakeTicker) OnTick(ticker.TickHandler)            {}
+func (*fakeTicker) OnConnect(func())                     {}
+func (*fakeTicker) OnError(func(error))                  {}
+func (*fakeTicker) OnClose(func(int, string))            {}
+func (*fakeTicker) OnReconnect(func(int, time.Duration)) {}
+func (*fakeTicker) OnNoReconnect(func(int))              {}
+func (*fakeTicker) Serve(context.Context)                {}
+func (*fakeTicker) Close() error                         { return nil }

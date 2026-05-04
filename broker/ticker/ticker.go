@@ -23,7 +23,10 @@
 // in Q2.
 package ticker
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Mode identifies the granularity of tick data subscribed to. Adapter
 // authors translate vendor-specific mode codes (e.g. Zerodha's
@@ -139,12 +142,13 @@ type TickHandler func(Tick)
 //
 //  1. Construct via a broker-specific factory (e.g.
 //     zerodha.NewTickerAdapter).
-//  2. Register handlers via On* methods BEFORE the underlying
-//     transport connects — the OnConnect handler is the right place
-//     to call Subscribe/SetMode for the initial token set.
-//  3. Adapter starts the underlying transport (typically
-//     adapter-internal — the consumer doesn't need to call ServeWith-
-//     Context or similar).
+//  2. Register handlers via On* methods BEFORE calling Serve —
+//     the OnConnect handler is the right place to call
+//     Subscribe/SetMode for the initial token set.
+//  3. Call Serve(ctx) in a goroutine to start the underlying
+//     transport. Serve blocks until ctx is cancelled or the
+//     transport gives up reconnecting; consumers cancel ctx to
+//     stop the ticker.
 //  4. Subscribe / Unsubscribe / SetMode mutate the active subscription
 //     set; calls before connection are queued and applied in
 //     OnConnect, matching the Zerodha kiteticker behaviour kc/ticker/
@@ -199,6 +203,15 @@ type Ticker interface {
 	// exhausted its reconnect budget and stops trying. Attempt is the
 	// final attempt count.
 	OnNoReconnect(handler func(attempt int))
+
+	// Serve starts the underlying transport's read loop. Blocks until
+	// ctx is cancelled or the transport gives up reconnecting.
+	// Consumers typically call this in a goroutine alongside a
+	// derived ctx whose cancel func stops the ticker. Serve is
+	// callable at most once per Ticker instance — implementations
+	// that don't require explicit serve loops (test fakes, future
+	// brokers using a daemon goroutine) MAY make Serve a no-op.
+	Serve(ctx context.Context)
 
 	// Close releases the underlying transport and unblocks any
 	// internal goroutines. Safe to call multiple times — second and

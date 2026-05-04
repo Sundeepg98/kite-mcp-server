@@ -8,8 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 )
 
 func TestTickerService_New(t *testing.T) {
@@ -123,12 +125,13 @@ func TestTickerService_UpdateTokenNoTicker(t *testing.T) {
 }
 
 // newTestUserTicker creates a UserTicker with a no-op cancel for testing.
-// The Ticker field uses a real kiteticker.New (required for wireCallbacks)
-// but we never call ServeWithContext so no WebSocket is opened.
-// The conn field defaults to the real ticker (same as production Start).
-func newTestUserTicker(email, apiKey, accessToken string, subs map[uint32]kiteticker.Mode) *UserTicker {
+// The Ticker field uses a real *zerodha.TickerAdapter (which wraps a fresh
+// *kiteticker.Ticker for the wireCallbacks lifecycle handlers) but we never
+// call Serve so no WebSocket is opened. The conn field defaults to the same
+// adapter (same pattern as production Start).
+func newTestUserTicker(email, apiKey, accessToken string, subs map[uint32]brokerticker.Mode) *UserTicker {
 	_, cancel := context.WithCancel(context.Background())
-	t := kiteticker.New(apiKey, accessToken)
+	t := zerodha.NewTickerAdapter(apiKey, accessToken)
 	return &UserTicker{
 		Email:       email,
 		APIKey:      apiKey,
@@ -203,7 +206,7 @@ func TestTickerService_UpdateTokenPreservesSubscriptions(t *testing.T) {
 	email := "sub-test@example.com"
 
 	// Inject a UserTicker with known subscriptions
-	origSubs := map[uint32]kiteticker.Mode{
+	origSubs := map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 		738561: ModeFull,
@@ -251,7 +254,7 @@ func TestTickerService_UpdateTokenNewCredentials(t *testing.T) {
 	svc := New(Config{})
 	email := "cred-test@example.com"
 
-	ut := newTestUserTicker(email, "oldkey", "oldtoken", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "oldkey", "oldtoken", make(map[uint32]brokerticker.Mode))
 	svc.mu.Lock()
 	svc.tickers[email] = ut
 	svc.mu.Unlock()
@@ -277,7 +280,7 @@ func TestTickerService_StopInjected(t *testing.T) {
 	svc := New(Config{})
 	email := "stopper@example.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	svc.mu.Lock()
 	svc.tickers[email] = ut
 	svc.mu.Unlock()
@@ -296,7 +299,7 @@ func TestTickerService_ShutdownWithTickers(t *testing.T) {
 	emails := []string{"a@test.com", "b@test.com", "c@test.com"}
 	svc.mu.Lock()
 	for _, email := range emails {
-		svc.tickers[email] = newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+		svc.tickers[email] = newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	}
 	svc.mu.Unlock()
 
@@ -317,7 +320,7 @@ func TestTickerService_GetStatusWithSubscriptions(t *testing.T) {
 	svc := New(Config{})
 	email := "status@example.com"
 
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 	}
@@ -343,10 +346,10 @@ func TestTickerService_ListAllWithTickers(t *testing.T) {
 	svc := New(Config{})
 
 	svc.mu.Lock()
-	svc.tickers["a@test.com"] = newTestUserTicker("a@test.com", "k", "t", map[uint32]kiteticker.Mode{
+	svc.tickers["a@test.com"] = newTestUserTicker("a@test.com", "k", "t", map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 	})
-	svc.tickers["b@test.com"] = newTestUserTicker("b@test.com", "k", "t", map[uint32]kiteticker.Mode{
+	svc.tickers["b@test.com"] = newTestUserTicker("b@test.com", "k", "t", map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 		738561: ModeFull,
@@ -378,7 +381,7 @@ func TestTickerService_ConcurrentAccess(t *testing.T) {
 	// Pre-populate with injected tickers so concurrent ops hit real state
 	svc.mu.Lock()
 	for _, email := range emails {
-		svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]kiteticker.Mode{
+		svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]brokerticker.Mode{
 			256265: ModeLTP,
 			260105: ModeQuote,
 		})
@@ -438,7 +441,7 @@ func TestTickerService_ConcurrentAccessWithUpdateToken(t *testing.T) {
 
 	// Inject initial ticker with subscriptions
 	svc.mu.Lock()
-	svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]kiteticker.Mode{
+	svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 	})
@@ -484,7 +487,7 @@ func TestTickerService_ShutdownConcurrent(t *testing.T) {
 	// Pre-populate with tickers so Shutdown has work to do
 	svc.mu.Lock()
 	for _, email := range []string{"x@test.com", "y@test.com"} {
-		svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]kiteticker.Mode{
+		svc.tickers[email] = newTestUserTicker(email, "key", "tok", map[uint32]brokerticker.Mode{
 			256265: ModeLTP,
 		})
 	}

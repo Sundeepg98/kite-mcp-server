@@ -10,8 +10,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 )
 
 // --- mockCallbackRegistrar captures closures registered by wireCallbacks ---
@@ -19,7 +21,7 @@ import (
 type mockCallbackRegistrar struct {
 	mu            sync.Mutex
 	onConnect     func()
-	onTick        func(models.Tick)
+	onTick        brokerticker.TickHandler
 	onError       func(error)
 	onClose       func(int, string)
 	onReconnect   func(int, time.Duration)
@@ -32,7 +34,7 @@ func (m *mockCallbackRegistrar) OnConnect(f func()) {
 	m.onConnect = f
 }
 
-func (m *mockCallbackRegistrar) OnTick(f func(models.Tick)) {
+func (m *mockCallbackRegistrar) OnTick(f brokerticker.TickHandler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onTick = f
@@ -69,7 +71,7 @@ type mockTickerConn struct {
 	subscribeCalls [][]uint32
 	unsubCalls     [][]uint32
 	modeCalls      []struct {
-		mode   kiteticker.Mode
+		mode   brokerticker.Mode
 		tokens []uint32
 	}
 	subscribeErr error
@@ -95,22 +97,25 @@ func (m *mockTickerConn) Unsubscribe(tokens []uint32) error {
 	return m.unsubErr
 }
 
-func (m *mockTickerConn) SetMode(mode kiteticker.Mode, tokens []uint32) error {
+func (m *mockTickerConn) SetMode(mode brokerticker.Mode, tokens []uint32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cp := make([]uint32, len(tokens))
 	copy(cp, tokens)
 	m.modeCalls = append(m.modeCalls, struct {
-		mode   kiteticker.Mode
+		mode   brokerticker.Mode
 		tokens []uint32
 	}{mode: mode, tokens: cp})
 	return m.setModeErr
 }
 
 // newTestUserTickerWithMockConn creates a UserTicker backed by a mockTickerConn
-// instead of a real kiteticker.Ticker, allowing connected-path testing.
-func newTestUserTickerWithMockConn(email string, subs map[uint32]kiteticker.Mode, conn *mockTickerConn) *UserTicker {
-	t := kiteticker.New("key", "tok")
+// instead of a real broker-agnostic ticker, allowing connected-path testing.
+// The Ticker field carries a real *zerodha.TickerAdapter (no live websocket
+// because tests never call Serve), satisfying the broker/ticker.Ticker port
+// type required by UserTicker.Ticker post the multi-broker port refactor.
+func newTestUserTickerWithMockConn(email string, subs map[uint32]brokerticker.Mode, conn *mockTickerConn) *UserTicker {
+	t := zerodha.NewTickerAdapter("key", "tok")
 	return &UserTicker{
 		Email:       email,
 		APIKey:      "key",
@@ -140,7 +145,7 @@ func TestWireCallbacksClosure_OnConnect(t *testing.T) {
 	t.Parallel()
 	svc, _ := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP}
 	mockConn := &mockTickerConn{}
 	ut := newTestUserTickerWithMockConn("closure-connect@test.com", subs, mockConn)
 
@@ -190,7 +195,10 @@ func TestWireCallbacksClosure_OnTick(t *testing.T) {
 	reg.mu.Unlock()
 	require.NotNil(t, fn)
 
-	tick := models.Tick{InstrumentToken: 999, LastPrice: 42.0}
+	// The hook now takes broker/ticker.Tick (not models.Tick); the
+	// closure inside wireCallbacks translates back to models.Tick via
+	// brokerToModelsTick before dispatching to the gotTick capture.
+	tick := brokerticker.Tick{InstrumentToken: 999, LastPrice: 42.0}
 	fn(tick)
 
 	mu.Lock()
@@ -305,7 +313,7 @@ func TestSubscribe_Connected_Success(t *testing.T) {
 	svc, _ := newEdgeTestService(nil)
 
 	mockConn := &mockTickerConn{}
-	ut := newTestUserTickerWithMockConn("sub-conn@test.com", make(map[uint32]kiteticker.Mode), mockConn)
+	ut := newTestUserTickerWithMockConn("sub-conn@test.com", make(map[uint32]brokerticker.Mode), mockConn)
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -342,7 +350,7 @@ func TestSubscribe_Connected_SubscribeError(t *testing.T) {
 	svc, _ := newEdgeTestService(nil)
 
 	mockConn := &mockTickerConn{subscribeErr: errors.New("ws write fail")}
-	ut := newTestUserTickerWithMockConn("sub-conn-err@test.com", make(map[uint32]kiteticker.Mode), mockConn)
+	ut := newTestUserTickerWithMockConn("sub-conn-err@test.com", make(map[uint32]brokerticker.Mode), mockConn)
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -371,7 +379,7 @@ func TestSubscribe_Connected_SetModeError(t *testing.T) {
 	svc, _ := newEdgeTestService(nil)
 
 	mockConn := &mockTickerConn{setModeErr: errors.New("mode write fail")}
-	ut := newTestUserTickerWithMockConn("sub-mode-err@test.com", make(map[uint32]kiteticker.Mode), mockConn)
+	ut := newTestUserTickerWithMockConn("sub-mode-err@test.com", make(map[uint32]brokerticker.Mode), mockConn)
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -398,7 +406,7 @@ func TestUnsubscribe_Connected_Success(t *testing.T) {
 	t.Parallel()
 	svc, _ := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP, 260105: ModeQuote}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP, 260105: ModeQuote}
 	mockConn := &mockTickerConn{}
 	ut := newTestUserTickerWithMockConn("unsub-conn@test.com", subs, mockConn)
 	ut.mu.Lock()
@@ -434,7 +442,7 @@ func TestUnsubscribe_Connected_Error(t *testing.T) {
 	t.Parallel()
 	svc, _ := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP}
 	mockConn := &mockTickerConn{unsubErr: errors.New("unsub write fail")}
 	ut := newTestUserTickerWithMockConn("unsub-conn-err@test.com", subs, mockConn)
 	ut.mu.Lock()
@@ -464,16 +472,17 @@ func TestUnsubscribe_Connected_Error(t *testing.T) {
 
 func TestCallbackRegistrar_InterfaceCompliance(t *testing.T) {
 	t.Parallel()
-	// Verify *kiteticker.Ticker satisfies callbackRegistrar
-	var _ callbackRegistrar = kiteticker.New("k", "t")
+	// Verify *zerodha.TickerAdapter (the production broker/ticker.Ticker
+	// implementation) satisfies callbackRegistrar
+	var _ callbackRegistrar = zerodha.NewTickerAdapter("k", "t")
 	// Verify mock satisfies it too
 	var _ callbackRegistrar = &mockCallbackRegistrar{}
 }
 
 func TestTickerConn_InterfaceCompliance(t *testing.T) {
 	t.Parallel()
-	// Verify *kiteticker.Ticker satisfies tickerConn
-	var _ tickerConn = kiteticker.New("k", "t")
+	// Verify *zerodha.TickerAdapter satisfies tickerConn
+	var _ tickerConn = zerodha.NewTickerAdapter("k", "t")
 	// Verify mock satisfies it too
 	var _ tickerConn = &mockTickerConn{}
 }
@@ -500,7 +509,7 @@ func TestWireCallbacksClosure_OnTick_NilCallback(t *testing.T) {
 
 	// Should not panic
 	assert.NotPanics(t, func() {
-		fn(models.Tick{InstrumentToken: 1})
+		fn(brokerticker.Tick{InstrumentToken: 1})
 	})
 }
 
@@ -511,7 +520,7 @@ func TestWireCallbacksClosure_OnConnect_NoSubs(t *testing.T) {
 	svc, _ := newEdgeTestService(nil)
 
 	mockConn := &mockTickerConn{}
-	ut := newTestUserTickerWithMockConn("no-subs@test.com", make(map[uint32]kiteticker.Mode), mockConn)
+	ut := newTestUserTickerWithMockConn("no-subs@test.com", make(map[uint32]brokerticker.Mode), mockConn)
 
 	reg := &mockCallbackRegistrar{}
 	svc.wireCallbacks(ut, reg)
@@ -539,7 +548,7 @@ func TestSubscribe_Connected_MultipleTokensMultipleModes(t *testing.T) {
 	svc, _ := newEdgeTestService(nil)
 
 	mockConn := &mockTickerConn{}
-	ut := newTestUserTickerWithMockConn("multi-mode@test.com", make(map[uint32]kiteticker.Mode), mockConn)
+	ut := newTestUserTickerWithMockConn("multi-mode@test.com", make(map[uint32]brokerticker.Mode), mockConn)
 	ut.mu.Lock()
 	ut.Connected = true
 	ut.mu.Unlock()
@@ -571,7 +580,7 @@ func TestUnsubscribe_Connected_MultipleTokens(t *testing.T) {
 	t.Parallel()
 	svc, _ := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{100: ModeLTP, 200: ModeQuote, 300: ModeFull}
+	subs := map[uint32]brokerticker.Mode{100: ModeLTP, 200: ModeQuote, 300: ModeFull}
 	mockConn := &mockTickerConn{}
 	ut := newTestUserTickerWithMockConn("multi-unsub@test.com", subs, mockConn)
 	ut.mu.Lock()
@@ -604,7 +613,7 @@ func TestWireCallbacksClosure_OnConnect_WithSubscribeError(t *testing.T) {
 	t.Parallel()
 	svc, buf := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{256265: ModeLTP}
+	subs := map[uint32]brokerticker.Mode{256265: ModeLTP}
 	mockConn := &mockTickerConn{subscribeErr: errors.New("sub fail")}
 	ut := newTestUserTickerWithMockConn("closure-sub-err@test.com", subs, mockConn)
 
@@ -629,7 +638,7 @@ func TestWireCallbacksClosure_OnConnect_MultiMode(t *testing.T) {
 	t.Parallel()
 	svc, _ := newEdgeTestService(nil)
 
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		100: ModeLTP,
 		200: ModeQuote,
 		300: ModeFull,
@@ -657,7 +666,7 @@ func TestWireCallbacksClosure_OnConnect_MultiMode(t *testing.T) {
 	// 3 SetMode calls (LTP, Quote, Full)
 	assert.Len(t, mockConn.modeCalls, 3)
 
-	modeMap := make(map[kiteticker.Mode][]uint32)
+	modeMap := make(map[brokerticker.Mode][]uint32)
 	for _, mc := range mockConn.modeCalls {
 		modeMap[mc.mode] = append(modeMap[mc.mode], mc.tokens...)
 	}

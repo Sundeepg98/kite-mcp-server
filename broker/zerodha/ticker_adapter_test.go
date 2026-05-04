@@ -7,6 +7,7 @@ package zerodha
 // adapter's translation layer.
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -23,9 +24,14 @@ import (
 // satisfies the package-internal kiteSubscriber + kiteCallbackRegistrar +
 // kiteTickRegistrar interfaces; the helper passes it three times
 // because in production *kiteticker.Ticker is the same value for
-// all three roles.
+// all three roles. serveFn is a no-op (tests don't drive a real
+// transport).
 func newTickerAdapterFromFake(fake *fakeKiteSubscriber) *TickerAdapter {
-	return newTickerAdapter(fake, fake, fake, func() error { return nil })
+	return newTickerAdapter(
+		fake, fake, fake,
+		func(context.Context) {},
+		func() error { return nil },
+	)
 }
 
 // OnConnect / OnError / OnClose / OnReconnect / OnNoReconnect on

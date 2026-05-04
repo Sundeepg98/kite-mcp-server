@@ -7,8 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
+
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
 )
 
 // --- wireCallbacks coverage ---
@@ -21,7 +22,7 @@ func TestWireCallbacks_OnConnect(t *testing.T) {
 	svc := New(Config{})
 	email := "wire-connect@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", map[uint32]kiteticker.Mode{
+	ut := newTestUserTicker(email, "key", "tok", map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 	})
 
@@ -53,7 +54,7 @@ func TestWireCallbacks_OnClose(t *testing.T) {
 	svc := New(Config{})
 	email := "wire-close@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	svc.wireCallbacks(ut, ut.Ticker)
 
 	// Simulate connected state then close.
@@ -76,7 +77,7 @@ func TestWireCallbacks_OnNoReconnect(t *testing.T) {
 	svc := New(Config{})
 	email := "wire-noreconnect@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	svc.wireCallbacks(ut, ut.Ticker)
 
 	// Simulate connected then NoReconnect.
@@ -106,7 +107,7 @@ func TestSubscribe_WithConnectedTicker(t *testing.T) {
 	// subscribe-store-then-apply-on-connect path with a disconnected ticker.
 	// The connected path (ws.Subscribe + SetMode) is tested indirectly via
 	// the integration tests with real tickers.
-	subs := make(map[uint32]kiteticker.Mode)
+	subs := make(map[uint32]brokerticker.Mode)
 	ut := newTestUserTicker(email, "key", "tok", subs)
 	ut.Connected = false
 
@@ -132,7 +133,7 @@ func TestSubscribe_WithDisconnectedTicker(t *testing.T) {
 	svc := New(Config{})
 	email := "sub-disconnected@test.com"
 
-	subs := make(map[uint32]kiteticker.Mode)
+	subs := make(map[uint32]brokerticker.Mode)
 	ut := newTestUserTicker(email, "key", "tok", subs)
 	ut.Connected = false // Not connected
 
@@ -164,7 +165,7 @@ func TestUnsubscribe_WithConnectedTicker(t *testing.T) {
 	// The connected=true path exercises ut.Ticker.Unsubscribe which
 	// panics without a real WebSocket. We test the subscription removal
 	// logic with a disconnected ticker instead.
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 		260105: ModeQuote,
 	}
@@ -193,7 +194,7 @@ func TestUnsubscribe_WithDisconnectedTicker(t *testing.T) {
 	svc := New(Config{})
 	email := "unsub-disconnected@test.com"
 
-	subs := map[uint32]kiteticker.Mode{
+	subs := map[uint32]brokerticker.Mode{
 		256265: ModeLTP,
 	}
 	ut := newTestUserTicker(email, "key", "tok", subs)
@@ -232,7 +233,7 @@ func TestOnTickCallback(t *testing.T) {
 
 	// Wire callbacks on a test ticker.
 	email := "tick-cb@test.com"
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	svc.wireCallbacks(ut, ut.Ticker)
 
 	// Manually invoke the onTick callback as if a tick arrived.
@@ -255,7 +256,7 @@ func TestStart_DuplicateWhenConnected(t *testing.T) {
 	email := "dup-connected@test.com"
 
 	// Inject a connected ticker.
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	ut.Connected = true
 
 	svc.mu.Lock()
@@ -276,7 +277,7 @@ func TestGetStatus_Uptime(t *testing.T) {
 	svc := New(Config{})
 	email := "uptime@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	ut.StartedAt = time.Now().Add(-5 * time.Minute)
 	ut.Connected = true
 
@@ -299,11 +300,11 @@ func TestListAll_MultipleUsers(t *testing.T) {
 	svc := New(Config{})
 
 	svc.mu.Lock()
-	svc.tickers["user1@test.com"] = newTestUserTicker("user1@test.com", "k", "t", map[uint32]kiteticker.Mode{
+	svc.tickers["user1@test.com"] = newTestUserTicker("user1@test.com", "k", "t", map[uint32]brokerticker.Mode{
 		1: ModeLTP,
 		2: ModeQuote,
 	})
-	svc.tickers["user2@test.com"] = newTestUserTicker("user2@test.com", "k", "t", make(map[uint32]kiteticker.Mode))
+	svc.tickers["user2@test.com"] = newTestUserTicker("user2@test.com", "k", "t", make(map[uint32]brokerticker.Mode))
 	svc.mu.Unlock()
 	defer svc.Shutdown()
 
@@ -326,7 +327,7 @@ func TestSubscribe_OverwriteMode(t *testing.T) {
 	svc := New(Config{})
 	email := "mode-overwrite@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	ut.Connected = false
 
 	svc.mu.Lock()
@@ -379,7 +380,7 @@ func TestConcurrent_SubscribeUnsubscribe(t *testing.T) {
 	svc := New(Config{})
 	email := "concurrent-sub@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	ut.Connected = false
 
 	svc.mu.Lock()
@@ -414,7 +415,7 @@ func TestUpdateToken_EmptySubscriptions(t *testing.T) {
 	svc := New(Config{})
 	email := "empty-subs@test.com"
 
-	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]kiteticker.Mode))
+	ut := newTestUserTicker(email, "key", "tok", make(map[uint32]brokerticker.Mode))
 	svc.mu.Lock()
 	svc.tickers[email] = ut
 	svc.mu.Unlock()
@@ -433,7 +434,7 @@ func TestUpdateToken_EmptySubscriptions(t *testing.T) {
 
 func TestModeConstants(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, kiteticker.ModeLTP, ModeLTP)
-	assert.Equal(t, kiteticker.ModeQuote, ModeQuote)
-	assert.Equal(t, kiteticker.ModeFull, ModeFull)
+	assert.Equal(t, brokerticker.ModeLTP, ModeLTP)
+	assert.Equal(t, brokerticker.ModeQuote, ModeQuote)
+	assert.Equal(t, brokerticker.ModeFull, ModeFull)
 }

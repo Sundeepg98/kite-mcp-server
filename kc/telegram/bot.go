@@ -16,7 +16,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
+	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
@@ -80,7 +80,7 @@ type PaperEngineLookup interface {
 // /setalert to auto-subscribe instruments for real-time monitoring.
 type TickerLookup interface {
 	IsRunning(email string) bool
-	Subscribe(email string, tokens []uint32, mode kiteticker.Mode) error
+	Subscribe(email string, tokens []uint32, mode brokerticker.Mode) error
 }
 
 // KiteManager abstracts the kc.Manager methods needed by the bot handler.
