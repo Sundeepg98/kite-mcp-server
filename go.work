@@ -67,6 +67,7 @@ use (
 	./kc/legaldocs
 	./kc/logger
 	./kc/money
+	./kc/registry
 	./kc/riskguard
 	./kc/templates
 	./kc/watchlist
