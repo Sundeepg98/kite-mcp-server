@@ -73,6 +73,7 @@ use (
 	./kc/riskguard
 	./kc/scheduler
 	./kc/templates
+	./kc/ticker
 	./kc/users
 	./kc/watchlist
 )
