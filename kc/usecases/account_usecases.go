@@ -49,7 +49,7 @@ type AccountDependencies struct {
 	WatchlistStore  WatchlistStore
 	TrailingStops   TrailingStopManager
 	PaperEngine     PaperEngine
-	UserStore       UserStore
+	UserStore       AdminUserStore
 	Sessions        SessionTerminator
 }
 

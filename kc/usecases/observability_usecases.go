@@ -16,24 +16,28 @@ import (
 // their logger field as the kc/logger.Logger port; constructors
 // retain *slog.Logger and convert via logport.NewSlog.
 
-// AuditReader provides read-only query access for audit records (ISP-narrowed).
-type AuditReader interface {
+// MetricsAuditReader provides read-only query access for audit metrics
+// (ISP-narrowed for observability use cases).
+//
+// F2 close-out (Phase B/D): renamed from usecases.AuditReader to
+// disambiguate from kc.AuditReader (9-method canonical including
+// per-user List/ListOrders/GetOrderAttribution/GetStats/GetToolCounts/
+// VerifyChain). The usecases version surfaces only the global-metrics
+// subset that ServerMetricsUseCase actually queries — narrowing keeps
+// the use case's port surface to exactly what it needs.
+//
+// AuditWriter and AuditStore (the composite) were deleted as part of
+// F2 — both were declared but never referenced as field types or
+// function parameters anywhere in kc/usecases. Pure dead code from
+// an earlier ISP cleanup that didn't follow through to consumers.
+//
+// *kc.audit.Store satisfies this narrow port structurally — see
+// kc/interfaces.go:127-133 for the wider canonical's matching
+// methods.
+type MetricsAuditReader interface {
 	GetGlobalStats(since time.Time) (*audit.Stats, error)
 	GetToolMetrics(since time.Time) ([]audit.ToolMetric, error)
 	GetTopErrorUsers(since time.Time, limit int) ([]audit.UserErrorCount, error)
-}
-
-// AuditWriter provides audit record write operations (ISP-narrowed).
-// Retained here so use cases which write can depend on a narrow contract.
-type AuditWriter interface {
-	Enqueue(entry *audit.ToolCall)
-	Record(entry *audit.ToolCall) error
-}
-
-// AuditStore is the composite interface; prefer AuditReader / AuditWriter directly.
-type AuditStore interface {
-	AuditReader
-	AuditWriter
 }
 
 // ServerMetricsResult holds the structured result of a server metrics query.
@@ -48,12 +52,12 @@ type ServerMetricsResult struct {
 
 // ServerMetricsUseCase retrieves server observability metrics.
 type ServerMetricsUseCase struct {
-	auditStore AuditReader
+	auditStore MetricsAuditReader
 	logger     logport.Logger
 }
 
 // NewServerMetricsUseCase creates a ServerMetricsUseCase with dependencies injected.
-func NewServerMetricsUseCase(store AuditReader, logger *slog.Logger) *ServerMetricsUseCase {
+func NewServerMetricsUseCase(store MetricsAuditReader, logger *slog.Logger) *ServerMetricsUseCase {
 	return &ServerMetricsUseCase{auditStore: store, logger: logport.NewSlog(logger)}
 }
 

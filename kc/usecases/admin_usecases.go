@@ -13,31 +13,48 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 )
 
-// UserReader provides read-only access to user data (ISP-narrowed).
-type UserReader interface {
+// AdminUserReader provides read-only access to user data (ISP-narrowed).
+//
+// F2 close-out (Phase B/D): renamed from usecases.UserReader to
+// disambiguate from kc.UserReader (10-method canonical) — the
+// usecases version is a 3-method narrow subset for admin tooling
+// only. Per the redundancy audit's empirical finding: same name,
+// different signatures = future-maintainer confusion. *kc.Manager
+// (and kc.UserStoreInterface implementations) satisfy this narrow
+// port structurally — no adapter layer needed.
+//
+// UserAuthChecker was deleted (was dead code — declared but never
+// referenced as a field type or function parameter; only embedded in
+// the unused UserStore composite via UserAuthChecker.IsAdmin which
+// no admin use case actually called).
+type AdminUserReader interface {
 	List() []*users.User
 	Get(email string) (*users.User, bool)
 	Count() int
 }
 
-// UserWriter provides write operations on user data (ISP-narrowed).
-type UserWriter interface {
+// AdminUserWriter provides write operations on user data (ISP-narrowed).
+//
+// F2 close-out: renamed from usecases.UserWriter (was a 3-method
+// narrow subset of kc.UserWriter's 8). Same rename rationale as
+// AdminUserReader — disambiguate from the wide kc canonical.
+type AdminUserWriter interface {
 	UpdateStatus(email, status string) error
 	UpdateRole(email, role string) error
 	Create(u *users.User) error
 }
 
-// UserAuthChecker provides authentication/authorization checks (ISP-narrowed).
-type UserAuthChecker interface {
-	IsAdmin(email string) bool
-}
-
-// UserStore is the composite interface for use cases that need both reads and writes.
-// Prefer UserReader or UserWriter directly when possible (Interface Segregation Principle).
-type UserStore interface {
-	UserReader
-	UserWriter
-	UserAuthChecker
+// AdminUserStore is the composite interface for admin use cases that
+// need both reads and writes. Prefer AdminUserReader or AdminUserWriter
+// directly when possible (Interface Segregation Principle).
+//
+// F2 close-out: renamed from usecases.UserStore. UserAuthChecker
+// embedding removed — no admin use case calls IsAdmin/HasPassword/
+// VerifyPassword on the composite (they route through riskguard /
+// session-svc instead).
+type AdminUserStore interface {
+	AdminUserReader
+	AdminUserWriter
 }
 
 // RiskGuardService abstracts riskguard for admin use cases.
@@ -61,12 +78,12 @@ type SessionTerminator interface {
 
 // AdminListUsersUseCase retrieves a paginated list of users.
 type AdminListUsersUseCase struct {
-	userStore UserReader
+	userStore AdminUserReader
 	logger    logport.Logger
 }
 
 // NewAdminListUsersUseCase creates an AdminListUsersUseCase with dependencies injected.
-func NewAdminListUsersUseCase(store UserReader, logger *slog.Logger) *AdminListUsersUseCase {
+func NewAdminListUsersUseCase(store AdminUserReader, logger *slog.Logger) *AdminListUsersUseCase {
 	return &AdminListUsersUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
@@ -109,13 +126,13 @@ func (uc *AdminListUsersUseCase) Execute(ctx context.Context, query cqrs.AdminLi
 
 // AdminGetUserUseCase retrieves detailed user information.
 type AdminGetUserUseCase struct {
-	userStore UserReader
+	userStore AdminUserReader
 	riskguard RiskGuardService
 	logger    logport.Logger
 }
 
 // NewAdminGetUserUseCase creates an AdminGetUserUseCase with dependencies injected.
-func NewAdminGetUserUseCase(store UserReader, rg RiskGuardService, logger *slog.Logger) *AdminGetUserUseCase {
+func NewAdminGetUserUseCase(store AdminUserReader, rg RiskGuardService, logger *slog.Logger) *AdminGetUserUseCase {
 	return &AdminGetUserUseCase{userStore: store, riskguard: rg, logger: logport.NewSlog(logger)}
 }
 
@@ -210,7 +227,7 @@ func (uc *AdminGetRiskStatusUseCase) Execute(ctx context.Context, query cqrs.Adm
 
 // AdminSuspendUserUseCase suspends a user account.
 type AdminSuspendUserUseCase struct {
-	userStore  UserStore
+	userStore  AdminUserStore
 	riskguard  RiskGuardService
 	sessions   SessionTerminator
 	events     *domain.EventDispatcher
@@ -219,7 +236,7 @@ type AdminSuspendUserUseCase struct {
 
 // NewAdminSuspendUserUseCase creates an AdminSuspendUserUseCase with dependencies injected.
 func NewAdminSuspendUserUseCase(
-	store UserStore,
+	store AdminUserStore,
 	rg RiskGuardService,
 	sessions SessionTerminator,
 	events *domain.EventDispatcher,
@@ -297,12 +314,12 @@ func (uc *AdminSuspendUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminSu
 
 // AdminActivateUserUseCase reactivates a user account.
 type AdminActivateUserUseCase struct {
-	userStore UserWriter
+	userStore AdminUserWriter
 	logger    logport.Logger
 }
 
 // NewAdminActivateUserUseCase creates an AdminActivateUserUseCase with dependencies injected.
-func NewAdminActivateUserUseCase(store UserWriter, logger *slog.Logger) *AdminActivateUserUseCase {
+func NewAdminActivateUserUseCase(store AdminUserWriter, logger *slog.Logger) *AdminActivateUserUseCase {
 	return &AdminActivateUserUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
@@ -323,12 +340,12 @@ func (uc *AdminActivateUserUseCase) Execute(ctx context.Context, cmd cqrs.AdminA
 
 // AdminChangeRoleUseCase changes a user's role.
 type AdminChangeRoleUseCase struct {
-	userStore UserStore
+	userStore AdminUserStore
 	logger    logport.Logger
 }
 
 // NewAdminChangeRoleUseCase creates an AdminChangeRoleUseCase with dependencies injected.
-func NewAdminChangeRoleUseCase(store UserStore, logger *slog.Logger) *AdminChangeRoleUseCase {
+func NewAdminChangeRoleUseCase(store AdminUserStore, logger *slog.Logger) *AdminChangeRoleUseCase {
 	return &AdminChangeRoleUseCase{userStore: store, logger: logport.NewSlog(logger)}
 }
 
