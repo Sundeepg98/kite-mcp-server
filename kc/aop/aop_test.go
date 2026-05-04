@@ -1,3 +1,5 @@
+//go:build research
+
 package aop_test
 
 import (

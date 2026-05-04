@@ -1,5 +1,28 @@
+//go:build research
+
 // Package aop implements Aspect-Oriented Programming via reflection
 // for the kite-mcp-server codebase.
+//
+// # BUILD GATE — research tag only
+//
+// This package is gated behind the `research` build tag (F7 close-
+// out). It is EXCLUDED from default `go build ./...` and
+// `go test ./...` runs. To compile or test it locally:
+//
+//	go build -tags=research ./kc/aop/...
+//	go test  -tags=research ./kc/aop/...
+//
+// The CI workflow runs the research-tagged tests on a single
+// ubuntu-latest matrix entry (.github/workflows/ci.yml) so coverage
+// is preserved without paying the reflection-AOP overhead on every
+// production build/test cycle. Production binaries (Fly.io
+// Dockerfile + Dockerfile.selfhost) link without this package.
+//
+// Empirical zero-production-callers verified at HEAD 8308cdb:
+// `grep -r 'kite-mcp-server/kc/aop' --include='*.go'` returned
+// only the three intra-package _test.go files. Adding a non-test
+// production caller without retiring the build tag (and updating
+// ADR-0008) is a programmer error — the build will fail.
 //
 // # WARNING — non-idiomatic Go
 //

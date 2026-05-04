@@ -1,3 +1,5 @@
+//go:build research
+
 package aop
 
 // example_audit_riskguard.go — runnable demonstration of the AOP
