@@ -61,6 +61,7 @@ use (
 	./broker
 	./kc/audit
 	./kc/billing
+	./kc/decorators
 	./kc/i18n
 	./kc/isttz
 	./kc/legaldocs
