@@ -72,10 +72,10 @@ func (a *paperLTPAdapter) GetLTP(instruments ...string) (map[string]float64, err
 	}
 	for _, sess := range sessions {
 		data, ok := sess.Data.(*kc.KiteSessionData)
-		if !ok || data == nil || data.Kite == nil || data.Kite.Client == nil {
+		if !ok || data == nil || data.Kite == nil {
 			continue
 		}
-		ltps, err := data.Kite.Client.GetLTP(instruments...)
+		ltps, err := data.Kite.GetLTP(instruments...)
 		if err != nil {
 			continue
 		}

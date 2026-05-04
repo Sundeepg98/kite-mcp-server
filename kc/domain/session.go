@@ -4,8 +4,42 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
+
+// KiteSessionData is the transient runtime state of an authenticated
+// MCP session: the broker SDK handle, the broker-port adapter, and
+// the OAuth-resolved email. It lives in kc/domain (not kc parent) so
+// kc/ports/session.go can reference it without importing the kc parent
+// package — the Anchor 5 PR 5.6 / Wave B-1 inversion goal.
+//
+// Anchor 5 PR 5.6 (per .research/anchor-5-prs-design.md): the original
+// declaration in kc/manager.go:239 used `Kite *KiteConnect` where
+// kc.KiteConnect was a thin one-field wrapper around zerodha.KiteSDK
+// (see prior kc/manager.go:205-208). The wrapper carried no auth/
+// retry/caching/telemetry logic of its own, so this PR collapsed the
+// indirection: callsites that previously did `kiteSession.Kite.Client.
+// METHOD(...)` now do `kiteSession.Kite.METHOD(...)` — saving one
+// dereference and severing the kc-parent dependency. kc/manager.go
+// keeps `type KiteSessionData = domain.KiteSessionData` as a backward-
+// compatibility alias so the 56-file reverse-dep set continues to
+// compile via the legacy kc.KiteSessionData reference path.
+//
+// The field types reach only already-extracted modules:
+//   - zerodha.KiteSDK lives in github.com/zerodha/kite-mcp-server/
+//     broker/zerodha (broker module — extracted at commit 5d74acf)
+//   - broker.Client lives in github.com/zerodha/kite-mcp-server/
+//     broker (same module)
+//
+// Both are reached from kc/domain via the existing broker require/
+// replace in kc/domain/go.mod (no new replaces needed).
+type KiteSessionData struct {
+	Kite   zerodha.KiteSDK // authenticated Kite SDK handle (interface — nil-checkable)
+	Broker broker.Client   // broker-agnostic interface (wraps Kite via zerodha adapter)
+	Email  string          // Google-authenticated email (empty for local dev)
+}
 
 // SessionID is the value object for an MCP session identifier. It is always
 // non-empty — the NewSessionID constructor is the only way to produce a valid

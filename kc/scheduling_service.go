@@ -31,7 +31,7 @@ func (s *SchedulingService) initialize() {
 func (s *SchedulingService) kiteSessionCleanupHook(session *MCPSession) {
 	if kiteData, ok := session.Data.(*KiteSessionData); ok && kiteData != nil && kiteData.Kite != nil {
 		s.m.Logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
-		if _, err := kiteData.Kite.Client.InvalidateAccessToken(); err != nil {
+		if _, err := kiteData.Kite.InvalidateAccessToken(); err != nil {
 			s.m.Logger.Warn("Failed to invalidate access token", "session_id", session.ID, "error", err)
 		}
 	}

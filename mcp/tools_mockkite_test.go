@@ -204,7 +204,7 @@ func newMockKiteManager(t *testing.T, mockURL string) *kc.Manager {
 	kiteClient.SetBaseURI(mockURL)
 
 	kd := &kc.KiteSessionData{
-		Kite:   &kc.KiteConnect{Client: kiteClient},
+		Kite:   kiteClient,
 		Broker: zerodha.New(kiteClient),
 		Email:  mockEmail,
 	}
@@ -244,11 +244,11 @@ func callMockTool(t *testing.T, mgr *kc.Manager, toolName string, args map[strin
 
 // ── Read tools — pagination success paths ──────────────────────────────────
 
-// Tools that use session.Kite.Client or session.Broker directly work with the
+// Tools that use session.Kite or session.Broker directly work with the
 // mock Kite server. Tools that use manager.SessionSvc() use-case pattern create
 // fresh clients from credentials and can't be redirected to the mock.
 
-// -- Tools using session.Kite.Client directly --
+// -- Tools using session.Kite directly --
 
 func TestMock_GetLTP_UseCasePath(t *testing.T) {
 	t.Parallel()

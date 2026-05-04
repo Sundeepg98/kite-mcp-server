@@ -1335,8 +1335,8 @@ func TestPortfolioService_BrokerCallErrors(t *testing.T) {
 	// Create a session with a Kite client pointed at the failing mock
 	sid := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeee90"
 	kd, _, _ := m.GetOrCreateSessionWithEmail(sid, "broker-fail@test.com")
-	kd.Kite.Client.SetBaseURI(ts.URL)
-	kd.Kite.Client.SetAccessToken("fake-token")
+	kd.Kite.SetBaseURI(ts.URL)
+	kd.Kite.SetAccessToken("fake-token")
 
 	// Store the token so GetBrokerForEmail can find it
 	m.TokenStore().Set("broker-fail@test.com", &KiteTokenEntry{
@@ -1382,8 +1382,8 @@ func TestOrderService_BrokerCallErrors(t *testing.T) {
 	m := newTestManagerWithDB(t)
 	sid := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeee91"
 	kd, _, _ := m.GetOrCreateSessionWithEmail(sid, "order-fail@test.com")
-	kd.Kite.Client.SetBaseURI(ts.URL)
-	kd.Kite.Client.SetAccessToken("fake-token")
+	kd.Kite.SetBaseURI(ts.URL)
+	kd.Kite.SetAccessToken("fake-token")
 	m.TokenStore().Set("order-fail@test.com", &KiteTokenEntry{AccessToken: "fake-token"})
 
 	os := NewOrderService(m.SessionSvc(), testLogger())
@@ -1864,7 +1864,7 @@ func TestCompleteSession_WithMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreateSessionWithEmail: %v", err)
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	err = ss.CompleteSession("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeec0", "mock-request-token")
 	if err != nil {

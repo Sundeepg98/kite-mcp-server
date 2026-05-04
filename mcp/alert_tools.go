@@ -177,7 +177,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
 			}
 			ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
-				return kiteSession.Kite.Client.GetLTP(instrumentID)
+				return kiteSession.Kite.GetLTP(instrumentID)
 			}, 2)
 			if ltpErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch current LTP for reference price: %s", ltpErr)), nil

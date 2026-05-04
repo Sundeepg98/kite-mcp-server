@@ -405,7 +405,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			kiteSession, _, clientErr := handler.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr == nil {
 				ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
-					return kiteSession.Kite.Client.GetLTP(instrIDs...)
+					return kiteSession.Kite.GetLTP(instrIDs...)
 				}, 2)
 				if ltpErr == nil {
 					for key, data := range ltpResp {

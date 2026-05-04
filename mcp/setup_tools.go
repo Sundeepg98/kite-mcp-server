@@ -341,7 +341,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Check cached token (per-email, Fly.io multi-user flow)
 		if isNew && email != "" && handler.deps.Credentials.HasCachedToken(email) {
-			profile, err := kiteSession.Kite.Client.GetUserProfile()
+			profile, err := kiteSession.Kite.GetUserProfile()
 			if err == nil {
 				handler.LoggerPort().Info(ctx, "Cached token valid", "session_id", mcpSessionID, "email", email, "user", profile.UserName)
 				return &mcp.CallToolResult{
@@ -366,7 +366,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		if isNew && handler.deps.Credentials.HasPreAuth() {
 			// Pre-auth session — verify the token works
-			profile, err := kiteSession.Kite.Client.GetUserProfile()
+			profile, err := kiteSession.Kite.GetUserProfile()
 			if err == nil {
 				handler.LoggerPort().Info(ctx, "Pre-auth token valid", "session_id", mcpSessionID, "user", profile.UserName)
 				return &mcp.CallToolResult{
@@ -384,7 +384,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if !isNew {
 			// We have an existing session, verify it works by getting the profile
 			handler.LoggerPort().Debug(ctx, "Found existing Kite session, verifying with profile check", "session_id", mcpSessionID)
-			profile, err := kiteSession.Kite.Client.GetUserProfile()
+			profile, err := kiteSession.Kite.GetUserProfile()
 			if err != nil {
 				handler.LoggerPort().Warn(ctx, "Kite profile check failed, clearing session data", "session_id", mcpSessionID, "error", err)
 				// If we are still getting an error, lets clear session data and

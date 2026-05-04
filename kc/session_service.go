@@ -131,7 +131,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 		stubKite.Client.SetBaseURI("http://localhost:1/dev-stub")
 		ss.logger.Info("DEV_MODE: created mock broker session with stub Kite client", "session_id", sessionID, "email", email)
 		return &KiteSessionData{
-			Kite:   stubKite,
+			Kite:   stubKite.Client,
 			Broker: mockClient,
 			Email:  email,
 		}
@@ -141,7 +141,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 
 	kc := NewKiteConnect(apiKey)
 	kd := &KiteSessionData{
-		Kite:   kc,
+		Kite:   kc.Client,
 		Broker: zerodha.NewFromSDK(kc.Client),
 		Email:  email,
 	}
@@ -149,7 +149,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 	// Priority 1: Per-email cached token (Fly.io multi-user)
 	if email != "" {
 		if entry, ok := ss.tokenStore.Get(email); ok {
-			kd.Kite.Client.SetAccessToken(entry.AccessToken)
+			kd.Kite.SetAccessToken(entry.AccessToken)
 			ss.logger.Debug("Applied cached Kite token for user", "session_id", sessionID, "email", email, "user", entry.UserName)
 			return kd
 		}
@@ -157,7 +157,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 
 	// Priority 2: Global pre-auth token (local dev / env var)
 	if ss.credentialSvc.HasPreAuth() {
-		kd.Kite.Client.SetAccessToken(ss.credentialSvc.accessToken)
+		kd.Kite.SetAccessToken(ss.credentialSvc.accessToken)
 		ss.logger.Debug("Pre-set access token for session", "session_id", sessionID)
 	}
 	return kd
@@ -177,7 +177,7 @@ func (ss *SessionService) extractKiteSessionData(data any, sessionID string) (*K
 func (ss *SessionService) kiteSessionCleanupHook(session *MCPSession) {
 	if kiteData, ok := session.Data.(*KiteSessionData); ok && kiteData != nil && kiteData.Kite != nil {
 		ss.logger.Debug("Cleaning up Kite session for MCP session ID", "session_id", session.ID)
-		if _, err := kiteData.Kite.Client.InvalidateAccessToken(); err != nil {
+		if _, err := kiteData.Kite.InvalidateAccessToken(); err != nil {
 			ss.logger.Warn("Failed to invalidate access token", "session_id", session.ID, "error", err)
 		}
 	}
@@ -220,16 +220,17 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 			resolvedEmail = kiteData.Email
 		}
 		ss.logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
-		kiteData.Kite = NewKiteConnect(ss.credentialSvc.GetAPIKeyForEmail(resolvedEmail))
-		kiteData.Broker = zerodha.NewFromSDK(kiteData.Kite.Client)
+		restoredKite := NewKiteConnect(ss.credentialSvc.GetAPIKeyForEmail(resolvedEmail))
+		kiteData.Kite = restoredKite.Client
+		kiteData.Broker = zerodha.NewFromSDK(kiteData.Kite)
 		// Apply cached token if available
 		if resolvedEmail != "" {
 			if entry, ok := ss.tokenStore.Get(resolvedEmail); ok {
-				kiteData.Kite.Client.SetAccessToken(entry.AccessToken)
+				kiteData.Kite.SetAccessToken(entry.AccessToken)
 				ss.logger.Debug("Applied cached token to restored session", "session_id", mcpSessionID, "email", resolvedEmail)
 			}
 		} else if ss.credentialSvc.HasPreAuth() {
-			kiteData.Kite.Client.SetAccessToken(ss.credentialSvc.accessToken)
+			kiteData.Kite.SetAccessToken(ss.credentialSvc.accessToken)
 		}
 		// Treat as new session so WithSession runs the auth check
 		isNew = true
@@ -392,7 +393,7 @@ func (ss *SessionService) SessionLoginURL(mcpSessionID string) (string, error) {
 	}
 
 	redirectParams := url.QueryEscape(signedParams)
-	loginURL := kiteData.Kite.Client.GetLoginURL() + "&redirect_params=" + redirectParams
+	loginURL := kiteData.Kite.GetLoginURL() + "&redirect_params=" + redirectParams
 	ss.logger.Debug("Generated Kite login URL for MCP session", "session_id", mcpSessionID)
 
 	return loginURL, nil
@@ -456,14 +457,14 @@ func (ss *SessionService) CompleteSessionAndRotate(mcpSessionID, kiteRequestToke
 	}
 
 	ss.logger.Debug("Generating Kite session with request token")
-	userSess, err := kiteData.Kite.Client.GenerateSession(kiteRequestToken, apiSecret)
+	userSess, err := kiteData.Kite.GenerateSession(kiteRequestToken, apiSecret)
 	if err != nil {
 		ss.logger.Error("Failed to generate Kite session", "error", err)
 		return "", fmt.Errorf("failed to generate Kite session: %w", err)
 	}
 
 	ss.logger.Debug("Setting Kite access token for MCP session", "session_id", mcpSessionID)
-	kiteData.Kite.Client.SetAccessToken(userSess.AccessToken)
+	kiteData.Kite.SetAccessToken(userSess.AccessToken)
 
 	// Cache the token for future sessions by this user
 	if kiteData.Email != "" {

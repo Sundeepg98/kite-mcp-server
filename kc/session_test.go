@@ -73,7 +73,7 @@ func TestGenerateSession(t *testing.T) {
 
 func TestGenerateWithData(t *testing.T) {
 	manager := NewSessionRegistry(testLogger())
-	testData := &KiteSessionData{Kite: &KiteConnect{}}
+	testData := &KiteSessionData{Kite: NewKiteConnect("test_key").Client}
 
 	sessionID := manager.GenerateWithData(testData)
 
@@ -869,17 +869,17 @@ func TestSessionRegistry_TerminateByEmail(t *testing.T) {
 	// Set email on sessions via GetOrCreateSessionData
 	sm.GetOrCreateSessionData(id1, func() any {
 		kd := &KiteSessionData{Email: "user@example.com"}
-		kd.Kite = NewKiteConnect("test_key")
+		kd.Kite = NewKiteConnect("test_key").Client
 		return kd
 	})
 	sm.GetOrCreateSessionData(id2, func() any {
 		kd := &KiteSessionData{Email: "user@example.com"}
-		kd.Kite = NewKiteConnect("test_key")
+		kd.Kite = NewKiteConnect("test_key").Client
 		return kd
 	})
 	sm.GetOrCreateSessionData(id3, func() any {
 		kd := &KiteSessionData{Email: "other@example.com"}
-		kd.Kite = NewKiteConnect("test_key")
+		kd.Kite = NewKiteConnect("test_key").Client
 		return kd
 	})
 

@@ -35,7 +35,7 @@ func TestCompleteSession_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	// Complete the session
 	err = m.CompleteSession(sessionID, "mock-request-token")
@@ -61,7 +61,7 @@ func TestCompleteSession_WithEmailAndTokenCache(t *testing.T) {
 	if !isNew {
 		t.Error("Expected new session")
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	// Complete session
 	err = m.CompleteSession("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeee01", "mock-request-token")
@@ -126,7 +126,7 @@ func TestCompleteSession_GenerateSessionFails(t *testing.T) {
 	m, _ := newTestManager("test_key", "test_secret")
 	sessionID := m.GenerateSession()
 	kd, _ := m.GetSession(sessionID)
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	err := m.CompleteSession(sessionID, "bad-token")
 	if err == nil {
@@ -381,7 +381,7 @@ func TestHandleKiteCallback_FullSuccess(t *testing.T) {
 
 	// Point Kite at mock server
 	kd, _ := m.GetSession(sessionID)
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	// Sign the session ID for the callback
 	signedID := m.sessionSigner.SignSessionID(sessionID)
@@ -412,7 +412,7 @@ func TestHandleKiteCallback_CompleteSessionFails(t *testing.T) {
 	m := newTestManagerWithDB(t)
 	sessionID := m.GenerateSession()
 	kd, _ := m.GetSession(sessionID)
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	signedID := m.sessionSigner.SignSessionID(sessionID)
 	callbackURL := fmt.Sprintf("/callback?request_token=bad-token&session_id=%s", signedID)
@@ -1271,7 +1271,7 @@ func TestHandleKiteCallback_TemplateRenderFailure(t *testing.T) {
 
 	sessionID := m.GenerateSession()
 	kd, _ := m.GetSession(sessionID)
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	signedID := m.sessionSigner.SignSessionID(sessionID)
 	callbackURL := fmt.Sprintf("/callback?request_token=mock-token&session_id=%s", signedID)
@@ -1328,7 +1328,7 @@ func TestCompleteSessionAndRotate_GeneratesFreshID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	newID, err := m.CompleteSessionAndRotate(oldID, "mock-request-token")
 	if err != nil {
@@ -1360,7 +1360,7 @@ func TestCompleteSessionAndRotate_OldIDIsTerminated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 
 	if _, err := m.CompleteSessionAndRotate(oldID, "mock-request-token"); err != nil {
 		t.Fatalf("CompleteSessionAndRotate: %v", err)
@@ -1387,7 +1387,7 @@ func TestCompleteSessionAndRotate_NewIDHoldsKiteData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
-	kd.Kite.Client.SetBaseURI(ts.URL)
+	kd.Kite.SetBaseURI(ts.URL)
 	kd.Email = "alice@example.com"
 
 	newID, err := m.CompleteSessionAndRotate(oldID, "mock-request-token")

@@ -235,7 +235,7 @@ func newFactoryManager(t *testing.T, mockURL string) *kc.Manager {
 	kiteClient.SetBaseURI(mockURL)
 
 	kd := &kc.KiteSessionData{
-		Kite:   &kc.KiteConnect{Client: kiteClient},
+		Kite:   kiteClient,
 		Broker: zerodha.New(kiteClient),
 		Email:  factoryEmail,
 	}

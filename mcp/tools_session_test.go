@@ -199,8 +199,8 @@ func callToolNonDevMode(t *testing.T, mgr *kc.Manager, kiteBaseURL string, toolN
 	kiteSession, _, err := mgr.GetOrCreateSessionWithEmail(sessID, email)
 	require.NoError(t, err)
 	if kiteSession.Kite != nil {
-		kiteSession.Kite.Client.SetBaseURI(kiteBaseURL)
-		kiteSession.Kite.Client.SetAccessToken("mock_access_token")
+		kiteSession.Kite.SetBaseURI(kiteBaseURL)
+		kiteSession.Kite.SetAccessToken("mock_access_token")
 	}
 
 	for _, tool := range GetAllTools() {
@@ -222,7 +222,7 @@ func callToolNonDevMode(t *testing.T, mgr *kc.Manager, kiteBaseURL string, toolN
 // ---------------------------------------------------------------------------
 
 // TestWithSession_NonDevMode_CachedToken_Valid tests the cached token path in WithSession.
-// The use case layer creates its own broker client (not using session.Kite.Client),
+// The use case layer creates its own broker client (not using session.Kite),
 // so API calls will fail with auth errors. The key coverage is the WithSession branches.
 func TestWithSession_NonDevMode_CachedToken_Valid(t *testing.T) {
 	t.Parallel()
@@ -395,8 +395,8 @@ func TestWithSession_NonDevMode_ExpiredToken(t *testing.T) {
 
 	kiteSession, _, err := mgr.GetOrCreateSessionWithEmail(sessID, "expired@example.com")
 	require.NoError(t, err)
-	kiteSession.Kite.Client.SetBaseURI(ts.URL)
-	kiteSession.Kite.Client.SetAccessToken("expired_token")
+	kiteSession.Kite.SetBaseURI(ts.URL)
+	kiteSession.Kite.SetAccessToken("expired_token")
 
 	for _, tool := range GetAllTools() {
 		if tool.Tool().Name == "get_profile" {
@@ -464,8 +464,8 @@ func TestWithSession_NonDevMode_ExistingSession(t *testing.T) {
 
 	kiteSession, _, err := mgr.GetOrCreateSessionWithEmail(sessID, "session@example.com")
 	require.NoError(t, err)
-	kiteSession.Kite.Client.SetBaseURI(ts.URL)
-	kiteSession.Kite.Client.SetAccessToken("mock_access_token")
+	kiteSession.Kite.SetBaseURI(ts.URL)
+	kiteSession.Kite.SetAccessToken("mock_access_token")
 
 	ctx := context.Background()
 	ctx = oauth.ContextWithEmail(ctx, "session@example.com")
@@ -481,8 +481,8 @@ func TestWithSession_NonDevMode_ExistingSession(t *testing.T) {
 			assert.NotContains(t, resultTextSafe(t, result1), "log in first", "first call should not require login")
 
 			ks, _, _ := mgr.GetOrCreateSessionWithEmail(sessID, "session@example.com")
-			ks.Kite.Client.SetBaseURI(ts.URL)
-			ks.Kite.Client.SetAccessToken("mock_access_token")
+			ks.Kite.SetBaseURI(ts.URL)
+			ks.Kite.SetAccessToken("mock_access_token")
 
 			result2, err := tool.Handler(mgr)(ctx, req)
 			require.NoError(t, err)
@@ -653,8 +653,8 @@ func TestWithTokenRefresh_StaleTokenStillValid(t *testing.T) {
 	// Create the session first, then call it again to get existing session path
 	kiteSession, _, err := mgr.GetOrCreateSessionWithEmail(sessID, "session@example.com")
 	require.NoError(t, err)
-	kiteSession.Kite.Client.SetBaseURI(ts.URL)
-	kiteSession.Kite.Client.SetAccessToken("mock_access_token")
+	kiteSession.Kite.SetBaseURI(ts.URL)
+	kiteSession.Kite.SetAccessToken("mock_access_token")
 
 	ctx := context.Background()
 	ctx = oauth.ContextWithEmail(ctx, "session@example.com")

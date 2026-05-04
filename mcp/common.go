@@ -172,7 +172,7 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		// Check if a cached token was applied (per-email cache hit)
 		if email != "" && h.deps.Credentials.HasCachedToken(email) {
 			// Verify the cached token is still valid
-			_, err := kiteSession.Kite.Client.GetUserProfile()
+			_, err := kiteSession.Kite.GetUserProfile()
 			if err != nil {
 				h.deps.LoggerPort.Warn(ctx, "Cached Kite token expired", "email", email, "error", err)
 				h.deps.TokenStore.Delete(email)
@@ -202,12 +202,12 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 }
 
 // callWithNilKiteGuard runs the tool handler fn with a deferred recover.
-// In DEV_MODE session.Kite is nil, so any tool that dereferences session.Kite.Client
+// In DEV_MODE session.Kite is nil, so any tool that dereferences session.Kite
 // will panic.  The recover catches this and returns a descriptive error instead.
 func (h *ToolHandler) callWithNilKiteGuard(toolName string, session *kc.KiteSessionData, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (result *mcp.CallToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			h.deps.LoggerPort.Warn(context.Background(), "DEV_MODE: tool panicked (likely accessed session.Kite.Client)", "tool", toolName, "panic", r)
+			h.deps.LoggerPort.Warn(context.Background(), "DEV_MODE: tool panicked (likely accessed session.Kite)", "tool", toolName, "panic", r)
 			result = mcp.NewToolResultError(fmt.Sprintf("This tool (%s) requires a real Kite connection and is not available in DEV_MODE. Disable DEV_MODE to use it.", toolName))
 			err = nil
 		}

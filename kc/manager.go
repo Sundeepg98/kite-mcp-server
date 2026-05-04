@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
-	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
@@ -236,11 +235,22 @@ var (
 	ErrInvalidSessionID = errors.New("invalid MCP session ID, please try logging in again")
 )
 
-type KiteSessionData struct {
-	Kite   *KiteConnect
-	Broker broker.Client // broker-agnostic interface (wraps Kite.Client via zerodha adapter)
-	Email  string        // Google-authenticated email (empty for local dev)
-}
+// KiteSessionData is the transient runtime state of an authenticated MCP
+// session. Anchor 5 PR 5.6 relocated the canonical declaration to
+// kc/domain/session.go (its proper bounded-context home — see
+// anchor-5-prs-design.md). This alias preserves the legacy
+// kc.KiteSessionData reference path so the 56-file reverse-dep set
+// continues to compile via existing imports.
+//
+// The PR also collapsed the kc.KiteConnect wrapper indirection: the
+// Kite field is now zerodha.KiteSDK (interface) directly, not
+// *KiteConnect (one-field struct holding the same SDK). All callsites
+// migrated from `.Kite.Client.METHOD(...)` to `.Kite.METHOD(...)`.
+// The kc.KiteConnect type + NewKiteConnect helper remain available
+// (see lines 205-222) for the few callers that still need a *KiteConnect
+// pointer; the field type change is a deliberate decoupling so kc/domain
+// can host KiteSessionData without depending on the kc parent package.
+type KiteSessionData = domain.KiteSessionData
 
 type Manager struct {
 	apiKey      string
