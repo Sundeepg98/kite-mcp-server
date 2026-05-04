@@ -63,6 +63,7 @@ use (
 	./kc/billing
 	./kc/decorators
 	./kc/i18n
+	./kc/instruments
 	./kc/isttz
 	./kc/legaldocs
 	./kc/logger

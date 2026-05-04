@@ -19,6 +19,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/decorators v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/instruments v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/legaldocs v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
@@ -52,6 +53,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/billing => ./kc/billing
 	github.com/zerodha/kite-mcp-server/kc/decorators => ./kc/decorators
 	github.com/zerodha/kite-mcp-server/kc/i18n => ./kc/i18n
+	github.com/zerodha/kite-mcp-server/kc/instruments => ./kc/instruments
 	github.com/zerodha/kite-mcp-server/kc/isttz => ./kc/isttz
 	github.com/zerodha/kite-mcp-server/kc/legaldocs => ./kc/legaldocs
 	github.com/zerodha/kite-mcp-server/kc/logger => ./kc/logger

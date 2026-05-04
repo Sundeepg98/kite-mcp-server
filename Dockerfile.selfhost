@@ -46,6 +46,7 @@ COPY kc/scheduler/go.mod kc/scheduler/go.sum* kc/scheduler/
 COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 COPY kc/decorators/go.mod kc/decorators/go.sum* kc/decorators/
 COPY kc/i18n/go.mod kc/i18n/go.sum* kc/i18n/
+COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
 COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/legaldocs/go.mod kc/legaldocs/go.sum* kc/legaldocs/
 COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
