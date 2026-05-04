@@ -11,6 +11,7 @@ WORKDIR /app
 # kc/riskguard, etc.) when they get their own go.mod.
 COPY go.mod go.sum ./
 COPY kc/money/go.mod kc/money/go.sum* kc/money/
+COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
 COPY broker/go.mod broker/go.sum* broker/
 COPY kc/alerts/go.mod kc/alerts/go.sum* kc/alerts/
 COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/

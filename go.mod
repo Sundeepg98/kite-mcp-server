@@ -28,6 +28,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/legaldocs v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/registry v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/scheduler v0.0.0-00010101000000-000000000000
@@ -67,6 +68,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/legaldocs => ./kc/legaldocs
 	github.com/zerodha/kite-mcp-server/kc/logger => ./kc/logger
 	github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
+	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/registry => ./kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/scheduler => ./kc/scheduler

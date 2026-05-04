@@ -72,6 +72,7 @@ use (
 	./kc/legaldocs
 	./kc/logger
 	./kc/money
+	./kc/papertrading
 	./kc/registry
 	./kc/riskguard
 	./kc/scheduler

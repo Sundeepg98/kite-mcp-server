@@ -38,6 +38,7 @@ WORKDIR /app
 # setup. Add another COPY line per future extraction.
 COPY go.mod go.sum ./
 COPY kc/money/go.mod kc/money/go.sum* kc/money/
+COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
 COPY broker/go.mod broker/go.sum* broker/
 COPY kc/alerts/go.mod kc/alerts/go.sum* kc/alerts/
 COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
