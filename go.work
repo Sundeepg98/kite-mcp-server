@@ -63,6 +63,7 @@ use (
 	./kc/billing
 	./kc/i18n
 	./kc/isttz
+	./kc/legaldocs
 	./kc/money
 	./kc/riskguard
 )
