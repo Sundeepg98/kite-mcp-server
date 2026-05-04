@@ -6,10 +6,10 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members:
+// Members (5/5 multi-module decomposition complete):
 //   .              — root module github.com/zerodha/kite-mcp-server
 //                     (everything not yet extracted; app/, mcp/, kc/*
-//                      except the four below, oauth/, cmd/, plugins/).
+//                      except the five below, oauth/, cmd/, plugins/).
 //   ./kc/money     — Money value object (currency-aware decimal
 //                     arithmetic + JSON marshalling). First extracted
 //                     module (commit b7fedcc). 238 LOC, zero internal
@@ -29,16 +29,26 @@
 //   ./kc/riskguard — Pre-trade risk-control middleware (kill switch,
 //                     order caps, daily count, rate limiter, dedup,
 //                     anomaly detector, OTR band, market-hours).
-//                     Fourth extracted module (commit-this; ceremony-
-//                     per-user-override of 28169b6 stop-at-3
+//                     Fourth extracted module (commit 5982aff;
+//                     ceremony-per-user-override of 28169b6 stop-at-3
 //                     recommendation). Same shape as kc/audit:
 //                     bidirectional cross-module deps, transitive
 //                     replace for broker + kc/money via kc/domain.
+//   ./kc/billing   — Stripe-tier subscription gating + checkout/
+//                     billingportal/webhook flows + per-tier middle-
+//                     ware. Fifth extracted module (commit-this;
+//                     5/5 reached, ceremony-per-user-override per
+//                     prior 28169b6 stop-at-3 recommendation).
+//                     Same shape as kc/audit + kc/riskguard:
+//                     bidirectional cross-module deps with root for
+//                     kc/alerts + kc/domain + kc/logger + oauth, plus
+//                     Stripe SDK external dep. Transitive replace for
+//                     broker + kc/money via kc/domain.
 //
-// Adding more members: drop a go.mod into the target directory, append
-// the path here, then `go work sync`. Per the disintegrate audit's
-// trigger-driven escalation: only promote when a candidate genuinely
-// benefits — kc/billing at the next slice (commit 5 of 5).
+// Future members: per the disintegrate audit's trigger-driven
+// escalation, only promote when a candidate genuinely benefits — no
+// further candidates queued. The 5/5 set spans all bounded contexts
+// the user accepted ceremony for.
 //
 // CI: matrix-test per member is the canonical path. The default
 // `go test ./...` from the root still works because workspace mode
@@ -50,6 +60,7 @@ use (
 	.
 	./broker
 	./kc/audit
+	./kc/billing
 	./kc/money
 	./kc/riskguard
 )

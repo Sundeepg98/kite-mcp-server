@@ -41,6 +41,7 @@ COPY kc/money/go.mod kc/money/go.sum* kc/money/
 COPY broker/go.mod broker/go.sum* broker/
 COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
 COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
+COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 RUN go mod download
 
 COPY . .
