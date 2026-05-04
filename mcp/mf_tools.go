@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 type MFOrdersTool struct{}
@@ -31,7 +32,7 @@ func (*MFOrdersTool) Tool() mcp.Tool {
 
 func (*MFOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_mf_orders", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+	return common.PaginatedToolHandler(manager, "get_mf_orders", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFOrdersQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
@@ -66,7 +67,7 @@ func (*MFSIPsTool) Tool() mcp.Tool {
 
 func (*MFSIPsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_mf_sips", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+	return common.PaginatedToolHandler(manager, "get_mf_sips", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFSIPsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
@@ -101,7 +102,7 @@ func (*MFHoldingsTool) Tool() mcp.Tool {
 
 func (*MFHoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	h := NewToolHandler(manager)
-	return PaginatedToolHandler(manager, "get_mf_holdings", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
+	return common.PaginatedToolHandler(manager, "get_mf_holdings", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetMFHoldingsQuery{Email: session.Email})
 		if err != nil {
 			return nil, err
@@ -152,7 +153,7 @@ func (*PlaceMFOrderTool) Tool() mcp.Tool {
 func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "place_mf_order")
+		handler.TrackToolCall(ctx, "place_mf_order")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "tradingsymbol", "transaction_type"); err != nil {
@@ -160,10 +161,10 @@ func (*PlaceMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the MF order.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_mf_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "place_mf_order", "user_declined")
+				handler.TrackToolError(ctx, "place_mf_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -217,7 +218,7 @@ func (*CancelMFOrderTool) Tool() mcp.Tool {
 func (*CancelMFOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "cancel_mf_order")
+		handler.TrackToolCall(ctx, "cancel_mf_order")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "order_id"); err != nil {
@@ -281,7 +282,7 @@ func (*PlaceMFSIPTool) Tool() mcp.Tool {
 func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "place_mf_sip")
+		handler.TrackToolCall(ctx, "place_mf_sip")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "tradingsymbol", "amount", "frequency", "instalments"); err != nil {
@@ -289,10 +290,10 @@ func (*PlaceMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the SIP.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_mf_sip", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "place_mf_sip", "user_declined")
+				handler.TrackToolError(ctx, "place_mf_sip", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -341,7 +342,7 @@ func (*CancelMFSIPTool) Tool() mcp.Tool {
 func (*CancelMFSIPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "cancel_mf_sip")
+		handler.TrackToolCall(ctx, "cancel_mf_sip")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "sip_id"); err != nil {

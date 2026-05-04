@@ -32,7 +32,7 @@ func (*DeleteMyAccountTool) Tool() gomcp.Tool {
 func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "delete_my_account")
+		handler.TrackToolCall(ctx, "delete_my_account")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -77,7 +77,7 @@ func (*UpdateMyCredentialsTool) Tool() gomcp.Tool {
 func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "update_my_credentials")
+		handler.TrackToolCall(ctx, "update_my_credentials")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {

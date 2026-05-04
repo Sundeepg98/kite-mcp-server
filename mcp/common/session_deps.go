@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"github.com/zerodha/kite-mcp-server/kc"
@@ -9,12 +9,12 @@ import (
 // session lifecycle, credential retrieval, user identity, and token
 // storage. Adding a new session-related port should touch ONLY this file
 // + the corresponding wire in newSessionDeps below — not the cross-cutting
-// ToolHandlerDeps struct in common_deps.go.
+// ToolHandlerDeps struct in handler_deps.go.
 //
 // Investment K (per .research/agent-concurrency-decoupling-plan.md §K):
 // the builder pattern decomposes the previously monolithic NewToolHandler
 // constructor so that agents adding a new field per bounded context
-// don't collide on common_deps.go. The unified ToolHandlerDeps still
+// don't collide on handler_deps.go. The unified ToolHandlerDeps still
 // exists (tests + accessor methods reference it directly), but its
 // constructor now composes from per-context builders.
 type SessionDepsFields struct {

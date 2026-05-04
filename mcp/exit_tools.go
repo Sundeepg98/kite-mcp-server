@@ -35,7 +35,7 @@ func (*ClosePositionTool) Tool() mcp.Tool {
 func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "close_position")
+		handler.TrackToolCall(ctx, "close_position")
 
 		args := request.GetArguments()
 		p := NewArgParser(args)
@@ -54,10 +54,10 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		symbol := parts[1]
 
 		// Request user confirmation via elicitation.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("close_position", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "close_position", "user_declined")
+				handler.TrackToolError(ctx, "close_position", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -122,7 +122,7 @@ type closeResult struct {
 func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "close_all_positions")
+		handler.TrackToolCall(ctx, "close_all_positions")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -133,10 +133,10 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		}
 
 		// Request user confirmation via elicitation (in addition to the confirm param).
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("close_all_positions", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "close_all_positions", "user_declined")
+				handler.TrackToolError(ctx, "close_all_positions", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}

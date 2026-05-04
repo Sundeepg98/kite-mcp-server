@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // --- Pre-Trade Check Tool ---
@@ -110,7 +111,7 @@ type preTradeStopLoss struct {
 func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "order_risk_report")
+		handler.TrackToolCall(ctx, "order_risk_report")
 		args := request.GetArguments()
 
 		// Validate required parameters
@@ -151,9 +152,9 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			ucResult, terr := BusResult[*usecases.PreTradeData](raw)
+			ucResult, terr := common.BusResult[*usecases.PreTradeData](raw)
 			if terr != nil {
-				handler.manager.Logger.Error("order_risk_report bus result type mismatch", "error", terr)
+				handler.Manager().Logger.Error("order_risk_report bus result type mismatch", "error", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 

@@ -127,7 +127,7 @@ func (*DividendCalendarTool) Tool() mcp.Tool {
 func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "dividend_calendar")
+		handler.TrackToolCall(ctx, "dividend_calendar")
 
 		days := NewArgParser(request.GetArguments()).Int("days", 30)
 		if days <= 0 {
@@ -140,7 +140,7 @@ func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		return handler.WithSession(ctx, "dividend_calendar", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "dividend_calendar", "api_error")
+				handler.TrackToolError(ctx, "dividend_calendar", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)

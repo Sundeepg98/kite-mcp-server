@@ -43,28 +43,28 @@ type adminServerStatusResponse struct {
 func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_server_status")
+		handler.TrackToolCall(ctx, "admin_server_status")
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
 		resp := &adminServerStatusResponse{
-			ActiveSessions: handler.deps.Sessions.GetActiveSessionCount(),
+			ActiveSessions: handler.Deps.Sessions.GetActiveSessionCount(),
 			Uptime:         time.Since(serverStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
 			Goroutines:     runtime.NumGoroutine(),
 		}
 
-		if uStore := handler.deps.Users.UserStore(); uStore != nil {
+		if uStore := handler.Deps.Users.UserStore(); uStore != nil {
 			resp.TotalUsers = uStore.Count()
 		}
-		if rg := handler.deps.RiskGuard.RiskGuard(); rg != nil {
+		if rg := handler.Deps.RiskGuard.RiskGuard(); rg != nil {
 			resp.GlobalFreeze = rg.GetGlobalFreezeStatus()
 		}
-		if reg := handler.deps.Registry.RegistryStore(); reg != nil {
+		if reg := handler.Deps.Registry.RegistryStore(); reg != nil {
 			resp.RegisteredKeys = len(reg.List())
 		}
-		if db := handler.deps.AlertDB.AlertDB(); db != nil {
+		if db := handler.Deps.AlertDB.AlertDB(); db != nil {
 			resp.PersistenceEnabled = true
 		}
 

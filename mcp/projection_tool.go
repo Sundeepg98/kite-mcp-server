@@ -36,7 +36,7 @@ func (*GetOrderProjectionTool) Tool() mcp.Tool {
 func (*GetOrderProjectionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_order_projection")
+		handler.TrackToolCall(ctx, "get_order_projection")
 		p := NewArgParser(request.GetArguments())
 
 		if err := p.Required("order_id"); err != nil {

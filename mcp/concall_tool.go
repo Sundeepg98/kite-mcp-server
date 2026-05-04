@@ -61,7 +61,7 @@ type concallResponse struct {
 func (*AnalyzeConcallTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "analyze_concall")
+		handler.TrackToolCall(ctx, "analyze_concall")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "symbol"); err != nil {

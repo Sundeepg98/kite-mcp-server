@@ -450,9 +450,9 @@ func TestReadToolDefinitions(t *testing.T) {
 			assert.True(t, *tool.Annotations.ReadOnlyHint,
 				"tool %s should be read-only", tc.name)
 
-			// Read tools should NOT be in the writeTools set
+			// Read tools should NOT be in the WriteToolsSnapshot() set
 			assert.False(t, isWriteTool(tc.name),
-				"read tool %s should not be in writeTools", tc.name)
+				"read tool %s should not be in WriteToolsSnapshot()", tc.name)
 		})
 	}
 }
@@ -474,9 +474,9 @@ func TestWriteToolDefinitions(t *testing.T) {
 			assert.Equal(t, tc.name, tool.Name)
 			assert.NotEmpty(t, tool.Description)
 
-			// Write tools should be in writeTools set
+			// Write tools should be in WriteToolsSnapshot() set
 			assert.True(t, isWriteTool(tc.name),
-				"tool %s should be in writeTools", tc.name)
+				"tool %s should be in WriteToolsSnapshot()", tc.name)
 		})
 	}
 }

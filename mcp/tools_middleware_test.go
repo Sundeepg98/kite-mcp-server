@@ -75,7 +75,7 @@ func TestToolCache_Cleanup(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 
 	// Run cleanup
-	cache.cleanup()
+	cache.CleanupForTest()
 	assert.Equal(t, 0, cache.Size())
 }
 
@@ -89,10 +89,10 @@ func TestToolCache_CleanupKeepsValid(t *testing.T) {
 	// the same Set/list path the cleanup walks (pure black-box now —
 	// the LRU rewrite removed the public-state-poking shortcut).
 	cache.Set("expired", "old")
-	cache.expireForTest("expired", time.Now().Add(-1*time.Second))
+	cache.ExpireForTest("expired", time.Now().Add(-1*time.Second))
 	assert.Equal(t, 2, cache.Size())
 
-	cache.cleanup()
+	cache.CleanupForTest()
 	assert.Equal(t, 1, cache.Size())
 
 	val, ok := cache.Get("valid")
@@ -429,7 +429,7 @@ func TestCallWithNilKiteGuard_NormalExecution(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
-	result, err := handler.callWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
+	result, err := handler.CallWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("success"), nil
 	})
 	assert.NoError(t, err)
@@ -440,7 +440,7 @@ func TestCallWithNilKiteGuard_PanicRecovery(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
-	result, err := handler.callWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
+	result, err := handler.CallWithNilKiteGuard("test_tool", nil, func(s *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 		panic("nil pointer dereference")
 	})
 	assert.NoError(t, err)
@@ -588,7 +588,7 @@ func TestTrackToolCall_WithMetrics_LiveSession(t *testing.T) {
 
 	ctx := WithSessionType(context.Background(), "live")
 	assert.NotPanics(t, func() {
-		handler.trackToolCall(ctx, "get_holdings")
+		handler.TrackToolCall(ctx, "get_holdings")
 	})
 	assert.True(t, mgr.HasMetrics())
 }
@@ -600,7 +600,7 @@ func TestTrackToolCall_WithMetrics_PaperSession(t *testing.T) {
 
 	ctx := WithSessionType(context.Background(), "paper")
 	assert.NotPanics(t, func() {
-		handler.trackToolCall(ctx, "place_order")
+		handler.TrackToolCall(ctx, "place_order")
 	})
 }
 
@@ -612,7 +612,7 @@ func TestTrackToolCall_WithMetrics_UnknownSession(t *testing.T) {
 	// No session type in context — falls back to SessionTypeUnknown
 	ctx := context.Background()
 	assert.NotPanics(t, func() {
-		handler.trackToolCall(ctx, "get_profile")
+		handler.TrackToolCall(ctx, "get_profile")
 	})
 }
 
@@ -623,7 +623,7 @@ func TestTrackToolError_WithMetrics_AuthError(t *testing.T) {
 
 	ctx := WithSessionType(context.Background(), "live")
 	assert.NotPanics(t, func() {
-		handler.trackToolError(ctx, "place_order", "auth")
+		handler.TrackToolError(ctx, "place_order", "auth")
 	})
 }
 
@@ -634,7 +634,7 @@ func TestTrackToolError_WithMetrics_ValidationError(t *testing.T) {
 
 	ctx := WithSessionType(context.Background(), "paper")
 	assert.NotPanics(t, func() {
-		handler.trackToolError(ctx, "modify_order", "validation")
+		handler.TrackToolError(ctx, "modify_order", "validation")
 	})
 }
 
@@ -645,7 +645,7 @@ func TestTrackToolError_WithMetrics_APIError(t *testing.T) {
 
 	ctx := WithSessionType(context.Background(), "live")
 	assert.NotPanics(t, func() {
-		handler.trackToolError(ctx, "cancel_order", "api")
+		handler.TrackToolError(ctx, "cancel_order", "api")
 	})
 }
 
@@ -656,7 +656,7 @@ func TestTrackToolError_WithMetrics_UnknownSession(t *testing.T) {
 
 	ctx := context.Background()
 	assert.NotPanics(t, func() {
-		handler.trackToolError(ctx, "get_quotes", "timeout")
+		handler.TrackToolError(ctx, "get_quotes", "timeout")
 	})
 }
 
@@ -668,7 +668,7 @@ func TestTrackToolCall_WithMetrics_MultipleTools(t *testing.T) {
 	ctx := WithSessionType(context.Background(), "live")
 	tools := []string{"get_holdings", "get_positions", "get_orders", "place_order", "set_alert"}
 	for _, tool := range tools {
-		handler.trackToolCall(ctx, tool)
+		handler.TrackToolCall(ctx, tool)
 	}
 }
 

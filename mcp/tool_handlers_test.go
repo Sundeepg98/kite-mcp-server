@@ -20,6 +20,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // ---------------------------------------------------------------------------
@@ -203,14 +204,14 @@ func TestParsePaginationParams_CapsAtMax(t *testing.T) {
 
 
 func TestApplyPagination_EmptySlice(t *testing.T) {
-	result := ApplyPagination([]int{}, PaginationParams{From: 0, Limit: 10})
+	result := common.ApplyPagination([]int{}, PaginationParams{From: 0, Limit: 10})
 	assert.Empty(t, result)
 }
 
 
 func TestApplyPagination_LimitExceedsLength(t *testing.T) {
 	data := []string{"a", "b", "c"}
-	result := ApplyPagination(data, PaginationParams{From: 0, Limit: 100})
+	result := common.ApplyPagination(data, PaginationParams{From: 0, Limit: 100})
 	assert.Equal(t, data, result)
 }
 
@@ -238,16 +239,16 @@ func TestCreatePaginatedResponse_NoMore(t *testing.T) {
 
 
 // ---------------------------------------------------------------------------
-// common.go: writeTools init
+// common.go: WriteToolsSnapshot() init
 // ---------------------------------------------------------------------------
 func TestWriteToolsPopulated(t *testing.T) {
-	assert.NotEmpty(t, writeTools, "writeTools should be populated by init()")
+	assert.NotEmpty(t, WriteToolsSnapshot(), "WriteToolsSnapshot() should be populated by init()")
 	// Known write tools
-	assert.True(t, writeTools["place_order"], "place_order should be a write tool")
-	assert.True(t, writeTools["cancel_order"], "cancel_order should be a write tool")
+	assert.True(t, WriteToolsSnapshot()["place_order"], "place_order should be a write tool")
+	assert.True(t, WriteToolsSnapshot()["cancel_order"], "cancel_order should be a write tool")
 	// Known read-only tools should NOT be write tools
-	assert.False(t, writeTools["get_holdings"], "get_holdings should NOT be a write tool")
-	assert.False(t, writeTools["get_profile"], "get_profile should NOT be a write tool")
+	assert.False(t, WriteToolsSnapshot()["get_holdings"], "get_holdings should NOT be a write tool")
+	assert.False(t, WriteToolsSnapshot()["get_profile"], "get_profile should NOT be a write tool")
 }
 
 
@@ -1526,8 +1527,8 @@ func TestToolHandler_TrackCallsNoMetrics(t *testing.T) {
 	mgr := newDevModeManager(t)
 	handler := NewToolHandler(mgr)
 	// Should not panic even without metrics configured
-	handler.trackToolCall(context.Background(), "test_tool")
-	handler.trackToolError(context.Background(), "test_tool", "test_error")
+	handler.TrackToolCall(context.Background(), "test_tool")
+	handler.TrackToolError(context.Background(), "test_tool", "test_error")
 }
 
 // ── Phase 3a Batch 6: narrow accessors on *ToolHandler ──────────────────
@@ -1757,7 +1758,7 @@ func TestSimpleToolHandler_DevMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	handler := SimpleToolHandler(mgr, "test_tool", func(_ context.Context, session *kc.KiteSessionData) (any, error) {
+	handler := common.SimpleToolHandler(mgr, "test_tool", func(_ context.Context, session *kc.KiteSessionData) (any, error) {
 		return map[string]string{"status": "ok"}, nil
 	})
 

@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"time"
@@ -24,7 +24,7 @@ import (
 // during the SOLID 99→100 deprecation-shim sweep — all 58
 // consumer call sites migrated through Wave D Packages 6b-6e
 // already use LoggerPort with ctx threading. The 2 residual sites
-// (mcp/common.go:profileUC constructor, common_deps.go:Logger()
+// (handler_methods.go:profileUC constructor, handler_deps.go:Logger()
 // accessor) bridge to *slog.Logger via logport.AsSlog at the seam
 // where the underlying API still consumes slog directly.
 type ToolHandlerDeps struct {
@@ -74,10 +74,26 @@ type ToolHandlerDeps struct {
 // It holds focused service interfaces instead of the full Manager.
 // The manager field is retained for backward compatibility while individual
 // tool Handler methods are migrated incrementally.
+//
+// Anchor 1 PR 1.1: the previously-unexported `deps` field is now
+// exported as `Deps` (capital D) so cross-package callers
+// (`handler.Deps.Billing.X()` style) can reach the dependency
+// container without going through an accessor method that would
+// otherwise return a struct copy on every call. The `manager` field
+// stays unexported because cross-package consumers should reach for
+// narrow Provider ports through Deps.* — direct *kc.Manager access
+// is a backward-compat seam, not a long-term API.
 type ToolHandler struct {
 	manager          *kc.Manager                   // retained for tool-level backward compat
-	deps             ToolHandlerDeps               // injected services for common.go
+	Deps             ToolHandlerDeps               // injected services for handler methods
 	IsTokenExpiredFn func(storedAt time.Time) bool // injectable for testing; nil = kc.IsKiteTokenExpired
+}
+
+// Manager exposes the underlying *kc.Manager for backward compat with
+// tool-handler code that still reaches for the full manager surface
+// during incremental migration.
+func (h *ToolHandler) Manager() *kc.Manager {
+	return h.manager
 }
 
 // NewToolHandler creates a new tool handler, extracting focused interfaces
@@ -90,7 +106,7 @@ type ToolHandler struct {
 // / read_deps.go). Adding a new field for a single bounded context now
 // only touches that context's file; this constructor's body is stable.
 // The unified struct itself remains so existing tool code reading
-// h.deps.X keeps compiling unchanged.
+// h.Deps.X keeps compiling unchanged.
 func NewToolHandler(manager *kc.Manager) *ToolHandler {
 	sd := newSessionDeps(manager)
 	ad := newAlertDeps(manager)
@@ -99,7 +115,7 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 	rd := newReadDeps(manager)
 	return &ToolHandler{
 		manager: manager,
-		deps: ToolHandlerDeps{
+		Deps: ToolHandlerDeps{
 			// SessionDepsFields
 			Sessions:    sd.Sessions,
 			Credentials: sd.Credentials,
@@ -148,12 +164,12 @@ func NewToolHandler(manager *kc.Manager) *ToolHandler {
 
 // CommandBus returns the CQRS command bus. Prefer over h.manager.CommandBus().
 func (h *ToolHandler) CommandBus() *cqrs.InMemoryBus {
-	return h.deps.CommandBusP.CommandBus()
+	return h.Deps.CommandBusP.CommandBus()
 }
 
 // QueryBus returns the CQRS query bus. Prefer over h.manager.QueryBus().
 func (h *ToolHandler) QueryBus() *cqrs.InMemoryBus {
-	return h.deps.QueryBusP.QueryBus()
+	return h.Deps.QueryBusP.QueryBus()
 }
 
 // LoggerPort returns the kc/logger.Logger port for ctx-aware structured
@@ -163,37 +179,37 @@ func (h *ToolHandler) QueryBus() *cqrs.InMemoryBus {
 // *slog.Logger directly (e.g. usecase constructors that wrap internally)
 // bridge via logport.AsSlog at the call site.
 func (h *ToolHandler) LoggerPort() logport.Logger {
-	return h.deps.LoggerPort
+	return h.Deps.LoggerPort
 }
 
 // RiskGuard returns the configured risk guard, or nil if disabled. Phase
 // 3a Batch 6: prefer over h.manager.RiskGuard() so handlers depend on the
 // narrow RiskGuardProvider port through ToolHandlerDeps.
 func (h *ToolHandler) RiskGuard() *riskguard.Guard {
-	if h.deps.RiskGuard == nil {
+	if h.Deps.RiskGuard == nil {
 		return nil
 	}
-	return h.deps.RiskGuard.RiskGuard()
+	return h.Deps.RiskGuard.RiskGuard()
 }
 
 // AlertStore returns the per-user alert store, or nil if not configured.
 // Phase 3a Batch 6: prefer over h.manager.AlertStore() so handlers depend
 // on the narrow AlertStoreProvider port through ToolHandlerDeps.
 func (h *ToolHandler) AlertStore() kc.AlertStoreInterface {
-	if h.deps.Alerts == nil {
+	if h.Deps.Alerts == nil {
 		return nil
 	}
-	return h.deps.Alerts.AlertStore()
+	return h.Deps.Alerts.AlertStore()
 }
 
 // AlertDB returns the optional SQLite database used by the alerts subsystem.
 // Phase 3a Batch 6: prefer over h.manager.AlertDB() so handlers depend on
 // the narrow AlertDBProvider port through ToolHandlerDeps.
 func (h *ToolHandler) AlertDB() *alerts.DB {
-	if h.deps.AlertDB == nil {
+	if h.Deps.AlertDB == nil {
 		return nil
 	}
-	return h.deps.AlertDB.AlertDB()
+	return h.Deps.AlertDB.AlertDB()
 }
 
 // WatchlistStore returns the per-user watchlist store, or nil if not
@@ -201,10 +217,10 @@ func (h *ToolHandler) AlertDB() *alerts.DB {
 // handlers depend on the narrow WatchlistStoreProvider port through
 // ToolHandlerDeps.
 func (h *ToolHandler) WatchlistStore() kc.WatchlistStoreInterface {
-	if h.deps.Watchlist == nil {
+	if h.Deps.Watchlist == nil {
 		return nil
 	}
-	return h.deps.Watchlist.WatchlistStore()
+	return h.Deps.Watchlist.WatchlistStore()
 }
 
 // Instruments returns the instruments manager port. Phase 3a Batch 1
@@ -214,10 +230,10 @@ func (h *ToolHandler) WatchlistStore() kc.WatchlistStoreInterface {
 // not configured (test scaffolding); production callers should treat nil
 // as "instruments not yet loaded" and degrade accordingly.
 func (h *ToolHandler) Instruments() kc.InstrumentManagerInterface {
-	if h.deps.Instruments == nil {
+	if h.Deps.Instruments == nil {
 		return nil
 	}
-	return h.deps.Instruments.InstrumentsManager()
+	return h.Deps.Instruments.InstrumentsManager()
 }
 
 // AuditStore returns the audit-trail store. Phase 3a Batch 1 (admin
@@ -233,8 +249,8 @@ func (h *ToolHandler) Instruments() kc.InstrumentManagerInterface {
 // surface. See admin_baseline_tool.go and admin_cache_info_tool.go for
 // the documented exceptions.
 func (h *ToolHandler) AuditStore() kc.AuditStoreInterface {
-	if h.deps.Audit == nil {
+	if h.Deps.Audit == nil {
 		return nil
 	}
-	return h.deps.Audit.AuditStore()
+	return h.Deps.Audit.AuditStore()
 }

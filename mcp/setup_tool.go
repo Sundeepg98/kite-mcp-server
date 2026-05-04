@@ -52,7 +52,7 @@ type testIPWhitelistResponse struct {
 func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "test_ip_whitelist")
+		handler.TrackToolCall(ctx, "test_ip_whitelist")
 
 		return handler.WithSession(ctx, "test_ip_whitelist", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp := &testIPWhitelistResponse{

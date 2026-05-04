@@ -126,7 +126,7 @@ func parseEnableTradingFlag(raw string) bool {
 func (*ServerVersionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "server_version")
+		handler.TrackToolCall(ctx, "server_version")
 
 		versionInfoOnce.Do(resolveVersionInfo)
 

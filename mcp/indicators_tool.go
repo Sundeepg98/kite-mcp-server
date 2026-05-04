@@ -32,7 +32,7 @@ func (*TechnicalIndicatorsTool) Tool() mcp.Tool {
 func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "technical_indicators")
+		handler.TrackToolCall(ctx, "technical_indicators")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "exchange", "tradingsymbol"); err != nil {

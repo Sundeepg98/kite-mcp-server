@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -57,7 +58,7 @@ func TestBuildOrderConfirmMessage_ModifyNativeAlert(t *testing.T) {
 
 
 func TestBuildOrderConfirmMessage_AllConfirmableTools(t *testing.T) {
-	for toolName := range confirmableTools {
+	for toolName := range common.ConfirmableTools {
 		msg := buildOrderConfirmMessage(toolName, map[string]any{
 			"exchange":         "NSE",
 			"tradingsymbol":    "INFY",

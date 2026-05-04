@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"context"
@@ -9,9 +9,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// confirmableTools lists tools that require user confirmation via elicitation.
-// Principle: confirm tools that CREATE financial risk, skip tools that REMOVE risk.
-var confirmableTools = map[string]bool{
+// ConfirmableTools is the map exported for cross-package callers
+// (tests + future per-domain sub-packages).
+//
+// Anchor 1 PR 1.1: capitalised from `confirmableTools`. The lowercase
+// var below is preserved for in-package use.
+var ConfirmableTools = map[string]bool{
 	"place_order":         true,
 	"modify_order":        true,
 	"close_position":      true,
@@ -24,13 +27,23 @@ var confirmableTools = map[string]bool{
 	"place_mf_sip":        true,
 }
 
-// isConfirmableTool returns true if the tool should show a confirmation dialog.
-func isConfirmableTool(toolName string) bool {
+// confirmableTools is the lowercase alias preserved for in-package use.
+var confirmableTools = ConfirmableTools
+
+// IsConfirmableTool returns true if the tool should show a confirmation dialog.
+//
+// Anchor 1 PR 1.1: capitalised from `isConfirmableTool` so callers in
+// the mcp/ root (and future per-domain sub-packages) can invoke it
+// across the package boundary.
+func IsConfirmableTool(toolName string) bool {
 	return confirmableTools[toolName]
 }
 
-// confirmSchema is the JSON Schema for the confirmation dialog — a single boolean field.
-var confirmSchema = map[string]any{
+// ConfirmSchema is the JSON Schema for the confirmation dialog — a single boolean field.
+//
+// Anchor 1 PR 1.1: capitalised from `confirmSchema` for the test
+// fixture in mcp/tools_validation_helpers_test.go.
+var ConfirmSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
 		"confirm": map[string]any{
@@ -42,10 +55,12 @@ var confirmSchema = map[string]any{
 	"required": []string{"confirm"},
 }
 
-// requestConfirmation sends an elicitation dialog to the user and blocks until
+// RequestConfirmation sends an elicitation dialog to the user and blocks until
 // they respond. Returns nil if the user confirms, an error if they decline/cancel.
 // Fails open: if the client doesn't support elicitation, returns nil (proceed).
-func requestConfirmation(ctx context.Context, mcpServerRef any, message string) error {
+//
+// Anchor 1 PR 1.1: capitalised from `requestConfirmation`.
+func RequestConfirmation(ctx context.Context, mcpServerRef any, message string) error {
 	srv, ok := mcpServerRef.(*server.MCPServer)
 	if !ok || srv == nil {
 		return nil // no server reference — fail open
@@ -54,7 +69,7 @@ func requestConfirmation(ctx context.Context, mcpServerRef any, message string) 
 	req := gomcp.ElicitationRequest{
 		Params: gomcp.ElicitationParams{
 			Message:         message,
-			RequestedSchema: confirmSchema,
+			RequestedSchema: ConfirmSchema,
 		},
 	}
 
@@ -86,8 +101,10 @@ func requestConfirmation(ctx context.Context, mcpServerRef any, message string) 
 	}
 }
 
-// buildOrderConfirmMessage creates a human-readable confirmation message for the given tool.
-func buildOrderConfirmMessage(toolName string, args map[string]any) string {
+// BuildOrderConfirmMessage creates a human-readable confirmation message for the given tool.
+//
+// Anchor 1 PR 1.1: capitalised from `buildOrderConfirmMessage`.
+func BuildOrderConfirmMessage(toolName string, args map[string]any) string {
 	p := NewArgParser(args)
 	switch toolName {
 	case "place_order":

@@ -48,7 +48,7 @@ func (*AdminSetBillingTierTool) Tool() mcp.Tool {
 func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_set_billing_tier")
+		handler.TrackToolCall(ctx, "admin_set_billing_tier")
 
 		args := request.GetArguments()
 		p := NewArgParser(args)
@@ -74,7 +74,7 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}
 		maxUsers = max(maxUsers, 1)
 
-		bs := handler.deps.Billing.BillingStore()
+		bs := handler.Deps.Billing.BillingStore()
 		if bs == nil {
 			return mcp.NewToolResultError("billing store not configured"), nil
 		}

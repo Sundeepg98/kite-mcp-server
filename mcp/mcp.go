@@ -5,16 +5,26 @@ import (
 	"strings"
 	"time"
 
-	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
-type Tool interface {
-	Tool() gomcp.Tool
-	Handler(*kc.Manager) server.ToolHandlerFunc
-}
+// Tool is the contract every internal + external MCP tool implements.
+// Anchor 1 PR 1.1 (Option B per .research/anchor-1-pr-1-1-redesign.md
+// commit 34e5a23): the canonical declaration was relocated to
+// mcp/common/tool.go to break the bidirectional cycle with
+// mcp.Registry that previously prevented mcp/common from being a
+// true leaf sub-package. This alias preserves the legacy mcp.Tool
+// reference path so the 60+ tool implementations across mcp/*_tools.go
+// (and the 6 external app/* + plugins/* call sites) compile unchanged.
+//
+// Type aliases are not new types — mcp.Tool and common.Tool are
+// interchangeable at every call site, including struct-literal use
+// inside RegisterInternalTool() and []Tool slice construction inside
+// GetAllToolsForRegistry().
+type Tool = common.Tool
 
 // GetAllTools returns all available tools for registration, including
 // any externally registered plugins.
@@ -242,13 +252,21 @@ func RegisterToolsForRegistry(srv *server.MCPServer, manager *kc.Manager, exclud
 
 	// Compute the tool-description integrity manifest (sha256 per tool)
 	// so operators can detect wire-level tampering ("line jumping" /
-	// tool-poisoning attacks from a hostile proxy — see integrity.go).
-	manifest := ComputeToolManifest(filteredTools)
-	storeToolManifest(manifest)
+	// tool-poisoning attacks from a hostile proxy — see
+	// mcp/common/integrity.go).
+	manifest := common.ComputeToolManifest(filteredTools)
+	common.StoreToolManifest(manifest)
 	logger.Info("Tool integrity manifest computed",
 		"tools", len(manifest.Tools),
 		"hash_bytes", manifest.TotalHashBytes(),
 		"logged_at", manifest.LoggedAt.Format(time.RFC3339))
+
+	// Initialize the write-tool set in mcp/common from the resolved
+	// tool list. This replaces the previous lazy GetAllTools() callback
+	// inside common.go (which would have created a cycle). Anchor 1
+	// PR 1.1 Phase 3 — see .research/anchor-1-pr-1-1-redesign.md.
+	// SetWriteTools is once-guarded; subsequent calls are no-ops.
+	common.SetWriteTools(allTools)
 
 	logger.Info("Tool registration complete",
 		"registered", registeredCount,

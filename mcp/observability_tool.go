@@ -82,13 +82,13 @@ var serverStartTime = time.Now()
 func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "server_metrics")
+		handler.TrackToolCall(ctx, "server_metrics")
 
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
-		auditStore := handler.deps.Audit.AuditStore()
+		auditStore := handler.Deps.Audit.AuditStore()
 		if auditStore == nil {
 			return mcp.NewToolResultError("Audit store not available (requires database persistence)"), nil
 		}
@@ -147,7 +147,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Goroutines:     goroutines,
 			GCPauseMs:      gcPauseMs,
 			DBSizeMB:       dbSizeMB,
-			ActiveSessions: handler.deps.Sessions.GetActiveSessionCount(),
+			ActiveSessions: handler.Deps.Sessions.GetActiveSessionCount(),
 			Period:         ucResult.Period,
 			TotalCalls:     stats.TotalCalls,
 			ErrorCount:     stats.ErrorCount,

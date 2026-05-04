@@ -67,7 +67,7 @@ func (*SetTrailingStopTool) Tool() mcp.Tool {
 func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "set_trailing_stop")
+		handler.TrackToolCall(ctx, "set_trailing_stop")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -106,7 +106,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 		exchange := parts[0]
 
-		inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instrumentID)
+		inst, err := handler.Deps.Instruments.InstrumentsManager().GetByID(instrumentID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Instrument not found: %s", instrumentID)), nil
 		}
@@ -162,7 +162,7 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
 	orderID, variety, direction string, trailAmount, trailPct, currentStop, referencePrice float64) (*mcp.CallToolResult, error) {
 
-	if handler.deps.TrailingStop.TrailingStopManager() == nil {
+	if handler.Deps.TrailingStop.TrailingStopManager() == nil {
 		return mcp.NewToolResultError("Trailing stop manager not available (requires database persistence)"), nil
 	}
 
@@ -193,10 +193,10 @@ func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Ma
 
 	// Auto-start ticker and subscribe instrument
 	tickerMsg := ""
-	tickerSvc := handler.deps.Ticker.TickerService()
+	tickerSvc := handler.Deps.Ticker.TickerService()
 	if !tickerSvc.IsRunning(email) {
-		apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
-		if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
+		apiKey := handler.Deps.Credentials.GetAPIKeyForEmail(email)
+		if entry, ok := handler.Deps.Tokens.TokenStore().Get(email); ok {
 			if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
 				handler.LoggerPort().Warn(ctx, "Failed to auto-start ticker for trailing stop", "email", email, "error", startErr)
 			} else {
@@ -251,14 +251,14 @@ func (*ListTrailingStopsTool) Tool() mcp.Tool {
 func (*ListTrailingStopsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "list_trailing_stops")
+		handler.TrackToolCall(ctx, "list_trailing_stops")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		tsManager := handler.deps.TrailingStop.TrailingStopManager()
+		tsManager := handler.Deps.TrailingStop.TrailingStopManager()
 		if tsManager == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
@@ -297,7 +297,7 @@ func (*CancelTrailingStopTool) Tool() mcp.Tool {
 func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "cancel_trailing_stop")
+		handler.TrackToolCall(ctx, "cancel_trailing_stop")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -310,7 +310,7 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		tsID := NewArgParser(args).String("trailing_stop_id", "")
-		if handler.deps.TrailingStop.TrailingStopManager() == nil {
+		if handler.Deps.TrailingStop.TrailingStopManager() == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
 

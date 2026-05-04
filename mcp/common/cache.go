@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"container/list"
@@ -21,14 +21,14 @@ import (
 // retains that path for back-compat). Eviction order is maintained by
 // container/list — O(1) per operation, no per-Set allocation churn.
 type ToolCache struct {
-	mu          sync.RWMutex
-	entries     map[string]*list.Element // points at lruList nodes
-	lruList     *list.List               // front = MRU, back = LRU
-	ttl         time.Duration
-	maxEntries  int // 0 = unbounded
-	stopCh      chan struct{}
-	stopOnce    sync.Once
-	doneCh      chan struct{}
+	mu         sync.RWMutex
+	entries    map[string]*list.Element // points at lruList nodes
+	lruList    *list.List               // front = MRU, back = LRU
+	ttl        time.Duration
+	maxEntries int // 0 = unbounded
+	stopCh     chan struct{}
+	stopOnce   sync.Once
+	doneCh     chan struct{}
 }
 
 // cacheEntry is the *list.Element value type. It carries the key so
@@ -188,6 +188,25 @@ func (c *ToolCache) Clear() {
 // CacheKey builds a cache key from tool name, email, and a distinguishing suffix.
 func CacheKey(toolName, email, suffix string) string {
 	return toolName + ":" + email + ":" + suffix
+}
+
+// CleanupForTest is the exported variant of cleanup for cross-package
+// test fixtures (mcp/tools_middleware_test.go) that need to force a
+// scan of expired entries without waiting for the 5-minute ticker.
+//
+// Anchor 1 PR 1.1: capitalised so the pre-PR test in mcp/ can reach
+// it across the package boundary. Production code should NOT call
+// this — the background goroutine handles cleanup automatically.
+func (c *ToolCache) CleanupForTest() {
+	c.cleanup()
+}
+
+// ExpireForTest is the exported variant of expireForTest for cross-
+// package test fixtures.
+//
+// Anchor 1 PR 1.1: capitalised for the same reason as CleanupForTest.
+func (c *ToolCache) ExpireForTest(key string, expiresAt time.Time) bool {
+	return c.expireForTest(key, expiresAt)
 }
 
 // expireForTest forces a known key's expiry timestamp. Test-only seam

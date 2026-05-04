@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"context"
@@ -47,34 +47,80 @@ func SessionTypeFromContext(ctx context.Context) string {
 // A tool is a "write tool" if ReadOnlyHint is not explicitly true.
 // Users with the "viewer" role are blocked from calling these tools.
 //
-// Lazy-initialized via writeToolsOnce (Investment J — see
-// .research/agent-concurrency-decoupling-plan.md): per-tool-file init()
-// calls to RegisterInternalTool run in lex-order of filename, which
-// for files alphabetically AFTER common.go means common.go's prior
-// init()-time iteration of GetAllTools() saw a partial registry. The
-// once-guarded buildWriteTools defers population until first use, by
-// which time all package init()s have completed.
+// Lazy-initialized via writeToolsOnce — populated from the slice
+// passed in by mcp/ root via SetWriteTools at startup. Anchor 1 PR 1.1
+// (per .research/anchor-1-pr-1-1-redesign.md Phase 3) parameterised
+// the previous in-line GetAllTools() call to break the directional
+// dependency on mcp/ root: common is now leaf, mcp/ pushes the slice
+// down at registration time.
+//
+// Thread-safety: SetWriteTools is called once at startup (from
+// mcp.RegisterToolsForRegistry, see mcp/mcp.go) before any tool
+// invocation. The sync.Once guard preserves the original Investment-J
+// semantics — late init() registrations were the original concern,
+// but the parameterised entry point eliminates the lex-order race
+// entirely because mcp/ root fully resolves GetAllTools() before
+// invoking SetWriteTools.
 var (
 	writeTools     map[string]bool
 	writeToolsOnce sync.Once
 )
 
-func buildWriteTools() {
-	writeTools = make(map[string]bool)
-	for _, t := range GetAllTools() {
-		tool := t.Tool()
-		if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
-			writeTools[tool.Name] = true
+// SetWriteTools initialises the write-tool set from the resolved
+// tool slice. Called exactly once by mcp/ root after GetAllTools()
+// has finished merging internal + plugin registrations. Safe to
+// invoke from concurrent callers — the once-guard makes subsequent
+// calls no-ops.
+//
+// Anchor 1 PR 1.1: replaces the prior buildWriteTools() that called
+// GetAllTools() directly. The parameter form severs common's
+// dependency on mcp.GetAllTools, restoring the leaf invariant.
+func SetWriteTools(tools []Tool) {
+	writeToolsOnce.Do(func() {
+		writeTools = make(map[string]bool)
+		for _, t := range tools {
+			tool := t.Tool()
+			if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
+				writeTools[tool.Name] = true
+			}
 		}
-	}
+	})
 }
 
-// isWriteTool reports whether the named tool is a write tool. Lazily
-// builds the map on first call so init-order across tool files doesn't
-// matter.
+// isWriteTool reports whether the named tool is a write tool. Returns
+// false until SetWriteTools has been called (test harnesses that don't
+// run the full registration path will see all tools as read-only —
+// matches the previous lazy-init behaviour where unregistered tools
+// were absent from the map).
 func isWriteTool(name string) bool {
-	writeToolsOnce.Do(buildWriteTools)
+	if writeTools == nil {
+		return false
+	}
 	return writeTools[name]
+}
+
+// IsWriteTool is the exported variant for cross-package callers
+// (mcp/aliases.go's lowercase passthrough, future per-domain sub-
+// packages). Same semantics as isWriteTool.
+func IsWriteTool(name string) bool {
+	return isWriteTool(name)
+}
+
+// WriteToolsSnapshot returns a copy of the current write-tools map
+// for diagnostic / test purposes. Callers must not retain a reference
+// expecting live updates — the returned map is a snapshot.
+//
+// Anchor 1 PR 1.1: exposed for the mcp/tool_handler_test.go fixture
+// that previously asserted on the package-private writeTools variable.
+func WriteToolsSnapshot() map[string]bool {
+	if writeTools == nil {
+		return nil
+	}
+	cp := make(map[string]bool, len(writeTools))
+	for k, v := range writeTools {
+		cp[k] = v
+	}
+	return cp
 }
 
 // WithViewerBlock enforces the viewer role: blocks write tools for read-only users.
@@ -84,7 +130,7 @@ func (h *ToolHandler) WithViewerBlock(ctx context.Context, toolName string) *mcp
 	if email == "" || !isWriteTool(toolName) {
 		return nil
 	}
-	if uStore := h.deps.UserStore; uStore != nil {
+	if uStore := h.Deps.UserStore; uStore != nil {
 		if uStore.GetRole(email) == users.RoleViewer {
 			return mcp.NewToolResultError("Read-only access: your account has viewer role. Contact admin for trader access.")
 		}
@@ -113,7 +159,7 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 	if email == "" {
 		return nil
 	}
-	entry, ok := h.deps.TokenStore.Get(email)
+	entry, ok := h.Deps.TokenStore.Get(email)
 	isExpired := kc.IsKiteTokenExpired
 	if h.IsTokenExpiredFn != nil {
 		isExpired = h.IsTokenExpiredFn
@@ -126,11 +172,11 @@ func (h *ToolHandler) WithTokenRefresh(ctx context.Context, toolName string, ses
 	// accepts slog directly per kc/usecases/queries.go convention).
 	profileUC := usecases.NewGetProfileUseCase(
 		&sessionBrokerResolver{client: session.Broker},
-		logport.AsSlog(h.deps.LoggerPort),
+		logport.AsSlog(h.Deps.LoggerPort),
 	)
 	if _, err := profileUC.Execute(ctx, cqrs.GetProfileQuery{Email: email}); err != nil {
-		h.deps.LoggerPort.Warn(ctx, "Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
-		h.deps.TokenStore.Delete(email)
+		h.Deps.LoggerPort.Warn(ctx, "Kite token expired on existing session", "tool", toolName, "session_id", sessionID, "error", err)
+		h.Deps.TokenStore.Delete(email)
 		h.trackToolError(ctx, toolName, "token_expired")
 		return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error()))
 	}
@@ -150,12 +196,12 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	sessionID := sess.SessionID()
 	email := oauth.EmailFromContext(ctx)
 
-	h.deps.LoggerPort.Debug(ctx, "Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
+	h.Deps.LoggerPort.Debug(ctx, "Tool request with session", "tool", toolName, "session_id", sessionID, "email", email)
 
 	// Step 2: Session lookup/creation.
-	kiteSession, isNew, err := h.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
+	kiteSession, isNew, err := h.Deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 	if err != nil {
-		h.deps.LoggerPort.Error(ctx, "Failed to establish session", err, "tool", toolName, "session_id", sessionID)
+		h.Deps.LoggerPort.Error(ctx, "Failed to establish session", err, "tool", toolName, "session_id", sessionID)
 		h.trackToolError(ctx, toolName, "session_error")
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to establish a session: %s", err.Error())), nil
 	}
@@ -163,30 +209,30 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 	// DEV_MODE: mock broker session — skip all token/auth checks.
 	// The stub Kite client (non-nil, dead base URI) lets handler bodies execute
 	// and return API errors instead of panicking on nil dereference.
-	if h.deps.Config.DevMode() {
-		h.deps.LoggerPort.Debug(ctx, "DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
+	if h.Deps.Config.DevMode() {
+		h.Deps.LoggerPort.Debug(ctx, "DEV_MODE session (mock broker), skipping auth checks", "tool", toolName, "session_id", sessionID)
 		return fn(kiteSession)
 	}
 
 	if isNew {
 		// Check if a cached token was applied (per-email cache hit)
-		if email != "" && h.deps.Credentials.HasCachedToken(email) {
+		if email != "" && h.Deps.Credentials.HasCachedToken(email) {
 			// Verify the cached token is still valid
 			_, err := kiteSession.Kite.GetUserProfile()
 			if err != nil {
-				h.deps.LoggerPort.Warn(ctx, "Cached Kite token expired", "email", email, "error", err)
-				h.deps.TokenStore.Delete(email)
+				h.Deps.LoggerPort.Warn(ctx, "Cached Kite token expired", "email", email, "error", err)
+				h.Deps.TokenStore.Delete(email)
 				h.trackToolError(ctx, toolName, "auth_required")
 				return mcp.NewToolResultError(fmt.Sprintf("Your Kite session has expired: %s. Please use the login tool to re-authenticate.", err.Error())), nil
 			}
-			h.deps.LoggerPort.Info(ctx, "Auto-authenticated via cached token", "tool", toolName, "email", email)
-			h.deps.Metrics.TrackDailyUser(email)
-		} else if !h.deps.Credentials.HasPreAuth() {
-			h.deps.LoggerPort.Info(ctx, "New session created, login required", "tool", toolName, "session_id", sessionID)
+			h.Deps.LoggerPort.Info(ctx, "Auto-authenticated via cached token", "tool", toolName, "email", email)
+			h.Deps.Metrics.TrackDailyUser(email)
+		} else if !h.Deps.Credentials.HasPreAuth() {
+			h.Deps.LoggerPort.Info(ctx, "New session created, login required", "tool", toolName, "session_id", sessionID)
 			h.trackToolError(ctx, toolName, "auth_required")
 			return mcp.NewToolResultError("Please log in first using the login tool"), nil
 		} else {
-			h.deps.LoggerPort.Info(ctx, "New session with pre-auth token", "tool", toolName, "session_id", sessionID)
+			h.Deps.LoggerPort.Info(ctx, "New session with pre-auth token", "tool", toolName, "session_id", sessionID)
 		}
 	}
 
@@ -197,17 +243,20 @@ func (h *ToolHandler) WithSession(ctx context.Context, toolName string, fn func(
 		}
 	}
 
-	h.deps.LoggerPort.Debug(ctx, "Session validated successfully", "tool", toolName, "session_id", sessionID)
+	h.Deps.LoggerPort.Debug(ctx, "Session validated successfully", "tool", toolName, "session_id", sessionID)
 	return fn(kiteSession)
 }
 
-// callWithNilKiteGuard runs the tool handler fn with a deferred recover.
+// CallWithNilKiteGuard runs the tool handler fn with a deferred recover.
 // In DEV_MODE session.Kite is nil, so any tool that dereferences session.Kite
 // will panic.  The recover catches this and returns a descriptive error instead.
-func (h *ToolHandler) callWithNilKiteGuard(toolName string, session *kc.KiteSessionData, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (result *mcp.CallToolResult, err error) {
+//
+// Anchor 1 PR 1.1: capitalised from `callWithNilKiteGuard` for the test
+// fixture in mcp/tools_middleware_test.go.
+func (h *ToolHandler) CallWithNilKiteGuard(toolName string, session *kc.KiteSessionData, fn func(*kc.KiteSessionData) (*mcp.CallToolResult, error)) (result *mcp.CallToolResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			h.deps.LoggerPort.Warn(context.Background(), "DEV_MODE: tool panicked (likely accessed session.Kite)", "tool", toolName, "panic", r)
+			h.Deps.LoggerPort.Warn(context.Background(), "DEV_MODE: tool panicked (likely accessed session.Kite)", "tool", toolName, "panic", r)
 			result = mcp.NewToolResultError(fmt.Sprintf("This tool (%s) requires a real Kite connection and is not available in DEV_MODE. Disable DEV_MODE to use it.", toolName))
 			err = nil
 		}
@@ -528,7 +577,7 @@ func PaginatedToolHandler[T any](manager *kc.Manager, toolName string, apiCall f
 			// Get the data
 			data, err := apiCall(ctx, session)
 			if err != nil {
-				handler.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
+				handler.Deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 				handler.trackToolError(ctx, toolName, "api_error")
 				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 			}
@@ -573,7 +622,7 @@ func PaginatedToolHandlerWithArgs[T any](manager *kc.Manager, toolName string, a
 			args := request.GetArguments()
 			data, err := apiCall(ctx, session, args)
 			if err != nil {
-				handler.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
+				handler.Deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 				handler.trackToolError(ctx, toolName, "api_error")
 				return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 			}

@@ -34,7 +34,7 @@ func (*AdminInviteFamilyMemberTool) Tool() mcp.Tool {
 func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_invite_family_member")
+		handler.TrackToolCall(ctx, "admin_invite_family_member")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -97,7 +97,7 @@ func (*AdminListFamilyTool) Tool() mcp.Tool {
 func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_list_family")
+		handler.TrackToolCall(ctx, "admin_list_family")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -189,7 +189,7 @@ func (*AdminRemoveFamilyMemberTool) Tool() mcp.Tool {
 func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_remove_family_member")
+		handler.TrackToolCall(ctx, "admin_remove_family_member")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil

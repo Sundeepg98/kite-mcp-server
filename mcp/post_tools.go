@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // sessionBrokerResolver wraps an already-resolved broker.Client so that
@@ -109,7 +110,7 @@ func (*PlaceOrderTool) Tool() mcp.Tool {
 func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "place_order")
+		handler.TrackToolCall(ctx, "place_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -154,10 +155,10 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the order.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "place_order", "user_declined")
+				handler.TrackToolError(ctx, "place_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -278,7 +279,7 @@ func (*ModifyOrderTool) Tool() mcp.Tool {
 func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "modify_order")
+		handler.TrackToolCall(ctx, "modify_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -302,10 +303,10 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before modifying the order.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("modify_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "modify_order", "user_declined")
+				handler.TrackToolError(ctx, "modify_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -332,7 +333,7 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.LoggerPort().Error(ctx, "Failed to modify order", err)
 				return mcp.NewToolResultError(fmt.Sprintf("modify_order: %s", err.Error())), nil
 			}
-			resp, terr := BusResult[broker.OrderResponse](raw)
+			resp, terr := common.BusResult[broker.OrderResponse](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "modify_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
@@ -367,7 +368,7 @@ func (*CancelOrderTool) Tool() mcp.Tool {
 func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "cancel_order")
+		handler.TrackToolCall(ctx, "cancel_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -391,7 +392,7 @@ func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				handler.LoggerPort().Error(ctx, "Failed to cancel order", err)
 				return mcp.NewToolResultError(fmt.Sprintf("cancel_order: %s", err.Error())), nil
 			}
-			resp, terr := BusResult[broker.OrderResponse](raw)
+			resp, terr := common.BusResult[broker.OrderResponse](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "cancel_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
@@ -454,7 +455,7 @@ func (*ConvertPositionTool) Tool() mcp.Tool {
 func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "convert_position")
+		handler.TrackToolCall(ctx, "convert_position")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 

@@ -59,12 +59,12 @@ type sectorExposureResponse struct {
 func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "sector_exposure")
+		handler.TrackToolCall(ctx, "sector_exposure")
 
 		return handler.WithSession(ctx, "sector_exposure", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
 			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "sector_exposure", "api_error")
+				handler.TrackToolError(ctx, "sector_exposure", "api_error")
 				return gomcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)

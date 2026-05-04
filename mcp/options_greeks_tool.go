@@ -232,7 +232,7 @@ func extractUnderlyingSymbol(tradingsymbol string) string {
 func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "options_greeks")
+		handler.TrackToolCall(ctx, "options_greeks")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "exchange", "tradingsymbol", "strike_price", "expiry_date", "option_type"); err != nil {
@@ -442,7 +442,7 @@ type legSpec struct {
 func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "options_payoff_builder")
+		handler.TrackToolCall(ctx, "options_payoff_builder")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "strategy", "underlying", "expiry", "strike1"); err != nil {

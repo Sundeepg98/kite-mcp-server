@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // ltpCacheMaxEntries caps the LTP cache so a long-running process or
@@ -60,7 +61,7 @@ func (*QuotesTool) Tool() mcp.Tool {
 func (*QuotesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_quotes")
+		handler.TrackToolCall(ctx, "get_quotes")
 		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
@@ -117,7 +118,7 @@ func (*InstrumentsSearchTool) Tool() mcp.Tool {
 func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "search_instruments")
+		handler.TrackToolCall(ctx, "search_instruments")
 		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
@@ -184,7 +185,7 @@ func (*InstrumentsSearchTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Apply pagination if limit is specified
 		originalLength := len(out)
-		paginatedData := ApplyPagination(out, params)
+		paginatedData := common.ApplyPagination(out, params)
 
 		// Create response with pagination metadata if pagination was applied
 		var responseData any
@@ -243,7 +244,7 @@ func (*HistoricalDataTool) Tool() mcp.Tool {
 func (*HistoricalDataTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_historical_data")
+		handler.TrackToolCall(ctx, "get_historical_data")
 		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
@@ -315,7 +316,7 @@ func (*LTPTool) Tool() mcp.Tool {
 func (*LTPTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_ltp")
+		handler.TrackToolCall(ctx, "get_ltp")
 		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters
@@ -371,7 +372,7 @@ func (*OHLCTool) Tool() mcp.Tool {
 func (*OHLCTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_ohlc")
+		handler.TrackToolCall(ctx, "get_ohlc")
 		p := NewArgParser(request.GetArguments())
 
 		// Validate required parameters

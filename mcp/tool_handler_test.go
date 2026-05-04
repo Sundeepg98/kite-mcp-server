@@ -17,51 +17,51 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// writeTools derivation: viewer role should be blocked from write tools
+// WriteToolsSnapshot() derivation: viewer role should be blocked from write tools
 // ---------------------------------------------------------------------------
 
 func TestWriteToolsDerivation(t *testing.T) {
 	t.Parallel()
-	// writeTools is populated at init time from GetAllTools annotations.
+	// WriteToolsSnapshot() is populated at init time from GetAllTools annotations.
 	t.Run("write tools populated", func(t *testing.T) {
 		t.Parallel()
-		assert.NotEmpty(t, writeTools, "writeTools should be populated at init")
+		assert.NotEmpty(t, WriteToolsSnapshot(), "WriteToolsSnapshot() should be populated at init")
 	})
 
 	t.Run("place_order is a write tool", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, writeTools["place_order"], "place_order should be a write tool")
+		assert.True(t, WriteToolsSnapshot()["place_order"], "place_order should be a write tool")
 	})
 
 	t.Run("modify_order is a write tool", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, writeTools["modify_order"], "modify_order should be a write tool")
+		assert.True(t, WriteToolsSnapshot()["modify_order"], "modify_order should be a write tool")
 	})
 
 	t.Run("cancel_order is a write tool", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, writeTools["cancel_order"], "cancel_order should be a write tool")
+		assert.True(t, WriteToolsSnapshot()["cancel_order"], "cancel_order should be a write tool")
 	})
 
 	t.Run("close_position is a write tool", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, writeTools["close_position"], "close_position should be a write tool")
+		assert.True(t, WriteToolsSnapshot()["close_position"], "close_position should be a write tool")
 	})
 
 	t.Run("set_alert is a write tool", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, writeTools["set_alert"], "set_alert should be a write tool")
+		assert.True(t, WriteToolsSnapshot()["set_alert"], "set_alert should be a write tool")
 	})
 
-	t.Run("read-only tools not in writeTools", func(t *testing.T) {
+	t.Run("read-only tools not in WriteToolsSnapshot()", func(t *testing.T) {
 		t.Parallel()
-		// Tools explicitly annotated as ReadOnlyHint=true should NOT be in writeTools.
+		// Tools explicitly annotated as ReadOnlyHint=true should NOT be in WriteToolsSnapshot().
 		allTools := GetAllTools()
 		for _, toolDef := range allTools {
 			tool := toolDef.Tool()
 			if tool.Annotations.ReadOnlyHint != nil && *tool.Annotations.ReadOnlyHint {
-				assert.False(t, writeTools[tool.Name],
-					"read-only tool %q should NOT be in writeTools", tool.Name)
+				assert.False(t, WriteToolsSnapshot()[tool.Name],
+					"read-only tool %q should NOT be in WriteToolsSnapshot()", tool.Name)
 			}
 		}
 	})
@@ -475,7 +475,7 @@ func TestAllToolsHaveAnnotations(t *testing.T) {
 
 func TestWriteToolsAreOrderToolsOrMore(t *testing.T) {
 	t.Parallel()
-	// Every riskguard order tool should be in writeTools too.
+	// Every riskguard order tool should be in WriteToolsSnapshot() too.
 	orderToolNames := []string{
 		"place_order", "modify_order",
 		"close_position", "close_all_positions",
@@ -483,7 +483,7 @@ func TestWriteToolsAreOrderToolsOrMore(t *testing.T) {
 		"place_mf_order", "place_mf_sip",
 	}
 	for _, name := range orderToolNames {
-		assert.True(t, writeTools[name],
-			"riskguard order tool %q should also be in writeTools", name)
+		assert.True(t, WriteToolsSnapshot()[name],
+			"riskguard order tool %q should also be in WriteToolsSnapshot()", name)
 	}
 }

@@ -39,7 +39,7 @@ func (*GetAlertHistoryReconstitutedTool) Tool() mcp.Tool {
 func (*GetAlertHistoryReconstitutedTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_alert_history_reconstituted")
+		handler.TrackToolCall(ctx, "get_alert_history_reconstituted")
 		p := NewArgParser(request.GetArguments())
 
 		if err := p.Required("alert_id"); err != nil {

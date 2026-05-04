@@ -92,7 +92,7 @@ const minBaselineCountForSufficiency = 5
 func (*AdminGetUserBaselineTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_get_user_baseline")
+		handler.TrackToolCall(ctx, "admin_get_user_baseline")
 
 		args := request.GetArguments()
 		email := strings.ToLower(strings.TrimSpace(NewArgParser(args).String("email", "")))

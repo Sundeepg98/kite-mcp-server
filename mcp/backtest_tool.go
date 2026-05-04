@@ -97,7 +97,7 @@ type backtestSignal struct {
 func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "historical_price_analyzer")
+		handler.TrackToolCall(ctx, "historical_price_analyzer")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "strategy", "exchange", "tradingsymbol"); err != nil {

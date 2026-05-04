@@ -125,7 +125,7 @@ func (*PlaceNativeAlertTool) Tool() mcp.Tool {
 func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "place_native_alert")
+		handler.TrackToolCall(ctx, "place_native_alert")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
@@ -172,12 +172,12 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 
 		// Request user confirmation for ATO alerts (they place real orders)
 		if alertType == "ato" {
-			if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+			if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Create ATO alert '%s' — %s:%s %s %s → auto-order on trigger",
 					params.Name, params.LHSExchange, params.LHSTradingSymbol,
 					params.Operator, formatNativeAlertRHS(params))
 				if err := requestConfirmation(ctx, srv, msg); err != nil {
-					handler.trackToolError(ctx, "place_native_alert", "user_declined")
+					handler.TrackToolError(ctx, "place_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 			}
@@ -227,7 +227,7 @@ func (*ListNativeAlertsTool) Tool() mcp.Tool {
 func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "list_native_alerts")
+		handler.TrackToolCall(ctx, "list_native_alerts")
 
 		return handler.WithSession(ctx, "list_native_alerts", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			nac, ok := session.Broker.(broker.NativeAlertCapable)
@@ -342,7 +342,7 @@ func (*ModifyNativeAlertTool) Tool() mcp.Tool {
 func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "modify_native_alert")
+		handler.TrackToolCall(ctx, "modify_native_alert")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "uuid", "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
@@ -388,12 +388,12 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Confirm ATO modifications
 		if alertType == "ato" {
-			if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+			if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Modify ATO alert %s → %s:%s %s %s",
 					uuid, params.LHSExchange, params.LHSTradingSymbol,
 					params.Operator, formatNativeAlertRHS(params))
 				if err := requestConfirmation(ctx, srv, msg); err != nil {
-					handler.trackToolError(ctx, "modify_native_alert", "user_declined")
+					handler.TrackToolError(ctx, "modify_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 			}
@@ -443,7 +443,7 @@ func (*DeleteNativeAlertTool) Tool() mcp.Tool {
 func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "delete_native_alert")
+		handler.TrackToolCall(ctx, "delete_native_alert")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "uuid"); err != nil {
@@ -506,7 +506,7 @@ func (*GetNativeAlertHistoryTool) Tool() mcp.Tool {
 func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_native_alert_history")
+		handler.TrackToolCall(ctx, "get_native_alert_history")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "uuid"); err != nil {

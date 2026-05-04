@@ -51,14 +51,14 @@ type adminUserEntry struct {
 func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_list_users")
+		handler.TrackToolCall(ctx, "admin_list_users")
 
 		args := request.GetArguments()
 		p := NewArgParser(args)
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 100)
 
-		uStore := handler.deps.Users.UserStore()
+		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -134,7 +134,7 @@ type adminEffectiveLimits struct {
 func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_get_user")
+		handler.TrackToolCall(ctx, "admin_get_user")
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
@@ -145,7 +145,7 @@ func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		uStore := handler.deps.Users.UserStore()
+		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -210,7 +210,7 @@ func (*AdminSuspendUserTool) Tool() mcp.Tool {
 func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_suspend_user")
+		handler.TrackToolCall(ctx, "admin_suspend_user")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -231,13 +231,13 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
-		uStore := handler.deps.Users.UserStore()
+		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Suspend user %s? This will freeze trading, mark as suspended, and terminate all active sessions.", targetEmail)
 			if reason != "" {
 				msg += fmt.Sprintf(" Reason: %s", reason)
@@ -286,7 +286,7 @@ func (*AdminActivateUserTool) Tool() mcp.Tool {
 func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_activate_user")
+		handler.TrackToolCall(ctx, "admin_activate_user")
 
 		args := request.GetArguments()
 		targetEmail := NewArgParser(args).String("target_email", "")
@@ -294,7 +294,7 @@ func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		uStore := handler.deps.Users.UserStore()
+		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -334,7 +334,7 @@ func (*AdminChangeRoleTool) Tool() mcp.Tool {
 func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_change_role")
+		handler.TrackToolCall(ctx, "admin_change_role")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -347,7 +347,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("target_email and role are required."), nil
 		}
 
-		uStore := handler.deps.Users.UserStore()
+		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
 			return mcp.NewToolResultError(ErrUserStoreNA), nil
 		}
@@ -359,7 +359,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Change %s role from %s to %s?", targetEmail, target.Role, newRole)
 			if strings.EqualFold(targetEmail, adminEmail) {
 				msg += " WARNING: You are changing your own role."

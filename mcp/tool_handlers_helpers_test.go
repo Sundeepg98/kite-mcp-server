@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // ---------------------------------------------------------------------------
@@ -149,9 +150,9 @@ func TestArgParser_BoolFromString(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestConfirmableToolsAreWriteTools(t *testing.T) {
 	// Every confirmable tool should also be a write tool
-	for toolName := range confirmableTools {
-		assert.True(t, writeTools[toolName],
-			"confirmable tool %s should also be in writeTools", toolName)
+	for toolName := range common.ConfirmableTools {
+		assert.True(t, WriteToolsSnapshot()[toolName],
+			"confirmable tool %s should also be in WriteToolsSnapshot()", toolName)
 	}
 }
 
@@ -221,7 +222,7 @@ func TestValidateRequired_AlertParams(t *testing.T) {
 
 
 // ---------------------------------------------------------------------------
-// Elicitation: confirmableTools consistency
+// Elicitation: common.ConfirmableTools consistency
 // ---------------------------------------------------------------------------
 func TestConfirmableTools_AllExistInRegistry(t *testing.T) {
 	allTools := GetAllTools()
@@ -229,7 +230,7 @@ func TestConfirmableTools_AllExistInRegistry(t *testing.T) {
 	for _, tool := range allTools {
 		names[tool.Tool().Name] = true
 	}
-	for toolName := range confirmableTools {
+	for toolName := range common.ConfirmableTools {
 		assert.True(t, names[toolName], "confirmable tool %s should exist in GetAllTools()", toolName)
 	}
 }

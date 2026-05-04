@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"context"
@@ -37,11 +37,11 @@ func (h *ToolHandler) MarshalResponse(data any, toolName string) (*mcp.CallToolR
 	cleaned := SanitizeData(data)
 	v, err := json.Marshal(cleaned)
 	if err != nil {
-		h.deps.LoggerPort.Error(context.Background(), "Failed to marshal response", err, "tool", toolName)
+		h.Deps.LoggerPort.Error(context.Background(), "Failed to marshal response", err, "tool", toolName)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to process response data: %s", err.Error())), nil
 	}
 
-	h.deps.LoggerPort.Debug(context.Background(), "Response marshaled successfully", "tool", toolName, "response_size", len(v))
+	h.Deps.LoggerPort.Debug(context.Background(), "Response marshaled successfully", "tool", toolName, "response_size", len(v))
 	structured := wrapForStructuredContent(cleaned)
 	return mcp.NewToolResultStructured(structured, string(v)), nil
 }
@@ -74,7 +74,7 @@ func (h *ToolHandler) HandleAPICall(ctx context.Context, toolName string, apiCal
 	return h.WithSession(ctx, toolName, func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 		data, err := apiCall(ctx, session)
 		if err != nil {
-			h.deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
+			h.Deps.LoggerPort.Error(ctx, "API call failed", err, "tool", toolName)
 			return mcp.NewToolResultError(fmt.Sprintf("%s: %s", toolName, err.Error())), nil
 		}
 

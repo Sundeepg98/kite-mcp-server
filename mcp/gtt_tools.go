@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // GTT (Good Till Triggered) order tools. Split out from post_tools.go
@@ -90,7 +91,7 @@ func (*PlaceGTTOrderTool) Tool() mcp.Tool {
 func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "place_gtt_order")
+		handler.TrackToolCall(ctx, "place_gtt_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -100,10 +101,10 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before placing the GTT.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("place_gtt_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "place_gtt_order", "user_declined")
+				handler.TrackToolError(ctx, "place_gtt_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -151,7 +152,7 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to place GTT order: %s", err.Error())), nil
 			}
-			resp, terr := BusResult[broker.GTTResponse](raw)
+			resp, terr := common.BusResult[broker.GTTResponse](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "place_gtt_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
@@ -180,7 +181,7 @@ func (*DeleteGTTOrderTool) Tool() mcp.Tool {
 func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "delete_gtt_order")
+		handler.TrackToolCall(ctx, "delete_gtt_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -202,7 +203,7 @@ func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to delete GTT order: %s", err.Error())), nil
 			}
-			resp, terr := BusResult[broker.GTTResponse](raw)
+			resp, terr := common.BusResult[broker.GTTResponse](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "delete_gtt_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil
@@ -289,7 +290,7 @@ func (*ModifyGTTOrderTool) Tool() mcp.Tool {
 func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "modify_gtt_order")
+		handler.TrackToolCall(ctx, "modify_gtt_order")
 		args := request.GetArguments()
 		p := NewArgParser(args)
 
@@ -299,10 +300,10 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Request user confirmation via elicitation before modifying the GTT.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := buildOrderConfirmMessage("modify_gtt_order", args)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
-				handler.trackToolError(ctx, "modify_gtt_order", "user_declined")
+				handler.TrackToolError(ctx, "modify_gtt_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
@@ -350,7 +351,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to modify GTT order: %s", err.Error())), nil
 			}
-			resp, terr := BusResult[broker.GTTResponse](raw)
+			resp, terr := common.BusResult[broker.GTTResponse](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "modify_gtt_order bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil

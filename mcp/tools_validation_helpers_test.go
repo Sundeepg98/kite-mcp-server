@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // Input validation tests: missing params, invalid values, arg parsing, pagination, type assertions.
@@ -33,7 +34,7 @@ func TestTrackToolCall_NoMetrics(t *testing.T) {
 	handler := NewToolHandler(mgr)
 	// Should not panic even without metrics enabled
 	assert.NotPanics(t, func() {
-		handler.trackToolCall(context.Background(), "test_tool")
+		handler.TrackToolCall(context.Background(), "test_tool")
 	})
 }
 
@@ -43,7 +44,7 @@ func TestTrackToolError_NoMetrics(t *testing.T) {
 	mgr := newTestManager(t)
 	handler := NewToolHandler(mgr)
 	assert.NotPanics(t, func() {
-		handler.trackToolError(context.Background(), "test_tool", "test_error")
+		handler.TrackToolError(context.Background(), "test_tool", "test_error")
 	})
 }
 
@@ -81,7 +82,7 @@ func TestIsAlphanumeric_LoginKeys(t *testing.T) {
 func TestApplyPagination_FromAtEnd(t *testing.T) {
 	t.Parallel()
 	data := []int{1, 2, 3}
-	result := ApplyPagination(data, PaginationParams{From: 3, Limit: 5})
+	result := common.ApplyPagination(data, PaginationParams{From: 3, Limit: 5})
 	assert.Empty(t, result)
 }
 
@@ -89,7 +90,7 @@ func TestApplyPagination_FromAtEnd(t *testing.T) {
 func TestApplyPagination_FromNegativeWithLimit(t *testing.T) {
 	t.Parallel()
 	data := []string{"a", "b", "c"}
-	result := ApplyPagination(data, PaginationParams{From: -10, Limit: 2})
+	result := common.ApplyPagination(data, PaginationParams{From: -10, Limit: 2})
 	assert.Equal(t, []string{"a", "b"}, result)
 }
 
@@ -279,13 +280,13 @@ func TestParsePaginationParams_AboveMax(t *testing.T) {
 
 func TestConfirmSchema_Structure(t *testing.T) {
 	t.Parallel()
-	assert.NotNil(t, confirmSchema)
-	assert.Equal(t, "object", confirmSchema["type"])
-	props, ok := confirmSchema["properties"].(map[string]any)
+	assert.NotNil(t, common.ConfirmSchema)
+	assert.Equal(t, "object", common.ConfirmSchema["type"])
+	props, ok := common.ConfirmSchema["properties"].(map[string]any)
 	assert.True(t, ok)
 	_, hasConfirm := props["confirm"]
 	assert.True(t, hasConfirm)
-	required, ok := confirmSchema["required"].([]string)
+	required, ok := common.ConfirmSchema["required"].([]string)
 	assert.True(t, ok)
 	assert.Contains(t, required, "confirm")
 }
@@ -294,15 +295,15 @@ func TestConfirmSchema_Structure(t *testing.T) {
 func TestWriteTools_AdditionalChecks(t *testing.T) {
 	t.Parallel()
 	// Delete account is write
-	assert.True(t, writeTools["delete_my_account"])
+	assert.True(t, WriteToolsSnapshot()["delete_my_account"])
 	// Paper toggle is write
-	assert.True(t, writeTools["paper_trading_toggle"])
+	assert.True(t, WriteToolsSnapshot()["paper_trading_toggle"])
 	// Paper reset is write (destructiveHint=true)
-	assert.True(t, writeTools["paper_trading_reset"])
+	assert.True(t, WriteToolsSnapshot()["paper_trading_reset"])
 	// Search instruments is read-only
-	assert.False(t, writeTools["search_instruments"])
+	assert.False(t, WriteToolsSnapshot()["search_instruments"])
 	// Server metrics is read-only
-	assert.False(t, writeTools["server_metrics"])
+	assert.False(t, WriteToolsSnapshot()["server_metrics"])
 }
 
 
@@ -605,7 +606,7 @@ func TestParsePaginationParams_NegativeFrom(t *testing.T) {
 func TestApplyPagination_NoLimit(t *testing.T) {
 	t.Parallel()
 	data := []int{1, 2, 3, 4, 5}
-	result := ApplyPagination(data, PaginationParams{From: 0, Limit: 0})
+	result := common.ApplyPagination(data, PaginationParams{From: 0, Limit: 0})
 	assert.Len(t, result, 5)
 }
 
@@ -613,7 +614,7 @@ func TestApplyPagination_NoLimit(t *testing.T) {
 func TestApplyPagination_WithLimit(t *testing.T) {
 	t.Parallel()
 	data := []int{1, 2, 3, 4, 5}
-	result := ApplyPagination(data, PaginationParams{From: 1, Limit: 2})
+	result := common.ApplyPagination(data, PaginationParams{From: 1, Limit: 2})
 	assert.Len(t, result, 2)
 	assert.Equal(t, 2, result[0])
 	assert.Equal(t, 3, result[1])
@@ -623,7 +624,7 @@ func TestApplyPagination_WithLimit(t *testing.T) {
 func TestApplyPagination_FromBeyondLength(t *testing.T) {
 	t.Parallel()
 	data := []int{1, 2, 3}
-	result := ApplyPagination(data, PaginationParams{From: 10, Limit: 2})
+	result := common.ApplyPagination(data, PaginationParams{From: 10, Limit: 2})
 	assert.Empty(t, result)
 }
 
@@ -631,7 +632,7 @@ func TestApplyPagination_FromBeyondLength(t *testing.T) {
 func TestApplyPagination_LimitBeyondRemaining(t *testing.T) {
 	t.Parallel()
 	data := []int{1, 2, 3, 4, 5}
-	result := ApplyPagination(data, PaginationParams{From: 3, Limit: 10})
+	result := common.ApplyPagination(data, PaginationParams{From: 3, Limit: 10})
 	assert.Len(t, result, 2)
 	assert.Equal(t, 4, result[0])
 	assert.Equal(t, 5, result[1])

@@ -41,7 +41,7 @@ func (*GetPnLJournalTool) Tool() mcp.Tool {
 func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_pnl_journal")
+		handler.TrackToolCall(ctx, "get_pnl_journal")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -49,7 +49,7 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Phase 3a Batch 5: route through the PnLServiceProvider port.
-		var pnlService = handler.deps.PnL.PnLService()
+		var pnlService = handler.Deps.PnL.PnLService()
 		if pnlService == nil {
 			return mcp.NewToolResultError("P&L journal not available (requires database persistence)"), nil
 		}

@@ -138,7 +138,7 @@ func (*CompositeAlertTool) Tool() mcp.Tool {
 func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "composite_alert")
+		handler.TrackToolCall(ctx, "composite_alert")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -179,20 +179,20 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		for i, rc := range rawConds {
 			cond, err := parseCompositeCondition(i, rc)
 			if err != nil {
-				handler.trackToolError(ctx, "composite_alert", "invalid_condition")
+				handler.TrackToolError(ctx, "composite_alert", "invalid_condition")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			// Resolve instrument token via the shared instruments store.
 			// We do this at intake (not at evaluator time) so the stored
 			// alert carries a stable instrument_token.
-			instMgr := handler.deps.Instruments.InstrumentsManager()
+			instMgr := handler.Deps.Instruments.InstrumentsManager()
 			if instMgr == nil {
 				return mcp.NewToolResultError("Instruments store not available"), nil
 			}
 			inst, err := instMgr.GetByTradingsymbol(cond.Exchange, cond.Tradingsymbol)
 			if err != nil {
-				handler.trackToolError(ctx, "composite_alert", "instrument_not_found")
+				handler.TrackToolError(ctx, "composite_alert", "instrument_not_found")
 				return mcp.NewToolResultError(fmt.Sprintf("conditions[%d]: instrument %s:%s not found", i, cond.Exchange, cond.Tradingsymbol)), nil
 			}
 			cond.InstrumentToken = inst.InstrumentToken
@@ -225,7 +225,7 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Conditions: specs,
 		})
 		if err != nil {
-			handler.trackToolError(ctx, "composite_alert", "persistence_error")
+			handler.TrackToolError(ctx, "composite_alert", "persistence_error")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create composite alert: %s", err)), nil
 		}
 		alertID, _ := raw.(string)
@@ -249,7 +249,7 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Note:       responseNote,
 		}
 
-		handler.deps.LoggerPort.Info(ctx, "composite_alert created",
+		handler.Deps.LoggerPort.Info(ctx, "composite_alert created",
 			"email", email,
 			"alert_id", alertID,
 			"name", name,

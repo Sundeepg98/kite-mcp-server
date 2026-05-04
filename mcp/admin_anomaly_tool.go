@@ -137,7 +137,7 @@ type adminAnomalyFlagsResponse struct {
 func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_list_anomaly_flags")
+		handler.TrackToolCall(ctx, "admin_list_anomaly_flags")
 
 		p := NewArgParser(request.GetArguments())
 		hours := p.Int("hours", adminAnomalyDefaultHours)

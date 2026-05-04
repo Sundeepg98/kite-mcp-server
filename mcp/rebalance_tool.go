@@ -77,7 +77,7 @@ type rebalanceResponse struct {
 func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "portfolio_analysis")
+		handler.TrackToolCall(ctx, "portfolio_analysis")
 
 		args := request.GetArguments()
 
@@ -132,7 +132,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			// Fetch current holdings via CQRS query bus
 			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "portfolio_analysis", "api_error")
+				handler.TrackToolError(ctx, "portfolio_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)
@@ -171,7 +171,7 @@ func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			if len(ltpNeeded) > 0 {
 				raw, ltpErr := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: ltpNeeded})
 				if ltpErr != nil {
-					handler.trackToolError(ctx, "portfolio_analysis", "ltp_error")
+					handler.TrackToolError(ctx, "portfolio_analysis", "ltp_error")
 					return mcp.NewToolResultError("Failed to fetch LTP for target symbols: " + ltpErr.Error()), nil
 				}
 				ltpResp := raw.(map[string]broker.LTP)

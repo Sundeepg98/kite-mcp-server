@@ -28,7 +28,7 @@ func (*StartTickerTool) Tool() mcp.Tool {
 func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "start_ticker")
+		handler.TrackToolCall(ctx, "start_ticker")
 
 		return handler.WithSession(ctx, "start_ticker", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
@@ -40,8 +40,8 @@ func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Resolve API key and access token from manager (client fields are private)
-			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
-			accessToken := handler.deps.Credentials.GetAccessTokenForEmail(email)
+			apiKey := handler.Deps.Credentials.GetAPIKeyForEmail(email)
+			accessToken := handler.Deps.Credentials.GetAccessTokenForEmail(email)
 
 			if accessToken == "" {
 				return mcp.NewToolResultError("No access token — please login first"), nil
@@ -52,7 +52,7 @@ func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				APIKey:      apiKey,
 				AccessToken: accessToken,
 			}); err != nil {
-				handler.trackToolError(ctx, "start_ticker", "start_error")
+				handler.TrackToolError(ctx, "start_ticker", "start_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -77,7 +77,7 @@ func (*StopTickerTool) Tool() mcp.Tool {
 func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "stop_ticker")
+		handler.TrackToolCall(ctx, "stop_ticker")
 
 		return handler.WithSession(ctx, "stop_ticker", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
@@ -91,7 +91,7 @@ func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.StopTickerCommand{
 				Email: email,
 			}); err != nil {
-				handler.trackToolError(ctx, "stop_ticker", "stop_error")
+				handler.TrackToolError(ctx, "stop_ticker", "stop_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -116,7 +116,7 @@ func (*TickerStatusTool) Tool() mcp.Tool {
 func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "ticker_status")
+		handler.TrackToolCall(ctx, "ticker_status")
 
 		return handler.WithSession(ctx, "ticker_status", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
@@ -129,7 +129,7 @@ func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.TickerStatusQuery{Email: email})
 			if err != nil {
-				handler.trackToolError(ctx, "ticker_status", "status_error")
+				handler.TrackToolError(ctx, "ticker_status", "status_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			status := raw.(*ticker.Status)
@@ -164,7 +164,7 @@ func (*SubscribeInstrumentsTool) Tool() mcp.Tool {
 func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "subscribe_instruments")
+		handler.TrackToolCall(ctx, "subscribe_instruments")
 
 		args := request.GetArguments()
 		if err := ValidateRequired(args, "instruments"); err != nil {
@@ -199,7 +199,7 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				Tokens: tokens,
 				Mode:   modeStr,
 			}); err != nil {
-				handler.trackToolError(ctx, "subscribe_instruments", "subscribe_error")
+				handler.TrackToolError(ctx, "subscribe_instruments", "subscribe_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
@@ -233,7 +233,7 @@ func (*UnsubscribeInstrumentsTool) Tool() mcp.Tool {
 func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "unsubscribe_instruments")
+		handler.TrackToolCall(ctx, "unsubscribe_instruments")
 
 		args := request.GetArguments()
 		if err := ValidateRequired(args, "instruments"); err != nil {
@@ -263,7 +263,7 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				Email:  email,
 				Tokens: tokens,
 			}); err != nil {
-				handler.trackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
+				handler.TrackToolError(ctx, "unsubscribe_instruments", "unsubscribe_error")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 

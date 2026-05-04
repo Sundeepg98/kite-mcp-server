@@ -50,7 +50,7 @@ func (*GetPositionHistoryReconstitutedTool) Tool() mcp.Tool {
 func (*GetPositionHistoryReconstitutedTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_position_history_reconstituted")
+		handler.TrackToolCall(ctx, "get_position_history_reconstituted")
 		p := NewArgParser(request.GetArguments())
 
 		if err := p.Required("exchange", "tradingsymbol", "product"); err != nil {

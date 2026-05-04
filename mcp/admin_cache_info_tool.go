@@ -110,7 +110,7 @@ func cacheHealthy(hitRate float64, currentEntries int64, maxEntries int) bool {
 func (*AdminStatsCacheInfoTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, _ string, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_stats_cache_info")
+		handler.TrackToolCall(ctx, "admin_stats_cache_info")
 
 		// Concrete store is the only path to StatsCacheHitRate — this accessor
 		// is not part of AuditStoreInterface, and as a read-only admin tool we

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 func TestSanitizeForLLM_EmptyPassthrough(t *testing.T) {
@@ -45,7 +46,7 @@ func TestSanitizeForLLM_PromptInjectionPayload(t *testing.T) {
 func TestSanitizeForLLM_LongBodyWrapped(t *testing.T) {
 	t.Parallel()
 	// Long string crosses the wrap threshold → [UNTRUSTED] markers.
-	long := strings.Repeat("x", sanitizeWrapMinLen+10)
+	long := strings.Repeat("x", common.SanitizeWrapMinLen+10)
 	got := SanitizeForLLM(long)
 	assert.True(t, strings.HasPrefix(got, "[UNTRUSTED]"))
 	assert.True(t, strings.HasSuffix(got, "[/UNTRUSTED]"))
@@ -177,7 +178,7 @@ func TestSanitizeData_NoStringsNoChange(t *testing.T) {
 func TestSanitizeData_LongStringFieldWrapped(t *testing.T) {
 	t.Parallel()
 	// A long field value gets the [UNTRUSTED] wrap.
-	long := strings.Repeat("x", sanitizeWrapMinLen+10)
+	long := strings.Repeat("x", common.SanitizeWrapMinLen+10)
 	in := map[string]string{"description": long}
 	out := SanitizeData(in).(map[string]string)
 	assert.True(t, strings.HasPrefix(out["description"], "[UNTRUSTED]"))

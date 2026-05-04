@@ -43,7 +43,7 @@ type adminGetRiskStatusResponse struct {
 func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_get_risk_status")
+		handler.TrackToolCall(ctx, "admin_get_risk_status")
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
@@ -54,7 +54,7 @@ func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		rg := handler.deps.RiskGuard.RiskGuard()
+		rg := handler.Deps.RiskGuard.RiskGuard()
 		if rg == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
@@ -104,7 +104,7 @@ func (*AdminFreezeUserTool) Tool() mcp.Tool {
 func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_freeze_user")
+		handler.TrackToolCall(ctx, "admin_freeze_user")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -125,13 +125,13 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError(ErrSelfAction), nil
 		}
 
-		guard := handler.deps.RiskGuard.RiskGuard()
+		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Freeze trading for %s? Reason: %s", targetEmail, reason)
 			if err := requestConfirmation(ctx, srv, msg); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Freeze cancelled: %s", err.Error())), nil
@@ -147,7 +147,7 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		// Dispatch domain event (transport concern — stays in handler).
-		if ed := handler.deps.Events.EventDispatcher(); ed != nil {
+		if ed := handler.Deps.Events.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.UserFrozenEvent{
 				Email:    targetEmail,
 				FrozenBy: "admin",
@@ -185,7 +185,7 @@ func (*AdminUnfreezeUserTool) Tool() mcp.Tool {
 func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_unfreeze_user")
+		handler.TrackToolCall(ctx, "admin_unfreeze_user")
 
 		args := request.GetArguments()
 		targetEmail := NewArgParser(args).String("target_email", "")
@@ -193,7 +193,7 @@ func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
 		}
 
-		guard := handler.deps.RiskGuard.RiskGuard()
+		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
@@ -233,7 +233,7 @@ func (*AdminFreezeGlobalTool) Tool() mcp.Tool {
 func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_freeze_global")
+		handler.TrackToolCall(ctx, "admin_freeze_global")
 		adminEmail, errResult := adminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
@@ -241,7 +241,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Solo Pro users (max_users=1) shouldn't use global freeze — it only
 		// affects themselves. Require a Family (Pro) or Premium plan.
-		if bs := handler.deps.Billing.BillingStore(); bs != nil {
+		if bs := handler.Deps.Billing.BillingStore(); bs != nil {
 			if sub := bs.GetSubscription(adminEmail); sub != nil && sub.MaxUsers <= 1 {
 				return mcp.NewToolResultError("Global freeze requires a Family or Premium plan."), nil
 			}
@@ -258,13 +258,13 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError("confirm must be true. This action blocks ALL users from placing orders."), nil
 		}
 
-		guard := handler.deps.RiskGuard.RiskGuard()
+		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}
 
 		// Double elicitation: two sequential confirmations.
-		if srv := handler.deps.MCPServer.MCPServer(); srv != nil {
+		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg1 := fmt.Sprintf("WARNING: Freeze trading for ALL users on the server? Reason: %s", reason)
 			if err := requestConfirmation(ctx, srv, msg1); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Global freeze cancelled: %s", err.Error())), nil
@@ -282,7 +282,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		if ed := handler.deps.Events.EventDispatcher(); ed != nil {
+		if ed := handler.Deps.Events.EventDispatcher(); ed != nil {
 			ed.Dispatch(domain.GlobalFreezeEvent{
 				By:        adminEmail,
 				Reason:    reason,
@@ -318,11 +318,11 @@ func (*AdminUnfreezeGlobalTool) Tool() mcp.Tool {
 func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "admin_unfreeze_global")
+		handler.TrackToolCall(ctx, "admin_unfreeze_global")
 		if _, errResult := adminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
-		guard := handler.deps.RiskGuard.RiskGuard()
+		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
 			return mcp.NewToolResultError(ErrRiskGuardNA), nil
 		}

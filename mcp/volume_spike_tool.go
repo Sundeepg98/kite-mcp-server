@@ -98,7 +98,7 @@ func (*VolumeSpikeDetectorTool) Tool() mcp.Tool {
 func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "volume_spike_detector")
+		handler.TrackToolCall(ctx, "volume_spike_detector")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -142,7 +142,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 				Instruments: instrumentIDs,
 			})
 			if err != nil {
-				handler.trackToolError(ctx, "volume_spike_detector", "quotes_error")
+				handler.TrackToolError(ctx, "volume_spike_detector", "quotes_error")
 				return mcp.NewToolResultError(fmt.Sprintf("failed to fetch current quotes: %s", err.Error())), nil
 			}
 			quotes, ok := quotesRaw.(map[string]broker.Quote)
@@ -179,7 +179,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 				// Resolve the instrument token needed by the historical
 				// endpoint. We got it from the caller as a string ID so
 				// go via the instruments manager.
-				instMgr := handler.deps.Instruments.InstrumentsManager()
+				instMgr := handler.Deps.Instruments.InstrumentsManager()
 				if instMgr == nil {
 					skipped = append(skipped, volumeSpikeSkipped{Instrument: id, Reason: "instruments store not available"})
 					continue
@@ -201,7 +201,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 					// Skip, don't fail the whole scan — a single
 					// suspended / newly-listed instrument shouldn't take
 					// out the rest of the run.
-					handler.deps.LoggerPort.Warn(ctx, "volume_spike_detector: historical fetch failed",
+					handler.Deps.LoggerPort.Warn(ctx, "volume_spike_detector: historical fetch failed",
 						"instrument", id,
 						"error", err)
 					skipped = append(skipped, volumeSpikeSkipped{Instrument: id, Reason: fmt.Sprintf("historical data unavailable: %s", err.Error())})
@@ -308,7 +308,7 @@ func resolveVolumeSpikeInstruments(handler *ToolHandler, email string, requested
 	}
 
 	// Fallback: use the caller's watchlist items.
-	wstore := handler.deps.Watchlist.WatchlistStore()
+	wstore := handler.Deps.Watchlist.WatchlistStore()
 	if wstore == nil {
 		return ids, skipped
 	}

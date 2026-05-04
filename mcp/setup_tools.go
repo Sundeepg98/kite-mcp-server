@@ -260,7 +260,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Track login tool usage with session context
 		handler := NewToolHandler(manager)
-		handler.trackToolCall(ctx, "login")
+		handler.TrackToolCall(ctx, "login")
 
 		// Get MCP client session from context
 		mcpClientSession := server.ClientSessionFromContext(ctx)
@@ -301,7 +301,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				APIKey:    apiKey,
 				APISecret: apiSecret,
 			}); err != nil {
-				handler.trackToolError(ctx, "login", "credential_persist_failed")
+				handler.TrackToolError(ctx, "login", "credential_persist_failed")
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to persist credentials: %s", err.Error())), nil
 			}
 			// Round-5 Phase B (Sessions): session data clear routes through the
@@ -320,17 +320,17 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check if credentials are configured (global or per-user)
-		if !handler.deps.Credentials.HasGlobalCredentials() && !handler.deps.Credentials.HasUserCredentials(email) {
+		if !handler.Deps.Credentials.HasGlobalCredentials() && !handler.Deps.Credentials.HasUserCredentials(email) {
 			handler.LoggerPort().Info(ctx, "No credentials configured for login")
-			handler.trackToolError(ctx, "login", "no_credentials")
+			handler.TrackToolError(ctx, "login", "no_credentials")
 			return mcp.NewToolResultError("No Kite API credentials configured. Either set KITE_API_KEY and KITE_API_SECRET environment variables, or provide api_key and api_secret parameters to register your own credentials."), nil
 		}
 
 		// Get or create a Kite session for this MCP session (email-aware)
-		kiteSession, isNew, err := handler.deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
+		kiteSession, isNew, err := handler.Deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
 		if err != nil {
 			handler.LoggerPort().Error(ctx, "Failed to get or create Kite session", err, "session_id", mcpSessionID)
-			handler.trackToolError(ctx, "login", "session_error")
+			handler.TrackToolError(ctx, "login", "session_error")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get or create Kite session: %s", err.Error())), nil
 		}
 
@@ -340,7 +340,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check cached token (per-email, Fly.io multi-user flow)
-		if isNew && email != "" && handler.deps.Credentials.HasCachedToken(email) {
+		if isNew && email != "" && handler.Deps.Credentials.HasCachedToken(email) {
 			profile, err := kiteSession.Kite.GetUserProfile()
 			if err == nil {
 				handler.LoggerPort().Info(ctx, "Cached token valid", "session_id", mcpSessionID, "email", email, "user", profile.UserName)
@@ -364,7 +364,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 		}
 
-		if isNew && handler.deps.Credentials.HasPreAuth() {
+		if isNew && handler.Deps.Credentials.HasPreAuth() {
 			// Pre-auth session — verify the token works
 			profile, err := kiteSession.Kite.GetUserProfile()
 			if err == nil {
@@ -412,7 +412,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				}
 
 				// Create a new session
-				_, _, err = handler.deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
+				_, _, err = handler.Deps.Sessions.GetOrCreateSessionWithEmail(mcpSessionID, email)
 				if err != nil {
 					handler.LoggerPort().Error(ctx, "Failed to create new Kite session", err, "session_id", mcpSessionID)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to create new Kite session: %s", err.Error())), nil
@@ -454,8 +454,8 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Auto-open browser in local/STDIO mode. Phase 3a Batch 2:
 		// route through the BrowserOpener port.
-		if handler.deps.Browser != nil {
-			if err := handler.deps.Browser.OpenBrowser(url); err != nil {
+		if handler.Deps.Browser != nil {
+			if err := handler.Deps.Browser.OpenBrowser(url); err != nil {
 				handler.LoggerPort().Warn(ctx, "Failed to auto-open browser", "error", err)
 			}
 		}
@@ -499,7 +499,7 @@ func (*OpenDashboardTool) Tool() mcp.Tool {
 func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler := NewToolHandler(manager)
-		handler.trackToolCall(ctx, "open_dashboard")
+		handler.TrackToolCall(ctx, "open_dashboard")
 
 		// Parse page and validate through the QueryBus. URL construction
 		// itself stays in the handler because it depends on infrastructure
@@ -517,10 +517,10 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Build base URL
 		var baseURL string
-		if handler.deps.Config.IsLocalMode() {
+		if handler.Deps.Config.IsLocalMode() {
 			baseURL = "http://127.0.0.1:8080"
 		} else {
-			baseURL = handler.deps.Config.ExternalURL()
+			baseURL = handler.Deps.Config.ExternalURL()
 			if baseURL == "" {
 				return mcp.NewToolResultError("External URL not configured"), nil
 			}
@@ -563,8 +563,8 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Auto-open browser in local mode. Phase 3a Batch 2: route
 		// through the BrowserOpener port.
-		if handler.deps.Browser != nil {
-			if err := handler.deps.Browser.OpenBrowser(dashURL); err != nil {
+		if handler.Deps.Browser != nil {
+			if err := handler.Deps.Browser.OpenBrowser(dashURL); err != nil {
 				handler.LoggerPort().Warn(ctx, "Failed to auto-open dashboard", "error", err)
 			}
 		}
@@ -572,7 +572,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// Page title for display
 		pageTitle := strings.ToUpper(page[:1]) + page[1:]
 
-		if handler.deps.Config.IsLocalMode() {
+		if handler.Deps.Config.IsLocalMode() {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{Type: "text", Text: fmt.Sprintf("%s dashboard opened in your browser: %s", pageTitle, dashURL)},

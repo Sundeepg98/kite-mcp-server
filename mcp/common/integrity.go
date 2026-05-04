@@ -1,4 +1,4 @@
-// Package mcp — tool-description integrity manifest.
+// Package common — tool-description integrity manifest.
 //
 // Threat model (Invariant Labs "tool poisoning" / "line jumping"):
 // a malicious proxy sits between the Claude client and this MCP server
@@ -18,7 +18,7 @@
 // server can't reliably inspect the outbound tools/list payload after
 // marshaling. We hash what the server built; the operator compares what
 // the client sees. Explicitly *not* a runtime request-response check.
-package mcp
+package common
 
 import (
 	"crypto/sha256"
@@ -158,8 +158,12 @@ var (
 	currentManifest ToolManifest
 )
 
-// storeToolManifest is called from RegisterTools after tool filtering.
-func storeToolManifest(m ToolManifest) {
+// StoreToolManifest is called from RegisterTools after tool filtering.
+//
+// Anchor 1 PR 1.1: capitalised from `storeToolManifest` so the mcp/
+// root's RegisterToolsForRegistry can call it across the package
+// boundary.
+func StoreToolManifest(m ToolManifest) {
 	manifestMu.Lock()
 	currentManifest = m
 	manifestMu.Unlock()

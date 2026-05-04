@@ -76,7 +76,7 @@ type listMCPSessionsResponse struct {
 func (*ListMCPSessionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "list_mcp_sessions")
+		handler.TrackToolCall(ctx, "list_mcp_sessions")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -90,7 +90,7 @@ func (*ListMCPSessionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		all := reg.ListActiveSessions()
-		auditStore := handler.deps.Audit.AuditStore()
+		auditStore := handler.Deps.Audit.AuditStore()
 		now := time.Now()
 		cutoff := now.Add(-1 * time.Hour)
 
@@ -142,7 +142,7 @@ func (*ListMCPSessionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 						entry.LastActivity = lastAct.UTC().Format(time.RFC3339)
 					}
 				} else {
-					handler.deps.LoggerPort.Warn(ctx, "list_mcp_sessions: audit list failed",
+					handler.Deps.LoggerPort.Warn(ctx, "list_mcp_sessions: audit list failed",
 						"email", email, "session_id", s.ID, "error", err)
 				}
 			}
@@ -190,7 +190,7 @@ type revokeMCPSessionResponse struct {
 func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "revoke_mcp_session")
+		handler.TrackToolCall(ctx, "revoke_mcp_session")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -218,7 +218,7 @@ func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		}
 		kd, ok := s.Data.(*kc.KiteSessionData)
 		if !ok || kd == nil || !strings.EqualFold(kd.Email, email) {
-			handler.deps.LoggerPort.Warn(ctx, "revoke_mcp_session: ownership mismatch",
+			handler.Deps.LoggerPort.Warn(ctx, "revoke_mcp_session: ownership mismatch",
 				"caller_email", email, "session_id", sessionID)
 			return mcp.NewToolResultError(fmt.Sprintf("Session not found: %s", truncateSessionID(sessionID))), nil
 		}

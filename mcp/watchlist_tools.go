@@ -36,7 +36,7 @@ func (*CreateWatchlistTool) Tool() mcp.Tool {
 func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "create_watchlist")
+		handler.TrackToolCall(ctx, "create_watchlist")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -55,7 +55,7 @@ func (*CreateWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.CreateWatchlistCommand{Email: email, Name: name})
 		if err != nil {
-			handler.trackToolError(ctx, "create_watchlist", "create_error")
+			handler.TrackToolError(ctx, "create_watchlist", "create_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		result, ok := raw.(*usecases.CreateWatchlistResult)
@@ -90,7 +90,7 @@ func (*DeleteWatchlistTool) Tool() mcp.Tool {
 func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "delete_watchlist")
+		handler.TrackToolCall(ctx, "delete_watchlist")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -110,7 +110,7 @@ func (*DeleteWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteWatchlistCommand{Email: email, WatchlistID: wl.ID})
 		if err != nil {
-			handler.trackToolError(ctx, "delete_watchlist", "delete_error")
+			handler.TrackToolError(ctx, "delete_watchlist", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		result, ok := raw.(*usecases.DeleteWatchlistResult)
@@ -156,7 +156,7 @@ func (*AddToWatchlistTool) Tool() mcp.Tool {
 func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "add_to_watchlist")
+		handler.TrackToolCall(ctx, "add_to_watchlist")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -197,7 +197,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			exchange := parts[0]
 
 			// Resolve instrument to get token
-			inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instID)
+			inst, err := handler.Deps.Instruments.InstrumentsManager().GetByID(instID)
 			if err != nil {
 				failed = append(failed, fmt.Sprintf("%s (not found)", instID))
 				continue
@@ -231,7 +231,7 @@ func (*AddToWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		if len(added) == 0 {
-			handler.trackToolError(ctx, "add_to_watchlist", "all_failed")
+			handler.TrackToolError(ctx, "add_to_watchlist", "all_failed")
 			return mcp.NewToolResultError(result.String()), nil
 		}
 
@@ -263,7 +263,7 @@ func (*RemoveFromWatchlistTool) Tool() mcp.Tool {
 func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "remove_from_watchlist")
+		handler.TrackToolCall(ctx, "remove_from_watchlist")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -298,7 +298,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			if strings.Contains(ref, ":") {
 				parts := strings.SplitN(ref, ":", 2)
 				if len(parts) == 2 {
-					found := handler.deps.Watchlist.WatchlistStore().FindItemBySymbol(wl.ID, parts[0], parts[1])
+					found := handler.Deps.Watchlist.WatchlistStore().FindItemBySymbol(wl.ID, parts[0], parts[1])
 					if found != nil {
 						itemID = found.ID
 					} else {
@@ -327,7 +327,7 @@ func (*RemoveFromWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}
 
 		if len(removed) == 0 {
-			handler.trackToolError(ctx, "remove_from_watchlist", "all_failed")
+			handler.TrackToolError(ctx, "remove_from_watchlist", "all_failed")
 			return mcp.NewToolResultError(result.String()), nil
 		}
 
@@ -358,7 +358,7 @@ func (*GetWatchlistTool) Tool() mcp.Tool {
 func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_watchlist")
+		handler.TrackToolCall(ctx, "get_watchlist")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -381,7 +381,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetWatchlistQuery{Email: email, WatchlistID: wl.ID})
 		if err != nil {
-			handler.trackToolError(ctx, "get_watchlist", "get_error")
+			handler.TrackToolError(ctx, "get_watchlist", "get_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		items := raw.([]*watchlist.WatchlistItem)
@@ -402,7 +402,7 @@ func (*GetWatchlistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Get Kite session for LTP call
 			sess := server.ClientSessionFromContext(ctx)
 			sessionID := sess.SessionID()
-			kiteSession, _, clientErr := handler.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
+			kiteSession, _, clientErr := handler.Deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr == nil {
 				ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
 					return kiteSession.Kite.GetLTP(instrIDs...)
@@ -508,7 +508,7 @@ func (*ListWatchlistsTool) Tool() mcp.Tool {
 func (*ListWatchlistsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "list_watchlists")
+		handler.TrackToolCall(ctx, "list_watchlists")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {

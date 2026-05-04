@@ -68,7 +68,7 @@ type complianceResponse struct {
 func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "sebi_compliance_status")
+		handler.TrackToolCall(ctx, "sebi_compliance_status")
 
 		return handler.WithSession(ctx, "sebi_compliance_status", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)

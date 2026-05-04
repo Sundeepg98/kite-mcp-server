@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // fakeIntegrityTool is a minimal Tool used only by integrity tests so we
@@ -162,7 +163,7 @@ func TestToolManifest_SingletonRoundTrip(t *testing.T) {
 		&fakeIntegrityTool{name: "beta", description: "B"},
 	}
 	m := ComputeToolManifest(tools)
-	storeToolManifest(m)
+	common.StoreToolManifest(m)
 
 	got := GetToolManifest()
 	require.Equal(t, m.Tools, got.Tools)

@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // --- Trading Context Tool ---
@@ -93,7 +94,7 @@ type alertSummary struct {
 func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "trading_context")
+		handler.TrackToolCall(ctx, "trading_context")
 
 		return handler.WithSession(ctx, "trading_context", func(_ *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			email := oauth.EmailFromContext(ctx)
@@ -103,7 +104,7 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			ucResult, terr := BusResult[*usecases.TradingContextResult](raw)
+			ucResult, terr := common.BusResult[*usecases.TradingContextResult](raw)
 			if terr != nil {
 				handler.LoggerPort().Error(ctx, "trading_context bus result type mismatch", terr)
 				return mcp.NewToolResultError(terr.Error()), nil

@@ -66,7 +66,7 @@ func (*OrderMarginsTool) Tool() mcp.Tool {
 func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_order_margins")
+		handler.TrackToolCall(ctx, "get_order_margins")
 		args := request.GetArguments()
 
 		// Validate required parameters
@@ -138,7 +138,7 @@ func (*BasketMarginsTool) Tool() mcp.Tool {
 func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_basket_margins")
+		handler.TrackToolCall(ctx, "get_basket_margins")
 		args := request.GetArguments()
 
 		// Validate required parameters
@@ -209,7 +209,7 @@ func (*OrderChargesTool) Tool() mcp.Tool {
 func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_order_charges")
+		handler.TrackToolCall(ctx, "get_order_charges")
 		args := request.GetArguments()
 
 		// Validate required parameters

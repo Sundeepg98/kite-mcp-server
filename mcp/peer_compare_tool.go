@@ -140,7 +140,7 @@ func screenerURL(symbol string) string {
 func (*PeerCompareTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "peer_compare")
+		handler.TrackToolCall(ctx, "peer_compare")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "symbols"); err != nil {

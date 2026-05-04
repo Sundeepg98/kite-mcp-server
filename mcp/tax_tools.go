@@ -116,14 +116,14 @@ type taxHarvestResponse struct {
 func (*TaxHarvestTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "tax_loss_analysis")
+		handler.TrackToolCall(ctx, "tax_loss_analysis")
 
 		assumeDays := NewArgParser(request.GetArguments()).Int("assume_ltcg_days", 0)
 
 		return handler.WithSession(ctx, "tax_loss_analysis", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 			if err != nil {
-				handler.trackToolError(ctx, "tax_loss_analysis", "api_error")
+				handler.TrackToolError(ctx, "tax_loss_analysis", "api_error")
 				return mcp.NewToolResultError("Failed to get holdings: " + err.Error()), nil
 			}
 			portfolio := raw.(*usecases.PortfolioResult)

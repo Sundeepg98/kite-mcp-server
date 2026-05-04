@@ -85,7 +85,7 @@ type optionChainResponse struct {
 func (*OptionChainTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_option_chain")
+		handler.TrackToolCall(ctx, "get_option_chain")
 		args := request.GetArguments()
 
 		if err := ValidateRequired(args, "underlying"); err != nil {

@@ -50,10 +50,10 @@ func (*SetupTelegramTool) Tool() mcp.Tool {
 func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "setup_telegram")
+		handler.TrackToolCall(ctx, "setup_telegram")
 
 		// Phase 3a Batch 2: route through the TelegramNotifierProvider port.
-		if handler.deps.TelegramNotifier == nil || handler.deps.TelegramNotifier.TelegramNotifier() == nil {
+		if handler.Deps.TelegramNotifier == nil || handler.Deps.TelegramNotifier.TelegramNotifier() == nil {
 			return mcp.NewToolResultError("Telegram notifications are not configured on this server. Contact the server admin."), nil
 		}
 
@@ -122,7 +122,7 @@ func (*SetAlertTool) Tool() mcp.Tool {
 func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "set_alert")
+		handler.TrackToolCall(ctx, "set_alert")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -155,7 +155,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Resolve instrument to get token, exchange, and tradingsymbol
-		inst, err := handler.deps.Instruments.InstrumentsManager().GetByID(instrumentID)
+		inst, err := handler.Deps.Instruments.InstrumentsManager().GetByID(instrumentID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Instrument not found: %s", instrumentID)), nil
 		}
@@ -172,7 +172,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if alerts.IsPercentageDirection(direction) && referencePrice <= 0 {
 			sess := server.ClientSessionFromContext(ctx)
 			sessionID := sess.SessionID()
-			kiteSession, _, clientErr := handler.deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
+			kiteSession, _, clientErr := handler.Deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
 			}
@@ -203,11 +203,11 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		alertID := raw.(string)
 
 		// Auto-start ticker and subscribe instrument
-		tickerSvc := handler.deps.Ticker.TickerService()
+		tickerSvc := handler.Deps.Ticker.TickerService()
 		tickerMsg := ""
 		if !tickerSvc.IsRunning(email) {
-			apiKey := handler.deps.Credentials.GetAPIKeyForEmail(email)
-			if entry, ok := handler.deps.Tokens.TokenStore().Get(email); ok {
+			apiKey := handler.Deps.Credentials.GetAPIKeyForEmail(email)
+			if entry, ok := handler.Deps.Tokens.TokenStore().Get(email); ok {
 				if startErr := tickerSvc.Start(email, apiKey, entry.AccessToken); startErr != nil {
 					handler.LoggerPort().Warn(ctx, "Failed to auto-start ticker for alert", "email", email, "error", startErr)
 				} else {
@@ -235,7 +235,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Check if Telegram is configured
-		if _, ok := handler.deps.Telegram.TelegramStore().GetTelegramChatID(email); !ok {
+		if _, ok := handler.Deps.Telegram.TelegramStore().GetTelegramChatID(email); !ok {
 			result += "\n\nNote: Telegram not configured. Use setup_telegram to receive notifications."
 		}
 
@@ -259,7 +259,7 @@ func (*ListAlertsTool) Tool() mcp.Tool {
 func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "list_alerts")
+		handler.TrackToolCall(ctx, "list_alerts")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -301,7 +301,7 @@ func (*DeleteAlertTool) Tool() mcp.Tool {
 func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "delete_alert")
+		handler.TrackToolCall(ctx, "delete_alert")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -319,7 +319,7 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			Email:   email,
 			AlertID: alertID,
 		}); err != nil {
-			handler.trackToolError(ctx, "delete_alert", "delete_error")
+			handler.TrackToolError(ctx, "delete_alert", "delete_error")
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 

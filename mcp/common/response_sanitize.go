@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import (
 	"reflect"
@@ -50,7 +50,9 @@ import (
 // Short fields (single tradingsymbols, status enums, order IDs) get
 // only control-character normalisation; the delimiter wrap on a
 // 6-char string would be more visual noise than security gain.
-const sanitizeWrapMinLen = 64
+const SanitizeWrapMinLen = 64
+
+const sanitizeWrapMinLen = SanitizeWrapMinLen
 
 // SanitizeForLLM returns a copy of s safe to embed inside a JSON-string
 // field that the LLM will read. Two transformations:

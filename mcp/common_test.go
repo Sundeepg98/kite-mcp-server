@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // TestSafeAssertFunctions tests all SafeAssert utility functions
@@ -198,7 +199,7 @@ func TestPagination(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				result := ApplyPagination(data, tc.params)
+				result := common.ApplyPagination(data, tc.params)
 				assert.Equal(t, tc.expected, result)
 			})
 		}
@@ -406,7 +407,7 @@ func TestRaceConditions(t *testing.T) {
 		var wg sync.WaitGroup
 		for range 100 {
 			wg.Go(func() {
-				_ = ApplyPagination(data, params)
+				_ = common.ApplyPagination(data, params)
 				_ = ParsePaginationParams(map[string]any{"from": 1, "limit": 2})
 			})
 		}

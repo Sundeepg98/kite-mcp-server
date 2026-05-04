@@ -1,4 +1,4 @@
-package mcp
+package common
 
 import "github.com/zerodha/kite-mcp-server/kc"
 

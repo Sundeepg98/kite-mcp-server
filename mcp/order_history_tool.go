@@ -44,7 +44,7 @@ func (*GetOrderHistoryReconstitutedTool) Tool() mcp.Tool {
 func (*GetOrderHistoryReconstitutedTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler.trackToolCall(ctx, "get_order_history_reconstituted")
+		handler.TrackToolCall(ctx, "get_order_history_reconstituted")
 		p := NewArgParser(request.GetArguments())
 
 		if err := p.Required("order_id"); err != nil {
