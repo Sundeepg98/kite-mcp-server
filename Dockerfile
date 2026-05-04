@@ -22,6 +22,7 @@ COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/legaldocs/go.mod kc/legaldocs/go.sum* kc/legaldocs/
 COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
 COPY kc/templates/go.mod kc/templates/go.sum* kc/templates/
+COPY kc/users/go.mod kc/users/go.sum* kc/users/
 COPY kc/watchlist/go.mod kc/watchlist/go.sum* kc/watchlist/
 RUN go mod download
 COPY . .

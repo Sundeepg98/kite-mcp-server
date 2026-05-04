@@ -70,5 +70,6 @@ use (
 	./kc/registry
 	./kc/riskguard
 	./kc/templates
+	./kc/users
 	./kc/watchlist
 )
