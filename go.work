@@ -69,6 +69,7 @@ use (
 	./kc/money
 	./kc/registry
 	./kc/riskguard
+	./kc/scheduler
 	./kc/templates
 	./kc/users
 	./kc/watchlist
