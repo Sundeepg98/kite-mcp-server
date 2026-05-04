@@ -24,14 +24,17 @@ go 1.25.0
 // dispatch. This is 19/24 (commit 3 of 4 in this dispatch).
 require (
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 )
 
-require github.com/google/uuid v1.6.0
+require (
+	github.com/google/uuid v1.6.0
+	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -58,6 +61,8 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
