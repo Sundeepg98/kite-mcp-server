@@ -60,6 +60,7 @@ use (
 	.
 	./broker
 	./kc/alerts
+	./kc/aop
 	./kc/audit
 	./kc/billing
 	./kc/cqrs
