@@ -25,43 +25,20 @@ import (
 // AlertStoreInterface — price alert management (SRP: alerts only)
 // ---------------------------------------------------------------------------
 
-// AlertStoreInterface defines operations for managing per-user price alerts.
-// Telegram chat ID operations are separated into TelegramStoreInterface.
-type AlertStoreInterface interface {
-	// Add creates a new alert and returns its ID.
-	Add(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction) (string, error)
-
-	// AddWithReferencePrice creates a new alert with an optional reference price.
-	AddWithReferencePrice(email, tradingsymbol, exchange string, instrumentToken uint32, targetPrice float64, direction alerts.Direction, referencePrice float64) (string, error)
-
-	// AddComposite creates a new composite alert combining multiple per-
-	// instrument conditions via AND/ANY logic. Returns the alert ID.
-	AddComposite(email, name string, logic alerts.CompositeLogic, conds []alerts.CompositeCondition) (string, error)
-
-	// Delete removes an alert by ID for the given email.
-	Delete(email, alertID string) error
-
-	// DeleteByEmail removes all alerts for the given email.
-	DeleteByEmail(email string)
-
-	// List returns all alerts for the given email.
-	List(email string) []*alerts.Alert
-
-	// GetByToken returns all active (non-triggered) alerts matching the instrument token.
-	GetByToken(instrumentToken uint32) []*alerts.Alert
-
-	// MarkTriggered marks an alert as triggered with the current price.
-	MarkTriggered(alertID string, currentPrice float64) bool
-
-	// MarkNotificationSent records when a Telegram notification was sent.
-	MarkNotificationSent(alertID string, sentAt time.Time)
-
-	// ListAll returns all alerts grouped by email.
-	ListAll() map[string][]*alerts.Alert
-
-	// ActiveCount returns the number of active alerts for a user.
-	ActiveCount(email string) int
-}
+// AlertStoreInterface is the per-user price-alert interface. Anchor 5
+// PR 5.2 relocated the canonical declaration to kc/alerts/store_interface.go
+// (its owning package); this alias preserves the legacy `kc.AlertStoreInterface`
+// reference path so the 11+ pre-existing reverse-dep call sites build
+// unchanged. Type aliases are not new types — `kc.AlertStoreInterface`
+// and `alerts.AlertStoreInterface` are interchangeable at every call
+// site, including the compile-time satisfaction check below
+// (`_ AlertStoreInterface = (*alerts.Store)(nil)`).
+//
+// Wave B-2 PR 5.3 will rewrite kc/ports/alert.go to reference
+// `alerts.AlertStoreInterface` directly so it can drop its kc-parent
+// import; this alias remains as the long-tail backward-compatibility
+// shim until call sites migrate.
+type AlertStoreInterface = alerts.AlertStoreInterface
 
 // ---------------------------------------------------------------------------
 // TelegramStoreInterface — Telegram chat ID mappings (SRP: telegram only)
