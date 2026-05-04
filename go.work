@@ -83,4 +83,5 @@ use (
 	./kc/usecases
 	./kc/users
 	./kc/watchlist
+	./testutil
 )
