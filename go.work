@@ -78,6 +78,7 @@ use (
 	./kc/scheduler
 	./kc/templates
 	./kc/ticker
+	./kc/usecases
 	./kc/users
 	./kc/watchlist
 )
