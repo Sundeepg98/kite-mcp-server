@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // fakeFullTool is a minimal Tool used to populate FullPluginOpts.Tools.
@@ -39,7 +40,7 @@ func TestRegisterFullPlugin_HappyPath(t *testing.T) {
 
 	err := RegisterFullPlugin(FullPluginOpts{
 		Info: PluginInfo{Name: "p22-fixture", Version: "0.0.1"},
-		Tools: []Tool{&fakeFullTool{name: "p22_t"}},
+		Tools: []common.Tool{&fakeFullTool{name: "p22_t"}},
 		Middleware: []FullPluginMiddleware{{Name: "p22_mw", Order: 9999, Middleware: mw}},
 		Widgets: []FullPluginWidget{{URI: "ui://p22/fixture", Name: "P22 Fixture", Handler: widgetH}},
 		SBOM: &PluginSBOMEntry{Name: "p22-fixture", Version: "0.0.1", Checksum: "sha256:" + "00000000000000000000000000000000000000000000000000000000000000ff", Recorded: time.Now()},

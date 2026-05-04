@@ -17,7 +17,7 @@
 //   - **Health surface** — ReportPluginHealth + PluginHealth() give
 //     the admin panel a single snapshot of "is anything red right
 //     now?" without each plugin owning its own reporting path.
-package mcp
+package plugin
 
 import (
 	"context"

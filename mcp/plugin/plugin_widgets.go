@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"context"
@@ -94,15 +94,43 @@ func validateWidgetURI(uri string) error {
 	return nil
 }
 
-// builtInWidgetURIs returns the set of ui:// URIs owned by
-// appResources. Computed lazily on every call — appResources is a
-// short fixed list (~17 entries) so caching is not worth the
-// invalidation complexity. The map is a fresh allocation per call,
-// which also makes it safe to mutate in tests if ever needed.
-func builtInWidgetURIs() map[string]bool {
-	m := make(map[string]bool, len(appResources))
-	for _, r := range appResources {
-		m[r.URI] = true
+// builtInWidgetURISet is the set of ui:// URIs owned by the mcp/
+// root's appResources list. Anchor 1 PR 1.3 (per .research/anchor-
+// 1-and-3-pr-design.md): set once at startup by mcp/ root via
+// SetBuiltInWidgetURIs because the appResources slice itself stays
+// in mcp/ext_apps.go (intertwined with extAppManagerPort interface
+// and per-widget DataFunc closures that call into kc.Manager) and
+// is therefore not a candidate for relocation.
+//
+// Concurrent reads are safe: SetBuiltInWidgetURIs is called exactly
+// once at init() time before any RegisterWidget call. After that
+// the slice is read-only.
+var builtInWidgetURISet map[string]bool
+
+// SetBuiltInWidgetURIs initialises the URI-collision-check set from
+// the mcp/ root's appResources list. mcp/ root calls this from
+// aliases.go's init(). Subsequent calls overwrite the previous set
+// (test fixtures may reset).
+func SetBuiltInWidgetURIs(uris []string) {
+	m := make(map[string]bool, len(uris))
+	for _, u := range uris {
+		m[u] = true
 	}
-	return m
+	builtInWidgetURISet = m
+}
+
+// builtInWidgetURIs returns the set of ui:// URIs owned by the
+// builtin widget pack. Returns an empty map when SetBuiltInWidgetURIs
+// has not been called — RegisterWidget then accepts every URI without
+// the collision check (test ergonomic).
+func builtInWidgetURIs() map[string]bool {
+	if builtInWidgetURISet == nil {
+		return map[string]bool{}
+	}
+	// Return a fresh copy so callers can't mutate our state.
+	cp := make(map[string]bool, len(builtInWidgetURISet))
+	for k, v := range builtInWidgetURISet {
+		cp[k] = v
+	}
+	return cp
 }

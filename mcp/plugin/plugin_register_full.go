@@ -1,7 +1,8 @@
-package mcp
+package plugin
 
 import (
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // FullPluginMiddleware bundles a middleware with its name + order so a
@@ -30,7 +31,7 @@ type FullPluginWidget struct {
 // nil/empty sections.
 type FullPluginOpts struct {
 	Info       PluginInfo
-	Tools      []Tool
+	Tools      []common.Tool
 	Middleware []FullPluginMiddleware
 	Widgets    []FullPluginWidget
 	Lifecycle  map[string]PluginLifecycle

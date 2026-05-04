@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func TestRegisterWidget_BasicRegistration(t *testing.T) {
 		return []gomcp.ResourceContents{
 			gomcp.TextResourceContents{
 				URI:      "ui://test-plugin/sample",
-				MIMEType: ResourceMIMEType,
+				MIMEType: "text/html;profile=mcp-app",
 				Text:     "<html>hello from plugin</html>",
 			},
 		}, nil
@@ -48,7 +48,7 @@ func TestRegisterWidget_HandlerInvoked(t *testing.T) {
 		return []gomcp.ResourceContents{
 			gomcp.TextResourceContents{
 				URI:      "ui://test-plugin/greeter",
-				MIMEType: ResourceMIMEType,
+				MIMEType: "text/html;profile=mcp-app",
 				Text:     "<html>hi</html>",
 			},
 		}, nil
@@ -151,12 +151,21 @@ func TestRegisterWidget_DuplicateURI_LastWins(t *testing.T) {
 func TestRegisterWidget_NoConflictWithBuiltins(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	// Try every built-in URI.
-	for _, res := range appResources {
-		err := RegisterWidget(res.URI, "Hijack Attempt", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
+	// Anchor 1 PR 1.3: the appResources slice itself stays in mcp/
+	// (intertwined with extAppManagerPort + per-widget DataFunc
+	// closures that reference kc.Manager). The plugin package
+	// receives a flat URI slice via SetBuiltInWidgetURIs from
+	// mcp/plugin_aliases.go's init(). The test below seeds a
+	// representative built-in URI directly so the collision-check
+	// path is exercised without depending on the mcp/ root's
+	// appResources definition.
+	SetBuiltInWidgetURIs([]string{"ui://kite-mcp/portfolio"})
+	defer SetBuiltInWidgetURIs(nil) // reset so other tests start with empty set
+	for _, uri := range []string{"ui://kite-mcp/portfolio"} {
+		err := RegisterWidget(uri, "Hijack Attempt", func(ctx context.Context, req gomcp.ReadResourceRequest) ([]gomcp.ResourceContents, error) {
 			return nil, nil
 		})
-		assert.Error(t, err, "plugin registration of built-in URI %q should fail", res.URI)
+		assert.Error(t, err, "plugin registration of built-in URI %q should fail", uri)
 	}
 }
 

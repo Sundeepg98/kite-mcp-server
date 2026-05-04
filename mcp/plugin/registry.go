@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"context"
@@ -6,16 +6,17 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // RegisterPlugin adds a custom tool to DefaultRegistry.
 // Call this before server startup (e.g., in init() or main()).
-func RegisterPlugin(tool Tool) {
+func RegisterPlugin(tool common.Tool) {
 	DefaultRegistry.RegisterPlugin(tool)
 }
 
 // RegisterPlugins adds multiple custom tools.
-func RegisterPlugins(tools ...Tool) {
+func RegisterPlugins(tools ...common.Tool) {
 	DefaultRegistry.RegisterPlugins(tools...)
 }
 

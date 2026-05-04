@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // Registry holds all plugin-state that used to live in package-level
@@ -45,7 +46,7 @@ type Registry struct {
 	// callers of RegisterPlugin. Merged with the built-in tool set
 	// at server startup via GetAllTools.
 	toolMu      sync.Mutex
-	toolPlugins []Tool
+	toolPlugins []common.Tool
 
 	// Before / after hooks. Fired sequentially around every tool
 	// call; see HookMiddleware.
@@ -178,14 +179,14 @@ func (r *Registry) Reset() {
 // --- Tool-registry methods ---
 
 // RegisterPlugin adds a Tool to this Registry. Thread-safe.
-func (r *Registry) RegisterPlugin(tool Tool) {
+func (r *Registry) RegisterPlugin(tool common.Tool) {
 	r.toolMu.Lock()
 	defer r.toolMu.Unlock()
 	r.toolPlugins = append(r.toolPlugins, tool)
 }
 
 // RegisterPlugins adds multiple Tools.
-func (r *Registry) RegisterPlugins(tools ...Tool) {
+func (r *Registry) RegisterPlugins(tools ...common.Tool) {
 	r.toolMu.Lock()
 	defer r.toolMu.Unlock()
 	r.toolPlugins = append(r.toolPlugins, tools...)
@@ -199,10 +200,10 @@ func (r *Registry) PluginCount() int {
 }
 
 // Tools returns a snapshot of registered Tool plugins.
-func (r *Registry) Tools() []Tool {
+func (r *Registry) Tools() []common.Tool {
 	r.toolMu.Lock()
 	defer r.toolMu.Unlock()
-	out := make([]Tool, len(r.toolPlugins))
+	out := make([]common.Tool, len(r.toolPlugins))
 	copy(out, r.toolPlugins)
 	return out
 }

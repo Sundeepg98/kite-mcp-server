@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 // manifest helpers are pure delegates onto DefaultRegistry; all
 // direct state has moved to the Registry struct in plugin_registry.go.

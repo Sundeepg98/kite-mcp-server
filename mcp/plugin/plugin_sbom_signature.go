@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"crypto/ed25519"

@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"crypto/sha256"

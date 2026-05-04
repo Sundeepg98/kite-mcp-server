@@ -1,4 +1,4 @@
-package mcp
+package plugin
 
 import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
