@@ -23,7 +23,6 @@ require (
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 )
@@ -33,6 +32,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
 	pgregory.net/rapid v1.2.0
 )
 
@@ -96,4 +96,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
+	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
+	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

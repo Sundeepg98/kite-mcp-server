@@ -62,6 +62,7 @@ COPY kc/ticker/go.mod kc/ticker/go.sum* kc/ticker/
 COPY kc/usecases/go.mod kc/usecases/go.sum* kc/usecases/
 COPY kc/users/go.mod kc/users/go.sum* kc/users/
 COPY kc/watchlist/go.mod kc/watchlist/go.sum* kc/watchlist/
+COPY oauth/go.mod oauth/go.sum* oauth/
 COPY testutil/go.mod testutil/go.sum* testutil/
 RUN go mod download
 

@@ -83,5 +83,6 @@ use (
 	./kc/usecases
 	./kc/users
 	./kc/watchlist
+	./oauth
 	./testutil
 )

@@ -41,7 +41,6 @@ go 1.25.0
 // kc/telegram which imports kc/papertrading).
 require (
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
@@ -53,6 +52,7 @@ require (
 
 require (
 	github.com/mark3labs/mcp-go v0.46.0
+	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
 	go.uber.org/goleak v1.3.0
 )
 
@@ -112,4 +112,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
+	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
+	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )
