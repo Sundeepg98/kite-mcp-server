@@ -8,43 +8,30 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/zerodha/kite-mcp-server/kc/ops/shared"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 )
 
-type OverviewData struct {
-	Version         string           `json:"version"`
-	Uptime          string           `json:"uptime"`
-	ActiveSessions  int              `json:"active_sessions"`
-	ActiveTickers   int              `json:"active_tickers"`
-	TotalAlerts     int              `json:"total_alerts"`
-	ActiveAlerts    int              `json:"active_alerts"`
-	CachedTokens       int              `json:"cached_tokens"`
-	PerUserCredentials int              `json:"per_user_credentials"`
-	ToolUsage          map[string]int64 `json:"tool_usage"`
-	DailyUsers         int64            `json:"daily_users"`
-	GlobalFrozen       bool             `json:"global_frozen"`
-	// Runtime / observability
-	HeapAllocMB float64 `json:"heap_alloc_mb"`
-	Goroutines  int     `json:"goroutines"`
-	GCPauseMs   float64 `json:"gc_pause_ms"`
-	DBSizeMB    float64 `json:"db_size_mb"`
-}
-
-type SessionInfo struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
-type TickerData struct {
-	Tickers []ticker.UserTickerInfo `json:"tickers"`
-}
-
-type AlertData struct {
-	Alerts   map[string][]*alerts.Alert `json:"alerts"`
-	Telegram map[string]int64           `json:"telegram"`
-}
+// Backward-compatibility type aliases for the DTOs relocated to
+// kc/ops/shared in Anchor 3 PR 3.1. The 15-file in-tree reverse-dep
+// set + the 3 external consumers (app/app.go, main.go, main_test.go)
+// continue to compile via the kc/ops.X reference path unchanged. Go
+// type aliases are not new types — kc/ops.OverviewData and
+// shared.OverviewData are interchangeable at every call site,
+// including struct-literal construction (`ops.OverviewData{...}`)
+// and field access.
+//
+// Wave-B-2-shape: same alias-shim pattern Anchor 5 PRs 5.2/5.4/5.6
+// used to relocate AlertStoreInterface, InstrumentManagerInterface,
+// and KiteSessionData. PR 3.2 (kc/ops/admin) and PR 3.3 (kc/ops/user)
+// will reference shared.X directly so they don't have to import
+// kc/ops parent.
+type (
+	OverviewData = shared.OverviewData
+	SessionInfo  = shared.SessionInfo
+	TickerData   = shared.TickerData
+	AlertData    = shared.AlertData
+)
 
 func (h *Handler) buildOverview() OverviewData {
 	allAlerts := h.manager.AlertStore().ListAll()
