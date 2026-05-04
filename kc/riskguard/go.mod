@@ -5,8 +5,13 @@ go 1.25.0
 // kc/riskguard has bidirectional cross-module deps with the root module:
 // the root module requires kc/riskguard (24+ reverse-dep import sites
 // per .research/disintegrate-and-holistic-architecture.md §1.2);
-// kc/riskguard imports kc/alerts, kc/domain, kc/i18n, kc/logger, oauth
-// — all still in the root module pending future extraction.
+// kc/riskguard imports kc/alerts, kc/domain, kc/i18n, kc/logger, oauth.
+//
+// PR 4.4 (Anchor 4): kc/domain was extracted at PR 4.1 stub-add
+// (commit d4bb3e6). This PR adds explicit replaces for kc/domain +
+// kc/alerts + kc/i18n + kc/isttz + kc/logger + kc/templates + kc/users
+// matching the kc/audit / kc/billing pattern (PRs 4.2 + 4.3). ZERO
+// behavior change at runtime.
 //
 // In workspace mode (the canonical local + CI build path), all five
 // upstream packages are resolved via go.work + the root module path.
@@ -23,7 +28,13 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 )
 
-require pgregory.net/rapid v1.2.0
+require (
+	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
+	pgregory.net/rapid v1.2.0
+)
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
@@ -48,6 +59,9 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
+	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/net v0.49.0 // indirect
@@ -74,5 +88,12 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
+	github.com/zerodha/kite-mcp-server/kc/i18n => ../i18n
+	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
+	github.com/zerodha/kite-mcp-server/kc/users => ../users
 )
