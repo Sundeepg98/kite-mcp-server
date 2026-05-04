@@ -63,6 +63,7 @@ use (
 	./kc/billing
 	./kc/cqrs
 	./kc/decorators
+	./kc/eventsourcing
 	./kc/i18n
 	./kc/instruments
 	./kc/isttz
