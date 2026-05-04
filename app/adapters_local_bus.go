@@ -143,6 +143,15 @@ func newLocalOAuthBridgeBus(logger *slog.Logger, stores oauthBridgeStores) cqrs.
 
 // newLocalOAuthClientBus constructs a CommandBus with the two OAuth
 // client-persistence handlers used by clientPersisterAdapter.
+//
+// Phase B/D F6 close: handler registration is canonicalised in
+// usecases.RegisterOAuthClientHandlers; this function only differs
+// from the production-bus path (kc/manager_commands_oauth.go) in three
+// concrete ways — fresh bus vs Manager-bound, panic-on-register-error
+// vs return-err, and localOAuthClientStore vs oauthClientStoreAdapter
+// (byte-identical implementations, different declaration sites). The
+// helper accepts the bus + store-thunk + logger + error-prefix; the
+// rest of the divergence stays at this caller boundary.
 func newLocalOAuthClientBus(logger *slog.Logger, db *alerts.DB) cqrs.CommandBus {
 	logger = localBusLogger(logger)
 	bus := cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(logger))
@@ -152,24 +161,8 @@ func newLocalOAuthClientBus(logger *slog.Logger, db *alerts.DB) cqrs.CommandBus 
 		}
 		return &localOAuthClientStore{db: db}
 	}
-	if err := bus.Register(reflect.TypeFor[cqrs.SaveOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
-		cmd, ok := msg.(cqrs.SaveOAuthClientCommand)
-		if !ok {
-			return nil, fmt.Errorf("local bus: unexpected command type %T", msg)
-		}
-		uc := usecases.NewSaveOAuthClientUseCase(clientStore(), logger)
-		return nil, uc.Execute(ctx, cmd)
-	}); err != nil {
-		panic(err)
-	}
-	if err := bus.Register(reflect.TypeFor[cqrs.DeleteOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
-		cmd, ok := msg.(cqrs.DeleteOAuthClientCommand)
-		if !ok {
-			return nil, fmt.Errorf("local bus: unexpected command type %T", msg)
-		}
-		uc := usecases.NewDeleteOAuthClientUseCase(clientStore(), logger)
-		return nil, uc.Execute(ctx, cmd)
-	}); err != nil {
+	if err := usecases.RegisterOAuthClientHandlers(bus, clientStore, logger, "local bus"); err != nil {
+		// Register only fails on duplicate type — impossible here.
 		panic(err)
 	}
 	return bus

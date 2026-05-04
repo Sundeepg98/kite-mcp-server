@@ -89,7 +89,11 @@ func (m *Manager) registerOAuthBridgeCommands() error {
 		return err
 	}
 
-	// SaveOAuthClientCommand + DeleteOAuthClientCommand share an adapter.
+	// SaveOAuthClient + DeleteOAuthClient handler pair — registration shape
+	// is canonicalised in usecases.RegisterOAuthClientHandlers (Phase B/D
+	// F6 close). The mirror in app/adapters_local_bus.go's
+	// newLocalOAuthClientBus calls the same helper with its fresh
+	// in-process bus + localOAuthClientStore adapter.
 	clientStore := func() usecases.OAuthClientStore {
 		db := m.AlertDB()
 		if db == nil {
@@ -97,26 +101,7 @@ func (m *Manager) registerOAuthBridgeCommands() error {
 		}
 		return &oauthClientStoreAdapter{db: db}
 	}
-
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SaveOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
-		cmd, ok := msg.(cqrs.SaveOAuthClientCommand)
-		if !ok {
-			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
-		}
-		uc := usecases.NewSaveOAuthClientUseCase(clientStore(), m.Logger)
-		return nil, uc.Execute(ctx, cmd)
-	}); err != nil {
-		return err
-	}
-
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.DeleteOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
-		cmd, ok := msg.(cqrs.DeleteOAuthClientCommand)
-		if !ok {
-			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
-		}
-		uc := usecases.NewDeleteOAuthClientUseCase(clientStore(), m.Logger)
-		return nil, uc.Execute(ctx, cmd)
-	}); err != nil {
+	if err := usecases.RegisterOAuthClientHandlers(m.commandBus, clientStore, m.Logger, "cqrs"); err != nil {
 		return err
 	}
 

@@ -16,7 +16,9 @@ package usecases
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
@@ -305,6 +307,79 @@ func (uc *DeleteOAuthClientUseCase) Execute(_ context.Context, cmd cqrs.DeleteOA
 		return nil
 	}
 	return uc.store.DeleteClient(cmd.ClientID)
+}
+
+// RegisterOAuthClientHandlers wires the SaveOAuthClient + DeleteOAuthClient
+// command handlers onto the given bus. The handler bodies are thin
+// type-assert + use-case-construct + dispatch sequences identical in
+// shape to the production registration in kc/manager_commands_oauth.go
+// and the test-mode mirror in app/adapters_local_bus.go (which had two
+// near-identical 30-LOC blocks before this F6 close-out extracted the
+// shared shape here).
+//
+// Parameters:
+//
+//   - bus: the *cqrs.InMemoryBus to register on (Manager-bound in
+//     production via *kc.Manager.commandBus; fresh in-process bus in
+//     the test-mode app/adapters_local_bus.go local pattern). Concrete
+//     pointer type rather than the cqrs.CommandBus interface because
+//     Register is implementation-only (the interface exposes only
+//     Dispatch / DispatchWithResult; registration is a wiring concern,
+//     not a runtime contract).
+//   - clientStore: thunk returning the OAuthClientStore implementation
+//     to bind. Thunked rather than passed directly so callers can defer
+//     the AlertDB read to dispatch time (matches the existing nil-safe
+//     pattern in both call sites — when AlertDB is nil, the use case
+//     no-ops rather than failing the registration).
+//   - logger: bound into each constructed use case via
+//     logport.NewSlog inside NewSaveOAuthClientUseCase /
+//     NewDeleteOAuthClientUseCase. Should be the same logger
+//     production-bus consumers use to keep audit trails uniform.
+//   - errPrefix: prepended to the type-assertion error message
+//     ("cqrs" or "local bus" — preserved verbatim from each
+//     callsite's existing format string).
+//
+// Returns the FIRST registration error encountered; bus.Register only
+// fails on duplicate type registration, so in practice this returns nil
+// for fresh buses. Callers in test-mode local-bus contexts panic on the
+// returned error (matching the pre-F6 panic-vs-return semantics —
+// duplicate Register is a programmer error, not a runtime failure).
+//
+// Phase B/D F6 close: extracted from kc/manager_commands_oauth.go
+// (registerOAuthBridgeCommands lines 92-121) and app/adapters_local_bus
+// .go (newLocalOAuthClientBus lines 144-175). Both pre-extraction
+// blocks had byte-different but structurally-identical
+// type-assert+construct+dispatch sequences; this helper is the canonical
+// shape consumed from both sites.
+func RegisterOAuthClientHandlers(
+	bus *cqrs.InMemoryBus,
+	clientStore func() OAuthClientStore,
+	logger *slog.Logger,
+	errPrefix string,
+) error {
+	if err := bus.Register(reflect.TypeFor[cqrs.SaveOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.SaveOAuthClientCommand)
+		if !ok {
+			return nil, fmt.Errorf("%s: unexpected command type %T", errPrefix, msg)
+		}
+		uc := NewSaveOAuthClientUseCase(clientStore(), logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
+	if err := bus.Register(reflect.TypeFor[cqrs.DeleteOAuthClientCommand](), func(ctx context.Context, msg any) (any, error) {
+		cmd, ok := msg.(cqrs.DeleteOAuthClientCommand)
+		if !ok {
+			return nil, fmt.Errorf("%s: unexpected command type %T", errPrefix, msg)
+		}
+		uc := NewDeleteOAuthClientUseCase(clientStore(), logger)
+		return nil, uc.Execute(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // --- Admin registry mutations ---
