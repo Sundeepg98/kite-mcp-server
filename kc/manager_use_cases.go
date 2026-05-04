@@ -17,7 +17,7 @@ import "github.com/zerodha/kite-mcp-server/kc/usecases"
 //     also nil-safe because the use case wraps the dispatch path)
 //   - Logger must be non-nil (validated up-front in NewWithOptions)
 //   - Instruments MAY be nil at this point if the test fixture left it
-//     out; the InstrumentLookup wiring uses InstrumentsManagerConcrete()
+//     out; the LotSizeLookup wiring uses InstrumentsManagerConcrete()
 //     which is nil-safe at the call site.
 //
 // Mutations to riskGuard / eventStore / Instruments after this helper
@@ -64,7 +64,7 @@ func (m *Manager) initOrderUseCases() {
 		placeUC.SetEventStore(m.eventStore)
 	}
 	if im := m.InstrumentsManagerConcrete(); im != nil {
-		placeUC.SetInstrumentLookup(&instrumentLookupAdapter{mgr: im})
+		placeUC.SetLotSizeLookup(&lotSizeLookupAdapter{mgr: im})
 	}
 	m.placeOrderUC = placeUC
 

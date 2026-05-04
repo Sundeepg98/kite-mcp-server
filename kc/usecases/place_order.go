@@ -26,13 +26,20 @@ import (
 // pass-through policy, thread-safety, and lifetime — is documented
 // in ports.go. This use case still consumes the interface unchanged.
 
-// InstrumentLookup looks up lot size and tick size for an instrument. Narrow
+// LotSizeLookup looks up lot size and tick size for an instrument. Narrow
 // port so the use case does not pull in the full instruments.Manager surface
 // just to check divisibility and tick alignment. Returning ok=false means
 // "metadata unavailable" — the use case treats that as a silent skip rather
 // than a failure, so off-hours or bootstrap paths where instruments aren't
 // loaded keep working.
-type InstrumentLookup interface {
+//
+// F5 rename (Phase B/D close-out): was usecases.InstrumentLookup. The old
+// name collided with kc/telegram.InstrumentLookup (different signature:
+// GetByID returning instruments.Instrument) — same name, different
+// contracts. LotSizeLookup captures the actual semantic role of this
+// port: lot/tick-size validation for the order pipeline. Sibling type
+// usecases.InstrumentResolver (token resolution for alerts) stays as-is.
+type LotSizeLookup interface {
 	Get(exchange, tradingsymbol string) (lotSize int, tickSize float64, ok bool)
 }
 
@@ -49,7 +56,7 @@ type PlaceOrderUseCase struct {
 	riskguard      *riskguard.Guard
 	events         *domain.EventDispatcher
 	eventStore     EventAppender
-	instruments    InstrumentLookup
+	instruments    LotSizeLookup
 	logger         logport.Logger
 }
 
@@ -77,12 +84,15 @@ func (uc *PlaceOrderUseCase) SetEventStore(s EventAppender) {
 	uc.eventStore = s
 }
 
-// SetInstrumentLookup wires the instrument metadata lookup so Execute can
+// SetLotSizeLookup wires the lot/tick-size metadata lookup so Execute can
 // enforce lot-size divisibility and tick-size alignment at the domain
 // boundary via domain.InstrumentRules. Nil-safe — when unset, the use case
 // skips lot/tick checks. Optional to avoid breaking callers that construct
 // the use case without instrument metadata (bootstrap, tests).
-func (uc *PlaceOrderUseCase) SetInstrumentLookup(l InstrumentLookup) {
+//
+// F5 rename: was SetInstrumentLookup; renamed alongside the LotSizeLookup
+// type for naming consistency with the actual port's semantic role.
+func (uc *PlaceOrderUseCase) SetLotSizeLookup(l LotSizeLookup) {
 	uc.instruments = l
 }
 

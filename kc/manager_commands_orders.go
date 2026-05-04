@@ -10,18 +10,22 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 )
 
-// instrumentLookupAdapter wraps the concrete *instruments.Manager so it
-// satisfies usecases.InstrumentLookup. The port wants Get(exchange, symbol)
+// lotSizeLookupAdapter wraps the concrete *instruments.Manager so it
+// satisfies usecases.LotSizeLookup. The port wants Get(exchange, symbol)
 // → (lotSize, tickSize, ok); the concrete manager exposes
 // GetByID("EXCH:SYM") → (Instrument, error). This adapter bridges the two
 // shapes so PlaceOrderUseCase can enforce domain.InstrumentRules (lot-size
 // divisibility + tick-size alignment) in production without changing
 // instruments.Manager's public API.
-type instrumentLookupAdapter struct {
+//
+// F5 rename: was instrumentLookupAdapter (the type was renamed alongside
+// usecases.LotSizeLookup, which had been called InstrumentLookup but
+// collided semantically with the unrelated kc/telegram.InstrumentLookup).
+type lotSizeLookupAdapter struct {
 	mgr *instruments.Manager
 }
 
-// Get satisfies usecases.InstrumentLookup. Returns ok=false if the
+// Get satisfies usecases.LotSizeLookup. Returns ok=false if the
 // manager is nil, the instrument is unknown, or the metadata is
 // unusable (lotSize <= 0). All three cases are treated by
 // PlaceOrderUseCase as "skip lot/tick enforcement" rather than a hard
@@ -31,7 +35,7 @@ type instrumentLookupAdapter struct {
 // because domain.ValidateLotSize treats it as a config error — we'd
 // rather let the broker reject a bad order than fail with a cryptic
 // domain error on unpopulated instruments (test fixtures, pre-fetch).
-func (a *instrumentLookupAdapter) Get(exchange, tradingsymbol string) (int, float64, bool) {
+func (a *lotSizeLookupAdapter) Get(exchange, tradingsymbol string) (int, float64, bool) {
 	if a.mgr == nil {
 		return 0, 0, false
 	}
@@ -41,6 +45,9 @@ func (a *instrumentLookupAdapter) Get(exchange, tradingsymbol string) (int, floa
 	}
 	return inst.LotSize, inst.TickSize, true
 }
+
+// Compile-time assertion: lotSizeLookupAdapter satisfies the renamed port.
+var _ usecases.LotSizeLookup = (*lotSizeLookupAdapter)(nil)
 
 // registerOrderCommands wires CommandBus handlers for write-side order,
 // GTT, position, and trailing-stop commands (CommandBus batch B).
@@ -59,7 +66,7 @@ func (m *Manager) registerOrderCommands() error {
 	// initOrderUseCases (kc/manager_use_cases.go) and held on the
 	// Manager. The handler is a thin dispatcher — type-asserts the
 	// message and forwards to the pre-built use case. EventStore +
-	// InstrumentLookup wiring moved to construction time. Broker
+	// LotSizeLookup wiring moved to construction time. Broker
 	// resolution flows through m.sessionSvc on every dispatch.
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)

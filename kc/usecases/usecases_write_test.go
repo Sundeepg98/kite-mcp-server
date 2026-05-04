@@ -100,31 +100,34 @@ func TestPlaceOrder_ValidationFailures(t *testing.T) {
 	}
 }
 
-// mockInstrumentLookup returns fixed lot + tick metadata for one
+// mockLotSizeLookup returns fixed lot + tick metadata for one
 // hard-coded (exchange, symbol). Test-only dependency wired via
-// PlaceOrderUseCase.SetInstrumentLookup — mirrors how app/wire.go
+// PlaceOrderUseCase.SetLotSizeLookup — mirrors how app/wire.go
 // will inject the production instruments.Manager.
-type mockInstrumentLookup struct {
+//
+// F5 rename: was mockInstrumentLookup; renamed alongside the
+// usecases.LotSizeLookup type for naming consistency.
+type mockLotSizeLookup struct {
 	exchange      string
 	tradingsymbol string
 	lotSize       int
 	tickSize      float64
 }
 
-func (m *mockInstrumentLookup) Get(exchange, tradingsymbol string) (int, float64, bool) {
+func (m *mockLotSizeLookup) Get(exchange, tradingsymbol string) (int, float64, bool) {
 	if exchange == m.exchange && tradingsymbol == m.tradingsymbol {
 		return m.lotSize, m.tickSize, true
 	}
 	return 0, 0, false
 }
 
-// Task #35: place_order now enforces lot-size divisibility when an
-// InstrumentLookup is wired. NIFTY futures have lotSize=50 — an order
+// Task #35: place_order now enforces lot-size divisibility when a
+// LotSizeLookup is wired. NIFTY futures have lotSize=50 — an order
 // for 75 fails the domain.ValidateLotSize check.
 func TestPlaceOrder_LotSizeRejection(t *testing.T) {
 	t.Parallel()
 	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
-	uc.SetInstrumentLookup(&mockInstrumentLookup{
+	uc.SetLotSizeLookup(&mockLotSizeLookup{
 		exchange: "NFO", tradingsymbol: "NIFTY25APRFUT",
 		lotSize: 50, tickSize: 0.05,
 	})
@@ -148,7 +151,7 @@ func TestPlaceOrder_LotSizeRejection(t *testing.T) {
 func TestPlaceOrder_TickSizeRejection(t *testing.T) {
 	t.Parallel()
 	uc := NewPlaceOrderUseCase(nil, nil, nil, testLogger())
-	uc.SetInstrumentLookup(&mockInstrumentLookup{
+	uc.SetLotSizeLookup(&mockLotSizeLookup{
 		exchange: "NSE", tradingsymbol: "RELIANCE",
 		lotSize: 1, tickSize: 0.05,
 	})
