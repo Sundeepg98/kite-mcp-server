@@ -17,6 +17,7 @@ COPY kc/registry/go.mod kc/registry/go.sum* kc/registry/
 COPY kc/riskguard/go.mod kc/riskguard/go.sum* kc/riskguard/
 COPY kc/scheduler/go.mod kc/scheduler/go.sum* kc/scheduler/
 COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
+COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
 COPY kc/decorators/go.mod kc/decorators/go.sum* kc/decorators/
 COPY kc/i18n/go.mod kc/i18n/go.sum* kc/i18n/
 COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
