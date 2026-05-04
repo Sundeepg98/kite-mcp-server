@@ -20,6 +20,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/legaldocs v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
@@ -46,6 +47,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/i18n => ./kc/i18n
 	github.com/zerodha/kite-mcp-server/kc/isttz => ./kc/isttz
 	github.com/zerodha/kite-mcp-server/kc/legaldocs => ./kc/legaldocs
+	github.com/zerodha/kite-mcp-server/kc/logger => ./kc/logger
 	github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 )
