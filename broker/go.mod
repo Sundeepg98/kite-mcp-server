@@ -19,6 +19,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gocarina/gocsv v0.0.0-20180809181117-b8c38cb1ba36 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect

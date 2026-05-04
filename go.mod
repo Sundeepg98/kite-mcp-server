@@ -17,6 +17,7 @@ require (
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.48.0
@@ -30,13 +31,14 @@ require (
 // root module buildable from a tagged release tarball that omits go.work
 // (e.g., when goreleaser creates source archives) AND keep `GOWORK=off`
 // builds working for diagnostics. Without these, the root module's
-// imports of broker + kc/money + kc/audit would fail to resolve outside
-// workspace mode. Drop a replace once the corresponding module has its
-// own published tag.
+// imports of broker + kc/money + kc/audit + kc/riskguard would fail to
+// resolve outside workspace mode. Drop a replace once the corresponding
+// module has its own published tag.
 replace (
 	github.com/zerodha/kite-mcp-server/broker => ./broker
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
 	github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
+	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 )
 
 require (
