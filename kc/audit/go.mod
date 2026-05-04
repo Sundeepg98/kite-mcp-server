@@ -4,10 +4,15 @@ go 1.25.0
 
 // kc/audit has bidirectional cross-module deps with the root module:
 // the root module requires kc/audit (54 reverse-dep import sites);
-// kc/audit imports kc/alerts, kc/domain, kc/logger, oauth — all still
-// in the root module pending future extraction.
+// kc/audit imports kc/alerts, kc/domain, kc/logger, oauth.
 //
-// In workspace mode (the canonical local + CI build path), all four
+// PR 4.2 (Anchor 4): kc/domain was extracted at PR 4.1 stub-add
+// (commit d4bb3e6). This PR adds an explicit `kc/domain => ../domain`
+// replace so the resolver walks into the extracted module directly
+// rather than via the root → kc/domain bouncing path. ZERO behavior
+// change at runtime — same code reachable, just one fewer redirect.
+//
+// In workspace mode (the canonical local + CI build path), all
 // upstream packages are resolved via go.work + the root module path.
 // The replace directive below short-circuits version lookup when
 // GOWORK=off (Dockerfile build, vendored consumer). v0.0.0 pseudo-
@@ -20,6 +25,12 @@ require (
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/goleak v1.3.0
+)
+
+require (
+	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -39,11 +50,15 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
+	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
@@ -59,5 +74,11 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
+	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
+	github.com/zerodha/kite-mcp-server/kc/users => ../users
 )
