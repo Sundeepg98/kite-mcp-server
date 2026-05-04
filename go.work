@@ -59,6 +59,7 @@ go 1.25.0
 use (
 	.
 	./broker
+	./kc/alerts
 	./kc/audit
 	./kc/billing
 	./kc/cqrs
