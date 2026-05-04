@@ -1,4 +1,4 @@
-package mcp
+package middleware
 
 import (
 	"context"
@@ -92,6 +92,26 @@ func (rl *ToolRateLimiter) WithTierMultiplier(fn TierMultiplierFunc) *ToolRateLi
 	defer rl.mu.Unlock()
 	rl.tierMult = fn
 	return rl
+}
+
+// EffectiveLimit is the exported variant of effectiveLimit for cross-
+// package test fixtures (mcp/ratelimit_reload_test.go) that need to
+// observe the multiplier-applied cap directly.
+//
+// Anchor 1 PR 1.2: capitalised so the pre-PR test in package mcp can
+// reach it across the package boundary.
+func (rl *ToolRateLimiter) EffectiveLimit(baseLimit int, email string) int {
+	return rl.effectiveLimit(baseLimit, email)
+}
+
+// LimitsSnapshot returns a copy of the underlying per-tool limit map.
+// Anchor 1 PR 1.2: exposed for cross-package test fixtures that
+// previously accessed the unexported `limits` field directly. Same
+// behaviour as CurrentLimits — kept under a separate name for the
+// pre-PR test ergonomic of "snapshot for assert" rather than
+// "expose to operator dashboard".
+func (rl *ToolRateLimiter) LimitsSnapshot() map[string]int {
+	return rl.CurrentLimits()
 }
 
 func (rl *ToolRateLimiter) effectiveLimit(baseLimit int, email string) int {

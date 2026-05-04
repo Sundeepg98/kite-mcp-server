@@ -1,4 +1,4 @@
-package mcp
+package middleware
 
 // middleware_chain_builder_test.go — unit tests for the Config-driven
 // middleware chain builder (BuildMiddlewareChain + MiddlewareBuilder).

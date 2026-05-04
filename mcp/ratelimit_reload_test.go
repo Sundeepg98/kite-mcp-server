@@ -24,22 +24,22 @@ func TestToolRateLimiter_SetLimits_SwapsAtomically(t *testing.T) {
 	})
 
 	// Initial invocation sees the original cap.
-	assert.Equal(t, 10, rl.effectiveLimit(rl.limits["place_order"], ""))
+	assert.Equal(t, 10, rl.EffectiveLimit(rl.LimitsSnapshot()["place_order"], ""))
 
 	// Swap to a tighter cap.
 	rl.SetLimits(map[string]int{
 		"place_order": 3,
 	})
-	assert.Equal(t, 3, rl.effectiveLimit(rl.limits["place_order"], ""))
+	assert.Equal(t, 3, rl.EffectiveLimit(rl.LimitsSnapshot()["place_order"], ""))
 
 	// Swap to a broader cap and a new tool name — old tool should also
 	// vanish from the limit map (full replacement, not merge).
 	rl.SetLimits(map[string]int{
 		"modify_order": 25,
 	})
-	_, placeExists := rl.limits["place_order"]
+	_, placeExists := rl.LimitsSnapshot()["place_order"]
 	assert.False(t, placeExists, "place_order should be gone after full-replace SetLimits")
-	assert.Equal(t, 25, rl.limits["modify_order"])
+	assert.Equal(t, 25, rl.LimitsSnapshot()["modify_order"])
 }
 
 // TestToolRateLimiter_SetLimits_RaceWithMiddleware exercises the
@@ -108,5 +108,5 @@ func TestToolRateLimiter_SetLimits_RaceWithMiddleware(t *testing.T) {
 
 	// If we got here without the race detector flagging, the swap is
 	// correctly guarded. Sanity-check we still have a map afterwards.
-	assert.NotNil(t, rl.limits)
+	assert.NotNil(t, rl.LimitsSnapshot())
 }
