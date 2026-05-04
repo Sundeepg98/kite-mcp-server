@@ -28,6 +28,7 @@ COPY kc/instruments/go.mod kc/instruments/go.sum* kc/instruments/
 COPY kc/isttz/go.mod kc/isttz/go.sum* kc/isttz/
 COPY kc/legaldocs/go.mod kc/legaldocs/go.sum* kc/legaldocs/
 COPY kc/logger/go.mod kc/logger/go.sum* kc/logger/
+COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY kc/templates/go.mod kc/templates/go.sum* kc/templates/
 COPY kc/ticker/go.mod kc/ticker/go.sum* kc/ticker/
 COPY kc/usecases/go.mod kc/usecases/go.sum* kc/usecases/

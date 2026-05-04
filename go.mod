@@ -32,6 +32,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/registry v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/scheduler v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
@@ -73,6 +74,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/registry => ./kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/scheduler => ./kc/scheduler
+	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/templates => ./kc/templates
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases

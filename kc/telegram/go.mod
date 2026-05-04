@@ -1,0 +1,99 @@
+module github.com/zerodha/kite-mcp-server/kc/telegram
+
+go 1.25.0
+
+// kc/telegram is the highest-fan-in extractable module — Telegram bot
+// + commands + trading commands + plugin commands + handler tests +
+// disclaimer logic. Direct internal deps (validated by grep — 10
+// packages): broker + broker/ticker + broker/zerodha + kc/alerts +
+// kc/domain + kc/instruments + kc/papertrading + kc/riskguard +
+// kc/ticker + kc/watchlist.
+//
+// Replace block: 16+ entries — final Tier 4 extraction. Same plateau-
+// breaking pattern as kc/usecases (commit 7af0691) — extracted modules
+// at the top of the dep graph reach the entire codebase. Empirically
+// validated via tidy.
+//
+// Tier 4 zero-monolith path (.research/zero-monolith-roadmap.md
+// commit a5e7e76): heavy fan-in packages extracted in dep order.
+// This is 24/24 (commit 4 of 4 in this dispatch) — ZERO MONOLITH
+// REACHED. All bounded contexts now extracted from root.
+require (
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/stretchr/testify v1.10.0
+	github.com/zerodha/gokiteconnect/v4 v4.4.0
+	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/instruments v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000
+)
+
+require (
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/fatih/color v1.13.0 // indirect
+	github.com/gocarina/gocsv v0.0.0-20180809181117-b8c38cb1ba36 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/go-hclog v1.6.3 // indirect
+	github.com/hashicorp/go-plugin v1.7.0 // indirect
+	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/mark3labs/mcp-go v0.46.0 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/oklog/run v1.1.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/spf13/cast v1.7.1 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/libc v1.67.6 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.46.1 // indirect
+)
+
+replace (
+	github.com/zerodha/kite-mcp-server => ../..
+	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
+	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
+	github.com/zerodha/kite-mcp-server/kc/i18n => ../i18n
+	github.com/zerodha/kite-mcp-server/kc/instruments => ../instruments
+	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
+	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/zerodha/kite-mcp-server/kc/papertrading => ../papertrading
+	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
+	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
+	github.com/zerodha/kite-mcp-server/kc/ticker => ../ticker
+	github.com/zerodha/kite-mcp-server/kc/users => ../users
+	github.com/zerodha/kite-mcp-server/kc/watchlist => ../watchlist
+)
