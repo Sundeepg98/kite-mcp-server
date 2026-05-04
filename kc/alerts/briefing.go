@@ -21,6 +21,41 @@ import (
 // BrokerDataProvider abstracts broker API calls for testability.
 // When set on BriefingService via SetBrokerProvider, these methods are used
 // instead of creating kiteconnect.Client directly.
+//
+// F3 close-out (Phase B/D): the redundancy audit (commit 55ff79c)
+// initially flagged this as a duplicate of broker.PortfolioReader.
+// Empirical inspection shows the two interfaces are STRUCTURALLY
+// DIFFERENT — they serve different architectural roles:
+//
+//   - broker.PortfolioReader is the SESSION-PINNED port (3 methods:
+//     GetHoldings/GetPositions/GetTrades, no auth args, returns
+//     broker-agnostic DTOs). Implemented by *broker.Client; consumed
+//     by MCP tool handlers + use cases via the session-bound broker.
+//
+//   - BrokerDataProvider is the FACTORY-BACKED port (4 methods:
+//     GetHoldings/GetPositions/GetUserMargins/GetLTP, ALL take
+//     (apiKey, accessToken) per-call, return RAW kiteconnect types).
+//     Used by background services (briefing scheduler, P&L snapshot
+//     scheduler) that run outside the MCP request lifecycle and
+//     therefore cannot reach a session-pinned broker — they
+//     construct a fresh kiteconnect client per email via
+//     KiteClientFactory.
+//
+// Three concrete differences make merger structurally infeasible:
+//   1. Method signatures: per-call (apiKey, accessToken) vs none
+//   2. Return types: kiteconnect.* (raw SDK) vs broker.* (DTOs)
+//   3. Method sets: GetUserMargins+GetLTP here vs GetTrades there
+//
+// Forcing alignment would either redesign broker.PortfolioReader's
+// surface (forbidden per F3 brief stop condition) or require a
+// translation layer at every BrokerDataProvider callsite (the very
+// abstraction this interface exists to avoid). The names ARE similar
+// enough to invite confusion; this godoc is the F3 resolution —
+// document the divergence so future audits don't re-flag it.
+//
+// If a third broker integration ever needs this background-service
+// pattern, factor a shared port at that point. Today (Zerodha-only),
+// keeping the local declaration matches the actual coupling.
 type BrokerDataProvider interface {
 	// GetHoldings returns holdings for the user.
 	GetHoldings(apiKey, accessToken string) ([]kiteconnect.Holding, error)
