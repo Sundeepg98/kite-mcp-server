@@ -13,36 +13,6 @@ import (
 // These interfaces decompose the monolithic Manager into focused contracts,
 // enabling consumers to depend only on the capabilities they need.
 
-// CredentialResolver resolves per-user or global API credentials and tokens.
-//
-// Deprecated: use ports.CredentialPort (kc/ports/credential.go) instead.
-// Retained until Phase B/D migrate remaining consumers.
-type CredentialResolver interface {
-	// GetAPIKeyForEmail returns the API key: per-user if registered, otherwise global.
-	GetAPIKeyForEmail(email string) string
-
-	// GetAPISecretForEmail returns the API secret: per-user if registered, otherwise global.
-	GetAPISecretForEmail(email string) string
-
-	// GetAccessTokenForEmail returns the cached access token for a given email.
-	GetAccessTokenForEmail(email string) string
-
-	// HasPreAuth returns true if the manager has a pre-set access token.
-	HasPreAuth() bool
-
-	// HasCachedToken returns true if there's a cached Kite token for the email.
-	HasCachedToken(email string) bool
-
-	// HasUserCredentials returns true if per-user credentials exist.
-	HasUserCredentials(email string) bool
-
-	// HasGlobalCredentials returns true if global API key/secret are configured.
-	HasGlobalCredentials() bool
-
-	// IsTokenValid returns true if the user has a valid (non-expired) cached token.
-	IsTokenValid(email string) bool
-}
-
 // ---------------------------------------------------------------------------
 // Focused store-provider interfaces (ISP)
 // ---------------------------------------------------------------------------
@@ -280,8 +250,7 @@ type BrowserOpener interface {
 // ---------------------------------------------------------------------------
 
 var (
-	_ CredentialResolver = (*CredentialService)(nil) // Round 3: delegated to CredentialService; obtain via m.CredentialSvc()
-	_ StoreAccessor      = (*Manager)(nil)
+	_ StoreAccessor = (*Manager)(nil)
 	_ AppConfigProvider  = (*Manager)(nil)
 	_ MetricsRecorder    = (*Manager)(nil)
 	_ ManagerLifecycle   = (*Manager)(nil)
