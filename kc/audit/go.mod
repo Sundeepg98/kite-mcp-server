@@ -1,0 +1,62 @@
+module github.com/zerodha/kite-mcp-server/kc/audit
+
+go 1.25.0
+
+// kc/audit has bidirectional cross-module deps with the root module:
+// the root module requires kc/audit (54 reverse-dep import sites);
+// kc/audit imports kc/alerts, kc/domain, kc/logger, oauth — all still
+// in the root module pending future extraction.
+//
+// In workspace mode (the canonical local + CI build path), all four
+// upstream packages are resolved via go.work + the root module path.
+// The replace directive below short-circuits version lookup when
+// GOWORK=off (Dockerfile build, vendored consumer). v0.0.0 pseudo-
+// version is the conventional placeholder for "workspace-local-only".
+require (
+	github.com/google/uuid v1.6.0
+	github.com/mark3labs/mcp-go v0.46.0
+	github.com/stretchr/testify v1.10.0
+	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
+	go.uber.org/goleak v1.3.0
+)
+
+require (
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1 // indirect
+	github.com/gocarina/gocsv v0.0.0-20180809181117-b8c38cb1ba36 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/spf13/cast v1.7.1 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/tools v0.41.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/libc v1.67.6 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.46.1 // indirect
+)
+
+// kc/audit transitively imports broker (via kc/domain) and kc/money
+// (via kc/domain → broker). Each requires its own replace directive
+// because Go's module resolver walks the dep graph from kc/audit's
+// perspective, not from the root module's. Without these the resolver
+// fails with "invalid version: unknown revision 000000000000".
+replace (
+	github.com/zerodha/kite-mcp-server => ../..
+	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/money => ../money
+)

@@ -12,6 +12,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 COPY kc/money/go.mod kc/money/go.sum* kc/money/
 COPY broker/go.mod broker/go.sum* broker/
+COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/
 RUN go mod download
 COPY . .
 # VERSION sourced from server.json (single source of truth for the registry

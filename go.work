@@ -9,25 +9,30 @@
 // Members:
 //   .          — root module github.com/zerodha/kite-mcp-server
 //                 (everything not yet extracted; app/, mcp/, kc/* except
-//                  kc/money, oauth/, cmd/, plugins/, etc.).
+//                  kc/money + kc/audit, oauth/, cmd/, plugins/, etc.).
 //   ./kc/money — Money value object (currency-aware decimal arithmetic +
 //                 JSON marshalling). First extracted module (commit
 //                 b7fedcc). 238 LOC, zero internal deps — the lowest-
 //                 leaf extractable module in the codebase.
 //   ./broker   — Broker port + adapters (zerodha SDK adapter, mock,
 //                 broker.PortContract test pattern from 55d1a17). Second
-//                 extracted module. One internal dep (kc/money) crosses
-//                 a clean module boundary via the replace directive in
-//                 broker/go.mod. 115 import sites across 13 packages
-//                 keep working unchanged because the module path stays
-//                 github.com/zerodha/kite-mcp-server/broker.
+//                 extracted module (commit 5d74acf). One internal dep
+//                 (kc/money) crosses a clean module boundary via the
+//                 replace directive in broker/go.mod. 115 import sites
+//                 across 13 packages keep working unchanged.
+//   ./kc/audit — Audit log + tool-call observability + anomaly cache +
+//                 hash-publish manifest. Third extracted module. Has
+//                 BIDIRECTIONAL cross-module deps with the root module:
+//                 root requires kc/audit (54 reverse-dep callers);
+//                 kc/audit requires the root for kc/alerts, kc/domain,
+//                 kc/logger, oauth (all pending future extraction).
+//                 Workspace mode resolves both directions; `replace
+//                 ../..` in kc/audit/go.mod handles GOWORK=off.
 //
 // Adding more members: drop a go.mod into the target directory, append
 // the path here, then `go work sync`. Per the disintegrate audit's
 // trigger-driven escalation: only promote when a candidate genuinely
-// benefits — kc/riskguard, kc/audit, kc/billing at 50 stars external
-// interest or when a second consumer (e.g., second broker integration)
-// arrives.
+// benefits — kc/riskguard, kc/billing at the next slices.
 //
 // CI: matrix-test per member is the canonical path. The default
 // `go test ./...` from the root still works because workspace mode
@@ -38,5 +43,6 @@ go 1.25.0
 use (
 	.
 	./broker
+	./kc/audit
 	./kc/money
 )

@@ -15,6 +15,7 @@ require (
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 	go.uber.org/goleak v1.3.0
@@ -29,11 +30,12 @@ require (
 // root module buildable from a tagged release tarball that omits go.work
 // (e.g., when goreleaser creates source archives) AND keep `GOWORK=off`
 // builds working for diagnostics. Without these, the root module's
-// imports of kc/money + broker would fail to resolve outside workspace
-// mode. Drop a replace once the corresponding module has its own
-// published tag.
+// imports of broker + kc/money + kc/audit would fail to resolve outside
+// workspace mode. Drop a replace once the corresponding module has its
+// own published tag.
 replace (
 	github.com/zerodha/kite-mcp-server/broker => ./broker
+	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit
 	github.com/zerodha/kite-mcp-server/kc/money => ./kc/money
 )
 
