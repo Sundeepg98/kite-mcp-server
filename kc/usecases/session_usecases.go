@@ -12,10 +12,10 @@ import (
 )
 
 // SessionDataClearer abstracts the session-data clearing operation. Narrow
-// port (one method) so the use case does not pull in the full SessionPort /
-// SessionProvider surface just to perform a single lifecycle write. The kc
-// package's SessionService satisfies this natively via its ClearSessionData
-// method, so no adapter is required at the wiring site.
+// port (one method) so the use case does not pull in the full
+// ports.SessionPort surface just to perform a single lifecycle write. The
+// kc package's SessionService satisfies this natively via its
+// ClearSessionData method, so no adapter is required at the wiring site.
 type SessionDataClearer interface {
 	ClearSessionData(sessionID string) error
 }

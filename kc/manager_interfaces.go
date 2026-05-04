@@ -13,41 +13,6 @@ import (
 // These interfaces decompose the monolithic Manager into focused contracts,
 // enabling consumers to depend only on the capabilities they need.
 
-// SessionProvider retrieves and manages MCP sessions with associated Kite data.
-//
-// Deprecated: use ports.SessionPort (kc/ports/session.go) instead. The two
-// contracts are identical; SessionProvider is retained until Phase B/D
-// teammates complete migration. It will be deleted once the ports package
-// owns the session contract exclusively.
-type SessionProvider interface {
-	// GetOrCreateSession retrieves an existing Kite session or creates a new one.
-	GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error)
-
-	// GetOrCreateSessionWithEmail retrieves or creates a session with email context.
-	GetOrCreateSessionWithEmail(mcpSessionID, email string) (*KiteSessionData, bool, error)
-
-	// GetSession retrieves an existing Kite session by MCP session ID.
-	GetSession(mcpSessionID string) (*KiteSessionData, error)
-
-	// GenerateSession creates a new MCP session and returns the session ID.
-	GenerateSession() string
-
-	// ClearSession terminates a session, triggering cleanup hooks.
-	ClearSession(sessionID string)
-
-	// ClearSessionData clears session data without terminating the session.
-	ClearSessionData(sessionID string) error
-
-	// SessionLoginURL returns the Kite login URL for the given session.
-	SessionLoginURL(mcpSessionID string) (string, error)
-
-	// CompleteSession completes Kite authentication using the request token.
-	CompleteSession(mcpSessionID, kiteRequestToken string) error
-
-	// GetActiveSessionCount returns the number of active sessions.
-	GetActiveSessionCount() int
-}
-
 // CredentialResolver resolves per-user or global API credentials and tokens.
 //
 // Deprecated: use ports.CredentialPort (kc/ports/credential.go) instead.
@@ -315,7 +280,6 @@ type BrowserOpener interface {
 // ---------------------------------------------------------------------------
 
 var (
-	_ SessionProvider    = (*Manager)(nil)
 	_ CredentialResolver = (*CredentialService)(nil) // Round 3: delegated to CredentialService; obtain via m.CredentialSvc()
 	_ StoreAccessor      = (*Manager)(nil)
 	_ AppConfigProvider  = (*Manager)(nil)
