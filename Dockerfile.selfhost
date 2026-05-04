@@ -30,13 +30,15 @@ ARG ALPINE_VERSION=3.21
 FROM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /app
 
-# Copy module files first for better layer caching. The kc/money/go.mod
-# manifest must be staged before `go mod download` because the root
-# go.mod has a `replace` directive pointing kc/money at ./kc/money;
-# without the manifest the resolver fails. See sibling Dockerfile + go.work
-# for the multi-module workspace setup.
+# Copy module files first for better layer caching. Each extracted
+# module's go.mod manifest must be staged before `go mod download`
+# because the root go.mod has `replace` directives pointing at
+# ./kc/money and ./broker; without the manifests the resolver fails.
+# See sibling Dockerfile + go.work for the multi-module workspace
+# setup. Add another COPY line per future extraction.
 COPY go.mod go.sum ./
 COPY kc/money/go.mod kc/money/go.sum* kc/money/
+COPY broker/go.mod broker/go.sum* broker/
 RUN go mod download
 
 COPY . .
