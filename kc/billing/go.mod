@@ -5,13 +5,17 @@ go 1.25.0
 // kc/billing has bidirectional cross-module deps with the root module:
 // the root module requires kc/billing (12+ reverse-dep import sites
 // per .research/disintegrate-and-holistic-architecture.md §1.2);
-// kc/billing imports kc/alerts, kc/domain, kc/logger, oauth — all
-// still in the root module pending future extraction.
+// kc/billing imports kc/alerts, kc/domain, kc/logger, oauth.
+//
+// PR 4.3 (Anchor 4): kc/domain was extracted at PR 4.1 stub-add
+// (commit d4bb3e6). This PR adds an explicit `kc/domain => ../domain`
+// replace + 5 transitive replaces (matching the kc/audit PR 4.2
+// pattern at commit b614f39). ZERO behavior change at runtime.
 //
 // External: Stripe SDK (stripe-go/v82) for checkout/billingportal/
 // webhook + mark3labs/mcp-go for the billing-tier middleware.
 //
-// In workspace mode (the canonical local + CI build path), all four
+// In workspace mode (the canonical local + CI build path), all
 // upstream packages are resolved via go.work + the root module path.
 // The replace directives below short-circuit version lookup when
 // GOWORK=off (Dockerfile build, vendored consumer). v0.0.0 pseudo-
@@ -24,6 +28,12 @@ require (
 	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/goleak v1.3.0
+)
+
+require (
+	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -44,11 +54,15 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
+	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/templates v0.0.0-00010101000000-000000000000 // indirect
+	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
@@ -67,5 +81,11 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
+	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
+	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
+	github.com/zerodha/kite-mcp-server/kc/users => ../users
 )
