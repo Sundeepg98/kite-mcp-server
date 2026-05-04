@@ -79,15 +79,6 @@ type PaperEngineProvider interface {
 	PaperEngine() PaperEngineInterface
 }
 
-// InstrumentsManagerProvider exposes the instruments manager.
-//
-// Deprecated: prefer ports.InstrumentPort (kc/ports/instrument.go) which
-// composes the 5 instrument accessors (abstract+concrete manager, stats,
-// config, force-update).
-type InstrumentsManagerProvider interface {
-	InstrumentsManager() InstrumentManagerInterface
-}
-
 // AlertDBProvider exposes the optional SQLite database used by the alerts subsystem.
 //
 // Deprecated: prefer ports.AlertPort.
@@ -167,7 +158,16 @@ type StoreAccessor interface {
 	BillingStoreProvider
 	TickerServiceProvider
 	PaperEngineProvider
-	InstrumentsManagerProvider
+
+	// InstrumentsManager() inlined here (Phase B/D F1 close): the
+	// previous InstrumentsManagerProvider alias was deleted in favor
+	// of ports.InstrumentPort at consumer sites. StoreAccessor lives
+	// in package kc and cannot embed kc/ports types without creating
+	// a cycle, so the single accessor is inlined directly. See
+	// kc/ports/instrument.go:32 for the canonical port; *kc.Manager
+	// satisfies both via its existing implementation.
+	InstrumentsManager() InstrumentManagerInterface
+
 	AlertDBProvider
 	RiskGuardProvider
 	MCPServerProvider
@@ -269,7 +269,6 @@ var (
 	_ BillingStoreProvider       = (*Manager)(nil)
 	_ TickerServiceProvider      = (*Manager)(nil)
 	_ PaperEngineProvider        = (*Manager)(nil)
-	_ InstrumentsManagerProvider = (*Manager)(nil)
 	_ AlertDBProvider            = (*Manager)(nil)
 	_ RiskGuardProvider          = (*Manager)(nil)
 	_ MCPServerProvider          = (*Manager)(nil)

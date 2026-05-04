@@ -3,6 +3,7 @@ package mcp
 import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	logport "github.com/zerodha/kite-mcp-server/kc/logger"
+	"github.com/zerodha/kite-mcp-server/kc/ports"
 )
 
 // ReadDepsFields is the read/observability-context subset of
@@ -27,7 +28,7 @@ type ReadDepsFields struct {
 	QueryBusP   kc.QueryBusProvider
 	Watchlist   kc.WatchlistStoreProvider
 	Ticker      kc.TickerServiceProvider
-	Instruments kc.InstrumentsManagerProvider
+	Instruments ports.InstrumentPort
 }
 
 func newReadDeps(manager *kc.Manager) ReadDepsFields {

@@ -54,7 +54,7 @@ type ToolHandlerDeps struct {
 	Billing          kc.BillingStoreProvider
 	Ticker           kc.TickerServiceProvider
 	Paper            kc.PaperEngineProvider
-	Instruments      kc.InstrumentsManagerProvider
+	Instruments      ports.InstrumentPort
 	AlertDB          kc.AlertDBProvider
 	RiskGuard        kc.RiskGuardProvider
 	MCPServer        kc.MCPServerProvider
