@@ -480,45 +480,21 @@ type PaperEngineInterface interface {
 // InstrumentManagerInterface — instrument data lookup
 // ---------------------------------------------------------------------------
 
-// InstrumentManagerInterface defines operations for looking up instrument
-// metadata (symbols, tokens, ISIN, etc.).
-type InstrumentManagerInterface interface {
-	// GetByID returns an instrument using the symbol (exchange:tradingsymbol).
-	GetByID(id string) (instruments.Instrument, error)
-
-	// GetByTradingsymbol returns an instrument using exchange and trading symbol.
-	GetByTradingsymbol(exchange, tradingsymbol string) (instruments.Instrument, error)
-
-	// GetByISIN returns instruments matching the given ISIN.
-	GetByISIN(isin string) ([]instruments.Instrument, error)
-
-	// GetByInstToken returns an instrument using its instrument token.
-	GetByInstToken(token uint32) (instruments.Instrument, error)
-
-	// GetByExchToken returns an instrument using exchange and exchange token.
-	GetByExchToken(exch string, exchToken uint32) (instruments.Instrument, error)
-
-	// Filter returns instruments matching the given filter function.
-	Filter(filter func(instruments.Instrument) bool) []instruments.Instrument
-
-	// GetAllByUnderlying returns F&O instruments for the given underlying.
-	GetAllByUnderlying(exchange, underlying string) ([]instruments.Instrument, error)
-
-	// Count returns the number of instruments loaded.
-	Count() int
-
-	// GetUpdateStats returns current update statistics.
-	GetUpdateStats() instruments.UpdateStats
-
-	// UpdateInstruments fetches and updates instrument data.
-	UpdateInstruments() error
-
-	// ForceUpdateInstruments forces an instrument update regardless of timing.
-	ForceUpdateInstruments() error
-
-	// Shutdown gracefully shuts down the instruments manager.
-	Shutdown()
-}
+// InstrumentManagerInterface is the instrument-metadata lookup interface.
+// Anchor 5 PR 5.4 relocated the canonical declaration to
+// kc/instruments/manager_interface.go (its owning package); this alias
+// preserves the legacy `kc.InstrumentManagerInterface` reference path so
+// the 10+ pre-existing reverse-dep call sites build unchanged. Type
+// aliases are not new types — `kc.InstrumentManagerInterface` and
+// `instruments.InstrumentManagerInterface` are interchangeable at every
+// call site, including the compile-time satisfaction check below
+// (`_ InstrumentManagerInterface = (*instruments.Manager)(nil)`).
+//
+// Wave B-2 PR 5.5 will rewrite kc/ports/instrument.go to reference
+// `instruments.InstrumentManagerInterface` directly so it can drop its
+// kc-parent import; this alias remains as the long-tail backward-
+// compatibility shim until call sites migrate.
+type InstrumentManagerInterface = instruments.InstrumentManagerInterface
 
 // ---------------------------------------------------------------------------
 // Compile-time interface satisfaction checks
