@@ -6,11 +6,47 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"sync/atomic"
 
 	"github.com/zerodha/kite-mcp-server/app"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 )
+
+// memoryLimitBytes is the soft GC target for the Go runtime — set via
+// runtime/debug.SetMemoryLimit at process startup. Path C item per audit
+// 6ee6520: prevents OOM-kill on the 512MB Fly.io machine.
+//
+// Sizing rationale:
+//   - Fly.io machine: 512 MB total RAM
+//   - Linux kernel + base process overhead: ~30-50 MB
+//   - Go runtime metadata (stacks, schedulers, allocator): ~12-30 MB
+//   - Headroom for transient allocation spikes: ~20-40 MB
+//
+// 450 MB target leaves ~62 MB headroom — the empirical industry standard
+// is 85-90% of available RAM, so 450/512 = 88% sits in the conservative
+// upper-band. Above this, the GC starts running more aggressively to
+// reclaim memory before the kernel OOM-kills the process.
+//
+// GOMEMLIMIT env var (read at runtime startup) would override this — the
+// in-code default is intentionally visible (vs hidden in fly.toml or env)
+// for ops audit + debugging. Fly.io can override via secret if a per-
+// machine-class override is ever needed.
+const memoryLimitBytes int64 = 450 * 1024 * 1024 // 450 MB
+
+func init() {
+	// Path C item per audit 6ee6520: cap GC target to 450 MB on the 512 MB
+	// Fly.io machine. Without this, sustained allocation can outpace GC
+	// and trigger kernel OOM-kill (full outage vs smooth back-pressure).
+	//
+	// Safe in init(): runtime/debug is stdlib, no third-party deps, no
+	// goroutines spawned, no heap allocations of consequence. Runs before
+	// main() so the limit applies to all subsequent allocations.
+	//
+	// SetMemoryLimit returns the previous limit (we discard — startup
+	// idempotent: this is the only call site).
+	_ = debug.SetMemoryLimit(memoryLimitBytes)
+}
 
 var (
 	// MCP_SERVER_VERSION will be injected during the build process by the justfile

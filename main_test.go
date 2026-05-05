@@ -2,16 +2,54 @@ package main
 
 import (
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestMemoryLimitConstant verifies the runtime memory limit is set to a
+// sane value (450 MB). Path C item per audit 6ee6520: prevents OOM-kill
+// on the 512 MB Fly.io machine by giving Go's GC a soft target below
+// kernel OOM-killer threshold.
+//
+// We assert two invariants:
+//  1. memoryLimitBytes is the documented 450 MB constant
+//  2. debug.SetMemoryLimit retrieved-via-(-1) reflects an applied limit
+//     equal to memoryLimitBytes (proves init() ran)
+//
+// The init() block itself is exercised by virtue of the test binary
+// loading the main package — every test in this file proves init ran.
+func TestMemoryLimitConstant(t *testing.T) {
+	t.Parallel()
+
+	// Invariant 1: the constant matches the documented 450 MB. If a future
+	// change moves it without updating the docstring, this catches it.
+	const expected int64 = 450 * 1024 * 1024
+	assert.Equal(t, expected, memoryLimitBytes,
+		"memoryLimitBytes must be 450 MB to leave 62 MB headroom on 512 MB Fly.io machine")
+
+	// Invariant 2: the runtime limit is currently set. SetMemoryLimit(-1)
+	// returns the current value without changing it (per stdlib godoc).
+	current := debug.SetMemoryLimit(-1)
+	// Default GOMEMLIMIT is math.MaxInt64 — if init didn't run, the limit
+	// would still be MaxInt64. Assert it's been lowered.
+	assert.Less(t, current, int64(math.MaxInt64),
+		"runtime memory limit must be lowered from default by init()")
+	// And specifically: the limit equals our chosen value (or has been
+	// further overridden by GOMEMLIMIT env, which we accept).
+	if os.Getenv("GOMEMLIMIT") == "" {
+		assert.Equal(t, memoryLimitBytes, current,
+			"with no GOMEMLIMIT env override, runtime limit must equal memoryLimitBytes")
+	}
+}
 
 func TestVersionVariables(t *testing.T) {
 	// Package-level variables should have default values when not injected by ldflags.
