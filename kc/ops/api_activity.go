@@ -41,6 +41,7 @@ func (h *ActivityHandler) activityAPI(w http.ResponseWriter, r *http.Request) {
 		Limit:      intParam(r, "limit", 50),
 		Offset:     intParam(r, "offset", 0),
 		Category:   r.URL.Query().Get("category"),
+		ToolName:   r.URL.Query().Get("tool"),
 		OnlyErrors: r.URL.Query().Get("errors") == "true",
 	}
 	if since := r.URL.Query().Get("since"); since != "" {
@@ -111,6 +112,7 @@ func (h *ActivityHandler) activityExport(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	opts.Category = r.URL.Query().Get("category")
+	opts.ToolName = r.URL.Query().Get("tool")
 	opts.OnlyErrors = r.URL.Query().Get("errors") == "true"
 
 	results, _, err := h.core.auditStore.List(email, opts)

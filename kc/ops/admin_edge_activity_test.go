@@ -45,6 +45,53 @@ func TestMax_ActivityAPI_WithFilters(t *testing.T) {
 }
 
 
+// TestMax_ActivityAPI_WithToolNameFilter verifies the tool URL parameter
+// threads through to ListOptions.ToolName, narrowing the entries list to
+// the matching tool_name. Backend support landed in commit cf36ab8 (Axis
+// C feature gap C.F7 from .research/abc-100pct-complete-paths.md).
+func TestMax_ActivityAPI_WithToolNameFilter(t *testing.T) {
+	t.Parallel()
+	d := newDashboardWithAuditAndPaper(t)
+
+	// Seed three entries: 2 place_order, 1 get_holdings.
+	now := time.Now()
+	d.auditStore.Record(&audit.ToolCall{
+		CallID: "tn-1", Email: "user@test.com", ToolName: "place_order",
+		ToolCategory: "order", InputSummary: "buy 1 NIFTY",
+		StartedAt: now, CompletedAt: now,
+	})
+	d.auditStore.Record(&audit.ToolCall{
+		CallID: "tn-2", Email: "user@test.com", ToolName: "place_order",
+		ToolCategory: "order", InputSummary: "buy 2 NIFTY",
+		StartedAt: now, CompletedAt: now,
+	})
+	d.auditStore.Record(&audit.ToolCall{
+		CallID: "tn-3", Email: "user@test.com", ToolName: "get_holdings",
+		ToolCategory: "query", InputSummary: "list",
+		StartedAt: now, CompletedAt: now,
+	})
+
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Filter by tool_name=place_order
+	url := "/dashboard/api/activity?tool=place_order&limit=10"
+	req := reqWithEmail(http.MethodGet, url, "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	body := rec.Body.String()
+	// total field reports filtered count = 2; the third get_holdings entry must be absent
+	// from the entries[] list (tool_counts may legitimately mention get_holdings since
+	// it aggregates the user's full tool usage independent of the search filter).
+	assert.Contains(t, body, `"total":2`, "tool=place_order should narrow total to 2")
+	// Each filtered entry should have tool_name=place_order; spot-check via call_id presence.
+	assert.Contains(t, body, `"call_id":"tn-1"`, "place_order entry tn-1 must be present")
+	assert.Contains(t, body, `"call_id":"tn-2"`, "place_order entry tn-2 must be present")
+	assert.NotContains(t, body, `"call_id":"tn-3"`, "get_holdings entry tn-3 must be filtered out")
+}
+
 func TestMax_ActivityAPI_NoAuditStore(t *testing.T) {
 	t.Parallel()
 	d := newTestDashboard(t)
