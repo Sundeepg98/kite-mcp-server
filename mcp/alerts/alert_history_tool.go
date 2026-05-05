@@ -1,4 +1,4 @@
-package mcp
+package alerts
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GetAlertHistoryReconstitutedTool exposes event-sourced alert lifecycle
@@ -37,10 +39,10 @@ func (*GetAlertHistoryReconstitutedTool) Tool() mcp.Tool {
 }
 
 func (*GetAlertHistoryReconstitutedTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_alert_history_reconstituted")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		if err := p.Required("alert_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -64,4 +66,4 @@ func (*GetAlertHistoryReconstitutedTool) Handler(manager *kc.Manager) server.Too
 	}
 }
 
-func init() { RegisterInternalTool(&GetAlertHistoryReconstitutedTool{}) }
+func init() { plugin.RegisterInternalTool(&GetAlertHistoryReconstitutedTool{}) }

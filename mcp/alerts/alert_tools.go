@@ -1,4 +1,4 @@
-package mcp
+package alerts
 
 import (
 	"context"
@@ -10,10 +10,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	kcalerts "github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -48,7 +50,7 @@ func (*SetupTelegramTool) Tool() mcp.Tool {
 }
 
 func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "setup_telegram")
 
@@ -63,11 +65,11 @@ func (*SetupTelegramTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "chat_id"); err != nil {
+		if err := common.ValidateRequired(args,"chat_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		chatIDFloat := NewArgParser(args).Float("chat_id", 0)
+		chatIDFloat := common.NewArgParser(args).Float("chat_id", 0)
 		if math.IsNaN(chatIDFloat) || math.IsInf(chatIDFloat, 0) || chatIDFloat > float64(math.MaxInt64) || chatIDFloat < float64(math.MinInt64) {
 			return mcp.NewToolResultError("Invalid chat_id: must be a valid integer"), nil
 		}
@@ -120,7 +122,7 @@ func (*SetAlertTool) Tool() mcp.Tool {
 }
 
 func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "set_alert")
 
@@ -130,11 +132,11 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "instrument", "price", "direction"); err != nil {
+		if err := common.ValidateRequired(args,"instrument", "price", "direction"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		instrumentID := p.String("instrument", "")
 		targetPrice := p.Float("price", 0)
 		directionStr := p.String("direction", "above")
@@ -144,13 +146,13 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Price must be positive"), nil
 		}
 
-		direction := alerts.Direction(directionStr)
-		if !alerts.ValidDirections[direction] {
+		direction := kcalerts.Direction(directionStr)
+		if !kcalerts.ValidDirections[direction] {
 			return mcp.NewToolResultError("Direction must be 'above', 'below', 'drop_pct', or 'rise_pct'"), nil
 		}
 
 		// For percentage alerts, validate the threshold is reasonable
-		if alerts.IsPercentageDirection(direction) && targetPrice > 100 {
+		if kcalerts.IsPercentageDirection(direction) && targetPrice > 100 {
 			return mcp.NewToolResultError("Percentage threshold cannot exceed 100%"), nil
 		}
 
@@ -169,14 +171,14 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		tradingsymbol := inst.Tradingsymbol
 
 		// For percentage alerts, fetch current LTP as reference if not provided
-		if alerts.IsPercentageDirection(direction) && referencePrice <= 0 {
+		if kcalerts.IsPercentageDirection(direction) && referencePrice <= 0 {
 			sess := server.ClientSessionFromContext(ctx)
 			sessionID := sess.SessionID()
 			kiteSession, _, clientErr := handler.Deps.Sessions.GetOrCreateSessionWithEmail(sessionID, email)
 			if clientErr != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get Kite session for LTP lookup: %s", clientErr)), nil
 			}
-			ltpResp, ltpErr := RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
+			ltpResp, ltpErr := common.RetryBrokerCall(func() (kiteconnect.QuoteLTP, error) {
 				return kiteSession.Kite.GetLTP(instrumentID)
 			}, 2)
 			if ltpErr != nil {
@@ -224,7 +226,7 @@ func (*SetAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		var result string
-		if alerts.IsPercentageDirection(direction) {
+		if kcalerts.IsPercentageDirection(direction) {
 			result = fmt.Sprintf("Alert set: %s %s %.2f%% from reference %.2f (ID: %s)", instrumentID, directionStr, targetPrice, referencePrice, alertID)
 		} else {
 			result = fmt.Sprintf("Alert set: %s %s %.2f (ID: %s)", instrumentID, directionStr, targetPrice, alertID)
@@ -257,7 +259,7 @@ func (*ListAlertsTool) Tool() mcp.Tool {
 }
 
 func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "list_alerts")
 
@@ -270,7 +272,7 @@ func (*ListAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		alertList := raw.([]*alerts.Alert)
+		alertList := raw.([]*kcalerts.Alert)
 		if len(alertList) == 0 {
 			return mcp.NewToolResultText("No alerts configured. Use set_alert to create one."), nil
 		}
@@ -299,7 +301,7 @@ func (*DeleteAlertTool) Tool() mcp.Tool {
 }
 
 func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "delete_alert")
 
@@ -309,11 +311,11 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "alert_id"); err != nil {
+		if err := common.ValidateRequired(args,"alert_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		alertID := NewArgParser(args).String("alert_id", "")
+		alertID := common.NewArgParser(args).String("alert_id", "")
 
 		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.DeleteAlertCommand{
 			Email:   email,
@@ -328,8 +330,8 @@ func (*DeleteAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 func init() {
-	RegisterInternalTool(&DeleteAlertTool{})
-	RegisterInternalTool(&ListAlertsTool{})
-	RegisterInternalTool(&SetAlertTool{})
-	RegisterInternalTool(&SetupTelegramTool{})
+	plugin.RegisterInternalTool(&DeleteAlertTool{})
+	plugin.RegisterInternalTool(&ListAlertsTool{})
+	plugin.RegisterInternalTool(&SetAlertTool{})
+	plugin.RegisterInternalTool(&SetupTelegramTool{})
 }

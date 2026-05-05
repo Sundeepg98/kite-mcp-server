@@ -1,4 +1,4 @@
-package mcp
+package alerts
 
 import (
 	"context"
@@ -8,8 +8,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	kcalerts "github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -136,7 +138,7 @@ func (*CompositeAlertTool) Tool() mcp.Tool {
 }
 
 func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "composite_alert")
 
@@ -146,11 +148,11 @@ func (*CompositeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "name", "logic", "conditions"); err != nil {
+		if err := common.ValidateRequired(args,"name", "logic", "conditions"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		name := strings.TrimSpace(p.String("name", ""))
 		if name == "" {
 			return mcp.NewToolResultError("name cannot be empty"), nil
@@ -272,7 +274,7 @@ func parseCompositeCondition(idx int, raw any) (compositeCondition, error) {
 		return zero, fmt.Errorf("conditions[%d]: expected an object, got %T", idx, raw)
 	}
 
-	exchange := strings.ToUpper(strings.TrimSpace(SafeAssertString(obj["exchange"], "")))
+	exchange := strings.ToUpper(strings.TrimSpace(common.SafeAssertString(obj["exchange"], "")))
 	if exchange == "" {
 		return zero, fmt.Errorf("conditions[%d]: exchange is required", idx)
 	}
@@ -280,26 +282,26 @@ func parseCompositeCondition(idx int, raw any) (compositeCondition, error) {
 		return zero, fmt.Errorf("conditions[%d]: exchange %q not supported (use NSE, NFO, BSE, BFO, MCX)", idx, exchange)
 	}
 
-	symbol := strings.TrimSpace(SafeAssertString(obj["tradingsymbol"], ""))
+	symbol := strings.TrimSpace(common.SafeAssertString(obj["tradingsymbol"], ""))
 	if symbol == "" {
 		return zero, fmt.Errorf("conditions[%d]: tradingsymbol is required", idx)
 	}
 
-	operator := strings.ToLower(strings.TrimSpace(SafeAssertString(obj["operator"], "")))
+	operator := strings.ToLower(strings.TrimSpace(common.SafeAssertString(obj["operator"], "")))
 	if operator == "" {
 		return zero, fmt.Errorf("conditions[%d]: operator is required", idx)
 	}
-	if !alerts.ValidDirections[alerts.Direction(operator)] {
+	if !kcalerts.ValidDirections[kcalerts.Direction(operator)] {
 		return zero, fmt.Errorf("conditions[%d]: operator %q must be one of above, below, drop_pct, rise_pct", idx, operator)
 	}
 
-	value := SafeAssertFloat64(obj["value"], 0)
+	value := common.SafeAssertFloat64(obj["value"], 0)
 	if value <= 0 {
 		return zero, fmt.Errorf("conditions[%d]: value must be > 0", idx)
 	}
 
-	refPrice := SafeAssertFloat64(obj["reference_price"], 0)
-	if alerts.IsPercentageDirection(alerts.Direction(operator)) {
+	refPrice := common.SafeAssertFloat64(obj["reference_price"], 0)
+	if kcalerts.IsPercentageDirection(kcalerts.Direction(operator)) {
 		if refPrice <= 0 {
 			return zero, fmt.Errorf("conditions[%d]: reference_price is required (and > 0) for %s", idx, operator)
 		}
@@ -328,4 +330,4 @@ func validCompositeExchange(exchange string) bool {
 	return false
 }
 
-func init() { RegisterInternalTool(&CompositeAlertTool{}) }
+func init() { plugin.RegisterInternalTool(&CompositeAlertTool{}) }

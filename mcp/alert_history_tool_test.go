@@ -13,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	mcpalerts "github.com/zerodha/kite-mcp-server/mcp/alerts"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
@@ -54,7 +55,7 @@ func TestGetAlertHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"})
 
-	tool := &GetAlertHistoryReconstitutedTool{}
+	tool := &mcpalerts.GetAlertHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_alert_history_reconstituted"
 	req.Params.Arguments = map[string]any{"alert_id": "alert-history-test"}
@@ -113,7 +114,7 @@ func TestGetAlertHistoryReconstituted_UnknownAlertReturnsNotFound(t *testing.T) 
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "b2c3d4e5-f6a7-8901-bcde-f01234567890"})
 
-	tool := &GetAlertHistoryReconstitutedTool{}
+	tool := &mcpalerts.GetAlertHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_alert_history_reconstituted"
 	req.Params.Arguments = map[string]any{"alert_id": "does-not-exist-alert"}

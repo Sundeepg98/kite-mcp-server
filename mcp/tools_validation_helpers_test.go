@@ -383,22 +383,10 @@ func TestAllToolDefinitions_HaveValidSchema(t *testing.T) {
 }
 
 
-func TestInstrumentResolverAdapter_NotFound(t *testing.T) {
-	t.Parallel()
-	mgr := newTestManager(t)
-	adapter := &instrumentResolverAdapter{mgr: mgr.Instruments}
-	_, err := adapter.GetInstrumentToken("NSE", "NONEXISTENT")
-	assert.Error(t, err)
-}
-
-
-func TestInstrumentResolverAdapter_Type(t *testing.T) {
-	t.Parallel()
-	// Verify that the adapter implements the right interface pattern
-	mgr := newTestManager(t)
-	adapter := &instrumentResolverAdapter{mgr: mgr.Instruments}
-	assert.NotNil(t, adapter)
-}
+// Anchor 1 PR 1.8: TestInstrumentResolverAdapter_NotFound and
+// TestInstrumentResolverAdapter_Type moved to
+// mcp/alerts/instrument_resolver_adapter_test.go because they reference
+// unexported alerts-package symbols (instrumentResolverAdapter).
 
 
 func TestRequestConfirmation_InterfaceNotServer(t *testing.T) {

@@ -1,4 +1,4 @@
-package mcp
+package alerts
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -96,7 +98,7 @@ func (*VolumeSpikeDetectorTool) Tool() mcp.Tool {
 }
 
 func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "volume_spike_detector")
 
@@ -105,7 +107,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return mcp.NewToolResultError("Email required (OAuth must be enabled)"), nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		requested := p.StringArray("instruments")
 		threshold := p.Float("threshold", volumeSpikeDefaultThreshold)
 		lookback := p.Int("lookback_days", volumeSpikeDefaultLookback)
@@ -284,7 +286,7 @@ func (*VolumeSpikeDetectorTool) Handler(manager *kc.Manager) server.ToolHandlerF
 // Returns (ids, skipped). `skipped` captures malformed entries in the
 // caller-supplied list so we can surface them to the user without
 // failing the whole call.
-func resolveVolumeSpikeInstruments(handler *ToolHandler, email string, requested []string) ([]string, []volumeSpikeSkipped) {
+func resolveVolumeSpikeInstruments(handler *common.ToolHandler, email string, requested []string) ([]string, []volumeSpikeSkipped) {
 	seen := make(map[string]bool)
 	ids := make([]string, 0)
 	skipped := make([]volumeSpikeSkipped, 0)
@@ -363,4 +365,4 @@ func averageVolumeAndClose(candles []broker.HistoricalCandle) (float64, float64)
 	return volSum / n, priceSum / n
 }
 
-func init() { RegisterInternalTool(&VolumeSpikeDetectorTool{}) }
+func init() { plugin.RegisterInternalTool(&VolumeSpikeDetectorTool{}) }

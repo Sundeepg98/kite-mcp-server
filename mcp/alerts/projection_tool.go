@@ -1,4 +1,4 @@
-package mcp
+package alerts
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GetOrderProjectionTool exposes the read-side OrderAggregate projection
@@ -34,10 +36,10 @@ func (*GetOrderProjectionTool) Tool() mcp.Tool {
 }
 
 func (*GetOrderProjectionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_order_projection")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		if err := p.Required("order_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -58,4 +60,4 @@ func (*GetOrderProjectionTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 	}
 }
 
-func init() { RegisterInternalTool(&GetOrderProjectionTool{}) }
+func init() { plugin.RegisterInternalTool(&GetOrderProjectionTool{}) }
