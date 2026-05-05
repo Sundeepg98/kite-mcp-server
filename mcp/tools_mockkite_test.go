@@ -29,7 +29,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 )
 
 // ── mock Kite HTTP server ───────────────────────────────────────────���──────

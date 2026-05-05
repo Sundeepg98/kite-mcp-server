@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // compile-time proof that *Client satisfies broker.Client and broker.NativeAlertCapable.

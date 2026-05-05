@@ -80,7 +80,7 @@ require (
 	github.com/stripe/stripe-go/v82 v82.5.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zerodha/gokiteconnect/v4 v4.4.0 // indirect
-	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/decorators v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000 // indirect
@@ -116,7 +116,7 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/aop => ../../kc/aop
 	github.com/zerodha/kite-mcp-server/kc/audit => ../../kc/audit

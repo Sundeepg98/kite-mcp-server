@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"

@@ -13,7 +13,7 @@ require (
 	github.com/yuin/goldmark v1.8.2
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000
@@ -59,7 +59,7 @@ require (
 // module (Fx provider/recipe composition root for the DI graph).
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
-	github.com/zerodha/kite-mcp-server/broker => ./broker
+	github.com/algo2go/kite-mcp-broker => ./broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ./kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/aop => ./kc/aop
 	github.com/zerodha/kite-mcp-server/kc/audit => ./kc/audit

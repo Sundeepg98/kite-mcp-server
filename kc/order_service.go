@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // OrderService owns order placement, modification, and cancellation.

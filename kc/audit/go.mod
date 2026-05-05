@@ -21,7 +21,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/stretchr/testify v1.10.0
-	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/goleak v1.3.0
 )
@@ -73,7 +73,7 @@ require (
 // fails with "invalid version: unknown revision 000000000000".
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz

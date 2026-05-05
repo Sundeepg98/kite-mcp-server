@@ -5,9 +5,9 @@ go 1.25.0
 // kc/ticker is a moderate-fan-in module — websocket ticker service
 // (live tick subscription, leak sentinel, race-flag-on/off variants,
 // callback dispatch). Direct internal deps:
-//   - github.com/zerodha/kite-mcp-server/broker/ticker (subpackage of
+//   - github.com/algo2go/kite-mcp-broker/ticker (subpackage of
 //     extracted broker module — commit 5d74acf)
-//   - github.com/zerodha/kite-mcp-server/broker/zerodha (subpackage of
+//   - github.com/algo2go/kite-mcp-broker/zerodha (subpackage of
 //     extracted broker module — commit 5d74acf)
 //
 // Both subpackages live inside the broker module, so a single replace
@@ -20,7 +20,7 @@ go 1.25.0
 // dispatch. This is 18/24 (commit 2 of 4 in this dispatch).
 require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
-	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -39,6 +39,6 @@ require (
 )
 
 replace (
-	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
 )

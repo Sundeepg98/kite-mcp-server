@@ -1,6 +1,6 @@
 package usecases
 
-import "github.com/zerodha/kite-mcp-server/broker"
+import "github.com/algo2go/kite-mcp-broker"
 
 // ports.go is the architectural anchor for use-case-level interface
 // contracts (hexagonal "driven" ports — what the use case requires of

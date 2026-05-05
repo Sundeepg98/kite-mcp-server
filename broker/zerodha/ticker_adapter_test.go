@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/gokiteconnect/v4/models"
 
-	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
 )
 
 // newTickerAdapterFromFake is a test helper that builds a

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/broker/mock"
+	"github.com/algo2go/kite-mcp-broker"
+	"github.com/algo2go/kite-mcp-broker/mock"
 )
 
 // ports_test.go locks the BrokerResolver port contract with executable

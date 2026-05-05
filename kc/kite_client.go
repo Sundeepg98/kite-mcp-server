@@ -1,7 +1,7 @@
 package kc
 
 import (
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 )
 
 // KiteClientFactory creates Kite API clients. Inject a mock in tests by

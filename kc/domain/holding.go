@@ -1,6 +1,6 @@
 package domain
 
-import "github.com/zerodha/kite-mcp-server/broker"
+import "github.com/algo2go/kite-mcp-broker"
 
 // Holding is the rich domain entity for a broker portfolio holding.
 // It wraps a broker.Holding DTO and exposes the same Money-aware

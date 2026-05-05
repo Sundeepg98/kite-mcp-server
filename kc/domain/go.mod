@@ -18,7 +18,7 @@ go 1.25.0
 //
 // Direct internal deps (validated by `grep github.com/zerodha kc/domain/*.go`
 // at HEAD 68e92e1):
-//   - github.com/zerodha/kite-mcp-server/broker (used in holding.go,
+//   - github.com/algo2go/kite-mcp-broker (used in holding.go,
 //     order.go, position.go, profile.go for broker DTO interop —
 //     extracted at commit 5d74acf)
 //   - github.com/zerodha/kite-mcp-server/kc/isttz (used in session.go
@@ -37,7 +37,7 @@ go 1.25.0
 // is purely ceremony with zero behavior change. This is 20/24 in
 // the broader zero-monolith plan (commit 4 of 4 in this dispatch).
 require (
-	github.com/zerodha/kite-mcp-server/broker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
 )
@@ -55,7 +55,7 @@ require (
 )
 
 replace (
-	github.com/zerodha/kite-mcp-server/broker => ../../broker
+	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/money => ../money
 )

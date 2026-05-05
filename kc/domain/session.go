@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/isttz"
 )
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"

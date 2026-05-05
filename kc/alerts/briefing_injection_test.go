@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/testutil"
 )
 

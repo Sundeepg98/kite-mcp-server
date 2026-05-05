@@ -8,7 +8,7 @@ import (
 	"time"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // wrapKiteError classifies an error returned by the Kite SDK and, if it

@@ -46,8 +46,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	brokermod "github.com/zerodha/kite-mcp-server/broker"
-	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	brokermod "github.com/algo2go/kite-mcp-broker"
+	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
 )
 
 // PortContract is the canonical broker.Client conformance suite,

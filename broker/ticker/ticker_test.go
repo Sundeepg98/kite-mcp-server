@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/zerodha/kite-mcp-server/broker/ticker"
+	"github.com/algo2go/kite-mcp-broker/ticker"
 )
 
 // TestMode_ConstantsExist pins the broker-agnostic mode vocabulary.

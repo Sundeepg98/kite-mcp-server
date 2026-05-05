@@ -6,7 +6,7 @@ import (
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	"github.com/zerodha/gokiteconnect/v4/models"
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 func TestConvertProfile(t *testing.T) {

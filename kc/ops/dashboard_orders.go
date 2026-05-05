@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/domain"

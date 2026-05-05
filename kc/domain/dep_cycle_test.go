@@ -28,7 +28,7 @@ import (
 // each entry must be a true leaf below kc/domain in the dep graph,
 // and adding a new entry requires a corresponding go.mod replace.
 var allowedUpstreamModules = map[string]string{
-	"github.com/zerodha/kite-mcp-server/broker":    "broker DTO interop (Holding/Position/Order/Profile)",
+	"github.com/algo2go/kite-mcp-broker":    "broker DTO interop (Holding/Position/Order/Profile)",
 	"github.com/zerodha/kite-mcp-server/kc/domain": "self-package",
 	"github.com/zerodha/kite-mcp-server/kc/isttz":  "IST timezone for Session.IsExpired()",
 	"github.com/zerodha/kite-mcp-server/kc/money":  "Money value object",

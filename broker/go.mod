@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/broker
+module github.com/algo2go/kite-mcp-broker
 
 go 1.25.0
 

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/zerodha/kite-mcp-server/app/metrics"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"

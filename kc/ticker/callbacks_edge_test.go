@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/gokiteconnect/v4/models"
 
-	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 )
 
 // --- mockCallbackRegistrar captures closures registered by wireCallbacks ---

@@ -6,7 +6,7 @@ import (
 
 	"pgregory.net/rapid"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // sector_tool_property_test.go — property-based tests for sector

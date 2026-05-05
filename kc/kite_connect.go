@@ -1,7 +1,7 @@
 package kc
 
 import (
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 )
 
 // KiteConnect wraps the Kite Connect client.

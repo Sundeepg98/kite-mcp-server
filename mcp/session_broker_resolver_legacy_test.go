@@ -1,6 +1,6 @@
 package mcp
 
-import "github.com/zerodha/kite-mcp-server/broker"
+import "github.com/algo2go/kite-mcp-broker"
 
 // sessionBrokerResolver is the legacy in-mcp-package adapter retained
 // purely for tools_validation_test.go's pre-PR-1.5 test fixture.

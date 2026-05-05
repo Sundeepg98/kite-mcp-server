@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // sessionBrokerResolver wraps an already-resolved broker.Client so that

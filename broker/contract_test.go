@@ -16,9 +16,9 @@ package broker_test
 import (
 	"testing"
 
-	brokermod "github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/broker/conformance"
-	mockbroker "github.com/zerodha/kite-mcp-server/broker/mock"
+	brokermod "github.com/algo2go/kite-mcp-broker"
+	"github.com/algo2go/kite-mcp-broker/conformance"
+	mockbroker "github.com/algo2go/kite-mcp-broker/mock"
 )
 
 // TestZerodhaMockClient_Contract is the canonical contract-test
@@ -28,7 +28,7 @@ import (
 //
 // To wire a new broker:
 //
-//	import "github.com/zerodha/kite-mcp-server/broker/conformance"
+//	import "github.com/algo2go/kite-mcp-broker/conformance"
 //
 //	func TestUpstoxClient_Contract(t *testing.T) {
 //	    factory := func(_ *testing.T) broker.Client {

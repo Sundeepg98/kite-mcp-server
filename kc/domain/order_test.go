@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 func TestOrder_CanCancel(t *testing.T) {

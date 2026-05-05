@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // Anchor 1 PR 1.7: test helpers duplicated from mcp/tools_pure_test.go

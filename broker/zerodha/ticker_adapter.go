@@ -38,7 +38,7 @@ import (
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 	"github.com/zerodha/gokiteconnect/v4/models"
 
-	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
+	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
 )
 
 // kiteSubscriber is the narrow surface of *kiteticker.Ticker the

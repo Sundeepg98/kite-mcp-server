@@ -3,7 +3,7 @@ package domain
 import (
 	"strings"
 
-	"github.com/zerodha/kite-mcp-server/broker"
+	"github.com/algo2go/kite-mcp-broker"
 )
 
 // --- Position direction constants ---

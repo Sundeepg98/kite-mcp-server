@@ -11,9 +11,9 @@ package conformance_test
 import (
 	"testing"
 
-	brokermod "github.com/zerodha/kite-mcp-server/broker"
-	"github.com/zerodha/kite-mcp-server/broker/conformance"
-	mockbroker "github.com/zerodha/kite-mcp-server/broker/mock"
+	brokermod "github.com/algo2go/kite-mcp-broker"
+	"github.com/algo2go/kite-mcp-broker/conformance"
+	mockbroker "github.com/algo2go/kite-mcp-broker/mock"
 )
 
 // TestPortContract_HarnessRunsAgainstMock verifies the canonical

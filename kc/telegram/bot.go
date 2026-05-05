@@ -16,8 +16,8 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	brokerticker "github.com/zerodha/kite-mcp-server/broker/ticker"
-	"github.com/zerodha/kite-mcp-server/broker/zerodha"
+	brokerticker "github.com/algo2go/kite-mcp-broker/ticker"
+	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
