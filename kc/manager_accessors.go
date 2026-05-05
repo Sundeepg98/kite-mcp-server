@@ -5,7 +5,6 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
 
 // manager_accessors.go holds the Manager's service-accessor methods —
@@ -59,20 +58,6 @@ func (m *Manager) HasBrokerFactory() bool {
 //      conflict.
 func (m *Manager) SetFamilyService(fs *FamilyService) {
 	m.FamilyService = fs
-}
-
-// LoggerPort returns m.Logger wrapped in the kc/logger.Logger port.
-// New code that wants to depend on the abstract Logger contract (instead
-// of the concrete *slog.Logger) should call this accessor; the
-// underlying Logger field is preserved for the existing call-site set
-// so the migration can proceed file-by-file without a big-bang
-// rewrite. Returns a no-op when m.Logger is nil so the result is
-// always safe to use.
-func (m *Manager) LoggerPort() logport.Logger {
-	if m.Logger == nil {
-		return logport.NewNoop()
-	}
-	return logport.NewSlog(m.Logger)
 }
 
 // ---------------------------------------------------------------------------

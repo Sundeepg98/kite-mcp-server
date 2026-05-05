@@ -53,15 +53,26 @@ import (
 
 // ProvideLoggerPort returns the logport.Logger from the
 // post-construction Manager wrapper. Always non-nil when the wrapper
-// is non-nil (Manager.LoggerPort() returns NewNoop() rather than nil
-// when the underlying *slog.Logger is unset, per the existing
-// kc/manager_accessors.go:60-62 contract).
+// is non-nil (the constructor-per-call wrapper that Manager.LoggerPort()
+// previously emitted is now constructed once, here, at Fx-injection
+// time — the per-call construction overhead documented in PR 6.13's
+// commit message is now eliminated).
 //
 // Returns nil only when the input wrapper itself is nil — the
 // defensive case for direct-test callers.
+//
+// Anchor 6 PR 6.14: Manager.LoggerPort() method deleted; the wrapper
+// is constructed inline here from the Manager.Logger *slog.Logger
+// field. Same nil-fallback to NewNoop preserved (matches the prior
+// kc/manager_accessors.go:60-62 contract). Per-call construction
+// overhead eliminated — the Fx graph caches the resulting
+// logport.Logger by virtue of Fx's singleton-by-default semantics.
 func ProvideLoggerPort(initialized *InitializedManager) logport.Logger {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.LoggerPort()
+	if initialized.Manager.Logger == nil {
+		return logport.NewNoop()
+	}
+	return logport.NewSlog(initialized.Manager.Logger)
 }

@@ -85,9 +85,9 @@ func TestProvideLoggerPort_LiveManager_FunctionalEquivalence(t *testing.T) {
 	// implementations (e.g. NewNoop), so a non-nil match here also
 	// proves the wrapper is the slogAdapter variant.
 	gotSlog := logport.AsSlog(got)
-	wantSlog := logport.AsSlog(mgrInit.Manager.LoggerPort())
+	wantSlog := mgrInit.Manager.Logger
 	if gotSlog == nil || wantSlog == nil {
-		t.Fatalf("expected both wrappers to be slogAdapter variants; got %T and %T", got, mgrInit.Manager.LoggerPort())
+		t.Fatalf("expected both wrappers to be slogAdapter variants; got %T and %T", got, mgrInit.Manager.Logger)
 	}
 	if gotSlog != wantSlog {
 		t.Error("expected provider's wrapper and Manager.LoggerPort()'s wrapper to share the same underlying *slog.Logger; got different pointers (regression: provider wrapped a different logger)")
@@ -128,9 +128,9 @@ func TestProvideLoggerPort_FxIntegration(t *testing.T) {
 	}
 
 	gotSlog := logport.AsSlog(loggerPort)
-	wantSlog := logport.AsSlog(mgrInit.Manager.LoggerPort())
+	wantSlog := mgrInit.Manager.Logger
 	if gotSlog == nil || wantSlog == nil {
-		t.Fatalf("expected both wrappers to be slogAdapter variants; got %T and %T", loggerPort, mgrInit.Manager.LoggerPort())
+		t.Fatalf("expected both wrappers to be slogAdapter variants; got %T and %T", loggerPort, mgrInit.Manager.Logger)
 	}
 	if gotSlog != wantSlog {
 		t.Error("expected graph-resolved Logger and Manager.LoggerPort() to share the same underlying *slog.Logger")
