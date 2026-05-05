@@ -83,7 +83,7 @@ func TestProvideCredentialSvc_LiveManager_ReturnsService(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil CredentialService for populated wrapper")
 	}
-	if got != mgrInit.Manager.CredentialSvc() {
+	if got != mgrInit.Manager.CredentialSvc {
 		t.Error("expected pointer-identity with Manager.CredentialSvc(); got a different pointer (regression: provider wrapped/copied the service)")
 	}
 
@@ -122,7 +122,7 @@ func TestProvideCredentialSvc_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	if credSvc != mgrInit.Manager.CredentialSvc() {
+	if credSvc != mgrInit.Manager.CredentialSvc {
 		t.Error("expected pointer-identity between graph-resolved CredentialService and Manager.CredentialSvc()")
 	}
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })

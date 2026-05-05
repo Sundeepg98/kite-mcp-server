@@ -20,7 +20,7 @@ import (
 // Dependencies use interface types (Dependency Inversion Principle), enabling
 // mock injection for testing.
 type SessionService struct {
-	credentialSvc  *CredentialService
+	CredentialSvc  *CredentialService
 	tokenStore     TokenStoreInterface
 	sessionManager *SessionRegistry
 	sessionSigner  *SessionSigner
@@ -54,7 +54,7 @@ type SessionServiceConfig struct {
 // The SessionRegistry is created internally; use SetDB to wire persistence.
 func NewSessionService(cfg SessionServiceConfig) *SessionService {
 	ss := &SessionService{
-		credentialSvc: cfg.CredentialSvc,
+		CredentialSvc: cfg.CredentialSvc,
 		tokenStore:    cfg.TokenStore,
 		sessionSigner: cfg.SessionSigner,
 		auditStore:    cfg.AuditStore,
@@ -137,7 +137,7 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 		}
 	}
 
-	apiKey := ss.credentialSvc.GetAPIKeyForEmail(email)
+	apiKey := ss.CredentialSvc.GetAPIKeyForEmail(email)
 
 	kc := NewKiteConnect(apiKey)
 	kd := &KiteSessionData{
@@ -156,8 +156,8 @@ func (ss *SessionService) createKiteSessionData(sessionID, email string) *KiteSe
 	}
 
 	// Priority 2: Global pre-auth token (local dev / env var)
-	if ss.credentialSvc.HasPreAuth() {
-		kd.Kite.SetAccessToken(ss.credentialSvc.accessToken)
+	if ss.CredentialSvc.HasPreAuth() {
+		kd.Kite.SetAccessToken(ss.CredentialSvc.accessToken)
 		ss.logger.Debug("Pre-set access token for session", "session_id", sessionID)
 	}
 	return kd
@@ -220,7 +220,7 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 			resolvedEmail = kiteData.Email
 		}
 		ss.logger.Info("Restoring Kite client for persisted session", "session_id", mcpSessionID, "email", resolvedEmail)
-		restoredKite := NewKiteConnect(ss.credentialSvc.GetAPIKeyForEmail(resolvedEmail))
+		restoredKite := NewKiteConnect(ss.CredentialSvc.GetAPIKeyForEmail(resolvedEmail))
 		kiteData.Kite = restoredKite.Client
 		kiteData.Broker = zerodha.NewFromSDK(kiteData.Kite)
 		// Apply cached token if available
@@ -229,8 +229,8 @@ func (ss *SessionService) GetOrCreateSessionWithEmail(mcpSessionID, email string
 				kiteData.Kite.SetAccessToken(entry.AccessToken)
 				ss.logger.Debug("Applied cached token to restored session", "session_id", mcpSessionID, "email", resolvedEmail)
 			}
-		} else if ss.credentialSvc.HasPreAuth() {
-			kiteData.Kite.SetAccessToken(ss.credentialSvc.accessToken)
+		} else if ss.CredentialSvc.HasPreAuth() {
+			kiteData.Kite.SetAccessToken(ss.CredentialSvc.accessToken)
 		}
 		// Treat as new session so WithSession runs the auth check
 		isNew = true
@@ -450,7 +450,7 @@ func (ss *SessionService) CompleteSessionAndRotate(mcpSessionID, kiteRequestToke
 		return "", ErrSessionNotFound
 	}
 
-	apiSecret := ss.credentialSvc.GetAPISecretForEmail(kiteData.Email)
+	apiSecret := ss.CredentialSvc.GetAPISecretForEmail(kiteData.Email)
 	if apiSecret == "" {
 		ss.logger.Error("No API secret configured", "session_id", mcpSessionID, "email", kiteData.Email)
 		return "", fmt.Errorf("no Kite API secret configured")
@@ -551,8 +551,8 @@ func (ss *SessionService) GetBrokerForEmail(email string) (broker.Client, error)
 			}
 		}
 	}
-	apiKey := ss.credentialSvc.GetAPIKeyForEmail(email)
-	accessToken := ss.credentialSvc.GetAccessTokenForEmail(email)
+	apiKey := ss.CredentialSvc.GetAPIKeyForEmail(email)
+	accessToken := ss.CredentialSvc.GetAccessTokenForEmail(email)
 	if accessToken == "" {
 		return nil, fmt.Errorf("no Kite access token for %s", email)
 	}

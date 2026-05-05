@@ -264,7 +264,7 @@ func (m *Manager) initAlertEvaluator(cfg Config) {
 // initTrailingStop creates the trailing stop manager and wires the
 // "modification" audit + Telegram notification callback. The Kite
 // client modifier hook is wired separately from initCredentialService
-// because it needs credentialSvc, which isn't constructed yet at this
+// because it needs CredentialSvc, which isn't constructed yet at this
 // point in the phase order.
 func (m *Manager) initTrailingStop(cfg Config) {
 	m.trailingStopMgr = alerts.NewTrailingStopManager(cfg.Logger)
@@ -413,7 +413,7 @@ func (m *Manager) initInjectedStores(cfg Config) {
 // pass brings pre-registry self-provisioned keys into the new registry
 // store so later lookups are uniform.
 func (m *Manager) initCredentialService(cfg Config) {
-	m.credentialSvc = NewCredentialService(CredentialServiceConfig{
+	m.CredentialSvc = NewCredentialService(CredentialServiceConfig{
 		APIKey:          cfg.APIKey,
 		APISecret:       cfg.APISecret,
 		AccessToken:     cfg.AccessToken,
@@ -424,14 +424,14 @@ func (m *Manager) initCredentialService(cfg Config) {
 	})
 
 	// Backfill registry from existing credentials (handles pre-registry self-provisioned keys)
-	m.credentialSvc.BackfillRegistryFromCredentials()
+	m.CredentialSvc.BackfillRegistryFromCredentials()
 
 	// Wire the order modifier: creates a Kite client from cached tokens.
-	// This depends on credentialSvc existing — that's why it lives here
+	// This depends on CredentialSvc existing — that's why it lives here
 	// rather than in initTrailingStop above.
 	m.trailingStopMgr.SetModifier(func(email string) (alerts.KiteOrderModifier, error) {
-		apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
-		accessToken := m.credentialSvc.GetAccessTokenForEmail(email)
+		apiKey := m.CredentialSvc.GetAPIKeyForEmail(email)
+		accessToken := m.CredentialSvc.GetAccessTokenForEmail(email)
 		if accessToken == "" {
 			return nil, fmt.Errorf("no Kite access token for %s", email)
 		}
@@ -467,7 +467,7 @@ func (m *Manager) initFocusedServices(cfg Config, instrumentsManager *instrument
 		metricsImpl = cfg.Metrics
 	}
 	m.sessionSvc = NewSessionService(SessionServiceConfig{
-		CredentialSvc: m.credentialSvc,
+		CredentialSvc: m.CredentialSvc,
 		TokenStore:    m.tokenStore,
 		SessionSigner: m.sessionSigner,
 		Logger:        cfg.Logger,
@@ -510,7 +510,7 @@ func (m *Manager) initSessionPersistence(cfg Config) {
 func (m *Manager) initTokenRotation() {
 	m.tokenStore.OnChange(func(email string, entry *KiteTokenEntry) {
 		if m.tickerService.IsRunning(email) {
-			apiKey := m.credentialSvc.GetAPIKeyForEmail(email)
+			apiKey := m.CredentialSvc.GetAPIKeyForEmail(email)
 			if err := m.tickerService.UpdateToken(email, apiKey, entry.AccessToken); err != nil {
 				m.Logger.Error("Failed to update ticker token", "email", email, "error", err)
 			} else {

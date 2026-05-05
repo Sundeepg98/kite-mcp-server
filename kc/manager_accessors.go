@@ -19,11 +19,6 @@ import (
 // Focused sub-services (Clean Architecture)
 // ---------------------------------------------------------------------------
 
-// CredentialSvc returns the credential resolution service.
-func (m *Manager) CredentialSvc() *CredentialService {
-	return m.credentialSvc
-}
-
 // SessionSvc returns the session lifecycle service.
 func (m *Manager) SessionSvc() *SessionService {
 	return m.sessionSvc

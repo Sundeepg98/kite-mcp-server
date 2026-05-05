@@ -59,5 +59,12 @@ func ProvideCredentialSvc(initialized *InitializedManager) *kc.CredentialService
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.CredentialSvc()
+	// Anchor 6 PR 6.2: Manager.CredentialSvc() method deleted; the
+	// underlying field credentialSvc was capitalised to CredentialSvc
+	// (now a public field) so Fx providers can access it without an
+	// accessor method on the kc-root god-struct. Future PR 6.15
+	// (kc-root god-struct cleanup) will introduce a narrower port
+	// type to replace direct field access if the consumer surface
+	// expands.
+	return initialized.Manager.CredentialSvc
 }

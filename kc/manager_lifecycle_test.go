@@ -72,7 +72,7 @@ func TestManager_AccessorGetters(t *testing.T) {
 	defer m.Shutdown()
 
 	// CredentialSvc
-	if m.CredentialSvc() == nil {
+	if m.CredentialSvc == nil {
 		t.Error("CredentialSvc() should not be nil")
 	}
 

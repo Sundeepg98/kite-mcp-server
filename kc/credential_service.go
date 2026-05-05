@@ -212,52 +212,52 @@ func (cs *CredentialService) BackfillRegistryFromCredentials() {
 }
 
 // ---------------------------------------------------------------------------
-// Manager-level delegators (thin pass-throughs to m.credentialSvc)
+// Manager-level delegators (thin pass-throughs to m.CredentialSvc)
 // ---------------------------------------------------------------------------
 
 // HasPreAuth returns true if the manager has a pre-set access token.
 func (m *Manager) HasPreAuth() bool {
-	return m.credentialSvc.HasPreAuth()
+	return m.CredentialSvc.HasPreAuth()
 }
 
 // HasCachedToken returns true if there's a cached Kite token for the given email.
 func (m *Manager) HasCachedToken(email string) bool {
-	return m.credentialSvc.HasCachedToken(email)
+	return m.CredentialSvc.HasCachedToken(email)
 }
 
 // HasGlobalCredentials returns true if global API key/secret are configured.
 func (m *Manager) HasGlobalCredentials() bool {
-	return m.credentialSvc.HasGlobalCredentials()
+	return m.CredentialSvc.HasGlobalCredentials()
 }
 
 // IsTokenValid returns true if the user has a cached Kite token that has not expired.
 func (m *Manager) IsTokenValid(email string) bool {
-	return m.credentialSvc.IsTokenValid(email)
+	return m.CredentialSvc.IsTokenValid(email)
 }
 
 // HasUserCredentials returns true if per-user Kite credentials exist for the given email.
 func (m *Manager) HasUserCredentials(email string) bool {
-	return m.credentialSvc.HasUserCredentials(email)
+	return m.CredentialSvc.HasUserCredentials(email)
 }
 
 // GetAPIKeyForEmail returns the API key for a user (per-user or global fallback).
 func (m *Manager) GetAPIKeyForEmail(email string) string {
-	return m.credentialSvc.GetAPIKeyForEmail(email)
+	return m.CredentialSvc.GetAPIKeyForEmail(email)
 }
 
 // GetAPISecretForEmail returns the API secret for a user (per-user or global fallback).
 func (m *Manager) GetAPISecretForEmail(email string) string {
-	return m.credentialSvc.GetAPISecretForEmail(email)
+	return m.CredentialSvc.GetAPISecretForEmail(email)
 }
 
 // GetAccessTokenForEmail returns the cached access token for the given email.
 func (m *Manager) GetAccessTokenForEmail(email string) string {
-	return m.credentialSvc.GetAccessTokenForEmail(email)
+	return m.CredentialSvc.GetAccessTokenForEmail(email)
 }
 
-// QualifiesForTrading delegates to credentialSvc.QualifiesForTrading.
+// QualifiesForTrading delegates to CredentialSvc.QualifiesForTrading.
 // Returns true iff the user has resolvable credentials AND a non-expired
 // cached Kite token.
 func (m *Manager) QualifiesForTrading(email string) bool {
-	return m.credentialSvc.QualifiesForTrading(email)
+	return m.CredentialSvc.QualifiesForTrading(email)
 }

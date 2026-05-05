@@ -262,7 +262,7 @@ type Manager struct {
 	templates map[string]*template.Template
 
 	// Focused service objects (Clean Architecture)
-	credentialSvc     *CredentialService     // credential resolution (per-user + global)
+	CredentialSvc     *CredentialService     // credential resolution (per-user + global)
 	sessionSvc        *SessionService        // MCP session lifecycle
 	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
 	portfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
