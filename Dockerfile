@@ -10,6 +10,7 @@ WORKDIR /app
 # Add another COPY line per future module extraction (kc/audit,
 # kc/riskguard, etc.) when they get their own go.mod.
 COPY go.mod go.sum ./
+COPY app/providers/go.mod app/providers/go.sum* app/providers/
 COPY kc/money/go.mod kc/money/go.sum* kc/money/
 COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
 COPY broker/go.mod broker/go.sum* broker/

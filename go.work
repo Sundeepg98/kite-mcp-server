@@ -6,49 +6,37 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (5/5 multi-module decomposition complete):
-//   .              — root module github.com/zerodha/kite-mcp-server
-//                     (everything not yet extracted; app/, mcp/, kc/*
-//                      except the five below, oauth/, cmd/, plugins/).
-//   ./kc/money     — Money value object (currency-aware decimal
-//                     arithmetic + JSON marshalling). First extracted
-//                     module (commit b7fedcc). 238 LOC, zero internal
-//                     deps — the lowest-leaf extractable module.
-//   ./broker       — Broker port + adapters (zerodha SDK adapter,
-//                     mock, broker.PortContract test pattern from
-//                     55d1a17). Second extracted module (commit
-//                     5d74acf). One internal dep (kc/money) via
-//                     replace in broker/go.mod. 115 import sites
-//                     across 13 packages unchanged.
-//   ./kc/audit     — Audit log + tool-call observability + anomaly
-//                     cache + hash-publish manifest. Third extracted
-//                     module (commit 9ce2248). Bidirectional
-//                     cross-module deps with root; workspace mode
-//                     resolves both directions; replace ../.. in
-//                     kc/audit/go.mod handles GOWORK=off.
-//   ./kc/riskguard — Pre-trade risk-control middleware (kill switch,
-//                     order caps, daily count, rate limiter, dedup,
-//                     anomaly detector, OTR band, market-hours).
-//                     Fourth extracted module (commit 5982aff;
-//                     ceremony-per-user-override of 28169b6 stop-at-3
-//                     recommendation). Same shape as kc/audit:
-//                     bidirectional cross-module deps, transitive
-//                     replace for broker + kc/money via kc/domain.
-//   ./kc/billing   — Stripe-tier subscription gating + checkout/
-//                     billingportal/webhook flows + per-tier middle-
-//                     ware. Fifth extracted module (commit-this;
-//                     5/5 reached, ceremony-per-user-override per
-//                     prior 28169b6 stop-at-3 recommendation).
-//                     Same shape as kc/audit + kc/riskguard:
-//                     bidirectional cross-module deps with root for
-//                     kc/alerts + kc/domain + kc/logger + oauth, plus
-//                     Stripe SDK external dep. Transitive replace for
-//                     broker + kc/money via kc/domain.
+// Members (28 modules — see `use` block below):
 //
-// Future members: per the disintegrate audit's trigger-driven
-// escalation, only promote when a candidate genuinely benefits — no
-// further candidates queued. The 5/5 set spans all bounded contexts
-// the user accepted ceremony for.
+// The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
+// broker + kc/audit + kc/riskguard + kc/billing. Established the
+// "bidirectional cross-module deps with transitive replace" pattern
+// documented in their go.mod headers.
+//
+// Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
+// roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
+// kc/cqrs, kc/decorators, kc/domain, kc/eventsourcing, kc/i18n,
+// kc/instruments, kc/isttz, kc/legaldocs, kc/logger, kc/papertrading,
+// kc/registry, kc/scheduler, kc/telegram, kc/templates, kc/ticker,
+// kc/usecases, kc/users, kc/watchlist, oauth, testutil — completing the
+// 27/27 zero-monolith ceiling at commit e3beb2e.
+//
+// Anchor 2 (commit-this) extracts app/providers as the 28th module —
+// the Fx provider/recipe composition root for the DI graph (Manager,
+// AlertSvc, AuditStore, BillingStore, CredentialSvc, EventDispatcher,
+// FamilyService, LifecycleManager, LoggerPort, MCPServer, OrderSvc,
+// PortfolioSvc, RiskGuard, Scheduler, SessionSvc, TelegramNotifier).
+// First non-kc-prefixed extraction. Audits 7ac9d34 / 5fbd4a1 /
+// fd603f3 framed it as "complete the architectural roadmap".
+// Bidirectional cross-module deps with the root (app/wire.go +
+// cmd/event-graph/main.go consume providers; providers consume kc
+// parent + mcp + app/metrics from root). Replace block in
+// app/providers/go.mod has 28 entries — root + 27 already-extracted
+// modules — same shape as kc/usecases + heavier fan-out.
+//
+// Future members: plugins/ remains queued for Tier 6 (post-Anchor-6;
+// blocked by import of kc parent + mcp parent — same blocker oauth had
+// before kc/domain extraction unblocked it).
 //
 // CI: matrix-test per member is the canonical path. The default
 // `go test ./...` from the root still works because workspace mode
@@ -58,6 +46,7 @@ go 1.25.0
 
 use (
 	.
+	./app/providers
 	./broker
 	./kc/alerts
 	./kc/aop
