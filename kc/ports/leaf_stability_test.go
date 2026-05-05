@@ -61,10 +61,16 @@ const kcParentImportPath = "github.com/zerodha/kite-mcp-server/kc"
 // `import "github.com/zerodha/kite-mcp-server/kc"` line. Adding to
 // this list (e.g., when order.go's kc dependency is severed in
 // Anchor 6) requires a paired update to expectedKcImporters below.
+// Anchor 6 PR 6.8: order.go promoted to leafPorts list when
+// Manager.OrderSvc() was deleted. The OrderPort interface dropped
+// its OrderSvc() *kc.OrderService method (the only thing that
+// required the kc-parent import); OrderPort now contains only the
+// RiskGuard() *riskguard.Guard method which doesn't need kc-parent.
 var leafPorts = []string{
 	"alert.go",
 	"credential.go",
 	"instrument.go",
+	"order.go",
 	"session.go",
 }
 
@@ -74,9 +80,13 @@ var leafPorts = []string{
 // of these imports, the corresponding compile-time check or service
 // reference would silently break, and we'd want a loud test failure
 // rather than a runtime regression.
+//
+// Anchor 6 PR 6.8: order.go removed from this list — see leafPorts
+// above. Only assertions.go remains because the compile-time
+// `_ OrderPort = (*kc.Manager)(nil)` check is structural — the
+// assertion can ONLY live in a package that imports kc.
 var expectedKcImporters = []string{
 	"assertions.go", // *kc.Manager compile-time satisfaction check
-	"order.go",      // *kc.OrderService — Anchor 6 territory
 }
 
 // fileImportsKcParent reports whether the given Go file imports the

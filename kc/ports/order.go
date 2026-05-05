@@ -1,7 +1,6 @@
 package ports
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 )
 
@@ -35,7 +34,16 @@ import (
 // in a narrow interface right now would break unexposed fields that
 // Phase D must redesign anyway; keeping it concrete here minimises the
 // blast radius.
+// Anchor 6 PR 6.8: OrderSvc() *kc.OrderService removed from this
+// interface. Manager.OrderSvc() method was deleted alongside the
+// rest of the per-service accessor cluster (PR 6.2 CredentialSvc,
+// PR 6.4 SessionSvc, PR 6.6 PortfolioSvc, PR 6.10 AlertSvc, etc.).
+// The OrderService is now reachable as a public field on *kc.Manager
+// (the kc-root god-struct cleanup leaves direct field access until
+// PR 6.15 final cleanup introduces narrower bounded ports). Empirical
+// scope: zero non-test callers ever reached for OrderPort.OrderSvc()
+// in production — the interface was a compile-time satisfaction
+// pin without a runtime consumer.
 type OrderPort interface {
-	OrderSvc() *kc.OrderService
 	RiskGuard() *riskguard.Guard
 }

@@ -479,7 +479,7 @@ func (m *Manager) initFocusedServices(cfg Config, instrumentsManager *instrument
 
 	// Initialize portfolio and order services
 	m.PortfolioSvc = NewPortfolioService(m.SessionSvc, cfg.Logger)
-	m.orderSvc = NewOrderService(m.SessionSvc, cfg.Logger)
+	m.OrderSvc = NewOrderService(m.SessionSvc, cfg.Logger)
 
 	// Initialize alert service (wraps alert-related components)
 	m.alertSvc = NewAlertService(AlertServiceConfig{

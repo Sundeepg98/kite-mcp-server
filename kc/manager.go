@@ -266,7 +266,7 @@ type Manager struct {
 	SessionSvc        *SessionService        // MCP session lifecycle
 	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
 	PortfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
-	orderSvc          *OrderService          // order placement, modification, cancellation
+	OrderSvc          *OrderService          // order placement, modification, cancellation
 	alertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
 	familyService     *FamilyService         // family billing (invite, remove, list, tier resolution)
 

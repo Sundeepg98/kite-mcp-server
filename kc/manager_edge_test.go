@@ -435,7 +435,7 @@ func TestOrderService_ModifyOrder_NoSession(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	_, err = m.orderSvc.ModifyOrder("noone@test.com", "ORDER-123", broker.OrderParams{})
+	_, err = m.OrderSvc.ModifyOrder("noone@test.com", "ORDER-123", broker.OrderParams{})
 	if err == nil {
 		t.Error("Expected error for non-existent session")
 	}
@@ -450,7 +450,7 @@ func TestOrderService_CancelOrder_NoSession(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	_, err = m.orderSvc.CancelOrder("noone@test.com", "ORDER-123", "regular")
+	_, err = m.OrderSvc.CancelOrder("noone@test.com", "ORDER-123", "regular")
 	if err == nil {
 		t.Error("Expected error for non-existent session")
 	}

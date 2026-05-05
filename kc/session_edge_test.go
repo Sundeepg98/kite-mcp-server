@@ -527,7 +527,7 @@ func TestBillingStore_NilReturnsNil(t *testing.T) {
 func TestOrderService_PlaceOrder_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 
 	_, err := svc.PlaceOrder("nonexistent@test.com", broker.OrderParams{})
 	if err == nil {
@@ -538,7 +538,7 @@ func TestOrderService_PlaceOrder_NilBrokerError(t *testing.T) {
 func TestOrderService_ModifyOrder_ReturnsBroker(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err := svc.ModifyOrder("nobody@test.com", "ORD001", broker.OrderParams{})
 	if err == nil {
 		t.Error("Expected error for no broker")
@@ -548,7 +548,7 @@ func TestOrderService_ModifyOrder_ReturnsBroker(t *testing.T) {
 func TestOrderService_CancelOrder_ReturnsBroker(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err := svc.CancelOrder("nobody@test.com", "ORD001", "regular")
 	if err == nil {
 		t.Error("Expected error for no broker")
@@ -558,7 +558,7 @@ func TestOrderService_CancelOrder_ReturnsBroker(t *testing.T) {
 func TestOrderService_GetOrders_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err := svc.GetOrders("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -568,7 +568,7 @@ func TestOrderService_GetOrders_NilBrokerError(t *testing.T) {
 func TestOrderService_GetTrades_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err := svc.GetTrades("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -951,7 +951,7 @@ func TestOrderService_PlaceOrder_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	resp, err := svc.PlaceOrder("dev@test.com", broker.OrderParams{
 		Exchange:        "NSE",
 		Tradingsymbol:   "SBIN",
@@ -981,7 +981,7 @@ func TestOrderService_ModifyOrder_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	// ModifyOrder will fail because order doesn't exist in mock broker,
 	// but the code path through getBroker -> b.ModifyOrder is exercised.
 	_, err = svc.ModifyOrder("dev@test.com", "ORD001", broker.OrderParams{Quantity: 20})
@@ -1004,7 +1004,7 @@ func TestOrderService_CancelOrder_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	// CancelOrder will fail because order doesn't exist in mock broker,
 	// but the getBroker -> b.CancelOrder path is exercised.
 	_, err = svc.CancelOrder("dev@test.com", "ORD001", "regular")
@@ -1026,7 +1026,7 @@ func TestOrderService_GetOrders_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err = svc.GetOrders("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetOrders in DevMode: %v", err)
@@ -1046,7 +1046,7 @@ func TestOrderService_GetTrades_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.OrderSvc()
+	svc := m.OrderSvc
 	_, err = svc.GetTrades("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetTrades in DevMode: %v", err)

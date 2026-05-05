@@ -41,5 +41,5 @@ func ProvideOrderSvc(initialized *InitializedManager) *kc.OrderService {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.OrderSvc()
+	return initialized.Manager.OrderSvc
 }

@@ -68,7 +68,7 @@ func TestProvideOrderSvc_LiveManager_ReturnsService(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil OrderService for populated wrapper")
 	}
-	if got != mgrInit.Manager.OrderSvc() {
+	if got != mgrInit.Manager.OrderSvc {
 		t.Error("expected pointer-identity with Manager.OrderSvc(); got a different pointer (regression: provider wrapped/copied the service)")
 	}
 
@@ -104,7 +104,7 @@ func TestProvideOrderSvc_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	if orderSvc != mgrInit.Manager.OrderSvc() {
+	if orderSvc != mgrInit.Manager.OrderSvc {
 		t.Error("expected pointer-identity between graph-resolved OrderService and Manager.OrderSvc()")
 	}
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })

@@ -41,11 +41,6 @@ func (m *Manager) HasBrokerFactory() bool {
 	return m.SessionSvc.HasBrokerFactory()
 }
 
-// OrderSvc returns the order management service.
-func (m *Manager) OrderSvc() *OrderService {
-	return m.orderSvc
-}
-
 // AlertSvc returns the alert lifecycle service.
 func (m *Manager) AlertSvc() *AlertService {
 	return m.alertSvc

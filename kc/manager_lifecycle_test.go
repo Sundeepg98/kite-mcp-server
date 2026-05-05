@@ -87,7 +87,7 @@ func TestManager_AccessorGetters(t *testing.T) {
 	}
 
 	// OrderSvc
-	if m.OrderSvc() == nil {
+	if m.OrderSvc == nil {
 		t.Error("OrderSvc() should not be nil")
 	}
 
