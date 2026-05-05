@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GetFIIDIIFlowTool is a "frame the LLM" tool for Indian institutional flow
@@ -67,10 +69,10 @@ type fiiDIIResponse struct {
 }
 
 func (*GetFIIDIIFlowTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_fii_dii_flow")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		// Date — default to latest trading day. Validate format if provided so
 		// the LLM gets a clear error rather than a URL with a mangled date.
@@ -152,4 +154,4 @@ func latestTradingDay(now time.Time) string {
 }
 
 
-func init() { RegisterInternalTool(&GetFIIDIIFlowTool{}) }
+func init() { plugin.RegisterInternalTool(&GetFIIDIIFlowTool{}) }

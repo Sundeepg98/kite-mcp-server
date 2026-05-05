@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // BacktestStrategyTool backtests trading strategies against historical data.
@@ -95,16 +97,16 @@ type backtestSignal struct {
 }
 
 func (*BacktestStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "historical_price_analyzer")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "strategy", "exchange", "tradingsymbol"); err != nil {
+		if err := common.ValidateRequired(args, "strategy", "exchange", "tradingsymbol"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		strategy := p.String("strategy", "")
 		exchange := p.String("exchange", "NSE")
 		symbol := p.String("tradingsymbol", "")
@@ -188,7 +190,7 @@ func backtestDefaults(strategy string, args map[string]any) (float64, float64) {
 	case "mean_reversion":
 		p1Default, p2Default = 20, 2.0
 	}
-	ap := NewArgParser(args)
+	ap := common.NewArgParser(args)
 	p1 := ap.Float("param1", p1Default)
 	p2 := ap.Float("param2", p2Default)
 	return p1, p2
@@ -578,7 +580,7 @@ func computeSharpeRatio(trades []BacktestTrade, initialCapital float64) float64 
 
 // round2 is defined in options_greeks_tool.go (shared within the mcp package).
 
-func init() { RegisterInternalTool(&BacktestStrategyTool{}) }
+func init() { plugin.RegisterInternalTool(&BacktestStrategyTool{}) }
 
 // round2 rounds to 2 decimal places. Anchor 1 PR 1.5 added a local
 // copy when options_greeks_tool.go (which previously hosted round2)

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/analytics"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
@@ -43,9 +44,9 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 		&SEBIComplianceTool{},
 		&trade.ClosePositionTool{},
 		&trade.CloseAllPositionsTool{},
-		&PortfolioSummaryTool{},
-		&PortfolioConcentrationTool{},
-		&PositionAnalysisTool{},
+		&analytics.PortfolioSummaryTool{},
+		&analytics.PortfolioConcentrationTool{},
+		&analytics.PositionAnalysisTool{},
 	}
 	for _, td := range toolTypes {
 		toolDef := td.Tool()

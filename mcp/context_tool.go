@@ -310,3 +310,11 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider port
 }
 
 func init() { RegisterInternalTool(&TradingContextTool{}) }
+
+// roundTo2 rounds to 2 decimal places. Local copy duplicated from
+// mcp/analytics/analytics_tools.go's roundTo2. Anchor 1 PR 1.7: kept
+// package-private until a future cleanup deduplicates these into a
+// shared helper (which would expose roundTo2 publicly).
+func roundTo2(v float64) float64 {
+	return math.Round(v*100) / 100
+}

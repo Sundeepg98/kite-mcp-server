@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // PeerCompareTool is a "frame the LLM" tool for side-by-side fundamental-strength
@@ -138,16 +140,16 @@ func screenerURL(symbol string) string {
 }
 
 func (*PeerCompareTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "peer_compare")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "symbols"); err != nil {
+		if err := common.ValidateRequired(args, "symbols"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Extract + normalize symbols (uppercase, trim).
 		rawSymbols := p.StringArray("symbols")
@@ -255,4 +257,4 @@ func (*PeerCompareTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
-func init() { RegisterInternalTool(&PeerCompareTool{}) }
+func init() { plugin.RegisterInternalTool(&PeerCompareTool{}) }

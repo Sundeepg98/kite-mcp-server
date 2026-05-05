@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 type TechnicalIndicatorsTool struct{}
@@ -30,16 +32,16 @@ func (*TechnicalIndicatorsTool) Tool() mcp.Tool {
 }
 
 func (*TechnicalIndicatorsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "technical_indicators")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "exchange", "tradingsymbol"); err != nil {
+		if err := common.ValidateRequired(args, "exchange", "tradingsymbol"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		exchange := p.String("exchange", "NSE")
 		symbol := p.String("tradingsymbol", "")
 		interval := p.String("interval", "day")
@@ -319,4 +321,4 @@ func safeBBWidth(upper, lower, middle []float64) float64 {
 	return (u - l) / m * 100
 }
 
-func init() { RegisterInternalTool(&TechnicalIndicatorsTool{}) }
+func init() { plugin.RegisterInternalTool(&TechnicalIndicatorsTool{}) }

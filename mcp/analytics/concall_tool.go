@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // AnalyzeConcallTool is a "frame the LLM" tool for Indian earnings-call
@@ -59,16 +61,16 @@ type concallResponse struct {
 }
 
 func (*AnalyzeConcallTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "analyze_concall")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "symbol"); err != nil {
+		if err := common.ValidateRequired(args, "symbol"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		symbol := strings.ToUpper(strings.TrimSpace(p.String("symbol", "")))
 		quarter := strings.ToUpper(strings.TrimSpace(p.String("quarter", "")))
 		year := strings.TrimSpace(p.String("year", ""))
@@ -178,4 +180,4 @@ func latestIndianFiscalQuarter(now time.Time) string {
 	return fmt.Sprintf("Q%dFY%02d", q, fy%100)
 }
 
-func init() { RegisterInternalTool(&AnalyzeConcallTool{}) }
+func init() { plugin.RegisterInternalTool(&AnalyzeConcallTool{}) }

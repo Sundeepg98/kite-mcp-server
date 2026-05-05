@@ -1,4 +1,4 @@
-package mcp
+package analytics
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // --- Portfolio Summary Tool ---
@@ -51,7 +53,7 @@ type portfolioSummaryResponse struct {
 }
 
 func (*PortfolioSummaryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "portfolio_summary")
 
@@ -213,7 +215,7 @@ type portfolioConcentrationResponse struct {
 }
 
 func (*PortfolioConcentrationTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "portfolio_concentration")
 
@@ -369,7 +371,7 @@ type positionAnalysisResponse struct {
 }
 
 func (*PositionAnalysisTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "position_analysis")
 
@@ -482,7 +484,7 @@ func roundTo2(v float64) float64 {
 }
 
 func init() {
-	RegisterInternalTool(&PortfolioConcentrationTool{})
-	RegisterInternalTool(&PortfolioSummaryTool{})
-	RegisterInternalTool(&PositionAnalysisTool{})
+	plugin.RegisterInternalTool(&PortfolioConcentrationTool{})
+	plugin.RegisterInternalTool(&PortfolioSummaryTool{})
+	plugin.RegisterInternalTool(&PositionAnalysisTool{})
 }

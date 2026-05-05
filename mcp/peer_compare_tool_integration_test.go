@@ -8,17 +8,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestPeerCompareTool_ToolDefinition verifies the tool registration metadata
-// (name, description, read-only annotation) so the tool is surfaced correctly
-// to MCP clients.
-func TestPeerCompareTool_ToolDefinition(t *testing.T) {
-	t.Parallel()
-	tool := (&PeerCompareTool{}).Tool()
-	assert.Equal(t, "peer_compare", tool.Name)
-	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, tool.Annotations)
-	assert.NotNil(t, tool.Annotations.ReadOnlyHint, "peer_compare must be marked read-only")
-	assert.True(t, *tool.Annotations.ReadOnlyHint, "peer_compare must be marked read-only")
+// Anchor 1 PR 1.7: integration tests for peer_compare — moved from
+// mcp/analytics/peer_compare_tool_test.go. The tool now lives in
+// mcp/analytics (registered via init()); these black-box tests invoke
+// it by name via callToolWithManager + newDevModeManager.
+
+// peerCompareIntegrationResponse is a black-box duplicate of
+// analytics.peerCompareResponse (which is unexported). Tests need
+// this shape to assert structured output.
+type peerCompareIntegrationResponse struct {
+	Symbols          []string `json:"symbols"`
+	MetricsRequested []string `json:"metrics_requested"`
+	ComparisonTable  []struct {
+		Symbol      string `json:"symbol"`
+		CompanyName string `json:"company_name,omitempty"`
+		Exchange    string `json:"exchange,omitempty"`
+		Status      string `json:"status"`
+		Metrics     map[string]struct {
+			Metric     string `json:"metric"`
+			Status     string `json:"status"`
+			SourceHint string `json:"source_hint,omitempty"`
+			Formula    string `json:"formula,omitempty"`
+		} `json:"metrics"`
+	} `json:"comparison_table"`
+	Formulas   map[string]string `json:"formulas"`
+	NextSteps  []string          `json:"next_steps"`
+	Disclaimer string            `json:"disclaimer"`
 }
 
 // TestPeerCompare_TwoSymbols verifies a valid 2-symbol request returns a
@@ -32,7 +47,7 @@ func TestPeerCompare_TwoSymbols(t *testing.T) {
 	assert.False(t, result.IsError, "2-symbol request should not error: %s", resultText(t, result))
 	text := resultText(t, result)
 
-	var parsed peerCompareResponse
+	var parsed peerCompareIntegrationResponse
 	err := json.Unmarshal([]byte(text), &parsed)
 	assert.NoError(t, err, "response must be valid JSON: %s", text)
 
@@ -58,7 +73,7 @@ func TestPeerCompare_SixSymbols(t *testing.T) {
 	})
 	assert.False(t, result.IsError, "6-symbol request should not error: %s", resultText(t, result))
 
-	var parsed peerCompareResponse
+	var parsed peerCompareIntegrationResponse
 	err := json.Unmarshal([]byte(resultText(t, result)), &parsed)
 	assert.NoError(t, err)
 	assert.Len(t, parsed.ComparisonTable, 6, "comparison_table must have 6 rows")
