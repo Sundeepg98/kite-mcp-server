@@ -891,7 +891,7 @@ func TestInitializeServices_FamilyInvitation_Push100(t *testing.T) {
 	mgr.SetFamilyService(famSvc)
 
 	assert.NotNil(t, mgr.InvitationStore())
-	assert.NotNil(t, mgr.FamilyService())
+	assert.NotNil(t, mgr.FamilyService)
 }
 
 // ---------------------------------------------------------------------------

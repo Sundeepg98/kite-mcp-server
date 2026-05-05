@@ -74,7 +74,7 @@ func TestProvideFamilyService_LiveManager_PointerIdentity(t *testing.T) {
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })
 
 	got := ProvideFamilyService(mgrInit)
-	want := mgrInit.Manager.FamilyService()
+	want := mgrInit.Manager.FamilyService
 	if got != want {
 		t.Errorf("expected pointer-identity with Manager.FamilyService(); got %p want %p", got, want)
 	}
@@ -111,7 +111,7 @@ func TestProvideFamilyService_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	want := mgrInit.Manager.FamilyService()
+	want := mgrInit.Manager.FamilyService
 	if famSvc != want {
 		t.Errorf("expected pointer-identity between graph-resolved FamilyService and Manager.FamilyService(); got %p want %p", famSvc, want)
 	}

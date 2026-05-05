@@ -97,14 +97,14 @@ func TestManager_AccessorGetters(t *testing.T) {
 	}
 
 	// FamilyService (nil by default)
-	if m.FamilyService() != nil {
+	if m.FamilyService != nil {
 		t.Error("FamilyService() should be nil by default")
 	}
 
 	// SetFamilyService / FamilyService
 	fs := NewFamilyService(nil, nil, nil)
-	m.SetFamilyService(fs)
-	if m.FamilyService() != fs {
+	m.FamilyService = fs
+	if m.FamilyService != fs {
 		t.Error("FamilyService() should return the set service")
 	}
 

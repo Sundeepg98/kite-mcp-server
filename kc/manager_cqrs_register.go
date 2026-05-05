@@ -152,33 +152,33 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// --- Family CQRS wiring (first real CommandBus dispatch) ---
 	// FamilyService is assigned via SetFamilyService() after wire.go builds it,
-	// so it's nil at this point. Handlers resolve m.familyService lazily per
+	// so it's nil at this point. Handlers resolve m.FamilyService lazily per
 	// dispatch, returning an error when the service is still unconfigured.
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.AdminListFamilyQuery](), func(ctx context.Context, msg any) (any, error) {
-		if m.familyService == nil {
+		if m.FamilyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
-		uc := usecases.NewAdminListFamilyUseCase(m.familyService, m.invitationStore, m.Logger)
+		uc := usecases.NewAdminListFamilyUseCase(m.FamilyService, m.invitationStore, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.AdminListFamilyQuery))
 	}); err != nil {
 		return err
 	}
 
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminInviteFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
-		if m.familyService == nil {
+		if m.FamilyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
-		uc := usecases.NewAdminInviteFamilyMemberUseCase(m.familyService, m.invitationStore, m.eventing.Dispatcher(), m.Logger)
+		uc := usecases.NewAdminInviteFamilyMemberUseCase(m.FamilyService, m.invitationStore, m.eventing.Dispatcher(), m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.AdminInviteFamilyMemberCommand))
 	}); err != nil {
 		return err
 	}
 
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.AdminRemoveFamilyMemberCommand](), func(ctx context.Context, msg any) (any, error) {
-		if m.familyService == nil {
+		if m.FamilyService == nil {
 			return nil, fmt.Errorf("cqrs: family service not configured")
 		}
-		uc := usecases.NewAdminRemoveFamilyMemberUseCase(m.familyService, m.eventing.Dispatcher(), m.Logger)
+		uc := usecases.NewAdminRemoveFamilyMemberUseCase(m.FamilyService, m.eventing.Dispatcher(), m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.AdminRemoveFamilyMemberCommand))
 	}); err != nil {
 		return err

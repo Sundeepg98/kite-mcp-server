@@ -50,5 +50,5 @@ func ProvideFamilyService(initialized *InitializedManager) *kc.FamilyService {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.FamilyService()
+	return initialized.Manager.FamilyService
 }

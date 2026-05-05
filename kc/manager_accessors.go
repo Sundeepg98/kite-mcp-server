@@ -41,9 +41,24 @@ func (m *Manager) HasBrokerFactory() bool {
 	return m.SessionSvc.HasBrokerFactory()
 }
 
-// FamilyService returns the family billing service, or nil if not configured.
-func (m *Manager) FamilyService() *FamilyService {
-	return m.familyService
+// SetFamilyService sets the family billing service. Anchor 6 PR 6.12:
+// the FamilyService accessor method was deleted in favour of direct
+// field access (m.FamilyService — capitalised), but the setter is
+// retained because:
+//   1. It encapsulates the assignment for the Fx-graph wiring path
+//      in app/providers/family.go (the family setter-after-construct
+//      pattern that wire.go's lifecycle requires).
+//   2. Multiple test fixtures (app/app_edge_test.go,
+//      mcp/admin_tools_test.go, mcp/helpers_test.go) seed the family
+//      service via this setter; preserving it keeps the test surface
+//      stable.
+//   3. It does NOT conflict with the field — methods and fields with
+//      the same name DO clash, but only when both the getter method
+//      and field share the name. Setter `SetFamilyService` is a
+//      distinct identifier from the field `FamilyService`, so no
+//      conflict.
+func (m *Manager) SetFamilyService(fs *FamilyService) {
+	m.FamilyService = fs
 }
 
 // LoggerPort returns m.Logger wrapped in the kc/logger.Logger port.
@@ -58,11 +73,6 @@ func (m *Manager) LoggerPort() logport.Logger {
 		return logport.NewNoop()
 	}
 	return logport.NewSlog(m.Logger)
-}
-
-// SetFamilyService sets the family billing service.
-func (m *Manager) SetFamilyService(fs *FamilyService) {
-	m.familyService = fs
 }
 
 // ---------------------------------------------------------------------------
