@@ -1,4 +1,4 @@
-package mcp
+package paper
 
 import (
 	"context"
@@ -14,11 +14,18 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/ports"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // --- Trading Context Tool ---
+//
+// Anchor 1 PR 1.9 (closure): moved from mcp/context_tool.go into mcp/paper to
+// finish the paper-trading + context sub-package extraction. The exported
+// symbols (TradingContext, PositionDetail, AlertSummary, BuildTradingContext,
+// TradingContextTool) are referenced by in-tree mcp/ tests via type aliases
+// in mcp/aliases.go.
 
 // TradingContextTool returns a unified snapshot of the user's current trading state.
 type TradingContextTool struct{}
@@ -44,11 +51,11 @@ type TradingContext struct {
 	MarginUtilization float64 `json:"margin_utilization_pct"`
 
 	// Positions summary
-	OpenPositions   int               `json:"open_positions"`
-	PositionsPnL    float64           `json:"positions_pnl"`
-	MISPositions    int               `json:"mis_positions"`
-	NRMLPositions   int               `json:"nrml_positions"`
-	PositionDetails []positionDetail  `json:"position_details,omitempty"`
+	OpenPositions   int              `json:"open_positions"`
+	PositionsPnL    float64          `json:"positions_pnl"`
+	MISPositions    int              `json:"mis_positions"`
+	NRMLPositions   int              `json:"nrml_positions"`
+	PositionDetails []PositionDetail `json:"position_details,omitempty"`
 
 	// Orders
 	PendingOrders int `json:"pending_orders"`
@@ -61,18 +68,17 @@ type TradingContext struct {
 
 	// Alerts
 	ActiveAlerts int            `json:"active_alerts"`
-	AlertDetails []alertSummary `json:"alert_details,omitempty"`
+	AlertDetails []AlertSummary `json:"alert_details,omitempty"`
 
 	// Warnings (AI should pay attention to these)
 	Warnings []string `json:"warnings,omitempty"`
 
 	// Errors from API calls that failed
 	Errors map[string]string `json:"errors,omitempty"`
-
 }
 
-// positionDetail shows per-trade P&L for each open position.
-type positionDetail struct {
+// PositionDetail shows per-trade P&L for each open position.
+type PositionDetail struct {
 	Symbol       string  `json:"symbol"`
 	Exchange     string  `json:"exchange"`
 	Product      string  `json:"product"`
@@ -83,8 +89,8 @@ type positionDetail struct {
 	PnLPct       float64 `json:"pnl_pct"`
 }
 
-// alertSummary is a compact representation of an active alert.
-type alertSummary struct {
+// AlertSummary is a compact representation of an active alert.
+type AlertSummary struct {
 	Symbol    string  `json:"symbol"`
 	Exchange  string  `json:"exchange"`
 	Direction string  `json:"direction"`
@@ -92,7 +98,7 @@ type alertSummary struct {
 }
 
 func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "trading_context")
 
@@ -110,13 +116,13 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 
-			tradingCtx := buildTradingContext(ucResult, manager, email)
+			tradingCtx := BuildTradingContext(ucResult, manager, email)
 			return handler.MarshalResponse(tradingCtx, "trading_context")
 		})
 	}
 }
 
-// buildTradingContext processes the raw API responses into a structured TradingContext.
+// BuildTradingContext processes the raw API responses into a structured TradingContext.
 // Consumes the typed *usecases.TradingContextResult directly so broker types flow
 // end-to-end without map[string]any reboxing at the tool layer.
 //
@@ -126,7 +132,10 @@ func (*TradingContextTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 // here). *kc.Manager satisfies ports.AlertPort, so existing callers
 // compile unchanged. Phase B/D F1 close: was kc.AlertStoreProvider before
 // the consolidation.
-func buildTradingContext(data *usecases.TradingContextResult, alertProvider ports.AlertPort, email string) *TradingContext {
+//
+// Anchor 1 PR 1.9 closure: capitalised when moved into mcp/paper so in-tree
+// tests in package mcp can reach it via paper.BuildTradingContext.
+func BuildTradingContext(data *usecases.TradingContextResult, alertProvider ports.AlertPort, email string) *TradingContext {
 	tc := &TradingContext{
 		Warnings: make([]string, 0),
 	}
@@ -177,7 +186,7 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider port
 	if data.Positions != nil {
 		var totalPnL float64
 		var misCount, nrmlCount, openCount int
-		var details []positionDetail
+		var details []PositionDetail
 
 		for _, p := range data.Positions.Net {
 			pos := domain.NewPositionFromBroker(p)
@@ -197,7 +206,7 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider port
 				if p.AveragePrice > 0 && p.Quantity != 0 {
 					pnlPct = (p.PnL.Float64() / (p.AveragePrice * math.Abs(float64(p.Quantity)))) * 100
 				}
-				details = append(details, positionDetail{
+				details = append(details, PositionDetail{
 					Symbol:       p.Tradingsymbol,
 					Exchange:     p.Exchange,
 					Product:      p.Product,
@@ -286,12 +295,12 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider port
 	if email != "" && alertProvider.AlertStore() != nil {
 		alertList := alertProvider.AlertStore().List(email)
 		var activeCount int
-		details := make([]alertSummary, 0)
+		details := make([]AlertSummary, 0)
 
 		for _, a := range alertList {
 			if !a.Triggered {
 				activeCount++
-				details = append(details, alertSummary{
+				details = append(details, AlertSummary{
 					Symbol:    a.Tradingsymbol,
 					Exchange:  a.Exchange,
 					Direction: string(a.Direction),
@@ -309,12 +318,12 @@ func buildTradingContext(data *usecases.TradingContextResult, alertProvider port
 	return tc
 }
 
-func init() { RegisterInternalTool(&TradingContextTool{}) }
+func init() { plugin.RegisterInternalTool(&TradingContextTool{}) }
 
 // roundTo2 rounds to 2 decimal places. Local copy duplicated from
-// mcp/analytics/analytics_tools.go's roundTo2. Anchor 1 PR 1.7: kept
-// package-private until a future cleanup deduplicates these into a
-// shared helper (which would expose roundTo2 publicly).
+// mcp/analytics/analytics_tools.go and mcp/portfolio/sector_tool.go's
+// roundTo2. Anchor 1 PR 1.9 closure: kept package-private until a
+// future cleanup deduplicates these into a shared helper.
 func roundTo2(v float64) float64 {
 	return math.Round(v*100) / 100
 }

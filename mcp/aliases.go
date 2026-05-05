@@ -7,6 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 // aliases.go — Anchor 1 PR 1.1 (Option B per .research/anchor-1-pr-1-1-
@@ -51,6 +52,12 @@ type (
 	OrderDepsFields      = common.OrderDepsFields
 	AdminDepsFields      = common.AdminDepsFields
 	ReadDepsFields       = common.ReadDepsFields
+
+	// Anchor 1 PR 1.9 closure: TradingContext moved into mcp/paper alongside
+	// BuildTradingContext. The alias preserves *TradingContext as the bridge
+	// return type for the existing buildTradingContextFromMap test fixture
+	// in helpers_test.go.
+	TradingContext = paper.TradingContext
 )
 
 // ---------------------------------------------------------------------

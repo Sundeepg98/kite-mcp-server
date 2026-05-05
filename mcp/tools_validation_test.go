@@ -41,7 +41,7 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 		&portfolio.DeleteMyAccountTool{},
 		&portfolio.UpdateMyCredentialsTool{},
 		&portfolio.GetPnLJournalTool{},
-		&TradingContextTool{},
+		&paper.TradingContextTool{},
 		&SEBIComplianceTool{},
 		&trade.ClosePositionTool{},
 		&trade.CloseAllPositionsTool{},
@@ -175,7 +175,7 @@ func TestPortfolioRebalance_ValueModeNegative(t *testing.T) {
 
 func TestTradingContextTool_ToolDefinition(t *testing.T) {
 	t.Parallel()
-	tool := (&TradingContextTool{}).Tool()
+	tool := (&paper.TradingContextTool{}).Tool()
 	assert.Equal(t, "trading_context", tool.Name)
 	assert.NotEmpty(t, tool.Description)
 	assert.NotNil(t, tool.Annotations)

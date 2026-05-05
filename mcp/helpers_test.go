@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
@@ -491,10 +492,13 @@ func buildPreTradeResponseFromMap(
 }
 
 // buildTradingContextFromMap bridges the old map[string]any test signature
-// to the typed buildTradingContext entry point.
+// to the typed paper.BuildTradingContext entry point. *TradingContext is a
+// type alias to paper.TradingContext (see mcp/aliases.go) so the legacy
+// callers in tools_pure_test.go / tool_handlers_test.go continue to compile
+// against the same struct shape.
 func buildTradingContextFromMap(data map[string]any, apiErrors map[string]string, mgr *kc.Manager, email string) *TradingContext {
 	typed := tcResultFromMap(data, apiErrors)
-	return buildTradingContext(typed, mgr, email)
+	return paper.BuildTradingContext(typed, mgr, email)
 }
 
 func ptDataFromMap(data map[string]any, apiErrors map[string]string) *usecases.PreTradeData {
