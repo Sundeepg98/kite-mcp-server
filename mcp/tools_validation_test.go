@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
@@ -35,9 +36,9 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 		&PaperTradingToggleTool{},
 		&PaperTradingStatusTool{},
 		&PaperTradingResetTool{},
-		&DeleteMyAccountTool{},
-		&UpdateMyCredentialsTool{},
-		&GetPnLJournalTool{},
+		&portfolio.DeleteMyAccountTool{},
+		&portfolio.UpdateMyCredentialsTool{},
+		&portfolio.GetPnLJournalTool{},
 		&TradingContextTool{},
 		&SEBIComplianceTool{},
 		&trade.ClosePositionTool{},
@@ -191,7 +192,7 @@ func TestGetPnLJournal_NoAuth(t *testing.T) {
 
 func TestDividendCalendarTool_ToolDefinition(t *testing.T) {
 	t.Parallel()
-	tool := (&DividendCalendarTool{}).Tool()
+	tool := (&portfolio.DividendCalendarTool{}).Tool()
 	assert.Equal(t, "dividend_calendar", tool.Name)
 	assert.NotEmpty(t, tool.Description)
 	assert.NotNil(t, tool.Annotations)

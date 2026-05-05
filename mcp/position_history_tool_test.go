@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
@@ -105,7 +106,7 @@ func TestGetPositionHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "c3d4e5f6-a7b8-9012-cdef-0123456789ab"})
 
-	tool := &GetPositionHistoryReconstitutedTool{}
+	tool := &portfolio.GetPositionHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_position_history_reconstituted"
 	req.Params.Arguments = map[string]any{
@@ -166,7 +167,7 @@ func TestGetPositionHistoryReconstituted_UnknownPositionReturnsNotFound(t *testi
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "d4e5f6a7-b8c9-0123-def0-1234567890bc"})
 
-	tool := &GetPositionHistoryReconstitutedTool{}
+	tool := &portfolio.GetPositionHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_position_history_reconstituted"
 	req.Params.Arguments = map[string]any{

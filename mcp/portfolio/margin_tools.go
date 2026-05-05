@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // OrderMarginsTool calculates margin required for an order before placing it.
@@ -64,17 +66,17 @@ func (*OrderMarginsTool) Tool() mcp.Tool {
 }
 
 func (*OrderMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_order_margins")
 		args := request.GetArguments()
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
+		if err := common.ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		orderType := p.String("order_type", "")
 		price := p.Float("price", 0.0)
 		triggerPrice := p.Float("trigger_price", 0.0)
@@ -136,17 +138,17 @@ func (*BasketMarginsTool) Tool() mcp.Tool {
 }
 
 func (*BasketMarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_basket_margins")
 		args := request.GetArguments()
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "orders"); err != nil {
+		if err := common.ValidateRequired(args, "orders"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		ordersJSON := p.String("orders", "")
 		if ordersJSON == "" {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
@@ -207,17 +209,17 @@ func (*OrderChargesTool) Tool() mcp.Tool {
 }
 
 func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_order_charges")
 		args := request.GetArguments()
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "orders"); err != nil {
+		if err := common.ValidateRequired(args, "orders"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		ordersJSON := NewArgParser(args).String("orders", "")
+		ordersJSON := common.NewArgParser(args).String("orders", "")
 		if ordersJSON == "" {
 			return mcp.NewToolResultError("orders cannot be empty"), nil
 		}
@@ -250,7 +252,7 @@ func (*OrderChargesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 func init() {
-	RegisterInternalTool(&BasketMarginsTool{})
-	RegisterInternalTool(&OrderChargesTool{})
-	RegisterInternalTool(&OrderMarginsTool{})
+	plugin.RegisterInternalTool(&BasketMarginsTool{})
+	plugin.RegisterInternalTool(&OrderChargesTool{})
+	plugin.RegisterInternalTool(&OrderMarginsTool{})
 }

@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // DeleteMyAccountTool permanently deletes the authenticated user's account and all data.
@@ -30,7 +32,7 @@ func (*DeleteMyAccountTool) Tool() gomcp.Tool {
 }
 
 func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "delete_my_account")
 
@@ -40,7 +42,7 @@ func (*DeleteMyAccountTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		args := request.GetArguments()
-		confirm := NewArgParser(args).Bool("confirm", false)
+		confirm := common.NewArgParser(args).Bool("confirm", false)
 		if !confirm {
 			return gomcp.NewToolResultError("This permanently deletes ALL your data (credentials, tokens, alerts, watchlists, trailing stops, paper trading). Set confirm: true to proceed."), nil
 		}
@@ -75,7 +77,7 @@ func (*UpdateMyCredentialsTool) Tool() gomcp.Tool {
 }
 
 func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "update_my_credentials")
 
@@ -85,11 +87,11 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "api_key", "api_secret"); err != nil {
+		if err := common.ValidateRequired(args, "api_key", "api_secret"); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		apiKey := strings.TrimSpace(p.String("api_key", ""))
 		apiSecret := strings.TrimSpace(p.String("api_secret", ""))
 
@@ -110,6 +112,6 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 }
 
 func init() {
-	RegisterInternalTool(&DeleteMyAccountTool{})
-	RegisterInternalTool(&UpdateMyCredentialsTool{})
+	plugin.RegisterInternalTool(&DeleteMyAccountTool{})
+	plugin.RegisterInternalTool(&UpdateMyCredentialsTool{})
 }

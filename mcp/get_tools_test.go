@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/mock"
 	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
@@ -431,13 +432,13 @@ func TestReadToolDefinitions(t *testing.T) {
 		name     string
 		readOnly bool
 	}{
-		{&ProfileTool{}, "get_profile", true},
-		{&MarginsTool{}, "get_margins", true},
-		{&HoldingsTool{}, "get_holdings", true},
-		{&PositionsTool{}, "get_positions", true},
-		{&TradesTool{}, "get_trades", true},
-		{&OrdersTool{}, "get_orders", true},
-		{&OrderHistoryTool{}, "get_order_history", true},
+		{&portfolio.ProfileTool{}, "get_profile", true},
+		{&portfolio.MarginsTool{}, "get_margins", true},
+		{&portfolio.HoldingsTool{}, "get_holdings", true},
+		{&portfolio.PositionsTool{}, "get_positions", true},
+		{&portfolio.TradesTool{}, "get_trades", true},
+		{&portfolio.OrdersTool{}, "get_orders", true},
+		{&portfolio.OrderHistoryTool{}, "get_order_history", true},
 	}
 
 	for _, tc := range readTools {

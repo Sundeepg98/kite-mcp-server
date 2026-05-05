@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GetPositionHistoryReconstitutedTool exposes event-sourced position
@@ -48,10 +50,10 @@ func (*GetPositionHistoryReconstitutedTool) Tool() mcp.Tool {
 }
 
 func (*GetPositionHistoryReconstitutedTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_position_history_reconstituted")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		if err := p.Required("exchange", "tradingsymbol", "product"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -79,4 +81,4 @@ func (*GetPositionHistoryReconstitutedTool) Handler(manager *kc.Manager) server.
 	}
 }
 
-func init() { RegisterInternalTool(&GetPositionHistoryReconstitutedTool{}) }
+func init() { plugin.RegisterInternalTool(&GetPositionHistoryReconstitutedTool{}) }

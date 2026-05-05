@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -14,13 +14,15 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // --- Portfolio Rebalance Tool ---
 
 type PortfolioRebalanceTool struct{}
 
-func init() { RegisterInternalTool(&PortfolioRebalanceTool{}) }
+func init() { plugin.RegisterInternalTool(&PortfolioRebalanceTool{}) }
 
 func (*PortfolioRebalanceTool) Tool() mcp.Tool {
 	return mcp.NewTool("portfolio_analysis",
@@ -75,14 +77,14 @@ type rebalanceResponse struct {
 }
 
 func (*PortfolioRebalanceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "portfolio_analysis")
 
 		args := request.GetArguments()
 
 		// Parse targets JSON string
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		targetsStr := p.String("targets", "")
 		if targetsStr == "" {
 			return mcp.NewToolResultError("Parameter 'targets' is required and must be a JSON object mapping symbols to allocation values."), nil

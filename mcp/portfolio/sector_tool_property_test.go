@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"sort"
@@ -16,10 +16,10 @@ import (
 //
 // Properties under test:
 //
-//  1. Known-symbol mapping: every key in stockSectors maps to a
+//  1. Known-symbol mapping: every key in StockSectors maps to a
 //     non-empty sector. (Catches accidental "" entries in refactors.)
 //
-//  2. normalizeSymbol is idempotent: applying it twice is the same
+//  2. NormalizeSymbol is idempotent: applying it twice is the same
 //     as applying it once.
 //
 //  3. computeSectorExposure never panics on arbitrary holdings lists,
@@ -33,7 +33,7 @@ import (
 //     in the UnmappedStocks list — they never vanish or panic.
 
 // TestProperty_StockSectors_EveryEntryHasNonEmptySector validates the
-// invariant that the stockSectors map itself is well-formed: no empty
+// invariant that the StockSectors map itself is well-formed: no empty
 // strings, no whitespace-only values. A refactor that accidentally
 // wipes a sector string would be caught here before landing.
 func TestProperty_StockSectors_EveryEntryHasNonEmptySector(t *testing.T) {
@@ -41,17 +41,17 @@ func TestProperty_StockSectors_EveryEntryHasNonEmptySector(t *testing.T) {
 	// Not strictly a rapid test (finite map, no generators needed) but
 	// keeping it here so sector correctness lives alongside the rapid
 	// properties. Runs in <1ms.
-	for symbol, sector := range stockSectors {
+	for symbol, sector := range StockSectors {
 		if symbol == "" {
-			t.Errorf("stockSectors has empty symbol key → %q", sector)
+			t.Errorf("StockSectors has empty symbol key → %q", sector)
 		}
 		if sector == "" {
-			t.Errorf("stockSectors[%q] is empty", symbol)
+			t.Errorf("StockSectors[%q] is empty", symbol)
 		}
 	}
 }
 
-// TestProperty_NormalizeSymbol_Idempotent asserts that normalizeSymbol
+// TestProperty_NormalizeSymbol_Idempotent asserts that NormalizeSymbol
 // applied to its own output returns the same string. A regression that
 // strips suffixes conditionally (e.g. only if uppercase) would break
 // this.
@@ -59,10 +59,10 @@ func TestProperty_NormalizeSymbol_Idempotent(t *testing.T) {
 	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		s := rapid.String().Draw(t, "raw_symbol")
-		first := normalizeSymbol(s)
-		second := normalizeSymbol(first)
+		first := NormalizeSymbol(s)
+		second := NormalizeSymbol(first)
 		if first != second {
-			t.Fatalf("normalizeSymbol not idempotent: %q → %q → %q", s, first, second)
+			t.Fatalf("NormalizeSymbol not idempotent: %q → %q → %q", s, first, second)
 		}
 	})
 }
@@ -77,11 +77,11 @@ func TestProperty_NormalizeSymbol_StripsKnownSuffixes(t *testing.T) {
 		base := rapid.StringMatching(`[A-Z]{1,10}`).Draw(t, "base")
 		suffix := rapid.SampledFrom([]string{"", "-BE", "-EQ", "-BZ", "-BL"}).
 			Draw(t, "suffix")
-		got := normalizeSymbol(base + suffix)
+		got := NormalizeSymbol(base + suffix)
 		// The base string must survive the round-trip — no amount of
 		// suffix stripping should shave letters off the base token.
 		if got != base {
-			t.Fatalf("normalizeSymbol(%q) = %q, want %q", base+suffix, got, base)
+			t.Fatalf("NormalizeSymbol(%q) = %q, want %q", base+suffix, got, base)
 		}
 	})
 }
@@ -169,8 +169,8 @@ func TestProperty_ComputeSectorExposure_UnknownSymbolsSurfaceAsUnmapped(t *testi
 		holdings := make([]broker.Holding, 0, n)
 		for i := 0; i < n; i++ {
 			sym := rapid.StringMatching(`UNK[A-Z]{3,8}Z`).Draw(t, "sym")
-			// Skip any symbol that might coincidentally be in stockSectors.
-			if _, hit := stockSectors[sym]; hit {
+			// Skip any symbol that might coincidentally be in StockSectors.
+			if _, hit := StockSectors[sym]; hit {
 				t.Skip()
 			}
 			holdings = append(holdings, broker.Holding{
@@ -195,11 +195,11 @@ func TestProperty_ComputeSectorExposure_UnknownSymbolsSurfaceAsUnmapped(t *testi
 }
 
 // knownSymbolSample returns a stable alphabetical sample of up to 40
-// known stockSectors keys. Used by tests that want reproducible
+// known StockSectors keys. Used by tests that want reproducible
 // known-ticker generators (map iteration is random in Go).
 func knownSymbolSample() []string {
-	syms := make([]string, 0, len(stockSectors))
-	for s := range stockSectors {
+	syms := make([]string, 0, len(StockSectors))
+	for s := range StockSectors {
 		syms = append(syms, s)
 	}
 	sort.Strings(syms)

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -136,7 +137,7 @@ func TestComputePositionAnalysis_ProductGrouping(t *testing.T) {
 
 
 func TestStockSectors_NotEmpty(t *testing.T) {
-	assert.Greater(t, len(stockSectors), 50, "should have at least 50 stock-sector mappings")
+	assert.Greater(t, len(portfolio.StockSectors), 50, "should have at least 50 stock-sector mappings")
 }
 
 
@@ -148,8 +149,8 @@ func TestStockSectors_KnownStocks(t *testing.T) {
 		"TCS":      "IT",
 	}
 	for stock, expectedSector := range knownStocks {
-		sector, ok := stockSectors[stock]
-		assert.True(t, ok, "stock %s should be in stockSectors", stock)
+		sector, ok := portfolio.StockSectors[stock]
+		assert.True(t, ok, "stock %s should be in portfolio.StockSectors", stock)
 		assert.Equal(t, expectedSector, sector, "stock %s sector mismatch", stock)
 	}
 }

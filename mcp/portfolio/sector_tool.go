@@ -1,8 +1,9 @@
-package mcp
+package portfolio
 
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // --- Sector Exposure Analysis Tool ---
@@ -57,7 +60,7 @@ type sectorExposureResponse struct {
 }
 
 func (*SectorExposureTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "sector_exposure")
 
@@ -113,8 +116,8 @@ func computeSectorExposure(holdings []broker.Holding) *sectorExposureResponse {
 		pct := roundTo2(val / totalValue * 100)
 
 		// Normalize the trading symbol for lookup (strip exchange suffixes, etc.)
-		symbol := normalizeSymbol(h.Tradingsymbol)
-		sector, ok := stockSectors[symbol]
+		symbol := NormalizeSymbol(h.Tradingsymbol)
+		sector, ok := StockSectors[symbol]
 		if !ok {
 			unmapped = append(unmapped, sectorHolding{
 				Symbol: h.Tradingsymbol,
@@ -150,7 +153,7 @@ func computeSectorExposure(holdings []broker.Holding) *sectorExposureResponse {
 			OverExposed: overExposed,
 		})
 		if overExposed {
-			warnings = append(warnings, name+" is over-exposed at "+formatPct(pct)+" of portfolio (threshold: 30%)")
+			warnings = append(warnings, name+" is over-exposed at "+FormatPct(pct)+" of portfolio (threshold: 30%)")
 		}
 	}
 
@@ -175,8 +178,8 @@ func computeSectorExposure(holdings []broker.Holding) *sectorExposureResponse {
 	}
 }
 
-// normalizeSymbol strips common suffixes and normalises to uppercase for lookup.
-func normalizeSymbol(ts string) string {
+// NormalizeSymbol strips common suffixes and normalises to uppercase for lookup.
+func NormalizeSymbol(ts string) string {
 	s := strings.ToUpper(strings.TrimSpace(ts))
 	// Strip BSE/NSE trailing suffixes like "-BE", "-EQ"
 	for _, suffix := range []string{"-BE", "-EQ", "-BZ", "-BL"} {
@@ -185,17 +188,17 @@ func normalizeSymbol(ts string) string {
 	return s
 }
 
-// formatPct formats a percentage for display.
-func formatPct(v float64) string {
+// FormatPct formats a percentage for display.
+func FormatPct(v float64) string {
 	if v == float64(int(v)) {
 		return fmt.Sprintf("%d%%", int(v))
 	}
 	return fmt.Sprintf("%.1f%%", v)
 }
 
-// stockSectors maps NSE/BSE trading symbols to their primary sector classification.
+// StockSectors maps NSE/BSE trading symbols to their primary sector classification.
 // Covers Nifty 50, Nifty Next 50, and other commonly traded NSE stocks (~150+).
-var stockSectors = map[string]string{
+var StockSectors = map[string]string{
 	// --- Banking ---
 	"HDFCBANK":   "Banking",
 	"ICICIBANK":  "Banking",
@@ -410,4 +413,12 @@ var stockSectors = map[string]string{
 	"SPICEJET": "Aviation",
 }
 
-func init() { RegisterInternalTool(&SectorExposureTool{}) }
+func init() { plugin.RegisterInternalTool(&SectorExposureTool{}) }
+
+// roundTo2 rounds to 2 decimal places. Anchor 1 PR 1.6 added a local
+// copy when this file moved to mcp/portfolio. analytics_tools.go (in
+// mcp/ root) and other PR-1.5 trade files have their own copies for
+// the same reason — small stand-alone math helper.
+func roundTo2(v float64) float64 {
+	return math.Round(v*100) / 100
+}

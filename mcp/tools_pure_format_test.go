@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
@@ -18,24 +19,24 @@ import (
 
 func TestNormalizeSymbol(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE"))
-	assert.Equal(t, "RELIANCE", normalizeSymbol("reliance"))
-	assert.Equal(t, "RELIANCE", normalizeSymbol(" RELIANCE "))
-	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE-BE"))
-	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE-EQ"))
-	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE-BZ"))
-	assert.Equal(t, "RELIANCE", normalizeSymbol("RELIANCE-BL"))
-	assert.Equal(t, "INFY", normalizeSymbol("INFY-EQ"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("RELIANCE"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("reliance"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol(" RELIANCE "))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("RELIANCE-BE"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("RELIANCE-EQ"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("RELIANCE-BZ"))
+	assert.Equal(t, "RELIANCE", portfolio.NormalizeSymbol("RELIANCE-BL"))
+	assert.Equal(t, "INFY", portfolio.NormalizeSymbol("INFY-EQ"))
 }
 
 
 func TestFormatPct(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "50%", formatPct(50.0))
-	assert.Equal(t, "100%", formatPct(100.0))
-	assert.Equal(t, "0%", formatPct(0.0))
-	assert.Equal(t, "33.3%", formatPct(33.3))
-	assert.Equal(t, "12.5%", formatPct(12.5))
+	assert.Equal(t, "50%", portfolio.FormatPct(50.0))
+	assert.Equal(t, "100%", portfolio.FormatPct(100.0))
+	assert.Equal(t, "0%", portfolio.FormatPct(0.0))
+	assert.Equal(t, "33.3%", portfolio.FormatPct(33.3))
+	assert.Equal(t, "12.5%", portfolio.FormatPct(12.5))
 }
 
 
@@ -142,13 +143,13 @@ func TestFormatINR_LargeNumber(t *testing.T) {
 
 
 func TestFormatPct_NegativeValue(t *testing.T) {
-	result := formatPct(-5.5)
+	result := portfolio.FormatPct(-5.5)
 	assert.Equal(t, "-5.5%", result)
 }
 
 
 func TestNormalizeSymbol_NoSuffix(t *testing.T) {
-	assert.Equal(t, "TCS", normalizeSymbol("TCS"))
+	assert.Equal(t, "TCS", portfolio.NormalizeSymbol("TCS"))
 }
 
 

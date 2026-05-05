@@ -24,6 +24,7 @@ import (
 	// Each future per-domain PR (1.6 portfolio, etc.) adds its
 	// sibling import here.
 	_ "github.com/zerodha/kite-mcp-server/mcp/admin"
+	_ "github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	_ "github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 

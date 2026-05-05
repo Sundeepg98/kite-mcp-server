@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 type ProfileTool struct{}
@@ -26,7 +27,7 @@ func (*ProfileTool) Tool() mcp.Tool {
 }
 
 func (*ProfileTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.SimpleToolHandler(manager, "get_profile", func(ctx context.Context, session *kc.KiteSessionData) (any, error) {
 		return h.QueryBus().DispatchWithResult(ctx, cqrs.GetProfileQuery{Email: session.Email})
 	})
@@ -45,7 +46,7 @@ func (*MarginsTool) Tool() mcp.Tool {
 }
 
 func (*MarginsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.SimpleToolHandler(manager, "get_margins", func(ctx context.Context, session *kc.KiteSessionData) (any, error) {
 		return h.QueryBus().DispatchWithResult(ctx, cqrs.GetMarginsQuery{Email: session.Email})
 	})
@@ -70,7 +71,7 @@ func (*HoldingsTool) Tool() mcp.Tool {
 }
 
 func (*HoldingsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.PaginatedToolHandler(manager, "get_holdings", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		// Phase 2j: dispatch through CQRS query bus (handler registered in app/wire_bus.go).
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
@@ -112,7 +113,7 @@ func (*PositionsTool) Tool() mcp.Tool {
 }
 
 func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.PaginatedToolHandlerWithArgs(manager, "get_positions", func(ctx context.Context, session *kc.KiteSessionData, args map[string]any) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetPortfolioQuery{Email: session.Email})
 		if err != nil {
@@ -120,7 +121,7 @@ func (*PositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 		portfolio := raw.(*usecases.PortfolioResult)
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		posType := p.String("position_type", "net")
 
 		var source []broker.Position
@@ -161,7 +162,7 @@ func (*TradesTool) Tool() mcp.Tool {
 }
 
 func (*TradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.PaginatedToolHandler(manager, "get_trades", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetTradesQuery{Email: session.Email})
 		if err != nil {
@@ -196,7 +197,7 @@ func (*OrdersTool) Tool() mcp.Tool {
 }
 
 func (*OrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.PaginatedToolHandler(manager, "get_orders", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetOrdersQuery{Email: session.Email})
 		if err != nil {
@@ -231,7 +232,7 @@ func (*GTTOrdersTool) Tool() mcp.Tool {
 }
 
 func (*GTTOrdersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	h := NewToolHandler(manager)
+	h := common.NewToolHandler(manager)
 	return common.PaginatedToolHandler(manager, "get_gtts", func(ctx context.Context, session *kc.KiteSessionData) ([]any, error) {
 		raw, err := h.QueryBus().DispatchWithResult(ctx, cqrs.GetGTTsQuery{Email: session.Email})
 		if err != nil {
@@ -267,10 +268,10 @@ func (*OrderTradesTool) Tool() mcp.Tool {
 }
 
 func (*OrderTradesTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_order_trades")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		// Validate required parameters
 		if err := p.Required("order_id"); err != nil {
@@ -313,10 +314,10 @@ func (*OrderHistoryTool) Tool() mcp.Tool {
 }
 
 func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_order_history")
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 
 		// Validate required parameters
 		if err := p.Required("order_id"); err != nil {
@@ -338,13 +339,13 @@ func (*OrderHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 func init() {
-	RegisterInternalTool(&GTTOrdersTool{})
-	RegisterInternalTool(&HoldingsTool{})
-	RegisterInternalTool(&MarginsTool{})
-	RegisterInternalTool(&OrderHistoryTool{})
-	RegisterInternalTool(&OrdersTool{})
-	RegisterInternalTool(&OrderTradesTool{})
-	RegisterInternalTool(&PositionsTool{})
-	RegisterInternalTool(&ProfileTool{})
-	RegisterInternalTool(&TradesTool{})
+	plugin.RegisterInternalTool(&GTTOrdersTool{})
+	plugin.RegisterInternalTool(&HoldingsTool{})
+	plugin.RegisterInternalTool(&MarginsTool{})
+	plugin.RegisterInternalTool(&OrderHistoryTool{})
+	plugin.RegisterInternalTool(&OrdersTool{})
+	plugin.RegisterInternalTool(&OrderTradesTool{})
+	plugin.RegisterInternalTool(&PositionsTool{})
+	plugin.RegisterInternalTool(&ProfileTool{})
+	plugin.RegisterInternalTool(&TradesTool{})
 }

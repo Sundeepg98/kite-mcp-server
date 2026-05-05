@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GetPnLJournalTool retrieves historical P&L data with statistics.
@@ -39,7 +41,7 @@ func (*GetPnLJournalTool) Tool() mcp.Tool {
 }
 
 func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_pnl_journal")
 
@@ -55,7 +57,7 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		fromDate := p.String("from", "")
 		toDate := p.String("to", "")
 		period := p.String("period", "month")
@@ -110,4 +112,4 @@ func (*GetPnLJournalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
-func init() { RegisterInternalTool(&GetPnLJournalTool{}) }
+func init() { plugin.RegisterInternalTool(&GetPnLJournalTool{}) }

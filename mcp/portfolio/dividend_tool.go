@@ -1,4 +1,4 @@
-package mcp
+package portfolio
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // --- Corporate Actions Database ---
@@ -103,7 +105,7 @@ var dividendSeasonality = map[int]string{
 // DividendCalendarTool analyses portfolio holdings for dividend yield and upcoming corporate actions.
 type DividendCalendarTool struct{}
 
-func init() { RegisterInternalTool(&DividendCalendarTool{}) }
+func init() { plugin.RegisterInternalTool(&DividendCalendarTool{}) }
 
 func (*DividendCalendarTool) Tool() mcp.Tool {
 	return mcp.NewTool("dividend_calendar",
@@ -125,11 +127,11 @@ func (*DividendCalendarTool) Tool() mcp.Tool {
 }
 
 func (*DividendCalendarTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "dividend_calendar")
 
-		days := NewArgParser(request.GetArguments()).Int("days", 30)
+		days := common.NewArgParser(request.GetArguments()).Int("days", 30)
 		if days <= 0 {
 			days = 30
 		}

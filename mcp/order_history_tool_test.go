@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
+	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
 )
@@ -73,7 +74,7 @@ func TestGetOrderHistoryReconstituted_ReplaysFullLifecycle(t *testing.T) {
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "e1f2a3b4-c5d6-7890-abcd-ef0123456789"})
 
-	tool := &GetOrderHistoryReconstitutedTool{}
+	tool := &portfolio.GetOrderHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_order_history_reconstituted"
 	req.Params.Arguments = map[string]any{"order_id": "order-history-test"}
@@ -137,7 +138,7 @@ func TestGetOrderHistoryReconstituted_UnknownOrderReturnsNotFound(t *testing.T) 
 	mcpSrv := server.NewMCPServer("test", "1.0")
 	ctx = mcpSrv.WithContext(ctx, &mockSession{id: "f0a1b2c3-d4e5-6789-abcd-ef0123456789"})
 
-	tool := &GetOrderHistoryReconstitutedTool{}
+	tool := &portfolio.GetOrderHistoryReconstitutedTool{}
 	req := gomcp.CallToolRequest{}
 	req.Params.Name = "get_order_history_reconstituted"
 	req.Params.Arguments = map[string]any{"order_id": "does-not-exist"}

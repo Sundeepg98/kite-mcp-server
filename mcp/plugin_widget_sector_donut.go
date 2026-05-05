@@ -5,6 +5,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	portfoliopkg "github.com/zerodha/kite-mcp-server/mcp/portfolio"
 )
 
 // sectorDonutWidgetData returns the portfolio sector-exposure
@@ -60,10 +61,10 @@ func sectorDonutWidgetData(ctx context.Context, manager extAppManagerPort, email
 			continue
 		}
 		// Reuse the existing sector_tool.go classifier: normalise the
-		// trading symbol and look up in the stockSectors map. Unmapped
+		// trading symbol and look up in the portfolio.StockSectors map. Unmapped
 		// symbols fall through to an explicit "Unmapped" bucket so
 		// users can tell mapping-gap from data-gap.
-		sector, mapped := stockSectors[normalizeSymbol(h.Tradingsymbol)]
+		sector, mapped := portfoliopkg.StockSectors[portfoliopkg.NormalizeSymbol(h.Tradingsymbol)]
 		if !mapped {
 			sector = "Unmapped"
 		}
@@ -104,7 +105,7 @@ func sectorDonutWidgetData(ctx context.Context, manager extAppManagerPort, email
 		"concentration_warning": func() string {
 			for _, e := range entries {
 				if e.OverExposed {
-					return e.Sector + " exposure is " + formatPct(e.Pct) + " (> 30% threshold)"
+					return e.Sector + " exposure is " + portfoliopkg.FormatPct(e.Pct) + " (> 30% threshold)"
 				}
 			}
 			return ""
