@@ -15,7 +15,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Path A item 1 per audit 6ee6520: dropped macos-latest ($0.08/min vs
+        # $0.008/min ubuntu — 10x cost). Empirical CI cost dominated by
+        # macOS minute multiplier. Linux + Windows coverage retained because:
+        #   - ubuntu-latest = Fly.io production target (Linux)
+        #   - windows-latest = local dev target (user runs Windows + WSL2)
+        # macOS coverage was redundant: no macOS-specific build paths in this
+        # codebase. Re-add macos-latest if a macOS-only regression surface
+        # ever exists (none currently).
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
