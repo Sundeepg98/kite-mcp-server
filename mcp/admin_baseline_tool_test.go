@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 // seedBaselineOrders persists `n` place_order audit rows for the given email
@@ -127,7 +128,7 @@ func TestAdminBaseline_AdminWithHistory(t *testing.T) {
 	raw := resultText(t, result)
 	require.NotEmpty(t, raw, "response must carry text content")
 
-	var payload adminUserBaselineResponse
+	var payload admin.AdminUserBaselineResponse
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
 	assert.Equal(t, "trader@example.com", payload.Email)
@@ -160,7 +161,7 @@ func TestAdminBaseline_UnknownUser(t *testing.T) {
 	raw := resultText(t, result)
 	require.NotEmpty(t, raw)
 
-	var payload adminUserBaselineResponse
+	var payload admin.AdminUserBaselineResponse
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
 	assert.Equal(t, "ghost@nowhere.com", payload.Email)

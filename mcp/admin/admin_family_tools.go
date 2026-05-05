@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,15 +34,15 @@ func (*AdminInviteFamilyMemberTool) Tool() mcp.Tool {
 }
 
 func (*AdminInviteFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_invite_family_member")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		invitedEmail := strings.ToLower(p.String("invited_email", ""))
 		if invitedEmail == "" {
 			return mcp.NewToolResultError("invited_email is required."), nil
@@ -95,15 +97,15 @@ func (*AdminListFamilyTool) Tool() mcp.Tool {
 }
 
 func (*AdminListFamilyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_list_family")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 50)
 
@@ -187,19 +189,19 @@ func (*AdminRemoveFamilyMemberTool) Tool() mcp.Tool {
 }
 
 func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_remove_family_member")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		targetEmail := strings.ToLower(p.String("target_email", ""))
 		confirmed := p.Bool("confirm", false)
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 		if !confirmed {
 			return mcp.NewToolResultError("confirm must be true. Member will lose tier access."), nil
@@ -226,7 +228,7 @@ func (*AdminRemoveFamilyMemberTool) Handler(manager *kc.Manager) server.ToolHand
 }
 
 func init() {
-	RegisterInternalTool(&AdminInviteFamilyMemberTool{})
-	RegisterInternalTool(&AdminListFamilyTool{})
-	RegisterInternalTool(&AdminRemoveFamilyMemberTool{})
+	plugin.RegisterInternalTool(&AdminInviteFamilyMemberTool{})
+	plugin.RegisterInternalTool(&AdminListFamilyTool{})
+	plugin.RegisterInternalTool(&AdminRemoveFamilyMemberTool{})
 }

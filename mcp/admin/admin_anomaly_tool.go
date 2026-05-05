@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,30 +118,30 @@ type adminAnomalyEvent struct {
 	Tool string `json:"tool,omitempty"`
 }
 
-// adminAnomalyUserAgg groups a single user's anomaly events.
-type adminAnomalyUserAgg struct {
+// AdminAnomalyUserAgg groups a single user's anomaly events.
+type AdminAnomalyUserAgg struct {
 	Email     string              `json:"email"`
 	FlagCount int                 `json:"flag_count"`
 	Events    []adminAnomalyEvent `json:"events"`
 }
 
-// adminAnomalyFlagsResponse is the structured payload returned by the tool.
-type adminAnomalyFlagsResponse struct {
+// AdminAnomalyFlagsResponse is the structured payload returned by the tool.
+type AdminAnomalyFlagsResponse struct {
 	WindowHours int                    `json:"window_hours"`
 	Since       time.Time              `json:"since"`
 	TotalFlags  int                    `json:"total_flags"`
-	ByUser      []adminAnomalyUserAgg  `json:"by_user"`
+	ByUser      []AdminAnomalyUserAgg  `json:"by_user"`
 	// Truncated reports whether the response was capped (either per-user or
 	// total). Operators seeing this flag should rerun with a narrower window.
 	Truncated bool `json:"truncated,omitempty"`
 }
 
 func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_list_anomaly_flags")
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		hours := p.Int("hours", adminAnomalyDefaultHours)
 		if hours <= 0 {
 			hours = adminAnomalyDefaultHours
@@ -174,11 +176,11 @@ func (*AdminListAnomalyFlagsTool) Handler(manager *kc.Manager) server.ToolHandle
 //     tag, parse reason + order value, append to the aggregate.
 //  4. Cap per-user and total event counts; sort users by flag count desc
 //     for a stable, operator-friendly ordering.
-func buildAnomalyFlagResponse(auditStore kc.AuditStoreInterface, since time.Time, windowHours int) *adminAnomalyFlagsResponse {
-	resp := &adminAnomalyFlagsResponse{
+func buildAnomalyFlagResponse(auditStore kc.AuditStoreInterface, since time.Time, windowHours int) *AdminAnomalyFlagsResponse {
+	resp := &AdminAnomalyFlagsResponse{
 		WindowHours: windowHours,
 		Since:       since,
-		ByUser:      []adminAnomalyUserAgg{},
+		ByUser:      []AdminAnomalyUserAgg{},
 	}
 
 	// Step 1: find candidate users. GetTopErrorUsers returns decrypted emails.
@@ -232,7 +234,7 @@ func buildAnomalyFlagResponse(auditStore kc.AuditStoreInterface, since time.Time
 			events = events[:adminAnomalyMaxEventsPerUser]
 			resp.Truncated = true
 		}
-		resp.ByUser = append(resp.ByUser, adminAnomalyUserAgg{
+		resp.ByUser = append(resp.ByUser, AdminAnomalyUserAgg{
 			Email:     strings.ToLower(u.Email),
 			FlagCount: len(events),
 			Events:    events,
@@ -322,4 +324,4 @@ func numericAnomalyField(m map[string]any, key string) float64 {
 	return 0
 }
 
-func init() { RegisterInternalTool(&AdminListAnomalyFlagsTool{}) }
+func init() { plugin.RegisterInternalTool(&AdminListAnomalyFlagsTool{}) }

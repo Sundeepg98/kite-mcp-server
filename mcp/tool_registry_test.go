@@ -5,45 +5,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
-// internalToolSnapshot + helpers are test-only scaffolding for
-// snapshotting and restoring the package-level registry across tests.
-// Lives in _test.go (compiled only under `go test`) so prod binaries
-// don't carry this code.
-type internalToolSnapshot struct {
-	tools []Tool
-	names map[string]struct{}
-}
+// Test-only scaffolding for snapshotting/restoring the registry.
+// Anchor 1 PR 1.4: the canonical implementation moved to mcp/plugin
+// alongside the registry state. These thin local wrappers preserve the
+// pre-PR test-helper names (snapshotInternalTools etc.) so the test
+// bodies below need no rewrite.
+type internalToolSnapshot = plugin.InternalToolSnapshot
 
 func snapshotInternalTools() internalToolSnapshot {
-	internalToolRegistryMu.Lock()
-	defer internalToolRegistryMu.Unlock()
-	s := internalToolSnapshot{
-		tools: append([]Tool(nil), internalToolRegistry...),
-		names: make(map[string]struct{}, len(internalToolNames)),
-	}
-	for n := range internalToolNames {
-		s.names[n] = struct{}{}
-	}
-	return s
+	return plugin.SnapshotInternalTools()
 }
 
 func restoreInternalTools(s internalToolSnapshot) {
-	internalToolRegistryMu.Lock()
-	defer internalToolRegistryMu.Unlock()
-	internalToolRegistry = append(internalToolRegistry[:0], s.tools...)
-	internalToolNames = make(map[string]struct{}, len(s.names))
-	for n := range s.names {
-		internalToolNames[n] = struct{}{}
-	}
+	plugin.RestoreInternalTools(s)
 }
 
 func resetInternalTools() {
-	internalToolRegistryMu.Lock()
-	defer internalToolRegistryMu.Unlock()
-	internalToolRegistry = internalToolRegistry[:0]
-	internalToolNames = make(map[string]struct{})
+	plugin.ResetInternalTools()
 }
 
 // TestRegisterInternalTool_AppearsInGetAllTools proves the registry pattern:

@@ -9,6 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // Tool is the contract every internal + external MCP tool implements.
@@ -57,9 +58,13 @@ func GetAllTools() []Tool {
 // tools) defensive against a wiring regression that left app.registry
 // unset.
 func GetAllToolsForRegistry(reg *Registry) []Tool {
-	internalToolRegistryMu.Lock()
-	registered := append([]Tool(nil), internalToolRegistry...)
-	internalToolRegistryMu.Unlock()
+	// Anchor 1 PR 1.4: internalToolRegistry + RegisterInternalTool
+	// relocated to mcp/plugin alongside the rest of the plugin-registry
+	// infrastructure. mcp/aliases.go's RegisterInternalTool() is a
+	// passthrough so existing init() callers in mcp/*_tools.go keep
+	// compiling unchanged. Per-domain sub-packages (mcp/admin etc.)
+	// call plugin.RegisterInternalTool directly.
+	registered := plugin.GetInternalTools()
 
 	// Investment J — drain complete. Every built-in tool now self-registers
 	// via init() in its own *_tools.go file calling RegisterInternalTool.

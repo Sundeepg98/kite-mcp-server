@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -11,6 +12,18 @@ import (
 	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
+
+	// Side-effect imports — sub-packages whose init() functions
+	// register their tools via plugin.RegisterInternalTool. Without
+	// these blank imports, the per-domain sub-package init()s never
+	// run when only the mcp/ root is loaded (e.g., tests in package
+	// mcp), and tools=111 wire-protocol invariant breaks.
+	//
+	// Anchor 1 PR 1.4: introduced when mcp/admin extraction made
+	// admin tools' init() registration unreachable from mcp/ root.
+	// Each future per-domain PR (1.5 trade, 1.6 portfolio, etc.)
+	// adds its sibling import here.
+	_ "github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 // plugin_aliases.go — Anchor 1 PR 1.3 (per .research/anchor-1-and-3-
@@ -388,6 +401,26 @@ func NewMutableCallToolRequest(req gomcp.CallToolRequest) *MutableCallToolReques
 // _ keeps the common import alive for readability of the rest of the
 // file. Tool itself was already aliased in mcp/aliases.go (PR 1.1).
 var _ common.Tool
+
+// RegisterInternalTool is the legacy free-function passthrough for
+// the 60+ in-tree `func init() { mcp.RegisterInternalTool(...) }`
+// callers. Anchor 1 PR 1.4: the canonical implementation moved to
+// mcp/plugin alongside the rest of the plugin-registry infrastructure.
+// New code in per-domain sub-packages (mcp/admin, mcp/trade, etc.)
+// calls plugin.RegisterInternalTool directly to avoid a cycle through
+// mcp/ root.
+func RegisterInternalTool(t Tool) {
+	plugin.RegisterInternalTool(t)
+}
+
+// ServerStartTime returns the package-level server start time used
+// by status tools (admin_server_status, server_metrics, server_version,
+// ext_apps status). Anchor 1 PR 1.4: exposed so mcp/admin's
+// admin_server_status tool can compute uptime without needing
+// access to the package-private serverStartTime variable.
+func ServerStartTime() time.Time {
+	return common.ServerStartTime
+}
 
 // init wires the appResources URI list into mcp/plugin so plugin_widgets'
 // URI-collision check has the same domain-name set as before extraction.

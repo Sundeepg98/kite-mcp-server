@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -9,6 +9,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
+
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,16 +44,16 @@ type adminServerStatusResponse struct {
 }
 
 func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_server_status")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+		if _, errResult := common.AdminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
 		resp := &adminServerStatusResponse{
 			ActiveSessions: handler.Deps.Sessions.GetActiveSessionCount(),
-			Uptime:         time.Since(serverStartTime).Truncate(time.Second).String(),
+			Uptime:         time.Since(common.ServerStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
 			Goroutines:     runtime.NumGoroutine(),
 		}
@@ -79,4 +82,4 @@ func (*AdminServerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 	}
 }
 
-func init() { RegisterInternalTool(&AdminServerStatusTool{}) }
+func init() { plugin.RegisterInternalTool(&AdminServerStatusTool{}) }

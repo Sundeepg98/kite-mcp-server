@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,12 +30,12 @@ import (
 //     -1 signals "unknown" distinctly from 0 (which would mean "empty").
 // ─────────────────────────────────────────────────────────────────────────────
 
-// adminCacheInfoTTLSeconds mirrors the statsCacheTTL package var in
+// AdminCacheInfoTTLSeconds mirrors the statsCacheTTL package var in
 // kc/audit/store.go. Kept local because audit does not export the value
 // and the store-level instruction forbids editing store.go here. If the
 // audit TTL changes, this mirror must be updated — the TestAdminCacheInfo
 // response test pins the constant so a mismatch will surface in CI.
-const adminCacheInfoTTLSeconds = 900
+const AdminCacheInfoTTLSeconds = 900
 
 // adminCacheInfoHitRateAlertBelow is the threshold below which the cache
 // is considered unhealthy. Sourced from the Agent 89 monitoring doc: a
@@ -75,11 +77,11 @@ type adminCacheInfoThresholds struct {
 	SizeAlertAboveFraction float64 `json:"size_alert_above_fraction"`
 }
 
-// adminStatsCacheInfoResponse is the structured payload returned by the tool.
+// AdminStatsCacheInfoResponse is the structured payload returned by the tool.
 // Sentinel -1 on CurrentEntries/Hits/Misses means "audit.Store does not
 // currently expose this value", distinct from 0 which would be a legitimate
 // "cache is empty" reading.
-type adminStatsCacheInfoResponse struct {
+type AdminStatsCacheInfoResponse struct {
 	CacheName      string                   `json:"cache_name"`
 	HitRate        float64                  `json:"hit_rate"`
 	Hits           int64                    `json:"hits"`
@@ -108,8 +110,8 @@ func cacheHealthy(hitRate float64, currentEntries int64, maxEntries int) bool {
 }
 
 func (*AdminStatsCacheInfoTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, _ string, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, _ string, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_stats_cache_info")
 
 		// Concrete store is the only path to StatsCacheHitRate — this accessor
@@ -128,14 +130,14 @@ func (*AdminStatsCacheInfoTool) Handler(manager *kc.Manager) server.ToolHandlerF
 		// change adds getters, wire them in here and drop the sentinels.
 		const unknown = int64(-1)
 
-		resp := adminStatsCacheInfoResponse{
+		resp := AdminStatsCacheInfoResponse{
 			CacheName:      "audit.statsCache",
 			HitRate:        hitRate,
 			Hits:           unknown,
 			Misses:         unknown,
 			CurrentEntries: unknown,
 			MaxEntries:     audit.DefaultMaxStatsCacheEntries,
-			TTLSeconds:     adminCacheInfoTTLSeconds,
+			TTLSeconds:     AdminCacheInfoTTLSeconds,
 			Healthy:        cacheHealthy(hitRate, unknown, audit.DefaultMaxStatsCacheEntries),
 			Thresholds: adminCacheInfoThresholds{
 				HitRateAlertBelow:      adminCacheInfoHitRateAlertBelow,
@@ -147,4 +149,4 @@ func (*AdminStatsCacheInfoTool) Handler(manager *kc.Manager) server.ToolHandlerF
 	})
 }
 
-func init() { RegisterInternalTool(&AdminStatsCacheInfoTool{}) }
+func init() { plugin.RegisterInternalTool(&AdminStatsCacheInfoTool{}) }

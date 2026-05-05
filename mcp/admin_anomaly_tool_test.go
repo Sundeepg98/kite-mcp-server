@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 // seedBlockedAnomaly persists an audit row that looks exactly like what the
@@ -143,7 +144,7 @@ func TestAdminAnomalyFlags_EmptyWindow(t *testing.T) {
 	raw := resultText(t, result)
 	require.NotEmpty(t, raw)
 
-	var payload adminAnomalyFlagsResponse
+	var payload admin.AdminAnomalyFlagsResponse
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
 	assert.Equal(t, 24, payload.WindowHours, "default window is 24h")
@@ -176,7 +177,7 @@ func TestAdminAnomalyFlags_AdminWithFlags(t *testing.T) {
 	raw := resultText(t, result)
 	require.NotEmpty(t, raw)
 
-	var payload adminAnomalyFlagsResponse
+	var payload admin.AdminAnomalyFlagsResponse
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
 	assert.Equal(t, 48, payload.WindowHours)
@@ -184,7 +185,7 @@ func TestAdminAnomalyFlags_AdminWithFlags(t *testing.T) {
 	require.Len(t, payload.ByUser, 2, "two distinct flagged users")
 
 	// Locate trader@example.com — should have 2 events.
-	var trader, alice *adminAnomalyUserAgg
+	var trader, alice *admin.AdminAnomalyUserAgg
 	for i := range payload.ByUser {
 		switch payload.ByUser[i].Email {
 		case "trader@example.com":
@@ -239,7 +240,7 @@ func TestAdminAnomalyFlags_HoursArgDefaultsTo24(t *testing.T) {
 			require.False(t, result.IsError)
 			raw := resultText(t, result)
 			require.NotEmpty(t, raw)
-			var payload adminAnomalyFlagsResponse
+			var payload admin.AdminAnomalyFlagsResponse
 			require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 			assert.Equal(t, 24, payload.WindowHours, "hours must default to 24")
 		})

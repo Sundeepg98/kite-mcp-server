@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,22 +43,22 @@ type adminGetRiskStatusResponse struct {
 }
 
 func (*AdminGetRiskStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_get_risk_status")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+		if _, errResult := common.AdminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
 		args := request.GetArguments()
-		targetEmail := NewArgParser(args).String("target_email", "")
+		targetEmail := common.NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 
 		rg := handler.Deps.RiskGuard.RiskGuard()
 		if rg == nil {
-			return mcp.NewToolResultError(ErrRiskGuardNA), nil
+			return mcp.NewToolResultError(common.ErrRiskGuardNA), nil
 		}
 
 		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetRiskStatusQuery{TargetEmail: targetEmail})
@@ -102,15 +104,15 @@ func (*AdminFreezeUserTool) Tool() mcp.Tool {
 }
 
 func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_freeze_user")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		targetEmail := p.String("target_email", "")
 		reason := p.String("reason", "")
 		confirmed := p.Bool("confirm", false)
@@ -122,18 +124,18 @@ func (*AdminFreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			return mcp.NewToolResultError("confirm must be true to freeze trading."), nil
 		}
 		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError(ErrSelfAction), nil
+			return mcp.NewToolResultError(common.ErrSelfAction), nil
 		}
 
 		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError(ErrRiskGuardNA), nil
+			return mcp.NewToolResultError(common.ErrRiskGuardNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg := fmt.Sprintf("Freeze trading for %s? Reason: %s", targetEmail, reason)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Freeze cancelled: %s", err.Error())), nil
 			}
 		}
@@ -183,19 +185,19 @@ func (*AdminUnfreezeUserTool) Tool() mcp.Tool {
 }
 
 func (*AdminUnfreezeUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_unfreeze_user")
 
 		args := request.GetArguments()
-		targetEmail := NewArgParser(args).String("target_email", "")
+		targetEmail := common.NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 
 		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError(ErrRiskGuardNA), nil
+			return mcp.NewToolResultError(common.ErrRiskGuardNA), nil
 		}
 
 		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeUserCommand{
@@ -231,10 +233,10 @@ func (*AdminFreezeGlobalTool) Tool() mcp.Tool {
 }
 
 func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_freeze_global")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
@@ -247,7 +249,7 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			}
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		reason := p.String("reason", "")
 		confirmed := p.Bool("confirm", false)
 
@@ -260,17 +262,17 @@ func (*AdminFreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError(ErrRiskGuardNA), nil
+			return mcp.NewToolResultError(common.ErrRiskGuardNA), nil
 		}
 
 		// Double elicitation: two sequential confirmations.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 			msg1 := fmt.Sprintf("WARNING: Freeze trading for ALL users on the server? Reason: %s", reason)
-			if err := requestConfirmation(ctx, srv, msg1); err != nil {
+			if err := common.RequestConfirmation(ctx, srv, msg1); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Global freeze cancelled: %s", err.Error())), nil
 			}
 			msg2 := fmt.Sprintf("FINAL CONFIRMATION: This will block ALL users from placing orders immediately. Reason: %s", reason)
-			if err := requestConfirmation(ctx, srv, msg2); err != nil {
+			if err := common.RequestConfirmation(ctx, srv, msg2); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Global freeze cancelled at final confirmation: %s", err.Error())), nil
 			}
 		}
@@ -316,15 +318,15 @@ func (*AdminUnfreezeGlobalTool) Tool() mcp.Tool {
 }
 
 func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_unfreeze_global")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+		if _, errResult := common.AdminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 		guard := handler.Deps.RiskGuard.RiskGuard()
 		if guard == nil {
-			return mcp.NewToolResultError(ErrRiskGuardNA), nil
+			return mcp.NewToolResultError(common.ErrRiskGuardNA), nil
 		}
 		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminUnfreezeGlobalCommand{}); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -336,9 +338,9 @@ func (*AdminUnfreezeGlobalTool) Handler(manager *kc.Manager) server.ToolHandlerF
 }
 
 func init() {
-	RegisterInternalTool(&AdminFreezeGlobalTool{})
-	RegisterInternalTool(&AdminFreezeUserTool{})
-	RegisterInternalTool(&AdminGetRiskStatusTool{})
-	RegisterInternalTool(&AdminUnfreezeGlobalTool{})
-	RegisterInternalTool(&AdminUnfreezeUserTool{})
+	plugin.RegisterInternalTool(&AdminFreezeGlobalTool{})
+	plugin.RegisterInternalTool(&AdminFreezeUserTool{})
+	plugin.RegisterInternalTool(&AdminGetRiskStatusTool{})
+	plugin.RegisterInternalTool(&AdminUnfreezeGlobalTool{})
+	plugin.RegisterInternalTool(&AdminUnfreezeUserTool{})
 }

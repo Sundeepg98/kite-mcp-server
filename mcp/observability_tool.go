@@ -14,6 +14,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // --- Server Metrics Tool ---
@@ -76,15 +77,13 @@ type UserErrorCount struct {
 	ErrorCount int    `json:"error_count"`
 }
 
-// serverStartTime is set once at package init to track uptime.
-var serverStartTime = time.Now()
 
 func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "server_metrics")
 
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+		if _, errResult := common.AdminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
@@ -140,7 +139,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		resp := &serverMetricsResponse{
-			Uptime:         time.Since(serverStartTime).Truncate(time.Second).String(),
+			Uptime:         time.Since(common.ServerStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
 			ToolCount:      len(GetAllTools()),
 			HeapAllocMB:    heapAllocMB,

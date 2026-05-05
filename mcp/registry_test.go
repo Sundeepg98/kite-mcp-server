@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 func TestPluginRegistry(t *testing.T) {
@@ -34,7 +35,7 @@ func TestPluginRegistry(t *testing.T) {
 func TestRegisterMultiplePlugins(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	RegisterPlugins(&ServerMetricsTool{}, &AdminListUsersTool{})
+	RegisterPlugins(&ServerMetricsTool{}, &admin.AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
 }
 
@@ -42,7 +43,7 @@ func TestPluginCountAfterClear(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
 	RegisterPlugin(&ServerMetricsTool{})
-	RegisterPlugin(&AdminListUsersTool{})
+	RegisterPlugin(&admin.AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
 
 	ClearPlugins()
@@ -61,7 +62,7 @@ func TestPluginToolsAppearInGetAllTools(t *testing.T) {
 	baseCount := len(baseTools)
 
 	RegisterPlugin(&ServerMetricsTool{})
-	RegisterPlugin(&AdminListUsersTool{})
+	RegisterPlugin(&admin.AdminListUsersTool{})
 
 	allTools := GetAllTools()
 	assert.Equal(t, baseCount+2, len(allTools),

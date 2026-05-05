@@ -12,6 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // ServerVersionTool exposes build + runtime identity of the running process:
@@ -135,7 +136,7 @@ func (*ServerVersionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			BuildTime:     cachedBuildTime,
 			Region:        cachedRegion,
 			GoVersion:     runtime.Version(),
-			UptimeSeconds: int64(time.Since(serverStartTime).Seconds()),
+			UptimeSeconds: int64(time.Since(common.ServerStartTime).Seconds()),
 			EnvFlags: map[string]bool{
 				"enable_trading": readEnableTradingFlag(),
 			},

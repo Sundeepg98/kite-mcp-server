@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,8 +74,8 @@ type adminUserBaselineThresholds struct {
 	OffHoursWindowIST string `json:"off_hours_window_ist"`
 }
 
-// adminUserBaselineResponse is the structured payload returned by the tool.
-type adminUserBaselineResponse struct {
+// AdminUserBaselineResponse is the structured payload returned by the tool.
+type AdminUserBaselineResponse struct {
 	Email             string                      `json:"email"`
 	BaselineMeanINR   float64                     `json:"baseline_mean_inr"`
 	BaselineStdevINR  float64                     `json:"baseline_stdev_inr"`
@@ -90,12 +92,12 @@ type adminUserBaselineResponse struct {
 const minBaselineCountForSufficiency = 5
 
 func (*AdminGetUserBaselineTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_get_user_baseline")
 
 		args := request.GetArguments()
-		email := strings.ToLower(strings.TrimSpace(NewArgParser(args).String("email", "")))
+		email := strings.ToLower(strings.TrimSpace(common.NewArgParser(args).String("email", "")))
 		if email == "" {
 			return mcp.NewToolResultError("email is required."), nil
 		}
@@ -113,7 +115,7 @@ func (*AdminGetUserBaselineTool) Handler(manager *kc.Manager) server.ToolHandler
 		mean, stdev, countF := auditStore.UserOrderStats(email, adminBaselineDays)
 		count := int(countF)
 
-		resp := adminUserBaselineResponse{
+		resp := AdminUserBaselineResponse{
 			Email:             email,
 			BaselineMeanINR:   mean,
 			BaselineStdevINR:  stdev,
@@ -132,4 +134,4 @@ func (*AdminGetUserBaselineTool) Handler(manager *kc.Manager) server.ToolHandler
 	})
 }
 
-func init() { RegisterInternalTool(&AdminGetUserBaselineTool{}) }
+func init() { plugin.RegisterInternalTool(&AdminGetUserBaselineTool{}) }

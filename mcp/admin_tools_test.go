@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // newAdminTestManager creates a minimal Manager suitable for admin tool tests.
@@ -107,7 +108,7 @@ func TestAdminCheck_UnauthenticatedReturnsError(t *testing.T) {
 	t.Parallel()
 	mgr := newAdminTestManager(t)
 	ctx := context.Background() // no email in context
-	_, errResult := adminCheck(ctx, mgr)
+	_, errResult := common.AdminCheck(ctx, mgr)
 	require.NotNil(t, errResult, "expected error result for unauthenticated call")
 	assert.True(t, errResult.IsError, "result should be marked as error")
 }
@@ -117,7 +118,7 @@ func TestAdminCheck_NonAdminReturnsError(t *testing.T) {
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	ctx := oauth.ContextWithEmail(context.Background(), "trader@example.com")
-	_, errResult := adminCheck(ctx, mgr)
+	_, errResult := common.AdminCheck(ctx, mgr)
 	require.NotNil(t, errResult, "expected error result for non-admin")
 	assert.True(t, errResult.IsError, "result should be marked as error")
 }
@@ -127,7 +128,7 @@ func TestAdminCheck_AdminSucceeds(t *testing.T) {
 	mgr := newAdminTestManager(t)
 	seedUsers(t, mgr)
 	ctx := oauth.ContextWithEmail(context.Background(), "admin@example.com")
-	email, errResult := adminCheck(ctx, mgr)
+	email, errResult := common.AdminCheck(ctx, mgr)
 	assert.Nil(t, errResult, "admin should pass the check")
 	assert.Equal(t, "admin@example.com", email)
 }

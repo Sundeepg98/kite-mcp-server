@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 // admin_integration_test.go — end-to-end integration coverage for the three
@@ -56,7 +57,7 @@ func TestAdminIntegration_BaselineToAnomalyFlow(t *testing.T) {
 	})
 	require.False(t, baselineResult.IsError, "admin_get_user_baseline must succeed in the chain")
 
-	var baseline adminUserBaselineResponse
+	var baseline admin.AdminUserBaselineResponse
 	require.NoError(t, json.Unmarshal([]byte(resultText(t, baselineResult)), &baseline))
 	assert.Equal(t, traderEmail, baseline.Email)
 	assert.Equal(t, 10, baseline.BaselineCount,
@@ -73,7 +74,7 @@ func TestAdminIntegration_BaselineToAnomalyFlow(t *testing.T) {
 	cacheResult := callAdminTool(t, mgr, "admin_stats_cache_info", adminEmail, nil)
 	require.False(t, cacheResult.IsError, "admin_stats_cache_info must succeed in the chain")
 
-	var cache adminStatsCacheInfoResponse
+	var cache admin.AdminStatsCacheInfoResponse
 	require.NoError(t, json.Unmarshal([]byte(resultText(t, cacheResult)), &cache))
 	assert.Equal(t, "audit.statsCache", cache.CacheName)
 	assert.GreaterOrEqual(t, cache.HitRate, 0.0, "hit rate must be non-negative")
@@ -90,14 +91,14 @@ func TestAdminIntegration_BaselineToAnomalyFlow(t *testing.T) {
 	})
 	require.False(t, flagsResult.IsError, "admin_list_anomaly_flags must succeed in the chain")
 
-	var flags adminAnomalyFlagsResponse
+	var flags admin.AdminAnomalyFlagsResponse
 	require.NoError(t, json.Unmarshal([]byte(resultText(t, flagsResult)), &flags))
 	assert.Equal(t, 24, flags.WindowHours)
 	assert.GreaterOrEqual(t, flags.TotalFlags, 1,
 		"at least the Rs 50,000 anomaly block must surface in the listing")
 
 	// trader must appear in the by_user aggregate.
-	var traderAgg *adminAnomalyUserAgg
+	var traderAgg *admin.AdminAnomalyUserAgg
 	for i := range flags.ByUser {
 		if flags.ByUser[i].Email == traderEmail {
 			traderAgg = &flags.ByUser[i]

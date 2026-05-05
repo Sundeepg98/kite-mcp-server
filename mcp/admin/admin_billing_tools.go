@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // admin_set_billing_tier lets an admin of a self-hosted deployment grant or
@@ -46,12 +48,12 @@ func (*AdminSetBillingTierTool) Tool() mcp.Tool {
 }
 
 func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_set_billing_tier")
 
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		if err := p.Required("target_email", "tier"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -108,4 +110,4 @@ func (*AdminSetBillingTierTool) Handler(manager *kc.Manager) server.ToolHandlerF
 	})
 }
 
-func init() { RegisterInternalTool(&AdminSetBillingTierTool{}) }
+func init() { plugin.RegisterInternalTool(&AdminSetBillingTierTool{}) }

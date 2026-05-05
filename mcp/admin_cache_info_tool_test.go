@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/admin"
 )
 
 // -----------------------------------------------------------------------------
@@ -62,13 +63,13 @@ func TestAdminCacheInfo_AdminReturnsStructuredResponse(t *testing.T) {
 	raw := resultText(t, result)
 	require.NotEmpty(t, raw, "response must carry text content")
 
-	var payload adminStatsCacheInfoResponse
+	var payload admin.AdminStatsCacheInfoResponse
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 
 	// Stable constants (must match audit package + tool defaults).
 	assert.Equal(t, "audit.statsCache", payload.CacheName)
 	assert.Equal(t, audit.DefaultMaxStatsCacheEntries, payload.MaxEntries)
-	assert.Equal(t, int64(adminCacheInfoTTLSeconds), payload.TTLSeconds)
+	assert.Equal(t, int64(admin.AdminCacheInfoTTLSeconds), payload.TTLSeconds)
 	assert.InDelta(t, 0.7, payload.Thresholds.HitRateAlertBelow, 1e-9)
 	assert.InDelta(t, 0.9, payload.Thresholds.SizeAlertAboveFraction, 1e-9)
 
@@ -119,7 +120,7 @@ func TestAdminCacheInfo_HitRateSanity(t *testing.T) {
 	result := callAdminTool(t, mgr, "admin_stats_cache_info", "admin@example.com", nil)
 	require.False(t, result.IsError)
 
-	var payload adminStatsCacheInfoResponse
+	var payload admin.AdminStatsCacheInfoResponse
 	require.NoError(t, json.Unmarshal([]byte(resultText(t, result)), &payload))
 
 	// Hit rate from the store and from the tool must agree to full float precision.

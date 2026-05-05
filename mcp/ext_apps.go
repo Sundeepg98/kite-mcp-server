@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
 )
 
 // UICapabilityExtensionKey is the MCP Apps capability key that clients
@@ -253,7 +254,7 @@ var appResources = []appResource{
 			}
 			resp := map[string]any{
 				"active_sessions": manager.GetActiveSessionCount(),
-				"uptime":          time.Since(serverStartTime).Truncate(time.Second).String(),
+				"uptime":          time.Since(common.ServerStartTime).Truncate(time.Second).String(),
 				"go_version":      runtime.Version(),
 				"goroutines":      runtime.NumGoroutine(),
 			}

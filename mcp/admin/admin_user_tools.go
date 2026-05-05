@@ -1,4 +1,4 @@
-package mcp
+package admin
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,18 +51,18 @@ type adminUserEntry struct {
 }
 
 func (*AdminListUsersTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, adminEmail string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_list_users")
 
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		from := p.Int("from", 0)
 		limit := p.Int("limit", 100)
 
 		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+			return mcp.NewToolResultError(common.ErrUserStoreNA), nil
 		}
 
 		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminListUsersQuery{AdminEmail: adminEmail, From: from, Limit: limit})
@@ -132,22 +134,22 @@ type adminEffectiveLimits struct {
 }
 
 func (*AdminGetUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_get_user")
-		if _, errResult := adminCheck(ctx, manager); errResult != nil {
+		if _, errResult := common.AdminCheck(ctx, manager); errResult != nil {
 			return errResult, nil
 		}
 
 		args := request.GetArguments()
-		targetEmail := NewArgParser(args).String("target_email", "")
+		targetEmail := common.NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 
 		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+			return mcp.NewToolResultError(common.ErrUserStoreNA), nil
 		}
 
 		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.AdminGetUserQuery{TargetEmail: targetEmail})
@@ -208,32 +210,32 @@ func (*AdminSuspendUserTool) Tool() mcp.Tool {
 }
 
 func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_suspend_user")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		targetEmail := p.String("target_email", "")
 		reason := p.String("reason", "")
 		confirmed := p.Bool("confirm", false)
 
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 		if !confirmed {
 			return mcp.NewToolResultError("confirm must be true. This action suspends the user, freezes trading, and terminates sessions."), nil
 		}
 		if strings.EqualFold(targetEmail, adminEmail) {
-			return mcp.NewToolResultError(ErrSelfAction), nil
+			return mcp.NewToolResultError(common.ErrSelfAction), nil
 		}
 
 		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+			return mcp.NewToolResultError(common.ErrUserStoreNA), nil
 		}
 
 		// Elicitation confirmation (transport concern — stays in handler).
@@ -242,7 +244,7 @@ func (*AdminSuspendUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			if reason != "" {
 				msg += fmt.Sprintf(" Reason: %s", reason)
 			}
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Suspension cancelled: %s", err.Error())), nil
 			}
 		}
@@ -284,19 +286,19 @@ func (*AdminActivateUserTool) Tool() mcp.Tool {
 }
 
 func (*AdminActivateUserTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
-	return withAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := common.NewToolHandler(manager)
+	return common.WithAdminCheck(manager, func(ctx context.Context, _ string, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_activate_user")
 
 		args := request.GetArguments()
-		targetEmail := NewArgParser(args).String("target_email", "")
+		targetEmail := common.NewArgParser(args).String("target_email", "")
 		if targetEmail == "" {
-			return mcp.NewToolResultError(ErrTargetEmailRequired), nil
+			return mcp.NewToolResultError(common.ErrTargetEmailRequired), nil
 		}
 
 		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+			return mcp.NewToolResultError(common.ErrUserStoreNA), nil
 		}
 
 		if _, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.AdminActivateUserCommand{
@@ -332,15 +334,15 @@ func (*AdminChangeRoleTool) Tool() mcp.Tool {
 }
 
 func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "admin_change_role")
-		adminEmail, errResult := adminCheck(ctx, manager)
+		adminEmail, errResult := common.AdminCheck(ctx, manager)
 		if errResult != nil {
 			return errResult, nil
 		}
 
-		p := NewArgParser(request.GetArguments())
+		p := common.NewArgParser(request.GetArguments())
 		targetEmail := p.String("target_email", "")
 		newRole := p.String("role", "")
 		if targetEmail == "" || newRole == "" {
@@ -349,7 +351,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 
 		uStore := handler.Deps.Users.UserStore()
 		if uStore == nil {
-			return mcp.NewToolResultError(ErrUserStoreNA), nil
+			return mcp.NewToolResultError(common.ErrUserStoreNA), nil
 		}
 
 		// Fetch current role for elicitation message.
@@ -364,7 +366,7 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 			if strings.EqualFold(targetEmail, adminEmail) {
 				msg += " WARNING: You are changing your own role."
 			}
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("Role change cancelled: %s", err.Error())), nil
 			}
 		}
@@ -387,9 +389,9 @@ func (*AdminChangeRoleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 }
 
 func init() {
-	RegisterInternalTool(&AdminActivateUserTool{})
-	RegisterInternalTool(&AdminChangeRoleTool{})
-	RegisterInternalTool(&AdminGetUserTool{})
-	RegisterInternalTool(&AdminListUsersTool{})
-	RegisterInternalTool(&AdminSuspendUserTool{})
+	plugin.RegisterInternalTool(&AdminActivateUserTool{})
+	plugin.RegisterInternalTool(&AdminChangeRoleTool{})
+	plugin.RegisterInternalTool(&AdminGetUserTool{})
+	plugin.RegisterInternalTool(&AdminListUsersTool{})
+	plugin.RegisterInternalTool(&AdminSuspendUserTool{})
 }
