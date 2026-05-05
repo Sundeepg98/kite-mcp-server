@@ -75,6 +75,7 @@ use (
 	./kc/registry
 	./kc/riskguard
 	./kc/scheduler
+	./kc/sectors
 	./kc/telegram
 	./kc/templates
 	./kc/ticker

@@ -78,6 +78,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/registry => ./kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/scheduler => ./kc/scheduler
+	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/templates => ./kc/templates
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
