@@ -1,4 +1,4 @@
-package mcp
+package paper
 
 import (
 	"context"
@@ -10,13 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// setupStaticEgressIP is the server's static egress IP which users must
+// SetupStaticEgressIP is the server's static egress IP which users must
 // whitelist in their Kite developer console (SEBI April 2026 mandate).
 // Kept in sync with the value reported by sebi_compliance_status.
-const setupStaticEgressIP = "209.71.68.157"
+const SetupStaticEgressIP = "209.71.68.157"
 
 // Setup status codes returned by the test_ip_whitelist tool.
 const (
@@ -50,13 +52,13 @@ type testIPWhitelistResponse struct {
 }
 
 func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "test_ip_whitelist")
 
 		return handler.WithSession(ctx, "test_ip_whitelist", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			resp := &testIPWhitelistResponse{
-				EgressIP:  setupStaticEgressIP,
+				EgressIP:  SetupStaticEgressIP,
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
 			}
 
@@ -86,7 +88,7 @@ func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 				strings.HasPrefix(lowered, "ip "),
 				strings.HasSuffix(lowered, " ip"):
 				resp.Status = setupStatusIPNotWhitelisted
-				resp.Message = fmt.Sprintf("IP %s is not whitelisted in your Kite developer console. Add it at https://developers.kite.trade/apps. Kite said: %s", setupStaticEgressIP, rawErr)
+				resp.Message = fmt.Sprintf("IP %s is not whitelisted in your Kite developer console. Add it at https://developers.kite.trade/apps. Kite said: %s", SetupStaticEgressIP, rawErr)
 			case strings.Contains(lowered, "api_key"),
 				strings.Contains(lowered, "invalid_key"),
 				strings.Contains(lowered, "credentials"):
@@ -105,4 +107,4 @@ func (*TestIPWhitelistTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 	}
 }
 
-func init() { RegisterInternalTool(&TestIPWhitelistTool{}) }
+func init() { plugin.RegisterInternalTool(&TestIPWhitelistTool{}) }

@@ -21,8 +21,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
-	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // UICapabilityExtensionKey is the MCP Apps capability key that clients
@@ -413,7 +414,7 @@ func withAppUI(t gomcp.Tool, resourceURI string) gomcp.Tool {
 // resourceURIForTool returns the ui:// resource URI for a tool based on its
 // dashboard page mapping, or empty string if the tool has no associated page.
 func resourceURIForTool(toolName string) string {
-	pagePath, ok := toolDashboardPage[toolName]
+	pagePath, ok := paper.ToolDashboardPage[toolName]
 	if !ok {
 		return ""
 	}
@@ -938,7 +939,7 @@ func setupData(_ context.Context, manager extAppManagerPort, _ *audit.Store, ema
 		}
 	}
 	return map[string]any{
-		"egress_ip":              setupStaticEgressIP,
+		"egress_ip":              paper.SetupStaticEgressIP,
 		"credentials_registered": credsRegistered,
 		"api_key_masked":         apiKeyMasked,
 		// ready_to_trade currently mirrors credentials_registered — Step 3

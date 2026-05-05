@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/mcp/analytics"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
@@ -34,9 +35,9 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 	t.Parallel()
 	// These are tools whose Tool() method may not yet be covered
 	toolTypes := []Tool{
-		&PaperTradingToggleTool{},
-		&PaperTradingStatusTool{},
-		&PaperTradingResetTool{},
+		&paper.PaperTradingToggleTool{},
+		&paper.PaperTradingStatusTool{},
+		&paper.PaperTradingResetTool{},
 		&portfolio.DeleteMyAccountTool{},
 		&portfolio.UpdateMyCredentialsTool{},
 		&portfolio.GetPnLJournalTool{},

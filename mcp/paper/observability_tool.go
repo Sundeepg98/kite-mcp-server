@@ -1,4 +1,4 @@
-package mcp
+package paper
 
 import (
 	"context"
@@ -13,8 +13,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
-	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // --- Server Metrics Tool ---
@@ -79,7 +80,7 @@ type UserErrorCount struct {
 
 
 func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "server_metrics")
 
@@ -94,7 +95,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Parse period and route through use case for audit data.
 		args := request.GetArguments()
-		period := NewArgParser(args).String("period", "24h")
+		period := common.NewArgParser(args).String("period", "24h")
 		adminEmail := oauth.EmailFromContext(ctx)
 
 		raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.ServerMetricsQuery{AdminEmail: adminEmail, Period: period})
@@ -141,7 +142,7 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		resp := &serverMetricsResponse{
 			Uptime:         time.Since(common.ServerStartTime).Truncate(time.Second).String(),
 			GoVersion:      runtime.Version(),
-			ToolCount:      len(GetAllTools()),
+			ToolCount:      len(plugin.GetInternalTools()),
 			HeapAllocMB:    heapAllocMB,
 			Goroutines:     goroutines,
 			GCPauseMs:      gcPauseMs,
@@ -162,4 +163,4 @@ func (*ServerMetricsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
-func init() { RegisterInternalTool(&ServerMetricsTool{}) }
+func init() { plugin.RegisterInternalTool(&ServerMetricsTool{}) }

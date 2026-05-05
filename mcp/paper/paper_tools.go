@@ -1,12 +1,15 @@
-package mcp
+package paper
 
 import (
 	"context"
 	"encoding/json"
+
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -24,7 +27,7 @@ func (*PaperTradingToggleTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -35,7 +38,7 @@ func (*PaperTradingToggleTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 		args := request.GetArguments()
 		enable, _ := args["enable"].(bool)
-		initialCash := NewArgParser(args).Float("initial_cash", 10000000)
+		initialCash := common.NewArgParser(args).Float("initial_cash", 10000000)
 
 		raw, err := handler.CommandBus().DispatchWithResult(ctx, cqrs.PaperTradingToggleCommand{
 			Email:       email,
@@ -62,7 +65,7 @@ func (*PaperTradingStatusTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -98,7 +101,7 @@ func (*PaperTradingResetTool) Tool() gomcp.Tool {
 }
 
 func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
@@ -116,7 +119,7 @@ func (*PaperTradingResetTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 }
 
 func init() {
-	RegisterInternalTool(&PaperTradingResetTool{})
-	RegisterInternalTool(&PaperTradingStatusTool{})
-	RegisterInternalTool(&PaperTradingToggleTool{})
+	plugin.RegisterInternalTool(&PaperTradingResetTool{})
+	plugin.RegisterInternalTool(&PaperTradingStatusTool{})
+	plugin.RegisterInternalTool(&PaperTradingToggleTool{})
 }

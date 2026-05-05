@@ -6,6 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 // DevMode analytics tool tests: SEBI compliance, trading context, pre-trade check, backtest, PnL journal, dashboard, server metrics.
@@ -573,7 +574,7 @@ func TestDashboardBaseURL_LocalMode_Push(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	// DevMode manager is local -> returns local URL
-	base := dashboardBaseURL(mgr)
+	base := paper.DashboardBaseURL(mgr)
 	// Either returns a URL or empty
 	if base != "" {
 		assert.Contains(t, base, "http")
@@ -584,7 +585,7 @@ func TestDashboardBaseURL_LocalMode_Push(t *testing.T) {
 func TestDashboardLink_Coverage(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	// May be empty in test context
 	_ = link
 }
@@ -593,19 +594,19 @@ func TestDashboardLink_Coverage(t *testing.T) {
 func TestDashboardPageURL_Coverage(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	url := dashboardPageURL(mgr, "/dashboard")
+	url := paper.DashboardPageURL(mgr, "/dashboard")
 	_ = url
 }
 
 
 func TestIsAlphanumeric_Push(t *testing.T) {
 	t.Parallel()
-	assert.True(t, isAlphanumeric("abc123"))
-	assert.True(t, isAlphanumeric("ABCXYZ"))
-	assert.False(t, isAlphanumeric(""))
-	assert.False(t, isAlphanumeric("abc-123"))
-	assert.False(t, isAlphanumeric("abc 123"))
-	assert.False(t, isAlphanumeric("abc!@#"))
+	assert.True(t, paper.IsAlphanumeric("abc123"))
+	assert.True(t, paper.IsAlphanumeric("ABCXYZ"))
+	assert.False(t, paper.IsAlphanumeric(""))
+	assert.False(t, paper.IsAlphanumeric("abc-123"))
+	assert.False(t, paper.IsAlphanumeric("abc 123"))
+	assert.False(t, paper.IsAlphanumeric("abc!@#"))
 }
 
 

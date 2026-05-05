@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/templates"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 // mockUIClientSession implements server.SessionWithClientInfo so the
@@ -162,10 +163,10 @@ func TestResourceURIForTool(t *testing.T) {
 
 func TestPagePathToResourceURI(t *testing.T) {
 	t.Parallel()
-	t.Run("all toolDashboardPage paths have a resource URI", func(t *testing.T) {
+	t.Run("all paper.ToolDashboardPage paths have a resource URI", func(t *testing.T) {
 		// /admin/ops is admin-only and intentionally has no MCP App widget
 		skipPaths := map[string]bool{"/admin/ops": true}
-		for toolName, pagePath := range toolDashboardPage {
+		for toolName, pagePath := range paper.ToolDashboardPage {
 			if skipPaths[pagePath] {
 				continue
 			}

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/kc/billing"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 // TestSafeAssertFunctions tests all SafeAssert utility functions
@@ -311,8 +312,8 @@ func TestToolDashboardPage(t *testing.T) {
 			"tax_loss_analysis",
 		}
 		for _, tool := range portfolioTools {
-			path, ok := toolDashboardPage[tool]
-			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			path, ok := paper.ToolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 			assert.Equal(t, "/dashboard", path, "tool %s should map to /dashboard", tool)
 		}
 	})
@@ -326,8 +327,8 @@ func TestToolDashboardPage(t *testing.T) {
 			"get_gtts", "place_gtt_order", "modify_gtt_order", "delete_gtt_order",
 		}
 		for _, tool := range orderTools {
-			path, ok := toolDashboardPage[tool]
-			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			path, ok := paper.ToolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 			assert.Equal(t, "/dashboard/orders", path, "tool %s should map to /dashboard/orders", tool)
 		}
 	})
@@ -339,8 +340,8 @@ func TestToolDashboardPage(t *testing.T) {
 			"set_trailing_stop", "list_trailing_stops", "cancel_trailing_stop",
 		}
 		for _, tool := range alertTools {
-			path, ok := toolDashboardPage[tool]
-			assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+			path, ok := paper.ToolDashboardPage[tool]
+			assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 			assert.Equal(t, "/dashboard/alerts", path, "tool %s should map to /dashboard/alerts", tool)
 		}
 	})
@@ -364,8 +365,8 @@ func TestToolDashboardPage(t *testing.T) {
 			"admin_remove_family_member",
 		}
 		for _, tool := range unmappedTools {
-			_, ok := toolDashboardPage[tool]
-			assert.False(t, ok, "tool %s should NOT be in toolDashboardPage", tool)
+			_, ok := paper.ToolDashboardPage[tool]
+			assert.False(t, ok, "tool %s should NOT be in paper.ToolDashboardPage", tool)
 		}
 	})
 
@@ -376,9 +377,9 @@ func TestToolDashboardPage(t *testing.T) {
 		for _, tool := range allTools {
 			registeredNames[tool.Tool().Name] = true
 		}
-		for toolName := range toolDashboardPage {
+		for toolName := range paper.ToolDashboardPage {
 			assert.True(t, registeredNames[toolName],
-				"toolDashboardPage has %s but it is not in GetAllTools()", toolName)
+				"paper.ToolDashboardPage has %s but it is not in GetAllTools()", toolName)
 		}
 	})
 }

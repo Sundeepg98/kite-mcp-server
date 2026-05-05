@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 // Input validation tests: missing params, invalid values, arg parsing, pagination, type assertions.
@@ -69,13 +70,13 @@ func TestValidateRequired_BoolFalse(t *testing.T) {
 func TestIsAlphanumeric_LoginKeys(t *testing.T) {
 	t.Parallel()
 	// Valid API keys
-	assert.True(t, isAlphanumeric("4agbg2fm6szvmhon"))
-	assert.True(t, isAlphanumeric("ABC123def"))
+	assert.True(t, paper.IsAlphanumeric("4agbg2fm6szvmhon"))
+	assert.True(t, paper.IsAlphanumeric("ABC123def"))
 	// Invalid API keys
-	assert.False(t, isAlphanumeric("invalid-key!"))
-	assert.False(t, isAlphanumeric("invalid secret!"))
-	assert.False(t, isAlphanumeric("key with spaces"))
-	assert.False(t, isAlphanumeric("key_underscore"))
+	assert.False(t, paper.IsAlphanumeric("invalid-key!"))
+	assert.False(t, paper.IsAlphanumeric("invalid secret!"))
+	assert.False(t, paper.IsAlphanumeric("key with spaces"))
+	assert.False(t, paper.IsAlphanumeric("key_underscore"))
 }
 
 
@@ -210,9 +211,9 @@ func TestConfirmableTools_Exhaustive(t *testing.T) {
 
 func TestIsAlphanumeric_Unicode(t *testing.T) {
 	t.Parallel()
-	assert.False(t, isAlphanumeric("café"))
-	assert.False(t, isAlphanumeric("日本語"))
-	assert.True(t, isAlphanumeric("abc123XYZ"))
+	assert.False(t, paper.IsAlphanumeric("café"))
+	assert.False(t, paper.IsAlphanumeric("日本語"))
+	assert.True(t, paper.IsAlphanumeric("abc123XYZ"))
 }
 
 

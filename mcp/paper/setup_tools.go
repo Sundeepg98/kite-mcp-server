@@ -1,4 +1,4 @@
-package mcp
+package paper
 
 import (
 	"context"
@@ -12,11 +12,13 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
-// isAlphanumeric returns true if s is non-empty and contains only ASCII letters and digits.
-func isAlphanumeric(s string) bool {
+// IsAlphanumeric returns true if s is non-empty and contains only ASCII letters and digits.
+func IsAlphanumeric(s string) bool {
 	for _, r := range s {
 		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
 			return false
@@ -25,13 +27,13 @@ func isAlphanumeric(s string) bool {
 	return len(s) > 0
 }
 
-// dashboardBaseURL returns the validated base URL for the dashboard, or empty string.
+// DashboardBaseURL returns the validated base URL for the dashboard, or empty string.
 //
 // Phase 3a Batch 6: cfg is the narrow port surface this function actually
 // needs (IsLocalMode + ExternalURL). *kc.Manager satisfies
 // kc.AppConfigProvider, so existing callers (production + tests) compile
 // unchanged — narrowing is signature-only, no semantic change.
-func dashboardBaseURL(cfg kc.AppConfigProvider) string {
+func DashboardBaseURL(cfg kc.AppConfigProvider) string {
 	var base string
 	if cfg.IsLocalMode() {
 		base = "http://127.0.0.1:8080"
@@ -53,29 +55,29 @@ func dashboardBaseURL(cfg kc.AppConfigProvider) string {
 	return base
 }
 
-// dashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
+// DashboardLink returns a markdown dashboard link suffix, or empty string if not configured.
 // Phase 3a Batch 6: cfg narrowed to AppConfigProvider — same shape as
-// dashboardBaseURL above.
-func dashboardLink(cfg kc.AppConfigProvider) string {
-	base := dashboardBaseURL(cfg)
+// DashboardBaseURL above.
+func DashboardLink(cfg kc.AppConfigProvider) string {
+	base := DashboardBaseURL(cfg)
 	if base == "" {
 		return ""
 	}
 	return fmt.Sprintf("\n\nOps dashboard: [Open Dashboard](%s/admin/ops)", base)
 }
 
-// dashboardPageURL returns the full dashboard URL for a specific page path (e.g. "/dashboard", "/dashboard/activity").
+// DashboardPageURL returns the full dashboard URL for a specific page path (e.g. "/dashboard", "/dashboard/activity").
 // Phase 3a Batch 6: cfg narrowed to AppConfigProvider.
-func dashboardPageURL(cfg kc.AppConfigProvider, pagePath string) string {
-	base := dashboardBaseURL(cfg)
+func DashboardPageURL(cfg kc.AppConfigProvider, pagePath string) string {
+	base := DashboardBaseURL(cfg)
 	if base == "" {
 		return ""
 	}
 	return base + pagePath
 }
 
-// pageRoutes maps page names to URL paths for the open_dashboard tool.
-var pageRoutes = map[string]string{
+// PageRoutes maps page names to URL paths for the open_dashboard tool.
+var PageRoutes = map[string]string{
 	"portfolio": "/dashboard",
 	"activity":  "/dashboard/activity",
 	"orders":    "/dashboard/orders",
@@ -87,11 +89,11 @@ var pageRoutes = map[string]string{
 	"chart":     "/dashboard/chart",
 }
 
-// toolDashboardPage maps tool names to the dashboard page path that is most
+// ToolDashboardPage maps tool names to the dashboard page path that is most
 // relevant for viewing the data returned by that tool.  Used by
 // DashboardURLMiddleware to auto-append a dashboard link to successful tool
 // responses.
-var toolDashboardPage = map[string]string{
+var ToolDashboardPage = map[string]string{
 	// Portfolio / overview page
 	"get_holdings":             "/dashboard",
 	"get_positions":            "/dashboard",
@@ -205,11 +207,11 @@ var toolDashboardPage = map[string]string{
 // DashboardURLForTool returns the full dashboard URL for a given tool name,
 // or empty string if the tool has no associated dashboard page.
 func DashboardURLForTool(manager *kc.Manager, toolName string) string {
-	pagePath, ok := toolDashboardPage[toolName]
+	pagePath, ok := ToolDashboardPage[toolName]
 	if !ok {
 		return ""
 	}
-	return dashboardPageURL(manager, pagePath)
+	return DashboardPageURL(manager, pagePath)
 }
 
 // DashboardURLMiddleware returns server-level middleware that auto-appends a
@@ -259,7 +261,7 @@ func (*LoginTool) Tool() mcp.Tool {
 func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Track login tool usage with session context
-		handler := NewToolHandler(manager)
+		handler := common.NewToolHandler(manager)
 		handler.TrackToolCall(ctx, "login")
 
 		// Get MCP client session from context
@@ -272,7 +274,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// If user provided their own credentials, store them for per-user isolation
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		apiKey := p.String("api_key", "")
 		apiSecret := p.String("api_secret", "")
 
@@ -348,7 +350,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s (auto-authenticated)%s", profile.UserName, dashboardLink(manager)),
+							Text: fmt.Sprintf("You are already logged in as %s (auto-authenticated)%s", profile.UserName, DashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -373,7 +375,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s (pre-authenticated)%s", profile.UserName, dashboardLink(manager)),
+							Text: fmt.Sprintf("You are already logged in as %s (pre-authenticated)%s", profile.UserName, DashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -423,7 +425,7 @@ func (*LoginTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("You are already logged in as %s%s", profile.UserName, dashboardLink(manager)),
+							Text: fmt.Sprintf("You are already logged in as %s%s", profile.UserName, DashboardLink(manager)),
 						},
 					},
 				}, nil
@@ -498,7 +500,7 @@ func (*OpenDashboardTool) Tool() mcp.Tool {
 
 func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		handler := NewToolHandler(manager)
+		handler := common.NewToolHandler(manager)
 		handler.TrackToolCall(ctx, "open_dashboard")
 
 		// Parse page and validate through the QueryBus. URL construction
@@ -506,7 +508,7 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		// state (IsLocalMode, ExternalURL, query-param composition) that
 		// sits above the use-case boundary.
 		args := request.GetArguments()
-		page := NewArgParser(args).String("page", "portfolio")
+		page := common.NewArgParser(args).String("page", "portfolio")
 
 		if _, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.OpenDashboardQuery{
 			Email: oauth.EmailFromContext(ctx),
@@ -527,10 +529,10 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 		}
 
 		// Resolve page path
-		p := NewArgParser(args)
-		pagePath, ok := pageRoutes[page]
+		p := common.NewArgParser(args)
+		pagePath, ok := PageRoutes[page]
 		if !ok {
-			pagePath = pageRoutes["portfolio"]
+			pagePath = PageRoutes["portfolio"]
 			page = "portfolio"
 		}
 
@@ -589,6 +591,6 @@ func (*OpenDashboardTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 func init() {
-	RegisterInternalTool(&LoginTool{})
-	RegisterInternalTool(&OpenDashboardTool{})
+	plugin.RegisterInternalTool(&LoginTool{})
+	plugin.RegisterInternalTool(&OpenDashboardTool{})
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/mcp"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/plugins/rolegate"
 	"github.com/zerodha/kite-mcp-server/plugins/telegramnotify"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -756,7 +757,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	}
 	// Dashboard URL middleware auto-appends a dashboard_url hint to tool
 	// responses that have a relevant dashboard page.
-	mwDeps.DashboardURL = mcp.DashboardURLMiddleware(kcManager)
+	mwDeps.DashboardURL = paper.DashboardURLMiddleware(kcManager)
 
 	// Wave D Phase 2 Slice P2.4d+e: build the chain + server via Fx.
 	// The provider appends Elicitation + MCP Apps UI extension hooks

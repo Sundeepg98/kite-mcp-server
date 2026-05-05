@@ -15,6 +15,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/users"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	appmetrics "github.com/zerodha/kite-mcp-server/app/metrics"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
@@ -184,7 +185,7 @@ func TestDashboardBaseURL_NoExternalURL(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	// Manager without ExternalURL or LocalMode should return empty
-	base := dashboardBaseURL(mgr)
+	base := paper.DashboardBaseURL(mgr)
 	// Since the test manager has no external URL, it depends on local mode
 	// Either way, test that it doesn't panic
 	_ = base
@@ -193,7 +194,7 @@ func TestDashboardBaseURL_NoExternalURL(t *testing.T) {
 func TestDashboardLink_NoBaseURL(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	// Without external URL or local mode, should return empty
 	_ = link
 }
@@ -201,22 +202,22 @@ func TestDashboardLink_NoBaseURL(t *testing.T) {
 func TestDashboardPageURL_NoBaseURL(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	url := dashboardPageURL(mgr, "/dashboard")
+	url := paper.DashboardPageURL(mgr, "/dashboard")
 	// Without base URL, returns empty
 	_ = url
 }
 
 func TestPageRoutes_Count(t *testing.T) {
 	t.Parallel()
-	assert.GreaterOrEqual(t, len(pageRoutes), 9, "should have at least 9 page routes")
+	assert.GreaterOrEqual(t, len(paper.PageRoutes), 9, "should have at least 9 page routes")
 }
 
 func TestToolDashboardPage_PaperTradingTools(t *testing.T) {
 	t.Parallel()
 	paperTools := []string{"paper_trading_toggle", "paper_trading_status", "paper_trading_reset"}
 	for _, tool := range paperTools {
-		path, ok := toolDashboardPage[tool]
-		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+		path, ok := paper.ToolDashboardPage[tool]
+		assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 		assert.Equal(t, "/dashboard/paper", path, "tool %s should map to /dashboard/paper", tool)
 	}
 }
@@ -228,8 +229,8 @@ func TestToolDashboardPage_WatchlistTools(t *testing.T) {
 		"delete_watchlist", "add_to_watchlist", "remove_from_watchlist",
 	}
 	for _, tool := range watchlistTools {
-		path, ok := toolDashboardPage[tool]
-		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+		path, ok := paper.ToolDashboardPage[tool]
+		assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 		assert.Equal(t, "/dashboard/watchlist", path)
 	}
 }
@@ -238,8 +239,8 @@ func TestToolDashboardPage_OptionsTools(t *testing.T) {
 	t.Parallel()
 	optionsTools := []string{"get_option_chain", "options_greeks", "options_payoff_builder"}
 	for _, tool := range optionsTools {
-		path, ok := toolDashboardPage[tool]
-		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+		path, ok := paper.ToolDashboardPage[tool]
+		assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 		assert.Equal(t, "/dashboard/options", path)
 	}
 }
@@ -248,8 +249,8 @@ func TestToolDashboardPage_ChartTools(t *testing.T) {
 	t.Parallel()
 	chartTools := []string{"technical_indicators", "historical_price_analyzer", "get_quotes", "get_ltp", "get_ohlc", "get_historical_data", "search_instruments"}
 	for _, tool := range chartTools {
-		path, ok := toolDashboardPage[tool]
-		assert.True(t, ok, "tool %s should be in toolDashboardPage", tool)
+		path, ok := paper.ToolDashboardPage[tool]
+		assert.True(t, ok, "tool %s should be in paper.ToolDashboardPage", tool)
 		assert.Equal(t, "/dashboard/chart", path)
 	}
 }
@@ -258,14 +259,14 @@ func TestDashboardURLForTool_MappedTool(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	// This will return empty if no external URL, but shouldn't panic
-	url := DashboardURLForTool(mgr, "get_holdings")
+	url := paper.DashboardURLForTool(mgr, "get_holdings")
 	_ = url // verify no panic
 }
 
 func TestDashboardURLMiddleware_AddsDashboardURL(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	// Create a handler that returns a successful result
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -290,7 +291,7 @@ func TestDashboardURLMiddleware_AddsDashboardURL(t *testing.T) {
 func TestDashboardURLMiddleware_SkipsUnmappedTools(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return &gomcp.CallToolResult{
@@ -302,7 +303,7 @@ func TestDashboardURLMiddleware_SkipsUnmappedTools(t *testing.T) {
 
 	handler := middleware(inner)
 	req := gomcp.CallToolRequest{}
-	req.Params.Name = "login" // not mapped in toolDashboardPage
+	req.Params.Name = "login" // not mapped in paper.ToolDashboardPage
 
 	result, err := handler(context.Background(), req)
 	assert.NoError(t, err)
@@ -312,7 +313,7 @@ func TestDashboardURLMiddleware_SkipsUnmappedTools(t *testing.T) {
 func TestDashboardURLMiddleware_SkipsErrors(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultError("some error"), nil
@@ -330,7 +331,7 @@ func TestDashboardURLMiddleware_SkipsErrors(t *testing.T) {
 func TestDashboardURLMiddleware_SkipsNilResult(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return nil, nil
@@ -348,7 +349,7 @@ func TestDashboardURLMiddleware_SkipsNilResult(t *testing.T) {
 func TestDashboardURLMiddleware_PropagatesError(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return nil, errors.New("internal error")
@@ -470,14 +471,14 @@ func TestDashboardBaseURL_LocalMode(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	// newTestManager has no appMode set, so IsLocalMode() returns true
-	base := dashboardBaseURL(mgr)
+	base := paper.DashboardBaseURL(mgr)
 	assert.Equal(t, "http://127.0.0.1:8080", base)
 }
 
 func TestDashboardLink_LocalMode(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	assert.Contains(t, link, "Open Dashboard")
 	assert.Contains(t, link, "/admin/ops")
 }
@@ -485,28 +486,28 @@ func TestDashboardLink_LocalMode(t *testing.T) {
 func TestDashboardPageURL_LocalMode(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	url := dashboardPageURL(mgr, "/dashboard")
+	url := paper.DashboardPageURL(mgr, "/dashboard")
 	assert.Equal(t, "http://127.0.0.1:8080/dashboard", url)
 }
 
 func TestDashboardURLForTool_KnownTool_LocalMode(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	url := DashboardURLForTool(mgr, "get_holdings")
+	url := paper.DashboardURLForTool(mgr, "get_holdings")
 	assert.Equal(t, "http://127.0.0.1:8080/dashboard", url)
 }
 
 func TestDashboardURLForTool_UnknownTool(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	url := DashboardURLForTool(mgr, "unknown_tool")
+	url := paper.DashboardURLForTool(mgr, "unknown_tool")
 	assert.Empty(t, url)
 }
 
 func TestDashboardURLMiddleware_NoExternalURL(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 	require.NotNil(t, middleware)
 }
 
@@ -514,20 +515,20 @@ func TestPageRoutes_AllExpected(t *testing.T) {
 	t.Parallel()
 	expectedPages := []string{"portfolio", "activity", "orders", "alerts", "paper", "safety", "watchlist", "options", "chart"}
 	for _, page := range expectedPages {
-		_, ok := pageRoutes[page]
-		assert.True(t, ok, "pageRoutes should contain %q", page)
+		_, ok := paper.PageRoutes[page]
+		assert.True(t, ok, "paper.PageRoutes should contain %q", page)
 	}
 }
 
 func TestToolDashboardPage_HasManyTools(t *testing.T) {
 	t.Parallel()
-	assert.GreaterOrEqual(t, len(toolDashboardPage), 40, "toolDashboardPage should map at least 40 tools")
+	assert.GreaterOrEqual(t, len(paper.ToolDashboardPage), 40, "paper.ToolDashboardPage should map at least 40 tools")
 }
 
 func TestDashboardURLMiddleware_AddsURLForMappedTool(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	// Wrap a simple handler that returns a success result
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
@@ -547,7 +548,7 @@ func TestDashboardURLMiddleware_AddsURLForMappedTool(t *testing.T) {
 func TestDashboardURLMiddleware_SkipsUnmappedTool(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("ok"), nil
@@ -558,14 +559,14 @@ func TestDashboardURLMiddleware_SkipsUnmappedTool(t *testing.T) {
 	req.Params.Name = "login"
 	result, err := wrapped(context.Background(), req)
 	require.NoError(t, err)
-	// login is not in toolDashboardPage, should NOT append
+	// login is not in paper.ToolDashboardPage, should NOT append
 	assert.Equal(t, 1, len(result.Content))
 }
 
 func TestDashboardURLMiddleware_SkipsErrorResult(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 
 	inner := func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultError("some error"), nil
@@ -755,7 +756,7 @@ func TestToolCache_Expiration_P7(t *testing.T) {
 func TestDashboardBaseURL_Variations(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	url := dashboardBaseURL(mgr)
+	url := paper.DashboardBaseURL(mgr)
 	_ = url
 }
 
@@ -763,14 +764,14 @@ func TestDashboardBaseURL_WithExternalURL(t *testing.T) {
 	t.Parallel()
 	// DevMode manager always returns http://127.0.0.1:8080 (local mode)
 	mgr := newDevModeManager(t)
-	url := dashboardBaseURL(mgr)
+	url := paper.DashboardBaseURL(mgr)
 	assert.Contains(t, url, "127.0.0.1")
 }
 
 func TestDashboardLink_P7(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	_ = link
 }
 
@@ -782,27 +783,27 @@ func TestDashboardLink_WithExternalURL(t *testing.T) {
 	// The previous t.Setenv was dead code: newDevModeManager does NOT
 	// read env vars during construction. Removed for parallel-safety.
 	mgr := newDevModeManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	assert.NotEmpty(t, link)
 }
 
 func TestDashboardPageURL_P7(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	url := dashboardPageURL(mgr, "/test")
+	url := paper.DashboardPageURL(mgr, "/test")
 	_ = url
 }
 
 func TestDashboardPageURL_WithLocalMode(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	url := dashboardPageURL(mgr, "/portfolio")
+	url := paper.DashboardPageURL(mgr, "/portfolio")
 	assert.Contains(t, url, "127.0.0.1")
 }
 
 func TestDashboardLink_LocalMode_P7(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	assert.NotEmpty(t, link) // Local mode returns 127.0.0.1
 }

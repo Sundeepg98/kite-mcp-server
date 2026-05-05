@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
@@ -71,8 +72,8 @@ func TestRegisterInternalTool_DuplicateNamePanics(t *testing.T) {
 	t.Cleanup(func() { restoreInternalTools(saved) })
 	resetInternalTools()
 
-	RegisterInternalTool(&LoginTool{})
+	RegisterInternalTool(&paper.LoginTool{})
 	require.Panics(t, func() {
-		RegisterInternalTool(&LoginTool{}) // same Name() = "login"
+		RegisterInternalTool(&paper.LoginTool{}) // same Name() = "login"
 	})
 }

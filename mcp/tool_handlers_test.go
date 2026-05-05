@@ -19,8 +19,9 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/money"
 	"github.com/zerodha/kite-mcp-server/kc/scheduler"
 	"github.com/zerodha/kite-mcp-server/kc/watchlist"
-	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
+	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // ---------------------------------------------------------------------------
@@ -256,23 +257,23 @@ func TestWriteToolsPopulated(t *testing.T) {
 // setup_tools.go: isAlphanumeric
 // ---------------------------------------------------------------------------
 func TestIsAlphanumeric(t *testing.T) {
-	assert.True(t, isAlphanumeric("abc123"))
-	assert.True(t, isAlphanumeric("ABCDEF"))
-	assert.True(t, isAlphanumeric("a"))
-	assert.False(t, isAlphanumeric(""))
-	assert.False(t, isAlphanumeric("abc-123"))
-	assert.False(t, isAlphanumeric("abc 123"))
-	assert.False(t, isAlphanumeric("abc@123"))
-	assert.False(t, isAlphanumeric("abc_123"))
+	assert.True(t, paper.IsAlphanumeric("abc123"))
+	assert.True(t, paper.IsAlphanumeric("ABCDEF"))
+	assert.True(t, paper.IsAlphanumeric("a"))
+	assert.False(t, paper.IsAlphanumeric(""))
+	assert.False(t, paper.IsAlphanumeric("abc-123"))
+	assert.False(t, paper.IsAlphanumeric("abc 123"))
+	assert.False(t, paper.IsAlphanumeric("abc@123"))
+	assert.False(t, paper.IsAlphanumeric("abc_123"))
 }
 
 
 // ---------------------------------------------------------------------------
-// setup_tools.go: pageRoutes mapping
+// setup_tools.go: paper.PageRoutes mapping
 // ---------------------------------------------------------------------------
 func TestPageRoutes_AllNonEmpty(t *testing.T) {
-	assert.NotEmpty(t, pageRoutes)
-	for page, path := range pageRoutes {
+	assert.NotEmpty(t, paper.PageRoutes)
+	for page, path := range paper.PageRoutes {
 		assert.NotEmpty(t, path, "page %s has empty path", page)
 		assert.True(t, len(path) > 1, "page %s path too short: %s", page, path)
 	}
@@ -282,8 +283,8 @@ func TestPageRoutes_AllNonEmpty(t *testing.T) {
 func TestPageRoutes_KnownPages(t *testing.T) {
 	expected := []string{"portfolio", "activity", "orders", "alerts", "paper", "safety", "watchlist", "options", "chart"}
 	for _, page := range expected {
-		_, ok := pageRoutes[page]
-		assert.True(t, ok, "page %s should exist in pageRoutes", page)
+		_, ok := paper.PageRoutes[page]
+		assert.True(t, ok, "page %s should exist in paper.PageRoutes", page)
 	}
 }
 
@@ -293,30 +294,30 @@ func TestPageRoutes_KnownPages(t *testing.T) {
 // ---------------------------------------------------------------------------
 func TestDashboardURLForTool_UnmappedToolReturnsEmpty(t *testing.T) {
 	mgr := newTestManager(t)
-	url := DashboardURLForTool(mgr, "nonexistent_tool")
+	url := paper.DashboardURLForTool(mgr, "nonexistent_tool")
 	assert.Empty(t, url)
 }
 
 
 func TestDashboardURLForTool_LoginToolReturnsEmpty(t *testing.T) {
 	mgr := newTestManager(t)
-	url := DashboardURLForTool(mgr, "login")
+	url := paper.DashboardURLForTool(mgr, "login")
 	assert.Empty(t, url)
 }
 
 
 // ---------------------------------------------------------------------------
-// setup_tools.go: toolDashboardPage consistency
+// setup_tools.go: paper.ToolDashboardPage consistency
 // ---------------------------------------------------------------------------
 func TestToolDashboardPage_AllValuesNonEmpty(t *testing.T) {
-	for toolName, pagePath := range toolDashboardPage {
+	for toolName, pagePath := range paper.ToolDashboardPage {
 		assert.NotEmpty(t, pagePath, "tool %s has empty page path", toolName)
 	}
 }
 
 
 func TestToolDashboardPage_AllPathsStartWithSlash(t *testing.T) {
-	for toolName, pagePath := range toolDashboardPage {
+	for toolName, pagePath := range paper.ToolDashboardPage {
 		assert.True(t, len(pagePath) > 0 && pagePath[0] == '/', "tool %s path %s should start with /", toolName, pagePath)
 	}
 }
@@ -1114,7 +1115,7 @@ func TestIsAlphanumeric_Push100(t *testing.T) {
 		{"abc@def", false},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, isAlphanumeric(tt.input), "isAlphanumeric(%q)", tt.input)
+		assert.Equal(t, tt.want, paper.IsAlphanumeric(tt.input), "paper.IsAlphanumeric(%q)", tt.input)
 	}
 }
 
@@ -1122,7 +1123,7 @@ func TestIsAlphanumeric_Push100(t *testing.T) {
 func TestDashboardLink(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	link := dashboardLink(mgr)
+	link := paper.DashboardLink(mgr)
 	// May be empty if no external URL — just check it doesn't panic
 	_ = link
 }
@@ -1132,7 +1133,7 @@ func TestDashboardURLForTool_Mapped(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 	// A tool that should be mapped
-	url := DashboardURLForTool(mgr, "get_holdings")
+	url := paper.DashboardURLForTool(mgr, "get_holdings")
 	// May be empty if no external URL configured, but function should not panic
 	_ = url
 }
@@ -1141,14 +1142,14 @@ func TestDashboardURLForTool_Mapped(t *testing.T) {
 func TestDashboardURLForTool_Unmapped(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
-	url := DashboardURLForTool(mgr, "nonexistent_tool")
+	url := paper.DashboardURLForTool(mgr, "nonexistent_tool")
 	assert.Empty(t, url)
 }
 
 
 func TestPageRoutes_AllValid(t *testing.T) {
 	t.Parallel()
-	for page, path := range pageRoutes {
+	for page, path := range paper.PageRoutes {
 		assert.NotEmpty(t, page, "empty page name")
 		assert.NotEmpty(t, path, "empty path for page %s", page)
 		assert.Contains(t, path, "/dashboard", "path for %s should contain /dashboard", page)
@@ -1361,7 +1362,7 @@ func TestDashboardURLMiddleware_NoError(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 	inner := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("ok"), nil
 	}
@@ -1379,7 +1380,7 @@ func TestDashboardURLMiddleware_WithError(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 	inner := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultError("something went wrong"), nil
 	}
@@ -1399,7 +1400,7 @@ func TestDashboardURLMiddleware_UnmappedTool(t *testing.T) {
 	t.Parallel()
 	mgr := newDevModeManager(t)
 
-	middleware := DashboardURLMiddleware(mgr)
+	middleware := paper.DashboardURLMiddleware(mgr)
 	inner := func(ctx context.Context, req gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		return gomcp.NewToolResultText("ok"), nil
 	}

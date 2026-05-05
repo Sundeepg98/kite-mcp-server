@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/mcp/admin"
+	"github.com/zerodha/kite-mcp-server/mcp/paper"
 )
 
 func TestPluginRegistry(t *testing.T) {
@@ -18,7 +19,7 @@ func TestPluginRegistry(t *testing.T) {
 	assert.Equal(t, 0, PluginCount())
 
 	// Register a plugin
-	RegisterPlugin(&ServerMetricsTool{})
+	RegisterPlugin(&paper.ServerMetricsTool{})
 	assert.Equal(t, 1, PluginCount())
 
 	// GetAllTools includes plugin — server_metrics appears twice (built-in + plugin)
@@ -35,14 +36,14 @@ func TestPluginRegistry(t *testing.T) {
 func TestRegisterMultiplePlugins(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	RegisterPlugins(&ServerMetricsTool{}, &admin.AdminListUsersTool{})
+	RegisterPlugins(&paper.ServerMetricsTool{}, &admin.AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
 }
 
 func TestPluginCountAfterClear(t *testing.T) {
 	t.Parallel()
 	LockDefaultRegistryForTest(t)
-	RegisterPlugin(&ServerMetricsTool{})
+	RegisterPlugin(&paper.ServerMetricsTool{})
 	RegisterPlugin(&admin.AdminListUsersTool{})
 	assert.Equal(t, 2, PluginCount())
 
@@ -51,7 +52,7 @@ func TestPluginCountAfterClear(t *testing.T) {
 
 	// GetAllTools should have only built-in tools
 	baseCount := len(GetAllTools())
-	RegisterPlugin(&ServerMetricsTool{})
+	RegisterPlugin(&paper.ServerMetricsTool{})
 	assert.Equal(t, baseCount+1, len(GetAllTools()))
 }
 
@@ -61,7 +62,7 @@ func TestPluginToolsAppearInGetAllTools(t *testing.T) {
 	baseTools := GetAllTools()
 	baseCount := len(baseTools)
 
-	RegisterPlugin(&ServerMetricsTool{})
+	RegisterPlugin(&paper.ServerMetricsTool{})
 	RegisterPlugin(&admin.AdminListUsersTool{})
 
 	allTools := GetAllTools()
