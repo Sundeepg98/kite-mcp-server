@@ -30,6 +30,10 @@ func (s *Store) List(email string, opts ListOptions) ([]*ToolCall, int, error) {
 		where = append(where, "tool_category = ?")
 		args = append(args, opts.Category)
 	}
+	if opts.ToolName != "" {
+		where = append(where, "tool_name = ?")
+		args = append(args, opts.ToolName)
+	}
 	if opts.OnlyErrors {
 		where = append(where, "is_error = 1")
 	}

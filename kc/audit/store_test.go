@@ -164,6 +164,63 @@ func TestStore_ListWithFilters(t *testing.T) {
 	assert.Empty(t, results, "TestStore_ListWithFilters: results")
 }
 
+// TestStore_ListWithToolName verifies that the ToolName filter on
+// ListOptions narrows results to entries with the matching tool_name
+// column. Used by the audit-log search UI (Axis C feature gap from
+// .research/abc-100pct-complete-paths.md). Filter is exact-match,
+// case-sensitive (matches stored canonical tool name).
+func TestStore_ListWithToolName(t *testing.T) {
+	t.Parallel()
+	s := openTestStore(t)
+
+	email := "search@example.com"
+	base := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
+
+	entries := []*ToolCall{
+		makeEntry("s-0", email, "place_order", "order", false, base),
+		makeEntry("s-1", email, "modify_order", "order", false, base.Add(1*time.Minute)),
+		makeEntry("s-2", email, "place_order", "order", false, base.Add(2*time.Minute)),
+		makeEntry("s-3", email, "get_positions", "query", false, base.Add(3*time.Minute)),
+		makeEntry("s-4", email, "place_order", "order", true, base.Add(4*time.Minute)),
+	}
+	for _, e := range entries {
+		require.NoError(t, s.Record(e))
+	}
+
+	// --- Exact-match: place_order ---
+	results, total, err := s.List(email, ListOptions{ToolName: "place_order"})
+	require.NoError(t, err)
+	assert.Equal(t, 3, total, "3 entries with tool_name=place_order")
+	assert.Len(t, results, 3)
+	for _, r := range results {
+		assert.Equal(t, "place_order", r.ToolName)
+	}
+
+	// --- ToolName combined with OnlyErrors ---
+	results, total, err = s.List(email, ListOptions{ToolName: "place_order", OnlyErrors: true})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "1 error entry with tool_name=place_order")
+	require.Len(t, results, 1)
+	assert.Equal(t, "s-4", results[0].CallID)
+
+	// --- ToolName combined with Category ---
+	results, total, err = s.List(email, ListOptions{ToolName: "modify_order", Category: "order"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "1 entry matches both tool_name=modify_order AND category=order")
+	require.Len(t, results, 1)
+	assert.Equal(t, "s-1", results[0].CallID)
+
+	// --- ToolName non-existent returns empty ---
+	_, total, err = s.List(email, ListOptions{ToolName: "nonexistent_tool"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "0 entries with tool_name=nonexistent_tool")
+
+	// --- Empty ToolName behaves as no filter ---
+	_, total, err = s.List(email, ListOptions{ToolName: ""})
+	require.NoError(t, err)
+	assert.Equal(t, 5, total, "empty ToolName returns all 5 entries")
+}
+
 func TestStore_GetStats(t *testing.T) {
 	t.Parallel()
 	s := openTestStore(t)

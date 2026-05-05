@@ -53,6 +53,7 @@ type ListOptions struct {
 	Limit      int
 	Offset     int
 	Category   string
+	ToolName   string // exact-match filter on tool_name column; empty means no filter
 	OnlyErrors bool
 	Since      time.Time
 	Until      time.Time
