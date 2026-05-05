@@ -41,6 +41,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/oauth v0.0.0-00010101000000-000000000000
+	github.com/zerodha/kite-mcp-server/plugins v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
 	go.uber.org/goleak v1.3.0
@@ -88,6 +89,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/users => ./kc/users
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ./kc/watchlist
 	github.com/zerodha/kite-mcp-server/oauth => ./oauth
+	github.com/zerodha/kite-mcp-server/plugins => ./plugins
 	github.com/zerodha/kite-mcp-server/testutil => ./testutil
 )
 

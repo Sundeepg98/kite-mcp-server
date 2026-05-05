@@ -6,7 +6,7 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (28 modules — see `use` block below):
+// Members (29 modules — see `use` block below):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
@@ -34,9 +34,18 @@
 // app/providers/go.mod has 28 entries — root + 27 already-extracted
 // modules — same shape as kc/usecases + heavier fan-out.
 //
-// Future members: plugins/ remains queued for Tier 6 (post-Anchor-6;
-// blocked by import of kc parent + mcp parent — same blocker oauth had
-// before kc/domain extraction unblocked it).
+// Tier 6 (this commit) extracts plugins/ as the 29th module — the
+// external-tool / before-after hook extension surface. Contains
+// example/ (sample ServerTimeTool), rolegate/ (RBAC viewer-blocks-write
+// before-hook), and telegramnotify/ (family-admin DM after-hook).
+// Final architectural roadmap item — was deferred when plugins/ imported
+// the kc-parent god-struct and the un-extracted app providers. Anchor 6
+// (commit ea34058) collapsed kc-parent to constructor-only; Anchor 2
+// (commit e87cd38) extracted app/providers — both blockers resolved.
+// Bidirectional deps with root: plugins consumes kc parent + mcp parent
+// + kc/users + oauth; root's app/wire.go imports plugins/rolegate +
+// plugins/telegramnotify. Replace block in plugins/go.mod has 28
+// entries — same shape as app/providers's 28-entry plateau.
 //
 // CI: matrix-test per member is the canonical path. The default
 // `go test ./...` from the root still works because workspace mode
@@ -73,5 +82,6 @@ use (
 	./kc/users
 	./kc/watchlist
 	./oauth
+	./plugins
 	./testutil
 )
