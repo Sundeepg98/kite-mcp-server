@@ -267,7 +267,7 @@ type Manager struct {
 	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
 	PortfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
 	OrderSvc          *OrderService          // order placement, modification, cancellation
-	alertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
+	AlertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
 	familyService     *FamilyService         // family billing (invite, remove, list, tier resolution)
 
 	// Decomposed facades over the raw fields below (Task 7 — Manager decomposition)

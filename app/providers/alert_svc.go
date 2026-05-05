@@ -37,5 +37,5 @@ func ProvideAlertSvc(initialized *InitializedManager) *kc.AlertService {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.AlertSvc()
+	return initialized.Manager.AlertSvc
 }

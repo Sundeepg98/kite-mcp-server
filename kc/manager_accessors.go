@@ -41,11 +41,6 @@ func (m *Manager) HasBrokerFactory() bool {
 	return m.SessionSvc.HasBrokerFactory()
 }
 
-// AlertSvc returns the alert lifecycle service.
-func (m *Manager) AlertSvc() *AlertService {
-	return m.alertSvc
-}
-
 // FamilyService returns the family billing service, or nil if not configured.
 func (m *Manager) FamilyService() *FamilyService {
 	return m.familyService

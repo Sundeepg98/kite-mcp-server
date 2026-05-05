@@ -92,7 +92,7 @@ func TestManager_AccessorGetters(t *testing.T) {
 	}
 
 	// AlertSvc
-	if m.AlertSvc() == nil {
+	if m.AlertSvc == nil {
 		t.Error("AlertSvc() should not be nil")
 	}
 

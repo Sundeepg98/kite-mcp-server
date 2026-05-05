@@ -68,7 +68,7 @@ func TestProvideAlertSvc_LiveManager_ReturnsService(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil AlertService for populated wrapper")
 	}
-	if got != mgrInit.Manager.AlertSvc() {
+	if got != mgrInit.Manager.AlertSvc {
 		t.Error("expected pointer-identity with Manager.AlertSvc(); got a different pointer (regression: provider wrapped/copied the service)")
 	}
 
@@ -104,7 +104,7 @@ func TestProvideAlertSvc_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	if alertSvc != mgrInit.Manager.AlertSvc() {
+	if alertSvc != mgrInit.Manager.AlertSvc {
 		t.Error("expected pointer-identity between graph-resolved AlertService and Manager.AlertSvc()")
 	}
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })

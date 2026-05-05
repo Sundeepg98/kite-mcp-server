@@ -482,7 +482,7 @@ func (m *Manager) initFocusedServices(cfg Config, instrumentsManager *instrument
 	m.OrderSvc = NewOrderService(m.SessionSvc, cfg.Logger)
 
 	// Initialize alert service (wraps alert-related components)
-	m.alertSvc = NewAlertService(AlertServiceConfig{
+	m.AlertSvc = NewAlertService(AlertServiceConfig{
 		AlertStore:       m.alertStore,
 		AlertEvaluator:   m.alertEvaluator,
 		TrailingStopMgr:  m.trailingStopMgr,

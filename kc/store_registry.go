@@ -74,13 +74,13 @@ func (s *StoreRegistry) CredentialStore() CredentialStoreInterface { return s.m.
 func (s *StoreRegistry) CredentialStoreConcrete() *KiteCredentialStore { return s.m.credentialStore }
 
 // AlertStore returns the per-user alert store.
-func (s *StoreRegistry) AlertStore() AlertStoreInterface { return s.m.alertSvc.AlertStore() }
+func (s *StoreRegistry) AlertStore() AlertStoreInterface { return s.m.AlertSvc.AlertStore() }
 
 // AlertStoreConcrete returns the concrete alert store.
-func (s *StoreRegistry) AlertStoreConcrete() *alerts.Store { return s.m.alertSvc.AlertStore() }
+func (s *StoreRegistry) AlertStoreConcrete() *alerts.Store { return s.m.AlertSvc.AlertStore() }
 
 // TelegramStore returns the per-user Telegram chat ID store.
-func (s *StoreRegistry) TelegramStore() TelegramStoreInterface { return s.m.alertSvc.AlertStore() }
+func (s *StoreRegistry) TelegramStore() TelegramStoreInterface { return s.m.AlertSvc.AlertStore() }
 
 // AlertDB returns the optional SQLite database used for persistence.
 func (s *StoreRegistry) AlertDB() *alerts.DB { return s.m.alertDB }
