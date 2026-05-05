@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -15,46 +16,46 @@ import (
 
 func TestRound4(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, 3.1416, round4(3.14159265))
-	assert.Equal(t, 0.0, round4(0.0))
-	assert.Equal(t, 1.0, round4(1.0))
-	assert.Equal(t, -2.7183, round4(-2.71828))
+	assert.Equal(t, 3.1416, trade.Round4(3.14159265))
+	assert.Equal(t, 0.0, trade.Round4(0.0))
+	assert.Equal(t, 1.0, trade.Round4(1.0))
+	assert.Equal(t, -2.7183, trade.Round4(-2.71828))
 }
 
 
 func TestRound6(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, 3.141593, round6(3.14159265))
-	assert.Equal(t, 0.0, round6(0.0))
-	assert.Equal(t, 1.0, round6(1.0))
+	assert.Equal(t, 3.141593, trade.Round6(3.14159265))
+	assert.Equal(t, 0.0, trade.Round6(0.0))
+	assert.Equal(t, 1.0, trade.Round6(1.0))
 }
 
 
 func TestBsRho_Call(t *testing.T) {
 	t.Parallel()
 	// S=100, K=100, T=1, r=0.05, sigma=0.2, isCall=true
-	rho := bsRho(100, 100, 1, 0.05, 0.2, true)
+	rho := trade.BsRho(100, 100, 1, 0.05, 0.2, true)
 	assert.Greater(t, rho, 0.0, "call rho should be positive")
 }
 
 
 func TestBsRho_Put(t *testing.T) {
 	t.Parallel()
-	rho := bsRho(100, 100, 1, 0.05, 0.2, false)
+	rho := trade.BsRho(100, 100, 1, 0.05, 0.2, false)
 	assert.Less(t, rho, 0.0, "put rho should be negative")
 }
 
 
 func TestBsRho_ZeroTime(t *testing.T) {
 	t.Parallel()
-	rho := bsRho(100, 100, 0, 0.05, 0.2, true)
+	rho := trade.BsRho(100, 100, 0, 0.05, 0.2, true)
 	assert.Equal(t, 0.0, rho, "rho with zero time should be 0")
 }
 
 
 func TestBsRho_ZeroVol(t *testing.T) {
 	t.Parallel()
-	rho := bsRho(100, 100, 1, 0.05, 0, true)
+	rho := trade.BsRho(100, 100, 1, 0.05, 0, true)
 	assert.Equal(t, 0.0, rho, "rho with zero vol should be 0")
 }
 

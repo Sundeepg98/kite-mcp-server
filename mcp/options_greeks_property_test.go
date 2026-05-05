@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"testing"
 	"testing/quick"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // ---------------------------------------------------------------------------
@@ -38,8 +39,8 @@ func TestDeltaBounds(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		callDelta := bsDelta(in.S, in.K, in.T, in.R, in.Sigma, true)
-		putDelta := bsDelta(in.S, in.K, in.T, in.R, in.Sigma, false)
+		callDelta := trade.BsDelta(in.S, in.K, in.T, in.R, in.Sigma, true)
+		putDelta := trade.BsDelta(in.S, in.K, in.T, in.R, in.Sigma, false)
 
 		if callDelta < -0.0001 || callDelta > 1.0001 {
 			t.Logf("call delta=%.6f out of [0,1] for S=%.2f K=%.2f T=%.4f r=%.4f sigma=%.4f",
@@ -67,7 +68,7 @@ func TestGammaNonNegative(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		gamma := bsGamma(in.S, in.K, in.T, in.R, in.Sigma)
+		gamma := trade.BsGamma(in.S, in.K, in.T, in.R, in.Sigma)
 		if gamma < -1e-10 {
 			t.Logf("gamma=%.10f < 0 for S=%.2f K=%.2f T=%.4f r=%.4f sigma=%.4f",
 				gamma, in.S, in.K, in.T, in.R, in.Sigma)
@@ -92,7 +93,7 @@ func TestThetaNonPositiveForLongOptions(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		callTheta := bsTheta(in.S, in.K, in.T, in.R, in.Sigma, true)
+		callTheta := trade.BsTheta(in.S, in.K, in.T, in.R, in.Sigma, true)
 		// Call theta is always <= 0 for European calls (rK*e^{-rT}*N(d2) is always
 		// smaller than the first term). Allow tiny numerical tolerance.
 		if callTheta > 1e-6 {
@@ -116,7 +117,7 @@ func TestVegaNonNegative(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		vega := bsVega(in.S, in.K, in.T, in.R, in.Sigma)
+		vega := trade.BsVega(in.S, in.K, in.T, in.R, in.Sigma)
 		if vega < -1e-10 {
 			t.Logf("vega=%.10f < 0 for S=%.2f K=%.2f T=%.4f r=%.4f sigma=%.4f",
 				vega, in.S, in.K, in.T, in.R, in.Sigma)
@@ -140,12 +141,12 @@ func TestIVNonNegative(t *testing.T) {
 		isCall := rng.Intn(2) == 0
 
 		// Compute a fair price from the inputs, then recover IV.
-		price := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, isCall)
+		price := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, isCall)
 		if price <= 0 {
 			return true // skip degenerate case
 		}
 
-		iv, ok := impliedVolatility(price, in.S, in.K, in.T, in.R, isCall)
+		iv, ok := trade.ImpliedVolatility(price, in.S, in.K, in.T, in.R, isCall)
 		if !ok {
 			return true // convergence failure is acceptable, not a property violation
 		}
@@ -182,7 +183,7 @@ func TestIVRoundTrip(t *testing.T) {
 		}
 		isCall := rng.Intn(2) == 0
 
-		price := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, isCall)
+		price := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, isCall)
 		if price < 0.5 {
 			return true // too cheap, numerical issues in IV solver
 		}
@@ -199,7 +200,7 @@ func TestIVRoundTrip(t *testing.T) {
 			return true // <1% time value — IV recovery is inherently unstable
 		}
 
-		iv, ok := impliedVolatility(price, in.S, in.K, in.T, in.R, isCall)
+		iv, ok := trade.ImpliedVolatility(price, in.S, in.K, in.T, in.R, isCall)
 		if !ok {
 			return true // convergence failure is acceptable
 		}
@@ -227,8 +228,8 @@ func TestPutCallParity(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		callPrice := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, true)
-		putPrice := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, false)
+		callPrice := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, true)
+		putPrice := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, false)
 
 		// Put-call parity: C - P = S - K*exp(-rT)
 		lhs := callPrice - putPrice
@@ -260,8 +261,8 @@ func TestCallPutDeltaRelationship(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		callDelta := bsDelta(in.S, in.K, in.T, in.R, in.Sigma, true)
-		putDelta := bsDelta(in.S, in.K, in.T, in.R, in.Sigma, false)
+		callDelta := trade.BsDelta(in.S, in.K, in.T, in.R, in.Sigma, true)
+		putDelta := trade.BsDelta(in.S, in.K, in.T, in.R, in.Sigma, false)
 
 		// For European options: delta_call - delta_put = 1 (approximately, ignoring dividends)
 		// More precisely, delta_call - delta_put = exp(-qT) where q=0, so = 1.
@@ -288,8 +289,8 @@ func TestBlackScholesPriceNonNegative(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		in := generateValidBSInputs(rng)
 
-		callPrice := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, true)
-		putPrice := blackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, false)
+		callPrice := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, true)
+		putPrice := trade.BlackScholesPrice(in.S, in.K, in.T, in.R, in.Sigma, false)
 
 		if callPrice < -1e-10 {
 			t.Logf("call price=%.10f < 0", callPrice)
@@ -312,22 +313,22 @@ func TestBlackScholesPriceNonNegative(t *testing.T) {
 func TestBlackScholesEdgeCases(t *testing.T) {
 	t.Parallel()
 	t.Run("at expiry call ITM returns intrinsic", func(t *testing.T) {
-		price := blackScholesPrice(110, 100, 0, 0.05, 0.2, true)
+		price := trade.BlackScholesPrice(110, 100, 0, 0.05, 0.2, true)
 		if math.Abs(price-10) > 1e-10 {
 			t.Errorf("expected intrinsic 10, got %.10f", price)
 		}
 	})
 
 	t.Run("at expiry put ITM returns intrinsic", func(t *testing.T) {
-		price := blackScholesPrice(90, 100, 0, 0.05, 0.2, false)
+		price := trade.BlackScholesPrice(90, 100, 0, 0.05, 0.2, false)
 		if math.Abs(price-10) > 1e-10 {
 			t.Errorf("expected intrinsic 10, got %.10f", price)
 		}
 	})
 
 	t.Run("at expiry OTM returns 0", func(t *testing.T) {
-		callPrice := blackScholesPrice(90, 100, 0, 0.05, 0.2, true)
-		putPrice := blackScholesPrice(110, 100, 0, 0.05, 0.2, false)
+		callPrice := trade.BlackScholesPrice(90, 100, 0, 0.05, 0.2, true)
+		putPrice := trade.BlackScholesPrice(110, 100, 0, 0.05, 0.2, false)
 		if callPrice > 1e-10 {
 			t.Errorf("OTM call at expiry should be 0, got %.10f", callPrice)
 		}
@@ -337,8 +338,8 @@ func TestBlackScholesEdgeCases(t *testing.T) {
 	})
 
 	t.Run("delta is 0 at expiry", func(t *testing.T) {
-		callDelta := bsDelta(110, 100, 0, 0.05, 0.2, true)
-		putDelta := bsDelta(90, 100, 0, 0.05, 0.2, false)
+		callDelta := trade.BsDelta(110, 100, 0, 0.05, 0.2, true)
+		putDelta := trade.BsDelta(90, 100, 0, 0.05, 0.2, false)
 		if callDelta != 0 {
 			t.Errorf("expected delta 0 at expiry, got %.10f", callDelta)
 		}
@@ -348,21 +349,21 @@ func TestBlackScholesEdgeCases(t *testing.T) {
 	})
 
 	t.Run("gamma is 0 at expiry", func(t *testing.T) {
-		gamma := bsGamma(110, 100, 0, 0.05, 0.2)
+		gamma := trade.BsGamma(110, 100, 0, 0.05, 0.2)
 		if gamma != 0 {
 			t.Errorf("expected gamma 0 at expiry, got %.10f", gamma)
 		}
 	})
 
 	t.Run("theta is 0 at expiry", func(t *testing.T) {
-		theta := bsTheta(110, 100, 0, 0.05, 0.2, true)
+		theta := trade.BsTheta(110, 100, 0, 0.05, 0.2, true)
 		if theta != 0 {
 			t.Errorf("expected theta 0 at expiry, got %.10f", theta)
 		}
 	})
 
 	t.Run("vega is 0 at expiry", func(t *testing.T) {
-		vega := bsVega(110, 100, 0, 0.05, 0.2)
+		vega := trade.BsVega(110, 100, 0, 0.05, 0.2)
 		if vega != 0 {
 			t.Errorf("expected vega 0 at expiry, got %.10f", vega)
 		}
@@ -373,8 +374,8 @@ func TestBlackScholesEdgeCases(t *testing.T) {
 func TestNormalCDFProperties(t *testing.T) {
 	t.Parallel()
 	t.Run("N(0) = 0.5", func(t *testing.T) {
-		if math.Abs(normalCDF(0)-0.5) > 1e-15 {
-			t.Errorf("normalCDF(0) = %.15f, expected 0.5", normalCDF(0))
+		if math.Abs(trade.NormalCDF(0)-0.5) > 1e-15 {
+			t.Errorf("trade.NormalCDF(0) = %.15f, expected 0.5", trade.NormalCDF(0))
 		}
 	})
 
@@ -382,7 +383,7 @@ func TestNormalCDFProperties(t *testing.T) {
 		f := func(seed int64) bool {
 			rng := rand.New(rand.NewSource(seed))
 			x := (rng.Float64() - 0.5) * 20 // [-10, 10]
-			sum := normalCDF(x) + normalCDF(-x)
+			sum := trade.NormalCDF(x) + trade.NormalCDF(-x)
 			return math.Abs(sum-1.0) < 1e-12
 		}
 		cfg := &quick.Config{MaxCount: 1000}
@@ -392,14 +393,14 @@ func TestNormalCDFProperties(t *testing.T) {
 	})
 
 	t.Run("N(large) approaches 1", func(t *testing.T) {
-		if normalCDF(10) < 0.9999 {
-			t.Errorf("normalCDF(10) = %.10f, expected ~1", normalCDF(10))
+		if trade.NormalCDF(10) < 0.9999 {
+			t.Errorf("trade.NormalCDF(10) = %.10f, expected ~1", trade.NormalCDF(10))
 		}
 	})
 
 	t.Run("N(-large) approaches 0", func(t *testing.T) {
-		if normalCDF(-10) > 0.0001 {
-			t.Errorf("normalCDF(-10) = %.10f, expected ~0", normalCDF(-10))
+		if trade.NormalCDF(-10) > 0.0001 {
+			t.Errorf("trade.NormalCDF(-10) = %.10f, expected ~0", trade.NormalCDF(-10))
 		}
 	})
 }

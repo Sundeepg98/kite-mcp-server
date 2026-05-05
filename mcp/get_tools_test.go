@@ -10,6 +10,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/broker/mock"
 	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // ---------------------------------------------------------------------------
@@ -463,9 +464,9 @@ func TestWriteToolDefinitions(t *testing.T) {
 		tool Tool
 		name string
 	}{
-		{&PlaceOrderTool{}, "place_order"},
-		{&ModifyOrderTool{}, "modify_order"},
-		{&CancelOrderTool{}, "cancel_order"},
+		{&trade.PlaceOrderTool{}, "place_order"},
+		{&trade.ModifyOrderTool{}, "modify_order"},
+		{&trade.CancelOrderTool{}, "cancel_order"},
 	}
 
 	for _, tc := range writeToolDefs {
@@ -631,7 +632,7 @@ func TestExtractUnderlyingSymbol(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			result := extractUnderlyingSymbol(tc.input)
+			result := trade.ExtractUnderlyingSymbol(tc.input)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

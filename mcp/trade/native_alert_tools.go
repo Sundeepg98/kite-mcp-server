@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // nativeAlertAdapter bridges broker.NativeAlertCapable to usecases.NativeAlertClient.
@@ -123,26 +125,26 @@ func (*PlaceNativeAlertTool) Tool() mcp.Tool {
 }
 
 func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "place_native_alert")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
+		if err := common.ValidateRequired(args, "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		alertType := p.String("type", "simple")
 		rhsType := p.String("rhs_type", "constant")
 
 		// Validate RHS params
 		if rhsType == "constant" {
-			if err := ValidateRequired(args, "rhs_constant"); err != nil {
+			if err := common.ValidateRequired(args, "rhs_constant"); err != nil {
 				return mcp.NewToolResultError("rhs_constant is required when rhs_type='constant'"), nil
 			}
 		} else if rhsType == "instrument" {
-			if err := ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
+			if err := common.ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
 				return mcp.NewToolResultError("rhs_exchange, rhs_tradingsymbol, and rhs_attribute are required when rhs_type='instrument'"), nil
 			}
 		}
@@ -175,8 +177,8 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Create ATO alert '%s' — %s:%s %s %s → auto-order on trigger",
 					params.Name, params.LHSExchange, params.LHSTradingSymbol,
-					params.Operator, formatNativeAlertRHS(params))
-				if err := requestConfirmation(ctx, srv, msg); err != nil {
+					params.Operator, FormatNativeAlertRHS(params))
+				if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 					handler.TrackToolError(ctx, "place_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
 				}
@@ -225,7 +227,7 @@ func (*ListNativeAlertsTool) Tool() mcp.Tool {
 }
 
 func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "list_native_alerts")
 
@@ -236,7 +238,7 @@ func (*ListNativeAlertsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 			}
 
 			args := request.GetArguments()
-			p := NewArgParser(args)
+			p := common.NewArgParser(args)
 			filters := make(map[string]string)
 			if status := p.String("status", ""); status != "" {
 				filters["status"] = status
@@ -340,26 +342,26 @@ func (*ModifyNativeAlertTool) Tool() mcp.Tool {
 }
 
 func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "modify_native_alert")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "uuid", "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
+		if err := common.ValidateRequired(args, "uuid", "name", "type", "exchange", "tradingsymbol", "lhs_attribute", "operator", "rhs_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		uuid := p.String("uuid", "")
 		alertType := p.String("type", "simple")
 		rhsType := p.String("rhs_type", "constant")
 
 		if rhsType == "constant" {
-			if err := ValidateRequired(args, "rhs_constant"); err != nil {
+			if err := common.ValidateRequired(args, "rhs_constant"); err != nil {
 				return mcp.NewToolResultError("rhs_constant is required when rhs_type='constant'"), nil
 			}
 		} else if rhsType == "instrument" {
-			if err := ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
+			if err := common.ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
 				return mcp.NewToolResultError("rhs_exchange, rhs_tradingsymbol, and rhs_attribute are required when rhs_type='instrument'"), nil
 			}
 		}
@@ -391,8 +393,8 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 			if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
 				msg := fmt.Sprintf("Confirm: Modify ATO alert %s → %s:%s %s %s",
 					uuid, params.LHSExchange, params.LHSTradingSymbol,
-					params.Operator, formatNativeAlertRHS(params))
-				if err := requestConfirmation(ctx, srv, msg); err != nil {
+					params.Operator, FormatNativeAlertRHS(params))
+				if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 					handler.TrackToolError(ctx, "modify_native_alert", "user_declined")
 					return mcp.NewToolResultError(err.Error()), nil
 				}
@@ -441,22 +443,22 @@ func (*DeleteNativeAlertTool) Tool() mcp.Tool {
 }
 
 func (*DeleteNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "delete_native_alert")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "uuid"); err != nil {
+		if err := common.ValidateRequired(args, "uuid"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		uuidStr := NewArgParser(args).String("uuid", "")
+		uuidStr := common.NewArgParser(args).String("uuid", "")
 		if uuidStr == "" {
 			return mcp.NewToolResultError("uuid is required"), nil
 		}
 
 		// Support comma-separated UUIDs for batch delete
-		uuids := splitAndTrim(uuidStr)
+		uuids := SplitAndTrim(uuidStr)
 		if len(uuids) == 0 {
 			return mcp.NewToolResultError("at least one valid UUID is required"), nil
 		}
@@ -504,16 +506,16 @@ func (*GetNativeAlertHistoryTool) Tool() mcp.Tool {
 }
 
 func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "get_native_alert_history")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "uuid"); err != nil {
+		if err := common.ValidateRequired(args, "uuid"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		uuid := NewArgParser(args).String("uuid", "")
+		uuid := common.NewArgParser(args).String("uuid", "")
 
 		return handler.WithSession(ctx, "get_native_alert_history", func(session *kc.KiteSessionData) (*mcp.CallToolResult, error) {
 			nac, ok := session.Broker.(broker.NativeAlertCapable)
@@ -544,17 +546,17 @@ func (*GetNativeAlertHistoryTool) Handler(manager *kc.Manager) server.ToolHandle
 
 // --- Helpers ---
 
-// formatNativeAlertRHS returns a human-readable string for the right-hand side of an alert condition.
-func formatNativeAlertRHS(params broker.NativeAlertParams) string {
+// FormatNativeAlertRHS returns a human-readable string for the right-hand side of an alert condition.
+func FormatNativeAlertRHS(params broker.NativeAlertParams) string {
 	if params.RHSType == "constant" {
 		return fmt.Sprintf("%.2f", params.RHSConstant)
 	}
 	return fmt.Sprintf("%s:%s (%s)", params.RHSExchange, params.RHSTradingSymbol, params.RHSAttribute)
 }
 
-// splitAndTrim splits a comma-separated string and trims whitespace from each part,
+// SplitAndTrim splits a comma-separated string and trims whitespace from each part,
 // discarding empty entries.
-func splitAndTrim(s string) []string {
+func SplitAndTrim(s string) []string {
 	parts := strings.Split(s, ",")
 	result := make([]string, 0, len(parts))
 	for _, p := range parts {
@@ -567,9 +569,9 @@ func splitAndTrim(s string) []string {
 }
 
 func init() {
-	RegisterInternalTool(&DeleteNativeAlertTool{})
-	RegisterInternalTool(&GetNativeAlertHistoryTool{})
-	RegisterInternalTool(&ListNativeAlertsTool{})
-	RegisterInternalTool(&ModifyNativeAlertTool{})
-	RegisterInternalTool(&PlaceNativeAlertTool{})
+	plugin.RegisterInternalTool(&DeleteNativeAlertTool{})
+	plugin.RegisterInternalTool(&GetNativeAlertHistoryTool{})
+	plugin.RegisterInternalTool(&ListNativeAlertsTool{})
+	plugin.RegisterInternalTool(&ModifyNativeAlertTool{})
+	plugin.RegisterInternalTool(&PlaceNativeAlertTool{})
 }

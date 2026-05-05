@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // Input validation tests: missing params, invalid values, arg parsing, pagination, type assertions.
@@ -39,8 +40,8 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 		&GetPnLJournalTool{},
 		&TradingContextTool{},
 		&SEBIComplianceTool{},
-		&ClosePositionTool{},
-		&CloseAllPositionsTool{},
+		&trade.ClosePositionTool{},
+		&trade.CloseAllPositionsTool{},
 		&PortfolioSummaryTool{},
 		&PortfolioConcentrationTool{},
 		&PositionAnalysisTool{},

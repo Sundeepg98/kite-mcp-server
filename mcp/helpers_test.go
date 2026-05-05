@@ -22,6 +22,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/users"
 	"github.com/zerodha/kite-mcp-server/oauth"
 	"github.com/zerodha/kite-mcp-server/testutil/kcfixture"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // Shared test helpers used by multiple test files.
@@ -460,7 +461,7 @@ func newTestAuditStore(t *testing.T) *audit.Store {
 
 // --- Test bridges for typed pre-trade / trading-context builders --------
 //
-// buildPreTradeResponse and buildTradingContext were rewritten to consume
+// trade.BuildPreTradeResponse and buildTradingContext were rewritten to consume
 // *usecases.PreTradeData and *usecases.TradingContextResult directly (see
 // pretrade_tool.go / context_tool.go — the map[string]any round-trip and
 // its ten broker.Xxx type assertions were replaced by end-to-end typed
@@ -474,16 +475,16 @@ func newTestAuditStore(t *testing.T) *audit.Store {
 // and are never compiled into the production binary.
 
 // buildPreTradeResponseFromMap bridges the old map[string]any-based test
-// signature to the typed buildPreTradeResponse entry point. Accepts the
+// signature to the typed trade.BuildPreTradeResponse entry point. Accepts the
 // same keys the former implementation read: "ltp", "margins", "positions",
 // "holdings", "order_margins".
 func buildPreTradeResponseFromMap(
 	exchange, tradingsymbol, transactionType string,
 	quantity int, product string, limitPrice float64,
 	data map[string]any, apiErrors map[string]string,
-) *preTradeResponse {
+) *trade.PreTradeResponse {
 	typed := ptDataFromMap(data, apiErrors)
-	return buildPreTradeResponse(
+	return trade.BuildPreTradeResponse(
 		exchange, tradingsymbol, transactionType,
 		quantity, product, limitPrice, typed,
 	)

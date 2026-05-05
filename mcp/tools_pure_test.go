@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -606,8 +607,8 @@ func TestComputeBollingerBands_UpperAboveLower(t *testing.T) {
 func TestBlackScholesPrice_CallPutParity(t *testing.T) {
 	t.Parallel()
 	S, K, T, r, sigma := 100.0, 100.0, 1.0, 0.05, 0.2
-	callPrice := blackScholesPrice(S, K, T, r, sigma, true)
-	putPrice := blackScholesPrice(S, K, T, r, sigma, false)
+	callPrice := trade.BlackScholesPrice(S, K, T, r, sigma, true)
+	putPrice := trade.BlackScholesPrice(S, K, T, r, sigma, false)
 	parity := callPrice - putPrice
 	expected := S - K*math.Exp(-r*T)
 	assert.InDelta(t, expected, parity, 0.01)
@@ -616,21 +617,21 @@ func TestBlackScholesPrice_CallPutParity(t *testing.T) {
 
 func TestBlackScholesPrice_DeepITMCall(t *testing.T) {
 	t.Parallel()
-	price := blackScholesPrice(200, 100, 0.01, 0.05, 0.2, true)
+	price := trade.BlackScholesPrice(200, 100, 0.01, 0.05, 0.2, true)
 	assert.Greater(t, price, 99.0)
 }
 
 
 func TestBlackScholesPrice_DeepOTMPut(t *testing.T) {
 	t.Parallel()
-	price := blackScholesPrice(200, 100, 0.01, 0.05, 0.2, false)
+	price := trade.BlackScholesPrice(200, 100, 0.01, 0.05, 0.2, false)
 	assert.Less(t, price, 1.0)
 }
 
 
 func TestBsDelta_CallBounds(t *testing.T) {
 	t.Parallel()
-	delta := bsDelta(100, 100, 1, 0.05, 0.2, true)
+	delta := trade.BsDelta(100, 100, 1, 0.05, 0.2, true)
 	assert.Greater(t, delta, 0.0)
 	assert.Less(t, delta, 1.0)
 }
@@ -638,7 +639,7 @@ func TestBsDelta_CallBounds(t *testing.T) {
 
 func TestBsDelta_PutBounds(t *testing.T) {
 	t.Parallel()
-	delta := bsDelta(100, 100, 1, 0.05, 0.2, false)
+	delta := trade.BsDelta(100, 100, 1, 0.05, 0.2, false)
 	assert.Less(t, delta, 0.0)
 	assert.Greater(t, delta, -1.0)
 }
@@ -646,51 +647,51 @@ func TestBsDelta_PutBounds(t *testing.T) {
 
 func TestBsGamma_Positive(t *testing.T) {
 	t.Parallel()
-	gamma := bsGamma(100, 100, 1, 0.05, 0.2)
+	gamma := trade.BsGamma(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, gamma, 0.0)
 }
 
 
 func TestBsGamma_ZeroTimeReturnsZero(t *testing.T) {
 	t.Parallel()
-	gamma := bsGamma(100, 100, 0, 0.05, 0.2)
+	gamma := trade.BsGamma(100, 100, 0, 0.05, 0.2)
 	assert.Equal(t, 0.0, gamma)
 }
 
 
 func TestBsVega_Positive(t *testing.T) {
 	t.Parallel()
-	vega := bsVega(100, 100, 1, 0.05, 0.2)
+	vega := trade.BsVega(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, vega, 0.0)
 }
 
 
 func TestBsVega_ZeroTimeReturnsZero(t *testing.T) {
 	t.Parallel()
-	vega := bsVega(100, 100, 0, 0.05, 0.2)
+	vega := trade.BsVega(100, 100, 0, 0.05, 0.2)
 	assert.Equal(t, 0.0, vega)
 }
 
 
 func TestNormalCDF_KnownValues(t *testing.T) {
 	t.Parallel()
-	assert.InDelta(t, 0.5, normalCDF(0), 0.01)
-	assert.InDelta(t, 0.8413, normalCDF(1), 0.01)
-	assert.InDelta(t, 0.1587, normalCDF(-1), 0.01)
-	assert.InDelta(t, 0.9772, normalCDF(2), 0.01)
+	assert.InDelta(t, 0.5, trade.NormalCDF(0), 0.01)
+	assert.InDelta(t, 0.8413, trade.NormalCDF(1), 0.01)
+	assert.InDelta(t, 0.1587, trade.NormalCDF(-1), 0.01)
+	assert.InDelta(t, 0.9772, trade.NormalCDF(2), 0.01)
 }
 
 
 func TestNormalPDF_KnownValues(t *testing.T) {
 	t.Parallel()
-	assert.InDelta(t, 0.3989, normalPDF(0), 0.001)
-	assert.InDelta(t, normalPDF(1), normalPDF(-1), 0.0001)
+	assert.InDelta(t, 0.3989, trade.NormalPDF(0), 0.001)
+	assert.InDelta(t, trade.NormalPDF(1), trade.NormalPDF(-1), 0.0001)
 }
 
 
 func TestBsD1_ATM(t *testing.T) {
 	t.Parallel()
-	d1 := bsD1(100, 100, 1, 0.05, 0.2)
+	d1 := trade.BsD1(100, 100, 1, 0.05, 0.2)
 	assert.Greater(t, d1, 0.0)
 }
 
@@ -1148,10 +1149,10 @@ func TestBuildTradingContext_ZeroAvgPrice(t *testing.T) {
 
 func TestBsTheta_Exists(t *testing.T) {
 	t.Parallel()
-	// bsTheta is computed via -(S*normalPDF(d1)*sigma/(2*sqrt(T))) adjusted for r
+	// trade.BsTheta is computed via -(S*trade.NormalPDF(d1)*sigma/(2*sqrt(T))) adjusted for r
 	// Just verify it returns non-zero for ATM option
 	S, K, T, r, sigma := 100.0, 100.0, 1.0, 0.05, 0.2
-	d1 := bsD1(S, K, T, r, sigma)
+	d1 := trade.BsD1(S, K, T, r, sigma)
 	assert.NotZero(t, d1)
 }
 
@@ -1211,7 +1212,7 @@ func TestDoSetTrailingStop_WithAmount(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	h := NewToolHandler(mgr)
-	result, err := doSetTrailingStop(context.Background(), h, mgr, "test@example.com", "NSE", "INFY", 256265,
+	result, err := trade.DoSetTrailingStop(context.Background(), h, mgr, "test@example.com", "NSE", "INFY", 256265,
 		"order123", "regular", "long", 20, 0, 1480, 1500)
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
@@ -1224,7 +1225,7 @@ func TestDoSetTrailingStop_WithPct(t *testing.T) {
 	t.Parallel()
 	mgr := newTestManager(t)
 	h := NewToolHandler(mgr)
-	result, err := doSetTrailingStop(context.Background(), h, mgr, "test2@example.com", "NSE", "RELIANCE", 408065,
+	result, err := trade.DoSetTrailingStop(context.Background(), h, mgr, "test2@example.com", "NSE", "RELIANCE", 408065,
 		"order456", "regular", "short", 0, 2.5, 2550, 2500)
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
@@ -1252,49 +1253,49 @@ func TestBuildPreTradeResponse_ModerateConcentrationLevel(t *testing.T) {
 
 func TestBSDelta_CallATM(t *testing.T) {
 	t.Parallel()
-	delta := bsDelta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
+	delta := trade.BsDelta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
 	assert.InDelta(t, 0.5, delta, 0.1, "ATM call should have delta near 0.5")
 }
 
 
 func TestBSDelta_PutATM(t *testing.T) {
 	t.Parallel()
-	delta := bsDelta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, false)
+	delta := trade.BsDelta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, false)
 	assert.InDelta(t, -0.5, delta, 0.1, "ATM put should have delta near -0.5")
 }
 
 
 func TestBSGamma_ATM(t *testing.T) {
 	t.Parallel()
-	gamma := bsGamma(100.0, 100.0, 30.0/365.0, 0.05, 0.2)
+	gamma := trade.BsGamma(100.0, 100.0, 30.0/365.0, 0.05, 0.2)
 	assert.Greater(t, gamma, 0.0, "ATM gamma should be positive")
 }
 
 
 func TestBSTheta_CallNegative(t *testing.T) {
 	t.Parallel()
-	theta := bsTheta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
+	theta := trade.BsTheta(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
 	assert.Less(t, theta, 0.0, "Call theta should be negative (time decay)")
 }
 
 
 func TestBSVega_Positive(t *testing.T) {
 	t.Parallel()
-	vega := bsVega(100.0, 100.0, 30.0/365.0, 0.05, 0.2)
+	vega := trade.BsVega(100.0, 100.0, 30.0/365.0, 0.05, 0.2)
 	assert.Greater(t, vega, 0.0, "Vega should be positive")
 }
 
 
 func TestBSRho_CallPositive(t *testing.T) {
 	t.Parallel()
-	rho := bsRho(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
+	rho := trade.BsRho(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
 	assert.Greater(t, rho, 0.0, "Call rho should be positive")
 }
 
 
 func TestBSRho_PutNegative(t *testing.T) {
 	t.Parallel()
-	rho := bsRho(100.0, 100.0, 30.0/365.0, 0.05, 0.2, false)
+	rho := trade.BsRho(100.0, 100.0, 30.0/365.0, 0.05, 0.2, false)
 	assert.Less(t, rho, 0.0, "Put rho should be negative")
 }
 
@@ -1302,8 +1303,8 @@ func TestBSRho_PutNegative(t *testing.T) {
 func TestImpliedVolatility_Converges(t *testing.T) {
 	t.Parallel()
 	// Price an option with known vol, then extract IV from the price
-	price := blackScholesPrice(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
-	iv, ok := impliedVolatility(price, 100.0, 100.0, 30.0/365.0, 0.05, true)
+	price := trade.BlackScholesPrice(100.0, 100.0, 30.0/365.0, 0.05, 0.2, true)
+	iv, ok := trade.ImpliedVolatility(price, 100.0, 100.0, 30.0/365.0, 0.05, true)
 	assert.True(t, ok, "IV should converge")
 	assert.InDelta(t, 0.2, iv, 0.01, "Extracted IV should match input vol")
 }
@@ -1312,7 +1313,7 @@ func TestImpliedVolatility_Converges(t *testing.T) {
 func TestImpliedVolatility_DeepOTM(t *testing.T) {
 	t.Parallel()
 	// Very cheap option (near zero) — IV extraction may not converge
-	_, ok := impliedVolatility(0.001, 100.0, 200.0, 30.0/365.0, 0.05, true)
+	_, ok := trade.ImpliedVolatility(0.001, 100.0, 200.0, 30.0/365.0, 0.05, true)
 	// ok might be false, which is acceptable
 	_ = ok
 }
@@ -1321,27 +1322,27 @@ func TestImpliedVolatility_DeepOTM(t *testing.T) {
 func TestNormalCDF_Symmetric(t *testing.T) {
 	t.Parallel()
 	// N(0) should be 0.5
-	assert.InDelta(t, 0.5, normalCDF(0), 0.001)
+	assert.InDelta(t, 0.5, trade.NormalCDF(0), 0.001)
 	// N(x) + N(-x) = 1
-	assert.InDelta(t, 1.0, normalCDF(1.5)+normalCDF(-1.5), 0.001)
+	assert.InDelta(t, 1.0, trade.NormalCDF(1.5)+trade.NormalCDF(-1.5), 0.001)
 }
 
 
 func TestNormalPDF_Symmetric(t *testing.T) {
 	t.Parallel()
 	// pdf(x) == pdf(-x)
-	assert.InDelta(t, normalPDF(1.0), normalPDF(-1.0), 0.0001)
+	assert.InDelta(t, trade.NormalPDF(1.0), trade.NormalPDF(-1.0), 0.0001)
 	// pdf(0) is the maximum
-	assert.Greater(t, normalPDF(0), normalPDF(1.0))
+	assert.Greater(t, trade.NormalPDF(0), trade.NormalPDF(1.0))
 }
 
 
 func TestExtractUnderlyingSymbol_Various(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "NIFTY", extractUnderlyingSymbol("NIFTY26APR24000CE"))
-	assert.Equal(t, "BANKNIFTY", extractUnderlyingSymbol("BANKNIFTY26APR50000PE"))
+	assert.Equal(t, "NIFTY", trade.ExtractUnderlyingSymbol("NIFTY26APR24000CE"))
+	assert.Equal(t, "BANKNIFTY", trade.ExtractUnderlyingSymbol("BANKNIFTY26APR50000PE"))
 	// Edge case: short symbol
-	assert.NotPanics(t, func() { extractUnderlyingSymbol("A") })
+	assert.NotPanics(t, func() { trade.ExtractUnderlyingSymbol("A") })
 }
 
 
@@ -1441,7 +1442,7 @@ func TestExtractUnderlyingSymbol_AdditionalCases(t *testing.T) {
 		{"", ""},
 	}
 	for _, tc := range tests {
-		got := extractUnderlyingSymbol(tc.input)
+		got := trade.ExtractUnderlyingSymbol(tc.input)
 		assert.Equal(t, tc.expected, got, "input=%q", tc.input)
 	}
 }

@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/oauth"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // SetTrailingStopTool creates a trailing stop-loss that automatically modifies
@@ -65,7 +67,7 @@ func (*SetTrailingStopTool) Tool() mcp.Tool {
 }
 
 func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "set_trailing_stop")
 
@@ -75,11 +77,11 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "instrument", "order_id", "direction"); err != nil {
+		if err := common.ValidateRequired(args, "instrument", "order_id", "direction"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		instrumentID := p.String("instrument", "")
 		orderID := p.String("order_id", "")
 		direction := p.String("direction", "")
@@ -149,17 +151,17 @@ func (*SetTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 					referencePrice = ltpData.LastPrice
 				}
 
-				return doSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+				return DoSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 					orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 			})
 		}
 
-		return doSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
+		return DoSetTrailingStop(ctx, handler, manager, email, exchange, inst.Tradingsymbol, inst.InstrumentToken,
 			orderID, variety, direction, trailAmount, trailPct, currentStop, referencePrice)
 	}
 }
 
-func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
+func DoSetTrailingStop(ctx context.Context, handler *common.ToolHandler, manager *kc.Manager, email, exchange, tradingsymbol string, instrumentToken uint32,
 	orderID, variety, direction string, trailAmount, trailPct, currentStop, referencePrice float64) (*mcp.CallToolResult, error) {
 
 	if handler.Deps.TrailingStop.TrailingStopManager() == nil {
@@ -222,10 +224,10 @@ func doSetTrailingStop(ctx context.Context, handler *ToolHandler, manager *kc.Ma
 		"Direction: %s | Trail: %s\n"+
 		"Current stop: %.2f | Reference price: %.2f\n"+
 		"The SL order will be modified automatically as price moves favorably (max once per 30s).",
-		SanitizeForLLM(id),
-		SanitizeForLLM(exchange), SanitizeForLLM(tradingsymbol),
-		SanitizeForLLM(orderID), SanitizeForLLM(variety),
-		SanitizeForLLM(direction), SanitizeForLLM(trailDesc),
+		common.SanitizeForLLM(id),
+		common.SanitizeForLLM(exchange), common.SanitizeForLLM(tradingsymbol),
+		common.SanitizeForLLM(orderID), common.SanitizeForLLM(variety),
+		common.SanitizeForLLM(direction), common.SanitizeForLLM(trailDesc),
 		currentStop, referencePrice)
 
 	if tickerMsg != "" {
@@ -249,7 +251,7 @@ func (*ListTrailingStopsTool) Tool() mcp.Tool {
 }
 
 func (*ListTrailingStopsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "list_trailing_stops")
 
@@ -295,7 +297,7 @@ func (*CancelTrailingStopTool) Tool() mcp.Tool {
 }
 
 func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "cancel_trailing_stop")
 
@@ -305,11 +307,11 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 		}
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "trailing_stop_id"); err != nil {
+		if err := common.ValidateRequired(args, "trailing_stop_id"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		tsID := NewArgParser(args).String("trailing_stop_id", "")
+		tsID := common.NewArgParser(args).String("trailing_stop_id", "")
 		if handler.Deps.TrailingStop.TrailingStopManager() == nil {
 			return mcp.NewToolResultError("Trailing stop manager not available"), nil
 		}
@@ -323,7 +325,7 @@ func (*CancelTrailingStopTool) Handler(manager *kc.Manager) server.ToolHandlerFu
 }
 
 func init() {
-	RegisterInternalTool(&CancelTrailingStopTool{})
-	RegisterInternalTool(&ListTrailingStopsTool{})
-	RegisterInternalTool(&SetTrailingStopTool{})
+	plugin.RegisterInternalTool(&CancelTrailingStopTool{})
+	plugin.RegisterInternalTool(&ListTrailingStopsTool{})
+	plugin.RegisterInternalTool(&SetTrailingStopTool{})
 }

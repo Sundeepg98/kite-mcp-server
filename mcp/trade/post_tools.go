@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // sessionBrokerResolver wraps an already-resolved broker.Client so that
@@ -108,11 +109,11 @@ func (*PlaceOrderTool) Tool() mcp.Tool {
 }
 
 func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "place_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("variety", "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
@@ -156,8 +157,8 @@ func (*PlaceOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Request user confirmation via elicitation before placing the order.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("place_order", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("place_order", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "place_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -277,11 +278,11 @@ func (*ModifyOrderTool) Tool() mcp.Tool {
 }
 
 func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "modify_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("variety", "order_id", "order_type"); err != nil {
@@ -304,8 +305,8 @@ func (*ModifyOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Request user confirmation via elicitation before modifying the order.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("modify_order", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("modify_order", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "modify_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -366,11 +367,11 @@ func (*CancelOrderTool) Tool() mcp.Tool {
 }
 
 func (*CancelOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "cancel_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("variety", "order_id"); err != nil {
@@ -453,11 +454,11 @@ func (*ConvertPositionTool) Tool() mcp.Tool {
 }
 
 func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "convert_position")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("exchange", "tradingsymbol", "transaction_type", "quantity", "old_product", "new_product", "position_type"); err != nil {
@@ -491,8 +492,8 @@ func (*ConvertPositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 // GTT-specific handlers.
 
 func init() {
-	RegisterInternalTool(&CancelOrderTool{})
-	RegisterInternalTool(&ConvertPositionTool{})
-	RegisterInternalTool(&ModifyOrderTool{})
-	RegisterInternalTool(&PlaceOrderTool{})
+	plugin.RegisterInternalTool(&CancelOrderTool{})
+	plugin.RegisterInternalTool(&ConvertPositionTool{})
+	plugin.RegisterInternalTool(&ModifyOrderTool{})
+	plugin.RegisterInternalTool(&PlaceOrderTool{})
 }

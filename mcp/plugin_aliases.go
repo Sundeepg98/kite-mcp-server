@@ -21,9 +21,10 @@ import (
 	//
 	// Anchor 1 PR 1.4: introduced when mcp/admin extraction made
 	// admin tools' init() registration unreachable from mcp/ root.
-	// Each future per-domain PR (1.5 trade, 1.6 portfolio, etc.)
-	// adds its sibling import here.
+	// Each future per-domain PR (1.6 portfolio, etc.) adds its
+	// sibling import here.
 	_ "github.com/zerodha/kite-mcp-server/mcp/admin"
+	_ "github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // plugin_aliases.go — Anchor 1 PR 1.3 (per .research/anchor-1-and-3-

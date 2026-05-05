@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -13,31 +13,33 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ---------------------------------------------------------------------------
 // Black-Scholes primitives (pure Go, no external deps)
 // ---------------------------------------------------------------------------
 
-// normalCDF returns the cumulative distribution function of the standard normal.
-func normalCDF(x float64) float64 {
+// NormalCDF returns the cumulative distribution function of the standard normal.
+func NormalCDF(x float64) float64 {
 	return 0.5 * (1 + math.Erf(x/math.Sqrt2))
 }
 
-// normalPDF returns the probability density function of the standard normal.
-func normalPDF(x float64) float64 {
+// NormalPDF returns the probability density function of the standard normal.
+func NormalPDF(x float64) float64 {
 	return math.Exp(-x*x/2) / math.Sqrt(2*math.Pi)
 }
 
-// bsD1 computes the d1 parameter of Black-Scholes.
-func bsD1(S, K, T, r, sigma float64) float64 {
+// BsD1 computes the d1 parameter of Black-Scholes.
+func BsD1(S, K, T, r, sigma float64) float64 {
 	return (math.Log(S/K) + (r+sigma*sigma/2)*T) / (sigma * math.Sqrt(T))
 }
 
-// blackScholesPrice computes the theoretical option price.
+// BlackScholesPrice computes the theoretical option price.
 // S = spot, K = strike, T = time to expiry (years), r = risk-free rate,
 // sigma = volatility, isCall = true for CE / false for PE.
-func blackScholesPrice(S, K, T, r, sigma float64, isCall bool) float64 {
+func BlackScholesPrice(S, K, T, r, sigma float64, isCall bool) float64 {
 	if T <= 0 || sigma <= 0 {
 		// At or past expiry, return intrinsic value.
 		if isCall {
@@ -45,74 +47,74 @@ func blackScholesPrice(S, K, T, r, sigma float64, isCall bool) float64 {
 		}
 		return math.Max(K-S, 0)
 	}
-	d1 := bsD1(S, K, T, r, sigma)
+	d1 := BsD1(S, K, T, r, sigma)
 	d2 := d1 - sigma*math.Sqrt(T)
 	if isCall {
-		return S*normalCDF(d1) - K*math.Exp(-r*T)*normalCDF(d2)
+		return S*NormalCDF(d1) - K*math.Exp(-r*T)*NormalCDF(d2)
 	}
-	return K*math.Exp(-r*T)*normalCDF(-d2) - S*normalCDF(-d1)
+	return K*math.Exp(-r*T)*NormalCDF(-d2) - S*NormalCDF(-d1)
 }
 
-// bsDelta returns the Black-Scholes delta.
-func bsDelta(S, K, T, r, sigma float64, isCall bool) float64 {
+// BsDelta returns the Black-Scholes delta.
+func BsDelta(S, K, T, r, sigma float64, isCall bool) float64 {
 	if T <= 0 || sigma <= 0 {
 		return 0
 	}
-	d1 := bsD1(S, K, T, r, sigma)
+	d1 := BsD1(S, K, T, r, sigma)
 	if isCall {
-		return normalCDF(d1)
+		return NormalCDF(d1)
 	}
-	return normalCDF(d1) - 1
+	return NormalCDF(d1) - 1
 }
 
-// bsGamma returns the Black-Scholes gamma (same for calls and puts).
-func bsGamma(S, K, T, r, sigma float64) float64 {
+// BsGamma returns the Black-Scholes gamma (same for calls and puts).
+func BsGamma(S, K, T, r, sigma float64) float64 {
 	if T <= 0 || sigma <= 0 {
 		return 0
 	}
-	d1 := bsD1(S, K, T, r, sigma)
-	return normalPDF(d1) / (S * sigma * math.Sqrt(T))
+	d1 := BsD1(S, K, T, r, sigma)
+	return NormalPDF(d1) / (S * sigma * math.Sqrt(T))
 }
 
-// bsTheta returns the Black-Scholes theta per calendar day.
-func bsTheta(S, K, T, r, sigma float64, isCall bool) float64 {
+// BsTheta returns the Black-Scholes theta per calendar day.
+func BsTheta(S, K, T, r, sigma float64, isCall bool) float64 {
 	if T <= 0 || sigma <= 0 {
 		return 0
 	}
-	d1 := bsD1(S, K, T, r, sigma)
+	d1 := BsD1(S, K, T, r, sigma)
 	d2 := d1 - sigma*math.Sqrt(T)
-	common := -(S * normalPDF(d1) * sigma) / (2 * math.Sqrt(T))
+	common := -(S * NormalPDF(d1) * sigma) / (2 * math.Sqrt(T))
 	if isCall {
-		return (common - r*K*math.Exp(-r*T)*normalCDF(d2)) / 365.25
+		return (common - r*K*math.Exp(-r*T)*NormalCDF(d2)) / 365.25
 	}
-	return (common + r*K*math.Exp(-r*T)*normalCDF(-d2)) / 365.25
+	return (common + r*K*math.Exp(-r*T)*NormalCDF(-d2)) / 365.25
 }
 
-// bsVega returns the Black-Scholes vega per 1% move in volatility.
-func bsVega(S, K, T, r, sigma float64) float64 {
+// BsVega returns the Black-Scholes vega per 1% move in volatility.
+func BsVega(S, K, T, r, sigma float64) float64 {
 	if T <= 0 || sigma <= 0 {
 		return 0
 	}
-	d1 := bsD1(S, K, T, r, sigma)
-	return S * normalPDF(d1) * math.Sqrt(T) / 100
+	d1 := BsD1(S, K, T, r, sigma)
+	return S * NormalPDF(d1) * math.Sqrt(T) / 100
 }
 
-// bsRho returns the Black-Scholes rho per 1% move in the risk-free rate.
-func bsRho(S, K, T, r, sigma float64, isCall bool) float64 {
+// BsRho returns the Black-Scholes rho per 1% move in the risk-free rate.
+func BsRho(S, K, T, r, sigma float64, isCall bool) float64 {
 	if T <= 0 || sigma <= 0 {
 		return 0
 	}
-	d1 := bsD1(S, K, T, r, sigma)
+	d1 := BsD1(S, K, T, r, sigma)
 	d2 := d1 - sigma*math.Sqrt(T)
 	if isCall {
-		return K * T * math.Exp(-r*T) * normalCDF(d2) / 100
+		return K * T * math.Exp(-r*T) * NormalCDF(d2) / 100
 	}
-	return -K * T * math.Exp(-r*T) * normalCDF(-d2) / 100
+	return -K * T * math.Exp(-r*T) * NormalCDF(-d2) / 100
 }
 
-// impliedVolatility solves for sigma such that BS(sigma) ~ marketPrice,
+// ImpliedVolatility solves for sigma such that BS(sigma) ~ marketPrice,
 // using Newton-Raphson with a bisection fallback.
-func impliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, bool) {
+func ImpliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, bool) {
 	if T <= 0 || marketPrice <= 0 {
 		return 0, false
 	}
@@ -130,8 +132,8 @@ func impliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, b
 
 	sigma := 0.3 // initial guess
 	for range 100 {
-		price := blackScholesPrice(S, K, T, r, sigma, isCall)
-		v := bsVega(S, K, T, r, sigma) * 100 // undo the /100 to get raw vega
+		price := BlackScholesPrice(S, K, T, r, sigma, isCall)
+		v := BsVega(S, K, T, r, sigma) * 100 // undo the /100 to get raw vega
 		if v < 1e-10 {
 			break
 		}
@@ -152,7 +154,7 @@ func impliedVolatility(marketPrice, S, K, T, r float64, isCall bool) (float64, b
 	lo, hi := 0.001, 10.0
 	for range 200 {
 		mid := (lo + hi) / 2
-		price := blackScholesPrice(S, K, T, r, mid, isCall)
+		price := BlackScholesPrice(S, K, T, r, mid, isCall)
 		if math.Abs(price-marketPrice) < 0.01 {
 			return mid, true
 		}
@@ -215,10 +217,10 @@ type greeksResponse struct {
 	Moneyness      string  `json:"moneyness"` // ITM, ATM, OTM
 }
 
-// extractUnderlyingSymbol extracts the underlying name from an options
+// ExtractUnderlyingSymbol extracts the underlying name from an options
 // trading symbol. For example, "NIFTY2440324000CE" -> "NIFTY",
 // "BANKNIFTY24403CE" -> "BANKNIFTY", "RELIANCE2440324000CE" -> "RELIANCE".
-func extractUnderlyingSymbol(tradingsymbol string) string {
+func ExtractUnderlyingSymbol(tradingsymbol string) string {
 	// Trading symbols follow the pattern: NAME + YYMDD + STRIKE + CE/PE.
 	// The name portion is all leading alpha characters.
 	for i, ch := range tradingsymbol {
@@ -230,16 +232,16 @@ func extractUnderlyingSymbol(tradingsymbol string) string {
 }
 
 func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "options_greeks")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "exchange", "tradingsymbol", "strike_price", "expiry_date", "option_type"); err != nil {
+		if err := common.ValidateRequired(args, "exchange", "tradingsymbol", "strike_price", "expiry_date", "option_type"); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		exchange := strings.ToUpper(p.String("exchange", "NFO"))
 		tradingsymbol := strings.ToUpper(p.String("tradingsymbol", ""))
 		strikePrice := p.Float("strike_price", 0)
@@ -292,7 +294,7 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			// Fetch underlying price if not provided
 			underlyingPrice := underlyingPriceArg
 			if underlyingPrice <= 0 {
-				underlying := extractUnderlyingSymbol(tradingsymbol)
+				underlying := ExtractUnderlyingSymbol(tradingsymbol)
 				spotKeys := []string{
 					"NSE:" + underlying,
 					"NSE:" + underlying + "-EQ",
@@ -312,17 +314,17 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 			}
 
 			// Compute IV
-			iv, ivOk := impliedVolatility(optionPrice, underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, isCall)
+			iv, ivOk := ImpliedVolatility(optionPrice, underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, isCall)
 			if !ivOk {
 				iv = 0
 			}
 
 			// Compute Greeks using the IV
-			delta := bsDelta(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
-			gamma := bsGamma(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv)
-			theta := bsTheta(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
-			vega := bsVega(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv)
-			rho := bsRho(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
+			delta := BsDelta(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
+			gamma := BsGamma(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv)
+			theta := BsTheta(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
+			vega := BsVega(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv)
+			rho := BsRho(underlyingPrice, strikePrice, timeToExpiry, riskFreeRate, iv, isCall)
 
 			// Intrinsic and time value
 			intrinsic := 0.0
@@ -354,20 +356,20 @@ func (*OptionsGreeksTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				TradingSymbol:     tradingsymbol,
 				Exchange:          exchange,
 				OptionType:        optionTypeStr,
-				UnderlyingPrice:   round4(underlyingPrice),
+				UnderlyingPrice:   Round4(underlyingPrice),
 				StrikePrice:       strikePrice,
 				ExpiryDate:        expiryStr,
-				OptionPrice:       round4(optionPrice),
-				TimeToExpiry:      round6(timeToExpiry),
+				OptionPrice:       Round4(optionPrice),
+				TimeToExpiry:      Round6(timeToExpiry),
 				DaysToExpiry:      daysToExpiry,
 				RiskFreeRate:      riskFreeRate,
-				ImpliedVolatility: round6(iv),
+				ImpliedVolatility: Round6(iv),
 				IVPercent:         round2(iv * 100),
-				Delta:             round6(delta),
-				Gamma:             round6(gamma),
-				Theta:             round4(theta),
-				Vega:              round4(vega),
-				Rho:               round4(rho),
+				Delta:             Round6(delta),
+				Gamma:             Round6(gamma),
+				Theta:             Round4(theta),
+				Vega:              Round4(vega),
+				Rho:               Round4(rho),
 				IntrinsicValue:    round2(intrinsic),
 				TimeValue:         round2(timeVal),
 				Moneyness:         moneyness,
@@ -440,16 +442,16 @@ type legSpec struct {
 }
 
 func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "options_payoff_builder")
 		args := request.GetArguments()
 
-		if err := ValidateRequired(args, "strategy", "underlying", "expiry", "strike1"); err != nil {
+		if err := common.ValidateRequired(args, "strategy", "underlying", "expiry", "strike1"); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		strategy := strings.ToLower(p.String("strategy", ""))
 		underlying := strings.ToUpper(p.String("underlying", ""))
 		expiryStr := p.String("expiry", "")
@@ -811,15 +813,15 @@ func round2(x float64) float64 {
 	return math.Round(x*100) / 100
 }
 
-func round4(x float64) float64 {
+func Round4(x float64) float64 {
 	return math.Round(x*10000) / 10000
 }
 
-func round6(x float64) float64 {
+func Round6(x float64) float64 {
 	return math.Round(x*1000000) / 1000000
 }
 
 func init() {
-	RegisterInternalTool(&OptionsGreeksTool{})
-	RegisterInternalTool(&OptionsStrategyTool{})
+	plugin.RegisterInternalTool(&OptionsGreeksTool{})
+	plugin.RegisterInternalTool(&OptionsStrategyTool{})
 }

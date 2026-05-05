@@ -579,3 +579,11 @@ func computeSharpeRatio(trades []BacktestTrade, initialCapital float64) float64 
 // round2 is defined in options_greeks_tool.go (shared within the mcp package).
 
 func init() { RegisterInternalTool(&BacktestStrategyTool{}) }
+
+// round2 rounds to 2 decimal places. Anchor 1 PR 1.5 added a local
+// copy when options_greeks_tool.go (which previously hosted round2)
+// moved to mcp/trade. Identical to math.Round(x*100)/100. Other
+// users in mcp/ root reach for this same local copy.
+func round2(x float64) float64 {
+	return math.Round(x*100) / 100
+}

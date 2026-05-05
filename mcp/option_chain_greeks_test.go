@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 	"time"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // TestTimeToExpiryYearsFromKiteDate covers the date parser we call before
@@ -35,7 +36,7 @@ func TestTimeToExpiryYearsFromKiteDate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			years, days := timeToExpiryYearsFromKiteDate(tc.in)
+			years, days := trade.TimeToExpiryYearsFromKiteDate(tc.in)
 			if tc.wantYears {
 				if years <= 0 {
 					t.Fatalf("expected positive years, got %v", years)
@@ -67,8 +68,8 @@ func TestFillGreeks_CEAndPE(t *testing.T) {
 	)
 
 	// CE path
-	ce := &optionChainEntry{Strike: strike, CELTP: cePrice}
-	fillGreeks(ce, spot, strike, t30d, r, cePrice, true)
+	ce := &trade.OptionChainEntry{Strike: strike, CELTP: cePrice}
+	trade.FillGreeks(ce, spot, strike, t30d, r, cePrice, true)
 	if ce.CEDelta <= 0 || ce.CEDelta > 1 {
 		t.Errorf("CE delta out of bounds: %v", ce.CEDelta)
 	}
@@ -84,8 +85,8 @@ func TestFillGreeks_CEAndPE(t *testing.T) {
 	}
 
 	// PE path on a separate entry
-	pe := &optionChainEntry{Strike: strike, PELTP: pePrice}
-	fillGreeks(pe, spot, strike, t30d, r, pePrice, false)
+	pe := &trade.OptionChainEntry{Strike: strike, PELTP: pePrice}
+	trade.FillGreeks(pe, spot, strike, t30d, r, pePrice, false)
 	if pe.PEDelta >= 0 || pe.PEDelta < -1 {
 		t.Errorf("PE delta out of bounds (expected [-1, 0)): %v", pe.PEDelta)
 	}
@@ -110,8 +111,8 @@ func TestFillGreeks_ZeroWhenIVFails(t *testing.T) {
 		// Price well below intrinsic (2000) -> solver rejects.
 		cePrice = 100.0
 	)
-	ce := &optionChainEntry{Strike: strike, CELTP: cePrice}
-	fillGreeks(ce, spot, strike, t30d, r, cePrice, true)
+	ce := &trade.OptionChainEntry{Strike: strike, CELTP: cePrice}
+	trade.FillGreeks(ce, spot, strike, t30d, r, cePrice, true)
 	if ce.CEIV != 0 || ce.CEDelta != 0 {
 		t.Errorf("expected zero Greeks when price < intrinsic, got %+v", ce)
 	}
@@ -128,15 +129,15 @@ func TestFillGreeks_IVPercentIsHumanReadable(t *testing.T) {
 		r       = 0.07
 		cePrice = 180.0
 	)
-	ce := &optionChainEntry{Strike: strike, CELTP: cePrice}
-	fillGreeks(ce, spot, strike, t30d, r, cePrice, true)
+	ce := &trade.OptionChainEntry{Strike: strike, CELTP: cePrice}
+	trade.FillGreeks(ce, spot, strike, t30d, r, cePrice, true)
 	if ce.CEIV <= 0 || ce.CEIV > 500 {
 		t.Errorf("expected IV percent in (0, 500], got %v", ce.CEIV)
 	}
 	// Sanity: internal sigma reconstructed from percent should be close to
 	// what Black-Scholes would give back with the same price.
 	sigma := ce.CEIV / 100
-	priceBack := blackScholesPrice(spot, strike, t30d, r, sigma, true)
+	priceBack := trade.BlackScholesPrice(spot, strike, t30d, r, sigma, true)
 	if math.Abs(priceBack-cePrice) > 1.0 {
 		t.Errorf("IV round-trip off: priceBack=%v expected close to %v", priceBack, cePrice)
 	}

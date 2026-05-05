@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )
 
 // Pure function tests: backtest, indicators, options pricing, sector mapping, portfolio analysis, prompts.
@@ -57,7 +58,7 @@ func TestFormatRHS_Constant(t *testing.T) {
 		RHSType:     "constant",
 		RHSConstant: 1500.50,
 	}
-	assert.Equal(t, "1500.50", formatNativeAlertRHS(params))
+	assert.Equal(t, "1500.50", trade.FormatNativeAlertRHS(params))
 }
 
 
@@ -69,19 +70,19 @@ func TestFormatRHS_Instrument(t *testing.T) {
 		RHSTradingSymbol: "INFY",
 		RHSAttribute:     "last_price",
 	}
-	assert.Equal(t, "NSE:INFY (last_price)", formatNativeAlertRHS(params))
+	assert.Equal(t, "NSE:INFY (last_price)", trade.FormatNativeAlertRHS(params))
 }
 
 
 func TestSplitAndTrim(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, []string{"a", "b", "c"}, splitAndTrim("a, b, c"))
-	assert.Equal(t, []string{"NSE:INFY"}, splitAndTrim("NSE:INFY"))
-	assert.Equal(t, []string{"a", "b"}, splitAndTrim("  a  ,  b  "))
+	assert.Equal(t, []string{"a", "b", "c"}, trade.SplitAndTrim("a, b, c"))
+	assert.Equal(t, []string{"NSE:INFY"}, trade.SplitAndTrim("NSE:INFY"))
+	assert.Equal(t, []string{"a", "b"}, trade.SplitAndTrim("  a  ,  b  "))
 	// Empty string splits to one empty part, which gets trimmed to empty
-	result := splitAndTrim("")
+	result := trade.SplitAndTrim("")
 	assert.Empty(t, result)
-	result2 := splitAndTrim(", , ,")
+	result2 := trade.SplitAndTrim(", , ,")
 	assert.Empty(t, result2)
 }
 

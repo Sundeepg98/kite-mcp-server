@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // GTT (Good Till Triggered) order tools. Split out from post_tools.go
@@ -89,11 +90,11 @@ func (*PlaceGTTOrderTool) Tool() mcp.Tool {
 }
 
 func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "place_gtt_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
@@ -102,8 +103,8 @@ func (*PlaceGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Request user confirmation via elicitation before placing the GTT.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("place_gtt_order", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("place_gtt_order", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "place_gtt_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -179,11 +180,11 @@ func (*DeleteGTTOrderTool) Tool() mcp.Tool {
 }
 
 func (*DeleteGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "delete_gtt_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("trigger_id"); err != nil {
@@ -288,11 +289,11 @@ func (*ModifyGTTOrderTool) Tool() mcp.Tool {
 }
 
 func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "modify_gtt_order")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Validate required parameters
 		if err := p.Required("trigger_id", "exchange", "tradingsymbol", "last_price", "transaction_type", "product", "trigger_type"); err != nil {
@@ -301,8 +302,8 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Request user confirmation via elicitation before modifying the GTT.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("modify_gtt_order", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("modify_gtt_order", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "modify_gtt_order", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -362,7 +363,7 @@ func (*ModifyGTTOrderTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 }
 
 func init() {
-	RegisterInternalTool(&DeleteGTTOrderTool{})
-	RegisterInternalTool(&ModifyGTTOrderTool{})
-	RegisterInternalTool(&PlaceGTTOrderTool{})
+	plugin.RegisterInternalTool(&DeleteGTTOrderTool{})
+	plugin.RegisterInternalTool(&ModifyGTTOrderTool{})
+	plugin.RegisterInternalTool(&PlaceGTTOrderTool{})
 }

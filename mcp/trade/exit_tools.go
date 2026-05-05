@@ -1,4 +1,4 @@
-package mcp
+package trade
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ClosePositionTool closes a single position by placing an opposite MARKET order.
@@ -33,12 +35,12 @@ func (*ClosePositionTool) Tool() mcp.Tool {
 }
 
 func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "close_position")
 
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		if err := p.Required("instrument"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -55,8 +57,8 @@ func (*ClosePositionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 		// Request user confirmation via elicitation.
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("close_position", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("close_position", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "close_position", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -120,11 +122,11 @@ type closeResult struct {
 }
 
 func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "close_all_positions")
 		args := request.GetArguments()
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 
 		// Safety: confirm must be true
 		confirm := p.Bool("confirm", false)
@@ -134,8 +136,8 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 
 		// Request user confirmation via elicitation (in addition to the confirm param).
 		if srv := handler.Deps.MCPServer.MCPServer(); srv != nil {
-			msg := buildOrderConfirmMessage("close_all_positions", args)
-			if err := requestConfirmation(ctx, srv, msg); err != nil {
+			msg := common.BuildOrderConfirmMessage("close_all_positions", args)
+			if err := common.RequestConfirmation(ctx, srv, msg); err != nil {
 				handler.TrackToolError(ctx, "close_all_positions", "user_declined")
 				return mcp.NewToolResultError(err.Error()), nil
 			}
@@ -193,6 +195,6 @@ func (*CloseAllPositionsTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 }
 
 func init() {
-	RegisterInternalTool(&CloseAllPositionsTool{})
-	RegisterInternalTool(&ClosePositionTool{})
+	plugin.RegisterInternalTool(&CloseAllPositionsTool{})
+	plugin.RegisterInternalTool(&ClosePositionTool{})
 }

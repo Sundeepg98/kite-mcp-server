@@ -1,8 +1,9 @@
-package mcp
+package trade
 
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/domain"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // --- Pre-Trade Check Tool ---
@@ -21,7 +23,7 @@ import (
 // get_positions + portfolio_concentration) with one server-side call.
 type PreTradeCheckTool struct{}
 
-func init() { RegisterInternalTool(&PreTradeCheckTool{}) }
+func init() { plugin.RegisterInternalTool(&PreTradeCheckTool{}) }
 
 func (*PreTradeCheckTool) Tool() mcp.Tool {
 	return mcp.NewTool("order_risk_report",
@@ -68,8 +70,8 @@ func (*PreTradeCheckTool) Tool() mcp.Tool {
 	)
 }
 
-// preTradeResponse is the structured response returned by order_risk_report.
-type preTradeResponse struct {
+// PreTradeResponse is the structured response returned by order_risk_report.
+type PreTradeResponse struct {
 	Symbol          string                `json:"symbol"`
 	Exchange        string                `json:"exchange"`
 	Side            string                `json:"side"`
@@ -109,17 +111,17 @@ type preTradeStopLoss struct {
 }
 
 func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "order_risk_report")
 		args := request.GetArguments()
 
 		// Validate required parameters
-		if err := ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
+		if err := common.ValidateRequired(args, "exchange", "tradingsymbol", "transaction_type", "quantity", "product", "order_type"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		p := NewArgParser(args)
+		p := common.NewArgParser(args)
 		exchange := p.String("exchange", "NSE")
 		tradingsymbol := p.String("tradingsymbol", "")
 		transactionType := p.String("transaction_type", "BUY")
@@ -158,7 +160,7 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 				return mcp.NewToolResultError(terr.Error()), nil
 			}
 
-			resp := buildPreTradeResponse(
+			resp := BuildPreTradeResponse(
 				exchange, tradingsymbol, transactionType,
 				int(quantity), product, price,
 				ucResult,
@@ -169,16 +171,16 @@ func (*PreTradeCheckTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
-// buildPreTradeResponse processes parallel API results into a pre-trade check response.
+// BuildPreTradeResponse processes parallel API results into a pre-trade check response.
 // Consumes the typed *usecases.PreTradeData directly rather than a map[string]any
 // so the broker-typed fields (LTP, Margins, Positions, Holdings) flow end-to-end
 // without type assertions or reboxing at the tool layer.
-func buildPreTradeResponse(
+func BuildPreTradeResponse(
 	exchange, tradingsymbol, transactionType string,
 	quantity int, product string, limitPrice float64,
 	data *usecases.PreTradeData,
-) *preTradeResponse {
-	resp := &preTradeResponse{
+) *PreTradeResponse {
+	resp := &PreTradeResponse{
 		Symbol:         tradingsymbol,
 		Exchange:       exchange,
 		Side:           transactionType,
@@ -204,7 +206,7 @@ func buildPreTradeResponse(
 			currentPrice = ltpData.LastPrice
 		}
 	}
-	resp.CurrentPrice = roundTo2(currentPrice)
+	resp.CurrentPrice = _roundTo2(currentPrice)
 
 	// Use limit price for order value if provided, otherwise use current price
 	priceForCalc := currentPrice
@@ -212,7 +214,7 @@ func buildPreTradeResponse(
 		priceForCalc = limitPrice
 	}
 	orderValue := priceForCalc * float64(quantity)
-	resp.OrderValue = roundTo2(orderValue)
+	resp.OrderValue = _roundTo2(orderValue)
 
 	// --- Margin from GetOrderMargins (exact) ---
 	var marginRequired float64
@@ -236,9 +238,9 @@ func buildPreTradeResponse(
 	}
 
 	resp.Margin = preTradeMargin{
-		Required:         roundTo2(marginRequired),
-		Available:        roundTo2(marginAvailable),
-		UtilizationAfter: roundTo2(utilizationAfter),
+		Required:         _roundTo2(marginRequired),
+		Available:        _roundTo2(marginAvailable),
+		UtilizationAfter: _roundTo2(utilizationAfter),
 	}
 
 	// --- Portfolio concentration from holdings ---
@@ -261,7 +263,7 @@ func buildPreTradeResponse(
 	}
 
 	resp.PortfolioImpact = preTradePortfolio{
-		OrderAsPctOfPortfolio: roundTo2(orderAsPct),
+		OrderAsPctOfPortfolio: _roundTo2(orderAsPct),
 		ConcentrationAfter:    concentrationAfter,
 	}
 
@@ -279,8 +281,8 @@ func buildPreTradeResponse(
 				resp.ExistingPos = &preTradeExistingPos{
 					Quantity:     p.Quantity,
 					Product:      p.Product,
-					AveragePrice: roundTo2(p.AveragePrice),
-					PnL:          roundTo2(pos.PnL().Float64()),
+					AveragePrice: _roundTo2(p.AveragePrice),
+					PnL:          _roundTo2(pos.PnL().Float64()),
 				}
 				break
 			}
@@ -290,14 +292,14 @@ func buildPreTradeResponse(
 	// --- Stop-loss suggestions ---
 	if transactionType == "BUY" && priceForCalc > 0 {
 		resp.StopLoss = preTradeStopLoss{
-			CNC2Pct: roundTo2(priceForCalc * 0.98),
-			MIS1Pct: roundTo2(priceForCalc * 0.99),
+			CNC2Pct: _roundTo2(priceForCalc * 0.98),
+			MIS1Pct: _roundTo2(priceForCalc * 0.99),
 		}
 	} else if transactionType == "SELL" && priceForCalc > 0 {
 		// For SELL, stop-loss is above the price
 		resp.StopLoss = preTradeStopLoss{
-			CNC2Pct: roundTo2(priceForCalc * 1.02),
-			MIS1Pct: roundTo2(priceForCalc * 1.01),
+			CNC2Pct: _roundTo2(priceForCalc * 1.02),
+			MIS1Pct: _roundTo2(priceForCalc * 1.01),
 		}
 	}
 
@@ -357,4 +359,16 @@ func extractMarginTotal(raw any, fallback float64) float64 {
 		}
 	}
 	return fallback
+}
+
+// roundTo2 rounds to 2 decimal places. Local copy from mcp/analytics_tools.go
+// — small (1 LOC) to avoid cross-package import for a single utility.
+
+// _roundTo2 rounds to 2 decimal places. Local helper duplicated from
+// mcp/analytics_tools.go's roundTo2. Anchor 1 PR 1.5: kept package-
+// private here to avoid cross-package import for a 1-line utility.
+// Renamed to avoid linker collision when mcp/analytics extracts in
+// a future PR (which would expose roundTo2 publicly).
+func _roundTo2(v float64) float64 {
+	return math.Round(v*100) / 100
 }
