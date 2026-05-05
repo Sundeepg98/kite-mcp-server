@@ -26,6 +26,7 @@ import (
 	_ "github.com/zerodha/kite-mcp-server/mcp/admin"
 	_ "github.com/zerodha/kite-mcp-server/mcp/alerts"
 	_ "github.com/zerodha/kite-mcp-server/mcp/analytics"
+	_ "github.com/zerodha/kite-mcp-server/mcp/misc"
 	_ "github.com/zerodha/kite-mcp-server/mcp/paper"
 	_ "github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	_ "github.com/zerodha/kite-mcp-server/mcp/trade"

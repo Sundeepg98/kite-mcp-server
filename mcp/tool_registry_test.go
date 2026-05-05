@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/kite-mcp-server/mcp/misc"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
@@ -51,7 +52,7 @@ func TestRegisterInternalTool_AppearsInGetAllTools(t *testing.T) {
 		}
 	}
 
-	RegisterInternalTool(&ServerVersionTool{})
+	RegisterInternalTool(&misc.ServerVersionTool{})
 	got = GetAllTools()
 	var found bool
 	for _, tl := range got {

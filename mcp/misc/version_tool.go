@@ -1,4 +1,4 @@
-package mcp
+package misc
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
 
 // ServerVersionTool exposes build + runtime identity of the running process:
@@ -23,9 +24,14 @@ import (
 //
 // The sibling tool `server_metrics` covers per-tool latency and error rates;
 // `server_version` is the complementary "what am I running?" tool.
+//
+// Anchor 1 PR 1.10: extracted from mcp/version_tool.go into mcp/misc.
+// ServerVersionResponse, ParseEnableTradingFlag, and ReadEnableTradingFlag
+// are exported so the in-tree mcp/version_tool_test.go can reach them via
+// misc.X — backward-compat lowercase shims live in mcp/version_aliases.go.
 type ServerVersionTool struct{}
 
-func init() { RegisterInternalTool(&ServerVersionTool{}) }
+func init() { plugin.RegisterInternalTool(&ServerVersionTool{}) }
 
 func (*ServerVersionTool) Tool() mcp.Tool {
 	return mcp.NewTool("server_version",
@@ -37,11 +43,11 @@ func (*ServerVersionTool) Tool() mcp.Tool {
 	)
 }
 
-// serverVersionResponse is the structured payload for server_version. All
+// ServerVersionResponse is the structured payload for server_version. All
 // fields are safe for public display — we explicitly do NOT include secret
 // env vars (OAUTH_JWT_SECRET, KITE_API_SECRET, TELEGRAM_BOT_TOKEN, etc.), DB
 // paths, or user/IP identifiers.
-type serverVersionResponse struct {
+type ServerVersionResponse struct {
 	GitSHA        string          `json:"git_sha"`
 	BuildTime     string          `json:"build_time"`
 	Region        string          `json:"region"`
@@ -109,36 +115,40 @@ func resolveVersionInfo() {
 	cachedRegion = region
 }
 
-// readEnableTradingFlag returns whether ENABLE_TRADING env var is truthy.
+// ReadEnableTradingFlag returns whether ENABLE_TRADING env var is truthy.
 // Uses the same truthy set as SafeAssertBool for consistency with the rest
 // of the codebase ("true"/"1"/"yes"/"on" — case-insensitive).
 // Extracted so tests can pin behaviour without spinning up the whole handler.
-func readEnableTradingFlag() bool {
-	return parseEnableTradingFlag(os.Getenv("ENABLE_TRADING"))
+//
+// Anchor 1 PR 1.10: capitalised on extract.
+func ReadEnableTradingFlag() bool {
+	return ParseEnableTradingFlag(os.Getenv("ENABLE_TRADING"))
 }
 
-// parseEnableTradingFlag is the pure truthy-check over a raw value.
+// ParseEnableTradingFlag is the pure truthy-check over a raw value.
 // Callers pass os.Getenv("ENABLE_TRADING") explicitly so tests can exercise
 // the parser without t.Setenv and run in parallel.
-func parseEnableTradingFlag(raw string) bool {
-	return SafeAssertBool(raw, false)
+//
+// Anchor 1 PR 1.10: capitalised on extract.
+func ParseEnableTradingFlag(raw string) bool {
+	return common.SafeAssertBool(raw, false)
 }
 
 func (*ServerVersionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "server_version")
 
 		versionInfoOnce.Do(resolveVersionInfo)
 
-		resp := &serverVersionResponse{
+		resp := &ServerVersionResponse{
 			GitSHA:        cachedGitSHA,
 			BuildTime:     cachedBuildTime,
 			Region:        cachedRegion,
 			GoVersion:     runtime.Version(),
 			UptimeSeconds: int64(time.Since(common.ServerStartTime).Seconds()),
 			EnvFlags: map[string]bool{
-				"enable_trading": readEnableTradingFlag(),
+				"enable_trading": ReadEnableTradingFlag(),
 			},
 		}
 		return handler.MarshalResponse(resp, "server_version")

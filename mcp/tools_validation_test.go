@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/mcp/analytics"
+	"github.com/zerodha/kite-mcp-server/mcp/misc"
 	"github.com/zerodha/kite-mcp-server/mcp/paper"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
@@ -42,7 +43,7 @@ func TestToolDefinitions_Coverage(t *testing.T) {
 		&portfolio.UpdateMyCredentialsTool{},
 		&portfolio.GetPnLJournalTool{},
 		&paper.TradingContextTool{},
-		&SEBIComplianceTool{},
+		&misc.SEBIComplianceTool{},
 		&trade.ClosePositionTool{},
 		&trade.CloseAllPositionsTool{},
 		&analytics.PortfolioSummaryTool{},

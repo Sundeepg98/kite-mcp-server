@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zerodha/kite-mcp-server/mcp/misc"
 )
 
 // TestServerVersionTool_ToolDefinition verifies the tool registration metadata
@@ -15,7 +16,7 @@ import (
 // to MCP clients.
 func TestServerVersionTool_ToolDefinition(t *testing.T) {
 	t.Parallel()
-	tool := (&ServerVersionTool{}).Tool()
+	tool := (&misc.ServerVersionTool{}).Tool()
 	assert.Equal(t, "server_version", tool.Name)
 	assert.NotEmpty(t, tool.Description)
 	assert.NotNil(t, tool.Annotations)
@@ -45,7 +46,7 @@ func TestServerVersion_HandlerResponse(t *testing.T) {
 	assert.False(t, result.IsError, "server_version should never error, got: %s", resultText(t, result))
 
 	text := resultText(t, result)
-	var parsed serverVersionResponse
+	var parsed misc.ServerVersionResponse
 	err := json.Unmarshal([]byte(text), &parsed)
 	assert.NoError(t, err, "response must be valid JSON: %s", text)
 
@@ -119,8 +120,8 @@ func TestParseEnableTradingFlag(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := parseEnableTradingFlag(tc.raw)
-			assert.Equal(t, tc.want, got, "parseEnableTradingFlag(%q)", tc.raw)
+			got := misc.ParseEnableTradingFlag(tc.raw)
+			assert.Equal(t, tc.want, got, "misc.ParseEnableTradingFlag(%q)", tc.raw)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-package mcp
+package misc
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -20,6 +22,10 @@ import (
 // sessions. They are NOT admin-only — scope is implicit from the OAuth JWT
 // (oauth.EmailFromContext). An admin-scoped view exists elsewhere
 // (admin_server_status); this pair is for self-service.
+//
+// Anchor 1 PR 1.10: extracted from mcp/session_admin_tools.go into mcp/misc.
+// Tool types and helpers were not referenced from outside the source file
+// so the move is purely a relocation — no exported-symbol churn.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // sessionIDDisplayHead and sessionIDDisplayTail control the length of the
@@ -58,13 +64,13 @@ func (*ListMCPSessionsTool) Tool() mcp.Tool {
 }
 
 type mcpSessionEntry struct {
-	SessionID        string `json:"session_id"`         // truncated for display
-	SessionIDFull    string `json:"session_id_full"`    // full ID, needed to revoke
-	CreatedAt        string `json:"created_at"`
-	ExpiresAt        string `json:"expires_at"`
-	LastActivity     string `json:"last_activity,omitempty"`
-	ClientHint       string `json:"client_hint"`
-	RecentToolCalls  int    `json:"recent_tool_calls"` // count in the last hour
+	SessionID       string `json:"session_id"`      // truncated for display
+	SessionIDFull   string `json:"session_id_full"` // full ID, needed to revoke
+	CreatedAt       string `json:"created_at"`
+	ExpiresAt       string `json:"expires_at"`
+	LastActivity    string `json:"last_activity,omitempty"`
+	ClientHint      string `json:"client_hint"`
+	RecentToolCalls int    `json:"recent_tool_calls"` // count in the last hour
 }
 
 type listMCPSessionsResponse struct {
@@ -74,13 +80,13 @@ type listMCPSessionsResponse struct {
 }
 
 func (*ListMCPSessionsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "list_mcp_sessions")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
-			return mcp.NewToolResultError(ErrAuthRequired), nil
+			return mcp.NewToolResultError(common.ErrAuthRequired), nil
 		}
 		emailLower := strings.ToLower(email)
 
@@ -188,16 +194,16 @@ type revokeMCPSessionResponse struct {
 }
 
 func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "revoke_mcp_session")
 
 		email := oauth.EmailFromContext(ctx)
 		if email == "" {
-			return mcp.NewToolResultError(ErrAuthRequired), nil
+			return mcp.NewToolResultError(common.ErrAuthRequired), nil
 		}
 
-		sessionID := NewArgParser(request.GetArguments()).String("session_id", "")
+		sessionID := common.NewArgParser(request.GetArguments()).String("session_id", "")
 		if sessionID == "" {
 			return mcp.NewToolResultError("session_id is required."), nil
 		}
@@ -235,6 +241,6 @@ func (*RevokeMCPSessionTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 }
 
 func init() {
-	RegisterInternalTool(&ListMCPSessionsTool{})
-	RegisterInternalTool(&RevokeMCPSessionTool{})
+	plugin.RegisterInternalTool(&ListMCPSessionsTool{})
+	plugin.RegisterInternalTool(&RevokeMCPSessionTool{})
 }

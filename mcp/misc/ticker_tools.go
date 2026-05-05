@@ -1,4 +1,4 @@
-package mcp
+package misc
 
 import (
 	"context"
@@ -9,8 +9,17 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
+
+// Anchor 1 PR 1.10: extracted from mcp/ticker_tools.go into mcp/misc.
+// ResolveInstrumentTokens and ResolveTickerMode were package-private helpers
+// also used from mcp/tools_pure_format_test.go — they are capitalised here
+// so the in-tree tests can reach them via misc.X (matching the established
+// PR 1.4/1.5/1.9 capitalise-on-extract pattern). Backward-compat lowercase
+// shims live in mcp/ticker_aliases.go.
 
 // StartTickerTool starts a WebSocket stream for live market data.
 type StartTickerTool struct{}
@@ -26,7 +35,7 @@ func (*StartTickerTool) Tool() mcp.Tool {
 }
 
 func (*StartTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "start_ticker")
 
@@ -75,7 +84,7 @@ func (*StopTickerTool) Tool() mcp.Tool {
 }
 
 func (*StopTickerTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "stop_ticker")
 
@@ -114,7 +123,7 @@ func (*TickerStatusTool) Tool() mcp.Tool {
 }
 
 func (*TickerStatusTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "ticker_status")
 
@@ -162,12 +171,12 @@ func (*SubscribeInstrumentsTool) Tool() mcp.Tool {
 }
 
 func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "subscribe_instruments")
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "instruments"); err != nil {
+		if err := common.ValidateRequired(args, "instruments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -180,7 +189,7 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			p := NewArgParser(args)
+			p := common.NewArgParser(args)
 			instrumentIDs := p.StringArray("instruments")
 			if len(instrumentIDs) == 0 {
 				return mcp.NewToolResultError("At least one instrument must be specified"), nil
@@ -189,7 +198,7 @@ func (*SubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandler
 			modeStr := p.String("mode", "full")
 
 			// Resolve instrument IDs to tokens via the InstrumentsManagerProvider port.
-			tokens, failed := resolveInstrumentTokens(handler.Instruments(), instrumentIDs)
+			tokens, failed := ResolveInstrumentTokens(handler.Instruments(), instrumentIDs)
 			if len(tokens) == 0 {
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
@@ -231,12 +240,12 @@ func (*UnsubscribeInstrumentsTool) Tool() mcp.Tool {
 }
 
 func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "unsubscribe_instruments")
 
 		args := request.GetArguments()
-		if err := ValidateRequired(args, "instruments"); err != nil {
+		if err := common.ValidateRequired(args, "instruments"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -249,12 +258,12 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 				return mcp.NewToolResultError("Email required"), nil
 			}
 
-			instrumentIDs := NewArgParser(args).StringArray("instruments")
+			instrumentIDs := common.NewArgParser(args).StringArray("instruments")
 			if len(instrumentIDs) == 0 {
 				return mcp.NewToolResultError("At least one instrument must be specified"), nil
 			}
 
-			tokens, failed := resolveInstrumentTokens(handler.Instruments(), instrumentIDs)
+			tokens, failed := ResolveInstrumentTokens(handler.Instruments(), instrumentIDs)
 			if len(tokens) == 0 {
 				return mcp.NewToolResultError(fmt.Sprintf("Could not resolve any instruments: %v", failed)), nil
 			}
@@ -276,10 +285,13 @@ func (*UnsubscribeInstrumentsTool) Handler(manager *kc.Manager) server.ToolHandl
 	}
 }
 
-// resolveInstrumentTokens converts exchange:tradingsymbol strings to instrument tokens.
+// ResolveInstrumentTokens converts exchange:tradingsymbol strings to instrument tokens.
 // Phase 3a Batch 2: takes the InstrumentManagerInterface port rather than
 // reaching for the *kc.Manager.Instruments concrete field.
-func resolveInstrumentTokens(instr kc.InstrumentManagerInterface, instrumentIDs []string) (tokens []uint32, failed []string) {
+//
+// Anchor 1 PR 1.10: capitalised on extract so in-tree tests
+// (mcp/tools_pure_format_test.go) can reach it via misc.ResolveInstrumentTokens.
+func ResolveInstrumentTokens(instr kc.InstrumentManagerInterface, instrumentIDs []string) (tokens []uint32, failed []string) {
 	if instr == nil {
 		return nil, instrumentIDs
 	}
@@ -294,8 +306,10 @@ func resolveInstrumentTokens(instr kc.InstrumentManagerInterface, instrumentIDs 
 	return
 }
 
-// resolveTickerMode converts a mode string to the kiteticker Mode type.
-func resolveTickerMode(mode string) ticker.Mode {
+// ResolveTickerMode converts a mode string to the kiteticker Mode type.
+//
+// Anchor 1 PR 1.10: capitalised on extract.
+func ResolveTickerMode(mode string) ticker.Mode {
 	switch mode {
 	case "ltp":
 		return ticker.ModeLTP
@@ -307,9 +321,9 @@ func resolveTickerMode(mode string) ticker.Mode {
 }
 
 func init() {
-	RegisterInternalTool(&StartTickerTool{})
-	RegisterInternalTool(&StopTickerTool{})
-	RegisterInternalTool(&SubscribeInstrumentsTool{})
-	RegisterInternalTool(&TickerStatusTool{})
-	RegisterInternalTool(&UnsubscribeInstrumentsTool{})
+	plugin.RegisterInternalTool(&StartTickerTool{})
+	plugin.RegisterInternalTool(&StopTickerTool{})
+	plugin.RegisterInternalTool(&SubscribeInstrumentsTool{})
+	plugin.RegisterInternalTool(&TickerStatusTool{})
+	plugin.RegisterInternalTool(&UnsubscribeInstrumentsTool{})
 }

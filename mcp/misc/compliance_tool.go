@@ -1,4 +1,4 @@
-package mcp
+package misc
 
 import (
 	"context"
@@ -9,15 +9,22 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/zerodha/kite-mcp-server/mcp/common"
+	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // --- SEBI Compliance Status Tool ---
+//
+// Anchor 1 PR 1.10: extracted from mcp/compliance_tool.go into mcp/misc.
+// FormatINR (formerly package-private formatINR) is exported because the
+// in-tree tools_pure_format_test.go in package mcp asserts against it; the
+// lowercase shim lives in mcp/format_aliases.go for backward compat.
 
 // SEBIComplianceTool reports the user's SEBI algo trading compliance posture.
 type SEBIComplianceTool struct{}
 
-func init() { RegisterInternalTool(&SEBIComplianceTool{}) }
+func init() { plugin.RegisterInternalTool(&SEBIComplianceTool{}) }
 
 func (*SEBIComplianceTool) Tool() mcp.Tool {
 	return mcp.NewTool("sebi_compliance_status",
@@ -66,7 +73,7 @@ type complianceResponse struct {
 }
 
 func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
-	handler := NewToolHandler(manager)
+	handler := common.NewToolHandler(manager)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "sebi_compliance_status")
 
@@ -92,15 +99,15 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 
 			// RiskGuard section — pull live state if available.
 			rgSection := complianceSection{
-				Status:      "ACTIVE",
-				Checks:      7,
-				OrderValueCap: formatINR(riskguard.SystemDefaults.MaxSingleOrderINR.Float64()),
-				DailyLimit:  fmt.Sprintf("%d orders/day", riskguard.SystemDefaults.MaxOrdersPerDay),
+				Status:        "ACTIVE",
+				Checks:        7,
+				OrderValueCap: FormatINR(riskguard.SystemDefaults.MaxSingleOrderINR.Float64()),
+				DailyLimit:    fmt.Sprintf("%d orders/day", riskguard.SystemDefaults.MaxOrdersPerDay),
 			}
 
 			if guard := handler.RiskGuard(); guard != nil {
 				limits := guard.GetEffectiveLimits(email)
-				rgSection.OrderValueCap = formatINR(limits.MaxSingleOrderINR.Float64())
+				rgSection.OrderValueCap = FormatINR(limits.MaxSingleOrderINR.Float64())
 				rgSection.DailyLimit = fmt.Sprintf("%d orders/day", limits.MaxOrdersPerDay)
 				rgSection.Checks = 7 // kill-switch, order value, quantity, daily count, rate, duplicate, daily value
 
@@ -164,8 +171,11 @@ func (*SEBIComplianceTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	}
 }
 
-// formatINR formats a float as a human-readable Indian rupee string.
-func formatINR(v float64) string {
+// FormatINR formats a float as a human-readable Indian rupee string.
+//
+// Anchor 1 PR 1.10: capitalised on extract so in-tree tests
+// (mcp/tools_pure_format_test.go) reach it via misc.FormatINR.
+func FormatINR(v float64) string {
 	if v >= 100000 {
 		lakhs := v / 100000
 		if lakhs == float64(int(lakhs)) {
