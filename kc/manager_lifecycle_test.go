@@ -77,7 +77,7 @@ func TestManager_AccessorGetters(t *testing.T) {
 	}
 
 	// SessionSvc
-	if m.SessionSvc() == nil {
+	if m.SessionSvc == nil {
 		t.Error("SessionSvc() should not be nil")
 	}
 

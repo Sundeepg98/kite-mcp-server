@@ -78,7 +78,7 @@ func TestCommandBus_ClosePosition_RiskguardFires(t *testing.T) {
 	// running riskguard (it needs to fetch positions to derive the
 	// opposite-direction order). Pre-D4 the test injected a fake via
 	// WithBroker(ctx, ...) which the resolverFromContext fork honored;
-	// after D4 the use case has m.sessionSvc baked in. To keep this
+	// after D4 the use case has m.SessionSvc baked in. To keep this
 	// test exercising the riskguard wiring (not broker plumbing) we
 	// pre-populate a session with the fake Broker, so SessionService.
 	// GetBrokerForEmail finds it via its ListActiveSessions hot-path.

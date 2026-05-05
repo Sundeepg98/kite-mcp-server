@@ -89,21 +89,21 @@ func (m *Manager) registerRemainingQueries() error {
 	// --- Mutual fund queries ---
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFHoldingsQuery](), func(ctx context.Context, msg any) (any, error) {
-		uc := usecases.NewGetMFHoldingsUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewGetMFHoldingsUseCase(m.SessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFHoldingsQuery))
 	}); err != nil {
 		return err
 	}
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFOrdersQuery](), func(ctx context.Context, msg any) (any, error) {
-		uc := usecases.NewGetMFOrdersUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewGetMFOrdersUseCase(m.SessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFOrdersQuery))
 	}); err != nil {
 		return err
 	}
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMFSIPsQuery](), func(ctx context.Context, msg any) (any, error) {
-		uc := usecases.NewGetMFSIPsUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewGetMFSIPsUseCase(m.SessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.GetMFSIPsQuery))
 	}); err != nil {
 		return err
@@ -171,14 +171,14 @@ func (m *Manager) registerRemainingQueries() error {
 	// --- Trading context + pre-trade (BrokerResolver via sessionSvc) ---
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.TradingContextQuery](), func(ctx context.Context, msg any) (any, error) {
-		uc := usecases.NewTradingContextUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewTradingContextUseCase(m.SessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.TradingContextQuery))
 	}); err != nil {
 		return err
 	}
 
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.PreTradeCheckQuery](), func(ctx context.Context, msg any) (any, error) {
-		uc := usecases.NewPreTradeCheckUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewPreTradeCheckUseCase(m.SessionSvc, m.Logger)
 		return uc.Execute(ctx, msg.(cqrs.PreTradeCheckQuery))
 	}); err != nil {
 		return err

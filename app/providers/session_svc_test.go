@@ -68,7 +68,7 @@ func TestProvideSessionSvc_LiveManager_ReturnsService(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil SessionService for populated wrapper")
 	}
-	if got != mgrInit.Manager.SessionSvc() {
+	if got != mgrInit.Manager.SessionSvc {
 		t.Error("expected pointer-identity with Manager.SessionSvc(); got a different pointer (regression: provider wrapped/copied the service)")
 	}
 
@@ -104,7 +104,7 @@ func TestProvideSessionSvc_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	if sessSvc != mgrInit.Manager.SessionSvc() {
+	if sessSvc != mgrInit.Manager.SessionSvc {
 		t.Error("expected pointer-identity between graph-resolved SessionService and Manager.SessionSvc()")
 	}
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })

@@ -579,7 +579,7 @@ func (app *App) initializeServices() (*kc.Manager, *server.MCPServer, error) {
 	// Only wired when we have a sessionSvc to resolve per-email brokers.
 	// In DEV_MODE (no real sessions), the resolver is still usable; the
 	// mock broker satisfies broker.Client the same way a real one does.
-	if resolver := kc.FillWatcherResolverFromSessionSvc(kcManager.SessionSvc()); resolver != nil {
+	if resolver := kc.FillWatcherResolverFromBroker(kcManager); resolver != nil {
 		app.fillWatcher = kc.NewFillWatcher(kc.FillWatcherConfig{
 			Resolver:   resolver,
 			Dispatcher: eventDispatcher,

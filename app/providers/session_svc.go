@@ -53,5 +53,10 @@ func ProvideSessionSvc(initialized *InitializedManager) *kc.SessionService {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.SessionSvc()
+	// Anchor 6 PR 6.4: Manager.SessionSvc() method deleted; the
+	// underlying field sessionSvc was capitalised to SessionSvc
+	// (now a public field) so Fx providers can access it without an
+	// accessor method on the kc-root god-struct. Same field-exposure
+	// pattern as PR 6.2 (CredentialSvc, commit 5514fa3).
+	return initialized.Manager.SessionSvc
 }

@@ -989,7 +989,7 @@ func credentialsData(_ context.Context, manager extAppManagerPort, _ *audit.Stor
 // (which composes BrokerResolverProvider). *kc.Manager satisfies the
 // interface so existing test callers compile unchanged.
 func brokerClientForEmail(manager extAppManagerPort, email string) broker.Client {
-	client, err := manager.SessionSvc().GetBrokerForEmail(email)
+	client, err := manager.GetBrokerForEmail(email)
 	if err != nil {
 		return nil
 	}

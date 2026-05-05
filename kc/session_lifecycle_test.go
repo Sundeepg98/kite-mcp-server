@@ -122,7 +122,7 @@ func TestSessionService_HasBrokerFactory_NilByDefault(t *testing.T) {
 		WithInstrumentsSkipFetch(true),
 	)
 	require.NoError(t, err)
-	assert.False(t, mgr.SessionSvc().HasBrokerFactory(),
+	assert.False(t, mgr.SessionSvc.HasBrokerFactory(),
 		"fresh Manager must not have a broker.Factory wired")
 }
 
@@ -138,8 +138,8 @@ func TestSessionService_SetBrokerFactory_WiresFactory(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	mgr.SessionSvc().SetBrokerFactory(&stubBrokerFactory{})
-	assert.True(t, mgr.SessionSvc().HasBrokerFactory(),
+	mgr.SessionSvc.SetBrokerFactory(&stubBrokerFactory{})
+	assert.True(t, mgr.SessionSvc.HasBrokerFactory(),
 		"after SetBrokerFactory the service must report a wired factory")
 }
 
@@ -155,12 +155,12 @@ func TestSessionService_SetBrokerFactory_NilUnwires(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	mgr.SessionSvc().SetBrokerFactory(&stubBrokerFactory{})
-	require.True(t, mgr.SessionSvc().HasBrokerFactory())
+	mgr.SessionSvc.SetBrokerFactory(&stubBrokerFactory{})
+	require.True(t, mgr.SessionSvc.HasBrokerFactory())
 
 	// Now flip back to nil.
-	mgr.SessionSvc().SetBrokerFactory(nil)
-	assert.False(t, mgr.SessionSvc().HasBrokerFactory())
+	mgr.SessionSvc.SetBrokerFactory(nil)
+	assert.False(t, mgr.SessionSvc.HasBrokerFactory())
 }
 
 // ===========================================================================
@@ -493,7 +493,7 @@ func TestSessionService_ClearSessionData_InvalidIDReturnsError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = mgr.SessionSvc().ClearSessionData("not-a-uuid-not-a-prefix")
+	err = mgr.SessionSvc.ClearSessionData("not-a-uuid-not-a-prefix")
 	require.Error(t, err)
 }
 
@@ -511,7 +511,7 @@ func TestSessionService_ClearSessionData_UnknownSessionReturnsError(t *testing.T
 
 	// Well-formed but unknown — the kitemcp- prefix + a fresh UUID
 	// shape passes validation but the registry has no entry.
-	err = mgr.SessionSvc().ClearSessionData("kitemcp-00000000-0000-0000-0000-000000000000")
+	err = mgr.SessionSvc.ClearSessionData("kitemcp-00000000-0000-0000-0000-000000000000")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -532,6 +532,6 @@ func TestSessionService_ClearSessionData_NoDataIsNoop(t *testing.T) {
 
 	// Generate a session without populating Data.
 	id := mgr.GenerateSession()
-	require.NoError(t, mgr.SessionSvc().ClearSessionData(id),
+	require.NoError(t, mgr.SessionSvc.ClearSessionData(id),
 		"clearing a session with nil Data must succeed without invoking the hook")
 }

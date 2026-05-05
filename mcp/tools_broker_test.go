@@ -218,7 +218,7 @@ func newFactoryManager(t *testing.T, mockURL string) *kc.Manager {
 	mgr.SetRiskGuard(riskguard.NewGuard(logger))
 
 	// Inject the mock broker factory so GetBrokerForEmail uses it.
-	mgr.SessionSvc().SetBrokerFactory(&mockBrokerFactory{mockURL: mockURL})
+	mgr.SessionSvc.SetBrokerFactory(&mockBrokerFactory{mockURL: mockURL})
 
 	// Seed credentials + tokens so GetBrokerForEmail resolves successfully.
 	mgr.CredentialStore().Set(factoryEmail, &kc.KiteCredentialEntry{

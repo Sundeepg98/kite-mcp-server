@@ -14,55 +14,55 @@ func newSessionLifecycleService(m *Manager) *SessionLifecycleService {
 
 // GetOrCreateSession retrieves an existing Kite session or creates a new one.
 func (s *SessionLifecycleService) GetOrCreateSession(mcpSessionID string) (*KiteSessionData, bool, error) {
-	return s.m.sessionSvc.GetOrCreateSession(mcpSessionID)
+	return s.m.SessionSvc.GetOrCreateSession(mcpSessionID)
 }
 
 // GetOrCreateSessionWithEmail retrieves or creates a Kite session with email context.
 func (s *SessionLifecycleService) GetOrCreateSessionWithEmail(mcpSessionID, email string) (*KiteSessionData, bool, error) {
-	return s.m.sessionSvc.GetOrCreateSessionWithEmail(mcpSessionID, email)
+	return s.m.SessionSvc.GetOrCreateSessionWithEmail(mcpSessionID, email)
 }
 
 // GetSession retrieves an existing Kite session by MCP session ID.
 func (s *SessionLifecycleService) GetSession(mcpSessionID string) (*KiteSessionData, error) {
-	return s.m.sessionSvc.GetSession(mcpSessionID)
+	return s.m.SessionSvc.GetSession(mcpSessionID)
 }
 
 // ClearSession terminates a session, triggering cleanup hooks.
 func (s *SessionLifecycleService) ClearSession(sessionID string) {
-	s.m.sessionSvc.ClearSession(sessionID)
+	s.m.SessionSvc.ClearSession(sessionID)
 }
 
 // ClearSessionData clears the session data without terminating the session.
 func (s *SessionLifecycleService) ClearSessionData(sessionID string) error {
-	return s.m.sessionSvc.ClearSessionData(sessionID)
+	return s.m.SessionSvc.ClearSessionData(sessionID)
 }
 
 // GenerateSession creates a new MCP session and returns its ID.
 func (s *SessionLifecycleService) GenerateSession() string {
-	return s.m.sessionSvc.GenerateSession()
+	return s.m.SessionSvc.GenerateSession()
 }
 
 // SessionLoginURL returns the Kite login URL for the given session.
 func (s *SessionLifecycleService) SessionLoginURL(mcpSessionID string) (string, error) {
-	return s.m.sessionSvc.SessionLoginURL(mcpSessionID)
+	return s.m.SessionSvc.SessionLoginURL(mcpSessionID)
 }
 
 // CompleteSession completes Kite authentication using the request token.
 // Back-compat wrapper around CompleteSessionAndRotate.
 func (s *SessionLifecycleService) CompleteSession(mcpSessionID, kiteRequestToken string) error {
-	return s.m.sessionSvc.CompleteSession(mcpSessionID, kiteRequestToken)
+	return s.m.SessionSvc.CompleteSession(mcpSessionID, kiteRequestToken)
 }
 
 // CompleteSessionAndRotate completes Kite authentication AND rotates the
 // MCP session ID for OWASP A07 (Session Fixation) defence. Returns the
 // post-rotation session ID.
 func (s *SessionLifecycleService) CompleteSessionAndRotate(mcpSessionID, kiteRequestToken string) (string, error) {
-	return s.m.sessionSvc.CompleteSessionAndRotate(mcpSessionID, kiteRequestToken)
+	return s.m.SessionSvc.CompleteSessionAndRotate(mcpSessionID, kiteRequestToken)
 }
 
 // GetActiveSessionCount returns the number of active sessions.
 func (s *SessionLifecycleService) GetActiveSessionCount() int {
-	return s.m.sessionSvc.GetActiveSessionCount()
+	return s.m.SessionSvc.GetActiveSessionCount()
 }
 
 // ---------------------------------------------------------------------------

@@ -263,7 +263,7 @@ type Manager struct {
 
 	// Focused service objects (Clean Architecture)
 	CredentialSvc     *CredentialService     // credential resolution (per-user + global)
-	sessionSvc        *SessionService        // MCP session lifecycle
+	SessionSvc        *SessionService        // MCP session lifecycle
 	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
 	portfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
 	orderSvc          *OrderService          // order placement, modification, cancellation
@@ -348,7 +348,7 @@ type Manager struct {
 	// Wave D Phase 1 Slice D5: margin-query use cases hoisted from
 	// per-request construction. All three are read-side queries
 	// (estimate margin / charges before placing an order); broker
-	// resolution flows through m.sessionSvc on dispatch.
+	// resolution flows through m.SessionSvc on dispatch.
 	getOrderMarginsUC  *usecases.GetOrderMarginsUseCase
 	getBasketMarginsUC *usecases.GetBasketMarginsUseCase
 	getOrderChargesUC  *usecases.GetOrderChargesUseCase
@@ -368,7 +368,7 @@ type Manager struct {
 	// OR from the Manager's audit store. Hoisting at startup would
 	// lock the audit store choice and break the test fixture. The
 	// handler keeps per-dispatch use case construction but uses
-	// m.sessionSvc as the BrokerResolver (post-Wave-D pattern).
+	// m.SessionSvc as the BrokerResolver (post-Wave-D pattern).
 	// GetActivityForWidget has no broker resolver dimension at all so
 	// it's not a Wave D site; it stays per-dispatch construction.
 	getPortfolioForWidgetUC *usecases.GetPortfolioForWidgetUseCase

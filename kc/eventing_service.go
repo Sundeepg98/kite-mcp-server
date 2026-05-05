@@ -43,8 +43,8 @@ func (e *EventingService) SetDispatcher(d *domain.EventDispatcher) {
 	if d != nil && e.m.projector != nil {
 		e.m.projector.Subscribe(d)
 	}
-	if e.m.sessionSvc != nil {
-		e.m.sessionSvc.SetEventDispatcher(d)
+	if e.m.SessionSvc != nil {
+		e.m.SessionSvc.SetEventDispatcher(d)
 	}
 	// Trailing-stop trigger events flow through the same dispatcher so a
 	// forensic walk of the SL OrderID sees trailing modifications inline

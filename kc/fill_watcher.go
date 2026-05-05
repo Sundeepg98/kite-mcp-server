@@ -84,26 +84,36 @@ func (r staticBrokerResolver) GetBrokerForEmail(_ string) (FillWatcherBroker, er
 	return r.b, nil
 }
 
-// sessionSvcBrokerAdapter adapts *SessionService to FillWatcherBrokerResolver.
-// SessionService.GetBrokerForEmail returns broker.Client, which already
-// satisfies FillWatcherBroker (broker.Client embeds broker.OrderManager
-// which supplies GetOrderHistory), but Go interface rules require
-// exact return-type match so we provide a 3-line adapter here.
-type sessionSvcBrokerAdapter struct{ s *SessionService }
+// brokerResolverAdapter adapts BrokerResolverProvider to
+// FillWatcherBrokerResolver. The provider's GetBrokerForEmail returns
+// broker.Client, which already satisfies FillWatcherBroker
+// (broker.Client embeds broker.OrderManager which supplies
+// GetOrderHistory), but Go interface rules require exact return-type
+// match so we provide a 3-line adapter here.
+//
+// Anchor 6 PR 6.4 (per .research/anchor-6-pr-6-4-broker-resolver-
+// redesign.md commit a2a11db): renamed from sessionSvcBrokerAdapter
+// + retyped from *SessionService to the narrower BrokerResolverProvider
+// so the wire.go callsite no longer needs Manager.SessionSvc() access.
+// The narrow interface is satisfied by both *SessionService (preserved
+// for kc-internal callers) and *Manager directly (via passthrough
+// methods in kc/manager_accessors.go).
+type brokerResolverAdapter struct{ r BrokerResolverProvider }
 
-func (a sessionSvcBrokerAdapter) GetBrokerForEmail(email string) (FillWatcherBroker, error) {
-	return a.s.GetBrokerForEmail(email)
+func (a brokerResolverAdapter) GetBrokerForEmail(email string) (FillWatcherBroker, error) {
+	return a.r.GetBrokerForEmail(email)
 }
 
-// FillWatcherResolverFromSessionSvc returns a FillWatcherBrokerResolver
-// backed by a SessionService. Factored into a named constructor so
-// app/wire.go has an explicit, named API rather than passing an ad-hoc
-// struct literal.
-func FillWatcherResolverFromSessionSvc(s *SessionService) FillWatcherBrokerResolver {
-	if s == nil {
+// FillWatcherResolverFromBroker returns a FillWatcherBrokerResolver
+// backed by anything that satisfies BrokerResolverProvider. The
+// caller (app/wire.go) passes *kc.Manager directly post-PR-6.4;
+// pre-PR callers passed *kc.SessionService via the now-deleted
+// FillWatcherResolverFromSessionSvc constructor.
+func FillWatcherResolverFromBroker(r BrokerResolverProvider) FillWatcherBrokerResolver {
+	if r == nil {
 		return nil
 	}
-	return sessionSvcBrokerAdapter{s: s}
+	return brokerResolverAdapter{r: r}
 }
 
 // FillWatcherConfig is the constructor payload. All fields are required

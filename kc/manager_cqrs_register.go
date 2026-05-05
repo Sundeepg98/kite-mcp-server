@@ -21,7 +21,7 @@ import (
 // Behavior is unchanged — pure file move.
 func (m *Manager) registerCQRSHandlers() error {
 	// GetPortfolioQuery -> GetPortfolioUseCase
-	portfolioUC := usecases.NewGetPortfolioUseCase(m.sessionSvc, m.Logger)
+	portfolioUC := usecases.NewGetPortfolioUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetPortfolioQuery](), func(ctx context.Context, msg any) (any, error) {
 		return portfolioUC.Execute(ctx, msg.(cqrs.GetPortfolioQuery))
 	}); err != nil {
@@ -42,7 +42,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	// NOT caught by the fallback — those must propagate so users know to
 	// re-authenticate. isBrokerUnavailable's trigger list is conservative
 	// for this reason.
-	ordersUC := usecases.NewGetOrdersUseCase(m.sessionSvc, m.Logger)
+	ordersUC := usecases.NewGetOrdersUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOrdersQuery)
 		orders, err := ordersUC.Execute(ctx, q)
@@ -69,7 +69,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetOrderHistoryQuery -> GetOrderHistoryUseCase
-	orderHistoryUC := usecases.NewGetOrderHistoryUseCase(m.sessionSvc, m.Logger)
+	orderHistoryUC := usecases.NewGetOrderHistoryUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderHistoryQuery](), func(ctx context.Context, msg any) (any, error) {
 		return orderHistoryUC.Execute(ctx, msg.(cqrs.GetOrderHistoryQuery))
 	}); err != nil {
@@ -77,7 +77,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetOrderTradesQuery -> GetOrderTradesUseCase
-	orderTradesUC := usecases.NewGetOrderTradesUseCase(m.sessionSvc, m.Logger)
+	orderTradesUC := usecases.NewGetOrderTradesUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrderTradesQuery](), func(ctx context.Context, msg any) (any, error) {
 		return orderTradesUC.Execute(ctx, msg.(cqrs.GetOrderTradesQuery))
 	}); err != nil {
@@ -85,7 +85,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetProfileQuery -> GetProfileUseCase
-	profileUC := usecases.NewGetProfileUseCase(m.sessionSvc, m.Logger)
+	profileUC := usecases.NewGetProfileUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetProfileQuery](), func(ctx context.Context, msg any) (any, error) {
 		return profileUC.Execute(ctx, msg.(cqrs.GetProfileQuery))
 	}); err != nil {
@@ -93,7 +93,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetMarginsQuery -> GetMarginsUseCase
-	marginsUC := usecases.NewGetMarginsUseCase(m.sessionSvc, m.Logger)
+	marginsUC := usecases.NewGetMarginsUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetMarginsQuery](), func(ctx context.Context, msg any) (any, error) {
 		return marginsUC.Execute(ctx, msg.(cqrs.GetMarginsQuery))
 	}); err != nil {
@@ -101,7 +101,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetTradesQuery -> GetTradesUseCase
-	tradesUC := usecases.NewGetTradesUseCase(m.sessionSvc, m.Logger)
+	tradesUC := usecases.NewGetTradesUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetTradesQuery](), func(ctx context.Context, msg any) (any, error) {
 		return tradesUC.Execute(ctx, msg.(cqrs.GetTradesQuery))
 	}); err != nil {
@@ -109,7 +109,7 @@ func (m *Manager) registerCQRSHandlers() error {
 	}
 
 	// GetGTTsQuery -> GetGTTsUseCase
-	gttsUC := usecases.NewGetGTTsUseCase(m.sessionSvc, m.Logger)
+	gttsUC := usecases.NewGetGTTsUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetGTTsQuery](), func(ctx context.Context, msg any) (any, error) {
 		return gttsUC.Execute(ctx, msg.(cqrs.GetGTTsQuery))
 	}); err != nil {
@@ -118,7 +118,7 @@ func (m *Manager) registerCQRSHandlers() error {
 
 	// Market data queries take an email alongside the query (per usecase signature).
 	// We carry email via a dedicated envelope type so the bus can dispatch uniformly.
-	ltpUC := usecases.NewGetLTPUseCase(m.sessionSvc, m.Logger)
+	ltpUC := usecases.NewGetLTPUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetLTPQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetLTPQuery)
 		return ltpUC.Execute(ctx, q.Email, q)
@@ -126,7 +126,7 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
-	ohlcUC := usecases.NewGetOHLCUseCase(m.sessionSvc, m.Logger)
+	ohlcUC := usecases.NewGetOHLCUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOHLCQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetOHLCQuery)
 		return ohlcUC.Execute(ctx, q.Email, q)
@@ -134,7 +134,7 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
-	quotesUC := usecases.NewGetQuotesUseCase(m.sessionSvc, m.Logger)
+	quotesUC := usecases.NewGetQuotesUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetQuotesQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetQuotesQuery)
 		return quotesUC.Execute(ctx, q.Email, q)
@@ -142,7 +142,7 @@ func (m *Manager) registerCQRSHandlers() error {
 		return err
 	}
 
-	histUC := usecases.NewGetHistoricalDataUseCase(m.sessionSvc, m.Logger)
+	histUC := usecases.NewGetHistoricalDataUseCase(m.SessionSvc, m.Logger)
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetHistoricalDataQuery](), func(ctx context.Context, msg any) (any, error) {
 		q := msg.(cqrs.GetHistoricalDataQuery)
 		return histUC.Execute(ctx, q.Email, q)

@@ -7,7 +7,7 @@ package kc
 // Sub-commit C of Wave B option 2 (kc/ root Manager boot + lifecycle).
 //
 // Targets:
-//   1. FillWatcherResolverFromSessionSvc — both nil + non-nil paths
+//   1. FillWatcherResolverFromBroker — both nil + non-nil paths
 //      (was 0%)
 //   2. sessionSvcBrokerAdapter.GetBrokerForEmail — the 3-line adapter
 //      that exists only to satisfy Go's interface-method strict-match
@@ -53,25 +53,25 @@ func quietWatcherLogger() *slog.Logger {
 }
 
 // ===========================================================================
-// FillWatcherResolverFromSessionSvc — both branches (was 0%)
+// FillWatcherResolverFromBroker — both branches (was 0%)
 // ===========================================================================
 
-// TestFillWatcherResolverFromSessionSvc_NilReturnsNil verifies the
+// TestFillWatcherResolverFromBroker_NilReturnsNil verifies the
 // nil-guard at fill_watcher.go:103-105: passing a nil SessionService
 // produces a nil resolver rather than a struct wrapping nil.
-func TestFillWatcherResolverFromSessionSvc_NilReturnsNil(t *testing.T) {
+func TestFillWatcherResolverFromBroker_NilReturnsNil(t *testing.T) {
 	t.Parallel()
 
-	resolver := FillWatcherResolverFromSessionSvc(nil)
+	resolver := FillWatcherResolverFromBroker(nil)
 	assert.Nil(t, resolver,
 		"nil SessionService must produce a nil resolver, not a wrapper around nil")
 }
 
-// TestFillWatcherResolverFromSessionSvc_WrapsNonNil verifies the
+// TestFillWatcherResolverFromBroker_WrapsNonNil verifies the
 // happy-path: a real SessionService gets wrapped in the
 // sessionSvcBrokerAdapter, and adapter.GetBrokerForEmail delegates
 // to the underlying SessionService.GetBrokerForEmail.
-func TestFillWatcherResolverFromSessionSvc_WrapsNonNil(t *testing.T) {
+func TestFillWatcherResolverFromBroker_WrapsNonNil(t *testing.T) {
 	t.Parallel()
 
 	mgr, err := NewWithOptions(t.Context(),
@@ -81,7 +81,7 @@ func TestFillWatcherResolverFromSessionSvc_WrapsNonNil(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	resolver := FillWatcherResolverFromSessionSvc(mgr.SessionSvc())
+	resolver := FillWatcherResolverFromBroker(mgr)
 	require.NotNil(t, resolver,
 		"non-nil SessionService must yield a non-nil resolver")
 

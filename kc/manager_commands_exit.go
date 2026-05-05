@@ -15,7 +15,7 @@ import (
 // initOrderUseCases (kc/manager_use_cases.go) and held on the Manager.
 // The handler is a thin dispatcher — no per-request resolver lookup,
 // no per-request use case construction. Broker resolution flows through
-// m.sessionSvc on every dispatch (one in-memory session-cache lookup,
+// m.SessionSvc on every dispatch (one in-memory session-cache lookup,
 // ~100ns; see .research/wave-d-resolver-refactor-plan.md §5).
 func (m *Manager) registerExitCommands() error {
 	// --- Exit: ClosePositionCommand ---

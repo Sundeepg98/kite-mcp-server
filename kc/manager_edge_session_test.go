@@ -403,7 +403,7 @@ func TestSessionService_GetSession_ValidationError(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	_, err = m.sessionSvc.GetSession("invalid-session-id")
+	_, err = m.SessionSvc.GetSession("invalid-session-id")
 	if err == nil {
 		t.Error("Expected error for invalid session")
 	}
@@ -422,7 +422,7 @@ func TestSessionService_ClearSessionData_NoSession(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	err = m.sessionSvc.ClearSessionData("nonexistent-session")
+	err = m.SessionSvc.ClearSessionData("nonexistent-session")
 	if err == nil {
 		t.Error("Expected error for non-existent session")
 	}
@@ -442,7 +442,7 @@ func TestSessionService_ClearSessionData_Success_Gap(t *testing.T) {
 	defer m.Shutdown()
 
 	sessionID := m.GenerateSession()
-	err = m.sessionSvc.ClearSessionData(sessionID)
+	err = m.SessionSvc.ClearSessionData(sessionID)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestSessionService_SessionLoginURL_SignerError(t *testing.T) {
 
 	// Test with valid session — should succeed
 	sessionID := m.GenerateSession()
-	loginURL, err := m.sessionSvc.SessionLoginURL(sessionID)
+	loginURL, err := m.SessionSvc.SessionLoginURL(sessionID)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestSessionService_GetOrCreateSessionWithEmail(t *testing.T) {
 	defer m.Shutdown()
 
 	sessionID := m.GenerateSession()
-	data, isNew, err := m.sessionSvc.GetOrCreateSessionWithEmail(sessionID, "user@test.com")
+	data, isNew, err := m.SessionSvc.GetOrCreateSessionWithEmail(sessionID, "user@test.com")
 	if err != nil {
 		t.Fatalf("GetOrCreateSessionWithEmail error: %v", err)
 	}

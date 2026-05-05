@@ -64,7 +64,7 @@ func TestCommandBus_PlaceOrder_RiskguardFires(t *testing.T) {
 
 	// fake broker is retained as a sentinel — riskguard MUST fire before
 	// the use case reaches the broker-resolution step. After Wave D the
-	// PlaceOrder use case has m.sessionSvc baked in (no per-request
+	// PlaceOrder use case has m.SessionSvc baked in (no per-request
 	// broker via ctx), but the invariant remains meaningful: if
 	// riskguard fires for the frozen user, broker is never reached
 	// and fake.placeOrderCalled stays false. A regression that

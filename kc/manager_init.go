@@ -466,7 +466,7 @@ func (m *Manager) initFocusedServices(cfg Config, instrumentsManager *instrument
 	if cfg.Metrics != nil {
 		metricsImpl = cfg.Metrics
 	}
-	m.sessionSvc = NewSessionService(SessionServiceConfig{
+	m.SessionSvc = NewSessionService(SessionServiceConfig{
 		CredentialSvc: m.CredentialSvc,
 		TokenStore:    m.tokenStore,
 		SessionSigner: m.sessionSigner,
@@ -474,12 +474,12 @@ func (m *Manager) initFocusedServices(cfg Config, instrumentsManager *instrument
 		Metrics:       metricsImpl,
 		DevMode:       cfg.DevMode,
 	})
-	m.sessionSvc.SetSessionManager(m.sessionManager)
+	m.SessionSvc.SetSessionManager(m.sessionManager)
 	m.managedSessionSvc = NewManagedSessionService(m.sessionManager)
 
 	// Initialize portfolio and order services
-	m.portfolioSvc = NewPortfolioService(m.sessionSvc, cfg.Logger)
-	m.orderSvc = NewOrderService(m.sessionSvc, cfg.Logger)
+	m.portfolioSvc = NewPortfolioService(m.SessionSvc, cfg.Logger)
+	m.orderSvc = NewOrderService(m.SessionSvc, cfg.Logger)
 
 	// Initialize alert service (wraps alert-related components)
 	m.alertSvc = NewAlertService(AlertServiceConfig{

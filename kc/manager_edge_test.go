@@ -1343,7 +1343,7 @@ func TestPortfolioService_BrokerCallErrors(t *testing.T) {
 		AccessToken: "fake-token",
 	})
 
-	ps := NewPortfolioService(m.SessionSvc(), testLogger())
+	ps := NewPortfolioService(m.SessionSvc, testLogger())
 
 	_, err := ps.GetHoldings("broker-fail@test.com")
 	if err == nil {
@@ -1386,7 +1386,7 @@ func TestOrderService_BrokerCallErrors(t *testing.T) {
 	kd.Kite.SetAccessToken("fake-token")
 	m.TokenStore().Set("order-fail@test.com", &KiteTokenEntry{AccessToken: "fake-token"})
 
-	os := NewOrderService(m.SessionSvc(), testLogger())
+	os := NewOrderService(m.SessionSvc, testLogger())
 
 	_, err := os.PlaceOrder("order-fail@test.com", broker.OrderParams{
 		Exchange: "NSE", Tradingsymbol: "SBIN", TransactionType: "BUY",
@@ -1491,7 +1491,7 @@ func TestClearSessionData_WithData(t *testing.T) {
 		t.Fatal("Expected session data")
 	}
 
-	err := m.SessionSvc().ClearSessionData(sid)
+	err := m.SessionSvc.ClearSessionData(sid)
 	if err != nil {
 		t.Fatalf("ClearSessionData: %v", err)
 	}

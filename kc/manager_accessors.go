@@ -3,6 +3,7 @@ package kc
 import (
 	"time"
 
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	logport "github.com/zerodha/kite-mcp-server/kc/logger"
 )
@@ -19,9 +20,25 @@ import (
 // Focused sub-services (Clean Architecture)
 // ---------------------------------------------------------------------------
 
-// SessionSvc returns the session lifecycle service.
-func (m *Manager) SessionSvc() *SessionService {
-	return m.sessionSvc
+// GetBrokerForEmail resolves the broker.Client for the given email
+// by delegating to the underlying SessionService. Anchor 6 PR 6.4
+// (per .research/anchor-6-pr-6-4-broker-resolver-redesign.md commit
+// a2a11db): added so *Manager satisfies the narrowed
+// BrokerResolverProvider interface (kc/manager_interfaces.go:95-114)
+// directly, without exposing the *SessionService wrapper. Replaces
+// the prior `manager.SessionSvc().GetBrokerForEmail(email)` two-hop
+// at all 4 cross-package call sites.
+func (m *Manager) GetBrokerForEmail(email string) (broker.Client, error) {
+	return m.SessionSvc.GetBrokerForEmail(email)
+}
+
+// HasBrokerFactory reports whether the underlying SessionService has
+// an explicit broker.Factory wired. Anchor 6 PR 6.4: added so
+// *Manager satisfies BrokerResolverProvider directly. Replaces the
+// prior `manager.SessionSvc().HasBrokerFactory()` two-hop at the
+// app/http.go:720 call site.
+func (m *Manager) HasBrokerFactory() bool {
+	return m.SessionSvc.HasBrokerFactory()
 }
 
 // PortfolioSvc returns the portfolio query service.

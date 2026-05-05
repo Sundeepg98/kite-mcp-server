@@ -54,7 +54,7 @@ var _ usecases.LotSizeLookup = (*lotSizeLookupAdapter)(nil)
 //
 // Wave D Slices D2-D7: order/GTT/exit handlers dispatch into startup-
 // constructed use cases held on the Manager (initOrderUseCases). Broker
-// resolution always flows through m.sessionSvc; the per-request
+// resolution always flows through m.SessionSvc; the per-request
 // WithBroker / resolverFromContext optimization that this file used to
 // describe was removed in Slice D7. Trailing-stop handlers (further
 // down) still construct per-request because their dependency
@@ -67,7 +67,7 @@ func (m *Manager) registerOrderCommands() error {
 	// Manager. The handler is a thin dispatcher — type-asserts the
 	// message and forwards to the pre-built use case. EventStore +
 	// LotSizeLookup wiring moved to construction time. Broker
-	// resolution flows through m.sessionSvc on every dispatch.
+	// resolution flows through m.SessionSvc on every dispatch.
 	if err := m.commandBus.Register(reflect.TypeFor[cqrs.PlaceOrderCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.PlaceOrderCommand)
 		if !ok {
@@ -148,7 +148,7 @@ func (m *Manager) registerOrderCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewConvertPositionUseCase(m.sessionSvc, m.Logger)
+		uc := usecases.NewConvertPositionUseCase(m.SessionSvc, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}

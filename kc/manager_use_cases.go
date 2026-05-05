@@ -55,7 +55,7 @@ func (m *Manager) initOrderUseCases() {
 	// PlaceOrder — full pipeline (instruments lookup, riskguard, broker,
 	// event dispatch, optional event-store append).
 	placeUC := usecases.NewPlaceOrderUseCase(
-		m.sessionSvc,
+		m.SessionSvc,
 		m.riskGuard,
 		m.eventing.Dispatcher(), // nil at init-time; EventingService.SetDispatcher propagates later
 		m.Logger,
@@ -71,7 +71,7 @@ func (m *Manager) initOrderUseCases() {
 	// ModifyOrder — same pipeline minus the instruments lookup (modify
 	// only changes price/qty, not instrument metadata).
 	modifyUC := usecases.NewModifyOrderUseCase(
-		m.sessionSvc,
+		m.SessionSvc,
 		m.riskGuard,
 		m.eventing.Dispatcher(),
 		m.Logger,
@@ -84,7 +84,7 @@ func (m *Manager) initOrderUseCases() {
 	// CancelOrder — no riskguard (cancel is always allowed; riskguard
 	// only gates outbound state-creating actions). No instruments lookup.
 	cancelUC := usecases.NewCancelOrderUseCase(
-		m.sessionSvc,
+		m.SessionSvc,
 		m.eventing.Dispatcher(),
 		m.Logger,
 	)
@@ -96,7 +96,7 @@ func (m *Manager) initOrderUseCases() {
 	// PlaceGTT / ModifyGTT / DeleteGTT — Slice D3. GTT use case
 	// constructors take only (resolver, logger); event dispatcher and
 	// event store are wired post-construction via SetX setters.
-	placeGTT := usecases.NewPlaceGTTUseCase(m.sessionSvc, m.Logger)
+	placeGTT := usecases.NewPlaceGTTUseCase(m.SessionSvc, m.Logger)
 	if m.eventStore != nil {
 		placeGTT.SetEventStore(m.eventStore)
 	}
@@ -105,7 +105,7 @@ func (m *Manager) initOrderUseCases() {
 	}
 	m.placeGTTUC = placeGTT
 
-	modifyGTT := usecases.NewModifyGTTUseCase(m.sessionSvc, m.Logger)
+	modifyGTT := usecases.NewModifyGTTUseCase(m.SessionSvc, m.Logger)
 	if m.eventStore != nil {
 		modifyGTT.SetEventStore(m.eventStore)
 	}
@@ -114,7 +114,7 @@ func (m *Manager) initOrderUseCases() {
 	}
 	m.modifyGTTUC = modifyGTT
 
-	deleteGTT := usecases.NewDeleteGTTUseCase(m.sessionSvc, m.Logger)
+	deleteGTT := usecases.NewDeleteGTTUseCase(m.SessionSvc, m.Logger)
 	if m.eventStore != nil {
 		deleteGTT.SetEventStore(m.eventStore)
 	}
@@ -127,7 +127,7 @@ func (m *Manager) initOrderUseCases() {
 	// (resolver, guard, events, logger); event dispatcher comes via
 	// the constructor (nil at init, propagated by SetDispatcher).
 	closePos := usecases.NewClosePositionUseCase(
-		m.sessionSvc,
+		m.SessionSvc,
 		m.riskGuard,
 		m.eventing.Dispatcher(),
 		m.Logger,
@@ -135,7 +135,7 @@ func (m *Manager) initOrderUseCases() {
 	m.closePositionUC = closePos
 
 	closeAll := usecases.NewCloseAllPositionsUseCase(
-		m.sessionSvc,
+		m.SessionSvc,
 		m.riskGuard,
 		m.eventing.Dispatcher(),
 		m.Logger,
@@ -144,9 +144,9 @@ func (m *Manager) initOrderUseCases() {
 
 	// Margin queries — Slice D5. All three are read-only (compute margin /
 	// charges); no event dispatch, no riskguard, no event store.
-	m.getOrderMarginsUC = usecases.NewGetOrderMarginsUseCase(m.sessionSvc, m.Logger)
-	m.getBasketMarginsUC = usecases.NewGetBasketMarginsUseCase(m.sessionSvc, m.Logger)
-	m.getOrderChargesUC = usecases.NewGetOrderChargesUseCase(m.sessionSvc, m.Logger)
+	m.getOrderMarginsUC = usecases.NewGetOrderMarginsUseCase(m.SessionSvc, m.Logger)
+	m.getBasketMarginsUC = usecases.NewGetBasketMarginsUseCase(m.SessionSvc, m.Logger)
+	m.getOrderChargesUC = usecases.NewGetOrderChargesUseCase(m.SessionSvc, m.Logger)
 
 	// Widget queries — Slice D6. Two of the four widget use cases are
 	// fully hoistable (single dependency that's stable for Manager
@@ -154,7 +154,7 @@ func (m *Manager) initOrderUseCases() {
 	// construction so the ctx-bound audit-store override (test contract
 	// via cqrs.WithWidgetAuditStore) keeps working. See the field-doc
 	// comment in manager.go for the design tradeoff.
-	m.getPortfolioForWidgetUC = usecases.NewGetPortfolioForWidgetUseCase(m.sessionSvc, m.Logger)
+	m.getPortfolioForWidgetUC = usecases.NewGetPortfolioForWidgetUseCase(m.SessionSvc, m.Logger)
 
 	// Alerts widget needs the alert store. Manager-side initAlertSystem
 	// runs before initOrderUseCases so m.alertStore is non-nil here in
@@ -162,7 +162,7 @@ func (m *Manager) initOrderUseCases() {
 	// handler pattern that returns nil result when no store is wired.
 	if m.alertStore != nil {
 		m.getAlertsForWidgetUC = usecases.NewGetAlertsForWidgetUseCase(
-			m.sessionSvc,
+			m.SessionSvc,
 			m.alertStore,
 			m.Logger,
 		)

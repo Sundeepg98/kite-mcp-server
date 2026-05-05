@@ -39,12 +39,12 @@ func (s *SchedulingService) kiteSessionCleanupHook(session *MCPSession) {
 
 // CleanupExpiredSessions manually triggers cleanup of expired MCP sessions.
 func (s *SchedulingService) CleanupExpiredSessions() int {
-	return s.m.sessionSvc.CleanupExpiredSessions()
+	return s.m.SessionSvc.CleanupExpiredSessions()
 }
 
 // StopCleanupRoutine stops the background cleanup routine.
 func (s *SchedulingService) StopCleanupRoutine() {
-	s.m.sessionSvc.StopCleanupRoutine()
+	s.m.SessionSvc.StopCleanupRoutine()
 }
 
 // HasMetrics returns true if a metrics manager is available.

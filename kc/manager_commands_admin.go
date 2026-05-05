@@ -287,7 +287,7 @@ func (m *Manager) registerMFCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceMFOrderUseCase(m.SessionSvc(), m.Logger)
+		uc := usecases.NewPlaceMFOrderUseCase(m.SessionSvc, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
@@ -304,7 +304,7 @@ func (m *Manager) registerMFCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc(), m.Logger)
+		uc := usecases.NewCancelMFOrderUseCase(m.SessionSvc, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
@@ -321,7 +321,7 @@ func (m *Manager) registerMFCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewPlaceMFSIPUseCase(m.SessionSvc(), m.Logger)
+		uc := usecases.NewPlaceMFSIPUseCase(m.SessionSvc, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
@@ -338,7 +338,7 @@ func (m *Manager) registerMFCommands() error {
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc(), m.Logger)
+		uc := usecases.NewCancelMFSIPUseCase(m.SessionSvc, m.Logger)
 		if m.eventStore != nil {
 			uc.SetEventStore(m.eventStore)
 		}
@@ -455,7 +455,7 @@ func (a *nativeAlertBusAdapter) GetAlertHistory(uuid string) (any, error) {
 // returns an adapter that satisfies usecases.NativeAlertClient. Callers that
 // hit a broker without native alert support receive a clear error.
 func (m *Manager) resolveNativeAlertClient(email string) (usecases.NativeAlertClient, error) {
-	client, err := m.SessionSvc().GetBrokerForEmail(email)
+	client, err := m.SessionSvc.GetBrokerForEmail(email)
 	if err != nil {
 		return nil, fmt.Errorf("cqrs: resolve broker for %s: %w", email, err)
 	}

@@ -98,7 +98,7 @@ func (m *Manager) registerEscapeQueries() error {
 
 	// Orders keeps per-dispatch construction because the audit store
 	// dependency can be ctx-overridden (test-isolation contract via
-	// cqrs.WithWidgetAuditStore). The broker resolver is m.sessionSvc
+	// cqrs.WithWidgetAuditStore). The broker resolver is m.SessionSvc
 	// — the per-request optimization that previously rode on ctx was
 	// removed in Slice D7.
 	if err := m.queryBus.Register(reflect.TypeFor[cqrs.GetOrdersForWidgetQuery](), func(ctx context.Context, msg any) (any, error) {
@@ -107,7 +107,7 @@ func (m *Manager) registerEscapeQueries() error {
 		if store == nil {
 			return nil, nil
 		}
-		uc := usecases.NewGetOrdersForWidgetUseCase(m.sessionSvc, store, m.Logger)
+		uc := usecases.NewGetOrdersForWidgetUseCase(m.SessionSvc, store, m.Logger)
 		return uc.Execute(ctx, cqrs.GetWidgetOrdersQuery{Email: q.Email})
 	}); err != nil {
 		return err

@@ -714,10 +714,10 @@ func (app *App) databaseDeepStatus() healthzComponent {
 // kicks in at session-creation time); production deployments without
 // one fail later under load with a less obvious error.
 func (app *App) brokerFactoryDeepStatus() healthzComponent {
-	if app.kcManager == nil || app.kcManager.SessionSvc() == nil {
+	if app.kcManager == nil {
 		return healthzComponent{Status: "disabled", Note: "session service not wired"}
 	}
-	if app.kcManager.SessionSvc().HasBrokerFactory() {
+	if app.kcManager.HasBrokerFactory() {
 		return healthzComponent{Status: "ok"}
 	}
 	if app.DevMode {

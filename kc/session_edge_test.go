@@ -261,7 +261,7 @@ func TestGetOrCreateSessionWithEmail_RestorePersistedSession(t *testing.T) {
 
 	// Create a session, then simulate a restart by setting Kite to nil
 	_, _, _ = m.GetOrCreateSessionWithEmail(sid, "restore@test.com")
-	raw, _ := m.sessionSvc.sessionManager.GetSessionData(sid)
+	raw, _ := m.SessionSvc.sessionManager.GetSessionData(sid)
 	kd := raw.(*KiteSessionData)
 	kd.Kite = nil // simulate DB reload where Kite is nil
 
@@ -297,7 +297,7 @@ func TestGetOrCreateSessionWithEmail_RestoreWithPreAuth(t *testing.T) {
 
 	sid := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeee08"
 	_, _, _ = m.GetOrCreateSessionWithEmail(sid, "")
-	raw, _ := m.sessionSvc.sessionManager.GetSessionData(sid)
+	raw, _ := m.SessionSvc.sessionManager.GetSessionData(sid)
 	kd := raw.(*KiteSessionData)
 	kd.Kite = nil // simulate restart
 

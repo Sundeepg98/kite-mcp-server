@@ -1,6 +1,7 @@
 package kc
 
 import (
+	"github.com/zerodha/kite-mcp-server/broker"
 	"github.com/zerodha/kite-mcp-server/kc/alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/domain"
@@ -92,13 +93,28 @@ type MCPServerProvider interface {
 	MCPServer() any
 }
 
-// BrokerResolverProvider exposes the session service used by use cases to
-// resolve a broker.Client for a given email. Consumers depend on the narrow
-// *SessionService type because it already implements the usecases.BrokerResolver
-// interface — passing this into NewXxxUseCase(...) constructors replaces the
-// service-locator pattern of calling manager.SessionSvc() inline.
+// BrokerResolverProvider exposes the broker-resolution surface that
+// use cases and HTTP handlers need without forcing callers to reach
+// for the full *SessionService. Anchor 6 PR 6.4 (per .research/anchor-
+// 6-pr-6-4-broker-resolver-redesign.md commit a2a11db) narrowed the
+// interface from a single SessionSvc() *SessionService method to the
+// two methods consumers actually use:
+//
+//   - GetBrokerForEmail (4 callsites: mcp/ext_apps.go,
+//     kc/manager_commands_admin.go, app/wire.go via the
+//     FillWatcherResolverFromBroker constructor, plus in-package
+//     CQRS use-case constructors via this interface)
+//   - HasBrokerFactory  (1 callsite: app/http.go's auth-gate guard)
+//
+// The narrower interface is satisfied by both *kc.SessionService
+// (its existing methods) AND *kc.Manager (via the passthrough
+// methods declared in kc/manager_accessors.go below). This dual-
+// satisfaction lets PR 6.4 delete the Manager.SessionSvc() accessor
+// while preserving the use-case-level BrokerResolver contract that
+// kc/usecases/ports.go declares (one-method narrower port).
 type BrokerResolverProvider interface {
-	SessionSvc() *SessionService
+	GetBrokerForEmail(email string) (broker.Client, error)
+	HasBrokerFactory() bool
 }
 
 // StoreAccessor is the aggregate composition of every Manager-implemented
