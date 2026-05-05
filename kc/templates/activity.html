@@ -114,6 +114,14 @@
       <button class="fbtn" data-days="30">30 Days</button>
     </div>
     <div class="filter-sep"></div>
+    <div class="filter-group" id="toolSearchGroup" style="position:relative;">
+      <input type="text" id="toolSearchInput" placeholder="Search tool name..."
+             aria-label="Filter audit entries by tool name (exact match)"
+             style="padding:5px 10px; border-radius:3px; border:1px solid var(--border); background:var(--bg-2); color:var(--text-1); font-size:12px; font-family:var(--mono); min-width:170px;">
+      <button class="fbtn" id="toolSearchClear" title="Clear search" aria-label="Clear tool name filter"
+              style="display:none; padding:5px 10px;">&times;</button>
+    </div>
+    <div class="filter-sep"></div>
     <a id="exportBtn" class="fbtn" href="#" style="text-decoration:none;">Export CSV</a>
   </div>
 
@@ -153,7 +161,7 @@
 
   var PAGE_SIZE = 50;
   var REFRESH_MS = 30000;
-  var state = { offset: 0, category: '', errors: false, days: 0, entries: [], total: 0 };
+  var state = { offset: 0, category: '', errors: false, days: 0, tool: '', entries: [], total: 0 };
   var refreshTimer = null;
   var sseSource = null;
   var toolBarChartInstance = null;
@@ -167,6 +175,7 @@
       var d = parseInt(params.get('days'), 10);
       if (!isNaN(d) && d > 0) state.days = d;
     }
+    if (params.get('tool')) state.tool = params.get('tool');
   })();
 
   // --- Category badge config ---
@@ -242,6 +251,7 @@
     var params = ['limit=' + PAGE_SIZE, 'offset=' + state.offset];
     if (state.category) params.push('category=' + encodeURIComponent(state.category));
     if (state.errors) params.push('errors=true');
+    if (state.tool) params.push('tool=' + encodeURIComponent(state.tool));
     if (state.days > 0) {
       var since = new Date();
       since.setDate(since.getDate() - state.days);
@@ -475,9 +485,50 @@
     scheduleRefresh();
   });
 
-  // --- Auto-refresh (only page 1, no category filter, no error filter) ---
+  // --- Filter: tool name search (debounced; clears on empty) ---
+  (function() {
+    var input = document.getElementById('toolSearchInput');
+    var clearBtn = document.getElementById('toolSearchClear');
+    if (!input) return;
+    // Seed input from URL deep-link state
+    if (state.tool) {
+      input.value = state.tool;
+      clearBtn.style.display = '';
+    }
+    var debounceTimer = null;
+    function applyToolFilter() {
+      var newTool = input.value.trim();
+      if (newTool === state.tool) return;
+      state.tool = newTool;
+      state.offset = 0;
+      clearBtn.style.display = newTool ? '' : 'none';
+      fetchActivity();
+      scheduleRefresh();
+    }
+    input.addEventListener('input', function() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(applyToolFilter, 300);
+    });
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') {
+        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+        applyToolFilter();
+      } else if (ev.key === 'Escape') {
+        input.value = '';
+        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+        applyToolFilter();
+      }
+    });
+    clearBtn.addEventListener('click', function() {
+      input.value = '';
+      if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+      applyToolFilter();
+    });
+  })();
+
+  // --- Auto-refresh (only page 1, no filters active) ---
   function shouldAutoRefresh() {
-    return state.offset === 0 && !state.category && !state.errors;
+    return state.offset === 0 && !state.category && !state.errors && !state.tool;
   }
   function scheduleRefresh() {
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
@@ -502,6 +553,7 @@
     }
     if (state.category) url += '&category=' + encodeURIComponent(state.category);
     if (state.errors) url += '&errors=true';
+    if (state.tool) url += '&tool=' + encodeURIComponent(state.tool);
     window.location.href = url;
   });
 
