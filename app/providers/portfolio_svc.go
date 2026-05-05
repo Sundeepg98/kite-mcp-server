@@ -41,5 +41,5 @@ func ProvidePortfolioSvc(initialized *InitializedManager) *kc.PortfolioService {
 	if initialized == nil || initialized.Manager == nil {
 		return nil
 	}
-	return initialized.Manager.PortfolioSvc()
+	return initialized.Manager.PortfolioSvc
 }

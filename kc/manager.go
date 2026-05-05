@@ -265,7 +265,7 @@ type Manager struct {
 	CredentialSvc     *CredentialService     // credential resolution (per-user + global)
 	SessionSvc        *SessionService        // MCP session lifecycle
 	managedSessionSvc *ManagedSessionService // thin session facade (active count, terminate-by-email)
-	portfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
+	PortfolioSvc      *PortfolioService      // portfolio queries (holdings, positions, margins, profile)
 	orderSvc          *OrderService          // order placement, modification, cancellation
 	alertSvc          *AlertService          // alert lifecycle (CRUD, evaluation, trailing stops, Telegram, P&L)
 	familyService     *FamilyService         // family billing (invite, remove, list, tier resolution)

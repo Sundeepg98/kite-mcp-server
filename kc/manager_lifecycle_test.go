@@ -82,7 +82,7 @@ func TestManager_AccessorGetters(t *testing.T) {
 	}
 
 	// PortfolioSvc
-	if m.PortfolioSvc() == nil {
+	if m.PortfolioSvc == nil {
 		t.Error("PortfolioSvc() should not be nil")
 	}
 

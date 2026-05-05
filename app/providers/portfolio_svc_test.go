@@ -69,7 +69,7 @@ func TestProvidePortfolioSvc_LiveManager_ReturnsService(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected non-nil PortfolioService for populated wrapper")
 	}
-	if got != mgrInit.Manager.PortfolioSvc() {
+	if got != mgrInit.Manager.PortfolioSvc {
 		t.Error("expected pointer-identity with Manager.PortfolioSvc(); got a different pointer (regression: provider wrapped/copied the service)")
 	}
 
@@ -105,7 +105,7 @@ func TestProvidePortfolioSvc_FxIntegration(t *testing.T) {
 	if mgrInit == nil || mgrInit.Manager == nil {
 		t.Fatal("expected non-nil InitializedManager from fx graph")
 	}
-	if pfSvc != mgrInit.Manager.PortfolioSvc() {
+	if pfSvc != mgrInit.Manager.PortfolioSvc {
 		t.Error("expected pointer-identity between graph-resolved PortfolioService and Manager.PortfolioSvc()")
 	}
 	t.Cleanup(func() { mgrInit.Manager.Shutdown() })

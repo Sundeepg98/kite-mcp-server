@@ -582,7 +582,7 @@ func TestOrderService_GetTrades_NilBrokerError(t *testing.T) {
 func TestPortfolioService_GetHoldings_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err := svc.GetHoldings("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -592,7 +592,7 @@ func TestPortfolioService_GetHoldings_NilBrokerError(t *testing.T) {
 func TestPortfolioService_GetPositions_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err := svc.GetPositions("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -602,7 +602,7 @@ func TestPortfolioService_GetPositions_NilBrokerError(t *testing.T) {
 func TestPortfolioService_GetMargins_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err := svc.GetMargins("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -612,7 +612,7 @@ func TestPortfolioService_GetMargins_NilBrokerError(t *testing.T) {
 func TestPortfolioService_GetProfile_NilBrokerError(t *testing.T) {
 	t.Parallel()
 	m := newTestManagerWithDB(t)
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err := svc.GetProfile("nobody@test.com")
 	if err == nil {
 		t.Error("Expected error for nil broker")
@@ -1066,7 +1066,7 @@ func TestPortfolioService_GetHoldings_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err = svc.GetHoldings("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetHoldings in DevMode: %v", err)
@@ -1086,7 +1086,7 @@ func TestPortfolioService_GetPositions_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err = svc.GetPositions("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetPositions in DevMode: %v", err)
@@ -1106,7 +1106,7 @@ func TestPortfolioService_GetMargins_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err = svc.GetMargins("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetMargins in DevMode: %v", err)
@@ -1126,7 +1126,7 @@ func TestPortfolioService_GetProfile_DevMode(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	svc := m.PortfolioSvc()
+	svc := m.PortfolioSvc
 	_, err = svc.GetProfile("dev@test.com")
 	if err != nil {
 		t.Fatalf("GetProfile in DevMode: %v", err)
