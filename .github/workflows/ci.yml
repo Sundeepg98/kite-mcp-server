@@ -36,6 +36,12 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Path A item 3 per audit 6ee6520: full history needed for the
+          # smart-test-selection script (scripts/affected-test-paths.sh)
+          # to diff against origin/master. Cost: +2-5s checkout time vs
+          # default fetch-depth: 1. Worth it for the test-runtime savings.
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -48,7 +54,39 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
+      # Path A item 3 per audit 6ee6520: smart test selection (Go-equivalent
+      # of nx affected). On pull-request events, narrow `go test` to packages
+      # affected by the PR diff. On push-to-master events, fall back to full
+      # `./...` (safety: catches cross-module regressions the diff cannot
+      # see). The bash-only script has no external deps; see
+      # scripts/affected-test-paths.sh for the decision tree.
+      #
+      # Safety net: a weekly cron job (test-full-weekly.yml) runs the full
+      # suite regardless of diff. Smart selection can theoretically miss a
+      # regression where an unchanged consumer is broken by a changed
+      # exported API; the weekly run is the catch-all.
+      - name: Compute affected test paths (PR only)
+        id: affected
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          paths=$(bash scripts/affected-test-paths.sh origin/master)
+          if [[ -z "${paths}" ]]; then
+            echo "No Go-relevant changes detected — skipping test step."
+            echo "paths=" >> "${GITHUB_OUTPUT}"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Affected test paths: ${paths}"
+            echo "paths=${paths}" >> "${GITHUB_OUTPUT}"
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Test (smart selection — PR ubuntu)
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest' && steps.affected.outputs.skip != 'true'
+        run: go test ${{ steps.affected.outputs.paths }} -count=1 -race -timeout 8m -coverprofile=coverage.out -covermode=atomic
+
+      - name: Test (full — push to master, all OS)
+        if: github.event_name != 'pull_request' || matrix.os != 'ubuntu-latest'
         run: go test ./... -count=1 -race -timeout 8m -coverprofile=coverage.out -covermode=atomic
 
       # E1: end-to-end MCP-protocol roundtrip — //go:build e2e gated; runs

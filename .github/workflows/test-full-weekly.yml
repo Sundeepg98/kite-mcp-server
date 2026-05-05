@@ -1,0 +1,68 @@
+name: Test Full (weekly safety net)
+
+# Weekly full-suite run for smart-test-selection safety net.
+#
+# Path A item 3 per audit 6ee6520: ci.yml uses scripts/affected-test-paths.sh
+# to narrow `go test` on PRs to only the affected modules. Smart selection
+# can theoretically miss regressions in this shape:
+#
+#   Module A defines exported API f(). Module B (unchanged) calls f().
+#   PR changes f's contract in module A. Smart selection runs only A's
+#   tests; B's call site is broken but goes uncaught.
+#
+# This workflow runs the full `go test ./...` weekly to surface any such
+# missed regression within 7 days. Pure backstop — failures here mean
+# something slipped past per-PR smart selection.
+#
+# Trigger cadence: Monday 02:30 UTC (~08:00 IST). After overnight markets
+# close + before working hours. Manual dispatch supported for ad-hoc
+# verification (e.g. after a known-risky merge).
+
+on:
+  schedule:
+    - cron: '30 2 * * 1'  # Monday 02:30 UTC weekly
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# No concurrency cancellation: weekly cron should always complete.
+permissions:
+  contents: read
+
+jobs:
+  full-test:
+    name: full go test ./...
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (full ./...)
+        run: go test ./... -count=1 -race -timeout 15m -coverprofile=coverage-weekly.out -covermode=atomic
+
+      - name: E2E protocol roundtrip
+        run: go test -tags=e2e -count=1 -timeout 5m ./mcp/...
+
+      - name: Research-tag tests (kc/aop reflection-AOP)
+        run: go test -tags=research -count=1 -timeout 2m ./kc/aop/...
+
+      - name: Upload weekly coverage artifact
+        if: always() && hashFiles('coverage-weekly.out') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-weekly
+          path: coverage-weekly.out
+          if-no-files-found: ignore
+          retention-days: 30
