@@ -55,6 +55,7 @@ type DashboardHandler struct {
 	safety    *SafetyHandler
 	tax       *TaxHandler
 	account   *AccountHandler
+	scanner   *ScannerHandler
 }
 
 // billingStoreIface is the subset of billing.Store used by the dashboard.
@@ -85,6 +86,7 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 	d.safety = newSafetyHandler(d)
 	d.tax = newTaxHandler(d)
 	d.account = newAccountHandler(d)
+	d.scanner = newScannerHandler(d)
 	return d
 }
 
@@ -133,6 +135,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/tax-analysis", wrap(d.tax.taxAnalysisAPI))
 	mux.Handle("/dashboard/api/account/delete", wrap(d.account.selfDeleteAccount))
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.account.selfManageCredentials))
+	mux.Handle("/dashboard/api/scanner", wrap(d.scanner.scannerAPI))
 	// Only register billing page if billing store is available
 	if d.billingStore != nil {
 		mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))
