@@ -244,7 +244,7 @@ func computeBollingerBands(prices []float64, period int, stdDevMult float64) (up
 	return
 }
 
-func computeSignals(closes, rsi, sma20, sma50, ema12, ema26, bbUpper, bbLower, macdLine, macdSignal []float64) []string {
+func computeSignals(closes, rsi, sma20, sma50, _, _, bbUpper, bbLower, macdLine, macdSignal []float64) []string {
 	signals := []string{}
 	last := len(closes) - 1
 	price := closes[last]

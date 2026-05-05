@@ -2,7 +2,6 @@ package portfolio
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
@@ -107,7 +106,7 @@ func (*UpdateMyCredentialsTool) Handler(manager *kc.Manager) server.ToolHandlerF
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		return gomcp.NewToolResultText(fmt.Sprintf("Credentials updated successfully. Your cached Kite token has been cleared. Please use the login tool to re-authenticate with the new credentials.")), nil
+		return gomcp.NewToolResultText("Credentials updated successfully. Your cached Kite token has been cleared. Please use the login tool to re-authenticate with the new credentials."), nil
 	}
 }
 

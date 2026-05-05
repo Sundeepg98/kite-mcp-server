@@ -19,7 +19,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name     string
-		input    map[string]interface{}
+		input    map[string]any
 		wantExch string
 		wantOp   string
 		wantVal  float64
@@ -27,7 +27,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 	}{
 		{
 			name: "above",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "nse",
 				"tradingsymbol": "RELIANCE",
 				"operator":      "above",
@@ -39,7 +39,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 		},
 		{
 			name: "below",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "NSE",
 				"tradingsymbol": "TCS",
 				"operator":      "BELOW", // mixed case should be normalized
@@ -51,7 +51,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 		},
 		{
 			name: "drop_pct with reference",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":        "NSE",
 				"tradingsymbol":   "NIFTY 50",
 				"operator":        "drop_pct",
@@ -65,7 +65,7 @@ func TestParseCompositeCondition_HappyPath(t *testing.T) {
 		},
 		{
 			name: "rise_pct with reference",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":        "NSE",
 				"tradingsymbol":   "INDIA VIX",
 				"operator":        "rise_pct",
@@ -108,7 +108,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
-		input      interface{}
+		input      any
 		wantErrSub string
 	}{
 		{
@@ -118,7 +118,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "missing exchange",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"tradingsymbol": "RELIANCE",
 				"operator":      "above",
 				"value":         2500.0,
@@ -127,7 +127,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "unsupported exchange",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "NASDAQ",
 				"tradingsymbol": "AAPL",
 				"operator":      "above",
@@ -137,7 +137,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "missing tradingsymbol",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange": "NSE",
 				"operator": "above",
 				"value":    2500.0,
@@ -146,7 +146,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "unknown operator",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "NSE",
 				"tradingsymbol": "TCS",
 				"operator":      "equals",
@@ -156,7 +156,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "non-positive value",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "NSE",
 				"tradingsymbol": "TCS",
 				"operator":      "above",
@@ -166,7 +166,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "drop_pct without reference",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":      "NSE",
 				"tradingsymbol": "NIFTY 50",
 				"operator":      "drop_pct",
@@ -176,7 +176,7 @@ func TestParseCompositeCondition_Validation(t *testing.T) {
 		},
 		{
 			name: "rise_pct exceeds 100",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"exchange":        "NSE",
 				"tradingsymbol":   "INDIA VIX",
 				"operator":        "rise_pct",

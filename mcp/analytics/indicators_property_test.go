@@ -494,7 +494,7 @@ func TestEMAReactsToRecentPrices(t *testing.T) {
 	t.Parallel()
 	// Steady prices then a big jump
 	prices := make([]float64, 50)
-	for i := 0; i < 49; i++ {
+	for i := range 49 {
 		prices[i] = 100.0
 	}
 	prices[49] = 200.0 // big spike

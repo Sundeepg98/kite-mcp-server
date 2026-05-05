@@ -139,11 +139,12 @@ func (*PlaceNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFunc
 		rhsType := p.String("rhs_type", "constant")
 
 		// Validate RHS params
-		if rhsType == "constant" {
+		switch rhsType {
+		case "constant":
 			if err := common.ValidateRequired(args, "rhs_constant"); err != nil {
 				return mcp.NewToolResultError("rhs_constant is required when rhs_type='constant'"), nil
 			}
-		} else if rhsType == "instrument" {
+		case "instrument":
 			if err := common.ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
 				return mcp.NewToolResultError("rhs_exchange, rhs_tradingsymbol, and rhs_attribute are required when rhs_type='instrument'"), nil
 			}
@@ -356,11 +357,12 @@ func (*ModifyNativeAlertTool) Handler(manager *kc.Manager) server.ToolHandlerFun
 		alertType := p.String("type", "simple")
 		rhsType := p.String("rhs_type", "constant")
 
-		if rhsType == "constant" {
+		switch rhsType {
+		case "constant":
 			if err := common.ValidateRequired(args, "rhs_constant"); err != nil {
 				return mcp.NewToolResultError("rhs_constant is required when rhs_type='constant'"), nil
 			}
-		} else if rhsType == "instrument" {
+		case "instrument":
 			if err := common.ValidateRequired(args, "rhs_exchange", "rhs_tradingsymbol", "rhs_attribute"); err != nil {
 				return mcp.NewToolResultError("rhs_exchange, rhs_tradingsymbol, and rhs_attribute are required when rhs_type='instrument'"), nil
 			}

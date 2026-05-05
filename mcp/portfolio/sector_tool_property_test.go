@@ -98,7 +98,7 @@ func TestProperty_ComputeSectorExposure_NeverPanics(t *testing.T) {
 		// Pre-compute a sample of known tickers to mix with random ones.
 		known := knownSymbolSample()
 
-		for i := 0; i < n; i++ {
+		for range n {
 			var sym string
 			if rapid.Bool().Draw(t, "pick_known") && len(known) > 0 {
 				sym = rapid.SampledFrom(known).Draw(t, "known_sym")
@@ -134,7 +134,7 @@ func TestProperty_ComputeSectorExposure_PercentagesSumToHundred(t *testing.T) {
 		n := rapid.IntRange(1, 10).Draw(t, "holdings_count")
 		known := knownSymbolSample()
 		holdings := make([]broker.Holding, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			holdings = append(holdings, broker.Holding{
 				Tradingsymbol: rapid.SampledFrom(known).Draw(t, "sym"),
 				Quantity:      rapid.IntRange(1, 1000).Draw(t, "qty"),
@@ -167,7 +167,7 @@ func TestProperty_ComputeSectorExposure_UnknownSymbolsSurfaceAsUnmapped(t *testi
 	rapid.Check(t, func(t *rapid.T) {
 		n := rapid.IntRange(1, 10).Draw(t, "holdings_count")
 		holdings := make([]broker.Holding, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			sym := rapid.StringMatching(`UNK[A-Z]{3,8}Z`).Draw(t, "sym")
 			// Skip any symbol that might coincidentally be in StockSectors.
 			if _, hit := StockSectors[sym]; hit {
