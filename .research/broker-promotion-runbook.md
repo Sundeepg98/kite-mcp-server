@@ -32,7 +32,7 @@
 
 | Tool | Pros | Cons | Status |
 |---|---|---|---|
-| `git filter-repo` | Modern, fast, preserves authorship cleanly | **Not installed** (`which git-filter-repo` → not found); requires `pip install git-filter-repo` or Homebrew | Recommended — install when triggered |
+| `git filter-repo` | Modern, fast, preserves authorship cleanly | Originally noted as not installed; **2026-05-05 dry-run verified `git-filter-repo` IS installed in WSL2 at `/usr/bin/git-filter-repo`** (likely came in via apt or earlier `pip` step). Filter-repo extracted broker subtree in 0.34s. | Recommended — confirmed available |
 | `git subtree split` | Built into git, no install | Slower on large histories; can produce orphan refs | **Fallback if filter-repo unavailable** |
 | `git filter-branch` | Built-in, ancient | Officially deprecated by git docs since 2.24 (man page advises filter-repo) | **Reject** |
 
@@ -120,11 +120,14 @@ gh release create v0.1.0 --title "v0.1.0" --notes "Initial extraction. broker.Cl
 **Phase A — Transition (1 release cycle, ~1 month)**: keep both paths working.
 
 - Edit root `go.mod`: replace `replace github.com/zerodha/kite-mcp-server/broker => ./broker` with `require github.com/algo2go/kite-mcp-broker v0.1.0` + `replace github.com/algo2go/kite-mcp-broker => ./broker`. The new replace keeps the in-tree directory canonical for builds while the require line declares the upstream.
-- Rewrite all 143 import lines across 126 files: `find . -name '*.go' | xargs sed -i 's#github.com/zerodha/kite-mcp-server/broker#github.com/algo2go/kite-mcp-broker#g'` (16 packages affected: app, broker, broker/conformance, broker/mock, broker/ticker, broker/zerodha, kc, kc/alerts, kc/domain, kc/eventsourcing, kc/ops, kc/papertrading, kc/telegram, kc/ticker, kc/usecases, mcp).
+- Rewrite all import lines across the consumer tree: `find . -name '*.go' -not -path './broker/*' | xargs sed -i 's#github.com/zerodha/kite-mcp-server/broker#github.com/algo2go/kite-mcp-broker#g'`. **Empirical at HEAD `725ac32` (2026-05-05 dry-run): 192 occurrences across 153 files in 16 packages — 39 more files / 49 more occurrences than the original 143/126 estimate due to Anchor 2 (app/providers) + Tier 6 (plugins) extractions plus organic growth.**
+- **Sweep peer-module go.mod files (RUNBOOK GAP, discovered 2026-05-05 dry-run)**: 17 sibling go.mod files declare transitive deps on broker via `require` + `replace` directives. The `*.go` sed pass leaves them stale and breaks `go build` outside workspace mode. Add explicit go.mod sweep: `find . -path ./broker -prune -o -name 'go.mod' -type f -print | while read -r mod; do sed -i 's#github.com/zerodha/kite-mcp-server/broker#github.com/algo2go/kite-mcp-broker#g' "$mod"; done`. Affected files: oauth, app/providers, testutil, plugins, kc/{telegram,domain,usecases,audit,alerts,ticker,eventsourcing,papertrading,cqrs,registry,users,billing,riskguard}.
 - Run `goimports -w .` to fix formatting.
-- Update `go.work`: drop `./broker` from `use (...)` block (keeps 5 members: `.`, `./kc/audit`, `./kc/billing`, `./kc/money`, `./kc/riskguard`).
+- Update `go.work`: drop `./broker` from `use (...)` block (keeps 28 members at HEAD `725ac32`; the runbook's earlier "5 members" reflected the post-billing-extract state).
 - Update Dockerfile: remove `COPY broker/go.mod broker/go.sum* broker/` line.
 - CI green; production deploy.
+
+**Dry-run scripts** (validated 2026-05-05): `.research/path-a-prep-dryrun.sh` (extracts broker subtree via `git filter-repo` to scratch), `.research/path-a-prep-rewrite-dryrun.sh` (rewrites extracted repo's module path + self-imports), `.research/path-a-prep-consumer-dryrun.sh` (mirrors consumer-side cutover including the peer go.mod sweep + `go build ./...` PASS verification).
 
 **Phase B — Cutover (after 1 month canary)**: delete `./broker` directory + remove the `replace` from go.mod. Only `require github.com/algo2go/kite-mcp-broker v0.1.0` remains. From this point, broker bumps are upstream releases.
 
