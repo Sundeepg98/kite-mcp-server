@@ -25,6 +25,13 @@ on:
 permissions:
   contents: read
 
+# Path A item 2 per audit 6ee6520: cancel stale drift checks when a newer
+# commit on the same branch supersedes them. Drift assertion is fast (~30s)
+# but still saves runner-minute when many tool/* commits land rapidly.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   assert-tool-count:
     runs-on: ubuntu-latest

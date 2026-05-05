@@ -30,6 +30,14 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel stale gosec/SARIF scans when a
+# newer commit supersedes them on the same branch. Group key is filename-
+# based to avoid collision with security.yml (which shares the same
+# `name: Security Scan` heading).
+concurrency:
+  group: security-scan-yml-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gosec:
     name: gosec (SAST -> SARIF -> Code Scanning)

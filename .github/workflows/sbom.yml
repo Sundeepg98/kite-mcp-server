@@ -24,6 +24,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel in-flight SBOM gens for the same
+# ref. Master-branch push cycles can cancel stale runs; tag pushes (refs/
+# tags/vX.Y.Z) get unique groups so release SBOMs always complete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sbom:
     name: generate-cyclonedx-sbom

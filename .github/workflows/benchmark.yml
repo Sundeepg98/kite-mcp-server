@@ -54,6 +54,13 @@ env:
   # Default regression threshold (percent). workflow_dispatch can override.
   REGRESSION_THRESHOLD_PCT: '10'
 
+# Path A item 2 per audit 6ee6520: cancel in-flight bench runs when a newer
+# commit lands on the same PR. Benchmark is the longest gate (30min) — a
+# rapid-fix push cycle without cancellation would queue +30 min per push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   benchmark:
     name: bench compare (PR vs base)

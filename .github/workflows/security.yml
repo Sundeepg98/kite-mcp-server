@@ -8,6 +8,15 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel stale security scans when a newer
+# commit supersedes them on the same branch. Re-runnable scan; cancellation
+# preserves only the latest commit's verification. Group key is filename-
+# based (not github.workflow) because security-scan.yml shares the same
+# `name: Security Scan` and would collide with this workflow's group.
+concurrency:
+  group: security-yml-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     runs-on: ubuntu-latest

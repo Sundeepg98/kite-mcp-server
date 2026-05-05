@@ -18,6 +18,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel stale race-detector runs when a
+# newer commit lands. Race detector is slow (cgo + atomic instrumentation),
+# so cancellation gain is meaningful.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-race:
     runs-on: ubuntu-latest

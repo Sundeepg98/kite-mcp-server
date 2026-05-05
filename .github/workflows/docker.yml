@@ -14,6 +14,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel in-flight Docker builds when a
+# newer commit lands on the same branch. Docker build is idempotent and
+# re-runnable, so superseding stale builds saves ~5 min per cancelled run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: build-selfhost-image

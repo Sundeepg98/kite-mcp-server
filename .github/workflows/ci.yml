@@ -8,6 +8,16 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Path A item 2 per audit 6ee6520: cancel in-flight CI runs on rapid commits
+# to the same branch. Saves CI minutes when multiple commits land within
+# the ~5min CI window. Group is workflow-name + ref; on master push this
+# means a 2nd push within 5 min cancels the 1st run-in-progress, keeping
+# only the latest commit's verification. Pull-request events get isolated
+# by their own ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test (${{ matrix.os }})
