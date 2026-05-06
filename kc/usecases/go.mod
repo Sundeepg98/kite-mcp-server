@@ -41,7 +41,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-money v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/users v0.0.0-00010101000000-000000000000
 )
@@ -107,7 +107,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/i18n => ../i18n
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
-	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/algo2go/kite-mcp-money => ../money
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../ticker

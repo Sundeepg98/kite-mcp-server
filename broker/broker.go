@@ -3,7 +3,7 @@ package broker
 import (
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/algo2go/kite-mcp-money"
 )
 
 // Name identifies a broker implementation.

@@ -31,7 +31,7 @@ var allowedUpstreamModules = map[string]string{
 	"github.com/algo2go/kite-mcp-broker":    "broker DTO interop (Holding/Position/Order/Profile)",
 	"github.com/zerodha/kite-mcp-server/kc/domain": "self-package",
 	"github.com/zerodha/kite-mcp-server/kc/isttz":  "IST timezone for Session.IsExpired()",
-	"github.com/zerodha/kite-mcp-server/kc/money":  "Money value object",
+	"github.com/algo2go/kite-mcp-money":  "Money value object",
 }
 
 // TestDomainDependencyCycle pins kc/domain's transitive zerodha-org

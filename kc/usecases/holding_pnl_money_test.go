@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/algo2go/kite-mcp-money"
 )
 
 // TestSlice6b_WidgetHoldingItem_PreservesWireValue is the

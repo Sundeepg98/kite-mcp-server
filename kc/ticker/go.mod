@@ -34,11 +34,11 @@ require (
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace (
 	github.com/algo2go/kite-mcp-broker => ../../broker
-	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/algo2go/kite-mcp-money => ../money
 )

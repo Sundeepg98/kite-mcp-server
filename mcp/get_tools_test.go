@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-broker/mock"
-	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/algo2go/kite-mcp-money"
 	"github.com/zerodha/kite-mcp-server/mcp/portfolio"
 	"github.com/zerodha/kite-mcp-server/mcp/trade"
 )

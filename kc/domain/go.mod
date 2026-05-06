@@ -23,7 +23,7 @@ go 1.25.0
 //     extracted at commit 5d74acf)
 //   - github.com/zerodha/kite-mcp-server/kc/isttz (used in session.go
 //     for ISTNow() — extracted at commit a2ad8e0)
-//   - github.com/zerodha/kite-mcp-server/kc/money (used in money.go
+//   - github.com/algo2go/kite-mcp-money (used in money.go
 //     for Money type embedding — extracted at commit b7fedcc)
 //
 // Replace count: 3 — no root replace because kc/domain doesn't import
@@ -39,7 +39,7 @@ go 1.25.0
 require (
 	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/money v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-money v0.1.0
 )
 
 require github.com/stretchr/testify v1.10.0
@@ -57,5 +57,5 @@ require (
 replace (
 	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
-	github.com/zerodha/kite-mcp-server/kc/money => ../money
+	github.com/algo2go/kite-mcp-money => ../money
 )

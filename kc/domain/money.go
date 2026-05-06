@@ -6,7 +6,7 @@
 package domain
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/money"
+	"github.com/algo2go/kite-mcp-money"
 )
 
 // Money is the canonical monetary value object. As of Slice 6e it lives

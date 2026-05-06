@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/money
+module github.com/algo2go/kite-mcp-money
 
 go 1.25.0
 
