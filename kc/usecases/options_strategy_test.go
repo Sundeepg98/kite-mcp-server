@@ -147,7 +147,7 @@ func TestBuildOptionsStrategy_UnknownStrategy(t *testing.T) {
 		Strike1:    24000,
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown strategy")
+	assert.Contains(t, err.Error(), "Unknown strategy")
 }
 
 // TestBuildOptionsStrategy_BullCallSpread_StrikeOrder verifies invalid

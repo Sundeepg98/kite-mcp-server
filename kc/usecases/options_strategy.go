@@ -130,6 +130,37 @@ func NewBuildOptionsStrategyUseCase(resolver BrokerResolver, instruments OptionI
 	}
 }
 
+// ValidateOptionsStrategyCommand performs pure shape-validation on the
+// command without touching the broker or instruments. Returns the
+// canonical (lowercased / uppercased / trimmed) form of the strategy +
+// underlying so callers can surface arg-shape errors before the
+// session gate. The full Execute path re-validates internally; this
+// is the public entry point for pre-session validation by tool
+// handlers and dashboard endpoints.
+func ValidateOptionsStrategyCommand(cmd BuildOptionsStrategyCommand) (BuildOptionsStrategyCommand, error) {
+	strategy := strings.ToLower(strings.TrimSpace(cmd.Strategy))
+	if strategy == "" {
+		return cmd, fmt.Errorf("usecases: strategy is required")
+	}
+	underlying := strings.ToUpper(strings.TrimSpace(cmd.Underlying))
+	if underlying == "" {
+		return cmd, fmt.Errorf("usecases: underlying is required")
+	}
+	if _, err := time.Parse("2006-01-02", cmd.Expiry); err != nil {
+		return cmd, fmt.Errorf("usecases: expiry must be in YYYY-MM-DD format: %w", err)
+	}
+	if cmd.Strike1 <= 0 {
+		return cmd, fmt.Errorf("usecases: strike1 is required (must be > 0)")
+	}
+	// Strategy + strike-ordering pure validation (delegates to leg-builder).
+	if _, err := buildLegSpecs(strategy, cmd.Strike1, cmd.Strike2, cmd.Strike3, cmd.Strike4); err != nil {
+		return cmd, err
+	}
+	cmd.Strategy = strategy
+	cmd.Underlying = underlying
+	return cmd, nil
+}
+
 // Execute builds the options strategy and computes its payoff metrics.
 // All input validation, leg expansion, instrument resolution, LTP
 // fetching, and P&L formula application happen here.
@@ -137,20 +168,13 @@ func (uc *BuildOptionsStrategyUseCase) Execute(ctx context.Context, cmd BuildOpt
 	if cmd.Email == "" {
 		return nil, fmt.Errorf("usecases: email is required")
 	}
-	strategy := strings.ToLower(strings.TrimSpace(cmd.Strategy))
-	if strategy == "" {
-		return nil, fmt.Errorf("usecases: strategy is required")
+	validatedCmd, err := ValidateOptionsStrategyCommand(cmd)
+	if err != nil {
+		return nil, err
 	}
-	underlying := strings.ToUpper(strings.TrimSpace(cmd.Underlying))
-	if underlying == "" {
-		return nil, fmt.Errorf("usecases: underlying is required")
-	}
-	if _, err := time.Parse("2006-01-02", cmd.Expiry); err != nil {
-		return nil, fmt.Errorf("usecases: expiry must be in YYYY-MM-DD format: %w", err)
-	}
-	if cmd.Strike1 <= 0 {
-		return nil, fmt.Errorf("usecases: strike1 is required (must be > 0)")
-	}
+	cmd = validatedCmd
+	strategy := cmd.Strategy
+	underlying := cmd.Underlying
 	lots := cmd.Lots
 	if lots < 1 {
 		lots = 1
@@ -319,7 +343,7 @@ func buildLegSpecs(strategy string, strike1, strike2, strike3, strike4 float64) 
 			{strike3, "CE", "BUY", 1},
 		}, nil
 	}
-	return nil, fmt.Errorf("unknown strategy %q: supported are bull_call_spread, bear_put_spread, bear_call_spread, bull_put_spread, straddle, strangle, iron_condor, butterfly", strategy)
+	return nil, fmt.Errorf("Unknown strategy '%s'. Supported: bull_call_spread, bear_put_spread, bear_call_spread, bull_put_spread, straddle, strangle, iron_condor, butterfly", strategy)
 }
 
 // applyStrategyMetrics fills in MaxProfit/Loss/Breakevens/RiskReward

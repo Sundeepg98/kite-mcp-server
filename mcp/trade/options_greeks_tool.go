@@ -13,6 +13,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/mcp/common"
 	"github.com/zerodha/kite-mcp-server/mcp/plugin"
 )
@@ -404,45 +405,79 @@ func (*OptionsStrategyTool) Tool() gomcp.Tool {
 	)
 }
 
-// strategyLeg describes one leg of an options strategy.
-type strategyLeg struct {
-	TradingSymbol string  `json:"tradingsymbol"`
-	OptionType    string  `json:"option_type"` // CE or PE
-	Strike        float64 `json:"strike"`
-	Action        string  `json:"action"` // BUY or SELL
-	Lots          int     `json:"lots"`
-	Quantity      int     `json:"quantity"`
-	Premium       float64 `json:"premium"` // per-share premium (LTP)
-	TotalPremium  float64 `json:"total_premium"`
+// optionInstrumentLookupAdapter bridges kc.InstrumentManagerInterface
+// (which exposes a generic Filter predicate) to the narrow port that
+// the use case needs (FindOption + DefaultLotSize). Lives here in
+// mcp/trade rather than kc/usecases because (a) it imports kc and
+// kc/instruments, both of which usecases is decoupled from, and (b)
+// the adapter is only needed at the MCP-tool composition root and the
+// dashboard composition root — not in the use case layer.
+type optionInstrumentLookupAdapter struct {
+	mgr kc.InstrumentManagerInterface
 }
 
-// strategyResponse is the full output for options_payoff_builder.
-type strategyResponse struct {
-	Strategy     string        `json:"strategy"`
-	Underlying   string        `json:"underlying"`
-	Expiry       string        `json:"expiry"`
-	Legs         []strategyLeg `json:"legs"`
-	NetPremium   float64       `json:"net_premium"`   // positive = credit, negative = debit
-	MaxProfit    string        `json:"max_profit"`     // may be "unlimited"
-	MaxLoss      string        `json:"max_loss"`       // may be "unlimited"
-	MaxProfitAmt float64       `json:"max_profit_amt"` // 0 when unlimited
-	MaxLossAmt   float64       `json:"max_loss_amt"`   // 0 when unlimited
-	Breakevens   []float64     `json:"breakevens"`
-	RiskReward   string        `json:"risk_reward_ratio"`
-	LotSize      int           `json:"lot_size"`
-	TotalLots    int           `json:"total_lots"`
+func (a optionInstrumentLookupAdapter) FindOption(underlying, optionType string, strike float64, expiry string) (usecases.OptionInstrument, bool) {
+	if a.mgr == nil {
+		return usecases.OptionInstrument{}, false
+	}
+	found := a.mgr.Filter(func(inst instruments.Instrument) bool {
+		return inst.Exchange == "NFO" &&
+			strings.EqualFold(inst.Name, underlying) &&
+			inst.InstrumentType == optionType &&
+			inst.Strike == strike &&
+			strings.HasPrefix(inst.ExpiryDate, expiry)
+	})
+	if len(found) == 0 {
+		return usecases.OptionInstrument{}, false
+	}
+	inst := found[0]
+	return usecases.OptionInstrument{
+		Tradingsymbol: inst.Tradingsymbol,
+		Underlying:    inst.Name,
+		OptionType:    inst.InstrumentType,
+		Strike:        inst.Strike,
+		Expiry:        expiry,
+		LotSize:       inst.LotSize,
+	}, true
 }
 
-// legSpec is an internal representation used to build legs before fetching premiums.
-type legSpec struct {
-	strike     float64
-	optionType string // CE or PE
-	action     string // BUY or SELL
-	lotsMulti  int    // multiplier on the number of lots (e.g., 2 for butterfly middle leg)
+func (a optionInstrumentLookupAdapter) DefaultLotSize(underlying string) (int, bool) {
+	if a.mgr == nil || a.mgr.Count() == 0 {
+		return 0, false
+	}
+	found := a.mgr.Filter(func(inst instruments.Instrument) bool {
+		return inst.Exchange == "NFO" &&
+			strings.EqualFold(inst.Name, underlying) &&
+			(inst.InstrumentType == "CE" || inst.InstrumentType == "PE") &&
+			inst.LotSize > 0
+	})
+	if len(found) == 0 {
+		return 0, false
+	}
+	return found[0].LotSize, true
+}
+
+// brokerResolverAdapter bridges *kc.Manager (which exposes the
+// post-Anchor-6 GetBrokerForEmail accessor directly) to the narrow
+// usecases.BrokerResolver port. Lives here at the composition root.
+type brokerResolverAdapter struct {
+	manager *kc.Manager
+}
+
+func (a brokerResolverAdapter) GetBrokerForEmail(email string) (broker.Client, error) {
+	if a.manager == nil {
+		return nil, fmt.Errorf("manager not configured")
+	}
+	return a.manager.GetBrokerForEmail(email)
 }
 
 func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc {
 	handler := common.NewToolHandler(manager)
+	uc := usecases.NewBuildOptionsStrategyUseCase(
+		brokerResolverAdapter{manager: manager},
+		optionInstrumentLookupAdapter{mgr: handler.Instruments()},
+		nil, // logger threaded via context inside the use case
+	)
 	return func(ctx context.Context, request gomcp.CallToolRequest) (*gomcp.CallToolResult, error) {
 		handler.TrackToolCall(ctx, "options_payoff_builder")
 		args := request.GetArguments()
@@ -450,356 +485,34 @@ func (*OptionsStrategyTool) Handler(manager *kc.Manager) server.ToolHandlerFunc 
 		if err := common.ValidateRequired(args, "strategy", "underlying", "expiry", "strike1"); err != nil {
 			return gomcp.NewToolResultError(err.Error()), nil
 		}
-
 		p := common.NewArgParser(args)
-		strategy := strings.ToLower(p.String("strategy", ""))
-		underlying := strings.ToUpper(p.String("underlying", ""))
-		expiryStr := p.String("expiry", "")
-		strike1 := p.Float("strike1", 0)
-		strike2 := p.Float("strike2", 0)
-		strike3 := p.Float("strike3", 0)
-		strike4 := p.Float("strike4", 0)
-		lotSizeOverride := p.Int("lot_size", 0)
-		lots := p.Int("lots", 1)
-		lots = max(lots, 1)
-
-		// Validate expiry
-		if _, err := time.Parse("2006-01-02", expiryStr); err != nil {
-			return gomcp.NewToolResultError("expiry must be in YYYY-MM-DD format"), nil
+		cmd := usecases.BuildOptionsStrategyCommand{
+			Strategy:   p.String("strategy", ""),
+			Underlying: p.String("underlying", ""),
+			Expiry:     p.String("expiry", ""),
+			Strike1:    p.Float("strike1", 0),
+			Strike2:    p.Float("strike2", 0),
+			Strike3:    p.Float("strike3", 0),
+			Strike4:    p.Float("strike4", 0),
+			LotSize:    p.Int("lot_size", 0),
+			Lots:       p.Int("lots", 1),
 		}
 
-		// Build leg specs based on strategy
-		var specs []legSpec
-
-		switch strategy {
-		case "bull_call_spread":
-			if strike2 <= strike1 {
-				return gomcp.NewToolResultError("bull_call_spread requires strike2 > strike1"), nil
-			}
-			specs = []legSpec{
-				{strike1, "CE", "BUY", 1},
-				{strike2, "CE", "SELL", 1},
-			}
-
-		case "bear_put_spread":
-			if strike2 <= strike1 {
-				return gomcp.NewToolResultError("bear_put_spread requires strike2 > strike1 (buy higher put, sell lower put)"), nil
-			}
-			specs = []legSpec{
-				{strike1, "PE", "SELL", 1},
-				{strike2, "PE", "BUY", 1},
-			}
-
-		case "bear_call_spread":
-			if strike2 <= strike1 {
-				return gomcp.NewToolResultError("bear_call_spread requires strike2 > strike1 (sell lower call, buy higher call)"), nil
-			}
-			specs = []legSpec{
-				{strike1, "CE", "SELL", 1},
-				{strike2, "CE", "BUY", 1},
-			}
-
-		case "bull_put_spread":
-			if strike2 <= strike1 {
-				return gomcp.NewToolResultError("bull_put_spread requires strike2 > strike1 (buy lower put, sell higher put)"), nil
-			}
-			specs = []legSpec{
-				{strike1, "PE", "BUY", 1},
-				{strike2, "PE", "SELL", 1},
-			}
-
-		case "straddle":
-			specs = []legSpec{
-				{strike1, "CE", "BUY", 1},
-				{strike1, "PE", "BUY", 1},
-			}
-
-		case "strangle":
-			if strike2 <= 0 {
-				return gomcp.NewToolResultError("strangle requires strike2 (OTM CE strike)"), nil
-			}
-			specs = []legSpec{
-				{strike1, "PE", "BUY", 1},
-				{strike2, "CE", "BUY", 1},
-			}
-
-		case "iron_condor":
-			if strike2 <= 0 || strike3 <= 0 || strike4 <= 0 {
-				return gomcp.NewToolResultError("iron_condor requires strike1 (buy PE) < strike2 (sell PE) < strike3 (sell CE) < strike4 (buy CE)"), nil
-			}
-			if !(strike1 < strike2 && strike2 < strike3 && strike3 < strike4) {
-				return gomcp.NewToolResultError("iron_condor strikes must be ordered: strike1 < strike2 < strike3 < strike4"), nil
-			}
-			specs = []legSpec{
-				{strike1, "PE", "BUY", 1},
-				{strike2, "PE", "SELL", 1},
-				{strike3, "CE", "SELL", 1},
-				{strike4, "CE", "BUY", 1},
-			}
-
-		case "butterfly":
-			if strike2 <= 0 || strike3 <= 0 {
-				return gomcp.NewToolResultError("butterfly requires strike1 < strike2 (middle, sold 2x) < strike3"), nil
-			}
-			if !(strike1 < strike2 && strike2 < strike3) {
-				return gomcp.NewToolResultError("butterfly strikes must be ordered: strike1 < strike2 < strike3"), nil
-			}
-			specs = []legSpec{
-				{strike1, "CE", "BUY", 1},
-				{strike2, "CE", "SELL", 2},
-				{strike3, "CE", "BUY", 1},
-			}
-
-		default:
-			return gomcp.NewToolResultError(fmt.Sprintf("Unknown strategy '%s'. Supported: bull_call_spread, bear_put_spread, bear_call_spread, bull_put_spread, straddle, strangle, iron_condor, butterfly", strategy)), nil
+		// Pre-validate strategy + expiry + strike-ordering BEFORE the session
+		// gate. Pre-refactor handler did this same ordering: arg-shape
+		// errors should surface before "Please log in first" so a user
+		// correcting a typo doesn't have to log in just to see the typo.
+		if _, err := usecases.ValidateOptionsStrategyCommand(cmd); err != nil {
+			return gomcp.NewToolResultError(err.Error()), nil
 		}
 
-		// Detect lot size from instruments if not overridden
-		// Phase 3a Batch 1: route through the InstrumentsManagerProvider port.
-		lotSize := lotSizeOverride
-		instr := handler.Instruments()
-		if lotSize <= 0 {
-			if instr != nil && instr.Count() > 0 {
-				found := instr.Filter(func(inst instruments.Instrument) bool {
-					return inst.Exchange == "NFO" &&
-						strings.EqualFold(inst.Name, underlying) &&
-						(inst.InstrumentType == "CE" || inst.InstrumentType == "PE") &&
-						inst.LotSize > 0
-				})
-				if len(found) > 0 {
-					lotSize = found[0].LotSize
-				}
-			}
-			if lotSize <= 0 {
-				lotSize = 1 // fallback
-			}
-		}
-
+		// WithSession scopes Email from the validated session.
 		return handler.WithSession(ctx, "options_payoff_builder", func(session *kc.KiteSessionData) (*gomcp.CallToolResult, error) {
-			// Resolve trading symbols and fetch premiums for each leg
-			legs := make([]strategyLeg, 0, len(specs))
-			instrumentKeys := make([]string, 0, len(specs))
-			symbolForSpec := make([]string, len(specs))
-
-			// Find trading symbols from the instruments store. Phase 3a
-			// Batch 1: instr was already obtained above; hoist nil check.
-			if instr == nil {
-				return gomcp.NewToolResultError("Instruments manager not available"), nil
-			}
-			for i, spec := range specs {
-				optType := spec.optionType
-				found := instr.Filter(func(inst instruments.Instrument) bool {
-					return inst.Exchange == "NFO" &&
-						strings.EqualFold(inst.Name, underlying) &&
-						inst.InstrumentType == optType &&
-						inst.Strike == spec.strike &&
-						strings.HasPrefix(inst.ExpiryDate, expiryStr)
-				})
-				if len(found) == 0 {
-					return gomcp.NewToolResultError(fmt.Sprintf("No instrument found for %s %s %.0f expiry %s on NFO", underlying, spec.optionType, spec.strike, expiryStr)), nil
-				}
-				sym := found[0].Tradingsymbol
-				symbolForSpec[i] = sym
-				key := "NFO:" + sym
-				instrumentKeys = append(instrumentKeys, key)
-			}
-
-			// Batch LTP fetch
-			if len(instrumentKeys) > 500 {
-				instrumentKeys = instrumentKeys[:500]
-			}
-			raw, err := handler.QueryBus().DispatchWithResult(ctx, cqrs.GetLTPQuery{Email: session.Email, Instruments: instrumentKeys})
+			cmd.Email = session.Email
+			resp, err := uc.Execute(ctx, cmd)
 			if err != nil {
-				return gomcp.NewToolResultError(fmt.Sprintf("Failed to fetch option premiums: %s", err.Error())), nil
+				return gomcp.NewToolResultError(err.Error()), nil
 			}
-			ltpResp := raw.(map[string]broker.LTP)
-
-			netPremium := 0.0 // positive = net credit, negative = net debit
-			for i, spec := range specs {
-				sym := symbolForSpec[i]
-				key := "NFO:" + sym
-				premium := 0.0
-				if q, ok := ltpResp[key]; ok {
-					premium = q.LastPrice
-				}
-				if premium <= 0 {
-					return gomcp.NewToolResultError(fmt.Sprintf("No LTP available for %s — market may be closed or symbol is invalid", key)), nil
-				}
-
-				legLots := lots * spec.lotsMulti
-				qty := legLots * lotSize
-				totalPremium := premium * float64(qty)
-
-				leg := strategyLeg{
-					TradingSymbol: sym,
-					OptionType:    spec.optionType,
-					Strike:        spec.strike,
-					Action:        spec.action,
-					Lots:          legLots,
-					Quantity:      qty,
-					Premium:       round2(premium),
-					TotalPremium:  round2(totalPremium),
-				}
-				legs = append(legs, leg)
-
-				if spec.action == "SELL" {
-					netPremium += totalPremium
-				} else {
-					netPremium -= totalPremium
-				}
-			}
-
-			// Calculate max profit, max loss, breakevens per strategy
-			qty := float64(lots * lotSize) // per-unit quantity (1x lots)
-			maxProfitStr := ""
-			maxLossStr := ""
-			maxProfitAmt := 0.0
-			maxLossAmt := 0.0
-			var breakevens []float64
-
-			// Per-share premiums (positive = received, negative = paid)
-			perSharePremiums := make(map[string]float64)
-			for _, leg := range legs {
-				key := fmt.Sprintf("%s_%.0f", leg.OptionType, leg.Strike)
-				sign := -1.0
-				if leg.Action == "SELL" {
-					sign = 1.0
-				}
-				perSharePremiums[key] += sign * leg.Premium
-			}
-
-			switch strategy {
-			case "bull_call_spread":
-				// Buy CE@K1, Sell CE@K2 (K1 < K2). Net debit.
-				p1 := legs[0].Premium // paid
-				p2 := legs[1].Premium // received
-				netDebit := p1 - p2
-				maxProfitAmt = round2((strike2 - strike1 - netDebit) * qty)
-				maxLossAmt = round2(netDebit * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{round2(strike1 + netDebit)}
-
-			case "bear_put_spread":
-				// Sell PE@K1, Buy PE@K2 (K1 < K2). Net debit.
-				p1 := legs[0].Premium // received (sell)
-				p2 := legs[1].Premium // paid (buy)
-				netDebit := p2 - p1
-				maxProfitAmt = round2((strike2 - strike1 - netDebit) * qty)
-				maxLossAmt = round2(netDebit * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{round2(strike2 - netDebit)}
-
-			case "bear_call_spread":
-				// Sell CE@K1, Buy CE@K2 (K1 < K2). Net credit.
-				p1 := legs[0].Premium // received (sell)
-				p2 := legs[1].Premium // paid (buy)
-				netCredit := p1 - p2
-				maxProfitAmt = round2(netCredit * qty)
-				maxLossAmt = round2((strike2 - strike1 - netCredit) * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{round2(strike1 + netCredit)}
-
-			case "bull_put_spread":
-				// Buy PE@K1, Sell PE@K2 (K1 < K2). Net credit.
-				p1 := legs[0].Premium // paid (buy)
-				p2 := legs[1].Premium // received (sell)
-				netCredit := p2 - p1
-				maxProfitAmt = round2(netCredit * qty)
-				maxLossAmt = round2((strike2 - strike1 - netCredit) * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{round2(strike2 - netCredit)}
-
-			case "straddle":
-				// Buy CE + PE at same strike. Net debit. Unlimited profit.
-				totalDebit := legs[0].Premium + legs[1].Premium
-				maxProfitStr = "unlimited"
-				maxLossAmt = round2(totalDebit * qty)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{
-					round2(strike1 - totalDebit),
-					round2(strike1 + totalDebit),
-				}
-
-			case "strangle":
-				// Buy PE@K1 + Buy CE@K2. Net debit. Unlimited profit.
-				totalDebit := legs[0].Premium + legs[1].Premium
-				maxProfitStr = "unlimited"
-				maxLossAmt = round2(totalDebit * qty)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{
-					round2(strike1 - totalDebit),
-					round2(strike2 + totalDebit),
-				}
-
-			case "iron_condor":
-				// Buy PE@K1, Sell PE@K2, Sell CE@K3, Buy CE@K4. Net credit.
-				p1 := legs[0].Premium // paid
-				p2 := legs[1].Premium // received
-				p3 := legs[2].Premium // received
-				p4 := legs[3].Premium // paid
-				netCredit := (p2 + p3) - (p1 + p4)
-				// Max loss is the wider wing minus credit.
-				putWing := strike2 - strike1
-				callWing := strike4 - strike3
-				widerWing := math.Max(putWing, callWing)
-				maxProfitAmt = round2(netCredit * qty)
-				maxLossAmt = round2((widerWing - netCredit) * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{
-					round2(strike2 - netCredit),
-					round2(strike3 + netCredit),
-				}
-
-			case "butterfly":
-				// Buy CE@K1, Sell 2x CE@K2, Buy CE@K3. Net debit.
-				p1 := legs[0].Premium
-				p2 := legs[1].Premium // sold 2x (but Premium is per-share)
-				p3 := legs[2].Premium
-				netDebit := p1 - 2*p2 + p3
-				if netDebit < 0 {
-					netDebit = 0 // credit butterfly
-				}
-				wingWidth := strike2 - strike1
-				maxProfitAmt = round2((wingWidth - netDebit) * qty)
-				maxLossAmt = round2(netDebit * qty)
-				maxProfitStr = fmt.Sprintf("%.2f", maxProfitAmt)
-				maxLossStr = fmt.Sprintf("%.2f", maxLossAmt)
-				breakevens = []float64{
-					round2(strike1 + netDebit),
-					round2(strike3 - netDebit),
-				}
-			}
-
-			// Risk-reward ratio
-			rrStr := "N/A"
-			if maxProfitAmt > 0 && maxLossAmt > 0 {
-				rr := maxLossAmt / maxProfitAmt
-				rrStr = fmt.Sprintf("1:%.2f", 1/rr)
-			} else if maxProfitStr == "unlimited" && maxLossAmt > 0 {
-				rrStr = "unlimited upside"
-			}
-
-			resp := strategyResponse{
-				Strategy:     strategy,
-				Underlying:   underlying,
-				Expiry:       expiryStr,
-				Legs:         legs,
-				NetPremium:   round2(netPremium),
-				MaxProfit:    maxProfitStr,
-				MaxLoss:      maxLossStr,
-				MaxProfitAmt: maxProfitAmt,
-				MaxLossAmt:   maxLossAmt,
-				Breakevens:   breakevens,
-				RiskReward:   rrStr,
-				LotSize:      lotSize,
-				TotalLots:    lots,
-			}
-
 			return handler.MarshalResponse(resp, "options_payoff_builder")
 		})
 	}
