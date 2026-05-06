@@ -45,6 +45,7 @@ type DashboardHandler struct {
 	paperTmpl     *htmltemplate.Template
 	safetyTmpl    *htmltemplate.Template
 	scannerTmpl   *htmltemplate.Template
+	payoffTmpl    *htmltemplate.Template
 	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
 
 	// Focused sub-handlers (composition root pattern).
@@ -57,6 +58,7 @@ type DashboardHandler struct {
 	tax       *TaxHandler
 	account   *AccountHandler
 	scanner   *ScannerHandler
+	payoff    *PayoffHandler
 }
 
 // billingStoreIface is the subset of billing.Store used by the dashboard.
@@ -88,6 +90,7 @@ func NewDashboardHandler(manager *kc.Manager, logger *slog.Logger, auditStore *a
 	d.tax = newTaxHandler(d)
 	d.account = newAccountHandler(d)
 	d.scanner = newScannerHandler(d)
+	d.payoff = newPayoffHandler(d)
 	return d
 }
 
@@ -138,6 +141,8 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.account.selfManageCredentials))
 	mux.Handle("/dashboard/scanner", wrap(d.scanner.serveScannerPageSSR))
 	mux.Handle("/dashboard/api/scanner", wrap(d.scanner.scannerAPI))
+	mux.Handle("/dashboard/payoff", wrap(d.payoff.servePayoffPageSSR))
+	mux.Handle("/dashboard/api/payoff", wrap(d.payoff.payoffAPI))
 	// Only register billing page if billing store is available
 	if d.billingStore != nil {
 		mux.Handle("/dashboard/billing", wrap(d.serveBillingPage))

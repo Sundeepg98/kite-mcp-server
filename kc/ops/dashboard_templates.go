@@ -107,6 +107,17 @@ type ScannerPageData struct {
 	UpdatedAt  string
 }
 
+// PayoffPageData is the top-level data for the payoff visualizer page.
+// JS-driven (user pastes strategy JSON, posts to /dashboard/api/payoff,
+// SVG injected inline); only topbar context is server-rendered. Axis C
+// feature gap C.F4 (Option (c) — accepts pre-built MCP-tool output).
+type PayoffPageData struct {
+	Email      string
+	Role       string
+	TokenValid bool
+	UpdatedAt  string
+}
+
 // ============================================================================
 // Template initialization
 // ============================================================================
@@ -157,6 +168,13 @@ func (d *DashboardHandler) InitTemplates() {
 		d.loggerPort.Error(context.Background(), "Failed to parse scanner template", err)
 	} else {
 		d.scannerTmpl = scannerTmpl
+	}
+	// payoff.html — same pattern as scanner: no partials, JS-driven page.
+	payoffTmpl, err := htmltemplate.ParseFS(templates.FS, "payoff.html")
+	if err != nil {
+		d.loggerPort.Error(context.Background(), "Failed to parse payoff template", err)
+	} else {
+		d.payoffTmpl = payoffTmpl
 	}
 
 	fragTmpl, err := userDashboardFragmentTemplates()
