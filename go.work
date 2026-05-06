@@ -6,19 +6,20 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (28 modules — see `use` block below; was 30 pre-Phase-B,
-// then 29, now 28 after kc/sectors added by audit agent and broker +
-// kc/money removed by Path B canary deletion):
+// Members (27 modules — see `use` block below; arc was 30 -> 29 (sectors
+// added by audit agent) -> 28 (broker + money removed by first Phase B)
+// -> 27 (decorators removed by this commit's Phase B):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
 // "bidirectional cross-module deps with transitive replace" pattern
 // documented in their go.mod headers. Path A inauguration extracted
-// broker (commit 6626812) and kc/money (commit b92173b) to external
-// algo2go GitHub repos; Phase B canary deletion (this commit) removed
-// both ./broker and ./kc/money from the use block — they are now
-// fetched from algo2go/kite-mcp-broker@v0.1.0 +
-// algo2go/kite-mcp-money@v0.1.0 via GOPROXY.
+// broker (commit 6626812), kc/money (commit b92173b), and kc/decorators
+// (commit 7f71ccf) to external algo2go GitHub repos. Phase B canary
+// deletions removed broker + kc/money (commit bef0b31) and kc/decorators
+// (this commit) from the use block — they are now fetched from
+// algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
+// algo2go/kite-mcp-decorators@v0.1.0 via GOPROXY.
 //
 // Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
 // roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
@@ -68,7 +69,6 @@ use (
 	./kc/audit
 	./kc/billing
 	./kc/cqrs
-	./kc/decorators
 	./kc/domain
 	./kc/eventsourcing
 	./kc/i18n

@@ -124,7 +124,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../kc/cqrs
-	github.com/algo2go/kite-mcp-decorators => ../kc/decorators
 	github.com/zerodha/kite-mcp-server/kc/domain => ../kc/domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/i18n => ../kc/i18n

@@ -2,6 +2,8 @@ cloud.google.com/go/compute/metadata v0.9.0 h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdB
 cloud.google.com/go/compute/metadata v0.9.0/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
 github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
+github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE8ZnJywaQ5+Hc=
+github.com/algo2go/kite-mcp-decorators v0.1.0/go.mod h1:KUTxUT4pxYffXiw/fIw456AZ7J5hhz0qR7eC7ZMVqDw=
 github.com/algo2go/kite-mcp-money v0.1.0 h1:4+HEW6r0/N7h+5jsjCNJZCHYwML/SkmE8/FylcfckJ8=
 github.com/algo2go/kite-mcp-money v0.1.0/go.mod h1:bjj4XnGM+YU2B8pPKTheanSVgW6ON3t0lh2d/m7ELek=
 github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=

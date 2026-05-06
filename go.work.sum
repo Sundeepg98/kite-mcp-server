@@ -1,9 +1,7 @@
 cel.dev/expr v0.25.1/go.mod h1:hrXvqGP6G6gyx8UAHSHJ5RGk//1Oj5nXQ2NI02Nrsg4=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0/go.mod h1:P4WPRUkOhJC13W//jWpyfJNDAIpvRbAUIYLX/4jtlE0=
-github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIxrGIPnNf0=
-github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
-github.com/algo2go/kite-mcp-money v0.1.0 h1:4+HEW6r0/N7h+5jsjCNJZCHYwML/SkmE8/FylcfckJ8=
-github.com/algo2go/kite-mcp-money v0.1.0/go.mod h1:bjj4XnGM+YU2B8pPKTheanSVgW6ON3t0lh2d/m7ELek=
+github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE8ZnJywaQ5+Hc=
+github.com/algo2go/kite-mcp-decorators v0.1.0/go.mod h1:KUTxUT4pxYffXiw/fIw456AZ7J5hhz0qR7eC7ZMVqDw=
 github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5/go.mod h1:KdCmV+x/BuvyMxRnYBlmVaq4OLiKW6iRQfvC62cvdkI=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/envoyproxy/go-control-plane v0.14.0/go.mod h1:NcS5X47pLl/hfqxU70yPwL9ZMkUlwlKxtAohpi2wBEU=

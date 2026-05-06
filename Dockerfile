@@ -24,7 +24,6 @@ COPY kc/scheduler/go.mod kc/scheduler/go.sum* kc/scheduler/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
 COPY kc/billing/go.mod kc/billing/go.sum* kc/billing/
 COPY kc/cqrs/go.mod kc/cqrs/go.sum* kc/cqrs/
-COPY kc/decorators/go.mod kc/decorators/go.sum* kc/decorators/
 COPY kc/domain/go.mod kc/domain/go.sum* kc/domain/
 COPY kc/eventsourcing/go.mod kc/eventsourcing/go.sum* kc/eventsourcing/
 COPY kc/i18n/go.mod kc/i18n/go.sum* kc/i18n/
