@@ -6,20 +6,22 @@ import (
 	"strconv"
 
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/sectors"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // scannerHandler is the per-user dashboard endpoint that returns a filtered
-// list of tradable instruments. Phase 1 of the scanner feature (Axis C
-// feature gap C.F1 from .research/abc-100pct-complete-paths.md). Phase 1
-// supports min_price / max_price / exchange / limit URL params; subsequent
-// phases will add sector + market-cap filters.
+// list of tradable instruments. Closes Axis C feature gap C.F1 from
+// .research/abc-100pct-complete-paths.md.
 //
-// Default behavior:
-//   - min_price=0          (no lower bound; matches everything ≥ 0)
-//   - max_price=∞          (no upper bound)
-//   - exchange=""          (no exchange filter; matches all)
-//   - limit=50             (clamped to [1, 200])
+// URL params (all optional):
+//   - min_price (float)    — lower price bound; 0 means no bound
+//   - max_price (float)    — upper price bound; 0 means no bound
+//   - exchange (string)    — exact match (NSE/BSE); empty means any
+//   - sector (string)      — sector match via kc/sectors.Lookup
+//                            (strips -BE/-EQ suffixes; case-sensitive
+//                            sector value match e.g. "Banking", "IT")
+//   - limit (int)          — result cap; default 50, clamped to [1, 200]
 //
 // Results are sorted by last_price ascending for deterministic UI rendering.
 type ScannerHandler struct {
@@ -62,6 +64,7 @@ func (h *ScannerHandler) scannerAPI(w http.ResponseWriter, r *http.Request) {
 	minPrice := floatParam(r, "min_price", 0)
 	maxPrice := floatParam(r, "max_price", 0) // 0 means "no upper bound" (handled below)
 	exchange := r.URL.Query().Get("exchange")
+	sectorFilter := r.URL.Query().Get("sector")
 
 	// Limit clamp: default 50, max 200, min 1.
 	limit := intParam(r, "limit", 50)
@@ -80,7 +83,7 @@ func (h *ScannerHandler) scannerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	matches := instrMgr.Filter(func(inst instruments.Instrument) bool {
-		// Phase 1 only includes equity instruments; defer F&O/MF to later phases.
+		// Equity-only universe; defer F&O/MF to later phases.
 		if inst.InstrumentType != "EQ" {
 			return false
 		}
@@ -95,6 +98,16 @@ func (h *ScannerHandler) scannerAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if maxPrice > 0 && inst.LastPrice > maxPrice {
 			return false
+		}
+		if sectorFilter != "" {
+			// Use kc/sectors.Lookup which normalizes the symbol (strips
+			// -BE/-EQ suffixes, uppercase, trim) before mapping to a
+			// sector. Unmapped symbols fail this predicate; the user
+			// must explicitly clear the sector filter to see them.
+			matched, ok := sectors.Lookup(inst.Tradingsymbol)
+			if !ok || matched != sectorFilter {
+				return false
+			}
 		}
 		return true
 	})
