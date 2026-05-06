@@ -6,7 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/zerodha/kite-mcp-server/kc/decorators"
+	"github.com/algo2go/kite-mcp-decorators"
 )
 
 // Phase 3a Decorator Option 2 consumer migration: the around-hook chain

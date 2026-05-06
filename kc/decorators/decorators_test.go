@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zerodha/kite-mcp-server/kc/decorators"
+	"github.com/algo2go/kite-mcp-decorators"
 )
 
 // Sample request/response types used in tests. Kept package-internal so tests

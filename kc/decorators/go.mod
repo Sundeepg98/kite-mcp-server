@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/decorators
+module github.com/algo2go/kite-mcp-decorators
 
 go 1.25.0
 

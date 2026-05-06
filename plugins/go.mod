@@ -83,7 +83,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000 // indirect
-	github.com/zerodha/kite-mcp-server/kc/decorators v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-decorators v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/i18n v0.0.0-00010101000000-000000000000 // indirect
@@ -124,7 +124,7 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../kc/cqrs
-	github.com/zerodha/kite-mcp-server/kc/decorators => ../kc/decorators
+	github.com/algo2go/kite-mcp-decorators => ../kc/decorators
 	github.com/zerodha/kite-mcp-server/kc/domain => ../kc/domain
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/i18n => ../kc/i18n
