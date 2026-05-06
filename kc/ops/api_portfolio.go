@@ -5,9 +5,9 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strings"
 
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/kite-mcp-server/kc/sectors"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
@@ -297,8 +297,7 @@ func computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposur
 
 	for _, h := range holdings {
 		val := h.LastPrice * float64(h.Quantity)
-		symbol := dashboardNormalizeSymbol(h.Tradingsymbol)
-		sector, ok := dashboardStockSectors[symbol]
+		sector, ok := sectors.Lookup(h.Tradingsymbol)
 		if !ok {
 			unmappedCount++
 			sector = "Other"
@@ -315,12 +314,14 @@ func computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposur
 		acc.holdings++
 	}
 
-	sectors := make([]dashboardSectorAllocation, 0, len(sectorMap))
+	// sectorList rather than `sectors` to avoid shadowing the kc/sectors
+	// package import (used at the Lookup call earlier in this function).
+	sectorList := make([]dashboardSectorAllocation, 0, len(sectorMap))
 	var warnings []string
 	for name, acc := range sectorMap {
 		pct := math.Round(acc.value/totalValue*10000) / 100
 		overExposed := pct > overExposureThresh
-		sectors = append(sectors, dashboardSectorAllocation{
+		sectorList = append(sectorList, dashboardSectorAllocation{
 			Sector:      name,
 			Value:       math.Round(acc.value*100) / 100,
 			Pct:         pct,
@@ -332,8 +333,8 @@ func computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposur
 		}
 	}
 
-	sort.Slice(sectors, func(i, j int) bool {
-		return sectors[i].Pct > sectors[j].Pct
+	sort.Slice(sectorList, func(i, j int) bool {
+		return sectorList[i].Pct > sectorList[j].Pct
 	})
 
 	return sectorExposureAPIResponse{
@@ -341,81 +342,8 @@ func computeDashboardSectorExposure(holdings kiteconnect.Holdings) sectorExposur
 		HoldingsCount: len(holdings),
 		MappedCount:   mappedCount,
 		UnmappedCount: unmappedCount,
-		Sectors:       sectors,
+		Sectors:       sectorList,
 		Warnings:      warnings,
 	}
 }
 
-// dashboardNormalizeSymbol strips common suffixes for sector lookup.
-func dashboardNormalizeSymbol(ts string) string {
-	s := strings.ToUpper(strings.TrimSpace(ts))
-	for _, suffix := range []string{"-BE", "-EQ", "-BZ", "-BL"} {
-		s = strings.TrimSuffix(s, suffix)
-	}
-	return s
-}
-
-// dashboardStockSectors maps NSE/BSE trading symbols to their primary sector.
-// Duplicated from mcp/sector_tool.go to avoid cross-package import.
-var dashboardStockSectors = map[string]string{
-	// Banking
-	"HDFCBANK": "Banking", "ICICIBANK": "Banking", "SBIN": "Banking",
-	"KOTAKBANK": "Banking", "AXISBANK": "Banking", "INDUSINDBK": "Banking",
-	"BANKBARODA": "Banking", "PNB": "Banking", "IDFCFIRSTB": "Banking",
-	"FEDERALBNK": "Banking", "AUBANK": "Banking", "BANDHANBNK": "Banking",
-	"CANBK": "Banking", "UNIONBANK": "Banking", "YESBANK": "Banking",
-	// IT
-	"TCS": "IT", "INFY": "IT", "HCLTECH": "IT", "WIPRO": "IT",
-	"TECHM": "IT", "LTIM": "IT", "MPHASIS": "IT", "COFORGE": "IT",
-	"PERSISTENT": "IT", "LTTS": "IT", "TATAELXSI": "IT",
-	// FMCG
-	"HINDUNILVR": "FMCG", "ITC": "FMCG", "NESTLEIND": "FMCG",
-	"BRITANNIA": "FMCG", "DABUR": "FMCG", "TATACONSUM": "FMCG",
-	"MARICO": "FMCG", "GODREJCP": "FMCG", "COLPAL": "FMCG",
-	// Pharma / Healthcare
-	"SUNPHARMA": "Pharma", "DRREDDY": "Pharma", "CIPLA": "Pharma",
-	"DIVISLAB": "Pharma", "LUPIN": "Pharma", "AUROPHARMA": "Pharma",
-	"BIOCON": "Pharma", "APOLLOHOSP": "Healthcare", "MAXHEALTH": "Healthcare",
-	"FORTIS": "Healthcare",
-	// Auto
-	"MARUTI": "Auto", "TATAMOTORS": "Auto", "M&M": "Auto",
-	"HEROMOTOCO": "Auto", "EICHERMOT": "Auto", "BAJAJ-AUTO": "Auto",
-	"ASHOKLEY": "Auto", "TVSMOTOR": "Auto", "MOTHERSON": "Auto",
-	// Energy
-	"RELIANCE": "Energy", "NTPC": "Energy", "POWERGRID": "Energy",
-	"ONGC": "Energy", "COALINDIA": "Energy", "BPCL": "Energy",
-	"IOC": "Energy", "GAIL": "Energy", "TATAPOWER": "Energy",
-	"ADANIGREEN": "Energy", "NHPC": "Energy",
-	// Metals
-	"TATASTEEL": "Metals", "JSWSTEEL": "Metals", "HINDALCO": "Metals",
-	"VEDL": "Metals", "JINDALSTEL": "Metals", "NMDC": "Metals", "SAIL": "Metals",
-	// Infra
-	"LT": "Infra", "ADANIPORTS": "Infra", "SIEMENS": "Infra",
-	"ABB": "Infra", "HAVELLS": "Infra", "POLYCAB": "Infra",
-	"BEL": "Infra", "BHEL": "Infra",
-	// Cement
-	"ULTRACEMCO": "Cement", "GRASIM": "Cement", "SHREECEM": "Cement",
-	"AMBUJACEM": "Cement", "ACC": "Cement",
-	// NBFC / Insurance
-	"BAJFINANCE": "NBFC", "BAJAJFINSV": "NBFC", "SBILIFE": "Insurance",
-	"HDFCLIFE": "Insurance", "ICICIGI": "Insurance", "MUTHOOTFIN": "NBFC",
-	"SHRIRAMFIN": "NBFC", "CHOLAFIN": "NBFC", "PFC": "NBFC", "RECLTD": "NBFC",
-	// Telecom
-	"BHARTIARTL": "Telecom", "IDEA": "Telecom",
-	// Consumer
-	"TITAN": "Consumer", "ASIANPAINT": "Consumer", "PIDILITIND": "Consumer",
-	"TRENT": "Consumer", "DMART": "Consumer",
-	// Tech / New Economy
-	"ZOMATO": "Tech", "PAYTM": "Tech", "NYKAA": "Tech",
-	"POLICYBZR": "Tech", "INFOEDGE": "Tech",
-	// Defence
-	"HAL": "Defence", "BDL": "Defence", "MAZAGON": "Defence",
-	// Conglomerate
-	"ADANIENT": "Conglomerate",
-	// Real Estate
-	"DLF": "Real Estate", "GODREJPROP": "Real Estate", "OBEROIRLTY": "Real Estate",
-	// Chemicals
-	"PIIND": "Chemicals", "SRF": "Chemicals", "DEEPAKNTR": "Chemicals",
-	// Services
-	"IRCTC": "Services", "INDIGO": "Aviation",
-}

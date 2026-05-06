@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
+	"github.com/zerodha/kite-mcp-server/kc/sectors"
 )
 
 // ===========================================================================
@@ -717,7 +718,11 @@ func TestMarketIndicesToBarData_InvalidType(t *testing.T) {
 }
 
 // ===========================================================================
-// dashboardNormalizeSymbol tests
+// sectors.NormalizeSymbol tests
+//
+// Migrated from the local dashboardNormalizeSymbol helper (deleted in
+// commit 8672d20 follow-up); the canonical NormalizeSymbol now lives in
+// kc/sectors. Test name + cases preserved verbatim for diff hygiene.
 // ===========================================================================
 
 func TestDashboardNormalizeSymbol(t *testing.T) {
@@ -736,7 +741,7 @@ func TestDashboardNormalizeSymbol(t *testing.T) {
 		{"ABC-BX", "ABC-BX"}, // unknown suffix - no strip
 	}
 	for _, tc := range tests {
-		assert.Equal(t, tc.want, dashboardNormalizeSymbol(tc.in), "dashboardNormalizeSymbol(%q)", tc.in)
+		assert.Equal(t, tc.want, sectors.NormalizeSymbol(tc.in), "sectors.NormalizeSymbol(%q)", tc.in)
 	}
 }
 
