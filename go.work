@@ -6,12 +6,19 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (29 modules — see `use` block below):
+// Members (28 modules — see `use` block below; was 30 pre-Phase-B,
+// then 29, now 28 after kc/sectors added by audit agent and broker +
+// kc/money removed by Path B canary deletion):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
 // "bidirectional cross-module deps with transitive replace" pattern
-// documented in their go.mod headers.
+// documented in their go.mod headers. Path A inauguration extracted
+// broker (commit 6626812) and kc/money (commit b92173b) to external
+// algo2go GitHub repos; Phase B canary deletion (this commit) removed
+// both ./broker and ./kc/money from the use block — they are now
+// fetched from algo2go/kite-mcp-broker@v0.1.0 +
+// algo2go/kite-mcp-money@v0.1.0 via GOPROXY.
 //
 // Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
 // roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
@@ -56,7 +63,6 @@ go 1.25.0
 use (
 	.
 	./app/providers
-	./broker
 	./kc/alerts
 	./kc/aop
 	./kc/audit
@@ -70,7 +76,6 @@ use (
 	./kc/isttz
 	./kc/legaldocs
 	./kc/logger
-	./kc/money
 	./kc/papertrading
 	./kc/registry
 	./kc/riskguard

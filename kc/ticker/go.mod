@@ -20,7 +20,7 @@ go 1.25.0
 // dispatch. This is 18/24 (commit 2 of 4 in this dispatch).
 require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
-	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-broker v0.1.0
 )
 
 require (
@@ -39,6 +39,4 @@ require (
 )
 
 replace (
-	github.com/algo2go/kite-mcp-broker => ../../broker
-	github.com/algo2go/kite-mcp-money => ../money
 )

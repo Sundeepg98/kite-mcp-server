@@ -23,7 +23,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000 // indirect
-	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-broker v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/domain v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/instruments v0.0.0-00010101000000-000000000000
@@ -81,7 +81,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
@@ -89,7 +88,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../instruments
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
-	github.com/algo2go/kite-mcp-money => ../money
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates

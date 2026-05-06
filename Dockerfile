@@ -3,17 +3,18 @@ RUN apk add --no-cache jq
 WORKDIR /app
 # Multi-module workspace setup (see go.work + .research/disintegrate-and-
 # holistic-architecture.md). The root go.mod has `replace` directives
-# pointing kc/money at ./kc/money and broker at ./broker, so each
+# pointing each in-tree extracted module at ./<path>, so each
 # extracted-module's go.mod must be present BEFORE `go mod download`
 # runs — otherwise the resolver fails with "open <module>/go.mod: no
 # such file or directory". Pre-stage every manifest before download.
-# Add another COPY line per future module extraction (kc/audit,
-# kc/riskguard, etc.) when they get their own go.mod.
+# Add another COPY line per future module extraction when they get
+# their own go.mod. Note: broker + kc/money were removed from this
+# pre-stage list as of Phase B canary deletion — they are now fetched
+# from algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0
+# via GOPROXY during go mod download instead of being in-tree COPY'd.
 COPY go.mod go.sum ./
 COPY app/providers/go.mod app/providers/go.sum* app/providers/
-COPY kc/money/go.mod kc/money/go.sum* kc/money/
 COPY kc/papertrading/go.mod kc/papertrading/go.sum* kc/papertrading/
-COPY broker/go.mod broker/go.sum* broker/
 COPY kc/alerts/go.mod kc/alerts/go.sum* kc/alerts/
 COPY kc/aop/go.mod kc/aop/go.sum* kc/aop/
 COPY kc/audit/go.mod kc/audit/go.sum* kc/audit/

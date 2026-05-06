@@ -21,7 +21,7 @@ go 1.25.0
 // dispatch. This is 17/24 (commit 1 of 4 in this dispatch).
 require (
 	github.com/stretchr/testify v1.10.0
-	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/isttz v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/logger v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
@@ -37,9 +37,7 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
-	github.com/algo2go/kite-mcp-money => ../money
 )

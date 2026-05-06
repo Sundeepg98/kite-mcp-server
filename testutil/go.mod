@@ -66,7 +66,7 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/stripe/stripe-go/v82 v82.5.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000 // indirect
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000 // indirect
@@ -101,7 +101,6 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../
-	github.com/algo2go/kite-mcp-broker => ../broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
@@ -112,7 +111,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../kc/instruments
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../kc/isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../kc/logger
-	github.com/algo2go/kite-mcp-money => ../kc/money
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/registry => ../kc/registry
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../kc/riskguard

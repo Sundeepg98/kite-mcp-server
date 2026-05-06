@@ -23,7 +23,7 @@ require (
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/stretchr/testify v1.10.0
-	github.com/algo2go/kite-mcp-broker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
 )
 
@@ -87,13 +87,11 @@ require (
 // (kc/audit) and earlier in the multi-module decomposition arc.
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-broker => ../../broker
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/domain => ../domain
 	github.com/zerodha/kite-mcp-server/kc/i18n => ../i18n
 	github.com/zerodha/kite-mcp-server/kc/isttz => ../isttz
 	github.com/zerodha/kite-mcp-server/kc/logger => ../logger
-	github.com/algo2go/kite-mcp-money => ../money
 	github.com/zerodha/kite-mcp-server/kc/templates => ../templates
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth
