@@ -44,6 +44,7 @@ type DashboardHandler struct {
 	alertsTmpl    *htmltemplate.Template
 	paperTmpl     *htmltemplate.Template
 	safetyTmpl    *htmltemplate.Template
+	scannerTmpl   *htmltemplate.Template
 	fragmentTmpl  *htmltemplate.Template // partials for htmx fragment responses
 
 	// Focused sub-handlers (composition root pattern).
@@ -135,6 +136,7 @@ func (d *DashboardHandler) RegisterRoutes(mux *http.ServeMux, auth func(http.Han
 	mux.Handle("/dashboard/api/tax-analysis", wrap(d.tax.taxAnalysisAPI))
 	mux.Handle("/dashboard/api/account/delete", wrap(d.account.selfDeleteAccount))
 	mux.Handle("/dashboard/api/account/credentials", wrap(d.account.selfManageCredentials))
+	mux.Handle("/dashboard/scanner", wrap(d.scanner.serveScannerPageSSR))
 	mux.Handle("/dashboard/api/scanner", wrap(d.scanner.scannerAPI))
 	// Only register billing page if billing store is available
 	if d.billingStore != nil {

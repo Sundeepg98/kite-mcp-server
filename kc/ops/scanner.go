@@ -153,3 +153,28 @@ func floatParam(r *http.Request, key string, defaultVal float64) float64 {
 	}
 	return v
 }
+
+// serveScannerPageSSR renders the /dashboard/scanner page. The page itself
+// is JS-driven — filters POST to /dashboard/api/scanner via fetch — so SSR
+// only needs to hand back the shell with topbar context (email, role,
+// token validity). Pattern matches dashboard_paper.go.
+func (h *ScannerHandler) serveScannerPageSSR(w http.ResponseWriter, r *http.Request) {
+	d := h.core
+	if d.scannerTmpl == nil {
+		d.servePageFallback(w, "scanner.html")
+		return
+	}
+
+	email, role, tokenValid := d.userContext(r)
+	data := ScannerPageData{
+		Email:      email,
+		Role:       role,
+		TokenValid: tokenValid,
+		UpdatedAt:  nowTimestamp(),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := d.scannerTmpl.Execute(w, data); err != nil {
+		d.loggerPort.Error(r.Context(), "Failed to render scanner page", err)
+	}
+}

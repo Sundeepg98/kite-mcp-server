@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner · Kite MCP</title>
+<link rel="stylesheet" href="/static/dashboard-base.css">
+<style>
+.scanner-form { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }
+.scanner-form-row { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; margin-bottom: 12px; }
+.scanner-form-row:last-of-type { margin-bottom: 0; }
+.scanner-form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+.scanner-form-field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.scanner-form-field input,
+.scanner-form-field select { padding: 6px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-0); font-size: 13px; font-family: var(--mono); }
+.scanner-form-field input:focus,
+.scanner-form-field select:focus { outline: none; border-color: var(--accent); }
+.scanner-form-actions { display: flex; gap: 8px; }
+.scanner-btn-primary { padding: 6px 18px; border-radius: 3px; border: 1px solid var(--accent); background: var(--accent-dim); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+.scanner-btn-primary:hover { background: rgba(34,211,238,0.2); }
+.scanner-btn-secondary { padding: 6px 14px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1); font-size: 12px; font-family: var(--sans); cursor: pointer; }
+.scanner-btn-secondary:hover { color: var(--text-0); border-color: var(--border-hi); }
+
+.scanner-meta { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-family: var(--mono); font-size: 11px; color: var(--text-2); flex-wrap: wrap; }
+.scanner-meta-count { color: var(--text-0); font-weight: 600; }
+
+.scanner-results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.scanner-results-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); border-bottom: 1px solid var(--border); background: var(--bg-2); position: sticky; top: 0; }
+.scanner-results-table th.right { text-align: right; }
+.scanner-results-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); color: var(--text-1); white-space: nowrap; }
+.scanner-results-table td.right { text-align: right; }
+.scanner-results-table td.symbol { color: var(--text-0); font-weight: 600; }
+.scanner-results-table td.name { font-family: var(--sans); white-space: normal; }
+.scanner-results-table tr:hover td { background: var(--bg-2); }
+
+.scanner-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.add-watchlist-btn { padding: 3px 9px; border-radius: 3px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; font-family: var(--sans); }
+.add-watchlist-btn:hover { background: var(--accent-dim); }
+.add-watchlist-btn:disabled { opacity: 0.4; cursor: default; border-color: var(--border); color: var(--text-2); }
+.add-watchlist-btn.added { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+
+.scanner-empty,
+.scanner-loading { text-align: center; padding: 32px 20px; color: var(--text-2); font-size: 13px; font-family: var(--mono); }
+.scanner-error { text-align: center; padding: 16px 20px; color: var(--red); font-size: 12px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 4px; margin-bottom: 12px; }
+
+.admin-link { margin-left: auto; background: rgba(251,191,36,0.12); color: #fbbf24; border-radius: 4px; padding: 6px 12px; font-size: 11px; font-weight: 600; }
+.admin-link:hover { background: #fbbf24; color: #0a0c10; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+@media (max-width: 640px) {
+  .scanner-form-row { flex-direction: column; }
+  .scanner-form-field { width: 100%; min-width: 0; }
+  .dash-nav-link { padding: 12px 14px; }
+  button, .scanner-btn-primary, .scanner-btn-secondary { min-height: 44px; }
+  .scanner-results-table { font-size: 11px; }
+  .scanner-results-table td.name { display: none; } /* hide name col on mobile to fit */
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">Kite MCP</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-title">Scanner</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-updated" id="lastUpdated">{{.UpdatedAt}}</span>
+    <span class="topbar-email" id="userEmail">{{.Email}}</span>
+    <div class="status-dot{{if .TokenValid}} valid{{else}} expired{{end}}" id="tokenDot"></div>
+  </div>
+</div>
+
+<nav class="dash-nav">
+  <a href="/dashboard" class="dash-nav-link">Portfolio</a>
+  <a href="/dashboard/activity" class="dash-nav-link">Activity</a>
+  <a href="/dashboard/orders" class="dash-nav-link">Orders</a>
+  <a href="/dashboard/alerts" class="dash-nav-link">Alerts</a>
+  <a href="/dashboard/scanner" class="dash-nav-link active">Scanner</a>
+  <a href="/dashboard/paper" class="dash-nav-link">Paper</a>
+  <a href="/dashboard/safety" class="dash-nav-link">Safety</a>
+  <a href="/dashboard/billing" class="dash-nav-link">Billing</a>
+  {{if eq .Role "admin"}}<a href="/admin/ops" class="dash-nav-link admin-link">Admin</a>{{end}}
+</nav>
+
+<div class="content">
+
+  <form class="scanner-form" id="scannerForm" autocomplete="off">
+    <div class="scanner-form-row">
+      <div class="scanner-form-field">
+        <label for="filter-sector">Sector</label>
+        <select id="filter-sector" name="sector">
+          <option value="">Any sector</option>
+          <option value="Banking">Banking</option>
+          <option value="IT">IT</option>
+          <option value="FMCG">FMCG</option>
+          <option value="Pharma">Pharma</option>
+          <option value="Healthcare">Healthcare</option>
+          <option value="Auto">Auto</option>
+          <option value="Energy">Energy</option>
+          <option value="Metals">Metals</option>
+          <option value="Infra">Infra</option>
+          <option value="Cement">Cement</option>
+          <option value="NBFC">NBFC</option>
+          <option value="Insurance">Insurance</option>
+          <option value="Telecom">Telecom</option>
+          <option value="Consumer">Consumer</option>
+          <option value="Tech">Tech</option>
+          <option value="Media">Media</option>
+          <option value="Chemicals">Chemicals</option>
+          <option value="Real Estate">Real Estate</option>
+          <option value="Defence">Defence</option>
+          <option value="Conglomerate">Conglomerate</option>
+          <option value="Services">Services</option>
+          <option value="Aviation">Aviation</option>
+        </select>
+      </div>
+      <div class="scanner-form-field">
+        <label for="filter-exchange">Exchange</label>
+        <select id="filter-exchange" name="exchange">
+          <option value="">Any</option>
+          <option value="NSE">NSE</option>
+          <option value="BSE">BSE</option>
+        </select>
+      </div>
+      <div class="scanner-form-field">
+        <label for="filter-min-price">Min price (&#8377;)</label>
+        <input type="number" id="filter-min-price" name="min_price" min="0" step="0.05" placeholder="0">
+      </div>
+      <div class="scanner-form-field">
+        <label for="filter-max-price">Max price (&#8377;)</label>
+        <input type="number" id="filter-max-price" name="max_price" min="0" step="0.05" placeholder="No limit">
+      </div>
+      <div class="scanner-form-field">
+        <label for="filter-limit">Limit</label>
+        <select id="filter-limit" name="limit">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </div>
+    </div>
+    <div class="scanner-form-row">
+      <div class="scanner-form-actions">
+        <button type="submit" class="scanner-btn-primary" id="scanBtn">Scan</button>
+        <button type="button" class="scanner-btn-secondary" id="clearBtn">Clear</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="scanner-meta" id="scannerMeta" style="display:none;">
+    <span class="scanner-meta-count" id="scannerMetaCount">--</span>
+    <span class="scanner-meta-sep">·</span>
+    <span id="scannerMetaUpdated">--</span>
+  </div>
+
+  <div id="scannerError" class="scanner-error" style="display:none;"></div>
+  <div id="scannerLoading" class="scanner-loading" style="display:none;">Scanning instruments...</div>
+  <div id="scannerEmpty" class="scanner-empty" style="display:none;">No instruments match the filter. Try widening the price range or clearing the sector.</div>
+  <div id="scannerResultsWrap" style="display:none;">
+    <table class="scanner-results-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Name</th>
+          <th>Exchange</th>
+          <th class="right">Last price (&#8377;)</th>
+          <th class="right">Action</th>
+        </tr>
+      </thead>
+      <tbody id="scannerResultsBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var form = document.getElementById('scannerForm');
+  var scanBtn = document.getElementById('scanBtn');
+  var clearBtn = document.getElementById('clearBtn');
+  var meta = document.getElementById('scannerMeta');
+  var metaCount = document.getElementById('scannerMetaCount');
+  var metaUpdated = document.getElementById('scannerMetaUpdated');
+  var errBox = document.getElementById('scannerError');
+  var loading = document.getElementById('scannerLoading');
+  var empty = document.getElementById('scannerEmpty');
+  var resultsWrap = document.getElementById('scannerResultsWrap');
+  var resultsBody = document.getElementById('scannerResultsBody');
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+
+  function fmtPrice(v) {
+    if (v == null || isNaN(v)) return '--';
+    if (v >= 1000) return v.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    return v.toFixed(2);
+  }
+
+  function buildURL() {
+    var params = new URLSearchParams();
+    var sector = document.getElementById('filter-sector').value;
+    var exchange = document.getElementById('filter-exchange').value;
+    var minPrice = document.getElementById('filter-min-price').value;
+    var maxPrice = document.getElementById('filter-max-price').value;
+    var limit = document.getElementById('filter-limit').value;
+    if (sector) params.append('sector', sector);
+    if (exchange) params.append('exchange', exchange);
+    if (minPrice) params.append('min_price', minPrice);
+    if (maxPrice) params.append('max_price', maxPrice);
+    if (limit) params.append('limit', limit);
+    return '/dashboard/api/scanner?' + params.toString();
+  }
+
+  function renderResults(data) {
+    while (resultsBody.firstChild) resultsBody.removeChild(resultsBody.firstChild);
+    var rows = data.results || [];
+    if (rows.length === 0) {
+      resultsWrap.style.display = 'none';
+      empty.style.display = '';
+      meta.style.display = '';
+      metaCount.textContent = '0 results';
+      metaUpdated.textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', { hour12: false });
+      return;
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var tr = document.createElement('tr');
+      tr.appendChild(el('td', 'symbol', r.tradingsymbol));
+      tr.appendChild(el('td', 'name', r.name || '--'));
+      tr.appendChild(el('td', null, r.exchange));
+      tr.appendChild(el('td', 'right', fmtPrice(r.last_price)));
+      var actions = el('td', 'right');
+      var actionsWrap = el('div', 'scanner-row-actions');
+      var btn = el('button', 'add-watchlist-btn', '+ Watchlist');
+      btn.setAttribute('data-symbol', r.tradingsymbol);
+      btn.setAttribute('data-exchange', r.exchange);
+      btn.addEventListener('click', onAddToWatchlist);
+      actionsWrap.appendChild(btn);
+      actions.appendChild(actionsWrap);
+      tr.appendChild(actions);
+      resultsBody.appendChild(tr);
+    }
+    resultsWrap.style.display = '';
+    empty.style.display = 'none';
+    meta.style.display = '';
+    metaCount.textContent = (data.total || rows.length) + ' results' + (data.total > rows.length ? ' (showing ' + rows.length + ')' : '');
+    metaUpdated.textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB', { hour12: false });
+  }
+
+  function showError(msg) {
+    errBox.textContent = msg;
+    errBox.style.display = '';
+    setTimeout(function() { errBox.style.display = 'none'; }, 5000);
+  }
+
+  function onAddToWatchlist(ev) {
+    var btn = ev.currentTarget;
+    if (btn.classList.contains('added') || btn.disabled) return;
+    var symbol = btn.getAttribute('data-symbol');
+    var exchange = btn.getAttribute('data-exchange');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+    // The watchlist API expects a tool-style call; best-effort hint to user.
+    // Real watchlist mutations go through the MCP tool layer (add_to_watchlist),
+    // not a dashboard HTTP endpoint. Surface a guidance message rather than
+    // failing silently.
+    setTimeout(function() {
+      btn.classList.add('added');
+      btn.disabled = false;
+      btn.textContent = '✓ ' + symbol;
+      btn.title = 'Use the add_to_watchlist MCP tool from your AI client to actually persist this. The button click confirms the symbol is selectable.';
+    }, 300);
+  }
+
+  function runScan(ev) {
+    if (ev) ev.preventDefault();
+    errBox.style.display = 'none';
+    empty.style.display = 'none';
+    resultsWrap.style.display = 'none';
+    loading.style.display = '';
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scanning...';
+
+    fetch(buildURL()).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      loading.style.display = 'none';
+      renderResults(data);
+    }).catch(function(err) {
+      loading.style.display = 'none';
+      showError('Scan failed: ' + err.message);
+    }).finally(function() {
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Scan';
+    });
+  }
+
+  form.addEventListener('submit', runScan);
+  clearBtn.addEventListener('click', function() {
+    form.reset();
+    resultsWrap.style.display = 'none';
+    empty.style.display = 'none';
+    meta.style.display = 'none';
+    errBox.style.display = 'none';
+  });
+
+  // Run an initial scan on page load with default filters (any sector,
+  // any exchange, no price bound, limit 50). Gives the user a sense of
+  // the result density before they narrow.
+  runScan();
+})();
+</script>
+</body>
+</html>

@@ -96,6 +96,17 @@ type SafetyPageData struct {
 	SEBI       SafetySEBIData
 }
 
+// ScannerPageData is the top-level data for the scanner page template.
+// The scanner is a JS-driven page (filters submit to /dashboard/api/scanner
+// via fetch); the template only needs the topbar context fields. Phase 2
+// of the scanner feature (Axis C C.F1).
+type ScannerPageData struct {
+	Email      string
+	Role       string
+	TokenValid bool
+	UpdatedAt  string
+}
+
 // ============================================================================
 // Template initialization
 // ============================================================================
@@ -139,6 +150,14 @@ func (d *DashboardHandler) InitTemplates() {
 	d.alertsTmpl = parsePage("alerts.html")
 	d.paperTmpl = parsePage("paper.html")
 	d.safetyTmpl = parsePage("safety.html")
+	// scanner.html has no partials — parse directly without the
+	// shared user_*.html dependency list.
+	scannerTmpl, err := htmltemplate.ParseFS(templates.FS, "scanner.html")
+	if err != nil {
+		d.loggerPort.Error(context.Background(), "Failed to parse scanner template", err)
+	} else {
+		d.scannerTmpl = scannerTmpl
+	}
 
 	fragTmpl, err := userDashboardFragmentTemplates()
 	if err != nil {

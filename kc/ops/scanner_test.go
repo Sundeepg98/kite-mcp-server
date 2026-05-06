@@ -232,6 +232,26 @@ func TestScanner_SectorFilter(t *testing.T) {
 	assert.Equal(t, 0, resp.Total, "Unknown sector should match 0")
 }
 
+// TestScanner_PageSSR_RendersWithTopbar verifies the /dashboard/scanner
+// page handler returns 200 and the rendered HTML includes the topbar
+// title plus the Scanner-specific filter form. Phase 2 of the scanner
+// feature (Axis C C.F1).
+func TestScanner_PageSSR_RendersWithTopbar(t *testing.T) {
+	t.Parallel()
+
+	d := newDashboardWithSeededInstruments(t, map[uint32]*instruments.Instrument{})
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	req := reqWithEmail(http.MethodGet, "/dashboard/scanner", "user@test.com")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "scanner page should return 200; body=%s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "Scanner", "page title/topbar should contain Scanner")
+	assert.Contains(t, rec.Body.String(), `id="scannerForm"`, "filter form should be rendered")
+	assert.Contains(t, rec.Body.String(), "/dashboard/api/scanner", "page JS should reference scanner API")
+}
+
 // TestScanner_SectorFilter_NormalizeSymbol ensures the sector match
 // uses kc/sectors.Lookup which strips -BE/-EQ suffixes (so SBIN-EQ
 // resolves to Banking via SBIN→Banking).
