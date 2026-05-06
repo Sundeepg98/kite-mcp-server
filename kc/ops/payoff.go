@@ -7,71 +7,155 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/algo2go/kite-mcp-broker"
+	"github.com/zerodha/kite-mcp-server/kc/instruments"
+	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )
 
 // PayoffHandler renders option-strategy payoff curves on the user
-// dashboard. Phase C of payoff-viz (Option (c) per coordinator pivot —
-// accepts the existing options_payoff_builder MCP-tool output JSON
-// shape directly; the AI client builds the strategy via MCP, then
-// posts the JSON here for visualization).
+// dashboard. Phase (a) refactor: the API endpoint now accepts a
+// strategy build-command (strategy + strikes + expiry) and constructs
+// the StrategyResponse server-side via the BuildOptionsStrategy use
+// case. The pure SVG renderer (renderPayoffSVG + computeLegPnL) is
+// shared with the use case output.
 //
-// This is the "data flows in from outside" entry point. A future
-// Option (a) refactor will extract options_payoff_builder logic to
-// kc/usecases/options_strategy.go and replace this entry point with a
-// server-side call that builds the strategy itself; the SVG renderer
-// (renderPayoffSVG + computeLegPnL below) is reusable across both
-// data-flow paths.
+// Pre-refactor (commit 1408871) accepted pre-built JSON via Option (c).
+// The API handler retains backward-compat for that path: if the POST
+// body has 'legs' populated, it skips the use case build and renders
+// the supplied data directly. New callers should send the build-
+// command shape (strategy/underlying/expiry/strike1..4/lots) and let
+// the server resolve LTPs and compute legs.
 type PayoffHandler struct {
 	core *DashboardHandler
+	uc   *usecases.BuildOptionsStrategyUseCase
 }
 
 func newPayoffHandler(core *DashboardHandler) *PayoffHandler {
-	return &PayoffHandler{core: core}
+	uc := usecases.NewBuildOptionsStrategyUseCase(
+		dashboardBrokerResolverAdapter{core: core},
+		dashboardOptionInstrumentLookupAdapter{core: core},
+		nil, // logger threaded via context
+	)
+	return &PayoffHandler{core: core, uc: uc}
 }
 
-// payoffStrategyLeg mirrors mcp/trade/strategyLeg JSON shape. Declared
-// locally rather than imported from mcp/trade because the contract is
-// JSON-on-the-wire (POSTed body), not Go type identity. This keeps
-// kc/ops dependency-free of mcp/.
-type payoffStrategyLeg struct {
-	TradingSymbol string  `json:"tradingsymbol"`
-	OptionType    string  `json:"option_type"` // CE or PE
-	Strike        float64 `json:"strike"`
-	Action        string  `json:"action"` // BUY or SELL
-	Lots          int     `json:"lots"`
-	Quantity      int     `json:"quantity"`
-	Premium       float64 `json:"premium"` // per-share LTP
-	TotalPremium  float64 `json:"total_premium"`
+// dashboardBrokerResolverAdapter bridges *kc.Manager to the
+// usecases.BrokerResolver port. Mirrors the brokerResolverAdapter in
+// mcp/trade/options_greeks_tool.go but lives at the kc/ops composition
+// root.
+type dashboardBrokerResolverAdapter struct {
+	core *DashboardHandler
 }
 
-// payoffStrategyResponse mirrors mcp/trade/strategyResponse JSON shape.
-// Populated by the AI client calling options_payoff_builder MCP tool;
-// the dashboard accepts the JSON body directly for SVG rendering.
-type payoffStrategyResponse struct {
-	Strategy     string              `json:"strategy"`
-	Underlying   string              `json:"underlying"`
-	Expiry       string              `json:"expiry"`
-	Legs         []payoffStrategyLeg `json:"legs"`
-	NetPremium   float64             `json:"net_premium"`
-	MaxProfit    string              `json:"max_profit"`
-	MaxLoss      string              `json:"max_loss"`
-	MaxProfitAmt float64             `json:"max_profit_amt"`
-	MaxLossAmt   float64             `json:"max_loss_amt"`
-	Breakevens   []float64           `json:"breakevens"`
-	RiskReward   string              `json:"risk_reward_ratio"`
-	LotSize      int                 `json:"lot_size"`
-	TotalLots    int                 `json:"total_lots"`
+func (a dashboardBrokerResolverAdapter) GetBrokerForEmail(email string) (broker.Client, error) {
+	if a.core == nil || a.core.manager == nil {
+		return nil, fmt.Errorf("manager not configured")
+	}
+	return a.core.manager.GetBrokerForEmail(email)
+}
+
+// dashboardOptionInstrumentLookupAdapter bridges kc.InstrumentManagerInterface
+// to usecases.OptionInstrumentLookup. Mirrors the adapter in mcp/trade.
+type dashboardOptionInstrumentLookupAdapter struct {
+	core *DashboardHandler
+}
+
+func (a dashboardOptionInstrumentLookupAdapter) FindOption(underlying, optionType string, strike float64, expiry string) (usecases.OptionInstrument, bool) {
+	if a.core == nil || a.core.manager == nil {
+		return usecases.OptionInstrument{}, false
+	}
+	mgr := a.core.manager.InstrumentsManager()
+	if mgr == nil {
+		return usecases.OptionInstrument{}, false
+	}
+	found := mgr.Filter(func(inst instruments.Instrument) bool {
+		return inst.Exchange == "NFO" &&
+			strings.EqualFold(inst.Name, underlying) &&
+			inst.InstrumentType == optionType &&
+			inst.Strike == strike &&
+			strings.HasPrefix(inst.ExpiryDate, expiry)
+	})
+	if len(found) == 0 {
+		return usecases.OptionInstrument{}, false
+	}
+	inst := found[0]
+	return usecases.OptionInstrument{
+		Tradingsymbol: inst.Tradingsymbol,
+		Underlying:    inst.Name,
+		OptionType:    inst.InstrumentType,
+		Strike:        inst.Strike,
+		Expiry:        expiry,
+		LotSize:       inst.LotSize,
+	}, true
+}
+
+func (a dashboardOptionInstrumentLookupAdapter) DefaultLotSize(underlying string) (int, bool) {
+	if a.core == nil || a.core.manager == nil {
+		return 0, false
+	}
+	mgr := a.core.manager.InstrumentsManager()
+	if mgr == nil || mgr.Count() == 0 {
+		return 0, false
+	}
+	found := mgr.Filter(func(inst instruments.Instrument) bool {
+		return inst.Exchange == "NFO" &&
+			strings.EqualFold(inst.Name, underlying) &&
+			(inst.InstrumentType == "CE" || inst.InstrumentType == "PE") &&
+			inst.LotSize > 0
+	})
+	if len(found) == 0 {
+		return 0, false
+	}
+	return found[0].LotSize, true
+}
+
+// payoffStrategyLeg + payoffStrategyResponse are type aliases of the
+// canonical usecases types. The aliases keep existing test signatures
+// and the SVG renderer's parameter names readable without forcing the
+// renderer to import mcp/trade or duplicating types.
+type payoffStrategyLeg = usecases.StrategyLeg
+type payoffStrategyResponse = usecases.StrategyResponse
+
+// payoffAPIRequest is the build-command shape for POST
+// /dashboard/api/payoff. Used by the new server-side-build path.
+// Backward-compat: if the body's `legs` field is non-empty (indicating
+// a pre-built response from the AI client), the handler bypasses the
+// use case and renders directly.
+type payoffAPIRequest struct {
+	// Build-command fields (used when Legs is empty)
+	Strategy   string  `json:"strategy"`
+	Underlying string  `json:"underlying"`
+	Expiry     string  `json:"expiry"`
+	Strike1    float64 `json:"strike1"`
+	Strike2    float64 `json:"strike2"`
+	Strike3    float64 `json:"strike3"`
+	Strike4    float64 `json:"strike4"`
+	LotSize    int     `json:"lot_size"`
+	Lots       int     `json:"lots"`
+	// Pre-built-response field (used when populated, bypasses build).
+	Legs         []payoffStrategyLeg `json:"legs,omitempty"`
+	NetPremium   float64             `json:"net_premium,omitempty"`
+	MaxProfit    string              `json:"max_profit,omitempty"`
+	MaxLoss      string              `json:"max_loss,omitempty"`
+	MaxProfitAmt float64             `json:"max_profit_amt,omitempty"`
+	MaxLossAmt   float64             `json:"max_loss_amt,omitempty"`
+	Breakevens   []float64           `json:"breakevens,omitempty"`
+	RiskReward   string              `json:"risk_reward_ratio,omitempty"`
 }
 
 // payoffAPIResponse is the JSON envelope returned by /dashboard/api/payoff.
-// SVG is embedded inline (no separate image-fetch round-trip; the
-// dashboard injects it directly into the page via innerHTML).
+// Strategy field carries the canonical strategy name; SVG is embedded
+// inline; SpotMin/SpotMax are the spot-price range used for plotting;
+// StrategyResponse is the full structured payload (use case output OR
+// the pre-built body) so the page can render the legs table without
+// re-sending the input.
 type payoffAPIResponse struct {
-	Strategy string  `json:"strategy"`
-	SVG      string  `json:"svg"`
-	SpotMin  float64 `json:"spot_min"`
-	SpotMax  float64 `json:"spot_max"`
+	Strategy         string                  `json:"strategy"`
+	SVG              string                  `json:"svg"`
+	SpotMin          float64                 `json:"spot_min"`
+	SpotMax          float64                 `json:"spot_max"`
+	StrategyResponse *payoffStrategyResponse `json:"strategy_response,omitempty"`
 }
 
 // computeLegPnL returns the per-share P&L of a single leg at the given
@@ -228,9 +312,18 @@ func renderPayoffSVG(resp payoffStrategyResponse, spotMin, spotMax float64, samp
 	return b.String()
 }
 
-// payoffAPI handles POST /dashboard/api/payoff. Accepts a strategy
-// JSON body matching options_payoff_builder MCP tool output, returns
-// {strategy, svg, spot_min, spot_max} JSON envelope.
+// payoffAPI handles POST /dashboard/api/payoff. Two modes:
+//
+// (1) Server-side build (preferred) — body has strategy + strikes +
+//     expiry; the BuildOptionsStrategy use case fetches LTPs and
+//     computes legs/breakevens/max-P&L server-side.
+//
+// (2) Backward-compat pre-built JSON — body has populated legs[]
+//     (from a prior options_payoff_builder MCP-tool call); handler
+//     skips the use case and renders directly. Preserves the
+//     Option (c) flow shipped at commit 1408871.
+//
+// Mode is auto-detected: if `legs` is non-empty, mode (2); else mode (1).
 func (h *PayoffHandler) payoffAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -242,22 +335,72 @@ func (h *PayoffHandler) payoffAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body payoffStrategyResponse
+	var body payoffAPIRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if len(body.Legs) == 0 {
+
+	var resp *payoffStrategyResponse
+	if len(body.Legs) > 0 {
+		// Mode (2): pre-built body. Wrap the input fields into a
+		// StrategyResponse for the renderer.
+		resp = &payoffStrategyResponse{
+			Strategy:     body.Strategy,
+			Underlying:   body.Underlying,
+			Expiry:       body.Expiry,
+			Legs:         body.Legs,
+			NetPremium:   body.NetPremium,
+			MaxProfit:    body.MaxProfit,
+			MaxLoss:      body.MaxLoss,
+			MaxProfitAmt: body.MaxProfitAmt,
+			MaxLossAmt:   body.MaxLossAmt,
+			Breakevens:   body.Breakevens,
+			RiskReward:   body.RiskReward,
+			LotSize:      body.LotSize,
+			TotalLots:    body.Lots,
+		}
+	} else {
+		// Mode (1): server-side build. Validate command shape first
+		// (so users see arg-shape errors before broker resolution).
+		cmd := usecases.BuildOptionsStrategyCommand{
+			Email:      email,
+			Strategy:   body.Strategy,
+			Underlying: body.Underlying,
+			Expiry:     body.Expiry,
+			Strike1:    body.Strike1,
+			Strike2:    body.Strike2,
+			Strike3:    body.Strike3,
+			Strike4:    body.Strike4,
+			LotSize:    body.LotSize,
+			Lots:       body.Lots,
+		}
+		if cmd.Strategy == "" || cmd.Underlying == "" || cmd.Expiry == "" || cmd.Strike1 <= 0 {
+			http.Error(w, "strategy, underlying, expiry, and strike1 are required when legs is empty", http.StatusBadRequest)
+			return
+		}
+		if _, err := usecases.ValidateOptionsStrategyCommand(cmd); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		built, err := h.uc.Execute(r.Context(), cmd)
+		if err != nil {
+			h.core.loggerPort.Error(r.Context(), "Failed to build options strategy", err, "email", email)
+			http.Error(w, "build failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp = built
+	}
+
+	if len(resp.Legs) == 0 {
 		http.Error(w, "strategy must have at least one leg", http.StatusBadRequest)
 		return
 	}
 
 	// Compute spot range: ±20% around the average strike across legs.
-	// Falls back to [80, 120] if no strikes present (defensive — rejected above
-	// by len(Legs)==0, but guards against a leg with strike=0).
 	var sumStrikes float64
 	var nStrikes int
-	for _, leg := range body.Legs {
+	for _, leg := range resp.Legs {
 		if leg.Strike > 0 {
 			sumStrikes += leg.Strike
 			nStrikes++
@@ -270,19 +413,23 @@ func (h *PayoffHandler) payoffAPI(w http.ResponseWriter, r *http.Request) {
 	spotMin := avgStrike * 0.80
 	spotMax := avgStrike * 1.20
 
-	svg := renderPayoffSVG(body, spotMin, spotMax, 81) // 81 sample points → smooth curve
+	svg := renderPayoffSVG(*resp, spotMin, spotMax, 81)
 
 	h.core.writeJSON(w, payoffAPIResponse{
-		Strategy: body.Strategy,
-		SVG:      svg,
-		SpotMin:  spotMin,
-		SpotMax:  spotMax,
+		Strategy:         resp.Strategy,
+		SVG:              svg,
+		SpotMin:          spotMin,
+		SpotMax:          spotMax,
+		StrategyResponse: resp,
 	})
 }
 
-// servePayoffPageSSR renders the /dashboard/payoff page. JS-driven —
-// the page accepts pasted strategy JSON, POSTs to /dashboard/api/payoff,
-// and injects the returned SVG inline.
+// servePayoffPageSSR renders the /dashboard/payoff page. Server-side
+// build mode is now the default: the page presents a strategy picker
+// (sector/strikes/expiry/lots) and POSTs to /dashboard/api/payoff
+// without needing the user to copy-paste from the AI client first.
+// Pre-built JSON paste path remains supported (degrades gracefully
+// for users who already have an MCP-tool response).
 func (h *PayoffHandler) servePayoffPageSSR(w http.ResponseWriter, r *http.Request) {
 	d := h.core
 	if d.payoffTmpl == nil {

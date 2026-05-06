@@ -6,24 +6,26 @@
 <title>Options Payoff · Kite MCP</title>
 <link rel="stylesheet" href="/static/dashboard-base.css">
 <style>
-.payoff-help { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; font-size: 12px; color: var(--text-1); line-height: 1.55; }
-.payoff-help code { font-family: var(--mono); font-size: 11px; background: var(--bg-1); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
-.payoff-help-step { display: flex; gap: 10px; margin-bottom: 6px; }
-.payoff-help-step:last-child { margin-bottom: 0; }
-.payoff-help-num { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; font-family: var(--mono); }
-
 .payoff-form { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 16px; }
-.payoff-form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-.payoff-form-row:last-of-type { margin-bottom: 0; }
-.payoff-form-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
-.payoff-form textarea { width: 100%; min-height: 140px; padding: 10px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-0); font-family: var(--mono); font-size: 11px; resize: vertical; line-height: 1.55; }
-.payoff-form textarea:focus { outline: none; border-color: var(--accent); }
+.payoff-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.payoff-form-field { display: flex; flex-direction: column; gap: 4px; }
+.payoff-form-field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); }
+.payoff-form-field input, .payoff-form-field select { padding: 6px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-0); font-size: 13px; font-family: var(--mono); }
+.payoff-form-field input:focus, .payoff-form-field select:focus { outline: none; border-color: var(--accent); }
+.payoff-form-field.disabled { opacity: 0.4; }
+.payoff-form-field.disabled input { cursor: not-allowed; }
 .payoff-form-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .payoff-btn-primary { padding: 7px 18px; border-radius: 3px; border: 1px solid var(--accent); background: var(--accent-dim); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
 .payoff-btn-primary:hover { background: rgba(34,211,238,0.2); }
 .payoff-btn-primary:disabled { opacity: 0.4; cursor: default; }
 .payoff-btn-secondary { padding: 7px 14px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1); font-size: 12px; font-family: var(--sans); cursor: pointer; }
 .payoff-btn-secondary:hover { color: var(--text-0); border-color: var(--border-hi); }
+
+.payoff-paste-toggle { font-size: 11px; color: var(--text-2); cursor: pointer; user-select: none; }
+.payoff-paste-toggle:hover { color: var(--accent); text-decoration: underline; }
+.payoff-paste-area { display: none; margin-top: 12px; }
+.payoff-paste-area.open { display: block; }
+.payoff-paste-area textarea { width: 100%; min-height: 100px; padding: 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-0); font-family: var(--mono); font-size: 11px; resize: vertical; }
 
 .payoff-viz { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 16px; }
 .payoff-viz svg { display: block; width: 100%; height: auto; max-width: 100%; }
@@ -59,7 +61,6 @@
 @media (max-width: 640px) {
   .dash-nav-link { padding: 12px 14px; }
   button, .payoff-btn-primary, .payoff-btn-secondary { min-height: 44px; }
-  .payoff-form textarea { font-size: 10px; min-height: 110px; }
   .payoff-summary-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 </style>
@@ -94,29 +95,57 @@
 
 <div class="content">
 
-  <div class="payoff-help">
-    <div class="payoff-help-step">
-      <span class="payoff-help-num">1</span>
-      <div>In your AI client (Claude Desktop / claude.ai web / ChatGPT) call <code>options_payoff_builder</code> with strategy + strikes + expiry. Example: <em>"Build me an iron condor on NIFTY at 24000/24200/24500/24700 expiring May 29."</em></div>
-    </div>
-    <div class="payoff-help-step">
-      <span class="payoff-help-num">2</span>
-      <div>The MCP tool returns a JSON envelope with <code>legs</code>, <code>breakevens</code>, <code>max_profit_amt</code>, etc. Copy that JSON.</div>
-    </div>
-    <div class="payoff-help-step">
-      <span class="payoff-help-num">3</span>
-      <div>Paste below + click <strong>Render</strong>. The page draws a P&amp;L curve across &plusmn;20% spot range with breakeven markers + strategy summary.</div>
-    </div>
-  </div>
-
   <form class="payoff-form" id="payoffForm" autocomplete="off">
-    <div class="payoff-form-row">
-      <label class="payoff-form-label" for="payoffStrategyInput">Strategy JSON</label>
-      <textarea id="payoffStrategyInput" name="strategy" placeholder='{"strategy":"iron_condor","underlying":"NIFTY","expiry":"2026-05-29","legs":[{"option_type":"PE","strike":24000,"action":"BUY","premium":15,"lots":1,"quantity":50},...],"breakevens":[24180,24520],"max_profit":"4000.00","max_profit_amt":4000,"max_loss":"6000.00","max_loss_amt":6000,"lot_size":50,"total_lots":1}'></textarea>
+    <div class="payoff-form-grid">
+      <div class="payoff-form-field">
+        <label for="payoffStrategy">Strategy</label>
+        <select id="payoffStrategy" name="strategy" required>
+          <option value="straddle">Straddle (Long Vol)</option>
+          <option value="strangle">Strangle (Long Vol)</option>
+          <option value="bull_call_spread">Bull Call Spread</option>
+          <option value="bear_put_spread">Bear Put Spread</option>
+          <option value="bear_call_spread">Bear Call Spread (Credit)</option>
+          <option value="bull_put_spread">Bull Put Spread (Credit)</option>
+          <option value="iron_condor">Iron Condor</option>
+          <option value="butterfly">Butterfly</option>
+        </select>
+      </div>
+      <div class="payoff-form-field">
+        <label for="payoffUnderlying">Underlying</label>
+        <input type="text" id="payoffUnderlying" name="underlying" placeholder="NIFTY" value="NIFTY" required>
+      </div>
+      <div class="payoff-form-field">
+        <label for="payoffExpiry">Expiry (YYYY-MM-DD)</label>
+        <input type="text" id="payoffExpiry" name="expiry" placeholder="2026-05-29" pattern="\d{4}-\d{2}-\d{2}" required>
+      </div>
+      <div class="payoff-form-field">
+        <label for="payoffStrike1">Strike 1</label>
+        <input type="number" id="payoffStrike1" name="strike1" step="50" required>
+      </div>
+      <div class="payoff-form-field" id="payoffStrike2Wrap">
+        <label for="payoffStrike2">Strike 2</label>
+        <input type="number" id="payoffStrike2" name="strike2" step="50">
+      </div>
+      <div class="payoff-form-field disabled" id="payoffStrike3Wrap">
+        <label for="payoffStrike3">Strike 3</label>
+        <input type="number" id="payoffStrike3" name="strike3" step="50" disabled>
+      </div>
+      <div class="payoff-form-field disabled" id="payoffStrike4Wrap">
+        <label for="payoffStrike4">Strike 4</label>
+        <input type="number" id="payoffStrike4" name="strike4" step="50" disabled>
+      </div>
+      <div class="payoff-form-field">
+        <label for="payoffLots">Lots</label>
+        <input type="number" id="payoffLots" name="lots" min="1" step="1" value="1">
+      </div>
     </div>
     <div class="payoff-form-actions">
-      <button type="submit" class="payoff-btn-primary" id="renderBtn">Render</button>
+      <button type="submit" class="payoff-btn-primary" id="renderBtn">Build &amp; Render</button>
       <button type="button" class="payoff-btn-secondary" id="clearBtn">Clear</button>
+      <span class="payoff-paste-toggle" id="pasteToggle" role="button" tabindex="0">Or paste pre-built JSON…</span>
+    </div>
+    <div class="payoff-paste-area" id="pasteArea">
+      <textarea id="payoffStrategyInput" placeholder='Paste options_payoff_builder JSON output here. Useful when you have already built a strategy in your AI client and want to render it without re-fetching LTPs.'></textarea>
     </div>
   </form>
 
@@ -143,7 +172,7 @@
     </table>
   </div>
 
-  <div id="payoffEmpty" class="payoff-empty">Paste a strategy JSON above and click Render to visualize.</div>
+  <div id="payoffEmpty" class="payoff-empty">Pick a strategy + strikes + expiry above and click Build &amp; Render. The server fetches live option premiums from your Kite session, computes the payoff, and renders the curve.</div>
 
 </div>
 
@@ -151,16 +180,39 @@
 (function() {
   'use strict';
 
+  // Per-strategy strike-input visibility map.
+  // Each entry lists which strike fields (1..4) are required for that strategy.
+  var strategyStrikes = {
+    straddle:         [1],
+    strangle:         [1, 2],
+    bull_call_spread: [1, 2],
+    bear_put_spread:  [1, 2],
+    bear_call_spread: [1, 2],
+    bull_put_spread:  [1, 2],
+    iron_condor:      [1, 2, 3, 4],
+    butterfly:        [1, 2, 3]
+  };
+
   var form = document.getElementById('payoffForm');
-  var input = document.getElementById('payoffStrategyInput');
+  var strategySelect = document.getElementById('payoffStrategy');
   var renderBtn = document.getElementById('renderBtn');
   var clearBtn = document.getElementById('clearBtn');
+  var pasteToggle = document.getElementById('pasteToggle');
+  var pasteArea = document.getElementById('pasteArea');
+  var pasteInput = document.getElementById('payoffStrategyInput');
   var errBox = document.getElementById('payoffError');
   var viz = document.getElementById('payoffViz');
   var summary = document.getElementById('payoffSummary');
   var summaryGrid = document.getElementById('payoffSummaryGrid');
   var legsBody = document.getElementById('payoffLegsBody');
   var empty = document.getElementById('payoffEmpty');
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
 
   function showError(msg) {
     errBox.textContent = msg;
@@ -171,26 +223,48 @@
   }
 
   function clearAll() {
-    input.value = '';
+    form.reset();
+    pasteInput.value = '';
+    pasteArea.classList.remove('open');
     errBox.style.display = 'none';
     viz.style.display = 'none';
     summary.style.display = 'none';
     empty.style.display = '';
+    updateStrikeVisibility();
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = String(text);
-    return e;
+  // Adjust which strike fields are enabled based on the selected strategy.
+  function updateStrikeVisibility() {
+    var strat = strategySelect.value;
+    var visible = strategyStrikes[strat] || [1, 2, 3, 4];
+    [2, 3, 4].forEach(function(n) {
+      var wrap = document.getElementById('payoffStrike' + n + 'Wrap');
+      var input = document.getElementById('payoffStrike' + n);
+      var on = visible.indexOf(n) !== -1;
+      if (on) {
+        wrap.classList.remove('disabled');
+        input.disabled = false;
+      } else {
+        wrap.classList.add('disabled');
+        input.disabled = true;
+        input.value = '';
+      }
+    });
   }
+  strategySelect.addEventListener('change', updateStrikeVisibility);
+  updateStrikeVisibility();
+
+  pasteToggle.addEventListener('click', function() { pasteArea.classList.toggle('open'); });
+  pasteToggle.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pasteArea.classList.toggle('open'); }
+  });
 
   // Replace all children of `host` with the parsed SVG document element.
   // DOMParser with image/svg+xml validates the SVG is well-formed XML
-  // before adoption — safer than innerHTML even for first-party content.
-  // The server (kc/ops/payoff.go renderPayoffSVG) emits a canonical
-  // <svg>...</svg> with no <script> elements; this parser path enforces
-  // that constraint on the client side too.
+  // before adoption — safer than direct HTML parsing even for first-party
+  // content. The server (kc/ops/payoff.go renderPayoffSVG) emits a
+  // canonical <svg>...</svg> with no <script> elements; this parser path
+  // enforces that constraint on the client side too.
   function injectSVG(host, svgString) {
     while (host.firstChild) host.removeChild(host.firstChild);
     var parser = new DOMParser();
@@ -202,7 +276,6 @@
       host.appendChild(fallback);
       return;
     }
-    // Reject any <script> content inside the SVG defensively.
     var scripts = svgEl.getElementsByTagName('script');
     if (scripts.length > 0) {
       var fallback2 = el('div', 'payoff-error', 'SVG contained disallowed elements; render aborted.');
@@ -250,33 +323,53 @@
     }
   }
 
+  function buildBodyFromForm() {
+    var pasted = pasteInput.value.trim();
+    if (pasteArea.classList.contains('open') && pasted) {
+      try {
+        return JSON.parse(pasted);
+      } catch (err) {
+        throw new Error('Invalid pasted JSON: ' + err.message);
+      }
+    }
+    var visible = strategyStrikes[strategySelect.value] || [1, 2, 3, 4];
+    var body = {
+      strategy: strategySelect.value,
+      underlying: document.getElementById('payoffUnderlying').value.trim().toUpperCase(),
+      expiry: document.getElementById('payoffExpiry').value.trim(),
+      lots: parseInt(document.getElementById('payoffLots').value, 10) || 1
+    };
+    for (var i = 1; i <= 4; i++) {
+      if (visible.indexOf(i) === -1) continue;
+      var raw = document.getElementById('payoffStrike' + i).value;
+      var v = parseFloat(raw);
+      if (!isNaN(v) && v > 0) body['strike' + i] = v;
+    }
+    return body;
+  }
+
   function runRender(ev) {
     if (ev) ev.preventDefault();
     errBox.style.display = 'none';
-    var raw = input.value.trim();
-    if (!raw) {
-      showError('Please paste the strategy JSON first.');
-      return;
-    }
-    var strat;
+    var body;
     try {
-      strat = JSON.parse(raw);
+      body = buildBodyFromForm();
     } catch (err) {
-      showError('Invalid JSON: ' + err.message);
+      showError(err.message);
       return;
     }
-    if (!strat.legs || strat.legs.length === 0) {
-      showError('Strategy must have at least one leg.');
+    if (!body.strategy && (!body.legs || body.legs.length === 0)) {
+      showError('Choose a strategy or paste a pre-built JSON.');
       return;
     }
 
     renderBtn.disabled = true;
-    renderBtn.textContent = 'Rendering...';
+    renderBtn.textContent = 'Building...';
 
     fetch('/dashboard/api/payoff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(strat)
+      body: JSON.stringify(body)
     }).then(function(r) {
       if (!r.ok) return r.text().then(function(t) { throw new Error(t || ('HTTP ' + r.status)); });
       return r.json();
@@ -284,46 +377,27 @@
       injectSVG(viz, data.svg);
       viz.style.display = '';
       empty.style.display = 'none';
-      renderSummary(strat);
+      renderSummary(data.strategy_response || body);
       summary.style.display = '';
     }).catch(function(err) {
       showError('Render failed: ' + err.message);
     }).finally(function() {
       renderBtn.disabled = false;
-      renderBtn.textContent = 'Render';
+      renderBtn.textContent = 'Build & Render';
     });
   }
 
   form.addEventListener('submit', runRender);
   clearBtn.addEventListener('click', clearAll);
 
-  // Auto-render if URL has ?demo=1 to seed an iron-condor sample
-  // for first-time users (helps validate the page works without
-  // requiring them to copy from MCP first).
   (function() {
     var params = new URLSearchParams(window.location.search);
     if (params.get('demo') === '1') {
-      input.value = JSON.stringify({
-        strategy: "iron_condor",
-        underlying: "NIFTY",
-        expiry: "2026-05-29",
-        legs: [
-          { tradingsymbol: "NIFTY26MAY24000PE", option_type: "PE", strike: 24000, action: "BUY", lots: 1, quantity: 50, premium: 15, total_premium: 750 },
-          { tradingsymbol: "NIFTY26MAY24200PE", option_type: "PE", strike: 24200, action: "SELL", lots: 1, quantity: 50, premium: 35, total_premium: 1750 },
-          { tradingsymbol: "NIFTY26MAY24500CE", option_type: "CE", strike: 24500, action: "SELL", lots: 1, quantity: 50, premium: 45, total_premium: 2250 },
-          { tradingsymbol: "NIFTY26MAY24700CE", option_type: "CE", strike: 24700, action: "BUY", lots: 1, quantity: 50, premium: 18, total_premium: 900 }
-        ],
-        net_premium: 2350,
-        max_profit: "2350.00",
-        max_loss: "7650.00",
-        max_profit_amt: 2350,
-        max_loss_amt: 7650,
-        breakevens: [24153, 24547],
-        risk_reward_ratio: "1:0.31",
-        lot_size: 50,
-        total_lots: 1
-      }, null, 2);
-      runRender();
+      strategySelect.value = 'straddle';
+      updateStrikeVisibility();
+      document.getElementById('payoffUnderlying').value = 'NIFTY';
+      document.getElementById('payoffStrike1').value = '24200';
+      document.getElementById('payoffExpiry').focus();
     }
   })();
 })();

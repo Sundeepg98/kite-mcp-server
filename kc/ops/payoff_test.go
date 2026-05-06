@@ -182,6 +182,10 @@ func TestPayoff_API_RejectsBadJSON(t *testing.T) {
 
 // TestPayoff_API_RejectsEmptyLegs verifies a strategy with zero legs
 // yields 400 (renderer can't compute anything).
+//
+// After Phase (a) refactor: empty `legs` field triggers server-side
+// build mode; if `strategy`+`strike1` is also incomplete, command-shape
+// pre-validation kicks in and returns 400.
 func TestPayoff_API_RejectsEmptyLegs(t *testing.T) {
 	t.Parallel()
 
@@ -196,6 +200,47 @@ func TestPayoff_API_RejectsEmptyLegs(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// TestPayoff_API_BuildModeMissingStrikes verifies the server-side build
+// path returns 400 when the build-command is incomplete (no strikes).
+// Phase (a) addition: this path didn't exist pre-refactor.
+func TestPayoff_API_BuildModeMissingStrikes(t *testing.T) {
+	t.Parallel()
+
+	d := newDashboardWithAuditAndPaper(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	// Build-command shape (no `legs`) but missing strike1.
+	body := `{"strategy":"straddle","underlying":"NIFTY","expiry":"2026-05-29"}`
+	req := reqWithEmail(http.MethodPost, "/dashboard/api/payoff", "user@test.com")
+	req.Body = io.NopCloser(strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "strike1")
+}
+
+// TestPayoff_API_BuildModeUnknownStrategy verifies the server-side build
+// path returns 400 with canonical "Unknown strategy" wording before
+// touching the broker — pre-validation matches the MCP tool's behavior.
+func TestPayoff_API_BuildModeUnknownStrategy(t *testing.T) {
+	t.Parallel()
+
+	d := newDashboardWithAuditAndPaper(t)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux, noopAuth)
+
+	body := `{"strategy":"no_such","underlying":"NIFTY","expiry":"2026-05-29","strike1":24000}`
+	req := reqWithEmail(http.MethodPost, "/dashboard/api/payoff", "user@test.com")
+	req.Body = io.NopCloser(strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Unknown strategy")
 }
 
 // TestPayoff_PageSSR verifies the /dashboard/payoff page renders 200
