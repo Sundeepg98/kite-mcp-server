@@ -13,6 +13,7 @@ import (
 	"github.com/algo2go/kite-mcp-eventsourcing"
 	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/algo2go/kite-mcp-riskguard"
+	"github.com/algo2go/kite-mcp-ticker"
 	"github.com/algo2go/kite-mcp-usecases"
 	"github.com/algo2go/kite-mcp-users"
 )
@@ -521,63 +522,101 @@ func (m *Manager) registerMFCommands() error {
 
 // --- Ticker: start / stop / subscribe / unsubscribe ------------------------
 
-func (m *Manager) registerTickerCommands() error {
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.StartTickerCommand](), func(ctx context.Context, msg any) (any, error) {
+// AdminTickerRegistrarDeps holds the dependencies for ticker admin
+// commands (Start/Stop/Subscribe/Unsubscribe; 4 commands). Single dep
+// — TickerServiceGetter — because every handler in this group requires
+// the ticker service and errors if nil.
+type AdminTickerRegistrarDeps struct {
+	TickerServiceGetter func() *ticker.Service // required at command-dispatch time
+}
+
+// registerAdminTickerCommandsOnBus is the package-level pure-function
+// registrar for ticker admin commands.
+func registerAdminTickerCommandsOnBus(
+	bus *cqrs.InMemoryBus,
+	deps AdminTickerRegistrarDeps,
+	logger *slog.Logger,
+) error {
+	if err := bus.Register(reflect.TypeFor[cqrs.StartTickerCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StartTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.tickerService == nil {
+		if deps.TickerServiceGetter == nil {
 			return nil, fmt.Errorf("cqrs: ticker service not configured")
 		}
-		uc := usecases.NewStartTickerUseCase(m.tickerService, m.Logger)
+		ts := deps.TickerServiceGetter()
+		if ts == nil {
+			return nil, fmt.Errorf("cqrs: ticker service not configured")
+		}
+		uc := usecases.NewStartTickerUseCase(ts, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.StopTickerCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.StopTickerCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.StopTickerCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.tickerService == nil {
+		if deps.TickerServiceGetter == nil {
 			return nil, fmt.Errorf("cqrs: ticker service not configured")
 		}
-		uc := usecases.NewStopTickerUseCase(m.tickerService, m.Logger)
+		ts := deps.TickerServiceGetter()
+		if ts == nil {
+			return nil, fmt.Errorf("cqrs: ticker service not configured")
+		}
+		uc := usecases.NewStopTickerUseCase(ts, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.SubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.SubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.SubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.tickerService == nil {
+		if deps.TickerServiceGetter == nil {
 			return nil, fmt.Errorf("cqrs: ticker service not configured")
 		}
-		uc := usecases.NewSubscribeInstrumentsUseCase(m.tickerService, m.Logger)
+		ts := deps.TickerServiceGetter()
+		if ts == nil {
+			return nil, fmt.Errorf("cqrs: ticker service not configured")
+		}
+		uc := usecases.NewSubscribeInstrumentsUseCase(ts, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 
-	if err := m.commandBus.Register(reflect.TypeFor[cqrs.UnsubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
+	if err := bus.Register(reflect.TypeFor[cqrs.UnsubscribeInstrumentsCommand](), func(ctx context.Context, msg any) (any, error) {
 		cmd, ok := msg.(cqrs.UnsubscribeInstrumentsCommand)
 		if !ok {
 			return nil, fmt.Errorf("cqrs: unexpected command type %T", msg)
 		}
-		if m.tickerService == nil {
+		if deps.TickerServiceGetter == nil {
 			return nil, fmt.Errorf("cqrs: ticker service not configured")
 		}
-		uc := usecases.NewUnsubscribeInstrumentsUseCase(m.tickerService, m.Logger)
+		ts := deps.TickerServiceGetter()
+		if ts == nil {
+			return nil, fmt.Errorf("cqrs: ticker service not configured")
+		}
+		uc := usecases.NewUnsubscribeInstrumentsUseCase(ts, logger)
 		return nil, uc.Execute(ctx, cmd)
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// registerTickerCommands delegates to the package-level pure-function
+// registrar (Tier 2.3 slice 5/6).
+func (m *Manager) registerTickerCommands() error {
+	return registerAdminTickerCommandsOnBus(m.commandBus, AdminTickerRegistrarDeps{
+		TickerServiceGetter: func() *ticker.Service { return m.tickerService },
+	}, m.Logger)
 }
 
 // --- Native Alerts: place / modify / delete --------------------------------
