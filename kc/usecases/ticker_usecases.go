@@ -7,7 +7,7 @@ import (
 
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/algo2go/kite-mcp-ticker"
 )
 
 // TickerService abstracts the WebSocket ticker for use cases.

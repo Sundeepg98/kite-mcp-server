@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/algo2go/kite-mcp-ticker"
 )
 
 // OverviewData is the dashboard's top-level snapshot DTO. Built by

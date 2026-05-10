@@ -9,7 +9,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/ops/shared"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/algo2go/kite-mcp-ticker"
 )
 
 // Backward-compatibility type aliases for the DTOs relocated to

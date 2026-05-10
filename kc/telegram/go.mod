@@ -29,7 +29,7 @@ require (
 	github.com/algo2go/kite-mcp-instruments v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-ticker v0.1.0
 	github.com/algo2go/kite-mcp-watchlist v0.1.0
 )
 
@@ -84,5 +84,5 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
-	github.com/zerodha/kite-mcp-server/kc/ticker => ../ticker
+	github.com/algo2go/kite-mcp-ticker => ../ticker
 )

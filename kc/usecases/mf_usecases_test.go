@@ -15,7 +15,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/algo2go/kite-mcp-ticker"
 	"github.com/algo2go/kite-mcp-watchlist"
 )
 

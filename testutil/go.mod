@@ -79,7 +79,7 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000 // indirect
 	github.com/algo2go/kite-mcp-registry v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-templates v0.1.0 // indirect
-	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-ticker v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000 // indirect
 	github.com/algo2go/kite-mcp-users v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-watchlist v0.1.0 // indirect
@@ -106,6 +106,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../kc/papertrading
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../kc/riskguard
-	github.com/zerodha/kite-mcp-server/kc/ticker => ../kc/ticker
+	github.com/algo2go/kite-mcp-ticker => ../kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../kc/usecases
 )

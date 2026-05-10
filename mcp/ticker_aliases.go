@@ -2,7 +2,7 @@ package mcp
 
 import (
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/ticker"
+	"github.com/algo2go/kite-mcp-ticker"
 	"github.com/zerodha/kite-mcp-server/mcp/misc"
 )
 
