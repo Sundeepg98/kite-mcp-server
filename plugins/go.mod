@@ -131,6 +131,5 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/ticker => ../kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../kc/usecases
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ../kc/watchlist
-	github.com/algo2go/kite-mcp-oauth => ../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../testutil
 )

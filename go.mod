@@ -12,6 +12,7 @@ require (
 	github.com/algo2go/kite-mcp-legaldocs v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0
+	github.com/algo2go/kite-mcp-oauth v0.1.0
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/algo2go/kite-mcp-templates v0.1.0
 	github.com/algo2go/kite-mcp-users v0.1.0
@@ -38,7 +39,6 @@ require (
 	github.com/zerodha/kite-mcp-server/kc/ticker v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/watchlist v0.0.0-00010101000000-000000000000
-	github.com/algo2go/kite-mcp-oauth v0.1.0
 	github.com/zerodha/kite-mcp-server/plugins v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/testutil v0.0.0-00010101000000-000000000000
 	go.uber.org/fx v1.24.0
@@ -100,7 +100,6 @@ replace (
 	github.com/zerodha/kite-mcp-server/kc/ticker => ./kc/ticker
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases
 	github.com/zerodha/kite-mcp-server/kc/watchlist => ./kc/watchlist
-	github.com/algo2go/kite-mcp-oauth => ./oauth
 	github.com/zerodha/kite-mcp-server/plugins => ./plugins
 	github.com/zerodha/kite-mcp-server/testutil => ./testutil
 )

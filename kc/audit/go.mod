@@ -73,6 +73,5 @@ require (
 // fails with "invalid version: unknown revision 000000000000".
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-oauth => ../../oauth
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )
