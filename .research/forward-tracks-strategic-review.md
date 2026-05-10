@@ -10,7 +10,9 @@
 
 ## TL;DR — three calibrated assertions
 
-1. **The single most important thing we are NOT doing right now is shipping a production deploy.** Master is `2919f6e`/in-tree tools=130; production is `v1.3.0`/tools=111 — **548 commits and 19 tools behind**. `final-pre-launch-verification.md` already flagged this: hosted demo is 14d-uptime stale. Every other forward-track investment compounds against a deploy that is already unblocked once flyctl auth is refreshed. **Cost: ~30 minutes including reauth. Impact: closes the README-vs-/healthz integrity gap that any HN/Reddit visitor will spot in 10 seconds.**
+**CORRECTION 2026-05-11**: This doc was written 2026-05-10 at HEAD `2919f6e` claiming "production is 548 commits stale; in-tree tools=130; 19-tool gap; need flyctl reauth + deploy." **All four claims are FALSIFIED per `production-master-gap-report.md` (chain agent's empirical investigation, commit `21d5684`).** Empirical reality: production at master HEAD modulo `.research/`-only commits; tools=111 = master-built = production-registered (the "130" was a grep error that included 19 `_test.go` fixtures); flyctl auth works without reauth (chain agent + verification dispatch both used flyctl successfully). **The "production deploy is the #1 unblock" framing throughout this doc is no longer load-bearing.** The actual gating cluster is launch ops (TM filing, demo GIF, Reddit warmup, dr-drill secrets, missing `cmd/dr-decrypt-probe`) per `dr-drill-results-2026-05-11.md` + `research-batch-2026-05-11.md`. Original TL;DR §1 text below retained for traceability but read as historical.
+
+1. **[FALSIFIED — see CORRECTION above]** ~~The single most important thing we are NOT doing right now is shipping a production deploy.~~ Master is `2919f6e`/in-tree tools=130; production is `v1.3.0`/tools=111 — **548 commits and 19 tools behind**. `final-pre-launch-verification.md` already flagged this: hosted demo is 14d-uptime stale. Every other forward-track investment compounds against a deploy that is already unblocked once flyctl auth is refreshed. **Cost: ~30 minutes including reauth. Impact: closes the README-vs-/healthz integrity gap that any HN/Reddit visitor will spot in 10 seconds.**
 
 2. **Phase 3 multi-cell, Phase 1.4 self-hosted runners, NSE empanelment prep — none of these has its trigger fired.** All three are correctly-scoped at "do nothing yet": Phase 3 trigger is sustained 100+ concurrent users (we are at 0 paid); Phase 1.4 trigger is GitHub free-tier exhaust at N=50+ pushes/month (we hit this in early May at 585 commits/2wk — **trigger has fired but the cheap one-line fix is already in `ci.yml`**); NSE empanelment trigger is 50 paid subs (we are at 0). **Action: do small, cheap pre-positioning steps for Phase 1.4 only; defer Phase 3 and NSE empanelment until their triggers fire.**
 
@@ -27,7 +29,7 @@
 | Production version | **v1.3.0** | `curl /healthz` |
 | Production tools | **111** (deployed snapshot) | `curl /healthz` |
 | Production uptime | 3m33s at audit-time (just-restarted) | `curl /healthz` |
-| **Production gap** | **19 tools + 548 commits stale** | confirmed independently in `final-pre-launch-verification.md` |
+| **Production gap** | **0 tools, 0 source commits** (production at master HEAD modulo .research/-only commits per `production-master-gap-report.md` §1.4 — both production and master-built binary register tools=111; the "548 commits / 19 tools" framing above is the grep-error narrative FALSIFIED 2026-05-11) | per chain agent's compile-and-run probe + machine version 273 image hash chain |
 | Algo2go external modules | **28** (alerts/aop/audit/billing/broker/clockport/cqrs/decorators/domain/eventsourcing/i18n/instruments/isttz/legaldocs/logger/money/oauth/papertrading/registry/riskguard/scheduler/sectors/telegram/templates/ticker/usecases/users/watchlist) | `ls D:/Sundeep/projects/algo2go/` |
 | Total master commits | **1,354** lifetime | `git log --oneline | wc -l` |
 | Master commits last 2 weeks | **585** | `git log --since` |
@@ -237,13 +239,13 @@ Per `day-1-launch-ops-runbook.md` Phase 1.3 + `gtm-launch-sequence.md`:
 
 | Day | Action | Time | Cost |
 |---|---|---|---|
-| **Today** | Refresh flyctl auth + deploy to Fly.io (closes the 548-commit gap) | ~30 min | $0 |
+| **Today** | ~~Refresh flyctl auth + deploy to Fly.io (closes the 548-commit gap)~~ — FALSIFIED 2026-05-11; no deploy needed (production = master modulo .research/-only); see `production-master-gap-report.md` §1.4 + `STATE.md` §2.1 | 0 min | $0 |
 | **Today** | Trigger `dr-drill.yml` via `gh workflow run` (action #43) | ~15 min | $0 |
 | **Today** | Buy `algo2go.com` + create `algo2go` GitHub org (action #42 partial) | ~10 min | ₹1k |
 | **Today** | Create `u/Sundeepg98` Reddit account (action #45 setup) | ~15 min | $0 |
 | **Day +1** | Record Demo A GIF (action #44) | ~30-60 min | $0 |
 | **Day +1 to +6** | Reddit lurk/comment for karma (action #45 warmup, passive) | ~30 min/day | $0 |
-| **Day +7** | Final pre-launch checks: smoke-test green, dr-drill green, healthz tools=130, og-image 200 | ~30 min | $0 |
+| **Day +7** | Final pre-launch checks: smoke-test green, dr-drill green, healthz tools=111, og-image 200 (already HTTP 200 verified 2026-05-11) | ~30 min | $0 |
 | **Day +7 (Tue/Wed PT)** | Show HN submission (action #46) + Twitter D1-T1 + Reddit r/algotrading post | ~3 hours active triage | $0 |
 | **Day +30** | Star count check; if ≥50 stars → Rainmatter warm-intro trigger (per `kite-rainmatter-warm-intro.md`) | ~1 hour | $0 |
 | **Day +90** | TM filing review: only file if Show HN delivered ≥25 stars + ≥5 paid trial conversions (action #42 final) | 30 min online | ₹18-22k |
@@ -292,7 +294,7 @@ Per `MEMORY.md kite-templates`: `landing.html` exists. Embedding the demo GIF in
 
 ### Quantitative state
 
-- **Codebase**: 1,354 lifetime commits. 130 MCP tools (in-tree). 28 algo2go external modules. ~330+ tests. Production at v1.3.0 / tools=111 (548 commits stale).
+- **Codebase**: 1,354 lifetime commits (1,364+ at 2026-05-11 re-verify). **111 MCP tools** (production-registered via compile-and-run; "130 in-tree" was a grep error including 19 test fixtures). 28 algo2go external modules. **~8,500 tests cumulative** (4,697 in-tree + 3,760 across 28 algo2go modules per research-batch §I). Production at v1.3.0 / tools=111 — **MATCHES master-built binary** per `production-master-gap-report.md`; the ".0 tools / 0 source commits stale" reality is the operative empirical state (post-2026-05-11 correction).
 - **Architecture**: Clean Architecture + CQRS + 9 RiskGuard checks + AES-256-GCM encryption + Litestream → R2 backup + per-user OAuth. Phase 2.6 (libSQL/Turso adapter) closed at `2919f6e`.
 - **Distribution**: Zero. No Show HN submission yet. No Reddit posts. No Twitter (handle exists, build-in-public not started). No domain owned. No trademark filed.
 - **Monetization**: Zero. No payment integration. ENABLE_TRADING=false on Fly.io (Path 2 read-only). Free tier of 50 paid subs target per `kite-mrr-reality.md` is 50 trial→paid conversions away.
@@ -301,7 +303,7 @@ Per `MEMORY.md kite-templates`: `landing.html` exists. Embedding the demo GIF in
 
 ### Qualitative state
 
-- **The codebase is over-built for its current external traction.** 130 tools / 28 external modules / 9 RiskGuard checks / AES encryption / Litestream backups / DR drills / Path 2 compliance — every dimension has been hardened beyond the needs of 0 paid users. This is the "diminishing returns past ~10 research agents — transition to execution" pattern flagged in `MEMORY.md feedback_research_diminishing_returns.md`. Same pattern now applies to engineering: diminishing returns past tools=130, transition to distribution.
+- **The codebase is over-built for its current external traction.** 111 tools / 28 external modules / 11 RiskGuard pre-trade checks (17 RejectionReason constants) / AES-256-GCM encryption / Litestream backups / DR drills / Path 2 compliance — every dimension has been hardened beyond the needs of 0 paid users. This is the "diminishing returns past ~10 research agents — transition to execution" pattern flagged in `MEMORY.md feedback_research_diminishing_returns.md`. Same pattern now applies to engineering: diminishing returns past tools=111, transition to distribution.
 - **Architecture ceiling has been hit at the current effort level.** Per `team-scaling-cost-benefit-per-axis.md`: solo + agent-fleet ceiling on Architecture is ~95.69; the next +47 nominal points are gated by external auditor sign-off (SOC 2, ISO 27001, SEBI CSCRF, NIST CSF) — none of which can ship without an external customer + funded runway.
 - **The single highest-leverage gap is empirical-feedback-from-strangers.** Every other team-config / tooling / decoupling / capacity decision has been made on internal reasoning. **No external user has ever stress-tested it.** Show HN + Reddit + Twitter is the cheapest way to break this.
 
@@ -321,13 +323,9 @@ Per `MEMORY.md kite-competitors-corrected.md` + `kite-zerodha-no-marketplace.md`
 
 Calibrated against (user-facing value × probability-of-impact) ÷ (effort + cost).
 
-### #1 — Deploy current master to Fly.io (~30 min, $0)
+### #1 — ~~Deploy current master to Fly.io (~30 min, $0)~~ — **FALSIFIED 2026-05-11**
 
-User-facing value: **closes the README-vs-/healthz integrity gap**. Right now any HN/Reddit/Twitter visitor who clicks the live demo sees `tools=111` while README claims `tools=130`. This is the #1 silent credibility-killer.
-Probability of impact: **100%** — guaranteed delta improvement.
-Effort: ~30 min including flyctl reauth via Playwright per `MEMORY.md`.
-**Risk**: minimal (the master HEAD already has CI green ex-Playwright per `final-pre-launch-verification.md`; smoke tests should pass).
-**Reversibility**: full (rollback to v1.3.0 release ID is one `flyctl releases rollback` command).
+**Updated**: this was the #1 highest-leverage move per the 2026-05-10 framing. Per `production-master-gap-report.md`: there is no deploy backlog. Production runs `bc5043e`; master HEAD is 1-2 commits ahead but those are `.research/`-only (excluded from Docker build context). The "README claims tools=130 / production shows tools=111" was a grep error (README L198 was the only `117/130` claim; patched to `111` at commit `b4fdaf7`). No deploy needed. The replacement #1 is **publish demo GIF + execute launch path** (Tasks #44 + #46 from `launch-path-execution-playbooks.md`) — see #2/#3 below for re-ranked priorities.
 
 ### #2 — Demo GIF recording (~30-60 min, $0)
 
@@ -366,7 +364,7 @@ Reversibility: full (account can be deleted; no data attached yet).
 - **Phase 3 multi-cell scaling**: trigger has not fired. Doing it now is investing infra cost on speculation.
 - **NSE empanelment Pvt Ltd formation**: trigger has not fired. Doing it now is committing ₹70k-1.2L on a project that hasn't been validated externally.
 - **Self-hosted CI runners**: cost-savings are real (~$150/mo) but should follow Show-HN validation; don't need to do it pre-launch.
-- **More algo2go module extractions**: tools=130 is already 5+ tools above the 117 README claim. Building more before deploying what's already built is a denominator-mismatch.
+- **More algo2go module extractions**: 28 modules already external per Path A inauguration COMPLETE (post 2026-05-10 per `memory/session_2026-05-10_path-a-complete.md`). tools=111 production-registered matches master-built; no "build more before deploying" gap exists.
 - **TM filing**: ₹19-22k pre-validation expense. Wait until Show-HN delivers ≥25 stars + paid-trial signal.
 - **More research docs**: `feedback_research_diminishing_returns.md` is real. We have 80+ research docs in `.research/`. Adding more is procrastination.
 
@@ -432,7 +430,7 @@ Per `feedback_decoupling_denominator.md`: decoupling investments should be evalu
 
 | Action | Human time | Agent time |
 |---|---|---|
-| Deploy to Fly.io | ~30 min (flyctl reauth via Playwright) | ~5 min |
+| ~~Deploy to Fly.io~~ — FALSIFIED 2026-05-11; production already at master modulo .research/-only | 0 min | 0 |
 | Trigger dr-drill.yml | ~5 min (gh workflow run + read output) | ~5 min |
 | Buy domain + create GitHub org | ~10 min | 0 |
 | Email kiteconnect@zerodha.com | ~10 min | ~5 min draft |
@@ -466,7 +464,7 @@ Trigger-based hire roadmap:
 
 **Do five things this week. In order.**
 
-1. Deploy master to Fly.io. Refresh flyctl auth via Playwright; run `flyctl deploy -a kite-mcp-server --remote-only`; verify `/healthz` returns `tools=130`/`v1.3.x` post-deploy. **30 min.**
+1. ~~Deploy master to Fly.io~~ — FALSIFIED 2026-05-11 per `production-master-gap-report.md`. Production at master HEAD modulo `.research/`-only commits; tools=111 in both production and master-built binary. Replacement step #1: **Provision GitHub Actions secrets for dr-drill** per `research-batch-2026-05-11.md` §D (6 `gh secret set` commands). **~5 min once secrets in hand.**
 2. Trigger `dr-drill.yml` workflow. Read output. **15 min.**
 3. Buy `algo2go.com` + create `algo2go` GitHub org. **10 min, ₹1k.**
 4. Email `kiteconnect@zerodha.com` with 3 compliance questions. **10 min.**
