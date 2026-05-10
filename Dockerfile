@@ -15,7 +15,6 @@ WORKDIR /app
 COPY go.mod go.sum ./
 COPY app/providers/go.mod app/providers/go.sum* app/providers/
 COPY kc/sectors/go.mod kc/sectors/go.sum* kc/sectors/
-COPY kc/telegram/go.mod kc/telegram/go.sum* kc/telegram/
 COPY plugins/go.mod plugins/go.sum* plugins/
 COPY testutil/go.mod testutil/go.sum* testutil/
 RUN go mod download

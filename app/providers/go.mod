@@ -116,6 +116,5 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/algo2go/kite-mcp-telegram => ../../kc/telegram
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil
 )

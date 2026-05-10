@@ -38,6 +38,8 @@ github.com/algo2go/kite-mcp-riskguard v0.1.0 h1:+toPprDTLLer0nl5ZsIDESfEcHkQ3pFP
 github.com/algo2go/kite-mcp-riskguard v0.1.0/go.mod h1:ch4ZWiSliitP2GiBHELTOVEzXvsNInl+1NIHn85eINI=
 github.com/algo2go/kite-mcp-scheduler v0.1.0 h1:Y4kHEDXBoDL/btwPLdgHWqLly+7qYwlGrxiw7CpuswU=
 github.com/algo2go/kite-mcp-scheduler v0.1.0/go.mod h1:ESyLLpZVElgKH4ZhqqCwwLQ16X03ykjr3jLdCW3Gb4U=
+github.com/algo2go/kite-mcp-telegram v0.1.0 h1:PSKhnp+DDkAWDgBxkc7zfFuxIEYaK/Z/6iN4Q7mi6pI=
+github.com/algo2go/kite-mcp-telegram v0.1.0/go.mod h1:sy8dBUdpKyzyICM8kBGEt5/o/Shb8e0ONYEI4qo0He4=
 github.com/algo2go/kite-mcp-templates v0.1.0 h1:IakYl8o4F8dGJl7MSPCAqxPoKOXUvI4loJqP9ct6tEo=
 github.com/algo2go/kite-mcp-templates v0.1.0/go.mod h1:UV6YXB2GLX+zoQZmDCFg5D6/YbhVDEIFPoTKg5eSMXY=
 github.com/algo2go/kite-mcp-ticker v0.1.0 h1:ei0+PEVfOjfZ82NjoG3CVJO4QSC1wO5g3UJsFiBtoPk=
