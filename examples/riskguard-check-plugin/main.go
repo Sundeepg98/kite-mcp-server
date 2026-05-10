@@ -47,7 +47,7 @@ import (
 	"strings"
 
 	hplugin "github.com/hashicorp/go-plugin"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard/checkrpc"
+	"github.com/algo2go/kite-mcp-riskguard/checkrpc"
 )
 
 // exampleCheck implements checkrpc.CheckRPC. It's pure data + a

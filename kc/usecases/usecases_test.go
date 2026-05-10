@@ -10,7 +10,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // Shared mocks (mockBrokerResolver, mockBrokerClient, mockAlertStore,

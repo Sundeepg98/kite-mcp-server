@@ -11,7 +11,7 @@ import (
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/algo2go/kite-mcp-eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // ModifyOrderUseCase orchestrates the order modification pipeline:

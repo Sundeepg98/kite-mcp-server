@@ -8,7 +8,7 @@ import (
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-cqrs"
 	"github.com/algo2go/kite-mcp-money"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // fakeBrokerForExit is a minimal broker.Client stand-in for the exit-batch

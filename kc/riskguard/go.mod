@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/riskguard
+module github.com/algo2go/kite-mcp-riskguard
 
 go 1.25.0
 

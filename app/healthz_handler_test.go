@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-audit"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // ===========================================================================

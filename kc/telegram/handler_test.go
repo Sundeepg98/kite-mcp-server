@@ -19,7 +19,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-instruments"
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 	"path/filepath"
 	"github.com/algo2go/kite-mcp-watchlist"
 )

@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // OrderPort is the bounded-context contract for order-placement access.

@@ -35,7 +35,7 @@ require (
 	github.com/zerodha/gokiteconnect/v4 v4.4.0
 	github.com/zerodha/kite-mcp-server/app/providers v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/papertrading v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-riskguard v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/sectors v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/telegram v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/usecases v0.0.0-00010101000000-000000000000
@@ -88,7 +88,7 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server/app/providers => ./app/providers
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ./kc/papertrading
-	github.com/zerodha/kite-mcp-server/kc/riskguard => ./kc/riskguard
+	github.com/algo2go/kite-mcp-riskguard => ./kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/sectors => ./kc/sectors
 	github.com/zerodha/kite-mcp-server/kc/telegram => ./kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/usecases => ./kc/usecases

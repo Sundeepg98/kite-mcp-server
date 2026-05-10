@@ -9,7 +9,7 @@ import (
 
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-audit"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // riskguard.go — Wave D Phase 2 Slice P2.4c. Provides initialization

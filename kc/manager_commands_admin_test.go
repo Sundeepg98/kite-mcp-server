@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/algo2go/kite-mcp-cqrs"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 // TestCommandBus_AdminFreezeUser_FlipsRiskguard proves the batch-C admin

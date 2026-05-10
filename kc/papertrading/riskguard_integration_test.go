@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/algo2go/kite-mcp-domain"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard"
+	"github.com/algo2go/kite-mcp-riskguard"
 )
 
 const rgIntegrationEmail = "trader@rg-paper.test"

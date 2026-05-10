@@ -49,7 +49,7 @@ require (
 	github.com/algo2go/kite-mcp-billing v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
-	github.com/zerodha/kite-mcp-server/kc/riskguard v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-riskguard v0.1.0
 	github.com/algo2go/kite-mcp-scheduler v0.1.0
 	github.com/algo2go/kite-mcp-users v0.1.0
 	go.uber.org/fx v1.24.0
@@ -117,7 +117,7 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/papertrading => ../../kc/papertrading
-	github.com/zerodha/kite-mcp-server/kc/riskguard => ../../kc/riskguard
+	github.com/algo2go/kite-mcp-riskguard => ../../kc/riskguard
 	github.com/zerodha/kite-mcp-server/kc/telegram => ../../kc/telegram
 	github.com/zerodha/kite-mcp-server/kc/usecases => ../../kc/usecases
 	github.com/zerodha/kite-mcp-server/testutil => ../../testutil

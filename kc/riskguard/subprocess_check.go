@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 
 	hplugin "github.com/hashicorp/go-plugin"
-	"github.com/zerodha/kite-mcp-server/kc/riskguard/checkrpc"
+	"github.com/algo2go/kite-mcp-riskguard/checkrpc"
 
 	logport "github.com/algo2go/kite-mcp-logger"
 )
