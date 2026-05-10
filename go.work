@@ -6,12 +6,12 @@
 //   - .research/disintegrate-and-holistic-architecture.md (commit
 //     5437c32) — the prior audit that recommended this exact pattern.
 //
-// Members (20 modules — see `use` block below; arc was 30 -> 29 (sectors
+// Members (19 modules — see `use` block below; arc was 30 -> 29 (sectors
 // added by audit agent) -> 28 (broker + money removed by first Phase B)
 // -> 27 (decorators removed) -> 26 (i18n removed) -> 25 (legaldocs
 // removed) -> 23 (isttz + scheduler dual-removed) -> 22 (logger
-// removed) -> 21 (templates removed) -> 20 (aop removed by this
-// commit's Phase B):
+// removed) -> 21 (templates removed) -> 20 (aop removed) -> 19
+// (domain removed by this commit's Phase B):
 //
 // The original 5/5 ceremony set (commits b7fedcc → 1cccfaf): kc/money +
 // broker + kc/audit + kc/riskguard + kc/billing. Established the
@@ -22,20 +22,22 @@
 // 568895e), kc/isttz (commit bbb31da — Path A.6.1 foundation),
 // kc/scheduler (commit b2315cd — Path A.6.2 dependent), kc/logger
 // (commit e6231a9 — Path A.7), kc/templates (commit 1db565a —
-// Path A.8' after Path A.8 kc/billing halt at 71f17eb), and kc/aop
-// (commit 5db5165 — Path A.9 research-tag-gated leaf) to external
-// algo2go GitHub repos. Phase B canary deletions removed broker +
-// kc/money (commit bef0b31), kc/decorators (commit c19bca9), kc/i18n
-// (commit 84aab63), kc/legaldocs (commit 326c045), kc/isttz +
+// Path A.8' after Path A.8 kc/billing halt at 71f17eb), kc/aop
+// (commit 5db5165 — Path A.9 research-tag-gated leaf), and kc/domain
+// (commit 9ee8212 — Path A.10 foundation for kc/billing chain) to
+// external algo2go GitHub repos. Phase B canary deletions removed
+// broker + kc/money (commit bef0b31), kc/decorators (commit c19bca9),
+// kc/i18n (commit 84aab63), kc/legaldocs (commit 326c045), kc/isttz +
 // kc/scheduler (commit b72a7e9 — combined dual delete), kc/logger
-// (commit 1d977b7), kc/templates (commit 10b30a3), and kc/aop (this
-// commit) from the use block — they are now fetched from
+// (commit 1d977b7), kc/templates (commit 10b30a3), kc/aop (commit
+// ad137cf), and kc/domain (this commit) from the use block — they
+// are now fetched from
 // algo2go/kite-mcp-broker@v0.1.0 + algo2go/kite-mcp-money@v0.1.0 +
 // algo2go/kite-mcp-decorators@v0.1.0 + algo2go/kite-mcp-i18n@v0.1.0 +
 // algo2go/kite-mcp-legaldocs@v0.1.0 + algo2go/kite-mcp-isttz@v0.1.0 +
 // algo2go/kite-mcp-scheduler@v0.1.0 + algo2go/kite-mcp-logger@v0.1.0 +
-// algo2go/kite-mcp-templates@v0.1.0 + algo2go/kite-mcp-aop@v0.1.0
-// via GOPROXY.
+// algo2go/kite-mcp-templates@v0.1.0 + algo2go/kite-mcp-aop@v0.1.0 +
+// algo2go/kite-mcp-domain@v0.1.0 via GOPROXY.
 //
 // Tier 1 / 2 / 3 / 4 / 5 zero-monolith path (.research/zero-monolith-
 // roadmap.md commit a5e7e76) added 21 more modules — kc/alerts, kc/aop,
@@ -84,7 +86,6 @@ use (
 	./kc/audit
 	./kc/billing
 	./kc/cqrs
-	./kc/domain
 	./kc/eventsourcing
 	./kc/instruments
 	./kc/papertrading

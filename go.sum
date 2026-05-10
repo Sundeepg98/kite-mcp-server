@@ -4,6 +4,8 @@ github.com/algo2go/kite-mcp-broker v0.1.0 h1:4sEF6U0OGnhMWzXWB97DAN7F69nLmt0quIx
 github.com/algo2go/kite-mcp-broker v0.1.0/go.mod h1:96SPH/3bGKE/PGZPC04LUeY5czpd7WCLC5fzXRG/Qhc=
 github.com/algo2go/kite-mcp-decorators v0.1.0 h1:UHGrpHOeHVjDTAqnr3qDY8FfMy/e1zE8ZnJywaQ5+Hc=
 github.com/algo2go/kite-mcp-decorators v0.1.0/go.mod h1:KUTxUT4pxYffXiw/fIw456AZ7J5hhz0qR7eC7ZMVqDw=
+github.com/algo2go/kite-mcp-domain v0.1.0 h1:tLQ+7WxFolMxo4dtW3BN45WFnYvbTqsMF67tHGK+NjM=
+github.com/algo2go/kite-mcp-domain v0.1.0/go.mod h1:XsbcFNchYrahzSSN7oww+5XtSBAIavS5YmeFN8M7178=
 github.com/algo2go/kite-mcp-i18n v0.1.0 h1:37KY+MTmQKo+NIxlJcp4AYL2dmF7rZxayCJgBG0xp9M=
 github.com/algo2go/kite-mcp-i18n v0.1.0/go.mod h1:XpdXAnBcVWUWxv/GtLCauzwZPoGytLcGPRZTTo8h/DE=
 github.com/algo2go/kite-mcp-isttz v0.1.0 h1:9E3T/LVk0J9XCHp80keS9PPL4k+vl/9FVvMB3UviBlY=

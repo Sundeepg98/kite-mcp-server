@@ -61,5 +61,4 @@ require (
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
 	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
-	github.com/algo2go/kite-mcp-domain => ../domain
 )
