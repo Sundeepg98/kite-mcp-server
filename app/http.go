@@ -23,7 +23,7 @@ import (
 	"github.com/mark3labs/mcp-go/util"
 	"github.com/zerodha/kite-mcp-server/kc"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
 	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"

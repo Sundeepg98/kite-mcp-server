@@ -81,7 +81,7 @@ require (
 	github.com/algo2go/kite-mcp-broker v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-alerts v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000 // indirect
-	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000 // indirect
+	github.com/algo2go/kite-mcp-billing v0.1.0 // indirect
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000 // indirect
 	github.com/algo2go/kite-mcp-decorators v0.1.0 // indirect
 	github.com/algo2go/kite-mcp-domain v0.1.0 // indirect
@@ -120,7 +120,7 @@ replace (
 	github.com/zerodha/kite-mcp-server => ../
 	github.com/zerodha/kite-mcp-server/app/providers => ../app/providers
 	github.com/zerodha/kite-mcp-server/kc/audit => ../kc/audit
-	github.com/zerodha/kite-mcp-server/kc/billing => ../kc/billing
+	github.com/algo2go/kite-mcp-billing => ../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../kc/cqrs
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../kc/eventsourcing
 	github.com/zerodha/kite-mcp-server/kc/instruments => ../kc/instruments

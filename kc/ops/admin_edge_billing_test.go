@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 )
 
 // --- Helpers (unique names to avoid collisions) ---

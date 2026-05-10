@@ -6,7 +6,7 @@ import (
 	"strings"
 	htmltemplate "html/template"
 
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-oauth"
 )
 

@@ -6,7 +6,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/algo2go/kite-mcp-users"

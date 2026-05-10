@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 )
 
 func TestTierRateMultiplier(t *testing.T) {

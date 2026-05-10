@@ -1,6 +1,6 @@
 package app
 
-import "github.com/zerodha/kite-mcp-server/kc/billing"
+import "github.com/algo2go/kite-mcp-billing"
 
 // tierRateMultiplier maps a user's billing tier to a rate-limit bucket
 // multiplier. Premium users get 10x, Pro (and Solo Pro) get 3x, free users

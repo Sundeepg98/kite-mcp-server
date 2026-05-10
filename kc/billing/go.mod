@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/billing
+module github.com/algo2go/kite-mcp-billing
 
 go 1.25.0
 

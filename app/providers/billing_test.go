@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/algo2go/kite-mcp-alerts"
-	"github.com/zerodha/kite-mcp-server/kc/billing"
+	"github.com/algo2go/kite-mcp-billing"
 )
 
 // billing_test.go covers Wave D Phase 2 Slice β-1's
