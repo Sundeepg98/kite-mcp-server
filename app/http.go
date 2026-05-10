@@ -26,7 +26,7 @@ import (
 	"github.com/algo2go/kite-mcp-billing"
 	"github.com/algo2go/kite-mcp-i18n"
 	"github.com/zerodha/kite-mcp-server/kc/ops"
-	tgbot "github.com/zerodha/kite-mcp-server/kc/telegram"
+	tgbot "github.com/algo2go/kite-mcp-telegram"
 	"github.com/algo2go/kite-mcp-templates"
 	"github.com/zerodha/kite-mcp-server/mcp"
 	"github.com/algo2go/kite-mcp-oauth"
