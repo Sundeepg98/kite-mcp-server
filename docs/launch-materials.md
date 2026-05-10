@@ -1,5 +1,7 @@
 # Launch Materials: Kite MCP Server
 
+**Last verified 2026-05-11 against `algo2go/kite-mcp-riskguard/guard.go` (RiskGuard caps + check names) + `curl /healthz` (tools count) + master HEAD `1eb3fcd`.** Tightened on this date to correct pre-2026-04 cap values (`Rs 5,00,000/order, 200/day, Rs 10,00,000 notional, 8 checks`) which were obsoleted by commit `7cd7b35`. Current empirical caps per `SystemDefaults` in guard.go: `Rs 50,000/order, 20 orders/day, Rs 2,00,000 daily notional, 11 user-facing pre-trade checks` (17 `RejectionReason` constants total; 11 of which are user-facing pre-trade per README L3 framing).
+
 **IMPORTANT before posting:** Review all factual claims. The agent that drafted this made some unverified claims — specifically around tool counts, test counts, and commit counts. Verify against current state before you post. Notable correction already applied: Kite tokens expire daily at ~6 AM IST, NOT "every 6 hours" as the draft originally said.
 
 ---
@@ -10,7 +12,7 @@
 **Kite Trading MCP Server – Execute orders + backtest on Zerodha via Claude, ChatGPT, VS Code**
 
 ### Body
-We shipped a Model Context Protocol server that connects any AI assistant to Zerodha Kite for real trading. ~100 tools (vs. the official 22 read-only tools). Order placement, paper trading, backtesting SMA/RSI/breakout, options Greeks, Telegram alerts, tax loss harvesting analysis. 8 safety checks prevent runaway orders. Self-hostable (Docker + Go). Live at https://kite-mcp-server.fly.dev. MIT license, free—you bring a ₹500/mo Kite Connect app.
+We shipped a Model Context Protocol server that connects any AI assistant to Zerodha Kite for real trading. 111 tools (vs. the official 22 read-only tools). Order placement, paper trading, backtesting SMA/RSI/breakout, options Greeks, Telegram alerts, tax loss harvesting analysis. 11 safety checks prevent runaway orders. Self-hostable (Docker + Go). Live at https://kite-mcp-server.fly.dev. MIT license, free—you bring a ₹500/mo Kite Connect app.
 
 Designed for algorithmic developers in India. Ask Claude: "Show my portfolio", "Backtest SMA crossover on INFY", "What are the Greeks on NIFTY 50 calls?".
 
@@ -21,7 +23,7 @@ Designed for algorithmic developers in India. Ask Claude: "Show my portfolio", "
 **Tweet 1** (Hook)
 Tired of your Kite algos breaking at 6 AM IST when the daily token expires? We shipped a Model Context Protocol server so Claude, ChatGPT, and your AI can execute orders, backtest strategies, and analyze Greeks — all on Zerodha.
 
-~100 tools. Paper trading mode. 8 safety checks. Zero cost (you bring the ₹500/mo Kite app).
+111 tools. Paper trading mode. 11 safety checks. Zero cost (you bring the ₹500/mo Kite app).
 
 https://github.com/Sundeepg98/kite-mcp-server
 
@@ -50,11 +52,13 @@ All in one conversation.
 **Tweet 4**
 Why it's safe:
 - Kill-switch per user (freeze trading instantly)
-- Order value cap (default ₹5,00,000)
+- Order value cap (default ₹50,000)
 - Rate limit (10 orders/minute, prevents loops)
 - Duplicate detection (blocks same order within 30s)
-- Daily order cap (200/day)
+- Daily order cap (20/day)
+- Daily notional cap (₹2,00,000 cumulative)
 - Circuit breaker (auto-freeze after 3 rejections)
+- Plus 5 more: per-second rate, idempotency, confirmation required, anomaly μ+3σ, off-hours block (11 total)
 
 Paper trading mode = zero real money risk.
 
@@ -89,7 +93,7 @@ Feedback/issues welcome. This solves a real itch for algo traders in India — h
 ## Reddit — r/IndiaAlgoTrading
 
 ### Title
-Built a free, open-source MCP server that lets Claude execute Zerodha orders, backtest, and calculate Greeks. ~100 tools, 8 safety checks, paper trading.
+Built a free, open-source MCP server that lets Claude execute Zerodha orders, backtest, and calculate Greeks. 111 tools, 11 safety checks, paper trading.
 
 ### Body
 
@@ -104,7 +108,7 @@ Shipping this today after months of work. Real problem: token expiry, fragmented
 
 **What we shipped:**
 
-~100 tools across 14 categories:
+111 tools across 14 categories:
 - **Trading**: Place/modify/cancel orders, GTT, convert positions, close all
 - **Portfolio**: Holdings, positions, P&L by sector, concentration analysis
 - **Backtesting**: SMA crossover, RSI reversal, breakout, mean reversion
@@ -115,17 +119,20 @@ Shipping this today after months of work. Real problem: token expiry, fragmented
 - **Paper Trading**: Simulate orders risk-free, toggle on/off instantly
 - **MF & Watchlists**: Holdings, place/cancel MF orders, create watchlists
 
-**Safety first (8 checks):**
+**Safety first (11 user-facing pre-trade checks):**
 1. Kill switch (freeze your account instantly if needed)
-2. Order value limit (default ₹5,00,000)
+2. Order value limit (default ₹50,000 — tightened from ₹5L per landmine #3 mitigation, commit `7cd7b35`)
 3. Quantity limit (exchange freeze limits)
-4. Daily order cap (200/day)
+4. Daily order cap (20/day — tightened from 200)
 5. Rate limit (10 orders/minute — stops runaway loops)
-6. Duplicate detection (blocks same order within 30 seconds)
-7. Daily value cap (₹10,00,000 cumulative)
-8. Circuit breaker (auto-freeze after 3 rejections in 5 min)
+6. Per-second rate limit (SEBI 10-order/sec ceiling — defensive against burst flooding)
+7. Duplicate detection (blocks same order within 30 seconds)
+8. Daily value cap (₹2,00,000 cumulative — tightened from ₹10L)
+9. Idempotency dedup (SHA256 client_order_id, 15-min TTL — survives double-click)
+10. Confirmation required (default ON — every order needs explicit ACK; blocks silent autonomous-agent execution)
+11. Anomaly μ+3σ (30-day rolling user baseline — catches "user normally places ₹5k orders, suddenly places ₹49k" pattern)
 
-All limits are per-user and configurable in the dashboard.
+Plus 6 system-rejection reasons (auto-freeze on 3 rejections in 5 min, off-hours block 02:00-06:00 IST, SEBI OTR-band check, exchange circuit-band check, insufficient-margin check, market-closed check). All limits are per-user and configurable in the dashboard.
 
 **How it works:**
 1. OAuth login (once) — you bring your own Kite Connect app (₹500/mo from Zerodha)
@@ -157,15 +164,17 @@ Honest ask: if you're an algo dev in India using Kite, would you use this? Feedb
 ## Reddit — r/selfhosted
 
 ### Title
-Self-hosted Zerodha trading API for AI assistants – MCP server, Docker, MIT license, audit trail, ~100 tools
+Self-hosted Zerodha trading API for AI assistants – MCP server, Docker, MIT license, audit trail, 111 tools
 
 ### Body
 
 For the self-hosting crowd: we built a Model Context Protocol (MCP) server that gives any AI assistant (Claude, ChatGPT, local LLMs via Ollama) full access to Zerodha trading — order placement, portfolio analysis, backtesting, Greeks calculation. Self-hostable. MIT license. All data stays on your infrastructure.
 
+
+
 **Why this matters for self-hosters:**
 
-1. **No API vendor lock-in** – Zerodha's official MCP is proprietary-hosted, read-only, 22 tools. This: open-source, ~100 tools, order execution.
+1. **No API vendor lock-in** – Zerodha's official MCP is proprietary-hosted, read-only, 22 tools. This: open-source, 111 tools, order execution.
 2. **Own your trading data** – SQLite on your machine, encrypted locally (AES-256-GCM). No 3rd-party SaaS intermediary.
 3. **Audit everything** – Hash-chained audit trail logged to SQLite. Every tool call timestamped, attributed, verifiable.
 4. **Run anywhere** – Docker Compose (2-minute setup), bare metal Go (1.25+), or cloud (Fly.io).
