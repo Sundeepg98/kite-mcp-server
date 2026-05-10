@@ -13,7 +13,7 @@ matches the domain — not to whoever is idle.
 
 **Last updated**: 2026-05-09 IST (session resume)
 **HEAD at update**: `52204eb`
-**Production**: v228 LIVE; tools=130; 40-deploy streak
+**Production**: v1.3.0 LIVE (binary literal; doesn't auto-bump per deploy); tools=111 (production-registered = master-built; raw `grep mcp.NewTool(` returns 130 which includes 19 test fixtures — per `production-master-gap-report.md` §1.5); Fly.io machine version 273 (84+ consecutive deploys, v228 → v273+). Last empirical verification 2026-05-11 via `curl /healthz`.
 
 ---
 
@@ -34,7 +34,7 @@ across 2+ sessions; transient one-off work uses the closest existing role.
 - **Cross-session resume**: route deploy questions, version-bump triggers,
   rollback alarms here. Re-ping with deploy state pasted (current version,
   smoke status, machine count).
-- **Recent context** (cross-session): owned v189 → v228 deploy streak.
+- **Recent context** (cross-session): owned v189 → v273+ deploy streak (machine version 273 at last empirical check 2026-05-11; was v228 at 2026-05-09 doc-write time).
 - **WSL2 use**: minimal — `flyctl` is binary-launched from Windows.
 - **Last touched**: v229 deploy in flight per session-resume note.
 
@@ -173,8 +173,7 @@ quick reference.)
    `git commit --amend`, `git commit --no-verify`.
 3. **Push to origin/master** per commit when WSL2 green (per
    `user_agents_push_after_wsl_green.md`).
-4. **tools=130 invariant**: refactor work shouldn't change tool count;
-   feature work MAY change it but must record in commit message.
+4. **tools=111 invariant** (production-registered count via compile-and-run): refactor work shouldn't change tool count; feature work MAY change it but must record in commit message. **NOT 130** — that's a raw `grep mcp.NewTool(` over `mcp/` which over-counts test fixtures by 19. Methodology rule pinned at `STATE.md` §5.6 + §11.
 5. **Don't deploy yourself**: `chain` agent owns deploys exclusively.
 6. **Disjoint scope**: check this file before dispatch.
 
