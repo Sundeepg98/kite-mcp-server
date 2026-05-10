@@ -19,7 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // testKiteClientFactory is a trivial factory used by tests; it mirrors the

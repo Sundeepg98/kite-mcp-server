@@ -21,7 +21,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/papertrading"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
 	"path/filepath"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // ---------------------------------------------------------------------------

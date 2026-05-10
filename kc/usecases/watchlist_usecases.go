@@ -10,7 +10,7 @@ import (
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // WatchlistStore abstracts watchlist persistence for use cases.

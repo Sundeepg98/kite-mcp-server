@@ -6,7 +6,7 @@ import (
 	"github.com/algo2go/kite-mcp-billing"
 	"github.com/zerodha/kite-mcp-server/kc/registry"
 	"github.com/algo2go/kite-mcp-users"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // StoreRegistry groups all persistence store accessors that Manager previously

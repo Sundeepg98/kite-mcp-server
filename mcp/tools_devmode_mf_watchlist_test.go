@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // DevMode MF + watchlist tool tests: mutual-fund orders/SIPs/holdings + watchlist CRUD + paper-trading status.

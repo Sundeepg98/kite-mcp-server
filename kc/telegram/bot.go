@@ -21,7 +21,7 @@ import (
 	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/instruments"
 	"github.com/zerodha/kite-mcp-server/kc/riskguard"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // TelegramLookup abstracts the Telegram chat-ID-to-email mapping needed by the bot.

@@ -19,7 +19,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
 	"github.com/zerodha/kite-mcp-server/kc/usecases"
 	"github.com/algo2go/kite-mcp-users"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // manager_struct.go holds the Manager state declaration plus the small set

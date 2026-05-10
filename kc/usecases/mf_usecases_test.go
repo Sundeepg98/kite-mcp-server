@@ -16,7 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/algo2go/kite-mcp-domain"
 	"github.com/zerodha/kite-mcp-server/kc/ticker"
-	"github.com/zerodha/kite-mcp-server/kc/watchlist"
+	"github.com/algo2go/kite-mcp-watchlist"
 )
 
 // --- Enhanced mock broker with configurable MF/margin/convert returns ---
