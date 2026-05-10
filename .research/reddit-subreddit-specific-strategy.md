@@ -14,7 +14,7 @@
 
 **Verbatim first post (use this exactly on Day-1 +12h):**
 
-> **Title:** `[Show] kite-mcp-server — Go MCP bridge for Zerodha Kite with riskguard chain and SQLite audit (open source, 80 tools, 330 tests)`
+> **Title:** `[Show] kite-mcp-server — Go MCP bridge for Zerodha Kite with riskguard chain and SQLite audit (open source, 111 tools, ~8500 tests)`
 
 > **Body:** *(see §A.1 below — full ~700-word draft, opens with architecture, leads with the riskguard chain, ends with "what would you audit first" question — calibrated against the 187-score "multi-agent AI" post and the 142-score "pandas-ta release" post that worked in this sub.)*
 
@@ -216,7 +216,7 @@ For each primary sub, two distinct drafts. v1 = recommended; v2 = fallback if v1
 
 **Title (≤300 chars Reddit limit, but keep ≤90 for visibility):**
 ```
-[Show] kite-mcp-server — Go MCP bridge for Zerodha Kite with riskguard chain and SQLite audit (open source, 80 tools, 330 tests)
+[Show] kite-mcp-server — Go MCP bridge for Zerodha Kite with riskguard chain and SQLite audit (open source, 111 tools, ~8500 tests)
 ```
 
 **Flair:** Tools (or Project — sub doesn't enforce strict flairs).
@@ -229,7 +229,7 @@ because the riskguard chain is the part I'd actually like critique on.
 **What it is.** A Go-based Model Context Protocol server that wraps Zerodha Kite Connect
 (India's largest retail-broker REST API). Each user brings their own Kite developer
 app, connects through OAuth 2.1 + PKCE, and the server speaks streamable-HTTP MCP to
-any compliant client (Claude Desktop, Claude Code, Cursor, Cline, etc.). 80 tools
+any compliant client (Claude Desktop, Claude Code, Cursor, Cline, etc.). 111 tools
 across read (holdings, positions, quotes, historical, option chain) and write (place
 / modify / cancel order, GTT, alerts).
 
@@ -397,7 +397,7 @@ For other Zerodha customers who code: an open-source self-hosted helper for your
 
 **Title:**
 ```
-[P] kite-mcp-server: a real-world Go MCP server with 80 tools, riskguard middleware, and SQLite hash-chained audit — open source
+[P] kite-mcp-server: a real-world Go MCP server with 111 tools, riskguard middleware, and SQLite hash-chained audit — open source
 ```
 
 **Body:**
@@ -447,7 +447,7 @@ not just an embarrassing demo. That focused the engineering.
   email + persistent session table) eliminates the need for clients to renegotiate
   on deploy. Single biggest UX win for production MCP servers.
 
-**Repo:** github.com/Sundeepg98/kite-mcp-server. MIT license. ~330 tests. Go 1.25.
+**Repo:** github.com/Sundeepg98/kite-mcp-server. MIT license. ~8500 tests (4,697 in-tree + 3,760 across 28 algo2go modules per `research-batch-2026-05-11.md` §I). Go 1.25.
 
 If you're building MCP servers and want to look at a production-shaped reference,
 the audit middleware (`kc/audit/`), riskguard (`kc/riskguard/`), and elicitation

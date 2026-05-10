@@ -6,7 +6,7 @@
 >
 > **Companion docs (already drafted, read first if unfamiliar):**
 > - `docs/twitter-launch-kit.md` — bio, pinned tweets, 14-day evergreen cadence (lines 50–69 are the core table). **This file extends, not replaces, that one.** Where they overlap (themes Build-log / TIL / Industry-observation), this file slots specific Day-1–30 content into the 14-day rotation rhythm.
-> - `docs/launch/03-twitter-thread.md` — pre-staged 7-tweet Show-HN announcement thread (Day 1 use).
+> - `docs/launch/03-twitter-thread.md` — **STALE REF 2026-05-11**: `docs/launch/` subdirectory does NOT exist at HEAD per `active-docs-verification-2026-05-11.md` §13. Use this doc's §First-3-Day-1-tweet-drafts (below) as authoritative thread source until `docs/launch/` is restored or this ref is rewritten.
 > - `docs/show-hn-post.md` — Show HN body + 9 prepared replies (Day 1 use).
 > - `docs/product-definition.md` lines 73–86 — **the differentiation table** (this server vs official Kite MCP vs Streak). Lifted verbatim into Day 1 + Day 5 threads.
 > - `.research/show-hn-redteam-rehearsal.md` (`f30d9fe`) — top-10 worst-case replies, github.com domain penalty, surge profile.
@@ -34,9 +34,9 @@ The single most leveraged rules to internalize before posting anything in this 3
 ```
 Show HN today: kite-mcp-server — self-hosted MCP for Zerodha Kite, with riskguards.
 
-~80 tools. Per-user OAuth. 9 pre-trade safety checks. Paper trading. Options Greeks. Backtesting. Telegram briefings.
+111 tools. Per-user OAuth. 11 pre-trade safety checks. Paper trading. Options Greeks. Backtesting. Telegram briefings.
 
-MIT, Go, ~330 tests, deployed on Fly.io.
+MIT, Go, ~8500 tests (4.7k in-tree + 3.8k across 28 algo2go modules), deployed on Fly.io.
 
 github.com/Sundeepg98/kite-mcp-server
 ```
@@ -270,7 +270,7 @@ Char count: 232. `#mcp`. Reply-bait, intentionally invites engagement.
 ```
 1/6 — "AI placing real orders" sounds reckless. It is reckless without guardrails.
 
-kite-mcp-server runs 9 pre-trade checks before any order touches Kite. Built so each check is killable via env var (audit-trail visible if any was bypassed).
+kite-mcp-server runs 11 pre-trade checks before any order touches Kite. Built so each check is killable via env var (audit-trail visible if any was bypassed).
 
 Code: github.com/Sundeepg98/kite-mcp-server/blob/master/kc/riskguard/guard.go
 
@@ -306,7 +306,7 @@ Check 8: μ+3σ anomaly detection. Per-user rolling baseline of order frequency 
 
 If any check fires + 3 do in 60s → auto-freeze all order tools for 5 min. Circuit breaker.
 
-All 9 are unit-tested. ~330 tests in the repo. Critique welcome — adversarial review is the most valuable feedback.
+All 11 are unit-tested. ~8500 tests across kite-mcp-server + 28 algo2go modules. Critique welcome — adversarial review is the most valuable feedback.
 ```
 
 ### Day 4 — Paper trade screenshot
@@ -348,7 +348,7 @@ mcp.kite.trade
 ```
 
 ```
-3/5 — This server: ~80 tools, full order placement (local build only), 9-check RiskGuard, paper trading, options Greeks, Telegram, audit trail.
+3/5 — This server: 111 tools, full order placement (local build only), 11-check RiskGuard, paper trading, options Greeks, Telegram, audit trail.
 
 Right answer for: "I want a power-user trading workspace, AI native, with safety rails."
 
@@ -553,7 +553,7 @@ Char count: 288 — TRIM by removing parenthetical "(Mumbai)" → 281. **Trim fu
 ```
 6 months ago I forked Zerodha's kite-mcp-server (22 tools, read-only).
 
-Today: ~80 tools, ~330 tests, ~45k LOC of Go, deployed on Fly.io with per-user OAuth + R2 backup.
+Today: 111 tools, ~8500 tests (4.7k in-tree + 3.8k across 28 algo2go modules), ~45k LOC of Go, deployed on Fly.io with per-user OAuth + R2 backup.
 
 What it took: 1 burnout, 2 redesigns, 3 OAuth implementations, 0 prior MCP experience.
 

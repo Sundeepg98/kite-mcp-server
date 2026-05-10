@@ -23,7 +23,7 @@
 | `algo2go.org` | AVAILABLE | RDAP PIR 404 |
 | `algo2go.io` | AVAILABLE | RDAP Identity Digital 404 |
 | `algo2go.dev` | AVAILABLE | RDAP PIR 404 |
-| `algo2go` GitHub org | **AVAILABLE** | `GET api.github.com/orgs/algo2go` → 404 |
+| `algo2go` GitHub org | **CLAIMED 2026-05-05** (28 repos as of 2026-05-11 per `WebFetch api.github.com/orgs/algo2go`); was AVAILABLE at this doc's 2026-05-03 audit | `GET api.github.com/orgs/algo2go` → 200 |
 | `algo2go` GitHub user | AVAILABLE | `GET api.github.com/users/algo2go` → 404 |
 | `algo2go` on npm | **AVAILABLE** | `GET registry.npmjs.org/algo2go` → 404 |
 | `algo2go` on PyPI | **AVAILABLE** | `GET pypi.org/pypi/algo2go/json` → 404 |

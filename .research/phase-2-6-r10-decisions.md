@@ -130,7 +130,7 @@ From Track 1 (Path E) + libsql-tagged tests in alerts v0.6.0:
 - ✓ `ProvideAlertDB` factory accepts `Driver="turso"` per kite-mcp-server providers tests
 - ✓ Empty URL → config error (correct behavior)
 - ✓ Invalid URL → wrapped error (correct behavior)
-- ✓ tools=130 invariant preserved
+- ✓ tools=111 invariant preserved
 - ✓ go vet clean; WSL2 Linux cross-compile clean
 
 ### 2.2 What ONLY a Fly deployment could catch (honest list)
@@ -301,7 +301,7 @@ After Steps 1-3, Path 6 is now in the codebase (driver factory accepts `Driver="
 | ON CONFLICT DO UPDATE | YES (via libsql_test.go INSERT pattern) |
 | `Dialect()` reports DialectLibSQL | YES | TestOpenLibSQL_OpensCleanly |
 | Configuration error handling | YES | TestProvideAlertDB_TursoDriver_EmptyURL_Errors |
-| tools=130 invariant | YES | grep verified at every commit |
+| tools=111 invariant | YES | grep verified at every commit |
 
 ### 5.2 What's NOT verified (and what would catch it)
 
@@ -407,7 +407,7 @@ Calendar: ~1 day for full flip when trigger fires.
 
 ✓ Phase 2.6 driver factory: `ALERT_DB_DRIVER=turso` accepted in `ProvideAlertDB` factory
 ✓ alerts v0.6.0: `OpenLibSQL` constructor + dialect helpers + libsql-tagged tests
-✓ kite-mcp-server: TDD tests, go.mod bumped, tools=130 preserved, WSL2-cross-compile clean
+✓ kite-mcp-server: TDD tests, go.mod bumped, tools=111 preserved (production-registered count via compile-and-run; the raw grep over `mcp/` returns 130 which includes 19 `_test.go` fixtures — per `production-master-gap-report.md` §1.5), WSL2-cross-compile clean
 
 ### 8.2 What's recommended next
 
@@ -462,7 +462,7 @@ All sources from v7's Section 12 unchanged. See git log of `.research/phase-2-6-
 
 ---
 
-**End of v8 R-10 libSQL ecosystem reckoning + Step 4 analysis. Doc-only commit; supersedes v7. tools=130 invariant preserved. NO source mutations.**
+**End of v8 R-10 libSQL ecosystem reckoning + Step 4 analysis. Doc-only commit; supersedes v7. tools=111 invariant preserved (production-registered; the prior "tools=130 invariant" framing in this doc referred to the grep count which includes 19 test fixtures — corrected 2026-05-11 per `production-master-gap-report.md`). NO source mutations.**
 
 **v8's primary recommendation**: **Phase 2.6 architecturally CLOSED at Steps 1-3 (commit `5f8ee3b`). Skip Step 4 (test/dev Fly deploy); flip production deferred indefinitely until trigger fires.** The libsql-client-go deprecation banner does NOT block our use case (pure-remote CGO-free is its sole remaining recommended use). v8 surfaces a third option v7 didn't make explicit: "ship the code, never flip yet".
 
