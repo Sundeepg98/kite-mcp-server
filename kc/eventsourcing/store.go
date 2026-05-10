@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // StoredEvent is the persistent representation of a domain event.

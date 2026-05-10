@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // AlertPort is the bounded-context contract for alert-subsystem access:

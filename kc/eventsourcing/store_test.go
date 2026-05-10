@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-broker"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // newTestStore creates a temporary SQLite DB and initializes the event store.

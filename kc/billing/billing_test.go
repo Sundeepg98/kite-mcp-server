@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	stripe "github.com/stripe/stripe-go/v82"
 	stripewebhook "github.com/stripe/stripe-go/v82/webhook"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // newTestStore creates a billing Store backed only by the in-memory map

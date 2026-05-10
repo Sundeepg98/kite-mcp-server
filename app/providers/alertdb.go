@@ -3,7 +3,7 @@ package providers
 import (
 	"log/slog"
 
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // AlertDBConfig is the narrow input the alertDB provider needs.

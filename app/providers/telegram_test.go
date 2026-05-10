@@ -3,7 +3,7 @@ package providers
 import (
 	"testing"
 
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // telegram_test.go covers the Telegram-notifier provider. Wave D

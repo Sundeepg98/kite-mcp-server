@@ -44,7 +44,7 @@ go 1.25.0
 require (
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000
-	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/audit v0.0.0-00010101000000-000000000000
 	github.com/zerodha/kite-mcp-server/kc/billing v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-domain v0.1.0
@@ -116,7 +116,7 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/alerts => ../../kc/alerts
+	github.com/algo2go/kite-mcp-alerts => ../../kc/alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../../kc/audit
 	github.com/zerodha/kite-mcp-server/kc/billing => ../../kc/billing
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../../kc/cqrs

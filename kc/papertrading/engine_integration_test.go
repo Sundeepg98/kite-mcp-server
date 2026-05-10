@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/algo2go/kite-mcp-broker"
 	"github.com/algo2go/kite-mcp-broker/mock"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // brokerLTPAdapter wraps a broker.Client to satisfy the papertrading.LTPProvider interface.

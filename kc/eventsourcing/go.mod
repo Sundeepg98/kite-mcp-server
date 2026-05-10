@@ -32,7 +32,7 @@ require (
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
 )
 
@@ -60,5 +60,5 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/algo2go/kite-mcp-alerts => ../alerts
 )

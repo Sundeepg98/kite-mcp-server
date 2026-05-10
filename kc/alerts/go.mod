@@ -1,4 +1,4 @@
-module github.com/zerodha/kite-mcp-server/kc/alerts
+module github.com/algo2go/kite-mcp-alerts
 
 go 1.25.0
 

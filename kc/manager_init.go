@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zerodha/gokiteconnect/v4/models"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/cqrs"
 	"github.com/algo2go/kite-mcp-domain"

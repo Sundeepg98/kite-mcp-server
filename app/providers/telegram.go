@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/zerodha/kite-mcp-server/kc/alerts"
+import "github.com/algo2go/kite-mcp-alerts"
 
 // telegram.go — Wave D Phase 2 Slice P2.4a (Batch 1). Pure
 // passthrough provider for the Telegram push-notification sender.

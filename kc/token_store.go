@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // KiteTokenEntry stores a Kite access token and metadata for a user.

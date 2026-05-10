@@ -16,7 +16,7 @@ import (
 	"github.com/zerodha/kite-mcp-server/app/metrics"
 	"github.com/algo2go/kite-mcp-broker/zerodha"
 	"github.com/zerodha/kite-mcp-server/kc"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 	"github.com/zerodha/kite-mcp-server/kc/audit"
 	"github.com/zerodha/kite-mcp-server/kc/eventsourcing"
 	logport "github.com/algo2go/kite-mcp-logger"

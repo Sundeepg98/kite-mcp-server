@@ -42,7 +42,7 @@ go 1.25.0
 require (
 	github.com/stretchr/testify v1.10.0
 	github.com/algo2go/kite-mcp-broker v0.1.0
-	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/algo2go/kite-mcp-logger v0.1.0
 	github.com/algo2go/kite-mcp-money v0.1.0 // indirect
@@ -102,7 +102,7 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/algo2go/kite-mcp-alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/riskguard => ../riskguard
 	github.com/zerodha/kite-mcp-server/kc/users => ../users
 	github.com/zerodha/kite-mcp-server/oauth => ../../oauth

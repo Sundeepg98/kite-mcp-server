@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 	_ "modernc.org/sqlite"
 )
 

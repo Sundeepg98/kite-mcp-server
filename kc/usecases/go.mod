@@ -36,7 +36,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/zerodha/kite-mcp-server v0.0.0-00010101000000-000000000000 // indirect
 	github.com/algo2go/kite-mcp-broker v0.1.0
-	github.com/zerodha/kite-mcp-server/kc/alerts v0.0.0-00010101000000-000000000000
+	github.com/algo2go/kite-mcp-alerts v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/cqrs v0.0.0-00010101000000-000000000000
 	github.com/algo2go/kite-mcp-domain v0.1.0
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing v0.0.0-00010101000000-000000000000
@@ -98,7 +98,7 @@ require (
 
 replace (
 	github.com/zerodha/kite-mcp-server => ../..
-	github.com/zerodha/kite-mcp-server/kc/alerts => ../alerts
+	github.com/algo2go/kite-mcp-alerts => ../alerts
 	github.com/zerodha/kite-mcp-server/kc/audit => ../audit
 	github.com/zerodha/kite-mcp-server/kc/cqrs => ../cqrs
 	github.com/zerodha/kite-mcp-server/kc/eventsourcing => ../eventsourcing

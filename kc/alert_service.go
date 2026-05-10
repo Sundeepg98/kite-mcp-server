@@ -1,7 +1,7 @@
 package kc
 
 import (
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // AlertService owns alert lifecycle: CRUD, evaluation, trailing stops,

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	gomcp "github.com/mark3labs/mcp-go/mcp"
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 	logport "github.com/algo2go/kite-mcp-logger"
 	"github.com/zerodha/kite-mcp-server/oauth"
 )

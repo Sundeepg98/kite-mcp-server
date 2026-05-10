@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zerodha/kite-mcp-server/kc/alerts"
+	"github.com/algo2go/kite-mcp-alerts"
 )
 
 // SetEncryptionKey wires the AES-256 key used to encrypt TOTP secrets at
