@@ -97,13 +97,16 @@ func newEmptyManager(cfg Config) *Manager {
 		commandBus:        cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
 		queryBus:          cqrs.NewInMemoryBus(cqrs.LoggingMiddleware(cfg.Logger)),
 	}
-	// Initialize the decomposed facades. The stores/scheduling/
-	// sessionLifecycle facades currently hold a back-pointer to Manager, so
-	// each accessor reads the current field value (no stale snapshot). The
-	// brokers + eventing facades are back-pointer-free as of Tier 1.1 +
-	// Tier 1.2 (Path A.28 follow-ups): they capture closures over the same
-	// Manager fields, preserving the same "read current value" semantics
-	// without the *Manager reference.
+	// Initialize the decomposed facades. The stores + sessionLifecycle
+	// facades still hold a back-pointer to Manager, so each accessor reads
+	// the current field value (no stale snapshot). The brokers + eventing
+	// + scheduling facades are back-pointer-free as of Tier 1.1 / Tier 1.2 /
+	// Tier 1.3 (Path A.28 follow-ups, the "facade-without-back-pointer"
+	// closure-DI track): they capture closures over the same Manager fields,
+	// preserving the same "read current value" semantics without the
+	// *Manager reference. scheduling additionally uses a closure-with-
+	// write-back for sessionManager (initialize() constructs the registry
+	// and hands it back via setSessionManager).
 	m.stores = newStoreRegistry(m)
 	m.eventing = newEventingService(m)
 	m.brokers = newBrokerServices(m)
