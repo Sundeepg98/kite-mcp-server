@@ -68,7 +68,6 @@ use (
 	.
 	./app/providers
 	./kc/papertrading
-	./kc/riskguard
 	./kc/sectors
 	./kc/telegram
 	./kc/usecases

@@ -32,6 +32,8 @@ github.com/algo2go/kite-mcp-oauth v0.1.0 h1:JpqI5MdQAYi8eJE0BaWlDDCRYA4LyQ6xxsNi
 github.com/algo2go/kite-mcp-oauth v0.1.0/go.mod h1:7jSnI4Qw6FyzzsWdWZBfgl0MFR0UzLE/sb7NqFEdJNk=
 github.com/algo2go/kite-mcp-registry v0.1.0 h1:s8lxMOkgc8GE3SXs/T8ZTQx8LCgcTBI9ltgNuhV2vt8=
 github.com/algo2go/kite-mcp-registry v0.1.0/go.mod h1:z2oX71IHhZDlgRWRSMgPlKssB4UQpfcyuFWBELwia8s=
+github.com/algo2go/kite-mcp-riskguard v0.1.0 h1:+toPprDTLLer0nl5ZsIDESfEcHkQ3pFPaw5uCDYZipE=
+github.com/algo2go/kite-mcp-riskguard v0.1.0/go.mod h1:ch4ZWiSliitP2GiBHELTOVEzXvsNInl+1NIHn85eINI=
 github.com/algo2go/kite-mcp-scheduler v0.1.0 h1:Y4kHEDXBoDL/btwPLdgHWqLly+7qYwlGrxiw7CpuswU=
 github.com/algo2go/kite-mcp-scheduler v0.1.0/go.mod h1:ESyLLpZVElgKH4ZhqqCwwLQ16X03ykjr3jLdCW3Gb4U=
 github.com/algo2go/kite-mcp-templates v0.1.0 h1:IakYl8o4F8dGJl7MSPCAqxPoKOXUvI4loJqP9ct6tEo=
